@@ -2535,6 +2535,10 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    #[pyo3(get)]
+    pub route_mana_value: Option<u8>,
+    #[pyo3(get)]
+    pub quota_type: Option<u8>,
 }
 
 #[cfg(feature = "python")]
@@ -2650,6 +2654,8 @@ impl From<ActionOption> for PyAction {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
         }
     }
 }
@@ -2670,6 +2676,8 @@ impl From<PyAction> for ActionOption {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
         }
     }
 }

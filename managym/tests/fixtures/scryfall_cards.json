@@ -6729,5 +6729,19 @@
     "colors": [
       "B"
     ]
+  },
+  "Muldrotha, the Gravetide": {
+    "name": "Muldrotha, the Gravetide",
+    "mana_cost": "{3}{B}{G}{U}",
+    "type_line": "Legendary Creature — Elemental Avatar",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "During each of your turns, you may play a land and cast a permanent spell of each permanent type from your graveyard. (If a card has multiple permanent types, choose one as you play it.)",
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ]
   }
 }

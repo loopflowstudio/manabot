@@ -143,6 +143,12 @@ impl Serialize for ActionJson<'_> {
         if let Some(name_index) = &value.name_index {
             map.serialize_entry("name_index", name_index)?;
         }
+        if let Some(cost) = value.route_mana_value {
+            map.serialize_entry("route_mana_value", &cost)?;
+        }
+        if let Some(kind) = value.quota_type {
+            map.serialize_entry("quota_type", &kind)?;
+        }
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }

@@ -477,6 +477,9 @@ columns! { action {
     // `mode` keeps its index, and these name it as the stack row does.
     23: HAS_X => ("has_x", ValueLayout::FLAG),
     24: X => ("x", ValueLayout::COUNT_TENTHS),
+    25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
+    26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
+    27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {

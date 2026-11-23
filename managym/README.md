@@ -511,6 +511,9 @@ A resolving spell remains on the stack until the zone-move authority commits
 its departure. A spell cast with flashback carries that choice onto the stack.
 A Zombie cast from the graveyard with Zul Ashur pays its normal cost, enters
 the battlefield on resolution and returns to the graveyard if countered.
+With Muldrotha in play, you can choose which permission casts the Zombie.
+Casting through Muldrotha spends its creature allowance for the turn, even
+if the spell is countered. Using Zul Ashur leaves that allowance available.
 The zone-move authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from

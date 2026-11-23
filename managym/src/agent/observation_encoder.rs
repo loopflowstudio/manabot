@@ -2110,6 +2110,13 @@ fn encode_actions(
             *has_x = 1.0;
             *value = x as f32 / 10.0;
         }
+        if let Some([has_cost, value, quota]) =
+            row.get_mut(action::HAS_ROUTE_COST..=action::QUOTA_TYPE)
+        {
+            *has_cost = bool_to_f32(action.route_mana_value.is_some());
+            *value = f32::from(action.route_mana_value.unwrap_or_default()) / 10.;
+            *quota = f32::from(action.quota_type.unwrap_or_default());
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2296,6 +2303,8 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        route_mana_value: None,
+                        quota_type: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2310,6 +2319,8 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        route_mana_value: None,
+                        quota_type: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2324,6 +2335,8 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        route_mana_value: None,
+                        quota_type: None,
                     },
                 ],
                 focus: Vec::new(),
@@ -2467,6 +2480,8 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                route_mana_value: None,
+                quota_type: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -2769,6 +2784,8 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                route_mana_value: None,
+                quota_type: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

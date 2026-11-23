@@ -682,10 +682,13 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
-        let granted_flash = self
-            .play_grant(player, object)
-            .is_some_and(|grant| grant.flash);
+    pub(crate) fn has_instant_timing(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: crate::flow::game::CastChoices,
+    ) -> bool {
+        let granted_flash = cast.grant(self, object).is_some_and(|grant| grant.flash);
         let object = &self.state[object];
         granted_flash
             || object.is_instant_speed()

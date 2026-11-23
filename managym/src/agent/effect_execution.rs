@@ -20,7 +20,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game},
+        game::{ActivationSource, CastChoices, Game},
         payment::{Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
@@ -52,6 +52,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "captured activation",
     "cascade exiled",
     "cast choices",
+    "quota type",
     "cast from exile",
     "cast from hand",
     "cast from library",
@@ -482,7 +483,24 @@ impl<'a> Projection<'a> {
                 target_req_indices,
             } => {
                 self.object_id("paid spell", *object);
-                self.field("cast choices", cast);
+                // Storage keys identify the chosen permission only within the game.
+                // The payment already gives its cost. Project a quota source as a
+                // viewer-safe object reference, including when it left to pay a cost.
+                self.field(
+                    "cast choices",
+                    &CastChoices {
+                        route: None,
+                        ..*cast
+                    },
+                );
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    kind,
+                }) = cast.route
+                {
+                    self.object("grantor", source);
+                    self.field("quota type", &kind);
+                }
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
                 for target in targets {

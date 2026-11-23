@@ -166,17 +166,17 @@ impl Game {
             _ => None,
         };
         let cost = match action {
-            Action::CastSpell { object, .. } => {
+            Action::CastSpell { object, route, .. } => {
+                let cast =
+                    CastChoices::from_route(self.selected_play_route(player, *object, *route)?);
                 let card = &self.state[*object];
-                if self.cast_needs_x_announcement(player, *object, CastChoices::default()) {
+                if self.cast_needs_x_announcement(*object, cast) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose X or replicate count before previewing payment.",
                     ));
                 }
-                let Some(cast) =
-                    self.fixed_cast_cost_choices(player, *object, CastChoices::default())
-                else {
+                let Some(cast) = self.fixed_cast_cost_choices(player, *object, cast) else {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the optional or alternative cost before previewing payment.",

@@ -907,6 +907,12 @@ pub struct ActionOption {
     /// replicate count, a resolving payment's X) rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
+    /// Base mana value of the selected permission, before reductions or additional costs.
+    #[serde(default)]
+    pub route_mana_value: Option<u8>,
+    /// CardType + 1 when this play spends that permanent type for its source.
+    #[serde(default)]
+    pub quota_type: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -1037,7 +1043,22 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
+                            let (route_mana_value, quota_type) = match action {
+                                Action::CastSpell { object, route: Some(route), .. }
+                                | Action::PlayLand { object, route: Some(route), .. } => {
+                                    let cast = crate::flow::game::CastChoices::from_route(*route);
+                                    let cost = game.casting_mana_cost(*object, cast);
+                                    let quota = match route {
+                                        crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(*kind as u8 + 1),
+                                        _ => None,
+                                    };
+                                    (cost.map(|cost| cost.mana_value), quota)
+                                }
+                                _ => (None, None),
+                            };
                             ActionOption {
+                                route_mana_value,
+                                quota_type,
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
@@ -2069,6 +2090,16 @@ impl Observation {
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
+            Action::PlayLand {
+                object,
+                route: Some(crate::flow::cast_permission::PlayRoute::GraveyardType { source, .. }),
+                ..
+            }
+            | Action::CastSpell {
+                object,
+                route: Some(crate::flow::cast_permission::PlayRoute::GraveyardType { source, .. }),
+                ..
+            } => vec![game.state[object].id, game.state[source].id],
             Action::PlayLand { object, .. }
             | Action::CastSpell { object, .. }
             | Action::ActivateCardAbility { object, .. }
@@ -2525,6 +2556,8 @@ mod characteristics_tests {
             continuation_index: None,
             pays_directly: false,
             announces_x: false,
+            route_mana_value: None,
+            quota_type: None,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

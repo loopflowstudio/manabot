@@ -503,6 +503,7 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> ObjectId {
+        self.spend_play_route(controller, cast.route);
         let cast_from = self.state.zones.zone_of(object).expect("cast source zone");
         // CR 400.7g, h: the spell is the object the card became on the stack.
         let object = self.move_object(object, ZoneType::Stack);

@@ -19,7 +19,10 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
-from manabot.managym.experience_projection import decision_surface_view
+from manabot.managym.experience_projection import (
+    decision_surface_view,
+    describe_actions,
+)
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -513,10 +516,14 @@ def test_foretell_is_an_ability_offer_naming_the_card() -> None:
     assert [a.description for a in decision.actions] == ["Pass priority"]
 
 
-def test_zul_ashur_graveyard_cast_in_text_and_policy_input() -> None:
+@pytest.mark.parametrize("with_muldrotha", [False, True])
+def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
+    with_muldrotha: bool,
+) -> None:
     env = priority_root(
         ("Lightning Bolt",),
-        ("Mountain", "Swamp", "Swamp", "Hungry Ghoul", "Zul Ashur, Lich Lord"),
+        ("Mountain", "Swamp", "Swamp", "Hungry Ghoul", "Zul Ashur, Lich Lord")
+        + (("Muldrotha, the Gravetide",) if with_muldrotha else ()),
     )
     _choose(env, "Cast ")
     _choose(env, "Hungry Ghoul")
@@ -528,7 +535,15 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input() -> None:
         _choose(env, "Pass priority")
 
     decision = capture_text_decision(env)
-    [cast] = [a for a in decision.actions if a.description.startswith("Cast ")]
+    casts = [a for a in decision.actions if a.description.startswith("Cast ")]
+    if with_muldrotha:
+        assert len(casts) == 2
+        [muldrotha] = [a for a in casts if "Creature for this turn" in a.description]
+        [cast] = [a for a in casts if "using Zul Ashur" in a.description]
+        branch = env.clone_env()
+        submit_response(branch, capture_text_decision(branch), muldrotha.reference)
+    else:
+        [cast] = casts
     assert "Hungry Ghoul" in cast.description
     alias = cast.description.split()[1]
     assert "may be played from graveyard by You: cast for {1}{B}, this turn only" in (
@@ -536,6 +551,18 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input() -> None:
     )
     observation = _viewer_observation(decision)
     encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    if with_muldrotha:
+        projected = [
+            a
+            for a in describe_actions(observation)
+            if a["type"] == "PRIORITY_CAST_SPELL"
+        ]
+        assert len(projected) == 2
+        for action in projected:
+            label = action["description"]
+            quota = encoded["actions"][action["index"], column("actions", "quota_type")]
+            assert (quota > 0) == ("using Muldrotha" in label)
+            assert "using Muldrotha" in label or "using Zul Ashur" in label
     rows = encoded["agent_cards"]
     row = next(
         i for i, card in enumerate(observation.agent_cards) if card.cast_permission

@@ -28,10 +28,30 @@ use crate::{
     },
 };
 
+/// The rule chosen to play one exact object. A grant keeps its key when other grants expire.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum PlayRoute {
+    Hand,
+    LibraryTop,
+    PrintedFlashback,
+    GrantedFlashback,
+    Grant(usize),
+    GraveyardType {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        source: ObjectId,
+        kind: crate::state::card::CardType,
+    },
+}
+
 /// Permission for one player to cast or play a card in one exact zone appearance.
 /// The granting effect determines the eligible object and the duration.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayGrant {
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub key: usize,
+    /// Printed source of a resolved independent grant, even after it leaves.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<crate::state::card::CardDefId>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub object: ObjectId,
     pub player: PlayerId,
@@ -77,6 +97,8 @@ impl PlayGrant {
     /// its timing allows.
     pub fn new(object: ObjectId, player: PlayerId) -> Self {
         Self {
+            key: 0,
+            origin: None,
             object,
             player,
             cost: None,
@@ -107,11 +129,32 @@ pub struct CastPermissions {
     pub grants: Vec<PlayGrant>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hand_only: Vec<HandOnly>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spent_types: Vec<(PlayerId, PlayRoute)>,
 }
 
 impl CastPermissions {
+    /// Keep one copy of identical terms and give distinct terms a stable
+    /// key within this exact appearance. Cleanup may compact the grant list.
+    pub fn grant(&mut self, mut grant: PlayGrant) {
+        let mut next = 0;
+        for existing in self
+            .grants
+            .iter()
+            .filter(|other| other.object == grant.object)
+        {
+            grant.key = existing.key;
+            if *existing == grant {
+                return;
+            }
+            next = next.max(existing.key + 1);
+        }
+        grant.key = next;
+        self.grants.push(grant);
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.grants.is_empty() && self.hand_only.is_empty()
+        self.grants.is_empty() && self.hand_only.is_empty() && self.spent_types.is_empty()
     }
 }
 
@@ -313,13 +356,14 @@ impl Game {
         {
             return;
         }
-        self.state.cast_permissions.grants.push(grant(object_id));
+        self.state.cast_permissions.grant(grant(object_id));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2), and "until the
     /// end of your next turn" ones in that of the permitted player's next
     /// turn.
     pub(crate) fn expire_turn_cast_grants(&mut self) {
+        self.state.cast_permissions.spent_types.clear();
         let (active, turn) = (self.active_player(), self.state.turn.turn_number);
         self.state.cast_permissions.grants.retain(|grant| {
             !grant.this_turn
@@ -347,7 +391,7 @@ impl Game {
     }
 
     /// The grants naming this exact card in its current zone appearance (CR 400.7).
-    fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &PlayGrant> {
+    pub(super) fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &PlayGrant> {
         self.state
             .cast_permissions
             .grants
@@ -360,8 +404,12 @@ impl Game {
     /// The live grant letting `player` play this exact card now.
     /// Another player's card is castable too; a permanent spell enters
     /// under its caster's control (CR 110.2).
-    pub(crate) fn play_grant(&self, player: PlayerId, object: ObjectId) -> Option<&PlayGrant> {
-        self.grants_naming(object).find(|grant| {
+    pub(super) fn live_grants(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> impl Iterator<Item = &PlayGrant> {
+        self.grants_naming(object).filter(move |grant| {
             grant.player == player
                 && (!grant.own_turn_only || self.active_player() == player)
                 && grant
@@ -427,25 +475,12 @@ impl Game {
             .map(|restriction| restriction.until_turn_of)
     }
 
-    /// Whether `player` may play `card` from where it is now: their hand,
-    /// a graveyard casting cost, or an exile grant. A granted land play is
-    /// not a cast, so a hand-only restriction does not stop it.
-    pub(crate) fn may_play_from_zone(&self, player: PlayerId, object: ObjectId) -> bool {
-        if self.state.zones.contains(object, ZoneType::Hand, player) {
-            return true;
-        }
-        if self.state[object].types.is_land() {
-            return self.state.zones.zone_of(object) == Some(ZoneType::Exile)
-                && self.play_grant(player, object).is_some();
-        }
-        self.zone_cast_permission(player, object).is_some()
-    }
-
     /// Exiled candidates only. Priority already visits the player's graveyard.
     pub(crate) fn exile_granted_cards(
         &self,
         player: PlayerId,
     ) -> impl Iterator<Item = CardId> + '_ {
+        let mut seen = std::collections::BTreeSet::new();
         self.state
             .cast_permissions
             .grants
@@ -454,6 +489,8 @@ impl Game {
                 grant.player == player
                     && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
             })
-            .filter_map(|grant| self.state.card_of(grant.object))
+            .map(|grant| grant.object)
+            .filter(move |object| seen.insert(*object))
+            .filter_map(|object| self.state.card_of(object))
     }
 }

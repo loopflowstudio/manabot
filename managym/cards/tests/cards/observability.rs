@@ -1460,6 +1460,9 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it",
         ),
+        StaticAbility::PlayGraveyardByPermanentType => witnessed(
+            "StaticAbility::PlayGraveyardByPermanentType", Seen::Actions("each remaining permanent type offers a graveyard play"), "Muldrotha, the Gravetide","fdn","muldrotha_and_zul_offer_independent_casts",
+        ),
         StaticAbility::CastFromLibraryTop(_) => witnessed(
             "StaticAbility::CastFromLibraryTop",
             Seen::Actions("the library's top card is offered as a cast"),
@@ -1735,6 +1738,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
+        StaticAbility::PlayGraveyardByPermanentType,
         StaticAbility::CastFromLibraryTop(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
         StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
@@ -3433,6 +3437,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
+        route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
+        quota_type => [column(Action, action::QUOTA_TYPE)],
         announces_x => [column(Action, action::HAS_X)],
     }));
     fields.extend(encoding!(EventData {

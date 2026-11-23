@@ -44,11 +44,15 @@ pub enum Action {
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     CastSpell {
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     ActivateAbility {
         player: PlayerId,

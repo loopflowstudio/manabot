@@ -831,3 +831,199 @@ fn zul_ashur_ward_costs_the_opponent_two_life() {
         Some(ZoneType::Graveyard)
     );
 }
+
+#[test]
+fn overlapping_grants_price_each_cast_in_both_orders() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        play::fork_choosing,
+    };
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::{PlayGrant, PlayRoute},
+        state::mana::ManaCost,
+    };
+    for free_first in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Hungry Ghoul"]);
+        let card = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+        let grant = PlayGrant::new(card, PlayerId(0));
+        let free = PlayGrant {
+            cost: Some(ManaCost::default()),
+            ..grant.clone()
+        };
+        for terms in if free_first {
+            [free, grant]
+        } else {
+            [grant, free]
+        } {
+            s.game_mut().state.cast_permissions.grant(terms);
+        }
+        s.game_mut().state.cast_permissions.grants.reverse();
+        for funded in [false, true] {
+            if funded {
+                s.set_player_mana_pool(0, "1B");
+            }
+            s.game_mut().scenario_refresh_priority().unwrap();
+            let routes: Vec<_> = s
+                .action_space()
+                .actions
+                .iter()
+                .filter(|a| matches!(a,Action::CastSpell {object,..} if *object==card))
+                .cloned()
+                .collect();
+            assert_eq!(routes.len(), if funded { 2 } else { 1 });
+            for action in routes {
+                let Action::CastSpell {
+                    route: Some(PlayRoute::Grant(index)),
+                    ..
+                } = action
+                else {
+                    panic!("unbound grant")
+                };
+                let free = index == usize::from(!free_first);
+                assert!(funded || free);
+                let branch = fork_choosing(&s, |a| *a == action);
+                assert_eq!(
+                    branch.game().state.players[0].mana_pool.total(),
+                    if free && funded { 2 } else { 0 }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn muldrotha_and_zul_offer_independent_casts() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, now, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::action::Action, flow::cast_permission::PlayRoute, state::game_object::Target,
+    };
+    let mut s = five_color_unfunded_setup(&[
+        "Muldrotha, the Gravetide",
+        "Zul Ashur, Lich Lord",
+        "Hungry Ghoul",
+        "Counterspell",
+    ]);
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let zombie = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    assert!(s.choose_target(Target::GraveyardCard(zombie)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "1B");
+    s.set_player_mana_pool(1, "UU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    use managym::agent::{
+        observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+        observation_layout::action,
+    };
+    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let mut labels = Vec::new();
+    for (index, offer) in obs
+        .action_space
+        .actions
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| {
+            a.focus.first() == Some(&(s.game().state[zombie].id.0 as i32))
+                && a.route_mana_value.is_some()
+        })
+    {
+        let label = offer.description.as_deref().unwrap();
+        let row = &encoded.actions[index * ACTION_DIM..][..ACTION_DIM];
+        assert_eq!(row[action::ROUTE_MANA_VALUE], 0.2);
+        assert_eq!(row[action::QUOTA_TYPE] > 0., label.contains("Muldrotha"));
+        labels.push(label);
+    }
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().any(|label| label.contains("Zul Ashur")));
+    for use_quota in [false, true] {
+        let mut branch = fork_choosing(
+            &s,
+            |a| matches!(a,Action::CastSpell {object,route:Some(route),..} if *object==zombie && matches!(route,PlayRoute::GraveyardType {..})==use_quota),
+        );
+        let spell = now(&branch, zombie);
+        branch.pass_priority();
+        choose(
+            &mut branch,
+            |a| matches!(a,Action::CastSpell {object,..} if *object==counter),
+        );
+        assert!(branch.choose_target(Target::StackSpell(spell)));
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, zombie), Some(ZoneType::Graveyard));
+        branch.set_player_mana_pool(0, "1B");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&branch, other), !use_quota);
+        assert_eq!(can_cast(&branch, zombie), !use_quota);
+    }
+}
+
+#[test]
+fn muldrotha_spends_the_chosen_type_for_this_incarnation_and_turn() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::can_cast,
+        play::{choose, fork_choosing},
+    };
+    use managym::{agent::action::Action, flow::cast_permission::PlayRoute, state::card::CardType};
+    let mut s = five_color_unfunded_setup(&[
+        "Muldrotha, the Gravetide",
+        "Scarecrow Guide",
+        "Hungry Ghoul",
+    ]);
+    let source = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let dual = move_from_library(&mut s, 0, "Scarecrow Guide", ZoneType::Graveyard);
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let swamp = move_from_library(&mut s, 0, "Swamp", ZoneType::Graveyard);
+    let forest = move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for kind in [CardType::Artifact, CardType::Creature] {
+        let mut branch = fork_choosing(&s, |action| {
+            matches!(action,
+            Action::CastSpell {object, route:Some(PlayRoute::GraveyardType {kind:chosen,..}),..}
+            if *object==dual && *chosen==kind)
+        });
+        settle(&mut branch);
+        branch.set_player_mana_pool(0, "1B");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&branch, ghoul), kind == CardType::Artifact);
+        choose(
+            &mut branch,
+            |action| matches!(action,Action::PlayLand {object,..} if *object==swamp),
+        );
+        assert!(!branch
+            .action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a,Action::PlayLand {object,..} if *object==forest)));
+        if kind == CardType::Creature {
+            let card = card_of(&branch, source);
+            let exiled = move_card(&mut branch, card, ZoneType::Exile);
+            move_card(&mut branch, exiled, ZoneType::Battlefield);
+            settle(&mut branch);
+            branch.game_mut().scenario_refresh_priority().unwrap();
+            assert!(can_cast(&branch, ghoul));
+        } else {
+            branch.advance_to_active_step(1, StepKind::Main);
+            assert!(!can_cast(&branch, ghoul));
+            branch.advance_to_active_step(0, StepKind::Main);
+            assert!(branch
+                .action_space()
+                .actions
+                .iter()
+                .any(|a| matches!(a,Action::PlayLand {object,..} if *object==forest)));
+        }
+    }
+}

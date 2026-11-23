@@ -929,6 +929,7 @@ pub enum StaticAbility {
     LookAtLibraryTop,
     /// "You may cast [predicate] spells from the top of your library."
     CastFromLibraryTop(CardPredicate),
+    PlayGraveyardByPermanentType,
     /// "Equipped creature has \"...\"": an activated ability the creature
     /// this is attached to has, listed after its own in printed order.
     AttachedHas(ActivatedAbilityDefinition),

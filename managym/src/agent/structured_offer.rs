@@ -211,6 +211,7 @@ pub enum AtomicCommand {
         binding: OfferSetBinding,
         player: PlayerId,
         object: ObjectId,
+        route: Option<crate::flow::cast_permission::PlayRoute>,
         targets: Vec<BoundTarget>,
     },
     DeclareAttackers {
@@ -246,6 +247,7 @@ enum InternalOffer {
     CastSingleTarget {
         player: PlayerId,
         object: ObjectId,
+        route: Option<crate::flow::cast_permission::PlayRoute>,
         role: RoleId,
         targets: BTreeMap<CandidateId, BoundTarget>,
     },
@@ -349,6 +351,7 @@ impl StructuredOfferSet {
             InternalOffer::CastSingleTarget {
                 player,
                 object,
+                route,
                 role,
                 targets,
             } => {
@@ -370,6 +373,7 @@ impl StructuredOfferSet {
                     binding: self.binding,
                     player: *player,
                     object: *object,
+                    route: *route,
                     targets: vec![target],
                 })
             }
@@ -704,7 +708,7 @@ impl Game {
                 let presentation = self.structured_priority_offers()?;
                 for offer in &mut complete.projection.offers {
                     let Some(InternalOffer::SearchAction {
-                        action: Action::CastSpell { object, .. },
+                        action: Action::CastSpell { object, route, .. },
                     }) = complete.internal.get(&offer.id)
                     else {
                         continue;
@@ -716,8 +720,11 @@ impl Game {
                             .find_map(|(id, inner)| match inner {
                                 InternalOffer::CastSingleTarget {
                                     object: target_card,
+                                    route: target_route,
                                     ..
-                                } if target_card == object => Some((*id, inner.clone())),
+                                } if target_card == object && route == target_route => {
+                                    Some((*id, inner.clone()))
+                                }
                                 _ => None,
                             });
                     if let Some((id, inner)) = replacement {
@@ -1053,7 +1060,11 @@ impl Game {
                     });
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
-                Action::CastSpell { player, object } => {
+                Action::CastSpell {
+                    player,
+                    object,
+                    route,
+                } => {
                     let card_ref = &self.state[*object];
                     if card_ref.optional_cost().is_some() {
                         continue;
@@ -1111,7 +1122,9 @@ impl Game {
                                     .generation(),
                             ),
                         }),
-                        label: format!("Cast {}", card_ref.name),
+                        label: self
+                            .action_description(action)
+                            .unwrap_or_else(|| format!("Cast {}", card_ref.name)),
                         help: None,
                         choices: vec![ChoiceStep::Select {
                             role,
@@ -1133,6 +1146,7 @@ impl Game {
                         InternalOffer::CastSingleTarget {
                             player: *player,
                             object: *object,
+                            route: *route,
                             role,
                             targets: target_by_candidate,
                         },
@@ -1326,6 +1340,7 @@ impl Game {
                 Ok((done, 1))
             }
             AtomicCommand::CastSpell {
+                route,
                 player,
                 object,
                 targets,
@@ -1346,8 +1361,8 @@ impl Game {
                                 action,
                                 Action::CastSpell {
                                     player: legal_player,
-                                    object: legal_card,
-                                } if legal_player == player && legal_card == object
+                                    object: legal_card, route:legal_route,
+                                } if legal_player == player && legal_card == object && legal_route == route
                             )
                         })
                     })

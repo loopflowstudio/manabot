@@ -1203,12 +1203,13 @@ impl Game {
             Effect::GrantGraveyardCastThisTurn { .. } => {
                 if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
                     let grant = PlayGrant {
+                        origin: frame
+                            .source_ref()
+                            .map(|source| self.state.source_base(source).0),
                         this_turn: true,
                         ..PlayGrant::new(object, frame.controller)
                     };
-                    if !self.state.cast_permissions.grants.contains(&grant) {
-                        self.state.cast_permissions.grants.push(grant);
-                    }
+                    self.state.cast_permissions.grant(grant);
                 }
                 None
             }

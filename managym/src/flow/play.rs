@@ -11,10 +11,12 @@
 // ability functions from its owner's hand or graveyard (cycling, "return
 // this card from your graveyard").
 
+use std::borrow::Cow;
+
 use crate::{
     agent::action::AgentError,
     flow::{
-        cast_permission::PlayGrant,
+        cast_permission::PlayRoute,
         decision::{EffectFrame, FrameCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
@@ -55,10 +57,29 @@ struct TargetSelection {
     chosen_req_indices: Vec<usize>,
 }
 
-pub(super) enum ZoneCastPermission<'a> {
-    LibraryTop,
-    Flashback(ManaCost),
-    Grant(&'a PlayGrant),
+impl CastChoices {
+    pub(crate) fn from_route(route: PlayRoute) -> Self {
+        Self {
+            route: (route != PlayRoute::Hand).then_some(route),
+            flashback: matches!(
+                route,
+                PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback
+            ),
+            ..Self::default()
+        }
+    }
+    pub(super) fn grant(
+        self,
+        game: &Game,
+        object: ObjectId,
+    ) -> Option<&crate::flow::cast_permission::PlayGrant> {
+        match self.route {
+            Some(PlayRoute::Grant(index)) => {
+                game.grants_naming(object).find(|grant| grant.key == index)
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Game {
@@ -103,32 +124,13 @@ impl Game {
         self.can_pay_automatic_mana(player, cost)
     }
 
-    /// The graveyard casting cost of `card` for its owner, if any (CR 702.34).
-    /// Iroh's continuous grant applies only on its controller's turn; printed
-    /// flashback applies whenever the card's timing permits. When both apply,
-    /// the grant is used: in TLA it never costs more than a printed flashback
-    /// (a Lesson's {1}, or a spell's own mana cost).
-    pub(crate) fn flashback_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
-        let card = self.state.card_of(object)?;
-        let definition = &self.state[self.state.object_of(card)];
-        if !definition.types.is_spell()
-            || !self
-                .state
-                .zones
-                .contains(object, ZoneType::Graveyard, player)
-        {
-            return None;
-        }
-        let granted = self.active_player() == player
-            && self.active_permanent_has(player, |ability| {
-                *ability == StaticAbility::GraveyardSpellsHaveFlashback
-            });
-        if !granted {
-            definition.flashback().cloned()
-        } else if definition.has_subtype("Lesson") {
+    /// Iroh grants a Lesson {1}, and other spells their printed mana cost.
+    fn granted_flashback_cost(&self, object: ObjectId) -> Option<ManaCost> {
+        let card = &self.state[object];
+        if card.has_subtype("Lesson") {
             Some(ManaCost::parse("{1}"))
         } else {
-            definition.mana_cost.clone()
+            card.mana_cost.clone()
         }
     }
 
@@ -160,43 +162,110 @@ impl Game {
         .then_some(card)
     }
 
-    /// The authority for a priority cast outside the hand, before payment.
-    pub(super) fn zone_cast_permission(
+    /// Collect the permissions before timing or payment eliminates individual routes.
+    pub(super) fn play_routes(
         &self,
         player: PlayerId,
         object: ObjectId,
-    ) -> Option<ZoneCastPermission<'_>> {
-        if self.casts_only_from_hand(player) {
-            return None;
-        }
-        match self.state.zones.zone_of(object)? {
-            ZoneType::Graveyard => self
-                .play_grant(player, object)
-                .map(ZoneCastPermission::Grant)
-                .or_else(|| {
-                    self.flashback_cost(player, object)
-                        .map(ZoneCastPermission::Flashback)
-                }),
-            ZoneType::Exile => self
-                .play_grant(player, object)
-                .map(ZoneCastPermission::Grant),
-            ZoneType::Library
+    ) -> Cow<'static, [PlayRoute]> {
+        let land = self.state[object].types.is_land();
+        match self.state.zones.zone_of(object) {
+            Some(ZoneType::Hand) if self.state[object].owner == player => {
+                Cow::Borrowed(&[PlayRoute::Hand])
+            }
+            _ if !land && self.casts_only_from_hand(player) => Cow::Borrowed(&[]),
+            Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
+                let mut routes: Vec<_> = self
+                    .live_grants(player, object)
+                    .map(|grant| PlayRoute::Grant(grant.key))
+                    .collect();
+                if zone != ZoneType::Graveyard || self.state[object].owner != player {
+                    return routes.into();
+                }
+                if self.state[object].types.is_spell() {
+                    let printed = self.state[object].flashback();
+                    if printed.is_some() {
+                        routes.push(PlayRoute::PrintedFlashback);
+                    }
+                    if self.active_player() == player
+                        && self.active_permanent_has(player, |ability| {
+                            *ability == StaticAbility::GraveyardSpellsHaveFlashback
+                        })
+                        && self
+                            .granted_flashback_cost(object)
+                            .as_ref()
+                            .is_some_and(|cost| Some(cost) != printed)
+                    {
+                        routes.push(PlayRoute::GrantedFlashback);
+                    }
+                }
+                if self.active_player() != player || !self.state[object].types.is_permanent() {
+                    return routes.into();
+                }
+                for (id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+                    if !view
+                        .static_abilities
+                        .contains(&StaticAbility::PlayGraveyardByPermanentType)
+                    {
+                        continue;
+                    }
+                    let source = self.state.permanents[id].as_ref().unwrap().object;
+                    for &kind in &self.state[object].types.types {
+                        use crate::state::card::CardType::*;
+                        if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
+                            continue;
+                        }
+                        if !self
+                            .state
+                            .cast_permissions
+                            .spent_types
+                            .contains(&(player, PlayRoute::GraveyardType { source, kind }))
+                        {
+                            routes.push(PlayRoute::GraveyardType { source, kind });
+                        }
+                    }
+                }
+                routes.into()
+            }
+            Some(ZoneType::Library)
                 if self
                     .library_top_castable(player)
-                    .is_some_and(|card| self.state.object_of(card) == object) =>
+                    .is_some_and(|c| self.state.object_of(c) == object) =>
             {
-                Some(ZoneCastPermission::LibraryTop)
+                Cow::Borrowed(&[PlayRoute::LibraryTop])
             }
-            _ => None,
+            _ => Cow::Borrowed(&[]),
+        }
+    }
+
+    pub(super) fn selected_play_route(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        selected: Option<PlayRoute>,
+    ) -> Result<PlayRoute, AgentError> {
+        let routes = self.play_routes(player, object);
+        match (selected, routes.as_ref()) {
+            (Some(route), _) if routes.contains(&route) => Ok(route),
+            (None, [only]) => Ok(*only),
+            _ => Err(AgentError("missing or ambiguous play permission".into())),
+        }
+    }
+
+    pub(super) fn spend_play_route(&mut self, player: PlayerId, route: Option<PlayRoute>) {
+        if let Some(route @ PlayRoute::GraveyardType { .. }) = route {
+            self.state
+                .cast_permissions
+                .spent_types
+                .push((player, route));
         }
     }
 
     /// The selected mana or alternative cost, before announcing X or applying
     /// additional costs and reductions. Announcement and payment share this
     /// choice so a fixed alternative cost cannot grant a free value of X.
-    fn casting_mana_cost(
+    pub(crate) fn casting_mana_cost(
         &self,
-        player: PlayerId,
         object: ObjectId,
         cast: CastChoices,
     ) -> Option<ManaCost> {
@@ -208,10 +277,11 @@ impl Game {
         } else if cast.resolving || self.state.zones.zone_of(object) == Some(ZoneType::Hand) {
             self.state[object].mana_cost.clone()
         } else {
-            match self.zone_cast_permission(player, object)? {
-                ZoneCastPermission::LibraryTop => self.state[object].mana_cost.clone(),
-                ZoneCastPermission::Flashback(cost) => Some(cost),
-                ZoneCastPermission::Grant(grant) => self.grant_cast_cost(grant),
+            match cast.route? {
+                PlayRoute::PrintedFlashback => self.state[object].flashback().cloned(),
+                PlayRoute::GrantedFlashback => self.granted_flashback_cost(object),
+                PlayRoute::Grant(_) => self.grant_cast_cost(cast.grant(self, object)?),
+                _ => self.state[object].mana_cost.clone(),
             }
         }
     }
@@ -229,7 +299,7 @@ impl Game {
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
         let card_ref = &self.state[object];
-        let mut cost = self.casting_mana_cost(player, object, cast)?.with_x(cast.x);
+        let mut cost = self.casting_mana_cost(object, cast)?.with_x(cast.x);
         cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
@@ -315,7 +385,12 @@ impl Game {
         Some(cost)
     }
 
-    pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+    pub(crate) fn play_land(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        selected: Option<PlayRoute>,
+    ) -> Result<(), AgentError> {
         let card_ref = &self.state[self.state.object_of(card)];
         if !card_ref.types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
@@ -323,14 +398,13 @@ impl Game {
         if card_ref.owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("land is not in a permitted zone".into()));
-        }
+        let route = self.selected_play_route(player, self.state.object_of(card), selected)?;
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
+        self.spend_play_route(player, Some(route));
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
@@ -347,6 +421,7 @@ impl Game {
         &mut self,
         player: PlayerId,
         card: CardId,
+        selected: Option<PlayRoute>,
     ) -> Result<(), AgentError> {
         if self.pending_choice.is_some() {
             return Err(AgentError("a choice is already pending".to_string()));
@@ -356,17 +431,12 @@ impl Game {
         if self.state[object].types.is_land() {
             return Err(AgentError("land cards cannot be cast".into()));
         }
-        let mut cast = CastChoices::default();
-        if !self.state.zones.contains(object, ZoneType::Hand, player) {
-            let permission = self
-                .zone_cast_permission(player, object)
-                .ok_or_else(|| AgentError("card is not in a permitted casting zone".into()))?;
-            cast.flashback = matches!(permission, ZoneCastPermission::Flashback(_));
-        }
+        let route = self.selected_play_route(player, object, selected)?;
+        let cast = CastChoices::from_route(route);
         if self.state.priority.holder != player {
             return Err(AgentError("player does not have priority".to_string()));
         }
-        if self.has_instant_timing(player, object) {
+        if self.has_instant_timing(player, object, cast) {
             if !self.can_cast_instants(player) {
                 return Err(AgentError("cannot cast instant now".to_string()));
             }
@@ -404,7 +474,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if self.cast_needs_x_announcement(player, object, cast) {
+        if self.cast_needs_x_announcement(object, cast) {
             self.pending_choice = Some(PendingChoice::AnnounceX {
                 player,
                 object,
@@ -417,16 +487,11 @@ impl Game {
 
     /// Announcement and read-only explanation use the selected casting cost,
     /// including a fixed zone permission that can replace a printed X.
-    pub(crate) fn cast_needs_x_announcement(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-    ) -> bool {
+    pub(crate) fn cast_needs_x_announcement(&self, object: ObjectId, cast: CastChoices) -> bool {
         let card = &self.state[object];
         let printed_x = card.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
         let selected_x = self
-            .casting_mana_cost(player, object, cast)
+            .casting_mana_cost(object, cast)
             .is_some_and(|cost| cost.x > 0);
         // CR 107.3a/b: additional X applies to a free cast when the printed
         // cost has no X; a replaced printed X is zero. Replicate announces
@@ -571,7 +636,7 @@ impl Game {
         };
         // CR 118.9a: a free cast cannot also take an alternative cost.
         let card = &self.state[object];
-        let alternative = !cast.free && self.alternative_cost_available(player, object);
+        let alternative = self.alternative_cost_available(player, object, cast);
         let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
             if self.can_pay_cast(player, object, cast) {
@@ -586,7 +651,20 @@ impl Game {
 
     /// Whether `object` has an alternative cost `player` may choose now: an
     /// exile alternative, or alternative mana whose condition holds.
-    pub(crate) fn alternative_cost_available(&self, player: PlayerId, object: ObjectId) -> bool {
+    pub(crate) fn alternative_cost_available(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> bool {
+        if cast.free
+            || cast.flashback
+            || cast
+                .grant(self, object)
+                .is_some_and(|g| g.cost.is_some() || g.foretold)
+        {
+            return false;
+        }
         let card = &self.state[object];
         card.exile_alternative().is_some()
             || card
@@ -623,12 +701,7 @@ impl Game {
     /// pay by waterbending: a required waterbend additional cost, an
     /// optional one once chosen, or all of a cost granted as
     /// "waterbending {X}" (Hama).
-    pub(crate) fn cast_waterbend_generic(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-    ) -> u8 {
+    pub(crate) fn cast_waterbend_generic(&self, object: ObjectId, cast: CastChoices) -> u8 {
         let card_ref = &self.state[object];
         let waterbend = card_ref
             .additional_costs
@@ -640,8 +713,8 @@ impl Game {
             })
             .fold(0u8, u8::saturating_add);
         let granted = !cast.free
-            && self
-                .play_grant(player, object)
+            && cast
+                .grant(self, object)
                 .is_some_and(|grant| grant.waterbend);
         if granted {
             u8::MAX
@@ -662,7 +735,7 @@ impl Game {
     ) -> Help {
         let mut help = Help {
             waterbend: self
-                .cast_waterbend_generic(player, object, cast)
+                .cast_waterbend_generic(object, cast)
                 .min(cost.generic()),
             ..Default::default()
         };

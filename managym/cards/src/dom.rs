@@ -8,7 +8,28 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![run_amok()]
+    vec![run_amok(), muldrotha()]
+}
+
+fn muldrotha() -> CardDefinition {
+    let text_box = "During each of your turns, you may play a land and cast a permanent spell of each permanent type from your graveyard. (If a card has multiple permanent types, choose one as you play it.)";
+    CardDefinition {
+        key: "dom.muldrotha_the_gravetide",
+        scryfall_id: "c654737d-34ac-42ff-ae27-3a3bbb930fc1",
+        printed: PrintedCharacteristics {
+            name: "Muldrotha, the Gravetide".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{G}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elemental".into(), "Avatar".into()],
+            power: Some(6),
+            toughness: Some(6),
+            statics: vec![managym_state::card::StaticAbility::PlayGraveyardByPermanentType],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn run_amok() -> CardDefinition {

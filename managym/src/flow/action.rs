@@ -47,6 +47,50 @@ impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         use crate::flow::decision::Decision;
         match action {
+            Action::CastSpell {
+                object,
+                route: Some(route),
+                ..
+            }
+            | Action::PlayLand {
+                object,
+                route: Some(route),
+                ..
+            } => {
+                use crate::flow::cast_permission::PlayRoute;
+                let card = &self.state[*object];
+                let terms = match route {
+                    PlayRoute::GraveyardType { source, kind } => format!(
+                        "using {} (object {}, {kind:?} for this turn)",
+                        self.state[*source].name, self.state[*source].id.0
+                    ),
+                    PlayRoute::Grant(index) => {
+                        let grant = self.grants_naming(*object).find(|g| g.key == *index)?;
+                        let price = self.grant_cast_cost(grant).map(|cost| {
+                            if cost.mana_value == 0 && cost.x == 0 {
+                                "{0}".into()
+                            } else {
+                                format!("{}{}", "{X}".repeat(cost.x as usize), cost_label(&cost))
+                            }
+                        });
+                        format!(
+                            "using {}{}",
+                            grant
+                                .origin
+                                .and_then(|id| default_content_pack().definition(id))
+                                .map(|def| def.name.clone())
+                                .unwrap_or_else(|| format!("permission {}", index + 1)),
+                            price.map(|cost| format!(" for {cost}")).unwrap_or_default()
+                        )
+                    }
+                    PlayRoute::PrintedFlashback => "with printed flashback".into(),
+                    PlayRoute::GrantedFlashback => "with granted flashback".into(),
+                    PlayRoute::LibraryTop => "from library".into(),
+                    PlayRoute::Hand => "from hand".into(),
+                };
+                let verb = if card.types.is_land() { "Play" } else { "Cast" };
+                Some(format!("{verb} {} {terms}", card.name))
+            }
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
                     .state
@@ -325,7 +369,7 @@ impl Game {
 
     /// Cards `player` might play at priority: their hand and graveyard, and
     /// exiled cards they hold grants for, and a library top a permanent lets
-    /// them cast. `priority_action_for_card` decides.
+    /// them cast. `priority_actions_for_card` prices each route.
     fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         self.state
             .zone_cards(ZoneType::Hand, player)
@@ -341,15 +385,11 @@ impl Game {
         let mut spell_spends = false;
         let mut actions = Vec::new();
         for card in self.priority_candidate_cards(player) {
-            if let Some((action, mana_value)) = self.priority_action_for_card(player, card) {
+            self.priority_actions_for_card(player, card, |action, mana_value, cast| {
                 if mode == ManaFloats::Usable && !spell_spends {
                     if let Action::CastSpell { object, .. } = action {
                         spell_spends = mana_value > 0
-                            || self.cast_needs_x_announcement(
-                                player,
-                                object,
-                                CastChoices::default(),
-                            )
+                            || self.cast_needs_x_announcement(object, cast)
                             || self.state[object]
                                 .optional_cost()
                                 .is_some_and(|cost| cost.mana_value > 0)
@@ -360,7 +400,7 @@ impl Game {
                     }
                 }
                 actions.push(action);
-            }
+            });
         }
         let mut floats = Vec::new();
         actions.extend(self.priority_activate_ability_actions(player, mode, &mut floats));
@@ -576,42 +616,49 @@ impl Game {
         actions
     }
 
-    fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<(Action, u8)> {
-        let object = &self.state[self.state.object_of(card)];
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return None;
+    fn priority_actions_for_card(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        mut offer: impl FnMut(Action, u8, CastChoices),
+    ) {
+        let object = self.state.object_of(card);
+        let types = &self.state[object].types;
+        // Preserve the original single-route Command. On overlap every offer
+        // names its route, even if only one survives the affordability check.
+        let routes = self.play_routes(player, object);
+        for &permission in routes.iter() {
+            let route = (routes.len() > 1).then_some(permission);
+            let cast = CastChoices::from_route(permission);
+            if types.is_land() {
+                if self.can_play_land(player) {
+                    offer(
+                        Action::PlayLand {
+                            player,
+                            object,
+                            route,
+                        },
+                        0,
+                        cast,
+                    );
+                }
+            } else if types.is_castable()
+                && (self.can_cast_sorceries(player)
+                    || self.has_instant_timing(player, object, cast))
+            {
+                if let Some(value) = self.castable_mana_value(player, card, cast) {
+                    offer(
+                        Action::CastSpell {
+                            player,
+                            object,
+                            route,
+                        },
+                        value,
+                        cast,
+                    );
+                }
+            }
         }
-        if object.types.is_land() {
-            return self.can_play_land(player).then_some((
-                Action::PlayLand {
-                    player,
-                    object: self.state.object_of(card),
-                },
-                0,
-            ));
-        }
-        if !object.types.is_castable() {
-            return None;
-        }
-
-        let can_cast_now = if self.has_instant_timing(player, self.state.object_of(card)) {
-            self.can_cast_instants(player)
-        } else {
-            self.can_cast_sorceries(player)
-        };
-        if !can_cast_now {
-            return None;
-        }
-        self.castable_mana_value(player, card, Default::default())
-            .map(|value| {
-                (
-                    Action::CastSpell {
-                        player,
-                        object: self.state.object_of(card),
-                    },
-                    value,
-                )
-            })
     }
 
     /// Mana charged by a legal cast at the given choices, or None when modes,
@@ -649,7 +696,7 @@ impl Game {
             if self.can_pay_cast(player, self.state.object_of(card), cast) {
                 return Some(cost.mana_value);
             }
-            return (self.alternative_cost_available(player, self.state.object_of(card))
+            return (self.alternative_cost_available(player, self.state.object_of(card), cast)
                 && self.can_pay_cast(
                     player,
                     self.state.object_of(card),
@@ -960,14 +1007,20 @@ impl Game {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)
             }
-            Action::PlayLand { player, object } => {
-                self.play_land(*player, self.chosen_card(*object)?)?;
+            Action::PlayLand {
+                player,
+                object,
+                route,
+            } => {
+                self.play_land(*player, self.chosen_card(*object)?, *route)?;
                 self.restart_priority_round();
                 Ok(())
             }
-            Action::CastSpell { player, object } => {
-                self.cast_spell_action(*player, self.chosen_card(*object)?)
-            }
+            Action::CastSpell {
+                player,
+                object,
+                route,
+            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route),
             Action::ActivateAbility {
                 player,
                 permanent,
@@ -1232,7 +1285,8 @@ mod identity_tests {
         assert!(game
             .execute_action(&Action::PlayLand {
                 player,
-                object: old
+                object: old,
+                route: None
             })
             .is_err());
         assert_eq!(witness(&game), before);
@@ -1240,7 +1294,8 @@ mod identity_tests {
         assert!(game
             .execute_action(&Action::PlayLand {
                 player,
-                object: returned
+                object: returned,
+                route: None
             })
             .is_ok());
         assert_eq!(

@@ -378,6 +378,7 @@ mod tests {
         tokens.extend(
             rules_tokens(
                 &CastChoices {
+                    route: None,
                     kicked: true,
                     flashback: true,
                     x: 1,

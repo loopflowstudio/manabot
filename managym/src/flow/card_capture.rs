@@ -757,6 +757,7 @@ mod tests {
                     Action::CastSpell {
                         player: PlayerId(0),
                         object: object_id,
+                        route: None,
                     },
                     Action::PassPriority {
                         player: PlayerId(0),

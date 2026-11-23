@@ -645,7 +645,7 @@ Capacities are configuration; widths are the layout.
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 25 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 28 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
 Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
@@ -679,6 +679,11 @@ print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]
 `mode` keeps its stored value on these rows. Both columns are appended, so a
 checkpoint trained before them does not read them. Inputs v9 and v10 have
 neither; their X offers differ only in `mode`.
+
+When several permissions apply to one play, its action row gives the selected
+base mana value (`has_route_cost`, `route_mana_value`) and the permanent
+type it spends (`quota_type`, zero for none). A type-limited offer focuses
+the card first and the permanent granting the allowance second.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1

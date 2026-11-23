@@ -76,7 +76,7 @@ pub struct GameState {
     /// order (`state::effect`).
     pub effects: crate::state::effect::EffectRecords,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
-    pub cast_permissions: CastPermissions,
+    pub cast_permissions: Box<CastPermissions>,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
     pub trigger_enqueue_counter: u64,
@@ -254,6 +254,8 @@ pub enum ActivationSource {
 /// when unset so ordinary casts keep their shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastChoices {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<crate::flow::cast_permission::PlayRoute>,
     /// Casting via flashback replaces any departure from the stack with exile.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flashback: bool,
