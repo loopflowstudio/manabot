@@ -82,6 +82,8 @@ The constructed boards reached attack, block and damage decisions. Their priorit
 | Damage step, median µs | 18.7 / 24.3 / 47.4 | 30.9 / 104.8 / 426.8 |
 | Damage step, requested bytes | 46,302 / 89,030 / 163,181 | 101,368 / 411,933 / 1,610,621 |
 
+The diverse-statics damage step grows about fourfold per doubling of board size, in both time and requested bytes, while the duplicate-creature board stays near linear. Its work counter shows one layer-board rebuild per creature at each size (4 / 8 / 16 boards), so the quadratic term is each rebuild re-evaluating every static source. This is the largest superlinear cell among the measured states. It is outside dormant storage and is left for a layer-rebuild change.
+
 Both the timing and the separate allocation pass returned digest `2f90bd126a98e659c8c17ca4f09e58aab97eb270055e9dc80591c8370e04d99b`. Reproduce these runs from the repository root.
 
 ```sh
