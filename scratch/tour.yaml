@@ -1,4 +1,4 @@
-at: 1d5d5474e8cdb6b16233fbecf0544c16974574e5
+at: 9ecb5842e536705a473de8ed8ba0df368c8f6db0
 first:
   - path: managym/cards/src/fdn.rs
     why: Defines the draw over controlled nonlands
@@ -7,6 +7,6 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Counts current mana values when the draw begins
   - path: managym/cards/tests/cards/fdn.rs
-    why: Resolves one announcement against three battlefields
+    why: Lists each battlefield and its expected draw count
   - path: managym/cards/tests/cards/observability.rs
     why: Checks the authored expression reaches catalog tokens

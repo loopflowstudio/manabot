@@ -746,18 +746,19 @@ fn lunar_insight_counts_distinct_controlled_nonland_values_at_resolution() {
     assert_eq!(top_spell(&s).spent.total(), 3);
     let pending = s.game().clone();
 
-    for (foods, one_drop, expected) in [(2, false, 2), (1, true, 3), (0, false, 0)] {
+    for (foods, creatures, expected) in [
+        (2, &["Felidar Cub"][..], 2),
+        (1, &["Kellan, Planar Trailblazer", "Felidar Cub"][..], 3),
+        (0, &[][..], 0),
+    ] {
         *s.game_mut() = pending.clone();
         for _ in 0..foods {
             s.game_mut()
                 .create_token("token.food", PlayerId(0), false)
                 .unwrap();
         }
-        if foods > 0 {
-            s.force_permanent_on_battlefield(0, "Felidar Cub");
-        }
-        if one_drop {
-            s.force_permanent_on_battlefield(0, "Kellan, Planar Trailblazer");
+        for creature in creatures {
+            s.force_permanent_on_battlefield(0, creature);
         }
         let before = hand(&s, 0).len();
         settle(&mut s);
