@@ -29,6 +29,7 @@ capacity is zero and its keys are absent.
 """
 
 from collections.abc import Iterator, Mapping
+from copy import copy
 from dataclasses import dataclass
 from itertools import groupby
 from operator import itemgetter
@@ -123,6 +124,15 @@ class BucketSizes:
     @property
     def trims_objects(self) -> bool:
         return any(self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES)
+
+
+@dataclass(frozen=True)
+class BucketedObservation:
+    """Views in original object coordinates, with the extents used to select them."""
+
+    rows: dict[str, np.ndarray]
+    buckets: BucketSizes
+    needs: np.ndarray
 
 
 def _capacities(space: ObservationSpace) -> dict[str, int]:
@@ -231,10 +241,14 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
     rejects it exactly as it would without buckets.
     """
     shapes = space.shapes
+    mask = obs.get("actions_valid")
+    if mask is None or mask.ndim != 2:
+        return None
+    count = len(mask)
     if any(
         key not in obs
         or obs[key].ndim != len(shape) + 1
-        or tuple(obs[key].shape[1:]) != tuple(shape)
+        or obs[key].shape != (count, *shape)
         for key, shape in shapes.items()
         if not (
             isinstance(obs, PrefixObservation)
@@ -244,7 +258,6 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
     ):
         return None
     capacities = _capacities(space)
-    count = len(obs["actions_valid"])
     needs = {axis: np.zeros(count, np.int64) for axis in AXES}
 
     def need(axis: str, rows: np.ndarray) -> None:
@@ -325,10 +338,10 @@ def object_columns(buckets: BucketSizes) -> list[slice]:
     ]
 
 
-def trim_observation(
+def bucket_views(
     obs: ObservationBuffers, buckets: BucketSizes
 ) -> dict[str, np.ndarray]:
-    """Trim admitted host rows and remap every object join to the new table."""
+    """Slice the measured rows, keeping all references in their original coordinates."""
     trimmed = (
         PrefixObservation(obs, obs.prefixes, obs.memory_capacities)
         if isinstance(obs, PrefixObservation)
@@ -343,8 +356,23 @@ def trim_observation(
         for key in keys:
             if key in obs:
                 trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+    return trimmed
+
+
+def trim_observation(
+    obs: ObservationBuffers, buckets: BucketSizes
+) -> dict[str, np.ndarray]:
+    """Trim admitted host rows and remap every object join to the new table."""
+    return remap_objects(bucket_views(obs, buckets), buckets)
+
+
+def remap_objects(
+    rows: dict[str, np.ndarray], buckets: BucketSizes
+) -> dict[str, np.ndarray]:
+    """Renumber admitted object joins in a new mapping, preserving retained prefixes."""
     if not buckets.trims_objects:
-        return trimmed
+        return rows
+    trimmed = copy(rows)
 
     segments = object_segments(buckets.capacities)
 

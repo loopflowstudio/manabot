@@ -222,14 +222,15 @@ of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding, the default for CUDA training, avoids most of that. After an
-observation is admitted, the network trims each variable axis (facts, effect
+Bucketed padding, the default for CUDA training, avoids most of that. The host measures
+each variable axis (facts, effect
 headers, details and members, relations, actions, events, cards, permanents,
-known hands and decklists) to a bucket: the next power of two at or
+known hands and decklists) and selects the next power of two at or
 above what the batch uses, at least 8 and at most the declared capacity. What a
 batch uses includes every row a reference can name, so trimming removes only
-empty rows nothing refers to. Trimming cards and permanents renumbers object
-references; it is skipped under `historical_mean` value aggregation, whose
+empty rows nothing refers to. Admission checks the measured prefixes in the
+original object coordinates. Preparation then renumbers references into the
+trimmed table. Object trimming is skipped under `historical_mean` value aggregation, whose
 average includes padding, and with belief rows. Logits keep their full action
 capacity. Admission measures the buckets on the host
 (`manabot.policy.buckets`), before any device transfer, for inference and

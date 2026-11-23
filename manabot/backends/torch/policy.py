@@ -49,7 +49,13 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import row_needs, sizes_of, trim_observation
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_views,
+    remap_objects,
+    row_needs,
+    sizes_of,
+)
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
@@ -550,12 +556,23 @@ class ActorCritic(nn.Module):
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        self.check_observation(obs)
-        return self.prepare_admitted(
-            obs, inference=inference, memory_roots=memory_roots
-        )
+        bucketed = self.check_observation(obs)
+        return self._prepare_rows(obs, bucketed, inference, memory_roots)
 
-    def check_observation(self, obs: ObservationBuffers) -> None:
+    def observation_buckets(
+        self, obs: ObservationBuffers, needs: np.ndarray | None = None
+    ) -> BucketedObservation | None:
+        if not self.bucketed_shapes:
+            return None
+        if needs is None:
+            needs = row_needs(obs, self.observation_space)
+        if needs is None:
+            return None
+        sizes = sizes_of(needs, self.observation_space, objects=self.object_trimming())
+        return BucketedObservation(bucket_views(obs, sizes), sizes, needs)
+
+    def check_observation(self, obs: ObservationBuffers) -> BucketedObservation | None:
+        """Validate the current rows and return their measured extents when bucketed."""
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -566,7 +583,9 @@ class ActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
             ) from error
-        admission.check(obs, self._admission_spec(), legal)
+        bucketed = self.observation_buckets(obs)
+        admission.check(obs, self._admission_spec(), legal, bucketed)
+        return bucketed
 
     def prepare_admitted(
         self,
@@ -581,23 +600,22 @@ class ActorCritic(nn.Module):
         `inference` selects compaction and catalog coverage independently of
         autograd mode; bucketed batches always use the full catalog schedule.
         """
-        spec = self._admission_spec()
+        bucketed = self.observation_buckets(obs, needs)
+        return self._prepare_rows(obs, bucketed, inference, memory_roots)
+
+    def _prepare_rows(
+        self,
+        obs: ObservationBuffers,
+        bucketed: BucketedObservation | None,
+        inference: bool,
+        memory_roots: Mapping[str, int] | None,
+    ) -> Prepared[np.ndarray]:
         capacity = obs["actions_valid"].shape[1]
-        if self.bucketed_shapes:
-            if needs is None:
-                needs = row_needs(obs, self.observation_space)
-            if needs is not None:
-                obs = trim_observation(
-                    obs,
-                    sizes_of(
-                        needs,
-                        self.observation_space,
-                        objects=self.object_trimming(),
-                    ),
-                )
+        if bucketed is not None:
+            obs = remap_objects(bucketed.rows, bucketed.buckets)
         batch = prepare(
             obs,
-            spec.tables,
+            self._admission_spec().tables,
             inference=inference and device_of(self).type == "cpu",
             bucketed=self.bucketed_shapes,
             live_tokens=self.live_tokens and self.config.attention_on,
@@ -610,7 +628,11 @@ class ActorCritic(nn.Module):
             select_programs=not inference and not self.bucketed_shapes,
         )
 
-        return replace(batch, bucket_needs=needs)
+        return (
+            replace(batch, bucket_needs=bucketed.needs)
+            if bucketed is not None
+            else batch
+        )
 
     def _evaluate_outputs(
         self, batch: Prepared[np.ndarray]

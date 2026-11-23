@@ -9,13 +9,14 @@ from manabot.backends import resolve
 
 backend = resolve("torch")
 policy, space = backend.load_policy("policy.safetensors")
-batch = policy.prepare(obs, inference=True)  # check, trim, index: a Prepared batch
+batch = policy.prepare(obs, inference=True)  # admitted and indexed on the host
 logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
 `Prepared` is the one policy input. A policy's `prepare` runs this package's
-host work in order (admission, bucket trimming, indexing) and every backend's
-forward reads the result; no forward reads an observation dictionary.
+host admission and indexing. With bucketed shapes, Torch measures occupied
+prefixes before admission and renumbers object references after it. Every
+backend's forward reads the resulting batch.
 
 - `admission.py` owns the checks an observation batch passes before a policy
   reads it: shapes and binary validity, definition and vocabulary references,

@@ -57,6 +57,7 @@ from manabot.env.shared_effects import (
     PROGRAM_TOKEN_KIND,
 )
 from manabot.infra.config import ModelConfig
+from manabot.policy.buckets import BucketedObservation
 from manabot.policy.decision_memory import (
     admit_memory,
     retained_memory,
@@ -122,8 +123,13 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
     return mask.astype(bool)
 
 
-def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
-    """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
+def check(
+    obs: ObservationBuffers,
+    spec: Spec,
+    legal: np.ndarray,
+    bucketed: BucketedObservation | None = None,
+) -> None:
+    """Admit raw coordinates. Measured prefixes exclude only unreferenced zero rows."""
     retained = bool(spec.space.config.max_decision_records)
     prefixes = retained_memory(obs)
     if retained != (prefixes is not None or "decision_records" in obs):
@@ -183,6 +189,10 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
                 "known_library requires whole positive positions or zero padding"
             )
 
+    raw = obs
+    if bucketed is not None:
+        obs = bucketed.rows
+        legal = legal[:, : obs["actions_valid"].shape[1]]
     size = spec.definition_count if lookup is None else len(lookup)
     ids = [
         obs["semantic_cards"],
@@ -228,8 +238,8 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     )
     if spec.space.one_token:
         keys = (*keys, "stack")
-    objects = sum(obs[k].shape[1] for k in keys)
-    validity = np.concatenate([obs[k + "_valid"] for k in keys], 1)
+    objects = sum(raw[k].shape[1] for k in keys)
+    validity = np.concatenate([raw[k + "_valid"] for k in keys], 1)
     if spec.model.belief_count_buckets:
         beliefs(obs, spec.model)
         objects += obs["belief_card_def_ids"].shape[1] + 1
@@ -246,12 +256,27 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
         catalog = Catalog(
             lookup, spec.tables.record_name_keys, spec.tables.record_token_keys
         )
-    facts(obs["facts"], spec.space.config.max_facts, objects, catalog)
+    sizes = bucketed.buckets.sizes if bucketed is not None else {}
+    facts(
+        obs["facts"], sizes.get("facts", spec.space.config.max_facts), objects, catalog
+    )
     shared_effects(
-        obs["effects"], obs["effect_details"], obs["effect_members"], objects, catalog
+        obs["effects"],
+        obs["effect_details"],
+        obs["effect_members"],
+        objects,
+        catalog,
+        header_rows=sizes.get("effects", EFFECT_ROWS),
+        detail_rows=sizes.get("details", DETAIL_ROWS),
+        member_rows=sizes.get("members", MEMBER_ROWS),
     )
     definition_ids(obs["relations"][..., _RELATION_DEFINITIONS], size, lookup)
-    relations(obs["relations"], spec.space.shapes["relations"][-1], objects)
+    relations(
+        obs["relations"],
+        spec.space.shapes["relations"][-1],
+        objects,
+        sizes.get("relations", RELATION_ROWS),
+    )
     if spec.model.recent_events:
         assert lookup is not None
         recent_events(obs, objects, lookup, spec.space.shapes["events"][-1])
@@ -398,9 +423,13 @@ def shared_effects(
     members: np.ndarray,
     objects: int,
     catalog: Catalog | None,
+    *,
+    header_rows: int = EFFECT_ROWS,
+    detail_rows: int = DETAIL_ROWS,
+    member_rows: int = MEMBER_ROWS,
 ) -> None:
     """Validate live headers and their complete CSR detail/member partitions."""
-    if headers.ndim != 3 or headers.shape[1:] != (EFFECT_ROWS, EFFECT_DIM):
+    if headers.ndim != 3 or headers.shape[1:] != (header_rows, EFFECT_DIM):
         raise ValueError(f"expected [batch, {EFFECT_ROWS}, {EFFECT_DIM}] state records")
     valid = headers[..., EFFECT_VALID]
     if not ((valid == 0) | (valid == 1)).all():
@@ -410,9 +439,9 @@ def shared_effects(
     if not np.isfinite(live).all():
         raise ValueError("state records must be finite")
     batch = len(headers)
-    if details.shape != (batch, DETAIL_ROWS, DETAIL_DIM) or members.shape != (
+    if details.shape != (batch, detail_rows, DETAIL_DIM) or members.shape != (
         batch,
-        MEMBER_ROWS,
+        member_rows,
         MEMBER_DIM,
     ):
         raise ValueError("invalid shared effect buffer shape")
@@ -442,14 +471,14 @@ def shared_effects(
         if (
             d != d_end
             or m != m_end
-            or d + count > DETAIL_ROWS
+            or d + count > detail_rows
             or targets == 0
-            or m + targets > MEMBER_ROWS
+            or m + targets > member_rows
         ):
             raise ValueError("invalid effect CSR partition")
         d_end, m_end = d + count, m + targets
-        detail_indexes.extend(range(b * DETAIL_ROWS + d, b * DETAIL_ROWS + d_end))
-        member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
+        detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d_end))
+        member_indexes.extend(range(b * member_rows + m, b * member_rows + m_end))
         member_records.extend([i] * targets)
     detail = details.reshape(-1, DETAIL_DIM)[detail_indexes]
     kinds = _indexes(detail[:, DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind")
@@ -478,9 +507,11 @@ def shared_effects(
         catalog.require_tokens(token_kinds[program], unsigned[program])
 
 
-def relations(rows: np.ndarray, width: int, objects: int) -> None:
+def relations(
+    rows: np.ndarray, width: int, objects: int, row_count: int = RELATION_ROWS
+) -> None:
     """Validate continuation validity, finite payloads, object joins and frames."""
-    if rows.shape[1:] != (RELATION_ROWS, width):
+    if rows.shape[1:] != (row_count, width):
         raise ValueError(f"expected [batch, 64, {width}] relations")
     valid = rows[..., RELATION_VALID_INDEX]
     if not ((valid == 0) | (valid == 1)).all():

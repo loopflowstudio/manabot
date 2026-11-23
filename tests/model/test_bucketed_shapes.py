@@ -7,7 +7,14 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import FACT_OBJECT_INDEX, ObservationSpace, column
+from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.rollout import AdmittedRollout
+from manabot.env.observation import (
+    FACT_OBJECT_INDEX,
+    ObservationSpace,
+    column,
+    encode_observation,
+)
 from manabot.infra.config import ObservationConfig
 from manabot.policy.buckets import (
     AXES,
@@ -18,6 +25,7 @@ from manabot.policy.buckets import (
     sizes_of,
 )
 from manabot.training.rollout.collection import collect
+from manabot.verify.representation import shared_effect_root
 import managym
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
@@ -221,6 +229,7 @@ def _shrink_facts(obs: dict[str, torch.Tensor]) -> None:
     [
         (_set_fact_object(10_000), "invalid fact object reference"),
         (_set_fact_object(2.5), "invalid fact object reference"),
+        (_set_fact_object(1e-12), "invalid fact object reference"),
         (_set_focus(10_000), "invalid action focus reference"),
         (_shrink_facts, "facts"),
     ],
@@ -239,6 +248,68 @@ def test_rejections_match_default(
             model.forward_distribution(device_input(model, obs))
         errors.append(str(error.value))
     assert errors[0] == errors[1]
+
+
+def test_admission_preserves_padding_errors_and_original_mask_evidence() -> None:
+    case = _policy()
+    agent = _bucketed(case.agent)
+    obs = case.obs
+    obs["effects"][-1, -1, column("effects", "valid")] = np.nan
+    for model in (agent, case.agent):
+        with pytest.raises(ValueError, match="^state record validity must be binary$"):
+            model.prepare(obs)
+    obs["actions_valid"][-1, -1] = 0.25
+    for model in (agent, case.agent):
+        with pytest.raises(NumericalError, match="^invalid_action_mask$") as rejected:
+            model.prepare(obs)
+        np.testing.assert_array_equal(
+            rejected.value.tensors["mask"], obs["actions_valid"]
+        )
+        assert rejected.value.tensors["failed"][-1, -1]
+
+
+def test_trimmed_effect_partitions_keep_full_order_bounds_and_batch_strides() -> None:
+    case = _policy()
+    env = shared_effect_root(1)
+    encoded = encode_observation(
+        case.agent.observation_space,
+        env.observation_for_player(env.current_agent_index()),
+    )
+    obs = {key: np.stack([value, value]) for key, value in encoded.items()}
+    bucketed = _bucketed(case.agent)
+    order = column("effect_members", "order")
+    # Membership order belongs to the declared table, not its live prefix.
+    obs["effect_members"][1, 0, order] = obs["effect_members"].shape[1]
+    for model in (case.agent, bucketed):
+        model.check_observation(obs)
+    for key, field, value, message in (
+        (
+            "effect_members",
+            "order",
+            obs["effect_members"][1, 1, order],
+            "duplicate effect membership order",
+        ),
+        ("effects", "member_offset", 1, "invalid effect CSR partition"),
+        ("effects", "member_count", -1, "invalid effect CSR offset/count reference"),
+        ("effect_details", "kind", 0, "live effect detail has no kind"),
+    ):
+        idx = (1, 0, column(key, field))
+        saved = obs[key][idx]
+        obs[key][idx] = value
+        for model in (case.agent, bucketed):
+            with pytest.raises(ValueError, match=f"^{message}$"):
+                model.check_observation(obs)
+        obs[key][idx] = saved
+
+
+def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
+    case = _policy()
+    agent = _bucketed(case.agent)
+    batch = collect(case.collector, agent, 1)
+    row = batch.recorded.index[0]
+    batch.recorded.rows["facts"][row, -1, column("facts", "valid")] = 2
+    with pytest.raises(ValueError, match="^fact validity must be binary$"):
+        AdmittedRollout(agent, batch).admit_rows(np.array([0]), 1)
 
 
 def test_reference_to_padding_object_is_kept() -> None:

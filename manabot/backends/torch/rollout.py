@@ -23,7 +23,6 @@ from manabot.backends.torch.rl import (
     require,
 )
 from manabot.env.memory_store import PrefixObservation, select_rows
-from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RolloutBatch
@@ -58,15 +57,16 @@ class AdmittedRollout:
             chunk = pending[start : start + chunk_rows]
             rows = self.batch.observations(chunk)
             obs = rows.observation
-            self.agent.check_observation(obs)
+            bucketed = self.agent.check_observation(obs)
             self._admitted[chunk] = True
-            if not self.agent.bucketed_shapes:
+            if bucketed is None:
                 continue
-            needs = self.batch.recorded.gather_needs(chunk)
-            if needs is None:
-                needs = row_needs(obs, self.agent.observation_space)
-            if needs is None:
-                continue
+            needs = bucketed.needs
+            # Packing drops illegal offers. Keep their collection-time shape floor
+            # while validating the current rollout, whose arrays are writable.
+            recorded = self.batch.recorded.gather_needs(chunk)
+            if recorded is not None:
+                needs = np.maximum(needs, recorded)
             if self._needs is None:
                 self._needs = np.zeros((len(self._admitted), needs.shape[1]), np.int64)
             self._needs[chunk] = needs
