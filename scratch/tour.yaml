@@ -1,4 +1,4 @@
-at: 9c66f306d83d04ce661d8b1b041608211df0a8a0
+at: b3d9b91a515206237d96d6425b7d20c997d9e963
 first:
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
@@ -7,11 +7,11 @@ first:
   - path: managym/state/src/ability.rs
     why: See the source, event quantity and life condition.
   - path: managym/src/flow/zones.rs
-    why: Return each committed move’s destination appearances.
+    why: Place paired arrivals and remember the owner’s chosen order.
   - path: managym/src/flow/proposed_event.rs
     why: Collect departures and bind one result per event.
   - path: managym/src/flow/decision.rs
-    why: Follow paired arrivals through ordering and discard binding.
+    why: Check both viewers, draw order and the following discard.
   - path: managym/src/flow/triggers.rs
     why: Match graveyard departures and collect simultaneous damage.
   - path: managym/src/flow/resolution.rs
