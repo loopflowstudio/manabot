@@ -104,7 +104,7 @@ In the Dark Ascension combat fixture, attacking grew Ooze to 2/2. Hill Giant blo
 
 The CPython 3.13 release wheel was rebuilt and installed. Four focused Python checks passed for LLM text, Academy projection, field coverage, named layout and protocol parity. The native experience schema matched its checked-in bytes. Both bundled pinned pilot replays passed; the optional frontier checkpoint was unavailable.
 
-Behavior review at `31316346` reran the exact-pair snapshot and Dark Ascension combat fixtures after the sorted-vector change. Both passed, including the two-viewer tensor comparison, repeated hit, two sources, both reentries and turn reset. The death trigger has no target or optional choice. V11 raises a capacity error if the relations cannot fit. The text and Academy projection test passed with a constructed viewer payload. All six search-state contract cases, the stale-Command rejection case and the runtime catalog-token control passed. These are shared controls; the integrated hidden-card permutation and replay through every consumer remain open. Predator Ooze meets its working obligation. The full cohort remains in the working phase with 76 of 81 primary FDN rows open.
+Behavior review at `31316346` reran the exact-pair snapshot and Dark Ascension combat fixtures after the sorted-vector change. Both passed, including the two-viewer tensor comparison, repeated hit, two sources, both reentries and turn reset. The death trigger has no target or optional choice. V11 raises a capacity error if the relations cannot fit. The text and Academy projection test passed with a constructed viewer payload. All six search-state contract cases, the stale-Command rejection case and the runtime catalog-token control passed. These are shared controls; the integrated hidden-card permutation and replay through every consumer remain open. Predator Ooze meets its working obligation. Ooze closed the fifth primary FDN row.
 
 ## Implemented slice · Steel Hellkite
 
@@ -114,7 +114,13 @@ The native snapshot fixture compared a combat hit and a noncombat hit by differe
 
 The text-play fixture exposed a missing stage in the renderer for announcing an activated ability’s X. With that stage admitted, the player attacked, saw X=0 and X=1, chose zero, and saw seat 1 on the pending ability in the text, both Academy frames, restored observation JSON and viewer-relative tensors. The rebuilt CPython 3.13 extension passed both bundled pilot replays. The optional frontier checkpoint was unavailable. Academy’s Svelte check reported zero diagnostics.
 
-Lunar Insight is the next contextual query. Count distinct mana values among current controlled nonlands and test zero, duplicates, and equal permanent counts with different mana values.
+At `73475291`, Ooze and Hellkite share one sorted damage history. Resolution and observation read the combat-player range for the exact source. The v11 permanent and stack rows use the same viewer-relative seat encoding. This answers the pending-source query even after the permanent row disappears.
+
+## Next slice · Lunar Insight
+
+The ledger obligation is “Count distinct mana values among current nonland permanents.” Author Lunar Insight with a draw amount evaluated at resolution. Reuse the current permanent mana-value lookup used by Hellkite and check the controller and nonland filters before counting distinct values. This query needs no retained turn fact.
+
+From the same saved pending spell, compare equal-sized boards with mana values 0, 0, 2 and 0, 1, 2 among the caster’s nonlands. Verify two and three actual draws respectively. Include a land and an opposing nonland with an otherwise absent value, and a branch with no qualifying permanent for zero draws. Change the board after announcement to distinguish a resolution read from an announcement snapshot. Check the authored expression in the catalog tokens and update the FDN ledger with the passing fixture.
 
 ## Evidence to carry forward
 
