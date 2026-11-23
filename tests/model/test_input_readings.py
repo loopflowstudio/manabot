@@ -234,6 +234,51 @@ def test_one_hot_and_steps_read_as_documented() -> None:
     assert np.linalg.norm(steps[1] - steps[0]) >= 1
 
 
+def test_mixed_numeric_columns_preserve_bits_on_strided_rows() -> None:
+    # Float64 ties in tenths distinguish rounding before and after narrowing.
+    entries = np.array([np.nan, np.inf, -np.inf, -0.0, 0.05, 0.15, 0.25, 1.9, 12.0])
+    readings = (
+        Reading.AS_IS,
+        Reading.FACT_VALUE_RAW,
+        Reading.MASK,
+        Reading.RANK,
+        Sized(Reading.STEPS, 2),
+        Reading.LOG,
+        Sized(Reading.ONE_HOT, 2),
+        Reading.FACT_VALUE,
+        Sized(Reading.STEPS, 2),
+        Reading.RANK,
+    )
+    rows = np.stack([np.roll(entries, i) for i in range(len(readings))])[::-1].T
+    kinds = np.tile([FACT_TRANSFORMS, FACT_EFFECT_PROGRAM, FACT_COUNTER], 3)
+    narrow = rows.astype(np.float32)
+    payload = narrow[:, 7].copy()
+    payload[kinds == FACT_EFFECT_PROGRAM] = 0
+    counts = kinds == FACT_TRANSFORMS
+    payload[counts] = signed_log(payload[counts])
+
+    def steps(index: int) -> np.ndarray:
+        count = np.rint(rows[:, index] * 10)
+        return np.column_stack((narrow[:, index], count >= 1, count >= 2))
+
+    code = rows[:, 6]
+    expected = np.column_stack(
+        (
+            narrow[:, :2],
+            narrow[:, 3] / 128,
+            steps(4),
+            signed_log(narrow[:, 5]),
+            (code >= 1) & (code < 2),
+            (code >= 2) & (code < 3),
+            code >= 3,
+            payload,
+            steps(8),
+            narrow[:, 9] / 128,
+        )
+    ).astype(np.float32)
+    assert read_numeric(rows, readings, kinds).tobytes() == expected.tobytes()
+
+
 def test_a_checkpoint_that_recorded_log_for_categories_loads_unchanged(
     tmp_path: Path,
 ) -> None:

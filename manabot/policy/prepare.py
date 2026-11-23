@@ -71,11 +71,14 @@ from manabot.policy.readings import (
     DURATION_FLAGS,
     PROGRAM_KINDS,
     RANK_SCALE,
+    READ_BY_READINGS,
     Reading,
+    ReadingPlan,
     Readings,
     duration_flags,
     input_width,
     read_numeric,
+    reading_plan,
 )
 
 Array = np.ndarray
@@ -156,6 +159,14 @@ class Layout:
     @cached_property
     def widths(self) -> dict[str, int]:
         return {key: len(values) for key, values in self.readings.items()}
+
+    @cached_property
+    def numeric(self) -> dict[str, ReadingPlan]:
+        return {
+            key: reading_plan(readings)
+            for key, readings in self.readings.items()
+            if key in READ_BY_READINGS
+        }
 
     def numeric_width(self, key: str) -> int:
         """How many inputs a buffer's projection receives: the sum of its
@@ -641,7 +652,7 @@ def prepare(
     objects = validity.shape[1]
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
-    numeric = read_numeric(permanents, layout.readings["agent_permanents"])
+    numeric = layout.numeric["agent_permanents"].read(permanents)
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
     # Deprecated v9/v10 carry no positional rows. Current input must supply
@@ -671,7 +682,7 @@ def prepare(
     features[..., _RELATION_FRAME_IDS] = np.where(
         pending[..., None], 0, clean[..., _RELATION_FRAME_IDS]
     )
-    relation_features = read_numeric(features, layout.readings["relations"])
+    relation_features = layout.numeric["relations"].read(features)
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
@@ -692,7 +703,7 @@ def prepare(
     positions = np.zeros(legal.shape, dtype=np.int64)
     positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
     action_rows = obs["actions"][legal_batches, legal_slots]
-    action_features = read_numeric(action_rows, layout.readings["actions"])
+    action_features = layout.numeric["actions"].read(action_rows)
     frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
     candidates = obs["name_candidates"][legal_batches, legal_slots].astype(np.int64)
     focus = obs["action_focus"][legal_batches, legal_slots].astype(np.int64)
@@ -702,17 +713,13 @@ def prepare(
         first = last = np.zeros(len(candidates), np.int64)
 
     players = [
-        read_numeric(obs[f"{seat}_player"], layout.readings[f"{seat}_player"])
-        for seat in SEATS
+        layout.numeric[f"{seat}_player"].read(obs[f"{seat}_player"]) for seat in SEATS
     ]
     cards = [
-        read_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
-        for seat in SEATS
+        layout.numeric[f"{seat}_cards"].read(obs[f"{seat}_cards"]) for seat in SEATS
     ]
     if "player_turn_state" in obs:
-        turn_state = read_numeric(
-            obs["player_turn_state"], layout.readings["player_turn_state"]
-        )
+        turn_state = layout.numeric["player_turn_state"].read(obs["player_turn_state"])
         players = [
             np.concatenate((row, turn_state[:, seat : seat + 1]), -1)
             for seat, row in enumerate(players)
@@ -759,9 +766,7 @@ def prepare(
         deck_rows=tables.rows(decklists[..., _DECK_DEFINITION]),
         deck_counts=(decklists[..., _DECK_MAIN:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-        stack=read_numeric(stack, layout.readings["stack"])
-        if stack is not None
-        else None,
+        stack=layout.numeric["stack"].read(stack) if stack is not None else None,
         stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])
         if stack is not None
         else None,
@@ -1024,7 +1029,7 @@ def _effects(
         member_indexes, MEMBER_OBJECT
     ].astype(np.int64)
     records = np.asarray(member_records, dtype=np.int64)
-    numeric = read_numeric(selected, tables.layout.readings["effects"])
+    numeric = tables.layout.numeric["effects"].read(selected)
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
     token_kinds = PROGRAM_TOKEN_KIND[kinds]
