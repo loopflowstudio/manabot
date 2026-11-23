@@ -12,3 +12,4 @@
 - Exercise retirement of the second exile appearance separately from formation. Preserve the existing generation of a ceased token in ordinary recorded games.
 - Use Ember Island Production for the Ragnarok token witness so the original and its nonlegendary copy survive together. The forked ordering test restores the same native GameSnapshot for each Command.
 - Lead the next review slice with opponent exile to distinguish the ordering player from the owner before migrating immediate battlefield move callers.
+- Use the existing owner exile list for the pair’s relative timestamps. Exile appends new arrivals and preserves survivor order on departure.

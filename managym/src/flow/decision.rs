@@ -1253,7 +1253,7 @@ impl Game {
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         loop {
             if let Some(mut batch) = frame.batch.take() {
-                match self.advance_event_batch(&mut batch) {
+                match self.advance_event_batch(&mut batch, Some(frame.controller)) {
                     BatchProgress::Decision(decision) => {
                         frame.batch = Some(batch);
                         *self.state.suspended_decision_mut() = Some(SuspendedResolution {

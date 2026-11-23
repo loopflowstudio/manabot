@@ -565,13 +565,12 @@ impl Game {
 
     /// Ask after replacements have fixed the destination and before any
     /// member of the simultaneous batch has moved (CR 713.8).
-    pub(super) fn meld_order_choice(&self, pending: &PendingEvent) -> Option<Decision> {
-        let ProposedEvent::ZoneMove {
-            object_id,
-            to: ZoneType::Library | ZoneType::Graveyard,
-            ..
-        } = pending.event
-        else {
+    pub(super) fn meld_order_choice(
+        &self,
+        pending: &PendingEvent,
+        effect_controller: Option<PlayerId>,
+    ) -> Option<Decision> {
+        let ProposedEvent::ZoneMove { object_id, to, .. } = pending.event else {
             return None;
         };
         if pending.second_card_first.is_some() {
@@ -580,7 +579,11 @@ impl Game {
         let second = self.state.zones.melded_card(object_id)?;
         let first = self.state.card_of(object_id).expect("melded primary card");
         Some(Decision::OrderMeldedCards {
-            player: self.state.cards[first].owner,
+            player: match to {
+                ZoneType::Exile => effect_controller?,
+                ZoneType::Library | ZoneType::Graveyard => self.state.cards[first].owner,
+                _ => return None,
+            },
             cards: [first, second],
         })
     }
@@ -612,6 +615,12 @@ impl Game {
             Some(ZoneType::Library) => {
                 self.reposition_library_object(owner, first, usize::MAX);
                 self.remember_library_objects(owner, &[first, second]);
+            }
+            // Exile appends appearances in timestamp order (earliest first).
+            Some(ZoneType::Exile) if second_first => {
+                self.state
+                    .zones
+                    .reposition(ZoneType::Exile, owner, second, usize::MAX)
             }
             Some(ZoneType::Graveyard) => {
                 self.state

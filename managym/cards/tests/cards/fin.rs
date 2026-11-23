@@ -525,10 +525,23 @@ fn bottom_with_lost_days(
     command(s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
 }
 
+fn meld_snapshot(s: &Scenario) -> managym::agent::env::GameSnapshot {
+    use crate::support::game::deck;
+    use managym::{state::player::PlayerConfig, Env};
+    let mut env = Env::new(1, false, false, false);
+    env.reset(
+        ["a", "b"]
+            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+            .to_vec(),
+    )
+    .unwrap();
+    *env.benchmark_game_mut() = s.game().clone();
+    env.snapshot().unwrap()
+}
+
 #[test]
 fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
-    use crate::support::{game::deck, inspect::library};
-    use managym::{state::player::PlayerConfig, Env};
+    use crate::support::inspect::library;
     let mut s = form_ragnarok();
     let owner = PlayerId(0);
     let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
@@ -557,15 +570,7 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
     assert_eq!(s.game().permanent_object(permanent), Some(object));
     assert_eq!(library(&s, 0), vec![library_cards[0]]);
     assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
-    let mut env = Env::new(1, false, false, false);
-    env.reset(
-        ["a", "b"]
-            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
-            .to_vec(),
-    )
-    .unwrap();
-    *env.benchmark_game_mut() = s.game().clone();
-    let snapshot = env.snapshot().unwrap();
+    let snapshot = meld_snapshot(&s);
     let offers = s.game().semantic_decision_frame().unwrap().offers;
     assert_eq!(offers.len(), 2);
     for first in 0..2 {
@@ -585,6 +590,77 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
             s.game_mut().draw_cards(owner, 1);
         }
         assert!(library(&s, 0).is_empty());
+    }
+}
+
+#[test]
+fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
+    use crate::support::game::force_new_card_in_hand;
+    use managym::{decision::Command, state::target::Target};
+
+    let mut s = five_color_setup(&[VANILLE, FANG, "Epic Downfall"]);
+    s.force_permanent_on_battlefield(0, VANILLE);
+    s.force_permanent_on_battlefield(0, FANG);
+    reach_meld_payment(&mut s);
+    pay_for_meld(&mut s);
+    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let object = s.game().permanent_object(permanent).unwrap();
+    let state = &s.game().state;
+    let cards = [
+        state.card_of(object).unwrap(),
+        state.zones.melded_card(object).unwrap(),
+    ];
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "1B");
+    let spell = force_new_card_in_hand(&mut s, 1, "Epic Downfall");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(permanent)));
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let snapshot = meld_snapshot(&s);
+    let offers = s.game().semantic_decision_frame().unwrap().offers;
+    assert_eq!(offers.len(), 2);
+    for first in 0..2 {
+        *s.game_mut() = snapshot
+            .restore(Default::default())
+            .unwrap()
+            .benchmark_game_mut()
+            .clone();
+        assert_eq!(s.game().permanent_object(permanent), Some(object));
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        let frame = s.game().semantic_decision_frame().unwrap();
+        assert_eq!(frame.offers, offers);
+        let cmd = Command {
+            command_id: format!("order-{first}"),
+            expected_revision: frame.revision,
+            offer_id: offers[first].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        let exile = |s: &Scenario| {
+            s.game()
+                .state
+                .zones
+                .zone_objects(ZoneType::Exile, PlayerId(0))
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        let mut expected = exile(&s);
+        s.game_mut().execute_semantic_command(&cmd).unwrap();
+        let state = &s.game().state;
+        assert_eq!(s.game().permanent_object(permanent), None);
+        for index in [first, 1 - first] {
+            let arrival = state.object_of(cards[index]);
+            assert_ne!(arrival, object);
+            assert_eq!(state.card_of(arrival), Some(cards[index]));
+            expected.push(arrival);
+        }
+        assert_eq!(exile(&s), expected);
+        let history = state.events.iter().cloned().collect::<Vec<_>>();
+        assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
+        assert_eq!(exile(&s), expected);
+        assert!(s.game().state.events.iter().eq(&history));
     }
 }
 

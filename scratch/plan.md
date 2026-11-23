@@ -2,7 +2,7 @@
 
 The Task brief gives the design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
 
-Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Vanille and Fang now form Ragnarok. A genuine departure produces both physical arrivals, and Lost Days retains the order choice before the Clue. Exile timestamp ordering, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
+Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witnesses now cover Joo Dee and Homunculus Horde. Cecil exercises transformation in place. Fang’s graveyard trigger is playable. Vanille and Fang now form Ragnarok. A genuine departure produces both physical arrivals, and Lost Days retains the order choice before the Clue. Resumable effect-driven exile now preserves the chosen relative timestamps. Immediate movement callers, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
 
 ## Cohort and interaction fixtures
 
@@ -72,7 +72,7 @@ At `71838e7e`, Fang is registered in `managym/cards/src/fin.rs`. Its trigger use
 
 ## Form Ragnarok and resolve its departure
 
-The FIN registry now authors Vanille’s mill and return, first-main payment, paired exile, and Ragnarok’s death ability. The owner chooses the draw order in the retained movement batch while the genuine pair is still on the battlefield. The native Lost Days test restores each order, draws the unrelated card and both originals, and checks the Clue. A nonlegendary token copy uses the same spell and leaves the physical pair intact. Exile timestamp ordering and integrated consumer evidence remain open.
+The FIN registry now authors Vanille’s mill and return, first-main payment, paired exile, and Ragnarok’s death ability. The owner chooses the draw order in the retained movement batch while the genuine pair is still on the battlefield. The native Lost Days test restores each order, draws the unrelated card and both originals, and checks the Clue. A nonlegendary token copy uses the same spell and leaves the physical pair intact. Epic Downfall now covers the exiling opponent’s timestamp choice. Integrated consumer evidence remains open.
 
 Focused debug checks passed for all 12 FIN fixtures, including namesake failure, both restored draw orders and token departure. The paired-arrivals discard binding, separated exile identity, real-card conformance, nine learning-token checks, decision-code bound and catalog naming checks passed. The CPython 3.13 release extension built. The text and pinned-pilot tests passed 77 cases and skipped the optional frontier checkpoint.
 
@@ -84,11 +84,11 @@ The separated-card identity probe established that parking a card in a vacant sl
 
 At `20b202bf`, the targeted debug filters `fin::vanille fin::ragnarok every_effect_variant_reaches every_condition_reaches` passed six tests. The two mixed-pool controls `uncles_musings_same_pool` and `filtering_cannot_launder` also passed. Vanille uses the shared optional payment. Native order offers name each front, and the continuation emits both front-definition references for the tensor and text projections. The restored Commands cover library departure and its token control. This satisfies the requested library slice. The working phase remains open: an opponent exiling genuine Ragnarok bypasses the ordering decision because the destination match excludes exile. Exercise the exiling player’s choice and reject the spent Command in the next fixture. Viewer-specific tensor/text comparisons and recorded replay remain outstanding; broad suites belong to gate.
 
-### Next slice · Exile a genuine Ragnarok
+### Exile a genuine Ragnarok
 
-Have an opponent exile the pair. In `managym/src/flow/zones.rs`, `meld_order_choice` currently handles library and graveyard placement for the owner. Carry the player responsible for exile through the resolved proposal and reuse the pending batch for that player’s relative timestamp choice. Restore the pre-commit position, take each legal order, and check both exact exile arrivals and their timestamps. Keep the library and graveyard decisions with the owner. [Comprehensive Rules, meld departure and exile timestamps](https://media.wizards.com/2026/downloads/MagicCompRules%2020260619.pdf)
+Epic Downfall’s controller chooses which front receives the earlier exile timestamp. The retained resolution frame supplies the chooser after replacements fix the destination. For these two cards, the owner’s exile list records relative timestamps in arrival order. The native fixture restores both Commands from one snapshot while Ragnarok is still present, checks the exact arrivals against the previous exile contents, and compares the entire event ledger and exile order after rejecting a spent Command. All three tests passed with `cargo test -p managym-cards --test cards fin::ragnarok` from `managym/`.
 
-Use a two-seat fixture before migrating callers. At the exile timestamp decision assert that Ragnarok is still present and the exiling opponent owns both offers. Restore both branches, inspect both exact arrivals and their relative timestamps, then submit the spent Command and compare history and timestamps. Use the existing Lost Days owner-order fixture as the control. The continuation consumes the complete EventResult even when the caller needs only to know the move finished.
+### Next slice · Immediate battlefield moves
 
 Audit battlefield callers of `move_object_with_entry`, which still completes a batch immediately and returns its first arrival. Keep single-successor reads for single-card moves. Route any caller that can separate a pair through the existing resumable batch. Remaining meld witnesses include death and graveyard ordering, owner-only order visibility, stale Command rejection with unchanged history and Clue count, and recorded replay. Continue with Manifest Dread before settling the shared form representation.
 

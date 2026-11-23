@@ -508,7 +508,11 @@ impl Game {
         }
     }
 
-    pub(crate) fn advance_event_batch(&mut self, batch: &mut EventBatch) -> BatchProgress {
+    pub(crate) fn advance_event_batch(
+        &mut self,
+        batch: &mut EventBatch,
+        effect_controller: Option<PlayerId>,
+    ) -> BatchProgress {
         // Earlier instructions and paid tap/life costs happened before this
         // proposal. Match them while their sources still exist; committing a
         // sacrifice must not erase the source's already-earned tap trigger.
@@ -553,7 +557,7 @@ impl Game {
                     );
                 }
                 [] => {
-                    if let Some(decision) = self.meld_order_choice(pending) {
+                    if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
                         return BatchProgress::Decision(Box::new(decision));
                     }
                     batch.cursor += 1;
@@ -953,7 +957,7 @@ impl Game {
         batch: &mut EventBatch,
     ) -> (Vec<EventResult>, Vec<ProposedEvent>) {
         loop {
-            match self.advance_event_batch(batch) {
+            match self.advance_event_batch(batch, None) {
                 BatchProgress::Complete { results, followups } => return (results, followups),
                 BatchProgress::Decision(decision)
                     if matches!(*decision, Decision::EnterAsCopy { .. }) =>
@@ -1602,7 +1606,7 @@ mod tests {
                     provenance: CounterProvenance::new(cause),
                 }]);
                 while let super::BatchProgress::Decision(decision) =
-                    game.advance_event_batch(&mut batch)
+                    game.advance_event_batch(&mut batch, None)
                 {
                     let super::Decision::OrderReplacement { candidates, .. } = *decision else {
                         panic!("expected a replacement choice")
