@@ -3304,13 +3304,7 @@ impl Game {
         &self,
         decision: &Decision,
     ) -> Vec<(CardId, SpellProfile)> {
-        let Decision::CastDuringResolution {
-            player,
-            offer,
-            paid,
-            ..
-        } = decision
-        else {
+        let Decision::CastDuringResolution { player, offer, .. } = decision else {
             return Vec::new();
         };
         // Casting from exile or a library is casting from outside the hand
@@ -3319,11 +3313,6 @@ impl Game {
         {
             return Vec::new();
         }
-        let free = CastChoices {
-            free: !paid,
-            resolving: *paid,
-            ..Default::default()
-        };
         let mut cards: Vec<CardId> = match offer {
             ResolutionCastOffer::Graveyard { .. } => self
                 .state
@@ -3391,15 +3380,15 @@ impl Game {
                 {
                     break;
                 }
-                let cast = CastChoices { profile, ..free };
-                if !cast.spell(definition).types.is_castable() {
+                let cast = decision
+                    .resolution_cast_choices(definition, profile)
+                    .expect("cast decision");
+                let spell = cast.spell(definition);
+                if !spell.types.is_castable() {
                     continue;
                 }
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
-                    let spell = cast.spell(definition);
-                    if !spell.types.is_castable()
-                        || !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0))
-                    {
+                    if !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0)) {
                         continue;
                     }
                 }

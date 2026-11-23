@@ -1,4 +1,4 @@
-at: 73c46dd9a1d41799c8a3fe780bcfc62b1fcfa973
+at: d0617e74929b46d138843bbe5211dbe944c688ad
 first:
   - path: docs/engine.md
     why: Follow an Etali attack through both casts
@@ -7,7 +7,7 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Identify the exact exiled cards
   - path: managym/src/flow/decision.rs
-    why: Follow announcement and resumption after payment
+    why: Compare offered cast terms with announcement and resumption
   - path: managym/src/agent/continuation.rs
     why: Inspect the parent during the target choice
   - path: managym/cards/tests/cards/rix.rs
