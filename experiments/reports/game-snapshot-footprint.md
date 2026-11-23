@@ -15,7 +15,7 @@ Both roots came from `match_fixtures::build_fixture`. The 48-decision fixture dr
 | `interactive-midgame-48-w4-v1` | 15 | 340 | `bc54c4159f3c61d5dbb368fc25f05eec4a5ec1a5efec46b6c94164dbad387ccc` | `17b492e4c9efe30cf461ec097739ea7e7eb723948b07a28c8a0539f36684f600` |
 | `interactive-heavy-80-w4-v1` | 28 | 499 | `f27e14b7bea2dc858a0a8e84c564bc75f4f1438bf848fa5cc371182c2dd918a8` | `fc4d7757b6b9116dd61252ead2bfff9c5a86f9c5ad1603faff63bd332f9829fb` |
 
-To reproduce the footprint from the repository root, build once and run each cache mode in a fresh process. The example writes JSON Lines. It always measures the two fixtures. On a host with at least 1 GiB available for the bank, the commands below also sample live RSS at 0, 1,000 and 10,000 forks using `ps` (macOS or Linux).
+Build from the repository root and run each cache mode in a fresh process. Each invocation writes JSON Lines for both fixtures. On macOS and Linux, `--bank-mib` also samples live RSS with `ps`. These commands assume 1 GiB available for the bank.
 
 ```sh
 cargo build --locked --release --manifest-path managym/Cargo.toml --features benchmark --example bench_footprint
@@ -23,7 +23,7 @@ managym/target/release/examples/bench_footprint exact --bank-mib 1024
 managym/target/release/examples/bench_footprint cold --bank-mib 1024
 ```
 
-Omit `--bank-mib` to measure only sizes and clone traffic. The example checks inline bytes plus requested heap bytes against the supplied bank allowance and a 1.5 GiB ceiling before reserving the vector. Allow headroom for allocator overhead.
+Omit `--bank-mib` for sizes and clone traffic alone. Before reserving the bank, the example checks that projected inline and heap bytes fit the allowance and stay below 1.5 GiB. Leave headroom for allocator overhead.
 
 ## Inline and heap bytes
 
@@ -93,7 +93,7 @@ cargo run --locked --release --features benchmark --example bench_states --manif
 
 ## Four-worker collection
 
-The checkout's CPython 3.13.15 extension ran four persistent `ShardedVectorEnv` workers over 16 streams starting at seed 24. Each process reset the same authored UR Lessons versus GW Allies matchup, then took 128 buffered steps per stream. Python's `Random(24)` chose uniformly from each row's legal action mask. The timer covered `step_into_buffers`, including the worker barrier and native observation encoding. Setup, policy choice and hashing were outside the timer.
+One CPython 3.13.15 process ran four persistent `ShardedVectorEnv` worker threads over 16 streams starting at seed 24. All streams reset to the authored UR Lessons versus GW Allies matchup and took 128 buffered steps each. Python's `Random(24)` chose uniformly from each row's legal action mask. The timer covered `step_into_buffers`, including the worker barrier and native observation encoding. Setup, action selection and hashing ran outside the timer.
 
 The 2,048 decisions produced SHA-256 `6e1db496eca5346db1aa0546fa9145767bf20a5e28116361e3eb93b9211224c1` over the action rows, masks, chosen indices, terminations and rewards on every batch. The standalone baseline was 36,470 steps/s. This measures the CPU producer prefix; model inference and training updates are outside its scope.
 

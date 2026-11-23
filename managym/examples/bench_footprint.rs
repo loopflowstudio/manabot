@@ -43,31 +43,26 @@ fn admit_bank(midgame_heap: u64, heavy_heap: u64, available_mib: u64) -> Result<
 }
 
 fn main() -> Result<(), String> {
-    let mut args = env::args().skip(1);
-    let mode = args.next().ok_or(USAGE)?;
+    let args: Vec<_> = env::args().skip(1).collect();
+    let (mode, available_mib) = match args.as_slice() {
+        [mode] => (mode, None),
+        [mode, flag, mib] if flag == "--bank-mib" => {
+            (mode, Some(mib.parse::<u64>().map_err(|_| USAGE)?))
+        }
+        _ => return Err(USAGE.into()),
+    };
     let cold = match mode.as_str() {
         "exact" => false,
         "cold" => true,
         _ => return Err(USAGE.into()),
     };
-    let budget = match args.next().as_deref() {
-        None => None,
-        Some("--bank-mib") => Some(
-            args.next()
-                .ok_or(USAGE)?
-                .parse::<u64>()
-                .map_err(|_| USAGE)?,
-        ),
-        _ => return Err(USAGE.into()),
-    };
-    if args.next().is_some() {
-        return Err(USAGE.into());
-    }
     println!("{}", json!({"mode": mode, "sizes": inline_sizes()}));
     let (midgame, midgame_heap) = measure_fixture("interactive-midgame-48-w4-v1", cold)?;
     let (heavy, heavy_heap) = measure_fixture("interactive-heavy-80-w4-v1", cold)?;
-    let Some(budget) = budget else { return Ok(()) };
-    admit_bank(midgame_heap, heavy_heap, budget)?;
+    let Some(available_mib) = available_mib else {
+        return Ok(());
+    };
+    admit_bank(midgame_heap, heavy_heap, available_mib)?;
     let mut bank = Vec::with_capacity(MAX_BANK);
     for count in [0, 1000, MAX_BANK] {
         while bank.len() < count {

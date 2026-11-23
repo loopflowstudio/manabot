@@ -1,5 +1,6 @@
-"""Fixed four-worker buffered rollout prefix. Hashing and policy are outside the timer."""
+"""Time four-worker buffered steps and hash the contiguous arrays between calls."""
 
+from contextlib import closing
 import hashlib
 import json
 import random
@@ -19,7 +20,7 @@ def main() -> None:
     rng = random.Random(seed)
     space = ObservationSpace()
     buffers = allocate_vector_buffers(space, streams)
-    players = managym.GameSetup(
+    setup = managym.GameSetup(
         [
             managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
             for key in ("ur_lessons", "gw_allies")
@@ -27,25 +28,22 @@ def main() -> None:
     )
     digest = hashlib.sha256()
     seconds = 0.0
-    env = ShardedVectorEnv(streams, seed, workers=4)
-    try:
+    with closing(ShardedVectorEnv(streams, seed, workers=4)) as env:
         env.set_buffers(buffers, layout=space.layout)
-        env.reset_all_into_buffers(players)
+        env.reset_all_into_buffers(setup)
         for _ in range(batches):
             actions = [
                 int(rng.choice(np.flatnonzero(mask)))
                 for mask in buffers["actions_valid"]
             ]
-            digest.update(buffers["actions"].tobytes())
-            digest.update(buffers["actions_valid"].tobytes())
-            digest.update(np.asarray(actions, dtype="<u4").tobytes())
+            digest.update(buffers["actions"])
+            digest.update(buffers["actions_valid"])
+            digest.update(np.asarray(actions, dtype="<u4"))
             start = perf_counter()
             env.step_into_buffers(actions)
             seconds += perf_counter() - start
-            digest.update(buffers["terminated"].tobytes())
-            digest.update(buffers["rewards"].tobytes())
-    finally:
-        env.close()
+            digest.update(buffers["terminated"])
+            digest.update(buffers["rewards"])
     steps = batches * streams
     print(
         json.dumps(

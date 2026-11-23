@@ -711,11 +711,11 @@ const _: () = {
     use crate::state::game_object::Object;
     use std::mem::size_of;
 
-    assert!(size_of::<Object>() <= 96); // 96 bytes
-    assert!(size_of::<Permanent>() <= 168); // 168 bytes
-    assert!(size_of::<GameState>() <= 4096); // 4040 bytes
-    assert!(size_of::<TrackedState>() <= 4096); // 4072 bytes
-    assert!(size_of::<Game>() <= 5248); // 5152 release, 5160 with debug scan count
+    assert!(size_of::<Object>() <= 96);
+    assert!(size_of::<Permanent>() <= 168);
+    assert!(size_of::<GameState>() <= 4096);
+    assert!(size_of::<TrackedState>() <= 4096);
+    assert!(size_of::<Game>() <= 5248);
     let cache_limit = if cfg!(debug_assertions) { 104 } else { 96 };
     assert!(size_of::<DerivedCache>() <= cache_limit);
 };
