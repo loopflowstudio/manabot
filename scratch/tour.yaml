@@ -1,19 +1,23 @@
-at: b804803948b6532f17facd0f9aa7c66f2c82416b
+at: 90698979988188d39784c5136cfcf212ed4f7cac
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Run Away Together needs a cross-target controller check
   - path: managym/cards/src/fdn.rs
-    why: Lightshell Duo combines prowess and surveil on entry
+    why: Arahbo and Hunter compose entry effects
   - path: managym/state/src/ability.rs
-    why: Prowess defines one trigger for cards, tokens and grants
+    why: Shared trigger subjects include self or another match
+  - path: managym/cards/src/tokens.rs
+    why: Ordinary white Cat token face
+  - path: managym/src/flow/triggers.rs
+    why: Match entering Cats by effective characteristics and token status
   - path: managym/state/src/predicate.rs
     why: Noncreature spells share one card predicate
   - path: managym/cards/src/tla.rs
     why: Sokka has prowess and grants it to other Allies
   - path: managym/cards/tests/cards/fdn.rs
-    why: Both library orders determine the next draw
+    why: Both trigger orders and both retained library orders
   - path: managym/src/flow/decision.rs
     why: Surveil partitions the inspected prefix before ordering
   - path: managym/src/flow/zones.rs
