@@ -4,9 +4,9 @@
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
 <h1>Do the player’s questions and the engine’s records line up?</h1>
 <p>Foundations asks players to remember a hit, recognize what an instruction actually did, and inspect the board as a spell resolves. The time named by the instruction determines which facts the engine needs.</p>
-<aside><h2>Biggest mismatch · Which creature just died?</h2>
-<p><b>Existing.</b> Predator Ooze’s death matcher can read <code>was_creature</code> from the departed object. The general <code>TriggerSubject::Matching</code> path applies its predicate to the destination object, with a special case for animation. One death question has two sources for creature status.</p>
-<p><b>Proposed.</b> Match Hunter’s “another nontoken creature” against the permanent as it left. A nontoken permanent copying a creature can qualify even when its printed card is a noncreature in the graveyard. Use this case to decide whether the generic death predicate reads the right object.</p></aside>
+<aside><h2>Biggest mismatch · Can two abilities disagree that a creature died?</h2>
+<p><b>Existing.</b> Hunter reads <code>was_creature</code> from the departing permanent. A delayed <code>CreatureDies</code> watcher in <code>delayed_triggers_for_event</code> instead checks the destination card’s type or the departure’s animation flag. An Island copying Gray Ogre exposes the difference. It was a creature even though its printed type is land and copying does not require animation.</p>
+<p><b>Proposed.</b> Classify a committed battlefield-to-graveyard move once from the exact departure. Immediate and delayed listeners consume that answer. Prowler needs only whether any such death happened this turn. Preserve the existing destination identities for effects that refer to particular graveyard objects.</p></aside>
 <h2>Existing · Two Hatchers hit the same player</h2>
 <table><tr><th>Moment</th><th>What the player can recover</th></tr>
 <tr><td>Combat damage commits</td><td>One Hatcher deals one, the other three. Each CombatPlayerHit pairs source and recipient with its own amount.</td></tr>
@@ -25,7 +25,8 @@
 <tr><td>How many different values do my current nonlands represent?</td><td>DrawCards evaluates EffectValue::DistinctManaValues once at resolution. The FDN fixture drew two, three and zero from branches of the same pending spell, retaining a land and opposing nonland.</td><td>Yes</td></tr>
 <tr><td>Which creature gets the counter and deals damage?</td><td>TargetCreaturesDealPowerDamageToLastTarget uses ordered legal slots. The FDN fixture gives the Ogre its counter before it deals three. Blinking the victim preserves the counter. Blinking the Ogre prevents both effects.</td><td>Yes</td></tr>
 <tr><td>How many counters did this hit earn?</td><td>CombatPlayerHit supplies the committed amount. The pending trigger owns the value exposed by the triggering_damage fact.</td><td>Yes</td></tr>
-<tr><td>Did another nontoken creature die?</td><td>The general death predicate reads the destination object. Ooze can read the departed permanent’s effective creature status.</td><td>No</td></tr>
+<tr><td>Did another nontoken creature die?</td><td>Hunter’s matching subject excludes its own departure and tokens. Each qualifying departure yields one stack entry.</td><td>Yes</td></tr>
+<tr><td>Did a creature die this turn?</td><td>A delayed watcher reconstructs creature status. The graveyard arrival list identifies destination objects and includes noncreatures.</td><td>No</td></tr>
 <tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
 <h2>One saved Hellkite decision · existing behavior</h2>
 <p>The earlier menu offered one with only an untapped Hellkite. Selecting it panicked because the payment required mana. The repaired menu and the payment step use the same ability cost.</p>
@@ -34,7 +35,12 @@
 <tr><td>Hellkite and one untapped Mountain</td><td>0, 1</td><td>Restore the X decision for each choice. Only one taps the Mountain.</td></tr>
 <tr><td>Katara’s waterbend fixture</td><td>1, 2, 3, 4</td><td>Pay two by tapping the Ally and Ogre. Floating mana remains available.</td></tr></table>
 <h2>Existing recovery evidence</h2><p>The native Hellkite snapshot fixture used two copies. Both could spend their use for zero. Noncombat damage by the second copy left its ability ineffective. Restoring after the hitting source left preserved the eligible seat for both viewers. A transferred Food was destroyed under its current controller. Countering an activation left its use spent. The turn boundary cleared the hit and restored the use.</p>
-<h2>Proposed · Restore Hunter’s attack trigger</h2>
-<p>Decline the sacrifice in one branch. In another, sacrifice a creature token. The token pays the cost and cannot earn a death draw. In a simultaneous destruction, Hunter sees each other qualifying creature on either side, even when Hunter also dies. Two qualifying departures put two draws on the stack. Save there and counter one draw in a sibling. Recovering the original pending draws must still allow both to resolve.</p>
-<p>Keep the pre-batch listener snapshot for who witnesses the deaths. Read the departing object for who died. Ordinary stack entries carry the resulting draws through restoration. Both viewers can count the pending draws while the drawn cards follow normal hand visibility.</p>
-<h2>Review questions</h2><ol><li>Which state decides whether the victim was a creature? <b>1a</b> Its battlefield characteristics at departure (selected). <b>1b</b> Its card in the graveyard.</li><li>Which control distinguishes those readings? <b>2a</b> Destroy two printed creatures. <b>2b</b> Include a nontoken noncreature card that was copying a creature when it died (selected).</li></ol></main></html>
+<h2>Existing · Hunter’s two draws</h2>
+<p>From the same attack trigger, declining keeps the Cat. Sacrificing it grows Hunter and produces zero draws. In the separate Fumigate fixture, Hunter dies alongside a friendly Gray Ogre and an opposing Island copying Gray Ogre. Both viewers see two pending draws. Restoring the game clone allows both to resolve. Countering one in a sibling leaves one draw. The identities enter only the controller’s visible hand.</p>
+<h2>Proposed · Follow the Cat to the end step</h2>
+<table><tr><th>From the attack choice</th><th>Hunter draws</th><th>Prowler at its controller’s end step</th></tr>
+<tr><td>Decline, no subsequent death</td><td>0</td><td>No trigger</td></tr>
+<tr><td>Sacrifice the Cat token</td><td>0</td><td>One trigger, one counter on resolution</td></tr>
+<tr><td>Restore after sacrifice, before end step</td><td>0</td><td>Same trigger. A later turn with no deaths adds no counter.</td></tr></table>
+<p>For the shared reader, isolate the copying Island as the sole death. Another dying creature would make the end-step result pass even if the Island were misclassified. Exiling the same creature supplies a negative control.</p>
+<h2>Review questions</h2><ol><li>Which record establishes a death? <b>1a</b> The committed move and departing creature’s effective type (selected). <b>1b</b> The card in the graveyard.</li><li>What should Prowler retain across a restore? <b>2a</b> Every qualifying identity. <b>2b</b> One public turn fact shared by both seats (selected).</li></ol></main></html>

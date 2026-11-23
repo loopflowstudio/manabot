@@ -159,6 +159,8 @@ Branch from Hunter’s attack trigger with Prowler in play. Sacrifice the Cat in
 
 Hunter’s death matcher already reads effective creature status at departure (`managym/src/flow/triggers.rs`). Have the turn-history writer use the same departure fact. The matcher still reads other card types from the moved card. If a remaining predicate needs another effective type at departure, consolidate that lookup before extending it.
 
+The delayed CreatureDies matcher in `flow/triggers.rs::delayed_triggers_for_event` also needs migration. It combines destination type with an animation flag, which can miss a noncreature copying a creature. First isolate that copy as the sole death with a delayed watcher present. Check exile as a control. Use one exact-departure classification for the watcher, Hunter’s death matching and the turn fact. Keep the graveyard arrival identities used by existing effects. For Prowler retain one public turn-wide boolean across forks, restore and hashing, reset it at each new turn, and expose it in native observation, v11, text and Academy. Restore after the Cat sacrifice before the end step and verify the same pending ability. Preserve the separate ward payment branches.
+
 ## Evidence to carry forward
 
 Eight of 81 primary rows have definitions and directed fixtures. Hunter and Hatcher are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
