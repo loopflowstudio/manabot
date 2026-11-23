@@ -1,5 +1,9 @@
-at: 72b65b3246d3b8a27aead6d82c88fe16bfcecacb
+at: 8f9f172f99e59535e62ea1364299d1206f979e59
 first:
+  - path: managym/cards/src/znr.rs
+    why: One opposing life loss per controller life gain
+  - path: managym/cards/tests/cards/znr.rs
+    why: Follow both triggers through both damage steps
   - path: managym/README.md
     why: Public meaning of the two combat flags
   - path: managym/src/agent/observation.rs
