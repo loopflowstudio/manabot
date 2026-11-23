@@ -92,7 +92,7 @@ The two directed BLB fixtures gained life from Cat Collector’s Food before cas
 
 The timing fixtures in `managym/cards/tests/cards/blb.rs` establish that existing controller history suffices even when the gain predates the enchantment. Keep the two printed triggers independently orderable. The shared condition reader in `managym/src/flow/statics.rs` tests each counter directly, so Convocation needs no history of its own. The mid-game training snapshot merge at `628fb536` left the BLB definition and fixtures intact.
 
-Behavior review at `5717184a` reran both BLB fixtures and seven shared trigger-order debug cases. Same-source triggers retain distinct ability joins, renumbering trigger occurrences preserves the encoded observation, and the opposing viewer omits the chooser’s ordering frames. The nested-fork, exact-description, stale-Command rejection and runtime catalog-token checks passed. Source tracing found that v11 emits the gain count as a player fact and life lost in the turn-state buffer, and LLM text reads both from native turn history. Academy declares both native fields. A Convocation-specific Academy frame comparison and the integrated hidden-card permutation remain unverified. No payment algorithm changed. The Convocation timing obligation is satisfied. Keep the working phase open for Predator Ooze and the remaining cohort.
+Behavior review at `5717184a` reran both BLB fixtures and seven shared trigger-order debug cases. Same-source triggers retain distinct ability joins, renumbering trigger occurrences preserves the encoded observation, and the opposing viewer omits the chooser’s ordering frames. The nested-fork, exact-description, stale-Command rejection and runtime catalog-token checks passed. Source tracing found that v11 emits the gain count as a player fact and life lost in the turn-state buffer, and LLM text reads both from native turn history. Academy declares both native fields. A Convocation-specific Academy frame comparison and the integrated hidden-card permutation remain unverified. No payment algorithm changed. The Convocation timing obligation is satisfied. The BLB witness leaves the primary FDN count unchanged.
 
 ## Implemented slice · Predator Ooze
 
@@ -106,7 +106,9 @@ The CPython 3.13 release wheel was rebuilt and installed. Four focused Python ch
 
 ## Next slice · Steel Hellkite
 
-Extend the turn history to distinguish players dealt combat damage by the activating Hellkite. Verify a second Hellkite, noncombat damage and the chosen X against matched and unmatched permanents.
+Predator Ooze closes the fifth primary FDN row. At `21c29128`, `flow/turn.rs::DamageHistory` stores the distinct exact pairs directly in witness order. Its recipient is a permanent incarnation. Hellkite asks a different question about a player and specifically combat damage. Keep Ooze’s any-positive-damage membership intact when adding that fact.
+
+The [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) requires “Combat-player history filters X-value destruction; once-turn activation quota.” From a saved decision after one Hellkite hits a player in combat, activate for X and resolve. Check that only that player’s nonlands of mana value X are destroyed. Compare the second Hellkite and a noncombat hit. Check the complete activation menu before resolution: the original has spent its one use, the other copy still has its own. After the turn changes, the activation returns and the old hit no longer qualifies. Inspect existing activation-limit support before adding state for the quota. Carry the public player relation through the same viewer and v11 checks used for Ooze.
 
 ## Evidence to carry forward
 
