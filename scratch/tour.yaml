@@ -1,27 +1,21 @@
-at: f2caa4fde913dfb70ccedea1d16d9ea2a1ee8b22
+at: c37efca3232056b73b6c85972fe897a12a6d434d
 first:
-  - path: docs/engine.md
-    why: What happens when a turn ends early
-  - path: managym/cards/src/chk.rs
-    why: Time Stop shares Sundial's instruction
-  - path: managym/src/flow/resolution.rs
-    why: Discard waiting triggers and exile the stack together
-  - path: managym/src/flow/decision.rs
-    why: Resume interrupted rules after state-based choices
+  - path: docs/engine-python.md
+    why: What both players see after reset
+  - path: managym/src/flow/opening.rs
+    why: Declarations, private bottom order and pregame entry
   - path: managym/src/flow/tick.rs
-    why: Ordinary and repeated cleanup share the priority loop
-  - path: managym/src/flow/stabilization.rs
-    why: Which cleanup actions and triggers open priority
-  - path: managym/src/flow/turn.rs
-    why: Preserve turn control and extra turns through cleanup
-  - path: managym/src/agent/effect_execution.rs
-    why: Describe pending turn termination to the chooser
-  - path: managym/cards/tests/cards/chk.rs
-    why: Cast Time Stop during opposing combat
-  - path: managym/src/flow/resolution_tests.rs
-    why: Fork at a mandatory pre-cleanup legend choice
-  - path: managym/tests/rules/cr_514_cleanup.rs
-    why: A legend choice during cleanup opens priority
-  - path: managym/cards/tests/cards/tla.rs
-    why: Verify who chooses each repeated cleanup discard
+    why: Opening choices precede ordinary turn initialization
+  - path: managym/cards/src/fdn.rs
+    why: Leyline Axe enters and equips
+  - path: managym/cards/src/msh.rs
+    why: Quicksilver shares the opening ability
+  - path: managym/src/flow/statics.rs
+    why: Power-up pricing distinguishes normal and pregame entry
+  - path: managym/tests/rules/cr_103_game_start.rs
+    why: Both seats redraw and fork their choices
+  - path: tests/env/test_native_player_policies.py
+    why: Scalar and vector parity and viewer privacy
+  - path: tests/academy/test_player_control_session.py
+    why: Academy reconnects during private bottom selection
 hide: []
