@@ -130,8 +130,6 @@ class BackendPolicy(Protocol):
         """Normalize host logits with the backend's established arithmetic."""
         ...
 
-    def probability_from_logit(self, value: float) -> float: ...
-
     def to(self, device: str) -> Self:
         """Place the policy for inference; refuse unsupported devices."""
         ...
@@ -260,12 +258,8 @@ class Backend(Protocol):
         """Decode checkpoint metadata without constructing a policy."""
         ...
 
-    def seed_training(self, seed: int, *, torch_deterministic: bool = True) -> None:
-        """Seed the framework and apply its training determinism setting."""
-        ...
-
-    def seed(self, seed: int) -> None:
-        """Seed the backend's global action RNG at an explicit decision boundary."""
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None:
+        """Seed the backend's global action RNG; optionally set determinism."""
         ...
 
     def load(

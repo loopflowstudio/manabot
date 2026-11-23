@@ -20,8 +20,10 @@ from typing import Literal, Sequence
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.protocol import SamplerBackend
 from manabot.belief.sampling_data import Split, read_dataset
 from manabot.belief.sampling_fit import (
+    BeliefTrainer,
     CalibrationBin,
     SamplerArmMetrics,
     calibration_error,
@@ -29,7 +31,6 @@ from manabot.belief.sampling_fit import (
     evaluate_sampler,
 )
 from manabot.infra.torch import deterministic_cpu
-from manabot.training.state.backend import TrainingBackend
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +124,8 @@ def _pool_games(
 def report_saved_sampler(
     dataset_path: Path,
     *,
-    backend: TrainingBackend,
+    backend: SamplerBackend,
+    trainer: BeliefTrainer,
     checkpoint: Path | None = None,
     checkpoint_identity: str | None = None,
     training_dataset_path: Path | None = None,
@@ -208,7 +210,7 @@ def report_saved_sampler(
                             game.examples,
                             samples=count,
                             seed=game_seed,
-                            backend=backend.belief_fit,
+                            backend=trainer,
                         )
                         learned = None
                     else:
@@ -217,7 +219,7 @@ def report_saved_sampler(
                             game.examples,
                             samples=count,
                             seed=game_seed,
-                            backend=backend.belief_fit,
+                            backend=trainer,
                         )
                         prior, learned = result.physical_baseline, result.learned
                     evidence.append(
@@ -319,10 +321,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.out.exists():
         raise FileExistsError(args.out)
     from manabot.backends import resolve
+    from manabot.backends.torch import belief_fit
 
     report = report_saved_sampler(
         args.dataset,
         backend=resolve("torch"),
+        trainer=belief_fit,
         checkpoint=args.checkpoint,
         checkpoint_identity=args.checkpoint_sha256,
         training_dataset_path=args.training_dataset,

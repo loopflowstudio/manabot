@@ -4,8 +4,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.observation import ObservationSpace
 from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
-from manabot.policy.prepare import RecordNamespace, record_key
+from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import Layout, RecordNamespace, Tables, record_key
+from manabot.policy.readings import Readings
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -137,4 +140,56 @@ def catalog_tables(
         buffers,
         tuple(sorted(vocabulary)),
         tables.size if tables else len(vocabulary) + 1,
+    )
+
+
+def fresh_policy_tables(
+    space: ObservationSpace, model: ModelConfig, readings: Readings
+) -> tuple[Tables, int, int]:
+    """Build host lookup `Tables` and embedding row counts for a fresh policy."""
+    buffers: dict[str, np.ndarray] = {}
+    token_rows = 0
+    definition_rows: np.ndarray | None = None
+    if model.world is not None:
+        catalog = catalog_tables(
+            model.world,
+            records=model.catalog_records(),
+            decision_memory=bool(space.config.max_decision_records),
+        )
+        for name, value in catalog.buffers.items():
+            buffers[f"semantic_cards.{name}"] = value
+        token_rows = catalog.embedding_rows
+        definition_rows = catalog.buffers["definition_rows"]
+    candidates = managym.naming_catalog()
+    if not candidates or len({candidate.name for candidate in candidates}) != len(
+        candidates
+    ):
+        raise ValueError("naming vocabulary must be nonempty and unique")
+    name_definitions = np.asarray(
+        [0]
+        + [
+            candidate.definition + 1 if candidate.definition is not None else 0
+            for candidate in candidates
+        ],
+        dtype=np.int64,
+    )
+    buffers["name_candidates.definitions"] = name_definitions
+    if definition_rows is not None:
+        buffers["name_candidates.program_rows"] = definition_rows[name_definitions]
+    cards = space.config.max_cards_per_player
+    perms = space.config.max_permanents_per_player
+    buffers["_is_agent_template"] = np.concatenate(
+        [
+            np.ones(1, dtype=bool),
+            np.zeros(1, dtype=bool),
+            np.ones(cards, dtype=bool),
+            np.zeros(cards, dtype=bool),
+            np.ones(perms, dtype=bool),
+            np.zeros(perms, dtype=bool),
+        ]
+    )[None]
+    return (
+        Tables.from_buffers(buffers, Layout(readings)),
+        token_rows,
+        len(candidates) + 1,
     )

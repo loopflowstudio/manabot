@@ -62,6 +62,20 @@ def no_grad() -> AbstractContextManager[object]:
     return nullcontext()
 
 
+def update_ema(ema: "MLXActorCritic", agent: "MLXActorCritic", decay: float) -> None:
+    """Update `ema` weights in place toward `agent`."""
+    if not 0 <= decay <= 1:
+        raise ValueError(f"EMA decay must be in [0, 1], got {decay}")
+    updated = tree_map(
+        lambda target, source: target * decay + source * (1.0 - decay),
+        ema.parameters(),
+        agent.parameters(),
+    )
+    ema.update(updated)
+    ema.clear_cache()
+    mx.eval(ema.parameters())
+
+
 class Learner:
     """Trainable policy and Adam state shared by every update."""
 
@@ -75,9 +89,10 @@ class Learner:
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
     ) -> None:
-        if execution_rows is not None or bootstrap_rows is not None:
-            raise NotImplementedError("execution row limits currently require Torch")
-        self.execution_rows = self.bootstrap_rows = None
+        if any(v is not None and v < 1 for v in (execution_rows, bootstrap_rows)):
+            raise ValueError("execution row limits must be positive")
+        self.execution_rows = execution_rows
+        self.bootstrap_rows = bootstrap_rows
         if minibatch_rows < 1:
             raise ValueError("minibatch_rows must be positive")
         if precision is not None:
@@ -94,6 +109,8 @@ class Learner:
         self.profiler = Profiler()
         # The loss `loss` last returned and its parameter gradients.
         self._pending: tuple[mx.array, dict[str, object]] | None = None
+        # Summed chunk gradients across execution chunks of one logical minibatch.
+        self._accumulated: dict[str, object] | None = None
 
     def _require_masters(self, message: str) -> None:
         """Gradients and Adam apply to float32 masters; inside
@@ -134,7 +151,17 @@ class Learner:
         return outputs
 
     def accumulate(self, loss: mx.array, *, first: bool) -> None:
-        raise NotImplementedError("gradient accumulation currently requires Torch")
+        """Accumulate chunk gradients without stepping; clip and Adam stay at the logical boundary."""
+        check_objective(loss)
+        gradients = self._gradients(loss)
+        self._pending = None
+        if first:
+            self._accumulated = gradients
+        else:
+            if self._accumulated is None:
+                raise ValueError("accumulate(first=False) requires an active batch")
+            self._accumulated = tree_map(mx.add, self._accumulated, gradients)
+            mx.eval(self._accumulated)
 
     def _gradients(self, loss: mx.array) -> dict[str, object]:
         if self._pending is None or self._pending[0] is not loss:
@@ -156,11 +183,17 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
-        if accumulated:
-            raise NotImplementedError("gradient accumulation currently requires Torch")
         self._require_masters("close the inference precision scope before stepping")
-        gradients = self._gradients(loss)
-        self._pending = None
+        if accumulated:
+            if self._accumulated is None:
+                raise ValueError(
+                    "step(accumulated=True) requires accumulated gradients"
+                )
+            gradients = self._accumulated
+            self._accumulated = None
+        else:
+            gradients = self._gradients(loss)
+            self._pending = None
         track = recorder.track if recorder is not None else _untracked
         with recorder.rejecting() if recorder is not None else nullcontext():
             check_objective(loss)

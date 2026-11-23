@@ -28,7 +28,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
-    belief_checkpoint_fields,
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import (
@@ -37,11 +36,8 @@ from manabot.infra.artifacts import (
     materialize_artifact,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.interface import saved_readings, world_fields
-from manabot.model.world import (
-    checkpoint_source,
-    validate_policy_input,
-)
+from manabot.model.interface import saved_readings
+from manabot.model.world import validate_policy_input
 from manabot.policy.checkpoint import (
     NotAContainer,
     ParameterArrays,
@@ -52,8 +48,8 @@ from manabot.policy.checkpoint import (
     from_torch_state,
     read_metadata,
     read_saved_container,
+    save_policy_checkpoint,
     torch_name,
-    write_container,
 )
 from manabot.policy.prepare import Tables
 import managym
@@ -263,62 +259,39 @@ def save_checkpoint(
     Pass `player_configs` to record the exact setups in the binding. Passing
     `None` allows the policy to play any admitted deck.
     """
-
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    checkpoint = {
-        **world_fields(obs_space, agent.readings, player_configs),
-        "source": checkpoint_source(),
-        "architecture": agent.architecture_receipt().model_dump(mode="json"),
-        "global_step": 0,
-        "hypers": {
-            "agent_hypers": agent.config.checkpoint_payload(),
-            "observation_hypers": obs_space.config.model_dump(),
-            "train_hypers": {},
-            # The collector applies the policy's decision settings to both seats.
-            # Training provenance is independent of strict world/ABI admission.
-            "training_setup": {
-                "mana_payment": [obs_space.config.mana_payment] * 2,
-                "mana_floats": [obs_space.config.mana_floats] * 2,
-                "skip_trivial": True,
-            },
-        },
-        "bc": extra or {},
-    }
-    validate_policy_input(agent, checkpoint["world_binding"])
-    checkpoint.update(
-        belief_checkpoint_fields(
-            belief_schema,
-            count_buckets=agent.belief_count_buckets,
-            card_vocab_size=agent.config.belief_card_vocab_size,
-        )
-    )
     # Check before NumPy conversion, which refuses some floating types outright.
     for name, parameter in agent.named_parameters():
         if parameter.dtype != torch.float32:
             raise TypeError(
                 f"parameter {name}: expected float32, got {parameter.dtype}"
             )
-    container = from_torch_state(
-        agent.config,
-        obs_space.config,
-        {
-            name: tensor.detach().cpu().numpy()
-            for name, tensor in agent.state_dict().items()
-        },
-        checkpoint_metadata(checkpoint),
-        parameter_names=dict(agent.named_parameters()),
+    parameter_names = [name for name, _ in agent.named_parameters()]
+    parameter_set = set(parameter_names)
+    state = {
+        name: tensor.detach().cpu().numpy()
+        for name, tensor in agent.state_dict().items()
+    }
+    parameters = {canonical_name(name): state[name] for name in parameter_names}
+    buffers = {
+        name: value for name, value in state.items() if name not in parameter_set
+    }
+    save_policy_checkpoint(
+        agent,
+        obs_space,
+        path,
+        parameters=parameters,
+        buffers=buffers,
+        parameter_names=parameter_names,
         readings=agent.readings,
+        architecture=agent.architecture_receipt(),
+        player_configs=player_configs,
+        extra=extra,
+        belief_schema=belief_schema,
     )
-    write_container(path, container)
 
 
 class _Torch:
     name = "torch"
-
-    @property
-    def verification(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.verification")
 
     @property
     def runtime(self) -> ModuleType:
@@ -329,10 +302,6 @@ class _Torch:
     @property
     def state(self) -> ModuleType:
         return importlib.import_module("manabot.backends.torch.state")
-
-    @property
-    def belief_fit(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.belief_fit")
 
     @property
     def belief(self) -> ModuleType:
@@ -390,13 +359,10 @@ class _Torch:
         return load_metadata(path)
 
     @staticmethod
-    def seed_training(seed: int, *, torch_deterministic: bool = True) -> None:
+    def seed(seed: int, *, deterministic: bool | None = None) -> None:
         torch.manual_seed(seed)
-        torch.backends.cudnn.deterministic = torch_deterministic
-
-    @staticmethod
-    def seed(seed: int) -> None:
-        torch.manual_seed(seed)
+        if deterministic is not None:
+            torch.backends.cudnn.deterministic = deterministic
 
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[ActorCritic, Learner]:
         agent = assemble(checkpoint)

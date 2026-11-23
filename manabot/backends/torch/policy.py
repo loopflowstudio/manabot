@@ -664,10 +664,6 @@ class ActorCritic(nn.Module):
             tensor = tensor.double()
         return to_numpy(torch.softmax(tensor, dim=-1))
 
-    @staticmethod
-    def probability_from_logit(value: float) -> float:
-        return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
-
     @torch.no_grad()
     def sample(
         self,

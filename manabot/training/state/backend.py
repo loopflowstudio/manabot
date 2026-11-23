@@ -19,14 +19,11 @@ from manabot.policy.protocol import BackendPolicy
 
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefEncodingSchema
-    from manabot.belief.sampling_fit import BeliefTrainer
     from manabot.infra.config import ModelConfig
     from manabot.training.learning import Precision
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor
-    from manabot.verify.choice_corpus import Case
-    from manabot.verify.learning_regression import PolicySnapshot
     from managym import PlayerConfig
 
 
@@ -90,20 +87,11 @@ class CollectionFactory(Protocol):
     ) -> Callable[[BackendPolicy, int], SelectionPredictor]: ...
 
 
-class Verification(Protocol):
-    def inspect_policy(
-        self, path: Path, cases: list[Case], updates: int
-    ) -> PolicySnapshot: ...
-
-
 class TrainingBackend(SamplerBackend, Protocol):
     """Execution roles beyond ordinary inference and portable updates.
 
     An unsupported runtime refuses before collection or recovery starts.
     """
-
-    @property
-    def verification(self) -> Verification: ...
 
     @property
     def runtime(self) -> TrainingRuntime: ...
@@ -121,9 +109,6 @@ class TrainingBackend(SamplerBackend, Protocol):
 
     @property
     def state(self) -> "TrainingState": ...
-
-    @property
-    def belief_fit(self) -> BeliefTrainer: ...
 
     @property
     def collection(self) -> CollectionFactory: ...

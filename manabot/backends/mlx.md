@@ -52,15 +52,18 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 ## What the backend covers
 
-The backend runs what the w160l8 recipe uses: a catalog world with catalog
-record ids, table attention, a masked-mean scalar critic and policy input v9.
-The container carries every configuration, so `backend.load_policy` is where the
-rest is refused: a checkpoint that enables belief inputs, policy history,
-another critic, FiLM (`policy_film` or `focus_film`), `stream_norm` or input
-v10 raises `UnsupportedPolicy` naming every unsupported field, rather than
-running partially. Checkpoints of the `local` and `baseline` recipes use FiLM
-and are refused. The sized column readings (`one_hot`, `steps`) are host
-preparation and need nothing from the backend.
+The backend runs what current damped self-play recipes (`baseline`, `elemental`
+and `w160l8`) use: a catalog world with catalog record ids, table attention
+(post- or pre-norm), a masked-mean scalar critic, `stream_norm`, `focus_film`,
+`policy_film`, `bucketed_shapes`, gradient accumulation and policy inputs v9,
+v10 and v11 (stack tokens and known library positions).
+The container carries every configuration, so `backend.load_policy` and
+`backend.runtime.create_policy` refuse what is not yet implemented: belief
+inputs, decision memory, policy history (`recent_events`), categorical WDL or
+other value aggregations, and `attention_on=False` raise `UnsupportedPolicy`
+naming every unsupported field, rather than running partially. The sized column
+readings (`one_hot`, `steps`) are host preparation and need nothing from the
+backend.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:

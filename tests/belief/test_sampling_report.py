@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from manabot.backends import resolve
+from manabot.backends.torch import belief_fit
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
@@ -123,6 +124,7 @@ def test_saved_cli_reproduces_statistics_and_refuses_overwrite(tmp_path: Path) -
         training_dataset_path=data,
         sample_counts=(4, 12),
         backend=resolve("torch"),
+        trainer=belief_fit,
     )
     assert report.policy_relationship == "same_policy"
     assert len(report.measurements) == 6
@@ -146,6 +148,7 @@ def test_saved_cli_reproduces_statistics_and_refuses_overwrite(tmp_path: Path) -
             checkpoint_identity="bad",
             training_dataset_path=data,
             backend=resolve("torch"),
+            trainer=belief_fit,
         )
 
 
@@ -197,6 +200,7 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
                 training_dataset_path=train_path,
                 sample_counts=(8,),
                 backend=resolve("torch"),
+                trainer=belief_fit,
             )
         )
     assert all(report.policy_relationship == "foreign_policy" for report in reports)
@@ -219,6 +223,7 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
             checkpoint_identity=digest,
             training_dataset_path=train_path,
             backend=resolve("torch"),
+            trainer=belief_fit,
         )
     wrong = tmp_path / "wrong.json"
     save_dataset(replace(training, world_identity="other-world"), wrong)
@@ -229,6 +234,7 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
             checkpoint_identity=digest,
             training_dataset_path=train_path,
             backend=resolve("torch"),
+            trainer=belief_fit,
         )
 
 
@@ -245,6 +251,7 @@ def test_wide_count_space_uses_bounded_sampling(tmp_path: Path) -> None:
         training_dataset_path=data,
         sample_counts=(2, 5),
         backend=resolve("torch"),
+        trainer=belief_fit,
     )
     for row in report.measurements:
         assert row.learned is not None and row.learned.support_violations == 0
@@ -252,7 +259,9 @@ def test_wide_count_space_uses_bounded_sampling(tmp_path: Path) -> None:
         assert (
             row.learned.largest_sample_tensor_bytes == row.samples_per_example * 40 * 8
         )
-    prior = report_saved_sampler(data, sample_counts=(2,), backend=resolve("torch"))
+    prior = report_saved_sampler(
+        data, sample_counts=(2,), backend=resolve("torch"), trainer=belief_fit
+    )
     assert prior.policy_relationship == "prior_only"
     assert all(row.learned is None for row in prior.measurements)
     assert {item.metric for item in prior.unavailable} >= {
@@ -267,7 +276,10 @@ def test_invalid_sensitivity_rejected_before_read(
 ) -> None:
     with pytest.raises(ValueError, match="sample counts"):
         report_saved_sampler(
-            tmp_path / "missing", sample_counts=counts, backend=resolve("torch")
+            tmp_path / "missing",
+            sample_counts=counts,
+            backend=resolve("torch"),
+            trainer=belief_fit,
         )
 
 
@@ -296,6 +308,7 @@ def test_report_counts_invalid_draws(
         training_dataset_path=data,
         sample_counts=(2,),
         backend=resolve("torch"),
+        trainer=belief_fit,
     )
     for row in report.measurements:
         assert row.learned is not None and row.learned.support_violations == 2
@@ -330,6 +343,7 @@ def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
             sample_counts=(4,),
             seed=7,
             backend=resolve("torch"),
+            trainer=belief_fit,
         )
         reports.append(report)
         assert report.training_seed == seed
@@ -382,7 +396,9 @@ def test_duplicate_saved_views_rejected(tmp_path: Path) -> None:
     path = tmp_path / "duplicates.json"
     save_dataset(dataset, path)
     with pytest.raises(ValueError, match="duplicate saved observation"):
-        report_saved_sampler(path, sample_counts=(2,), backend=resolve("torch"))
+        report_saved_sampler(
+            path, sample_counts=(2,), backend=resolve("torch"), trainer=belief_fit
+        )
 
 
 def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:

@@ -495,9 +495,9 @@ def run_simulation(
     random.seed(runtime_config.seed)
     np.random.seed(runtime_config.seed)
     if backend is not None:
-        backend.seed_training(
+        backend.seed(
             runtime_config.seed,
-            torch_deterministic=runtime_config.torch_deterministic,
+            deterministic=runtime_config.torch_deterministic,
         )
     previous_seed = os.environ.get("ETUDE_SEED")
     os.environ["ETUDE_SEED"] = str(runtime_config.seed)

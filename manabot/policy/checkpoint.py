@@ -21,16 +21,17 @@ This module reads and writes the file format with NumPy; it imports no array
 framework.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import json
 import logging
 from pathlib import Path
 import struct
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from manabot.belief.encoding import BeliefEncodingSchema, belief_checkpoint_fields
 from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.architecture import (
@@ -39,10 +40,13 @@ from manabot.model.architecture import (
     validate_architecture_receipt,
 )
 from manabot.model.interface import model_interface, saved_readings, world_fields
-from manabot.model.world import checkpoint_source, written_at
+from manabot.model.world import checkpoint_source, validate_policy_input, written_at
 from manabot.policy.binding import BindingReport, bind_catalog
 from manabot.policy.prepare import Layout, Tables
 from manabot.policy.readings import Readings
+
+if TYPE_CHECKING:
+    import managym
 
 type ParameterArrays = Mapping[str, np.ndarray]
 
@@ -159,6 +163,7 @@ class Dimensions:
     token_rows: int
     name_rows: int
     links: int
+    stack: int = 0
 
 
 # -- canonical names -----------------------------------------------------------------
@@ -252,14 +257,19 @@ class PolicyCheckpoint:
     def dimensions(self) -> Dimensions:
         model = self.model
         columns = Layout(self.readings)
+        player = columns.numeric_width("agent_player")
+        card = columns.numeric_width("agent_cards")
+        if self.space.turn_state:
+            player += columns.numeric_width("player_turn_state")
+            card += 1
         return Dimensions(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=columns.numeric_width("agent_player"),
-            card=columns.numeric_width("agent_cards"),
+            player=player,
+            card=card,
             permanent=columns.numeric_width("agent_permanents"),
             action=columns.numeric_width("actions"),
             focus=self.space.config.max_focus_objects,
@@ -272,6 +282,7 @@ class PolicyCheckpoint:
             ),
             name_rows=int(self.parameters["name_candidates.embedding.weight"].shape[0]),
             links=len(columns.link_columns),
+            stack=columns.numeric_width("stack") if self.space.one_token else 0,
         )
 
 
@@ -339,6 +350,75 @@ def checkpoint_metadata(
     if converted_from is not None:
         metadata["converted_from"] = str(converted_from)
     return metadata
+
+
+def save_policy_checkpoint(
+    agent: Any,
+    obs_space: ObservationSpace,
+    path: str | Path,
+    *,
+    parameters: Mapping[str, np.ndarray],
+    buffers: Mapping[str, np.ndarray],
+    parameter_names: Sequence[str],
+    readings: Readings,
+    architecture: ArchitectureReceipt,
+    player_configs: "Sequence[managym.PlayerConfig] | None",
+    extra: dict[str, Any] | None = None,
+    belief_schema: BeliefEncodingSchema | None = None,
+) -> None:
+    """Save a portable policy container from canonical float32 parameters and buffers.
+
+    Shared across every framework backend: metadata, world binding, belief
+    binding and container serialization live here once.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    record: dict[str, Any] = {
+        **world_fields(obs_space, readings, player_configs),
+        "source": checkpoint_source(),
+        "architecture": architecture.model_dump(mode="json"),
+        "global_step": 0,
+        "hypers": {
+            "agent_hypers": agent.config.checkpoint_payload(),
+            "observation_hypers": obs_space.config.model_dump(),
+            "train_hypers": {},
+            # The collector applies the policy's decision settings to both seats.
+            # Training provenance is independent of strict world/ABI admission.
+            "training_setup": {
+                "mana_payment": [obs_space.config.mana_payment] * 2,
+                "mana_floats": [obs_space.config.mana_floats] * 2,
+                "skip_trivial": True,
+            },
+        },
+        "bc": extra or {},
+    }
+    validate_policy_input(agent, record["world_binding"])
+    record.update(
+        belief_checkpoint_fields(
+            belief_schema,
+            count_buckets=agent.belief_count_buckets,
+            card_vocab_size=agent.config.belief_card_vocab_size,
+        )
+    )
+    checked_params: dict[str, np.ndarray] = {}
+    for name, value in parameters.items():
+        array = np.asarray(value)
+        if array.dtype != np.float32:
+            raise TypeError(f"parameter {name}: expected float32, got {array.dtype}")
+        checked_params[name] = (
+            array if array.flags.c_contiguous else np.ascontiguousarray(array)
+        )
+    meta = checkpoint_metadata(record)
+    meta["parameter_names"] = json.dumps(list(parameter_names))
+    container = PolicyCheckpoint(
+        model=agent.config,
+        space=obs_space,
+        parameters=checked_params,
+        buffers={name: np.asarray(value) for name, value in buffers.items()},
+        metadata=meta,
+        readings=readings,
+    )
+    write_container(target, container)
 
 
 def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:

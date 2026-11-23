@@ -49,6 +49,8 @@ def from_numpy(array: np.ndarray, device: object = None) -> mx.array:
 
 
 def to_numpy(array: mx.array) -> np.ndarray:
+    if array.dtype == mx.bfloat16:
+        array = array.astype(mx.float32)
     return np.array(array)
 
 

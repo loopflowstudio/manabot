@@ -40,7 +40,13 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from manabot.training.state.backend import TrainingRuntime, TrainingState
+from manabot.training.rollout.numerics import CollectionSession
+from manabot.training.rollout.selection_data import SelectionPredictor
+from manabot.training.state.backend import (
+    CollectionFactory,
+    TrainingRuntime,
+    TrainingState,
+)
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
@@ -117,14 +123,23 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
         if not hasattr(value, name):
             found.append(f"{where}: missing")
             continue
-        actual = getattr(value, name)
+        actual = (
+            value
+            if name == "__call__" and isinstance(value, type)
+            else getattr(value, name)
+        )
         declared = inspect.getattr_static(protocol, name, None)
         if name == "NumericalError":
             if not (isinstance(actual, type) and issubclass(actual, Exception)):
                 found.append(f"{where}: not an exception type")
         elif isinstance(declared, property):
             returned = get_type_hints(
-                declared.fget, localns={"RolloutBatch": RolloutBatch}
+                declared.fget,
+                localns={
+                    "RolloutBatch": RolloutBatch,
+                    "CollectionSession": CollectionSession,
+                    "SelectionPredictor": SelectionPredictor,
+                },
             ).get("return")
             if isinstance(returned, type) and getattr(returned, "_is_protocol", False):
                 found += _violations(actual, returned, where)
@@ -345,3 +360,13 @@ def test_torch_execution_state_capabilities_match_their_contracts() -> None:
     backend = resolve("torch")
     assert _violations(backend.state, TrainingState, "state") == []
     assert _violations(backend.runtime, TrainingRuntime, "runtime") == []
+    assert _violations(backend.collection, CollectionFactory, "collection") == []
+
+
+@pytest.mark.parametrize("name", sorted(BACKENDS))
+def test_backends_provide_runtime_and_collection_contracts(name: str) -> None:
+    backend = _installed(name)
+    assert _violations(backend.runtime, TrainingRuntime, f"{name}.runtime") == []
+    assert (
+        _violations(backend.collection, CollectionFactory, f"{name}.collection") == []
+    )

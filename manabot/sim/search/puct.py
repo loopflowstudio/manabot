@@ -196,7 +196,10 @@ class AgentLeafEvaluator:
         if self.agent.value_semantic == "signed_outcome":
             return (value + 1.0) / 2.0
         if self.agent.value_semantic == "win_logit":
-            return self.agent.probability_from_logit(value)
+            if value >= 0.0:
+                return 1.0 / (1.0 + math.exp(-value))
+            scaled = math.exp(value)
+            return scaled / (1.0 + scaled)
         raise ValueError("PUCT critic has an unsupported value semantic")
 
     def _predict(

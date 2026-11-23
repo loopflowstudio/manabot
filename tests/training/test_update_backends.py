@@ -352,11 +352,15 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
                 admitted.rows(np.array([0]), "cpu")
 
 
+@pytest.mark.parametrize("name", sorted(BACKENDS))
 def test_actor_filtered_floor_is_the_reported_penalty(
+    name: str,
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
+    if name not in installed_backends():
+        pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    backend = resolve("torch")
+    backend = resolve(name)
     results: list[UpdateDiagnostics] = []
     for coefficient in (0.0, 0.002):
         learning = LEARNING.model_copy(
@@ -367,6 +371,7 @@ def test_actor_filtered_floor_is_the_reported_penalty(
             "cpu",
             minibatch_rows=batch.actions.size,
             execution_rows=2,
+            bootstrap_rows=1,
         )
         results.append(update_damped_iteration(backend, learner, batch, learning, 1))
     control, floor = results
