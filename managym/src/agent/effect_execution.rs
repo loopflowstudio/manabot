@@ -1395,6 +1395,11 @@ pub(crate) fn project_decision(
                 ResolutionCastOffer::Exiled { object: object_id } => {
                     out.object_id("cast from exile", *object_id)
                 }
+                ResolutionCastOffer::AmongExiled { objects } => {
+                    for object in objects {
+                        out.object_id("cast from exile", *object);
+                    }
+                }
                 ResolutionCastOffer::Cascade {
                     object: object_id,
                     exiled,

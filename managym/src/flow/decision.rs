@@ -375,6 +375,8 @@ pub enum ResolutionCastOffer {
         source: ObjectId,
         predicate: CardPredicate,
     },
+    /// Exact appearances exiled together, cast in the chooser's order.
+    AmongExiled { objects: Vec<ObjectId> },
     /// Cascade's hit `card`, among every card the cascade `exiled`; those not
     /// cast go on the bottom of the library in a random order.
     Cascade {
@@ -1372,6 +1374,30 @@ impl Game {
                         {
                             spell.mode = mode;
                             spell.spent = payment.receipt;
+                        }
+                        if let Some(caller) = self.state.cast_caller_mut().take() {
+                            let caller = *caller;
+                            match &caller.decision {
+                                Decision::CastDuringResolution {
+                                    offer: ResolutionCastOffer::AmongExiled { .. },
+                                    ..
+                                } if !self
+                                    .resolution_cast_candidates(&caller.decision)
+                                    .is_empty() =>
+                                {
+                                    *self.state.suspended_decision_mut() = Some(caller);
+                                    return;
+                                }
+                                Decision::CastDuringResolution {
+                                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                                    ..
+                                } => {
+                                    self.put_exiled_on_bottom_in_random_order(exiled.clone());
+                                }
+                                _ => {}
+                            }
+                            frame = caller.frame;
+                            continue;
                         }
                     }
                     FrameCompletion::Activated {
@@ -2905,27 +2931,20 @@ impl Game {
                 {
                     self.spend_once_each_turn(key);
                 }
-                // The cast is the effect's last instruction: finish the
-                // resolution, then cast the chosen card onto the stack.
                 let (player, object_id) = (suspended.decision.player(), *object_id);
                 let cast = suspended
                     .decision
                     .resolution_cast_choices(&self.state[object_id], profile)
                     .expect("cast decision");
                 if let Decision::CastDuringResolution {
-                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                    offer: ResolutionCastOffer::AmongExiled { objects },
                     ..
-                } = &suspended.decision
+                } = &mut suspended.decision
                 {
-                    let rest = exiled.iter().copied().filter(|other| other != &object_id);
-                    self.put_exiled_on_bottom_in_random_order(rest.collect());
+                    objects.retain(|object| *object != object_id);
                 }
-                self.run_frame(suspended.frame);
-                debug_assert!(
-                    self.state.suspended_decision.is_none(),
-                    "a cast during resolution ends its resolving effect"
-                );
-                self.begin_resolution_cast(player, object_id, cast)
+                *self.state.cast_caller_mut() = Some(Box::new(suspended));
+                self.begin_cast(player, object_id, cast)
             }
             (
                 Decision::ExileLinked {
@@ -3318,6 +3337,11 @@ impl Game {
                         && self.object_matches_predicate(self.state.object_of(*card), predicate)
                 })
                 .collect(),
+            ResolutionCastOffer::AmongExiled { objects } => objects
+                .iter()
+                .filter(|object| self.state.zones.zone_of(**object) == Some(ZoneType::Exile))
+                .filter_map(|object| self.state.card_of(*object))
+                .collect(),
             ResolutionCastOffer::Exiled { object }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
@@ -3358,10 +3382,19 @@ impl Game {
             let object = self.state.object_of(card);
             let definition = &self.state[object];
             for profile in definition.spell_profiles() {
-                if !profile.is_front() && !matches!(offer, ResolutionCastOffer::Graveyard { .. }) {
+                if !profile.is_front()
+                    && !matches!(
+                        offer,
+                        ResolutionCastOffer::Graveyard { .. }
+                            | ResolutionCastOffer::AmongExiled { .. }
+                    )
+                {
                     break;
                 }
                 let cast = CastChoices { profile, ..free };
+                if !cast.spell(definition).types.is_castable() {
+                    continue;
+                }
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
                     let spell = cast.spell(definition);
                     if !spell.types.is_castable()
@@ -3375,7 +3408,10 @@ impl Game {
                 }
             }
         }
-        if !matches!(offer, ResolutionCastOffer::Graveyard { .. }) {
+        if !matches!(
+            offer,
+            ResolutionCastOffer::Graveyard { .. } | ResolutionCastOffer::AmongExiled { .. }
+        ) {
             candidates.dedup_by_key(|(card, profile)| {
                 (
                     self.state[self.state.object_of(*card)].definition_id,

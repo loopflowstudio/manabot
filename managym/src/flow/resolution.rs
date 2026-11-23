@@ -1315,6 +1315,21 @@ impl Game {
                     vec![Effect::sacrifice_this()],
                 )))
             }
+            Effect::ExileEachLibraryTopCastFree => {
+                let mut objects = Vec::new();
+                for owner in [PlayerId(0), PlayerId(1)] {
+                    if let Some(card) = self.library_top_card(owner) {
+                        objects.push(self.move_object(self.state.object_of(card), ZoneType::Exile));
+                    }
+                }
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    offer: ResolutionCastOffer::AmongExiled { objects },
+                    paid: false,
+                    spends: None,
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
+            }
             Effect::Cascade => {
                 let player = frame.controller;
                 let below = frame

@@ -848,3 +848,98 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
     assert json.loads(env.search_witness_json())["rng_continuation"] != before
     assert env.search_witness_json() == restored.search_witness_json()
     assert env.state_digest() == restored.state_digest()
+
+
+def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
+    etali = "Etali, Primal Storm"
+    env = managym.Env(seed=2)
+    env.enable_statistics()
+    env.enable_exposure_capture()
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Mountain": 28, etali: 8, "Gray Ogre": 12}),
+                managym.PlayerConfig(
+                    "b", {"Twinmaw Stormbrood": 24, "Lightning Bolt": 4, "Mountain": 10}
+                ),
+            ]
+        )
+    )
+
+    def completed() -> int:
+        stats = env.statistics()
+        assert stats is not None
+        count = next(row.resolutions for row in stats.cards if row.name == etali)
+        assert count is not None
+        return count
+
+    for _ in range(120):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(frame.actor)
+        bite = next(
+            (o for o in frame.offers if o["label"] == "Cast Charring Bite"), None
+        )
+        if bite and len(frame.offers) == 4:
+            before = completed()
+            env.execute_semantic_command_json(
+                Command("bite", frame.revision, bite["id"]).to_json()
+            )
+            break
+        etalis = {p.id for p in obs.agent_permanents if p.characteristics.name == etali}
+        if frame.offers[0]["verb"] == "declare_attacker":
+            index = next(
+                i
+                for i, a in enumerate(obs.action_space.actions)
+                if a.declared == bool(etalis.intersection(a.focus))
+            )
+        else:
+
+            def preference(index: int) -> int:
+                offer = frame.offers[index]
+                card = (offer.get("public_commitment") or {}).get("card")
+                if offer["verb"] == "play_land":
+                    return 0
+                if offer["verb"] == "cast" and card == etali and not etalis:
+                    return 1
+                if offer["verb"] == "cast" and card == "Gray Ogre":
+                    return 2
+                return 3 if offer["verb"] == "pass_priority" else 4
+
+            index = min(range(len(frame.offers)), key=preference)
+        env.step(index)
+    else:
+        pytest.fail("Etali never offered both exiled cards")
+
+    frame = decision_frame(env)
+    assert len(frame.offers) > 1 and all(
+        o["verb"] == "choose_target" for o in frame.offers
+    )
+    restored = cold_restore(env)
+    fork = env.snapshot().restore()
+    assert decision_frame(restored) == frame
+    target = frame.offers[0]["id"]
+    with pytest.raises(managym.AgentError, match="revision|stale"):
+        restored.execute_semantic_command_json(
+            Command("stale", frame.revision - 1, target).to_json()
+        )
+    assert restored.search_witness_json() == fork.search_witness_json()
+    command = Command("target", frame.revision, target).to_json()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    assert decision_frame(fork) == frame
+    remaining = decision_frame(env)
+    assert decision_frame(restored) == remaining
+    assert [o["verb"] for o in remaining.offers] == ["select_card", "decline"]
+    assert completed() == before
+    command = Command(
+        "cast-ogre", remaining.revision, remaining.offers[0]["id"]
+    ).to_json()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    assert completed() == before + 1
+    assert [
+        s.characteristics.name for s in env.observation_for_player(0).stack_objects
+    ] == ["Gray Ogre", "Charring Bite"]
+    assert restored.search_witness_json() == env.search_witness_json()

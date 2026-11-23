@@ -80,6 +80,8 @@ pub struct GameState {
     pub cast_permissions: Box<CastPermissions>,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
+    /// Effect waiting for its announced spell to commit (CR 608.2g).
+    pub cast_caller: Option<Box<SuspendedResolution>>,
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
@@ -470,6 +472,10 @@ impl TrackedState {
 
     pub(crate) fn delayed_triggers_mut(&mut self) -> &mut Vec<DelayedTrigger> {
         &mut self.state.delayed_triggers
+    }
+
+    pub(crate) fn cast_caller_mut(&mut self) -> &mut Option<Box<SuspendedResolution>> {
+        &mut self.state.cast_caller
     }
 
     pub(crate) fn suspended_decision_mut(&mut self) -> &mut Option<SuspendedResolution> {

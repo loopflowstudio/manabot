@@ -514,21 +514,10 @@ impl Game {
         self.begin_cast(player, object, cast)
     }
 
-    /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
-    /// or not: its timing and zone permissions don't apply.
-    pub(crate) fn begin_resolution_cast(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-    ) -> Result<(), AgentError> {
-        self.begin_cast(player, object, cast)
-    }
-
     /// CR 601.2b — announce X (or a replicate count), then any optional additional cost, before
     /// modes and targets. Replacing a printed X cost with a free cast or a
     /// fixed alternative fixes X to zero (CR 107.3b).
-    fn begin_cast(
+    pub(super) fn begin_cast(
         &mut self,
         player: PlayerId,
         object: ObjectId,

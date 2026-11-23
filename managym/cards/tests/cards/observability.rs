@@ -737,6 +737,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
+        Effect::ExileEachLibraryTopCastFree => "Effect::ExileEachLibraryTopCastFree",
         Effect::Cascade => "Effect::Cascade",
         Effect::CumulativeUpkeep { .. } => "Effect::CumulativeUpkeep",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
@@ -773,7 +774,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 85;
+const EFFECT_VARIANTS: usize = 86;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -933,6 +934,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 },
             },
         },
+        Effect::ExileEachLibraryTopCastFree,
         Effect::Cascade,
         Effect::CumulativeUpkeep {
             each: ManaCost::parse("{1}"),

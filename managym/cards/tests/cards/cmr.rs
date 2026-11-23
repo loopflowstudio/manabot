@@ -186,3 +186,42 @@ fn sakashima_copies_a_legend_you_control_and_both_stay() {
         .static_abilities
         .contains(&StaticAbility::LegendRuleDoesntApply));
 }
+
+#[test]
+fn countering_the_cascade_hit_keeps_the_bottom_order_and_rng() {
+    use crate::support::game::move_from_library;
+    let mut s = five_color_setup(&["Volcanic Torrent", "Hill Giant", "Counterspell"]);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    let pinned = cascade_over(&mut s, &["Forest", "Volcanic Torrent", "Hill Giant"]);
+    let hit = pinned[2];
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == hit),
+    );
+    let bottom_order = |s: &Scenario| {
+        s.game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))
+            .iter()
+            .take(2)
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    let order = bottom_order(&s);
+    let rng = s.game().state.rng.get_word_pos();
+    s.pass_priority();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == counter),
+    );
+    let target = now(&s, hit);
+    assert!(s.choose_target(Target::StackSpell(target)));
+    while !s.game().state.stack_objects.is_empty() {
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+        s.pass_priority();
+    }
+    assert_eq!(zone_of(&s, hit), Some(ZoneType::Graveyard));
+    assert_eq!(bottom_order(&s), order);
+    assert_eq!(s.game().state.rng.get_word_pos(), rng);
+}

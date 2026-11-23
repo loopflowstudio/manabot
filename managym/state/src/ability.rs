@@ -1073,6 +1073,7 @@ pub enum Effect {
     /// this way, and that one if not cast, goes on the bottom in a random
     /// order.
     Cascade,
+    ExileEachLibraryTopCastFree,
     /// "Look at the top card of your library. You may cast that card without
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
@@ -1744,6 +1745,7 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::ExileEachLibraryTopCastFree
             | Effect::Cascade
             | Effect::CumulativeUpkeep { .. }
             | Effect::CastFromHandFree { .. }

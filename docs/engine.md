@@ -1162,6 +1162,13 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
 
+When Etali, Primal Storm attacks, its controller exiles the top card of each
+library. They can cast the eligible spells in either order for free, or stop
+and leave the remaining cards in exile. Choosing Charring Bite from an exiled
+Twinmaw Stormbrood asks for its target. Once the cast commits, Etali offers
+the remaining spell before anyone receives priority. The last spell cast
+resolves first.
+
 Targeting Scavenger Regent with an opposing spell or ability triggers ward.
 The spell or ability’s controller can discard a card of their choice to keep the spell or ability
 on the stack. Declining counters it.

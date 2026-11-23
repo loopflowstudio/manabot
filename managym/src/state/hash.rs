@@ -185,6 +185,8 @@ struct CanonicalMatchState<'a> {
     #[serde(skip_serializing_if = "no_cast_permissions")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cast_caller: Option<&'a crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
@@ -225,6 +227,7 @@ impl<'a> CanonicalMatchState<'a> {
             effects,
             cast_permissions,
             suspended_decision,
+            cast_caller,
             trigger_enqueue_counter,
             rng,
             id_gen,
@@ -277,6 +280,7 @@ impl<'a> CanonicalMatchState<'a> {
             effects: effects.as_slice(),
             cast_permissions,
             suspended_decision,
+            cast_caller: cast_caller.as_deref(),
             trigger_enqueue_counter: *trigger_enqueue_counter,
             rng_probe,
             allocation_watermark: id_gen.watermark(),

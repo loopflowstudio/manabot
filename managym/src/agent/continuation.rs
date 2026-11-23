@@ -512,11 +512,19 @@ impl Game {
 
     /// The acting viewer's announcement, resolution and placement frames.
     fn append_private_frames(&self, viewer: PlayerId, frames: &mut Vec<ContinuationFrame>) {
+        let mut parent = None;
+        if let Some(caller) = &self.state.cast_caller {
+            self.append_suspended_frames(caller, viewer, frames, None);
+            parent = frames.len().checked_sub(1);
+        }
         if let Some(pending) = &self.pending_choice {
-            frames.push(self.announcement_frame(pending, viewer));
+            let mut announcement = self.announcement_frame(pending, viewer);
+            announcement.parent = parent;
+            frames.push(announcement);
+            parent = frames.len().checked_sub(1);
         }
         if let Some(suspended) = &self.state.suspended_decision {
-            self.append_suspended_frames(suspended, viewer, frames);
+            self.append_suspended_frames(suspended, viewer, frames, parent);
         }
         if let Some(placement) = &self.state.trigger_placement {
             let parent = frames.len();
@@ -782,8 +790,8 @@ impl Game {
         suspended: &SuspendedResolution,
         viewer: PlayerId,
         frames: &mut Vec<ContinuationFrame>,
+        mut parent: Option<usize>,
     ) {
-        let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
         for part in suspended.continuation() {
             let mut frame = match part {
                 ResolutionRef::Frame(effect) => self.effect_frame(effect, viewer),
@@ -883,11 +891,13 @@ impl Game {
                 );
             }
         }
-        let Some(suspended) = &self.state.suspended_decision else {
-            return;
-        };
-        // Kinds 5 and 6 come only from `append_suspended_frames`, in this order.
-        let mut parts = suspended.continuation().into_iter();
+        let mut parts = self
+            .state
+            .cast_caller
+            .as_deref()
+            .into_iter()
+            .chain(self.state.suspended_decision.as_ref())
+            .flat_map(SuspendedResolution::continuation);
         for frame in frames.iter_mut().filter(|f| matches!(f.kind, 5 | 6)) {
             match parts.next() {
                 Some(ResolutionRef::Frame(effect)) => {

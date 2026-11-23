@@ -161,6 +161,7 @@ impl Game {
                 effects: crate::state::effect::EffectRecords::default(),
                 cast_permissions: Default::default(),
                 suspended_decision: None,
+                cast_caller: None,
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
