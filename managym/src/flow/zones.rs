@@ -475,12 +475,22 @@ impl Game {
             .count()
     }
 
-    pub(crate) fn emit(&mut self, event: GameEvent) {
+    pub(crate) fn emit(&mut self, mut event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
-        // Every life total change is a LifeChanged event, so this is the one
-        // place loss this turn is counted (CR 119.3).
-        if let GameEvent::LifeChanged { player, old, new } = &event {
-            if new < old {
+        // A pending gain keeps its ordinal even if more gains commit before
+        // trigger matching. Life loss counts the applied amount (CR 119.3).
+        if let GameEvent::LifeChanged {
+            player,
+            old,
+            new,
+            gain_ordinal,
+        } = &mut event
+        {
+            if new > old {
+                let gains = &mut self.state.turn.history[player.0].life_gains;
+                *gains += 1;
+                *gain_ordinal = *gains;
+            } else if new < old {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }

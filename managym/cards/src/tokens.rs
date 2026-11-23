@@ -21,6 +21,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         ally(),
         ballistic_boulder(),
         bear(),
+        cat(),
         clue(),
         dragon(),
         elf_warrior(),
@@ -114,6 +115,15 @@ fn bear() -> TokenDefinition {
         "token.bear",
         "ca3dae7d-3880-4c0a-acfb-8fd227cf9fab",
         creature(base, 4, 4, [Color::Green]),
+    )
+}
+
+fn cat() -> TokenDefinition {
+    let base = face("Cat", [CardType::Creature], &["Cat"], "");
+    token(
+        "token.cat",
+        "5f458f39-27b6-4121-bda9-1a0d1b42f5fb",
+        creature(base, 1, 1, [Color::White]),
     )
 }
 

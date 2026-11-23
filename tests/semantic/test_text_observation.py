@@ -13,6 +13,11 @@ import pytest
 from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
+    FACT_ABILITY_RESOLUTION,
+    FACT_ID_INDEX,
+    FACT_KIND_INDEX,
+    FACT_LIFE_GAINS,
+    FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
     encode_observation,
@@ -624,6 +629,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "granted_firebending": "firebending",
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
+        "ability_resolutions": "ability N resolved",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
@@ -655,6 +661,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
+        "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",
         "owner_id": "Spell: owner",
@@ -680,6 +687,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_gains": "gained life N times",
         "life_lost": "lost N life",
     },
     managym.Player: {
@@ -776,6 +784,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     ogre |= {
         "attacking": True,
         "abilities_lost": True,
+        "ability_resolutions": [[1, 2]],
         "used_abilities": [0],
         "dealt_damage_this_turn": True,
     }
@@ -790,24 +799,36 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_gains": 2,
             "life_lost": 3,
         },
         "restricted_mana": [
             {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
         ],
     }
-    text = render_decision(_redigest(payload)).text
+    decision = render_decision(_redigest(payload))
+    facts = encode_observation(
+        ObservationSpace(ObservationConfig()), _viewer_observation(decision)
+    )["facts"]
+    counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
+    assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
+    assert facts[
+        facts[:, FACT_KIND_INDEX] == FACT_LIFE_GAINS, FACT_VALUE_INDEX
+    ].tolist() == [2]
+    text = decision.text
     assert "; blocking P2 (Gray Ogre);" in text
     assert "; attacking;" in text
     assert (
-        "; has lost all abilities; used-up abilities 1; dealt damage this turn" in text
+        "; has lost all abilities; ability 2 resolved 2 times this turn; used-up abilities 1; dealt damage this turn"
+        in text
     )
     assert "Keeps unspent red mana until end of turn." in text
     assert "Has no maximum hand size for the rest of the game." in text
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card; lost 3 life; cast 2 spells." in text
+        "their control; drew 1 card; gained life 2 times; lost 3 life; cast 2 spells."
+        in text
     )
     assert "Restricted mana for anything but nonartifact spells: C 2." in text
 

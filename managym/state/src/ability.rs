@@ -41,34 +41,52 @@ impl Ability {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
     /// The entering source must have been cast, rather than created or returned.
-    WasCast { condition: Box<TriggerCondition> },
+    WasCast {
+        condition: Box<TriggerCondition>,
+    },
     /// "Whenever [subject] is sacrificed" (CR 701.21): once per sacrificed
     /// permanent, matched as it last existed on the battlefield.
-    Sacrificed { subject: TriggerSubject },
+    Sacrificed {
+        subject: TriggerSubject,
+    },
     /// Wrap the whole condition, including ActiveIf. The limit is recorded
     /// when the event fires, once per exact source incarnation and turn.
-    OnceEachTurn { condition: Box<TriggerCondition> },
+    OnceEachTurn {
+        condition: Box<TriggerCondition>,
+    },
     /// "When [this] has no [kind] counters on it": a state trigger (CR 603.8)
     /// of a battlefield source. It triggers whenever the state holds and
     /// not again while its last occurrence waits or is on the stack.
-    NoCounters { kind: CounterKind },
+    NoCounters {
+        kind: CounterKind,
+    },
     /// "When you cast this spell" (CR 603.2): functions while the source is
     /// a spell on the stack, and its caster controls the trigger.
     YouCastThis,
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
-    WhileSourceAttacking { condition: Box<TriggerCondition> },
+    WhileSourceAttacking {
+        condition: Box<TriggerCondition>,
+    },
     /// "Whenever a player casts a [predicate] spell that targets only this
     /// [permanent]": every target of the spell is this permanent. The spell
     /// is the context and its caster "that player".
-    SpellTargetsOnlyThis { predicate: CardPredicate },
+    SpellTargetsOnlyThis {
+        predicate: CardPredicate,
+    },
     /// "When [subject] enters the battlefield."
-    EntersTheBattlefield { subject: TriggerSubject },
+    EntersTheBattlefield {
+        subject: TriggerSubject,
+    },
     /// "When [subject] dies." — battlefield to graveyard (CR 700.4).
-    Dies { subject: TriggerSubject },
+    Dies {
+        subject: TriggerSubject,
+    },
     /// "When [subject] leaves the battlefield": to any other zone, looking
     /// back in time (CR 603.10a).
-    LeavesTheBattlefield { subject: TriggerSubject },
+    LeavesTheBattlefield {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] attacks" (CR 508.1, after the declare-attackers
     /// turn-based action). `per` says whether it triggers once for each
     /// matching attacker or once per combat ("whenever you attack", "one or
@@ -88,13 +106,19 @@ pub enum TriggerCondition {
         condition: Box<TriggerCondition>,
     },
     /// "Whenever [subject] becomes tapped."
-    BecomesTapped { subject: TriggerSubject },
+    BecomesTapped {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] is tapped for mana."
-    TappedForMana { subject: TriggerSubject },
+    TappedForMana {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] becomes the target of a spell or ability an
     /// opponent controls." (Ward, CR 702.21.) The triggering spell or ability
     /// is threaded to the ability's effects as the trigger context target.
-    BecomesTargeted { subject: TriggerSubject },
+    BecomesTargeted {
+        subject: TriggerSubject,
+    },
     /// "Whenever a creature you control attacking causes a triggered ability
     /// of that creature to trigger": that ability, once on the stack, is the
     /// trigger's context.
@@ -102,7 +126,9 @@ pub enum TriggerCondition {
     /// A Saga's chapter ability (CR 714.2b): triggers as lore counters put
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
-    Chapter { chapter: u8 },
+    Chapter {
+        chapter: u8,
+    },
     /// "Whenever [who] puts one or more [kind] counters on a [on]
     /// permanent": once per permanent an instruction that player controls
     /// puts them on. The trigger's X is how many were put ("that much").
@@ -122,10 +148,20 @@ pub enum TriggerCondition {
     /// "Whenever [who] draws a card"; with `nth`, only that player's Nth
     /// draw this turn (see `PlayerTurnHistory::cards_drawn`). The drawer is
     /// "that player".
-    Draws { who: Actor, nth: Option<u32> },
+    Draws {
+        who: Actor,
+        nth: Option<u32>,
+    },
+    GainsLife {
+        who: Actor,
+        nth: Option<u32>,
+    },
     /// "At the beginning of [whose] [step]": `whose` is asked of the active
     /// player, who is "that player".
-    BeginningOf { step: TurnStep, whose: Actor },
+    BeginningOf {
+        step: TurnStep,
+        whose: Actor,
+    },
     /// "Whenever [who] [does one of these keyword actions]": once per
     /// search (even one that finds nothing, CR 701.23), scry with a count
     /// above zero (CR 701.22), completed surveil (CR 701.25), bending
@@ -153,7 +189,9 @@ pub enum TriggerCondition {
     /// The inner condition, for an ability that functions only while its
     /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
     /// the ability's source is that graveyard object.
-    InGraveyard { condition: Box<TriggerCondition> },
+    InGraveyard {
+        condition: Box<TriggerCondition>,
+    },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller: a conditionally granted triggered ability
     /// ("has firebending 2 as long as there's a Lesson card in your
@@ -1550,6 +1588,37 @@ impl Default for Effect {
 }
 
 impl Effect {
+    /// Whether this program reads its enclosing ability's resolution ordinal.
+    /// Delayed and reflexive triggers will be inspected when they resolve.
+    pub fn reads_resolution_count(&self) -> bool {
+        let reads = |effects: &[Effect]| effects.iter().any(Self::reads_resolution_count);
+        match self {
+            Self::OnNthResolutionThisTurn { .. } => true,
+            Self::If {
+                then, otherwise, ..
+            } => reads(then) || reads(otherwise),
+            Self::OptionalPayment {
+                if_paid,
+                if_declined,
+                ..
+            } => reads(if_paid) || reads(if_declined),
+            Self::SelectCards {
+                effects,
+                if_declined,
+                ..
+            } => reads(effects) || reads(if_declined),
+            Self::OptionalManaPaymentX { if_paid } => reads(if_paid),
+            Self::ForEachTarget { effects }
+            | Self::TargetClause { effects, .. }
+            | Self::ForPlayer { effects, .. }
+            | Self::MayOnceEachTurn { effects } => reads(effects),
+            Self::Modal { modes } | Self::TriggerModes { modes, .. } => {
+                modes.iter().any(|mode| reads(mode))
+            }
+            _ => false,
+        }
+    }
+
     /// Whether the effect reads the permanent whose event fired its
     /// trigger, which the trigger then keeps as its context.
     pub fn reads_triggering_permanent(&self) -> bool {

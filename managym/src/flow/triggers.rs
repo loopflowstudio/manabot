@@ -128,6 +128,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
+        TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
         TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
             EventKinds::of(EventKind::CountersPut)
@@ -1987,6 +1988,18 @@ impl Game {
                             .position(|cast| cast == object)
                             == Some(n as usize - 1)
                     })
+            }
+            (
+                TriggerCondition::GainsLife { who, nth },
+                GameEvent::LifeChanged {
+                    player,
+                    gain_ordinal,
+                    ..
+                },
+            ) => {
+                *gain_ordinal > 0
+                    && who.includes(source_controller, *player)
+                    && nth.is_none_or(|n| n == *gain_ordinal)
             }
             (
                 TriggerCondition::Draws { who, nth },

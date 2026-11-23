@@ -169,6 +169,7 @@ fn combat_damage_emits_damage_and_life_change_events() {
         player: PlayerId(1),
         old: 20,
         new: 19,
+        gain_ordinal: 0,
     }));
 }
 

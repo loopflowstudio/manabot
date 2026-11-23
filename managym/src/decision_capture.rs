@@ -264,6 +264,7 @@ mod tests {
                 player: actor,
                 old: 20,
                 new: 20 + amount,
+                gain_ordinal: 0,
             });
         }
         // Fixture events leave the present observation unchanged; the suffix is

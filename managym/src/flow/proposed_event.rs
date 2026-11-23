@@ -1733,6 +1733,7 @@ mod tests {
                 player: PlayerId(0),
                 old: 20,
                 new: 17,
+                gain_ordinal: 0,
             }]
         );
     }

@@ -292,6 +292,9 @@ impl Serialize for StackObjectJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("ability_index", &value.ability_index)?;
+        if value.ability_resolutions > 0 {
+            map.serialize_entry("ability_resolutions", &value.ability_resolutions)?;
+        }
         if let Some(spell) = &value.spell {
             let card = spell.legacy_card(value.x);
             map.serialize_entry("card", &CardJson(&card))?;
@@ -777,6 +780,8 @@ pub(super) struct WirePermanentData {
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -806,6 +811,8 @@ pub(super) struct WirePermanentData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireStackObjectData {
+    #[serde(default)]
+    pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     #[serde(default)]
     pub description: Option<String>,
@@ -896,6 +903,7 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
             effects: w.effects,
@@ -963,6 +971,7 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
             dealt_damage_this_turn: self.dealt_damage_this_turn,
             effects: self.effects.clone(),
@@ -981,6 +990,7 @@ impl From<WireStackObjectData> for StackObjectData {
     fn from(w: WireStackObjectData) -> Self {
         Self {
             description: w.description,
+            ability_resolutions: w.ability_resolutions,
             stack_object_id: w.stack_object_id,
             kind: w.kind,
             controller_id: w.controller_id,

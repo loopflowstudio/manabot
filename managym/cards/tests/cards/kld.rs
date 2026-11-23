@@ -60,6 +60,7 @@ fn fumigate_counts_destroyed_creatures_even_when_their_destination_changes() {
                     player: PlayerId(0),
                     old,
                     new,
+                    ..
                 } => Some((old, new)),
                 _ => None,
             })

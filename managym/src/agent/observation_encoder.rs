@@ -65,10 +65,12 @@ pub enum FactKind {
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
+    AbilityResolution = 15,
+    LifeGains = 16,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 13] = [
+    pub const ALL: [FactKind; 15] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -82,6 +84,8 @@ impl FactKind {
         FactKind::EffectiveColor,
         FactKind::KeywordCounterTimestamp,
         FactKind::ContinuationProgram,
+        FactKind::AbilityResolution,
+        FactKind::LifeGains,
     ];
 }
 
@@ -1145,9 +1149,10 @@ fn encode_into_memory(
         .iter_mut()
         .zip(&obs.stack_objects)
     {
+        row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
-    encode_facts(obs, &object_to_index, &ranks, out.facts)?;
+    encode_facts(obs, config.layout, &object_to_index, &ranks, out.facts)?;
     super::shared_effects::encode(
         obs,
         &object_to_index,
@@ -1769,7 +1774,7 @@ struct Fact {
 
 /// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
 /// object order (agent, opponent, agent permanents, opponent permanents).
-fn facts(obs: &Observation) -> Vec<Fact> {
+fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
         out.push(Fact {
@@ -1781,6 +1786,16 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             effect: None,
         })
     };
+    for player in [&obs.agent, &obs.opponent] {
+        if layout == InputLayout::OneToken && player.turn_history.life_gains > 0 {
+            push(
+                player.id,
+                FactKind::LifeGains,
+                0,
+                player.turn_history.life_gains as f32,
+            );
+        }
+    }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
@@ -1834,6 +1849,16 @@ fn facts(obs: &Observation) -> Vec<Fact> {
         }
         if permanent.transforms > 0 {
             push(object, FactKind::Transforms, 0, permanent.transforms as f32);
+        }
+        if layout == InputLayout::OneToken {
+            for &(index, count) in &permanent.ability_resolutions {
+                push(
+                    object,
+                    FactKind::AbilityResolution,
+                    index as i32,
+                    count as f32,
+                );
+            }
         }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1.0);
@@ -2023,11 +2048,12 @@ pub(super) fn split_id(id: i32) -> [f32; 2] {
 
 fn encode_facts(
     obs: &Observation,
+    layout: InputLayout,
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs);
+    let facts = facts(obs, layout);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
@@ -2634,6 +2660,7 @@ mod tests {
         let spell = make_card(555, ZoneType::Stack, false, 0, 0, 3);
         obs.stack_objects = vec![
             StackObjectData {
+                ability_resolutions: 0,
                 description: None,
                 stack_object_id: 600,
                 kind: StackObjectKindData::Spell,
@@ -2651,6 +2678,7 @@ mod tests {
                 )),
             },
             StackObjectData {
+                ability_resolutions: 0,
                 description: None,
                 stack_object_id: 601,
                 kind: StackObjectKindData::ActivatedAbility,

@@ -210,6 +210,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
+        "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
@@ -231,6 +232,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "land_entered": history.land_entered,
         "cards_drawn": history.cards_drawn,
         "bent": history.bent,
+        "life_gains": history.life_gains,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -515,6 +517,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     }
     data["stack_objects"] = [
         {
+            "ability_resolutions": entry.ability_resolutions,
             "id": int(entry.stack_object_id),
             "kind": {0: "spell", 1: "activated_ability", 2: "triggered_ability"}[
                 int(entry.kind)

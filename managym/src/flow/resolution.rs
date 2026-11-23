@@ -414,19 +414,23 @@ impl Game {
             return;
         };
 
-        // Track per-turn resolutions for "the Nth time this ability has
-        // resolved this turn" gating.
-        // Inline effects count under a sentinel slot that never collides
-        // with a printed ability.
-        let key = (source_object.slot(), ability.unwrap_or(usize::MAX));
-        let count = self
-            .state
-            .turn
-            .ability_resolutions_this_turn
-            .entry(key)
-            .or_insert(0);
-        *count += 1;
-        let resolutions_this_turn = *count;
+        let resolutions_this_turn = if effects.iter().any(Effect::reads_resolution_count) {
+            let key = (
+                triggered.source_identity.object(),
+                triggered.source_definition_id,
+                triggered.ability_index,
+            );
+            let count = self
+                .state
+                .turn
+                .ability_resolutions_this_turn
+                .entry(key)
+                .or_default();
+            *count += 1;
+            *count
+        } else {
+            0
+        };
 
         let frame = EffectFrame {
             program,

@@ -581,6 +581,20 @@
       "B"
     ]
   },
+  "Cat Collector": {
+    "name": "Cat Collector",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Citizen",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "When this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever you gain life for the first time during each of your turns, create a 1/1 white Cat creature token.",
+    "colors": [
+      "W"
+    ]
+  },
   "Cat-Gator": {
     "name": "Cat-Gator",
     "mana_cost": "{6}{B}",
@@ -3905,6 +3919,20 @@
     "oracle_text": "Whenever this creature attacks, choose target creature an opponent controls. Tap it, then you may sacrifice an artifact or creature. If you do, put a stun counter on the chosen creature. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
     "colors": [
       "W"
+    ]
+  },
+  "Venom Connoisseur": {
+    "name": "Venom Connoisseur",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Druid",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Alliance"
+    ],
+    "oracle_text": "Alliance — Whenever another creature you control enters, this creature gains deathtouch until end of turn. If this is the second time this ability has resolved this turn, all creatures you control gain deathtouch until end of turn.",
+    "colors": [
+      "G"
     ]
   },
   "Vindictive Warden": {

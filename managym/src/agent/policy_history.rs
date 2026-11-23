@@ -186,7 +186,9 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
                 vec![target_reference(game, target)],
             )
         }
-        GameEvent::LifeChanged { player, old, new } => (
+        GameEvent::LifeChanged {
+            player, old, new, ..
+        } => (
             Life,
             new - old,
             unknown,
@@ -445,6 +447,7 @@ mod tests {
                 player: PlayerId(1),
                 old: 20,
                 new: 20 - index,
+                gain_ordinal: 0,
             });
             let object = game.state.zones.latest().nth(index as usize).unwrap();
             game.move_object(object, ZoneType::Hand);

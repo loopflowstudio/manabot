@@ -134,6 +134,8 @@ mod rtr;
 mod scryfall;
 #[path = "cards/shm.rs"]
 mod shm;
+#[path = "cards/snc.rs"]
+mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
 #[path = "cards/som.rs"]

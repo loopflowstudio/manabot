@@ -834,6 +834,7 @@ class PlayerTurnHistory:
     # Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     bent: int
     # Life lost this turn (CR 119.3).
+    life_gains: int
     life_lost: int
 
 class RestrictedMana:
@@ -1011,6 +1012,7 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
     dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
@@ -1063,6 +1065,7 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.
     characteristics: ObservationCharacteristics | None
     object_id: int | None

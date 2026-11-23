@@ -446,6 +446,7 @@ columns! { stack {
     34: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     35: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     36: VALID => ("valid", ValueLayout::FLAG),
+    37: ABILITY_RESOLUTIONS => ("ability_resolutions", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -799,6 +800,8 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
+        FactKind::LifeGains => ("life_gains","value: times this player gained life this turn"),
+        FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
         FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
         FactKind::Copy => ("copy", "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2"),
         FactKind::CopyException => ("copy_exception", "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance"),
@@ -1011,12 +1014,15 @@ pub fn observation_layout(
         ),
     );
     let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
-    facts.row_kinds = FactKind::ALL
-        .into_iter()
+    let kinds = FactKind::ALL.into_iter().filter(|kind| {
+        layout_kind == InputLayout::OneToken
+            || !matches!(kind, FactKind::LifeGains | FactKind::AbilityResolution)
+    });
+    facts.row_kinds = kinds
+        .clone()
         .map(|kind| (kind as u8, fact_row_kind(kind).1))
         .collect();
-    facts.row_kind_names = FactKind::ALL
-        .into_iter()
+    facts.row_kind_names = kinds
         .map(|kind| (fact_row_kind(kind).0, kind as u8))
         .collect();
     layout.insert("facts".into(), facts);
@@ -1139,7 +1145,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 37);
+                assert_eq!(stack::WIDTH, 38);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

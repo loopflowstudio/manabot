@@ -1259,6 +1259,8 @@ pub struct PyPlayerTurnHistory {
     /// Life lost this turn (CR 119.3).
     #[pyo3(get, set)]
     pub life_lost: u32,
+    #[pyo3(get, set)]
+    pub life_gains: u32,
 }
 
 #[cfg(feature = "python")]
@@ -1280,6 +1282,7 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             cards_drawn: value.cards_drawn,
             bent: value.bent,
             life_lost: value.life_lost,
+            life_gains: value.life_gains,
         }
     }
 }
@@ -1294,6 +1297,7 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             cards_drawn: value.cards_drawn,
             bent: value.bent,
             life_lost: value.life_lost,
+            life_gains: value.life_gains,
         }
     }
 }
@@ -2398,6 +2402,10 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn ability_resolutions(&self) -> Vec<(usize, u32)> {
+        self.data.ability_resolutions.clone()
+    }
+    #[getter]
     fn used_abilities(&self) -> Vec<usize> {
         self.data.used_abilities.clone()
     }
@@ -2766,6 +2774,10 @@ impl PyStackObject {
     #[setter]
     fn set_description(&mut self, value: Option<String>) {
         self.data.description = value;
+    }
+    #[getter]
+    fn ability_resolutions(&self) -> u32 {
+        self.data.ability_resolutions
     }
     #[getter]
     fn stack_object_id(&self) -> i32 {

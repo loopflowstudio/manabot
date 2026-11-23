@@ -109,6 +109,9 @@ pub struct PlayerTurnHistory {
     /// lower than before), summed over every loss this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub life_lost: u32,
+    /// Separate occurrences, independent of the amount gained.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub life_gains: u32,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
@@ -147,10 +150,11 @@ pub struct TurnState {
     /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub ability_triggers_this_turn: BTreeMap<OnceEachTurnKey, u32>,
-    /// Times each triggered ability `(card index, ability index)` has
+    /// Times each triggered ability `(exact source, printed face, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
-    pub ability_resolutions_this_turn: BTreeMap<(usize, usize), u32>,
+    pub ability_resolutions_this_turn:
+        BTreeMap<(ObjectId, crate::state::card::CardDefId, usize), u32>,
     /// Extra turns still to be taken (CR 500.7), the most recently created
     /// last: it is taken first.
     #[serde(skip_serializing_if = "Vec::is_empty")]

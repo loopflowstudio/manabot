@@ -204,7 +204,9 @@ class DecisionContextView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     # What objects have already paid toward the cost being paid, in paid order.
-    paid: list[PaidView] = Field(default_factory=list, exclude_if=lambda value: not value)
+    paid: list[PaidView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class OfferSubjectView(ProtocolModel):
@@ -338,6 +340,7 @@ class PlayerTurnHistoryView(ProtocolModel):
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gains: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
@@ -432,6 +435,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
     keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    ability_resolutions: list[tuple[UInt32, UInt32]] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     used_abilities: list[UInt32] = Field(
@@ -555,6 +561,7 @@ class LegacyTurnView(ProtocolModel):
 
 
 class StackEntryView(ProtocolModel):
+    ability_resolutions: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     id: UInt64
     kind: str
     controller: UInt8

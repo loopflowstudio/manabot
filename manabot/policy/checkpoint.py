@@ -31,7 +31,7 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env.observation import FACT_KINDS, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.architecture import (
     ArchitectureReceipt,
@@ -246,8 +246,15 @@ class PolicyCheckpoint:
         programs = self.buffers.get("semantic_cards.tokens")
         return len(programs) if programs is not None else 0
 
+    @property
+    def fact_kinds(self) -> int:
+        """The last fact kind with a learned embedding in this policy."""
+        return self.parameters["facts.kind.weight"].shape[0] - 1
+
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, Layout(self.readings))
+        return Tables.from_buffers(
+            self.buffers, Layout(self.readings), fact_kinds=self.fact_kinds
+        )
 
     def dimensions(self) -> Dimensions:
         model = self.model
@@ -266,7 +273,7 @@ class PolicyCheckpoint:
             relation=columns.numeric_width("relations"),
             effect=columns.numeric_width("effects"),
             fact=columns.fact_width(catalog_ids=True),
-            fact_kinds=FACT_KINDS,
+            fact_kinds=self.fact_kinds,
             token_rows=int(
                 self.parameters["semantic_cards.token_embedding.weight"].shape[0]
             ),

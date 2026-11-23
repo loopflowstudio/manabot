@@ -225,6 +225,10 @@ def assemble(
         bucketed_shapes=bucketed_shapes,
         live_tokens=live_tokens,
     )
+    if agent.facts.kind.num_embeddings != checkpoint.fact_kinds + 1:
+        agent.facts.kind = torch.nn.Embedding(
+            checkpoint.fact_kinds + 1, checkpoint.model.hidden_dim
+        )
     cards = agent.semantic_cards
     if cards is not None and checkpoint.report is not None:
         weight = checkpoint.parameters["semantic_cards.token_embedding.weight"]

@@ -318,6 +318,8 @@ def _turn_history(player: managym.Player) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if count := history.life_gains:
+        parts.append(f"gained life {count} time{'s' if count != 1 else ''}")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
     if count := player.spells_cast:
@@ -1005,6 +1007,10 @@ class _Renderer:
             parts.append("has lost all abilities")
         if permanent.transforms:
             parts.append(f"transformed {permanent.transforms} times")
+        for index, count in permanent.ability_resolutions:
+            parts.append(
+                f"ability {index + 1} resolved {count} time{'s' if count != 1 else ''} this turn"
+            )
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
@@ -1200,6 +1206,10 @@ class _Renderer:
                 f"controller {self.name(item.controller_id)}",
                 f"source {source}",
             ]
+            if item.ability_resolutions:
+                details.append(
+                    f"prior resolutions this turn: {item.ability_resolutions}"
+                )
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))

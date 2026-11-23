@@ -122,6 +122,7 @@ export interface PermanentState {
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  ability_resolutions?: [number, number][];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
@@ -153,6 +154,7 @@ export interface PlayerTurnHistory {
   bent?: number;
   /** Life lost this turn (CR 119.3). */
   life_lost?: number;
+  life_gains?: number;
 }
 
 export interface PlayerState {
@@ -245,6 +247,7 @@ export interface DecisionContextView {
 }
 
 export interface StackEntryView {
+  ability_resolutions?: number;
   id: number;
   kind: string;
   controller: number;

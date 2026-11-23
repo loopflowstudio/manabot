@@ -4495,3 +4495,143 @@ fn hidden_knowledge_search_reveals_do_not_displace_a_known_top() {
             .unwrap();
     }
 }
+
+/// Resolve through the printed ability, with the same stack placement and
+/// counter operations that priority uses.
+fn history_game(name: &str) -> (Game, PermanentId) {
+    let deck = BTreeMap::from([(name.to_owned(), 12), ("Forest".to_owned(), 28)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        608_2026,
+        false,
+    );
+    let permanent = game
+        .scenario_force_battlefield(PlayerId(0), name, true)
+        .unwrap();
+    (game, permanent)
+}
+
+#[test]
+fn cat_collector_two_gains_before_matching_create_one_cat() {
+    let (mut game, _) = history_game("Cat Collector");
+    let player = PlayerId(0);
+    game.state.turn.active_player = player;
+    assert_eq!(game.commit_life_change(player, 3), 3);
+    assert_eq!(game.commit_life_change(player, 2), 2);
+    let ordinals: Vec<_> = game
+        .state
+        .pending_events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::LifeChanged { gain_ordinal, .. } => Some(*gain_ordinal),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ordinals, [1, 2]);
+    game.process_game_events();
+    assert_eq!(game.state.turn.history[0].life_gains, 2);
+    assert_eq!(game.state.pending_triggers.len(), 1);
+    assert!(game.flush_triggers().is_none());
+    game.resolve_top_of_stack();
+    assert_eq!(
+        game.iter_battlefield_permanents(player)
+            .filter(|&id| game.state[game.permanent_object(id).unwrap()].name == "Cat")
+            .count(),
+        1
+    );
+
+    for (active, expected_triggers) in [(PlayerId(1), 0), (player, 1)] {
+        while game.active_player() != active {
+            game.state.turn.advance_step();
+        }
+        assert_eq!(game.state.turn.history[player.0].life_gains, 0);
+        game.gain_life(player, 1);
+        assert_eq!(game.state.pending_triggers.len(), expected_triggers);
+    }
+}
+
+#[test]
+fn venom_connoisseur_only_resolved_triggers_advance_their_source() {
+    let (mut game, source) = history_game("Venom Connoisseur");
+    let player = PlayerId(0);
+    let original = game.permanent_object(source).unwrap();
+    let trigger = |game: &mut Game| {
+        game.create_token("token.ally", player, false);
+        game.process_game_events();
+        assert!(game.flush_triggers().is_none());
+        game.state.stack_objects.last().unwrap().id()
+    };
+    let countered = trigger(&mut game);
+    game.counter_ability(countered, None);
+    assert!(game.state.turn.ability_resolutions_this_turn.is_empty());
+    trigger(&mut game);
+    game.resolve_top_of_stack();
+    assert!(game
+        .characteristics(source)
+        .keywords
+        .has(Keyword::Deathtouch));
+    trigger(&mut game);
+    let exiled = game.move_object(original, ZoneType::Exile);
+    let returned = game.move_object(exiled, ZoneType::Battlefield);
+    let countered = trigger(&mut game);
+    game.counter_ability(countered, None);
+    let counts = &game.state.turn.ability_resolutions_this_turn;
+    assert_eq!(counts.len(), 1);
+    assert_eq!(
+        counts[&(original, game.state[returned].definition_id, 0)],
+        1
+    );
+    trigger(&mut game);
+    let observation = crate::agent::observation::Observation::for_player(&game, player);
+    assert_eq!(
+        observation
+            .stack_objects
+            .iter()
+            .map(|row| row.ability_resolutions)
+            .collect::<Vec<_>>(),
+        [0, 1]
+    );
+    assert_ne!(
+        observation.stack_objects[0].source_permanent_id,
+        observation.stack_objects[1].source_permanent_id
+    );
+    game.resolve_top_of_stack();
+    let ability = game.state[returned].definition_id;
+    let count =
+        |game: &Game, source| game.state.turn.ability_resolutions_this_turn[&(source, ability, 0)];
+    assert_eq!((count(&game, original), count(&game, returned)), (1, 1));
+    let ally = game
+        .iter_battlefield_permanents(player)
+        .find(|&id| game.state[game.permanent_object(id).unwrap()].name == "Ally")
+        .unwrap();
+    assert!(!game.characteristics(ally).keywords.has(Keyword::Deathtouch));
+    game.resolve_top_of_stack();
+    assert_eq!((count(&game, original), count(&game, returned)), (2, 1));
+    assert!(game.characteristics(ally).keywords.has(Keyword::Deathtouch));
+}
+
+#[test]
+fn separate_printed_abilities_on_one_source_each_resolve_for_the_first_time() {
+    let (mut game, permanent) = history_game("Venom Connoisseur");
+    let source = game.permanent_object(permanent).unwrap();
+    let original = game.state[source].abilities[0].clone();
+    game.state[source].abilities.push(original);
+    game.create_token("token.ally", PlayerId(0), false);
+    game.process_game_events();
+    let choices = game
+        .flush_triggers()
+        .expect("two printed triggers to order");
+    assert_eq!(choices.actions.len(), 2);
+    game.publish_action_space(choices.clone());
+    checked_command(&mut game, choices.actions[0].clone());
+    while !game.state.stack_objects.is_empty() {
+        game.resolve_top_of_stack();
+    }
+    let face = game.state[source].definition_id;
+    let counts = &game.state.turn.ability_resolutions_this_turn;
+    assert_eq!(counts.get(&(source, face, 0)), Some(&1));
+    assert_eq!(counts.get(&(source, face, 1)), Some(&1));
+}

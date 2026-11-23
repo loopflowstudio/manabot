@@ -8948,6 +8948,26 @@ fn sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target() {
 }
 
 #[test]
+fn south_pole_voyager_returning_starts_its_own_resolution_count() {
+    let mut s = five_color_setup(&["South Pole Voyager"]);
+    let voyager = s.force_permanent_on_battlefield(0, "South Pole Voyager");
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    resolve_until_priority(&mut s);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let life = s.life(0);
+    let card = card_of(&s, voyager);
+    let exiled = move_card(&mut s, card, ZoneType::Exile);
+    move_card(&mut s, exiled, ZoneType::Battlefield);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.life(0), life + 1);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}
+
+#[test]
 fn south_pole_voyager_second_resolution_draws() {
     let mut s = Scenario::new(
         deck(&[("Plains", 24), ("South Pole Voyager", 16)]),

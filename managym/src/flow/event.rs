@@ -70,6 +70,9 @@ pub enum GameEvent {
         player: PlayerId,
         old: i32,
         new: i32,
+        /// One-based occurrence on a gain, zero on a loss. Set at commit.
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        gain_ordinal: u32,
     },
     SpellCast {
         #[serde(rename = "card")]
@@ -406,6 +409,7 @@ mod tests {
             player: PlayerId(0),
             old: new + 1,
             new,
+            gain_ordinal: 0,
         }
     }
 

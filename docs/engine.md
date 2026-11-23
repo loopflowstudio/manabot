@@ -205,8 +205,10 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest. Version 18 of `MATCH_STATE_HASH_VERSION` includes the life loss retained
-across a choice and distinguishes a pending destruction from other zone moves.
+digest. Version 19 records each life gain's ordinal when it happens. An ability
+that reads its resolution count keeps it for that turn under the source
+incarnation, printed face and ability index. A trigger still on the stack
+keeps that identity after the source leaves. A countered trigger adds zero.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

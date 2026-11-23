@@ -565,7 +565,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 25] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -592,6 +592,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
         land_entered: _,
         cards_drawn: _,
         bent: _,
+        life_gains: _,
         life_lost: _,
     } = history[0];
     [
@@ -633,6 +634,10 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
             Seen::Via("the player after the interrupted turn: the extra-turn columns and the active player"),
         ),
         (
+            "history.life_gains",
+            Seen::Via("life_gains fact on the player"),
+        ),
+        (
             "history.cards_drawn",
             Seen::Player(player::CARDS_DRAWN, player::CARDS_DRAWN + 1),
         ),
@@ -666,7 +671,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
         ),
         (
             "ability_resolutions_this_turn",
-            Seen::Transient("read only by the resolving ability's own Nth-resolution check"),
+            Seen::Via("ability_resolution facts on live sources and prior resolutions on stack rows"),
         ),
         ("current_phase", Seen::Player(player::PHASE_BEGINNING, player::STEP_UNTAP)),
         ("current_step", Seen::Player(player::STEP_UNTAP, player::GRAVEYARD_LESSONS)),
@@ -1069,6 +1074,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
         TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
+        TriggerCondition::GainsLife { .. } => "TriggerCondition::GainsLife",
         TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
@@ -1088,6 +1094,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             who: Actor::Opponent,
             predicate: CardPredicate::creature(),
             nth: Some(2),
+        },
+        TriggerCondition::GainsLife {
+            who: Actor::You,
+            nth: Some(1),
         },
         TriggerCondition::Draws {
             who: Actor::AnyPlayer,
@@ -2982,6 +2992,7 @@ impl Buffer {
     fn validity(self) -> Option<usize> {
         match self {
             Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
+            Buffer::Stack => Some(stack::VALID),
             Buffer::Relation => Some(relation::VALID),
             Buffer::Facts => Some(fact::VALID),
             Buffer::Action => Some(action::VALID),
@@ -3025,6 +3036,8 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
+        FactKind::LifeGains => "PlayerTurnHistory.life_gains",
+        FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Copy => "PermanentData.copy",
         FactKind::CopyException => "CopyData.exceptions",
@@ -3130,6 +3143,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         land_entered => [column(Player, player::LAND_ENTERED)],
         cards_drawn => [column(Player, player::CARDS_DRAWN)],
         bent => [Columns(Player, player::BENT_WATER, 4)],
+        life_gains => [Fact(FactKind::LifeGains)],
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
     fields.extend(encoding!(CharacteristicsData {
@@ -3292,6 +3306,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
+        ability_resolutions => [Fact(FactKind::AbilityResolution)],
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         timestamp => [column(Permanent, permanent::TIMESTAMP)],
@@ -3325,6 +3340,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         timestamp => [column(Facts, fact::TIMESTAMP)],
     }));
     fields.extend(encoding!(StackObjectData {
+        ability_resolutions => [column(Stack, stack::ABILITY_RESOLUTIONS)],
         description => [Definition],
         stack_object_id => [Identity, Rows("relations")],
         kind => [Columns(Stack, stack::SPELL, 3), column(Relation, relation::FRAME_KIND)],

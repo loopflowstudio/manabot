@@ -17,6 +17,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         blasphemous_edict(),
+        cat_collector(),
         claws_out(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
@@ -238,6 +239,42 @@ fn claws_out() -> CardDefinition {
                 ObjectSelector::each_you_control(CardPredicate::creature()),
                 Modification::pump(2, 2),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cat_collector() -> CardDefinition {
+    let text_box = "When this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever you gain life for the first time during each of your turns, create a 1/1 white Cat creature token.";
+    CardDefinition {
+        key: "fdn.cat_collector",
+        scryfall_id: "526fe356-bff1-4211-9e88-bf913ac76b1d",
+        printed: PrintedCharacteristics {
+            name: "Cat Collector".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::create_tokens("token.food", 1)],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::GainsLife {
+                        who: Actor::You,
+                        nth: Some(1),
+                    },
+                    intervening_if: Some(Condition::YourTurn),
+                    effects: vec![Effect::create_tokens("token.cat", 1)],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

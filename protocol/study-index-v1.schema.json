@@ -1347,6 +1347,26 @@
           "description": "It has lost all abilities.",
           "type": "boolean"
         },
+        "ability_resolutions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            ]
+          }
+        },
         "attached_to": {
           "description": "The permanent this Aura or Equipment is attached to.",
           "type": [
@@ -2008,6 +2028,12 @@
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
         },
+        "life_gains": {
+          "description": "Separate occurrences, independent of the amount gained.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "life_lost": {
           "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
           "type": "integer",
@@ -2284,6 +2310,11 @@
             "integer",
             "null"
           ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ability_resolutions": {
+          "type": "integer",
           "format": "uint32",
           "minimum": 0
         },

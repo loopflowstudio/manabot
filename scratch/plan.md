@@ -54,8 +54,17 @@ exact-source power, and the pinned v18 suspended Clone witness. Both tests in
 `tests/verify/test_effect_execution_input.py` passed with the rebuilt CPython
 3.13 arm64 release extension.
 
-Next slice: implement Cat Collector and Venom Connoisseur together. The player can answer both cards from play: which gain was first on this turn, and how many times this particular ability resolved. Use two gains queued before trigger matching to prove the first event keeps its ordinal. Then counter one Connoisseur trigger, resolve another, blink the source, and resolve an old outstanding trigger alongside one from its successor. Each incarnation advances only its own resolution count. Preserve the triggered source reference through the stack, fork, witness and viewer-safe projection. In a sibling replay the same Commands and compare the counts and grants; a stale submission advances neither clock. Keep distinct printed ability identities even on one permanent. Restrict retained resolution counts to abilities whose programs can read them, after checking all printed, copied and inline program readers. A universal journal query would make these bounded questions depend on scanning past events. Bring in Panda and Convocation after the paired clocks agree. The other 79 primary rows, additional witnesses, broader replay/privacy
-validation and Engine Budget measurements remain open. The catalog and hash
+## Implemented slice · Cat Collector and Venom Connoisseur
+
+Four of the 81 primary FDN ledger rows have definitions. Cat Collector's Food grants three life in one gain. A second Collector entering after that gain makes Food, but neither Collector makes a second Cat. The queued-gain fixture commits gains of three and two before matching. Their ordinals are one and two and they create one Cat. The turn transition resets both players' counts. Seat zero's next first gain on seat one's turn creates no Cat, and its first gain on its own next turn queues the trigger again.
+
+Venom Connoisseur's second resolution grants team deathtouch. Countering a trigger leaves the count untouched, including after the original source returned. With an old trigger below a new one the stack shows prior counts zero and one in top-first order. Resolving both finishes at two for the original and one for the successor. Each priority Command in the card fixture replays identically in a fork and a spent Command is rejected. Two printed abilities on the same source each resolve for the first time. South Pole Voyager's returning incarnation gains life without drawing, then draws on its next resolution.
+
+The catalog adds `fdn.cat_collector`, `snc.venom_connoisseur` and `token.cat` (the 1/1 white Cat). The Oracle snapshot check, token reference check, experience schema and exhaustive field-to-column check passed. The text/tensor fixture recovers ability index one with count two and a separate player gain count of two.
+
+Hash v19 includes the gain ordinal and exact resolution keys. The stack retains the captured public source, and the stack and live permanent report counts for their respective abilities. The policy encodes two new v11 fact kinds and one appended stack column. The v9 and v11 pinned pilots reproduced their recorded games; the optional frontier checkpoint was unavailable.
+
+Next slice: Fiendish Panda with Heartfire Immolator for exact-source last-known power, then Lunar Convocation for simultaneous gain and loss history. The remaining 77 primary rows, additional anchors, integrated replay/privacy and Engine Budget measurements are open. The catalog and hash
 changed. Once the cohort stabilizes, integrated validation needs new current
 conformance receipts, including the semantic kernel, authored-match and Academy
 parity witnesses listed in `conformance/README.md`. The v17 historical witnesses

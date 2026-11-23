@@ -701,3 +701,24 @@ fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
     assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
+
+#[test]
+fn cat_collectors_food_creates_a_cat_only_on_its_controllers_first_gain() {
+    use crate::support::play::command;
+    use managym::agent::action::Action;
+
+    let mut s = five_color_setup(&["Cat Collector"]);
+    for _ in 0..2 {
+        enter_and_settle(&mut s, "Cat Collector");
+        let food = permanent_named(&s, "Food");
+        let before = s.life(0);
+        command(
+            &mut s,
+            |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == food),
+        );
+        spend_colorless(&mut s);
+        settle(&mut s);
+        assert_eq!(s.life(0), before + 3);
+        assert_eq!(s.battlefield_permanents_named(0, "Cat").len(), 1);
+    }
+}

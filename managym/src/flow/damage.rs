@@ -104,6 +104,7 @@ impl Game {
                         player,
                         old: old_life,
                         new: new_life,
+                        gain_ordinal: 0,
                     });
                 }
             }
@@ -184,6 +185,7 @@ impl Game {
             player,
             old: old_life,
             new: new_life,
+            gain_ordinal: 0,
         });
         new_life - old_life
     }

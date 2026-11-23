@@ -460,6 +460,7 @@ pub struct StackTargetData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
+    pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     pub description: Option<String>,
     pub stack_object_id: i32,
@@ -811,6 +812,7 @@ pub struct PermanentData {
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
+    pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     pub dealt_damage_this_turn: bool,
@@ -1565,6 +1567,16 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            ability_resolutions: {
+                let object = permanent.object;
+                let face = game.state.source_base(object).0;
+                game.state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .range((object, face, 0)..=(object, face, usize::MAX))
+                    .map(|((_, _, index), count)| (*index, *count))
+                    .collect()
+            },
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -1677,6 +1689,16 @@ impl Observation {
 
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
         StackObjectData {
+            ability_resolutions: match stack_object {
+                StackObject::TriggeredAbility(a) => game
+                    .state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .get(&(a.source_object(), a.source_definition_id, a.ability_index))
+                    .copied()
+                    .unwrap_or(0),
+                _ => 0,
+            },
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
@@ -1703,6 +1725,10 @@ impl Observation {
                 StackObject::ActivatedAbility(ability) => game
                     .object_event_ref(ability.source_object())
                     .map(|object| object.entity.0 as i32),
+                StackObject::TriggeredAbility(ability) => ability
+                    .source_lki
+                    .as_ref()
+                    .map(|lki| lki.presentation_id.0 as i32),
                 _ => None,
             },
             chosen_mode: match stack_object {
@@ -1855,7 +1881,9 @@ impl Observation {
                     None,
                 )]
             }
-            GameEvent::LifeChanged { player, old, new } => vec![Self::build_event_data(
+            GameEvent::LifeChanged {
+                player, old, new, ..
+            } => vec![Self::build_event_data(
                 EventType::LifeChanged,
                 Some(EventEntity::Player(*player)),
                 Some(EventEntity::Player(*player)),

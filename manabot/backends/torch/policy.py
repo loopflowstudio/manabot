@@ -518,7 +518,11 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(buffers, Layout(self.readings)),
+                Tables.from_buffers(
+                    buffers,
+                    Layout(self.readings),
+                    fact_kinds=self.facts.kind.num_embeddings - 1,
+                ),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings
