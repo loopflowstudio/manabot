@@ -378,8 +378,7 @@ impl Game {
             return None;
         };
 
-        let object_id = self.add_object(object);
-        Some(object_id)
+        Some(self.add_object(object))
     }
 
     pub(crate) fn finish_created_token(&mut self, object: ObjectId, attacking: bool) {
@@ -433,18 +432,19 @@ impl Game {
         self.state.zones.allocate()
     }
 
-    /// An object created in a zone starts at its first incarnation. Record its
-    /// entry for capture without emitting a rules zone-change event.
-    pub(crate) fn add_object_in_zone(
+    /// A spell copy starts on the stack at incarnation zero. Capture its
+    /// creation without emitting a rules zone-change event.
+    pub(crate) fn create_spell_copy(
         &mut self,
-        object: Object,
-        holder: PlayerId,
-        zone: ZoneType,
+        source: ObjectId,
+        id: PublicId,
+        controller: PlayerId,
     ) -> ObjectId {
-        let id = self.add_object(object);
-        self.state.place_object(id, holder, zone);
-        self.capture_object_move(id, None, Some(zone), holder);
-        id
+        let copy = Object::spell_copy(self.state[source].clone(), id, controller);
+        let object = self.add_object(copy);
+        self.state.place_object(object, controller, ZoneType::Stack);
+        self.capture_object_move(object, None, Some(ZoneType::Stack), controller);
+        object
     }
 
     /// Count permanents a player controls matching a predicate (e.g.

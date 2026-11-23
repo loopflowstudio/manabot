@@ -13,7 +13,6 @@ use crate::{
         ability::{effect_target_requirements, TargetRequirement},
         game_object::{PlayerId, Target},
         stack_object::StackObject,
-        zone::ZoneType,
     },
 };
 
@@ -171,14 +170,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
-                let copy = crate::state::game_object::Object::spell_copy(
-                    self.state[spell.object].clone(),
-                    id,
-                    controller,
-                );
-                let copied = self.add_object_in_zone(copy, controller, ZoneType::Stack);
+                spell.object = self.create_spell_copy(spell.object, id, controller);
                 spell.id = id;
-                spell.object = copied;
                 spell.controller = controller;
                 StackObject::Spell(spell)
             }

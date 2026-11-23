@@ -145,7 +145,7 @@ impl ManaUse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardSnapshot {
     pub copy: usize,
     pub definition: u32,
@@ -422,10 +422,6 @@ mod tests {
     use crate::state::{game_object::Target, player::PlayerConfig};
     use std::collections::BTreeMap;
 
-    fn configs() -> Vec<PlayerConfig> {
-        configs_with_card("Mountain")
-    }
-
     fn configs_with_card(card: &str) -> Vec<PlayerConfig> {
         ["a", "b"]
             .into_iter()
@@ -448,13 +444,18 @@ mod tests {
         (game, copy)
     }
 
-    fn copy_moves(game: &Game, copy: ObjectId) -> Vec<&CardMove> {
+    fn copy_moves(game: &Game, copy: ObjectId) -> impl Iterator<Item = &CardMove> {
         game.card_capture
             .as_ref()
             .unwrap()
             .moves
             .iter()
-            .filter(|m| m.object.copy == copy.slot())
+            .filter(move |m| m.object.copy == copy.slot())
+    }
+
+    fn copy_history(game: &Game, copy: ObjectId) -> Vec<(Option<ZoneType>, Option<ZoneType>, u32)> {
+        copy_moves(game, copy)
+            .map(|m| (m.from, m.object.zone, m.object.incarnation))
             .collect()
     }
 
@@ -466,23 +467,14 @@ mod tests {
         game.resolve_top_of_stack();
         game.perform_state_based_actions();
 
-        let moves = copy_moves(&game, copy);
-        let chain: Vec<_> = moves
-            .iter()
-            .map(|m| (m.from, m.object.zone, m.object.incarnation))
-            .collect();
         assert_eq!(
-            chain,
+            copy_history(&game, copy),
             [
                 (None, Some(Stack), 0),
                 (Some(Stack), Some(Graveyard), 1),
                 (Some(Graveyard), None, 1)
             ]
         );
-        assert_eq!(moves[0].object.name, "Lightning Bolt");
-        assert_eq!(moves[0].object.origin, "generated");
-        assert_eq!((moves[0].object.owner, moves[0].controller), (1, 1));
-        assert_eq!(moves[0].cause, "move");
     }
 
     #[test]
@@ -497,12 +489,8 @@ mod tests {
         game.move_object(token, Graveyard);
         game.perform_state_based_actions();
 
-        let chain: Vec<_> = copy_moves(&game, copy)
-            .iter()
-            .map(|m| (m.from, m.object.zone, m.object.incarnation))
-            .collect();
         assert_eq!(
-            chain,
+            copy_history(&game, copy),
             [
                 (None, Some(Stack), 0),
                 (Some(Stack), Some(Battlefield), 1),
@@ -518,22 +506,18 @@ mod tests {
         game.lose_game(PlayerId(0));
         assert!(game.is_game_over());
 
-        let moves = copy_moves(&game, copy);
-        let [entry] = moves.as_slice() else {
-            panic!("expected only the copy's stack entry");
-        };
+        let mut moves = copy_moves(&game, copy);
+        let entry = moves.next().expect("spell copy's stack entry");
+        assert!(moves.next().is_none());
         assert_eq!(
             (entry.from, entry.object.zone, entry.object.incarnation),
             (None, Some(ZoneType::Stack), 0)
         );
-        let final_card = snapshots(&game)
-            .into_iter()
-            .find(|card| card.copy == copy.slot())
-            .unwrap();
-        assert_eq!(
-            serde_json::to_value(&entry.object).unwrap(),
-            serde_json::to_value(final_card).unwrap()
-        );
+        assert_eq!(entry.object.name, "Gray Ogre");
+        assert_eq!(entry.object.origin, "generated");
+        assert_eq!((entry.object.owner, entry.controller), (1, 1));
+        assert_eq!(entry.cause, "move");
+        assert!(snapshots(&game).contains(&entry.object));
     }
 
     #[test]
@@ -555,10 +539,9 @@ mod tests {
         else {
             panic!("expected both Drill abilities on the stack");
         };
-        let originals = [trigger.id, activation.id];
         let moves_before = game.card_capture.as_ref().unwrap().moves.len();
-        for original in originals {
-            let original = Target::StackAbility(original);
+        for id in [trigger.id, activation.id] {
+            let original = Target::StackAbility(id);
             let copy = game.copy_stack_object(original, copier).unwrap();
             assert!(matches!(copy, Target::StackAbility(_)));
             assert_ne!(copy, original);
@@ -577,7 +560,7 @@ mod tests {
             state::mana::{Mana, ManaCost},
         };
         let payer = PlayerId(0);
-        let mut players = configs();
+        let mut players = configs_with_card("Mountain");
         players[0] = PlayerConfig::new(
             "a",
             BTreeMap::from([
@@ -627,7 +610,7 @@ mod tests {
         use crate::flow::turn::PhaseKind;
         let (active, defender) = (PlayerId(0), PlayerId(1));
         let mut game = Game::construct(
-            configs().into(),
+            configs_with_card("Mountain").into(),
             17,
             true,
             Some(CaptureMode::Exposure),
@@ -680,8 +663,8 @@ mod tests {
 
     #[test]
     fn capture_preserves_rules_and_excludes_forks() {
-        let plain = Game::new(configs(), 17, true);
-        let mut captured = Game::new_capturing(configs(), 17, true);
+        let plain = Game::new(configs_with_card("Mountain"), 17, true);
+        let mut captured = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         assert_eq!(
             plain.state.deterministic_hash(),
             captured.state.deterministic_hash()
@@ -712,7 +695,7 @@ mod tests {
 
     #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
-        let mut game = Game::new_capturing(configs(), 18, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 18, true);
         let object = game
             .state
             .zones
@@ -831,7 +814,7 @@ mod tests {
     #[test]
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
-        let mut game = Game::new_capturing(configs(), 17, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
         let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting
