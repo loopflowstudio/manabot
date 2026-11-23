@@ -6,10 +6,71 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import numpy as np
 import pytest
+
+if TYPE_CHECKING:
+    from manabot.training.loops.self_play import SelfPlay
+
+
+def bounded_self_play() -> "SelfPlay":
+    from manabot.recipes import baseline
+
+    return baseline.settings(
+        baseline.BaselineConfig(backend="mlx", device="mps")
+    ).model_copy(
+        update={
+            "streams": 2,
+            "transitions": 8,
+            "learning_seats": "one",
+            "batch_closure": "exact-quota",
+            "bucketed_shapes": True,
+            "checkpoint_every": 1,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "writer,reader,message",
+    [
+        ("torch", "mlx", "expected an MLX callback save"),
+        ("mlx", "torch", "saved state has no object"),
+    ],
+)
+def test_tracked_state_refuses_a_different_framework(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    writer: str,
+    reader: str,
+    message: str,
+) -> None:
+    pytest.importorskip("mlx.core")
+    from manabot.backends import resolve
+    from manabot.training.loops.self_play import CLOCKS, self_play
+    from tests.fixtures.training_records import recording
+
+    out = tmp_path / "out"
+    monkeypatch.setenv("ETUDE_OUT", str(out))
+    settings = bounded_self_play().model_copy(update={"device": "cpu"})
+    with recording(
+        experiment="test", run="cross", directory=tmp_path / "track", clocks=CLOCKS
+    ) as run:
+        policy = self_play(settings, run, updates=1, backend=resolve(writer))
+    before = (out / "state/current.json").read_bytes(), policy.read_bytes()
+    with recording(
+        experiment="test",
+        run="cross",
+        directory=tmp_path / "track",
+        clocks=CLOCKS,
+        resume=True,
+    ) as run:
+        with pytest.raises(ValueError, match=message):
+            self_play(settings, run, updates=2, backend=resolve(reader))
+    assert before == ((out / "state/current.json").read_bytes(), policy.read_bytes())
+    assert not policy.with_name("00000002-raw.safetensors").exists()
 
 
 def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
@@ -29,23 +90,11 @@ def exercise_continuation(root: Path) -> None:
     from manabot.backends import resolve
     from manabot.backends.mlx import state
     from manabot.backends.mlx.rl import NumericalError
-    from manabot.recipes import baseline
     from manabot.training.loops import self_play as loop
     from tests.fixtures.training_records import recording
 
     backend = resolve("mlx")
-    settings = baseline.settings(
-        baseline.BaselineConfig(backend="mlx", device="mps")
-    ).model_copy(
-        update={
-            "streams": 2,
-            "transitions": 8,
-            "learning_seats": "one",
-            "batch_closure": "exact-quota",
-            "bucketed_shapes": True,
-            "checkpoint_every": 1,
-        }
-    )
+    settings = bounded_self_play()
     out = root / "out"
     os.environ["ETUDE_OUT"] = str(out)
 
