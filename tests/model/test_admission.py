@@ -15,8 +15,10 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import RewardConfig
+from manabot.policy import admission
+from manabot.policy.buckets import BucketedObservation
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import (
     RolloutBatch,
@@ -129,18 +131,23 @@ def test_admitted_forward_performs_no_validation_reads(grad: bool) -> None:
 def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
-    check = ActorCritic.check_observation
+    check = admission.check
 
     def admitted_rows(epochs: int) -> list[int]:
-        monkeypatch.setattr(ActorCritic, "check_observation", check)
+        monkeypatch.setattr(admission, "check", check)
         agent, batch = _policy(history=False)
         rows: list[int] = []
 
-        def counting_checks(model: ActorCritic, obs: dict[str, np.ndarray]) -> None:
-            rows.append(len(obs["actions_valid"]))
-            check(model, obs)
+        def counting_checks(
+            obs: ObservationBuffers,
+            spec: admission.Spec,
+            legal: np.ndarray,
+            bucketed: BucketedObservation | None = None,
+        ) -> None:
+            rows.append(len(legal))
+            check(obs, spec, legal, bucketed)
 
-        monkeypatch.setattr(ActorCritic, "check_observation", counting_checks)
+        monkeypatch.setattr(admission, "check", counting_checks)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(

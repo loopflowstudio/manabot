@@ -1,5 +1,6 @@
 """Host preparation preserves the admitted observation's joins and coordinates."""
 
+from dataclasses import asdict
 from functools import lru_cache
 
 import numpy as np
@@ -18,13 +19,14 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
 from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
-from manabot.policy.readings import read_numeric
+from manabot.policy.readings import fresh_readings, legacy_readings, read_numeric
 from manabot.verify.representation import shared_effect_root
 import managym
 from tests.model.prepared_routes import device_input
@@ -229,6 +231,76 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     obs["belief_count_probabilities"] = np.zeros((3, 2, 2), np.float32)
     with pytest.raises(ValueError, match="valid belief rows must be normalized"):
         check(obs, spec, obs["actions_valid"].astype(bool))
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
+    space = ObservationSpace(ObservationConfig(policy_history_version=1))
+    env = shared_effect_root(1)
+    encoded = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
+    obs = {key: np.stack([value, value]) for key, value in encoded.items()}
+    # Join across removed padding to the first opposing permanent.
+    target = (
+        2
+        + 2 * space.config.max_cards_per_player
+        + space.config.max_permanents_per_player
+    )
+    obs["opponent_permanents"][:, 0, column("opponent_permanents", "blocking")] = (
+        target + 1
+    )
+    obs["stack"][:, 0, column("stack", "source")] = target + 1
+    obs["action_focus"][obs["actions_valid"] == 1] = [-1, target]
+    events = obs["events"]
+    obs["events_valid"][:, 0] = 1
+    events[:, 0, column("events", "source_context")] = -1
+    events[:, 0, column("events", "target_context")] = target
+    relations = obs["relations"]
+    for slot, kind in enumerate((7, 8, 10, 2)):
+        for name, value in (
+            ("valid", 1),
+            ("frame", slot + 1),
+            ("frame_kind", kind),
+            ("reference", target + 1),
+        ):
+            relations[:, slot, column("relations", name)] = value
+    relations[:, 4, column("relations", "reference")] = np.nan
+    config = ModelConfig(
+        hidden_dim=8,
+        num_attention_heads=2,
+        world=managym.WORLD_SETUP,
+        recent_events=True,
+        value_aggregation="masked_mean",
+    )
+    readings = legacy_readings(space) if legacy else fresh_readings(space)
+    agent = ActorCritic(space, config, bucketed_shapes=True, readings=readings)
+    actual = agent.prepare(obs)
+    buckets = bucket_sizes(obs, space, objects=True)
+    assert buckets is not None and buckets.trims_objects
+    compact = trim_observation(obs, buckets)
+    expected = prepare(
+        compact,
+        agent._admission_spec().tables,
+        bucketed=True,
+        bucket_needs=actual.bucket_needs,
+        binding=actual.binding,
+        action_capacity=space.config.max_actions,
+        value_token=agent.value_token is not None,
+    )
+    np.testing.assert_equal(asdict(actual), asdict(expected))
+    # A pending frame masks its positional columns even for saved scalar readings.
+    trimmed = compact["relations"]
+    dense = np.where(
+        (trimmed[..., column("relations", "valid")] == 1)[..., None], trimmed, 0
+    )
+    dense[:, :3, column("relations", "frame") : column("relations", "frame_kind")] = 0
+    np.testing.assert_array_equal(
+        actual.relation_features,
+        read_numeric(dense, readings["relations"]),
+        strict=True,
+    )
+    assert obs["stack"][0, 0, column("stack", "source")] == target + 1
 
 
 @pytest.mark.parametrize("catalog", [False, True])

@@ -2253,9 +2253,6 @@ def frozen_bootstraps(
     if frozen is None:
         return {}, tuple(spans), 0
     observations = frozen.arrays()
-    observations["action_focus"] = observations["action_focus"].astype(
-        np.float32, copy=False
-    )
     if frozen.memory_capacities is not None:
         observations = PrefixObservation(
             observations, frozen.memory, frozen.memory_capacities

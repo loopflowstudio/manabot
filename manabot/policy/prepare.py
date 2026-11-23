@@ -586,6 +586,12 @@ class Prepared[A]:
     stack_mask: A | None = None
 
 
+def object_slots(values: Array, remap: Array | None, *, base: int = 1) -> Array:
+    """Zero-based gather slots. An absent join gathers player zero under its mask."""
+    slots = (values.astype(np.int64, copy=False) - base).clip(min=0)
+    return slots if remap is None else remap[slots]
+
+
 def prepare(
     obs: ObservationBuffers,
     tables: Tables,
@@ -593,6 +599,7 @@ def prepare(
     inference: bool = False,
     bucketed: bool = False,
     bucket_needs: Array | None = None,
+    object_remap: Array | None = None,
     live_tokens: bool = False,
     value_token: bool = False,
     memory_summaries: int = 0,
@@ -659,30 +666,29 @@ def prepare(
         links = np.concatenate(
             [obs[key][..., link_column] for key in _PERMANENT_KEYS], 1
         )
-        link_targets.append(
-            (base + (links.astype(np.int64) - 1).clip(min=0)).reshape(-1)
-        )
+        link_targets.append((base + object_slots(links, object_remap)).reshape(-1))
         link_masks.append((links > 0).astype(f32))
 
     relations = obs["relations"]
     relation_valid = relations[..., RELATION_VALID_INDEX]
-    clean = np.where(relation_valid[..., None] == 1, relations, 0)
-    features = clean.copy()
-    pending = np.isin(clean[..., _RELATION_FRAME_KIND], (7, 8, 10))
-    features[..., _RELATION_FRAME_IDS] = np.where(
-        pending[..., None], 0, clean[..., _RELATION_FRAME_IDS]
+    valid = relation_valid == 1
+    live = relations[valid]
+    pending = np.isin(live[:, _RELATION_FRAME_KIND], (7, 8, 10))
+    live[pending, _RELATION_FRAME_IDS] = 0
+    relation_features = np.zeros(
+        (*valid.shape, layout.numeric_width("relations")), dtype=f32
     )
-    relation_features = read_numeric(features, layout.readings["relations"])
+    relation_features[valid] = read_numeric(live, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
     for link_column in _RELATION_OBJECT_COLUMNS:
-        indexes = clean[..., link_column].astype(np.int64)
-        relation_objects.append((base + (indexes - 1).clip(min=0)).reshape(-1))
+        indexes = np.where(valid, relations[..., link_column], 0)
+        relation_objects.append(
+            (base + object_slots(indexes, object_remap)).reshape(-1)
+        )
         relation_masks.append((indexes > 0).astype(f32))
-    frame_ids = np.where(
-        relation_valid == 1, relations[..., _RELATION_FRAME], 1
-    ).astype(np.int64)
+    frame_ids = np.where(valid, relations[..., _RELATION_FRAME], 1).astype(np.int64)
     frame_base = np.arange(batch)[:, None] * relation_count
     frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
 
@@ -761,7 +767,7 @@ def prepare(
         if stack is not None
         else None,
         stack_targets=(
-            base + (stack[..., STACK_SOURCE_INDEX].astype(np.int64) - 1).clip(min=0)
+            base + object_slots(stack[..., STACK_SOURCE_INDEX], object_remap)
         ).reshape(-1)
         if stack is not None
         else None,
@@ -770,8 +776,8 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(facts, tables, objects),
-        effects=_effects(obs, tables, objects),
+        facts=_facts(facts, tables, objects, object_remap),
+        effects=_effects(obs, tables, objects, object_remap),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
         relation_rows=tables.rows(relations[..., _RELATION_DEFINITIONS]),
@@ -792,7 +798,8 @@ def prepare(
         group_mask=(first > 0).astype(f32),
         group_counts=(last - first + 1).clip(min=1).astype(f32),
         candidate_rows=tables.rows(candidates[:, _NAME_DEFINITION]),
-        focus=legal_batches[:, None] * objects + focus.clip(min=0),
+        focus=legal_batches[:, None] * objects
+        + object_slots(focus, object_remap, base=0),
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
         binding=binding,
@@ -809,7 +816,7 @@ def prepare(
         if tables.definition_rows is not None
         else None,
         belief=belief,
-        events=_events(obs, tables, objects) if history else None,
+        events=_events(obs, tables, objects, object_remap) if history else None,
         memory=memory,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
@@ -863,7 +870,9 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
-def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
+def _facts(
+    facts: Array, tables: Tables, objects: int, object_remap: Array | None = None
+) -> FactRoutes[Array]:
     batch = len(facts)
     valid = facts[..., FACT_VALID_INDEX] == 1
     # Index only live facts on the host. Restore padding before the forward:
@@ -948,7 +957,7 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         token_rows=padded(token_rows),
         token_mask=all_programs.astype(np.float32),
         source_rows=padded(sources),
-        targets=(base + (links - 1).clip(min=0)).reshape(-1),
+        targets=(base + object_slots(links, object_remap)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
         programs=_fact_programs(facts, all_programs, tables.order_lengths),
     )
@@ -981,7 +990,10 @@ def _fact_programs(
 
 
 def _effects(
-    obs: ObservationBuffers, tables: Tables, objects: int
+    obs: ObservationBuffers,
+    tables: Tables,
+    objects: int,
+    object_remap: Array | None = None,
 ) -> EffectRoutes[Array] | None:
     headers = obs["effects"]
     details = obs["effect_details"]
@@ -1033,9 +1045,9 @@ def _effects(
     signed = np.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
     return EffectRoutes(
         numeric=numeric,
-        controller=base + (links[:, 0] - 1).clip(min=0),
+        controller=base + object_slots(links[:, 0], object_remap),
         controller_mask=(links[:, 0] > 0).astype(np.float32),
-        source_object=base + (links[:, 1] - 1).clip(min=0),
+        source_object=base + object_slots(links[:, 1], object_remap),
         source_object_mask=(links[:, 1] > 0).astype(np.float32),
         modification_rows=tables.names(
             RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
@@ -1049,7 +1061,7 @@ def _effects(
         detail_is_number=np.isin(token_kinds, NUMBER_TOKEN_KINDS).astype(np.float32),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
         schedule=pack(lengths),
-        routes=member_batches * objects + targets - 1,
+        routes=member_batches * objects + object_slots(targets, object_remap),
         member_records=records,
     )
 
@@ -1067,7 +1079,12 @@ def _belief(obs: ObservationBuffers) -> BeliefRows[Array] | None:
     )
 
 
-def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[Array]:
+def _events(
+    obs: ObservationBuffers,
+    tables: Tables,
+    objects: int,
+    object_remap: Array | None = None,
+) -> EventRows[Array]:
     valid = obs["events_valid"]
     rows = np.where((valid != 0)[..., None], obs["events"], 0)
     counts = valid.sum(1, keepdims=True)
@@ -1081,7 +1098,8 @@ def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[
         definitions=tables.rows(rows[..., _EVENT_DEFINITIONS]),
         owners=rows[..., _EVENT_OWNERS].astype(np.int64),
         zones=rows[..., _EVENT_ZONES].astype(np.int64),
-        focus=np.arange(len(rows))[:, None, None] * objects + focus.clip(min=0),
+        focus=np.arange(len(rows))[:, None, None] * objects
+        + object_slots(focus, object_remap, base=0),
         focus_mask=(focus >= 0) & (valid != 0)[..., None],
         status=rows[..., _EVENT_STATUS].astype(np.int64),
     )

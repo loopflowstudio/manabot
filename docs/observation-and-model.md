@@ -226,8 +226,9 @@ Bucketed padding is the default for CUDA training. The host measures the last
 occupied or referenced row on each variable axis, including actions, objects
 and effect spans. It rounds each extent up to a power of two, with a minimum
 of 8 rows and a maximum of the declared capacity. Admission validates these
-prefixes in the original object coordinates. Preparation then renumbers object
-references into the trimmed table. Models with belief rows or
+prefixes in the original object coordinates. Raw buffers keep those coordinates
+throughout collection and learning. Preparation translates the integer gathers
+into the trimmed object table. Models with belief rows or
 `historical_mean` value aggregation keep the full object table. Logits retain
 the original action slots.
 

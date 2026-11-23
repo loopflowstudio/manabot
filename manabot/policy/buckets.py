@@ -11,8 +11,8 @@ parameter, buffer, checkpoint or policy input.
 `row_needs` measures what each row needs on every axis; `sizes_of` buckets a
 group of rows from those needs (`bucket_sizes` does both for one batch).
 A learner measures each rollout row once and regroups the needs for every
-epoch's minibatches. `trim_observation` slices admitted NumPy buffers and
-remaps their object references before host index preparation.
+epoch's minibatches. Preparation reads original-coordinate bucket views and
+uses `object_map` to translate the integer joins it emits.
 
 An axis's need covers every row the default path could read or reject: the
 last row with any nonzero value (so poisoned padding is kept and still
@@ -29,7 +29,6 @@ capacity is zero and its keys are absent.
 """
 
 from collections.abc import Iterator, Mapping
-from copy import copy
 from dataclasses import dataclass
 
 import numpy as np
@@ -263,20 +262,27 @@ def bucket_views(
     return trimmed
 
 
+def object_map(buckets: BucketSizes) -> np.ndarray | None:
+    """Translate original zero-based object slots into bucket coordinates."""
+    if not buckets.trims_objects:
+        return None
+    segments = object_segments(buckets.capacities)
+    _, start, count = segments[-1]
+    indexes = np.arange(start + count, dtype=np.int64)
+    removed = 0
+    for axis, start, count in segments:
+        indexes[start : start + count] -= removed
+        removed += count - buckets.sizes[axis]
+    return indexes
+
+
 def trim_observation(
     obs: ObservationBuffers, buckets: BucketSizes
 ) -> dict[str, np.ndarray]:
     """Trim admitted host rows and remap every object join to the new table."""
-    return remap_objects(bucket_views(obs, buckets), buckets)
-
-
-def remap_objects(
-    rows: dict[str, np.ndarray], buckets: BucketSizes
-) -> dict[str, np.ndarray]:
-    """Renumber admitted object joins in a new mapping, preserving retained prefixes."""
+    trimmed = bucket_views(obs, buckets)
     if not buckets.trims_objects:
-        return rows
-    trimmed = copy(rows)
+        return trimmed
 
     segments = object_segments(buckets.capacities)
 

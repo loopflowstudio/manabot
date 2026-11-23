@@ -52,7 +52,7 @@ from manabot.policy import admission
 from manabot.policy.buckets import (
     BucketedObservation,
     bucket_views,
-    remap_objects,
+    object_map,
     row_needs,
     sizes_of,
 )
@@ -556,8 +556,8 @@ class ActorCritic(nn.Module):
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        bucketed = self.check_observation(obs)
-        return self._prepare_rows(obs, bucketed, inference, memory_roots)
+        bucketed, tables = self._admit_observation(obs)
+        return self._prepare_rows(obs, bucketed, tables, inference, memory_roots)
 
     def observation_buckets(
         self, obs: ObservationBuffers, needs: np.ndarray | None = None
@@ -573,6 +573,12 @@ class ActorCritic(nn.Module):
 
     def check_observation(self, obs: ObservationBuffers) -> BucketedObservation | None:
         """Validate the current rows and return their measured extents when bucketed."""
+        bucketed, _ = self._admit_observation(obs)
+        return bucketed
+
+    def _admit_observation(
+        self, obs: ObservationBuffers
+    ) -> tuple[BucketedObservation | None, Tables]:
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -584,8 +590,9 @@ class ActorCritic(nn.Module):
                 {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
             ) from error
         bucketed = self.observation_buckets(obs)
-        admission.check(obs, self._admission_spec(), legal, bucketed)
-        return bucketed
+        spec = self._admission_spec()
+        admission.check(obs, spec, legal, bucketed)
+        return bucketed, spec.tables
 
     def prepare_admitted(
         self,
@@ -601,21 +608,23 @@ class ActorCritic(nn.Module):
         autograd mode; bucketed batches always use the full catalog schedule.
         """
         bucketed = self.observation_buckets(obs, needs)
-        return self._prepare_rows(obs, bucketed, inference, memory_roots)
+        return self._prepare_rows(
+            obs, bucketed, self._admission_spec().tables, inference, memory_roots
+        )
 
     def _prepare_rows(
         self,
         obs: ObservationBuffers,
         bucketed: BucketedObservation | None,
+        tables: Tables,
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         capacity = obs["actions_valid"].shape[1]
-        if bucketed is not None:
-            obs = remap_objects(bucketed.rows, bucketed.buckets)
         return prepare(
-            obs,
-            self._admission_spec().tables,
+            bucketed.rows if bucketed is not None else obs,
+            tables,
+            object_remap=object_map(bucketed.buckets) if bucketed is not None else None,
             inference=inference and device_of(self).type == "cpu",
             bucketed=self.bucketed_shapes,
             bucket_needs=bucketed.needs if bucketed is not None else None,
@@ -1319,11 +1328,14 @@ class PolicyInference:
         self.check(agent)
         if torch.is_grad_enabled():
             raise RuntimeError("prepared inference observations cannot enter autograd")
-        self.cache_programs()
+        self._cache_programs()
 
     def cache_programs(self) -> None:
         """Prepare the fixed policy catalog, checking the serving lifetime first."""
         self.check(self.agent)
+        self._cache_programs()
+
+    def _cache_programs(self) -> None:
         if self.cache_catalog and not self.agent._cache_versions:
             self.agent.cache_programs()
 

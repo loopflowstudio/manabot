@@ -15,7 +15,8 @@ logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 
 `Prepared` is the one policy input. A policy's `prepare` runs this package's
 host admission and indexing. With bucketed shapes, Torch measures occupied
-prefixes before admission and renumbers object references after it. Every
+prefixes before admission. Preparation translates the extracted object joins
+to the bucket coordinates. Every
 backend's forward reads the resulting batch.
 
 - `admission.py` owns the checks an observation batch passes before a policy
@@ -26,10 +27,10 @@ backend's forward reads the resulting batch.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
-  axes to (`bucket_sizes`) and trims the NumPy rows (`trim_observation`),
-  remapping object references to the trimmed table. Native scans measure the
-  last occupied row and furthest referenced row in each object segment for
-  each batch item. The policy supplies the columns, bases and segment bounds.
+  axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
+  measures each item's occupied rows, object references, continuation joins
+  and effect spans. `bucket_views` slices the batch in original coordinates.
+  `object_map` supplies the lookup for joins into the trimmed object table.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token
