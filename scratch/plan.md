@@ -1,6 +1,8 @@
 # MTG-420 · Battlefield forms, copies and persistent ability sources
 
-Working-phase design for the checkout at `0b1cc9cfef9c1a98430c825b9764a49237182696`. Implementation starts with the three form probes below. Completion includes the card cohort, its observation and Command paths, decomposition and the 10% Engine Budget. The first playable probe is Esper Origins. The remaining probes and integrated measurements are pending.
+The Task brief gives the design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
+
+Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. Cecil is next. Meld, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
 
 ## Cohort and interaction fixtures
 
@@ -32,11 +34,15 @@ Compare two designs against these witnesses before committing to the Rust API. E
 
 ### Esper Origins movement probe
 
-Both native FIN scenarios pass. Casting from hand spends two mana, surveils, gains two life and leaves the card in the graveyard. Flashback spends four and produces separate stack, exile and battlefield appearances of one card. Entry replacements read the incoming Saga face. Its first chapter makes a permanent known in hand or leaves a nonpermanent publicly known on top. Chapters II and III, finality, temporary grants and an ordinary attempted return use the same movement and trigger machinery. Stack origin and battlefield mana value reach the v11 observation. The Scryfall fixture and the existing Clone and TLA face scenarios pass. The addition of two sorted catalog rows changed the constructed Clone scenario's state hash.
+Casting from hand spends two mana, surveils, gains two life and leaves the card in the graveyard. Flashback spends four and produces separate stack, exile and battlefield appearances of one card. Entry replacements read the incoming Saga face. Its first chapter makes a permanent known in hand or leaves a nonpermanent publicly known on top. Chapters II and III, finality, temporary grants and an ordinary attempted return use the same movement and trigger machinery. Stack origin and battlefield mana value reach the v11 observation. The Scryfall fixture and the existing Clone and TLA face scenarios pass. The addition of two sorted catalog rows changed the constructed Clone scenario's state hash.
 
 The two `fin::esper_origins` scenarios, Scryfall conformance, Clone's suspended entry, TLA's stacked-face and transforming-token tests, and the exhaustive effect, condition and observation-column guards passed. Rebuilt the CPython 3.13 release wheel and installed its extension in this checkout. `uv run --no-sync pytest -q tests/semantic/test_text_observation.py::test_esper_origins_text_follows_the_spell_onto_its_saga_face` passed through both real casts and the Saga's captured text. Both saved pilot games passed with `uv run --no-sync pytest -q 'tests/model/test_pinned_pilot.py::test_recorded_game[v9]' 'tests/model/test_pinned_pilot.py::test_recorded_game[v11]'`.
 
-Next, use Cecil to exercise transformation in place, then play the genuine meld pair and Manifest Dread before selecting the common battlefield representation. Cohort integration and the Engine Budget remain open.
+Esper and the TLA Sagas already express a transformed return as two moves. The second follows the exact object produced by the first (`Effect::exile_and_return_transformed` in `managym/state/src/ability.rs`). Keep that composition when changing how the incoming face is represented. The shared permanent-card predicate preserves the existing serialized type order. Revealing a permanent into hand shares the top-card move with drawing, while draw history and events stay in `draw_cards`.
+
+The recorded checks above precede the upstream merge at `19aa9fc4`. Upstream added saved live positions at `f7d353b8` and changed the native allocator at `52f8f2e4`. Include saved-position restoration when checking form identity and pending choices. Use the merged allocator on both sides of the budget comparison.
+
+**Next slice — Cecil.** Resolve Cecil’s damage trigger, lose the matching amount of life, then check the starting-life threshold for transformation. Exercise the back face’s indestructible grant to other attackers. Exercise transformation in place with counters, an attachment and an outstanding target. Follow the same object into the viewer projection with its new face and abilities. Start from `Effect::TransformSource` in `flow/resolution.rs`, which already checks the source's transform count. Keep that path if the witness passes. Then play Fang/Vanille and Manifest Dread before selecting the common representation.
 
 ## Native implementation and deletions
 
