@@ -268,3 +268,117 @@ fn demonic_pact_resolves_each_resource_mode() {
         s.assert_zone_size(1, ZoneType::Hand, hands[1] - if mode == 1 { 2 } else { 0 });
     }
 }
+
+#[test]
+fn exhausted_pact_keeps_its_history_until_it_leaves() {
+    use crate::support::{
+        inspect::card_of,
+        play::{choose_mode, settle, target_opponent},
+    };
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Demonic Pact", "Herald of Eternal Dawn"]);
+    let original = s.force_permanent_on_battlefield(0, "Demonic Pact");
+    let object = card_of(&s, original);
+    s.force_permanent_on_battlefield(0, "Herald of Eternal Dawn");
+    for mode in 0..4 {
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        assert_eq!(s.action_space().actions.len(), 4 - mode);
+        choose_mode(&mut s, mode);
+        if mode < 2 {
+            target_opponent(&mut s);
+        }
+        settle(&mut s);
+        s.advance_to_active_step(1, StepKind::Upkeep);
+    }
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(s.game().state.stack_objects.is_empty());
+
+    let exhausted = s.game().clone();
+    for blink in [false, true] {
+        *s.game_mut() = exhausted.clone();
+        if blink {
+            let exiled = s.game_mut().move_object(object, ZoneType::Exile);
+            s.game_mut().move_object(exiled, ZoneType::Battlefield);
+        } else {
+            let second = s.force_permanent_on_battlefield(0, "Demonic Pact");
+            assert_ne!(original, second);
+        }
+        s.advance_to_active_step(1, StepKind::Upkeep);
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        s.advance_until(
+            |s| s.action_space().kind == ActionSpaceKind::Modal,
+            "fresh Pact has no modes".into(),
+        );
+        assert_eq!(s.action_space().actions.len(), 4);
+    }
+}
+
+#[test]
+fn countered_pact_mode_stays_used_when_the_permanent_is_stolen() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{card_of, offered_targets},
+        play::{activate, cast_card, choose_mode, resolve_top, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{
+            ability::{Effect, ObjectSelector, TargetSpec},
+            card::ActivatedAbilityDefinition,
+            game_object::{PlayerId, Target},
+            player::ManaPayment,
+        },
+    };
+
+    let mut s = five_color_setup(&["Demonic Pact", "Gray Ogre", "Agent of Treachery"]);
+    let pact = s.force_permanent_on_battlefield(0, "Demonic Pact");
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    choose_mode(&mut s, 2);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.pass_priority();
+    // Give the scenario permanent the native "counter target ability" effect.
+    let counter = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let object = card_of(&s, counter);
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            effects: vec![Effect::CounterAbility {
+                what: ObjectSelector::Target(TargetSpec::Ability),
+            }],
+            ..Default::default()
+        });
+    activate(&mut s, counter, 0);
+    let targets = offered_targets(&s);
+    assert!(
+        matches!(targets.as_slice(), [Target::StackAbility(_)]),
+        "{:?} {targets:?}",
+        s.action_space().kind
+    );
+    assert!(s.choose_target(targets[0]));
+    settle(&mut s);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    let agent = force_new_card_in_hand(&mut s, 1, "Agent of Treachery");
+    s.game_mut().mana_payment[1] = ManaPayment::Auto;
+    s.set_player_mana_pool(1, "5UU");
+    cast_card(&mut s, agent);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(pact)));
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let modes: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(modes, [0, 1, 3]);
+}
