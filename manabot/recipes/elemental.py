@@ -15,7 +15,7 @@ from pydantic import Field
 from manabot.experiment.numerics import NumericsReceipt, check_numerics
 from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import elemental_self_play
-from manabot.training.loops.self_play import CLOCKS, self_play
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import self_play_report
 
 # Longest the CUDA numerics gate may take before training.
@@ -48,15 +48,22 @@ def report() -> Report:
     return self_play_report()
 
 
-def train(config: ElementalConfig) -> None:
-    settings = elemental_self_play().model_copy(
+def settings(config: ElementalConfig) -> SelfPlay:
+    return elemental_self_play().model_copy(
         update={
             "device": config.device,
             "streams": config.streams,
             "run_settings": config.run_settings,
         }
     )
+
+
+def train(config: ElementalConfig) -> None:
+    from manabot.backends import resolve
+
     with track(clocks=CLOCKS, config=config) as run:
         if config.validate_numerics:
             gate(run.out / "numerics")
-        self_play(settings, run, updates=config.updates)
+        self_play(
+            settings(config), run, updates=config.updates, backend=resolve("torch")
+        )

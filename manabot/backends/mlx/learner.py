@@ -63,8 +63,8 @@ def no_grad() -> AbstractContextManager[object]:
 
 def update_ema(ema: "MLXActorCritic", agent: "MLXActorCritic", decay: float) -> None:
     """Update `ema` weights in place toward `agent`."""
-    if not 0 <= decay <= 1:
-        raise ValueError(f"EMA decay must be in [0, 1], got {decay}")
+    if not 0 <= decay < 1:
+        raise ValueError(f"EMA decay must be in [0, 1), got {decay}")
     updated = tree_map(
         lambda target, source: target * decay + source * (1.0 - decay),
         ema.parameters(),

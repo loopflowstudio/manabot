@@ -282,7 +282,7 @@ def save_checkpoint(
     )
 
 
-class _Torch:
+class TorchBackend:
     name = "torch"
 
     @property
@@ -367,4 +367,4 @@ class _Torch:
     gradient_layout = parameter_layout
 
 
-BACKEND = _Torch()
+BACKEND = TorchBackend()

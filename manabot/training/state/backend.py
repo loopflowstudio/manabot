@@ -9,13 +9,14 @@ from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol, runtime_checkable
 
 import numpy as np
 
 from manabot.belief.protocol import SamplerBackend
 from manabot.env.observation import ObservationSpace
 from manabot.policy.protocol import BackendPolicy
+from manabot.training.updates.backend import Learner, LearnerFile, UpdateBackend
 
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefEncodingSchema
@@ -85,6 +86,93 @@ class CollectionFactory(Protocol):
     def SelectionPredictor(
         self,
     ) -> Callable[[BackendPolicy, int], SelectionPredictor]: ...
+
+
+class SelfPlayLearner(Learner, Protocol):
+    @property
+    def agent(self) -> BackendPolicy: ...
+
+
+class SelfPlayRuntime(TrainingRuntime, Protocol):
+    def scoped(
+        self, threads: int, precision: Precision, device: str
+    ) -> AbstractContextManager[object]: ...
+    def preserve_rng(self, device: str) -> AbstractContextManager[object]: ...
+    def synchronize(self, device: str) -> None: ...
+    def memory_metrics(self, device: str) -> dict[str, int]: ...
+    def create_policy(
+        self,
+        space: ObservationSpace,
+        config: ModelConfig,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
+        pretrained: BackendPolicy | None = None,
+    ) -> BackendPolicy: ...
+    def create_learner(
+        self,
+        agent: BackendPolicy,
+        device: str,
+        *,
+        minibatch_rows: int,
+        precision: Precision,
+        execution_rows: int | None,
+        bootstrap_rows: int | None,
+    ) -> SelfPlayLearner: ...
+
+
+class SelfPlayLearning(LearnerFile, Protocol):
+    def update_ema(
+        self, ema: BackendPolicy, agent: BackendPolicy, rate: float, /
+    ) -> None: ...
+
+
+class SelfPlayBackend(UpdateBackend, Protocol):
+    """Numerics for one fresh self-play iteration and its portable policies."""
+
+    name: str
+
+    @property
+    def runtime(self) -> SelfPlayRuntime: ...
+    @property
+    def learner(self) -> SelfPlayLearning: ...
+    @property
+    def collection(self) -> CollectionFactory: ...
+    def metadata(self, path: str | Path) -> dict[str, Any]: ...
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
+    def load_policy(
+        self,
+        path: str | Path,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
+    ) -> tuple[BackendPolicy, ObservationSpace]: ...
+    def save_policy(
+        self,
+        agent: BackendPolicy,
+        obs_space: ObservationSpace,
+        path: str | Path,
+        *,
+        player_configs: Sequence[PlayerConfig] | None,
+        extra: dict[str, Any] | None = None,
+    ) -> None: ...
+
+
+@runtime_checkable
+class Continuation(TrainingState, Protocol):
+    """Objects Etude can restore together, plus this framework's incident evidence."""
+
+    def resume_objects(
+        self, learner: SelfPlayLearner, ema: BackendPolicy | None
+    ) -> dict[str, object]: ...
+    def framework(self) -> dict[str, str | None]: ...
+
+
+def require_continuation(backend: SelfPlayBackend) -> Continuation:
+    state = getattr(backend, "state", None)
+    if not isinstance(state, Continuation):
+        raise ValueError(f"{backend.name} does not support resumable self-play")
+    return state
 
 
 class TrainingBackend(SamplerBackend, Protocol):

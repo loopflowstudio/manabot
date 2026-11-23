@@ -378,11 +378,8 @@ def test_only_the_mlx_backend_imports_mlx() -> None:
     assert violations == []
 
 
-# The Etude self-play loops are still written against Torch; they choose it
-# themselves until they take an injected backend.
-_TORCH_LOOPS = frozenset(
-    ("manabot/training/loops/minimal.py", "manabot/training/loops/self_play.py")
-)
+# The minimal tutorial loop directly uses Torch.
+_TORCH_LOOPS = frozenset({"manabot/training/loops/minimal.py"})
 
 # Modules outside the torch backend that still import torch. Training,
 # evaluation, search and the model's components move behind a backend in later
@@ -559,7 +556,9 @@ _BACKEND_ROOTS = frozenset(
 # Only these actual CLI/child entry-point scopes choose a backend in mixed modules.
 _BACKEND_ENTRYPOINTS = {
     "manabot/belief/demo.py": {"main"},
-    "manabot/recipes/baseline.py": {"evaluate"},
+    "manabot/recipes/baseline.py": {"train", "evaluate"},
+    "manabot/recipes/elemental.py": {"train"},
+    "manabot/training/loops/self_play.py": {"default_backend"},
     "manabot/recipes/belief_sampler.py": {"train"},
     "manabot/reports/belief.py": {"main"},
     "manabot/verify/checkpoint_scenarios.py": {"main"},

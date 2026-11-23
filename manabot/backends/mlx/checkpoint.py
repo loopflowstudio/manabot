@@ -48,6 +48,7 @@ from manabot.policy.checkpoint import (
 from manabot.policy.protocol import Precision
 
 if TYPE_CHECKING:
+    from manabot.backends.mlx.runtime import Runtime
     import managym
 
 
@@ -225,8 +226,10 @@ class MLXBackend:
     name = "mlx"
 
     @property
-    def runtime(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.runtime")
+    def runtime(self) -> "Runtime":
+        from manabot.backends.mlx.runtime import Runtime
+
+        return Runtime(self.precision)
 
     save_policy = staticmethod(save_checkpoint)
 
@@ -238,7 +241,9 @@ class MLXBackend:
     @contextmanager
     def seeded_inference(seed: int, *, cpu_only: bool = False) -> Iterator[None]:
         stream = mx.cpu if cpu_only else mx.default_device()
-        with mx.stream(stream):
+        from manabot.backends.mlx.runtime import preserve_rng
+
+        with preserve_rng("cpu" if cpu_only else "mps"), mx.stream(stream):
             mx.random.seed(seed)
             yield
 

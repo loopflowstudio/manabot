@@ -267,3 +267,17 @@ def capture_incident(
             for name, value in batch_tensors.items()
         ),
     )
+
+
+def resume_objects(learner: Learner, ema: BackendPolicy | None) -> dict[str, object]:
+    objects: dict[str, object] = {
+        "learner": learner.agent,
+        "optimizer": learner.optimizer,
+    }
+    if ema is not None:
+        objects["ema"] = ema
+    return objects
+
+
+def framework() -> dict[str, str | None]:
+    return {"torch": str(torch.__version__), "cuda": torch.version.cuda}

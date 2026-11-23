@@ -1,10 +1,28 @@
 """Framework backends; only composition roots select one through `resolve`."""
 
 import importlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
+    from manabot.backends.mlx.checkpoint import MLXBackend
+    from manabot.backends.torch.checkpoint import TorchBackend
     from manabot.policy.protocol import Backend, Precision
+
+
+@overload
+def resolve(
+    name: Literal["torch"], *, precision: "Precision | None" = None
+) -> "TorchBackend": ...
+
+
+@overload
+def resolve(
+    name: Literal["mlx"], *, precision: "Precision | None" = None
+) -> "MLXBackend": ...
+
+
+@overload
+def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend": ...
 
 
 def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend":

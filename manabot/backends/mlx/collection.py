@@ -51,6 +51,12 @@ class CollectionSession:
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
         mlx_agent = cast(MLXActorCritic, agent)
+        expected = "bfloat16" if self.precision == "bf16" else self.precision
+        if mlx_agent.precision != expected or mlx_agent.inference_device != self.device:
+            raise ValueError(
+                f"MLX collection requires {self.device_name}/{expected}, "
+                f"policy uses {mlx_agent.device_type}/{mlx_agent.precision}"
+            )
         with PolicyInference(mlx_agent) as inference:
             yield CollectionScope(self, inference)
 

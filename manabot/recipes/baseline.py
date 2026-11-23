@@ -69,8 +69,12 @@ def report() -> Report:
 
 
 def train(config: BaselineConfig) -> None:
+    from manabot.backends import resolve
+
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(settings(config), run, updates=config.updates)
+        self_play(
+            settings(config), run, updates=config.updates, backend=resolve("torch")
+        )
 
 
 def evaluate(

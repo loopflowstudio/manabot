@@ -9,6 +9,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import time
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -39,7 +40,7 @@ from manabot.backends.mlx.checkpoint import (
     mlx_parameters,
     require_supported,
 )
-from manabot.backends.mlx.learner import Learner as MLXLearner, update_ema
+from manabot.backends.mlx.learner import Learner as MLXLearner
 from manabot.backends.mlx.policy import (
     ObjectAttention,
     PackedGRU,
@@ -67,6 +68,7 @@ from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
+    STACK_SOURCE_INDEX,
     ObservationSpace,
     encode_observation,
 )
@@ -85,8 +87,8 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.prepare import Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
-from manabot.training.learning import DampedPolicyLearning
-from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.recipes import baseline, elemental
+from manabot.training.loops.self_play import create, fresh_iteration, self_play
 from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
 import managym
@@ -292,6 +294,13 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     )
     rows = rollout.observations(np.arange(rollout.actions.size))
     obs = rows.observation
+    # Put an ability on the stack with a source on the acting battlefield.
+    source = 2 + obs["agent_cards"].shape[1] + obs["opponent_cards"].shape[1]
+    obs["agent_permanents_valid"][0, 0] = 1
+    obs["stack_valid"][0, 0] = 1
+    obs["stack"][0, 0, STACK_SOURCE_INDEX] = source + 1
+    obs["player_turn_state"][0, 0, 0] = 1
+    obs["card_turn_state"][0, 0, 0] = 1
 
     policy = assemble(checkpoint, bucketed_shapes=bucketed)
     round_tripped = canonical_from_mlx(flat_numpy(policy.parameters()))
@@ -364,57 +373,87 @@ def test_bfloat16_host_arrays_widen_to_float32() -> None:
     np.testing.assert_array_equal(widened, [1.25, -0.5])
 
 
-def test_mlx_full_self_play_cycle_create_collect_update_save_and_torch_reload(
-    tmp_path: Path,
-    baseline_model: ModelConfig,
+@pytest.mark.parametrize("recipe", ["baseline", "elemental"])
+def test_mlx_fresh_recipe_exports_both_live_policies(
+    tmp_path: Path, recipe: str
 ) -> None:
-    """MLX creates a fresh v11 baseline policy, collects games, runs damped
-    self-play update + EMA, saves a portable checkpoint, and Torch loads it
-    with matching inference outputs."""
-
-    mlx = resolve("mlx")
+    mlx = resolve("mlx", precision="float32")
     torch_backend = resolve("torch")
-    space = ObservationSpace(ObservationConfig())
-    mlx.seed(19)
-    policy = mlx.runtime.create_policy(space, baseline_model, bucketed_shapes=True)
-    ema = mlx.runtime.create_policy(space, baseline_model, bucketed_shapes=True)
-    learner = MLXLearner(policy, minibatch_rows=4)
-    match = lesson_match()
-    batch = self_play_batch(
-        policy, match, mlx.collection.CollectionSession(device="mps", seed=19), 6
+    settings = (
+        baseline.settings(baseline.BaselineConfig(device="mps"))
+        if recipe == "baseline"
+        else elemental.settings(elemental.ElementalConfig(device="mps", streams=2))
+    ).model_copy(
+        update={
+            "streams": 2,
+            "games_per_stream": 1,
+            "transitions": 1,
+            "bucketed_shapes": True,
+        }
     )
-    diagnostics = update_damped_iteration(
-        mlx,
-        learner,
-        batch,
-        DampedPolicyLearning(gradient="damped_policy", tau_scale=0.1),
-        iteration=1,
-    )
-    assert diagnostics["numerical"]["optimizer_steps"] >= 1
-    assert np.isfinite(diagnostics["loss"])
-    update_ema(ema, policy, 0.99)
+    seed = 19
+    initial, initial_ema = create(settings, seed=seed, backend=mlx)
+    assert initial_ema is not None
+    starting = initial.parameters()
+    for name, value in flat_numpy(initial_ema.parameters()).items():
+        np.testing.assert_array_equal(value, starting[name])
+    for name, value in initial.agent.buffers().items():
+        np.testing.assert_array_equal(initial_ema.buffers()[name], value)
 
-    saved = tmp_path / "mlx-baseline.safetensors"
-    mlx.save_policy(
-        policy,
-        space,
-        saved,
-        player_configs=match.to_rust(),
-        extra={"value_semantic": "signed_outcome"},
+    result = fresh_iteration(settings, backend=mlx, seed=seed, out=tmp_path / recipe)
+    assert result.counts.updates == 1 and result.counts.games == 2
+    assert result.counts.optimizer_updates > 0
+    assert result.counts.environment_decisions == result.counts.learner_transitions > 0
+    assert result.checkpoint.name == "00000001-ema.safetensors"
+    assert result.ema is not None
+    decay = settings.learning.ema
+    raw, ema = flat_numpy(result.raw.parameters()), flat_numpy(result.ema.parameters())
+    assert any(not np.array_equal(raw[name], value) for name, value in starting.items())
+    for name, value in starting.items():
+        np.testing.assert_allclose(
+            ema[name],
+            value * decay + raw[name] * (1 - decay),
+            atol=1e-7,
+            rtol=1e-7,
+            err_msg=name,
+        )
+
+    env = managym.Env(seed=7)
+    env.reset(Match(settings.match).to_rust())
+    encoded = encode_observation(
+        result.raw.observation_space,
+        env.observation_for_player(env.current_agent_index()),
     )
-    reloaded_torch, _ = torch_backend.load_policy(str(saved))
-    reloaded_mlx, _ = mlx.load_policy(str(saved), bucketed_shapes=True)
-    obs = batch.observations(np.array([0, 1])).observation
-    torch_logits, torch_values = reloaded_torch.evaluate(
-        reloaded_torch.prepare(obs, inference=True)
-    )
-    mlx_logits, mlx_values = reloaded_mlx.evaluate(
-        reloaded_mlx.prepare(obs, inference=True)
-    )
+    obs = {key: value[None] for key, value in encoded.items()}
     legal = obs["actions_valid"] > 0
-    assert float(np.abs(mlx_logits - torch_logits)[legal].max()) <= 1e-4
-    assert float(np.abs(mlx_values - torch_values).max()) <= 1e-4
+    for label, source in (("raw", result.raw), ("ema", result.ema)):
+        saved = result.checkpoint.with_name(f"00000001-{label}.safetensors")
+        record = mlx.metadata(saved)["bc"]
+        assert (
+            record["counts"] == result.counts.coordinates()
+            and record["weights"] == label
+        )
+        expected_logits, expected_values = source.evaluate(
+            source.prepare(obs, inference=True)
+        )
+        canonical = canonical_from_mlx(flat_numpy(source.parameters()))
+        stored = mlx.read_policy(str(saved))
+        assert canonical.keys() == stored.parameters.keys()
+        for name, value in stored.parameters.items():
+            np.testing.assert_array_equal(value, canonical[name])
+        for reader in (mlx, torch_backend):
+            loaded, _ = reader.load_policy(saved)
+            logits, values = loaded.evaluate(loaded.prepare(obs, inference=True))
+            np.testing.assert_allclose(
+                logits[legal], expected_logits[legal], atol=1e-4, rtol=0
+            )
+            np.testing.assert_allclose(values, expected_values, atol=1e-4, rtol=0)
 
+    if recipe == "elemental":
+        (ledger,) = (tmp_path / recipe / "game-attempts").glob("*.jsonl")
+        assert len(ledger.read_text().splitlines()) == 2
+        return
+    saved = result.checkpoint
     cases, _, findings = collect_choices(
         tmp_path / "choices", 4000, time.perf_counter() + 30, closest=True
     )
@@ -429,6 +468,32 @@ def test_mlx_full_self_play_cycle_create_collect_update_save_and_torch_reload(
         assert mlx_choice.case == torch_choice.case
         assert mlx_choice.log_odds == pytest.approx(torch_choice.log_odds, abs=1e-4)
         assert mlx_choice.value == pytest.approx(torch_choice.value, abs=1e-4)
+
+
+def test_mlx_refuses_tracked_self_play_before_accessing_run_state() -> None:
+    settings = baseline.settings(baseline.BaselineConfig(device="mps"))
+    run = Mock()
+    with pytest.raises(ValueError, match="mlx does not support resumable self-play"):
+        self_play(settings, run, updates=1, backend=resolve("mlx"))
+    assert not run.mock_calls
+
+
+@pytest.mark.parametrize("exceptional", [False, True])
+def test_mlx_seeded_diagnostics_restore_outer_random_stream(exceptional: bool) -> None:
+    backend = resolve("mlx")
+    backend.seed(71)
+    mx.random.uniform().item()
+    expected = mx.random.uniform().item()
+    backend.seed(71)
+    mx.random.uniform().item()
+    try:
+        with backend.seeded_inference(21, cpu_only=True):
+            mx.random.uniform().item()
+            if exceptional:
+                raise LookupError
+    except LookupError:
+        assert exceptional
+    assert mx.random.uniform().item() == expected
 
 
 def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
