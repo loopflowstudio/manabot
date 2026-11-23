@@ -16304,6 +16304,23 @@ fn aang_returning_to_library_cannot_remember_its_departed_back_face() {
     }
 }
 
+fn attacker_life_gains(s: &Scenario, combat_start: usize) -> Vec<i32> {
+    s.game()
+        .state
+        .events
+        .iter()
+        .skip(combat_start)
+        .filter_map(|event| match event {
+            GameEvent::LifeChanged {
+                player: PlayerId(0),
+                old,
+                new,
+            } if new > old => Some(new - old),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn combat_assignment_deals_all_five_damage_as_one_lifelink_gain() {
     for trample in [false, true] {
@@ -16347,21 +16364,13 @@ fn combat_assignment_deals_all_five_damage_as_one_lifelink_gain() {
             });
         }
         s.advance_to_active_step(0, StepKind::EndOfCombat);
-        let events: Vec<_> = s.game().state.events.iter().skip(combat_start).collect();
-        let gains: Vec<_> = events
+        assert_eq!(attacker_life_gains(&s, combat_start), [5]);
+        let blocker_damage: Vec<_> = s
+            .game()
+            .state
+            .events
             .iter()
-            .filter_map(|event| match event {
-                GameEvent::LifeChanged {
-                    player: PlayerId(0),
-                    old,
-                    new,
-                } if new > old => Some(new - old),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(gains, [5]);
-        let blocker_damage: Vec<_> = events
-            .iter()
+            .skip(combat_start)
             .filter_map(|event| match event {
                 GameEvent::DamageDealt {
                     target: managym::flow::event::DamageTarget::Permanent(id),
@@ -16403,22 +16412,7 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
     let mut replay = crate::support::play::command(&mut s, |a| *a == second);
     for branch in [&mut s, &mut replay] {
         branch.advance_to_active_step(0, StepKind::EndOfCombat);
-        let gains: Vec<_> = branch
-            .game()
-            .state
-            .events
-            .iter()
-            .skip(combat_start)
-            .filter_map(|event| match event {
-                GameEvent::LifeChanged {
-                    player: PlayerId(0),
-                    old,
-                    new,
-                } if new > old => Some(new - old),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(gains, [2, 3]);
+        assert_eq!(attacker_life_gains(branch, combat_start), [2, 3]);
         assert_eq!(branch.life(1), 15);
         assert_eq!(
             counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
