@@ -378,13 +378,17 @@ impl Game {
 
     /// Cards `player` might play at priority: their hand and graveyard, and
     /// exiled cards they hold grants for, and a library top a permanent lets
-    /// them cast. `priority_actions_for_card` prices each route.
-    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+    /// them cast. `priority_actions_for_object` prices each route.
+    fn priority_candidate_objects(&self, player: PlayerId) -> impl Iterator<Item = ObjectId> + '_ {
         self.state
             .zone_cards(ZoneType::Hand, player)
             .chain(self.state.zone_cards(ZoneType::Graveyard, player))
-            .chain(self.exile_granted_cards(player))
-            .chain(self.library_top_card(player))
+            .map(|card| self.state.object_of(card))
+            .chain(self.exile_granted_objects(player))
+            .chain(
+                self.library_top_card(player)
+                    .map(|card| self.state.object_of(card)),
+            )
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
@@ -393,8 +397,8 @@ impl Game {
         let mode = self.mana_float_mode(player);
         let mut spell_spends = false;
         let mut actions = Vec::new();
-        for card in self.priority_candidate_cards(player) {
-            self.priority_actions_for_card(player, card, |action, mana_value, cast| {
+        for object in self.priority_candidate_objects(player) {
+            self.priority_actions_for_object(player, object, |action, mana_value, cast| {
                 if mode == ManaFloats::Usable && !spell_spends {
                     if let Action::CastSpell { object, .. } = action {
                         spell_spends = mana_value > 0
@@ -625,14 +629,12 @@ impl Game {
         actions
     }
 
-    fn priority_actions_for_card(
+    fn priority_actions_for_object(
         &self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         mut offer: impl FnMut(Action, u8, CastChoices),
     ) {
-        let object = self.state.object_of(card);
-
         // Preserve the original single-route Command. On overlap every offer
         // names its route, even if only one survives the affordability check.
         let routes = self.play_routes(player, object);
@@ -1044,7 +1046,7 @@ impl Game {
                 object,
                 route,
                 profile,
-            } => self.cast_spell_action(*player, self.chosen_card(*object)?, *route, *profile),
+            } => self.cast_spell_action(*player, *object, *route, *profile),
             Action::ActivateAbility {
                 player,
                 permanent,

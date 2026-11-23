@@ -4662,3 +4662,43 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     game.shuffle_unseen_libraries(12);
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
+
+/// Isolate priority announcement before state-based cleanup. Two exiled spell
+/// copies share a program, but each grant and target choice names one appearance.
+#[test]
+fn priority_announces_each_granted_spell_copy_by_object() {
+    use crate::flow::{cast_permission::PlayGrant, game::PendingChoice};
+
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    game.state.priority.holder = player;
+    let bolt = game
+        .state
+        .latest_objects()
+        .find(|(_, object)| object.name == "Lightning Bolt")
+        .unwrap()
+        .0;
+    let copies = [(); 2].map(|_| {
+        let id = game.state.id_gen_mut().next_id();
+        let copy = game.create_spell_copy(bolt, id, player);
+        let copy = game.move_object(copy, ZoneType::Exile);
+        assert!(game.state.card_of(copy).is_none());
+        game.state.cast_permissions.grant(PlayGrant {
+            cost: Some(Default::default()),
+            ..PlayGrant::new(copy, player)
+        });
+        copy
+    });
+    let actions = game.compute_player_actions(player);
+    for copy in copies {
+        let action = actions
+            .iter()
+            .find(|action| matches!(action, Action::CastSpell {object, ..} if *object == copy))
+            .expect("each copy has its own cast");
+        let mut fork = game.clone();
+        fork.execute_action(action).unwrap();
+        assert!(
+            matches!(fork.pending_choice, Some(PendingChoice::ChooseTargets { object, .. }) if object == copy)
+        );
+    }
+}

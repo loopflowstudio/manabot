@@ -491,10 +491,10 @@ impl Game {
     }
 
     /// Exiled candidates only. Priority already visits the player's graveyard.
-    pub(crate) fn exile_granted_cards(
+    pub(crate) fn exile_granted_objects(
         &self,
         player: PlayerId,
-    ) -> impl Iterator<Item = CardId> + '_ {
+    ) -> impl Iterator<Item = ObjectId> + '_ {
         let mut seen = std::collections::BTreeSet::new();
         self.state
             .cast_permissions
@@ -506,6 +506,5 @@ impl Game {
             })
             .map(|grant| grant.object)
             .filter(move |object| seen.insert(*object))
-            .filter_map(|object| self.state.card_of(object))
     }
 }

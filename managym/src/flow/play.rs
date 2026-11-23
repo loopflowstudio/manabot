@@ -481,7 +481,7 @@ impl Game {
     pub(crate) fn cast_spell_action(
         &mut self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         selected: Option<PlayRoute>,
         profile: SpellProfile,
     ) -> Result<(), AgentError> {
@@ -489,8 +489,11 @@ impl Game {
             return Err(AgentError("a choice is already pending".to_string()));
         }
 
-        let object = self.state.object_of(card);
-        if self.state[object].types.is_land() {
+        let spell = self
+            .state
+            .object(object)
+            .map_err(|_| AgentError("spell must name a current object".into()))?;
+        if spell.types.is_land() {
             return Err(AgentError("land cards cannot be cast".into()));
         }
         let route = self.selected_play_route(player, object, selected)?;
