@@ -37,9 +37,7 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Slice 2 behavior review at `cf9d7bc5` — iterate.** The constructed batch and trigger-token checks passed again. The M11 definition listens for a positive controller life change and puts one counter on its source. Native viewer events and policy history derive the signed amount from the same old and new life totals. The two-source fixture orders pending triggers directly. It does not exercise a viewer Command, its stale rejection or an independent fork at that decision.
 
-**Combat loses damage before lifelink sees it.** In a temporary variant of `tla::printed_trample_first_strike_lifelink_and_menace_affect_combat`, put three +1/+1 counters on Foggy Swamp Spirit Keeper (verified power 5), attack, and block with one Gray Ogre (2/2). At end of combat its controller had 22 life from a starting 20. The required total is 25. In `combat_damage_batch`, the blocker receives only lethal damage and the remaining 3 are discarded for a nontrampler. With trample, inspection shows the same loop always sends the excess to the player. Against this blocker, assignments of 2/3, 3/2, 4/1 and 5/0 to blocker/player should all be legal. The engine builds the batch without offering that choice to any consumer. Assign all five to the sole blocker without trample, and publish legal divisions through the shared combat decision before committing damage with trample. Retain both positions as regressions and exercise the bound assignment Command, replay and fork isolation. The injected batch demonstrates per-source gain counting independently of these assignment defects.
-
-The combat assignment regression now passes. A sole blocker takes all 5 damage without trample. With trample, all four splits from 2/3 through 5/0 are offered. Submitting 2/3 reproduces the fork witness, rejects the stale Command and yields one gain of 5 and one Pridemate counter. Slice 2 remains open for prevention, prohibited gains, replacement forks and the remaining life-gain callers below. Full consumer parity, compatibility and conformance suites remain with gate.
+**Combat assignment at `e4784f29`.** Before the repair, a 5-power Foggy Swamp Spirit Keeper blocked by Gray Ogre gained only 2 life. The damage batch had already discarded the other 3 before lifelink ran. The passing regression `combat_assignment_deals_all_five_damage_as_one_lifelink_gain` in `managym/cards/tests/cards/tla.rs` now observes 5 damage to the sole blocker without trample. With trample it checks all four blocker/player offers (2/3 through 5/0). The shared Command helper submits 2/3, checks stale rejection and compares the independent fork witness. Combat ends at 25/17 life with one gain of 5 and one Pridemate counter. The shared assignment path in `managym/src/flow/combat_actions.rs` builds the damage batch for both cases.
 
 ## Experience and model to build
 
@@ -109,9 +107,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-The directed combat fixture in `managym/cards/tests/cards/tla.rs` plays a 5-power lifelinker against a 2/2. It checks all four trample offers, commits the 2/3 split through the shared Command on two forks, and checks stale rejection. Without trample all 5 go to the blocker. Both cases require one gain of 5 and one Pridemate counter.
-
-**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in one damage step and require two counters.
+**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in the same damage step. Check the two separate gains and submit the Pridemate trigger order through a bound Command. Replay that order on an independent fork, reject stale resubmission, and resolve both counters. Reuse the existing combat assignment and Command helper. The batch fixture already distinguishes source counts, while the combat fixture above exercises a single source.
 
 Then cover the remaining boundaries and callers.
 
