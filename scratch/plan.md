@@ -72,6 +72,10 @@ At `71838e7e`, Fang is registered in `managym/cards/src/fin.rs`. Its trigger use
 
 ## Next slice — form Ragnarok and resolve its departure
 
+Behavior review at `3d9375d1`: the working phase remains open. The FIN registry contains Fang, whose two constructed tests pass, but has no Vanille or Ragnarok. Running the card target with `-- fin::meld fin::ragnarok fin::vanille` selected zero of 818 tests. The first missing interaction is Vanille's first-main payment or decline with Fang in play. Consequently no consumer can reach the meld or its departure through a Command. The paired-arrivals unit test passed with supplied arrivals. The producer still calls `complete_immediate_batch` and reads `result.arrivals().next()` in `move_object_with_entry`. Implement and exercise the resumable departure described below before advancing. Owner-only offers, stale rejection, recorded replay, tensor/text visibility and the token-copy control remain unverified for meld.
+
+Focused rerun: nine Fang, Cecil, Esper Origins and departed Clone card fixtures passed, as did the trigger-condition learning-token guard, the paired-arrivals unit test and the Esper Origins Python text fixture. Fang ignores the opponent's departure and its own return, then draws the expected card and loses one life on qualifying departures only once that turn. The current slice leaves payment selection unchanged. Competing spends remain a kicked-cohort check. Full suites and performance comparisons remain at gate.
+
 Review direction: “In the FIN tests, fork and restore the pending library-order choice, take each legal order, and verify that each original card moves exactly once. Repeat with a token copy of Ragnarok and verify that it moves no physical cards.”
 
 1. Add Vanille and the meld result in `managym/cards/src/fin.rs`. Play the first-main trigger through decline and legal payment. Exercise the genuine pair and namesake failure described above. Retain both pre-meld exile identities. Parking the second card with `ZoneManager::remove_object` alone leaves its generation unchanged, so separation could revive its old exile identity. Verify both old identities stay stale.
