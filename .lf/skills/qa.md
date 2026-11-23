@@ -314,6 +314,12 @@ publish, land or choose the next Graph step from here.
   `select` (the run prints nothing between "local" and its end, so a blocking
   read never sends `\x03`). `manabot training-report` hides `local` runs
   (kind `smoke`) until "Include labeled benchmarks…" is checked.
+  No shipped recipe exposes `precision`. For bf16 MLX, subclass `LocalConfig`
+  in a `.runs/` recipe with `precision` (and optional `pretrained`) fields and
+  `model_copy` them into `settings(config)`. bf16 needs MPS, and `SelfPlay`
+  refuses it on CPU inside `track`. A resume with a changed precision must
+  refuse with `run_identity_conflict`. Read `execution/precision` from the
+  run's `metrics/*.permanent.json` labels.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
