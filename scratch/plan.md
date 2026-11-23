@@ -44,6 +44,7 @@ The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn con
 Seven focused native cases passed at the earlier review. Seed 161 exposed a gap in those checks: the offer focused the Equipment permanent but described its underlying card as the exile cost. At `9de9c111` the native description names Gray Ogre as the ability source and the visible Bracelet permanent as the cost. Semantic text uses the same two focus slots and the viewer's battlefield aliases. Academy carries the native label.
 
 The seed-161 fixture checked both tensor joins and compared each bound activation with indexed play through exile, payment receipt and remaining mana. On the rebuilt CPython 3.13 extension, the seed-23 semantic and Academy Commands matched indexed play at targeting and after payment for either Bracelet. The fixture in `tests/academy/test_bracelet_offers.py` now selects the indexed action independently by the Ogre and Bracelet permanent IDs. This catches a shared offer-binding error even if both Commands agree.
+Behavior review at `dcdb8301` closes the two-Bracelet defect. Thirteen constructed native debug cases passed across Bracelet, Cube and Bloodbending, including control tokens, private visibility and delegated-payment replay. Both seed-23 consumer cases passed, as did Academy’s original Command import and stale-revision rejection case. The working phase is satisfied. The full suite and paired 10% Engine Budget remain at gate.
 
 ## Remaining cross-consumer obligations
 
