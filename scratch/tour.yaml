@@ -1,7 +1,15 @@
-at: 03ac59cdcef39c5ff482987ccb5aba1a7f2c8428
+at: bf9f4d73e84604b91a6d31b6ff4428f8236ca9d4
 first:
   - path: docs/engine.md
-    why: Follow Esper Origins from the stack through exile.
+    why: Read the movement and source-copy rules.
+  - path: managym/state/src/game_object.rs
+    why: Copiable values, inherited exceptions and retained departures.
+  - path: managym/src/flow/resolution.rs
+    why: Read the exact source when the instruction resolves.
+  - path: managym/src/flow/stabilization.rs
+    why: Release forms after the stack clears.
+  - path: managym/cards/tests/cards/lea.rs
+    why: Play the departed, returned and token Clone cases.
   - path: managym/cards/src/fin.rs
     why: Read the spell and its three Saga chapters.
   - path: managym/state/src/ability.rs

@@ -56,6 +56,8 @@ Homunculus Horde now uses the native second-draw trigger and source-copy effect.
 
 The copy instruction reads the live source until departure. The movement authority captures a distinct final form before resetting the appearance. Unmodified catalog rows resolve by definition id. Other forms share immutable printed data, including the shown face and inherited copy exceptions. At stable priority with an empty stack the engine releases extra forms, keeping those referenced by delayed triggers. The Horde witness checks release. The new catalog row shifted the name-ordered definition ids in Clone's suspended-entry hash witness. Gate retains the whole-game and fork allocation budget checks.
 
+At `bf9f4d73`, five directed debug tests passed with `cargo test --locked -p managym-cards --test cards -- departed_clone clone_copy_survives clone_legion_offers joo_dee_declined_surveil`. The card-shell check `every_registered_real_card_matches_scryfall` passed. Rebuilt and atomically installed the CPython 3.13 release extension. Both `test_recorded_game[v9]` and `test_recorded_game[v11]` passed against it.
+
 **Next slice — Cecil.** Resolve Cecil’s damage trigger, lose the matching amount of life, then check the starting-life threshold for transformation. Exercise the back face’s indestructible grant to other attackers. Exercise transformation in place with counters, an attachment and an outstanding target. Follow the same object into the viewer projection with its new face and abilities. Start from `Effect::TransformSource` in `flow/resolution.rs`, which already checks the source's transform count. Keep that path if the witness passes. Then play Fang/Vanille and Manifest Dread before selecting the common representation.
 
 ## Native implementation and deletions
