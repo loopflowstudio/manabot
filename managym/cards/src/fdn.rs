@@ -19,6 +19,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         cat_collector(),
         claws_out(),
+        fiendish_panda(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
@@ -273,6 +274,58 @@ fn cat_collector() -> CardDefinition {
                     },
                     intervening_if: Some(Condition::YourTurn),
                     effects: vec![Effect::create_tokens("token.cat", 1)],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fiendish_panda() -> CardDefinition {
+    let text_box = "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.";
+    let spec = TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+        predicate: CardPredicate {
+            not_subtypes: vec!["Bear".into()],
+            ..CardPredicate::creature()
+        },
+    };
+    CardDefinition {
+        key: "fdn.fiendish_panda",
+        scryfall_id: "4e434d74-cad0-45f5-bc8d-f34aa5e1d879",
+        printed: PrintedCharacteristics {
+            name: "Fiendish Panda".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bear".into(), "Demon".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::GainsLife {
+                        who: Actor::You,
+                        nth: None,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::another(spec.clone()),
+                        effects: vec![Effect::return_to_battlefield(
+                            ObjectSelector::Target(spec),
+                            false,
+                        )],
+                    }],
                 },
             ],
             text_box: text_box.into(),

@@ -11,3 +11,5 @@ Resolution keys include the captured printed face: ability index zero can belong
 Checkpoint assembly uses the saved fact embedding width at construction. Fresh encoders use the native fact vocabulary.
 
 For the exact-source pair, start with Panda and restore its pending trigger before testing source and target reentry separately. Immolator alone cannot exercise target enumeration.
+
+The checkout's library-order pin addition failed to compile with an unbound pre-move object and exceeded the GameState size guard. The prerequisite repair uses the departing object and boxes the two existing pin sets together.

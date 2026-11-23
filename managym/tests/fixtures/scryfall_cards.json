@@ -1219,6 +1219,19 @@
       "G"
     ]
   },
+  "Fiendish Panda": {
+    "name": "Fiendish Panda",
+    "mana_cost": "{2}{W}{B}",
+    "type_line": "Creature — Bear Demon",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
   "Fire Lord Zuko": {
     "name": "Fire Lord Zuko",
     "mana_cost": "{R}{W}{B}",
@@ -1746,6 +1759,20 @@
     "oracle_text": "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
     "colors": [
       "W"
+    ]
+  },
+  "Heartfire Immolator": {
+    "name": "Heartfire Immolator",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Prowess"
+    ],
+    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\n{R}, Sacrifice this creature: It deals damage equal to its power to target creature or planeswalker.",
+    "colors": [
+      "R"
     ]
   },
   "Heartless Act": {

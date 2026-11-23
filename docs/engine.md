@@ -1023,6 +1023,14 @@ The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
 
+Fiendish Panda’s death trigger compares each eligible graveyard card’s mana
+value with the Panda’s power when it died, including its counters. The same
+comparison applies when choosing a new target and when resolving the trigger.
+Returning the Panda to the battlefield leaves that bound intact. If the chosen
+card leaves the graveyard and returns before resolution, it has a new object
+ID and stays in the graveyard. Heartfire Immolator likewise deals damage using
+its power when sacrificed, including bonuses from prowess.
+
 A token is an object with no card behind it. Take one Spirit token through a
 turn:
 

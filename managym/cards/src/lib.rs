@@ -54,6 +54,7 @@ mod lea;
 mod m12;
 mod m15;
 mod m20;
+mod m21;
 mod mbs;
 mod mh1;
 mod mh2;
@@ -164,6 +165,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     m12::cards,
     m15::cards,
     m20::cards,
+    m21::cards,
     mbs::cards,
     mh1::cards,
     mh2::cards,

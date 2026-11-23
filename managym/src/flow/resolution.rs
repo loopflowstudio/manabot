@@ -26,7 +26,7 @@ use crate::{
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
-        game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
+        game_object::{AbilitySource, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
@@ -224,6 +224,7 @@ impl Game {
             &spell.target_req_indices,
             &requirements,
             spell.controller,
+            AbilitySource::new(object, None),
         ) else {
             self.move_object(object, ZoneType::Graveyard);
             self.emit(GameEvent::SpellCountered {
@@ -329,6 +330,7 @@ impl Game {
             &ability.target_req_indices,
             &requirements,
             ability.controller,
+            AbilitySource::new(ability.source_object, Some(ability.source_object)),
         ) else {
             return;
         };
@@ -410,6 +412,7 @@ impl Game {
             &triggered.target_req_indices,
             &requirements,
             triggered.controller,
+            triggered.source_identity,
         ) else {
             return;
         };
@@ -469,6 +472,7 @@ impl Game {
         indices: &[usize],
         requirements: &[TargetRequirement],
         controller: PlayerId,
+        source: AbilitySource,
     ) -> Option<Vec<ResolutionTarget>> {
         let mut slots: Vec<_> = targets
             .iter()
@@ -478,9 +482,9 @@ impl Game {
                 ResolutionTarget {
                     target: *target,
                     requirement,
-                    legal: requirements
-                        .get(requirement)
-                        .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller)),
+                    legal: requirements.get(requirement).is_some_and(|req| {
+                        self.target_meets_requirement(*target, req, controller, source)
+                    }),
                 }
             })
             .collect();
@@ -2459,25 +2463,40 @@ impl Game {
         }
     }
 
-    /// The bound a spec places with the ability's exact source (CR 608.2h:
-    /// its last known information once it has left), beyond
-    /// `target_is_legal`.
-    pub(crate) fn within_source_bound(
+    /// Source-relative parts of a targeting clause, including a dying
+    /// permanent's immediate graveyard successor for "another" (CR 400.7).
+    pub(crate) fn target_meets_requirement(
         &self,
         target: Target,
-        spec: &TargetSpec,
-        source_object: ObjectId,
-        source: Option<ObjectId>,
+        requirement: &TargetRequirement,
+        controller: PlayerId,
+        source: AbilitySource,
     ) -> bool {
-        let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = spec else {
+        if !self.target_is_legal(target, &requirement.spec, controller) {
+            return false;
+        }
+        if requirement.another
+            && match target {
+                Target::Permanent(id) => self.permanent_object(id) == source.reference(),
+                Target::GraveyardCard(card) => {
+                    card == source.object()
+                        || self.state.zones.successor(source.object()) == Some(card)
+                }
+                _ => false,
+            }
+        {
+            return false;
+        }
+        let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = requirement.spec else {
             return true;
         };
         let Target::GraveyardCard(object) = target else {
             return false;
         };
         let power = source
+            .reference()
             .and_then(|object| self.permanent_power_or_lki(object))
-            .unwrap_or_else(|| self.object_power(source_object));
+            .unwrap_or_else(|| self.object_power(source.object()));
         i32::from(self.object_mana_value(object)) <= power
     }
 

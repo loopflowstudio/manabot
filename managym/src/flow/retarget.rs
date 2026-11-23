@@ -94,8 +94,10 @@ impl Game {
             StackObject::TriggeredAbility(t) => t.x,
         };
         let current = targets.get(*slot).copied();
-        let source = stacked.source_ref();
-        let source_object = stacked.source_object();
+        let source = crate::state::game_object::AbilitySource::new(
+            stacked.source_object(),
+            stacked.source_ref(),
+        );
         let self_target = stacked.as_target();
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
@@ -105,21 +107,12 @@ impl Game {
             .enumerate()
             .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
             .map(|(_, (target, _))| *target);
-        self.legal_targets_for_spec(&requirement.spec, controller)
-            .into_iter()
+        self.targets_for_source(&requirement, controller, source)
             .filter(|target| Some(*target) != current && *target != self_target)
             .filter(|target| {
                 self.within_target_mana_budget(&requirement, x, other_targets.clone(), *target)
             })
             .filter(|target| !other_targets.clone().any(|chosen| chosen == *target))
-            .filter(|target| {
-                !requirement.another
-                    || !matches!((target, source), (Target::Permanent(id), Some(source))
-                        if self.permanent_object(*id) == Some(source))
-            })
-            .filter(|target| {
-                self.within_source_bound(*target, &requirement.spec, source_object, source)
-            })
             .collect()
     }
 

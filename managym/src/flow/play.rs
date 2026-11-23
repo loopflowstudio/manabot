@@ -24,7 +24,7 @@ use crate::{
     state::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{AbilitySource, CardId, ObjectId, PermanentId, PlayerId, Target},
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
         stack_object::ActivatedAbilityOnStack,
@@ -1498,18 +1498,18 @@ impl Game {
             return Vec::new();
         };
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
-        let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&clause.spec, player)
-            .into_iter()
-            .filter(|target| {
-                let is_source = match source {
-                    ActivationSource::Permanent(permanent) => {
-                        *target == Target::Permanent(permanent)
-                    }
-                    ActivationSource::Card(_) => false,
+        let identity = match source {
+            ActivationSource::Permanent(id) => {
+                let Some(object) = self.permanent_object(id) else {
+                    return Vec::new();
                 };
-                !is_source && !chosen.contains(target)
-            })
+                AbilitySource::new(object, Some(object))
+            }
+            ActivationSource::Card(card) => AbilitySource::new(self.state.object_of(card), None),
+        };
+        let candidates: Vec<_> = self
+            .targets_for_source(&clause, player, identity)
+            .filter(|target| !chosen.contains(target))
             .collect();
         if !clause.shares_creature_type {
             return candidates;
@@ -1795,8 +1795,7 @@ impl Game {
         object: ObjectId,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        self.legal_targets_for_spec(&requirement.spec, player)
-            .into_iter()
+        self.targets_for_source(requirement, player, AbilitySource::new(object, None))
             .filter(|target| *target != Target::StackSpell(object))
             .collect()
     }

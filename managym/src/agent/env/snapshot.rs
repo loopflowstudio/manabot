@@ -337,3 +337,129 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod panda_tests {
+    use super::{Env, RestoreOptions};
+    use crate::{
+        agent::action::Action,
+        decision::Command,
+        state::{
+            game_object::{PlayerId, Target},
+            player::PlayerConfig,
+            zone::ZoneType,
+        },
+    };
+
+    #[test]
+    fn panda_snapshot_replays_source_and_target_reentry() {
+        let mut env = Env::new(418, false, false, false);
+        let deck = [
+            "Fiendish Panda",
+            "Gray Ogre",
+            "Hill Giant",
+            "Serra Angel",
+            "Forest",
+        ]
+        .into_iter()
+        .map(|name| (name.to_owned(), 8))
+        .collect();
+        env.reset(vec![
+            PlayerConfig::new("Panda", deck),
+            PlayerConfig::new("Opponent", [("Forest".into(), 40)].into()),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        let player = PlayerId(0);
+        let panda = game
+            .scenario_force_battlefield(player, "Fiendish Panda", true)
+            .unwrap();
+        let mut bury = |name| {
+            let object = game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, player)
+                .iter()
+                .copied()
+                .find(|id| game.state[*id].name == name)
+                .unwrap();
+            game.move_object(object, ZoneType::Graveyard)
+        };
+        let giant = bury("Hill Giant");
+        let ogre = bury("Gray Ogre");
+        bury("Fiendish Panda");
+        bury("Serra Angel");
+        game.gain_life(player, 3);
+        assert!(game.stabilize_before_priority().is_none());
+        game.resolve_top_of_stack();
+        assert_eq!(game.characteristics(panda).power, 4);
+        let dead = game.move_object(game.permanent_object(panda).unwrap(), ZoneType::Graveyard);
+        let choice = game.stabilize_before_priority().unwrap();
+        let targets: Vec<_> = choice
+            .actions
+            .iter()
+            .map(|action| match action {
+                Action::ChooseTarget { target, .. } => *target,
+                _ => panic!("expected a graveyard target"),
+            })
+            .collect();
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(&Target::GraveyardCard(ogre)));
+        let index = targets
+            .iter()
+            .position(|target| *target == Target::GraveyardCard(giant))
+            .unwrap();
+        game.publish_action_space(choice);
+
+        let frame = env.semantic_decision_frame().unwrap();
+        let command = Command {
+            command_id: "return-giant".into(),
+            expected_revision: frame.revision,
+            offer_id: frame.offers[index].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        let snapshot = env.snapshot().unwrap();
+        let boundary = |branch: &Env| {
+            (
+                branch.selected_witness().unwrap(),
+                serde_json::to_value(branch.semantic_decision_frame().unwrap()).unwrap(),
+                [0, 1].map(|seat| branch.observation_for_player(seat).unwrap().to_json()),
+            )
+        };
+        let original = boundary(&env);
+        for move_target in [false, true] {
+            let replay = || {
+                let mut branch = snapshot.restore(RestoreOptions::default()).unwrap();
+                assert_eq!(boundary(&branch), original);
+                branch.execute_semantic_command(&command).unwrap();
+                let game = branch.game.as_mut().unwrap();
+                let card = game.state.card_of(giant).unwrap();
+                if move_target {
+                    let away = game.move_object(giant, ZoneType::Exile);
+                    game.move_object(away, ZoneType::Graveyard);
+                } else {
+                    let returned = game.move_object(dead, ZoneType::Battlefield);
+                    assert_eq!(
+                        game.characteristics(game.state.permanent_of(returned).unwrap())
+                            .power,
+                        3
+                    );
+                }
+                game.resolve_top_of_stack();
+                assert_eq!(
+                    game.state.zones.zone_of(game.state.object_of(card)),
+                    Some(if move_target {
+                        ZoneType::Graveyard
+                    } else {
+                        ZoneType::Battlefield
+                    })
+                );
+                game.scenario_refresh_priority().unwrap();
+                boundary(&branch)
+            };
+            assert_eq!(replay(), replay());
+        }
+        assert_eq!(boundary(&env), original);
+    }
+}

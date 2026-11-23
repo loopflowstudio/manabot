@@ -1540,6 +1540,14 @@ impl TargetRequirement {
         }
     }
 
+    /// "Another target" excludes the source or its immediate graveyard successor.
+    pub fn another(spec: TargetSpec) -> Self {
+        Self {
+            another: true,
+            ..Self::one(spec)
+        }
+    }
+
     /// Whether X must equal the number of targets ("X targets").
     pub fn exact_x(&self) -> bool {
         self.max_x && self.min > 0

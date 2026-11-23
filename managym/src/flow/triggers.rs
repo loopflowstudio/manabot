@@ -17,11 +17,11 @@ use crate::{
     state::{
         ability::{
             Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
-            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
+        game_object::{AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -208,11 +208,6 @@ pub(crate) struct TriggerIndex {
 
 impl Game {
     /// Whether `target` is the exact permanent whose ability triggered.
-    fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
-        matches!(target, Target::Permanent(id)
-            if trigger.source_ref().is_some() && self.permanent_object(id) == trigger.source_ref())
-    }
-
     fn trigger_requirements(
         &self,
         trigger: &PendingTrigger,
@@ -234,19 +229,6 @@ impl Game {
                 .effects(),
         };
         Some(crate::state::ability::effect_target_requirements(effects))
-    }
-
-    /// "Another target" excludes the exact source object.
-    fn excluded_source(
-        &self,
-        trigger: &PendingTrigger,
-        requirement: &crate::state::ability::TargetRequirement,
-    ) -> Option<PermanentId> {
-        if !requirement.another {
-            return None;
-        }
-        let source = trigger.source_ref()?;
-        self.lookup_current_permanent(source).ok()
     }
 
     /// Clause-wide mana-value budget; paid X belongs to this occurrence,
@@ -321,17 +303,7 @@ impl Game {
         if trigger.controller != player
             || duplicate
             || !self.within_trigger_mana_budget(trigger, requirement, target)
-            || (requirement.another && self.is_trigger_source(trigger, target))
-            || !self.target_is_legal(target, &requirement.spec, player)
-            || !self.within_source_bound(
-                target,
-                &requirement.spec,
-                trigger.source_object(),
-                trigger.source_ref(),
-            )
-            || self
-                .excluded_source(trigger, requirement)
-                .is_some_and(|id| target == Target::Permanent(id))
+            || !self.target_meets_requirement(target, requirement, player, trigger.source_identity)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -446,24 +418,10 @@ impl Game {
                     .iter()
                     .filter(|index| **index == trigger.requirement_index)
                     .count();
-                let source = self.excluded_source(&trigger, requirement);
                 let legal: Vec<_> = self
-                    .legal_targets_for_spec(&requirement.spec, trigger.controller)
-                    .into_iter()
+                    .targets_for_source(requirement, trigger.controller, trigger.source_identity)
                     .filter(|target| {
                         self.within_trigger_mana_budget(&trigger, requirement, *target)
-                    })
-                    .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
-                    .filter(|target| {
-                        self.within_source_bound(
-                            *target,
-                            &requirement.spec,
-                            trigger.source_object(),
-                            trigger.source_ref(),
-                        )
-                    })
-                    .filter(|target| {
-                        !(requirement.another && self.is_trigger_source(&trigger, *target))
                     })
                     .filter(|target| {
                         !trigger.targets.iter().zip(&trigger.target_req_indices).any(
@@ -579,21 +537,19 @@ impl Game {
         trigger: &PendingTrigger,
         modes: &[Vec<Effect>],
     ) -> Vec<usize> {
-        let source = trigger
-            .source_ref()
-            .and_then(|source| self.lookup_current_permanent(source).ok());
         (0..modes.len())
             .filter(|mode| {
                 crate::state::ability::effect_target_requirements(&modes[*mode])
                     .iter()
                     .filter(|requirement| requirement.min > 0)
                     .all(|requirement| {
-                        self.legal_targets_for_spec(&requirement.spec, trigger.controller)
-                            .into_iter()
-                            .any(|target| {
-                                !(requirement.another
-                                    && source.is_some_and(|id| target == Target::Permanent(id)))
-                            })
+                        self.targets_for_source(
+                            requirement,
+                            trigger.controller,
+                            trigger.source_identity,
+                        )
+                        .next()
+                        .is_some()
                     })
             })
             .collect()
@@ -785,13 +741,32 @@ impl Game {
         self.restart_priority_round();
     }
 
-    /// All currently legal targets for a spec, from `controller`'s
-    /// perspective ("you").
+    pub(crate) fn targets_for_source<'a>(
+        &'a self,
+        requirement: &'a TargetRequirement,
+        controller: PlayerId,
+        source: AbilitySource,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.target_candidates(&requirement.spec, controller)
+            .into_iter()
+            .filter(move |target| {
+                self.target_meets_requirement(*target, requirement, controller, source)
+            })
+    }
+
+    #[cfg(test)]
     pub(crate) fn legal_targets_for_spec(
         &self,
-        target_spec: &TargetSpec,
+        spec: &TargetSpec,
         controller: PlayerId,
     ) -> Vec<Target> {
+        self.target_candidates(spec, controller)
+            .into_iter()
+            .filter(|target| self.target_is_legal(*target, spec, controller))
+            .collect()
+    }
+
+    fn target_candidates(&self, target_spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {
         let mut candidates: Vec<Target> = match target_spec {
             TargetSpec::GraveyardCardYouOwn { .. }
             | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
@@ -870,7 +845,6 @@ impl Game {
                 }
             }
         }
-        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
         candidates
     }
 

@@ -1189,3 +1189,55 @@ fn retained_departure_recorded_card_and_spell_predicates_ignore_later_copy() {
     assert!(game.recorded_object_matches_predicate(bolt, &predicate));
     assert!(!game.object_matches_predicate(later, &predicate));
 }
+
+#[test]
+fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
+    use crate::state::{game_object::AbilitySource, permanent::CounterKind};
+    let (mut game, _, _, Target::Permanent(ogre), _) = fixture() else {
+        unreachable!()
+    };
+    let player = PlayerId(0);
+    let source = game.permanent_object(ogre).unwrap();
+    let mut bury_ogre = || {
+        let id = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        game.move_object(game.permanent_object(id).unwrap(), ZoneType::Graveyard)
+    };
+    let first = bury_ogre();
+    let second = bury_ogre();
+    game.state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::PlusOnePlusOne, 1);
+    let spec = TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+        predicate: CardPredicate::creature(),
+    };
+    let mut pending = trigger(
+        source,
+        vec![Effect::return_to_battlefield(
+            ObjectSelector::Target(spec),
+            false,
+        )],
+        0,
+    );
+    pending.source_identity = AbilitySource::new(source, Some(source));
+    game.state.pending_triggers.push(pending);
+    assert_eq!(game.flush_triggers().unwrap().actions.len(), 2);
+    game.choose_trigger_target(player, Target::GraveyardCard(first))
+        .unwrap();
+    assert!(game.flush_triggers().is_none());
+    let stack = game.state.stack_objects.last().unwrap().as_target();
+    let decision = game.next_retarget(player, stack, 0, true).unwrap();
+    assert_eq!(
+        game.retarget_candidates(&decision),
+        vec![Target::GraveyardCard(second)]
+    );
+    game.state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::PlusOnePlusOne, -1);
+    assert!(game.retarget_candidates(&decision).is_empty());
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.zones.zone_of(first), Some(ZoneType::Graveyard));
+}
