@@ -2874,11 +2874,13 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     let (mut root, first, second) = fixture(defender);
     for effect in [
         ReplacementEffect::ModifyDamage {
+            creature_source: false,
             source_by: Actor::AnyPlayer,
             recipient_by: Actor::You,
             transform: DamageTransform::Prevent(1),
         },
         ReplacementEffect::ModifyDamage {
+            creature_source: false,
             source_by: Actor::AnyPlayer,
             recipient_by: Actor::You,
             transform: DamageTransform::Double,

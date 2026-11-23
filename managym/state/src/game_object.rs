@@ -300,6 +300,8 @@ pub struct ObjectLki {
     pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
+    /// Effective creature status at departure, for damage from a stacked ability.
+    pub was_creature: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,

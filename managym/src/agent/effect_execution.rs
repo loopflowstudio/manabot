@@ -623,6 +623,7 @@ impl<'a> Projection<'a> {
             keywords,
             creature_types,
             permanent: _,
+            was_creature,
             animated_creature,
             abilities_lost,
             dealt_damage_this_turn,
@@ -649,6 +650,7 @@ impl<'a> Projection<'a> {
                     creature_types,
                 ),
                 (
+                    was_creature,
                     animated_creature,
                     abilities_lost,
                     dealt_damage_this_turn,

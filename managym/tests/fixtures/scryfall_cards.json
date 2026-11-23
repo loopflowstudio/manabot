@@ -1,4 +1,18 @@
 {
+  "Gratuitous Violence": {
+    "name": "Gratuitous Violence",
+    "mana_cost": "{2}{R}{R}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Double"
+    ],
+    "oracle_text": "If a creature you control would deal damage to a permanent or player, it deals double that damage instead.",
+    "colors": [
+      "R"
+    ]
+  },
   "Fog Bank": {
     "name": "Fog Bank",
     "mana_cost": "{1}{U}",

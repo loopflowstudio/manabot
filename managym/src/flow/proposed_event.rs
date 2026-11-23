@@ -1139,11 +1139,16 @@ impl Game {
                                         || *target == ProposedDamageTarget::Object(source))
                             }
                             ReplacementEffect::ModifyDamage {
+                                creature_source,
                                 source_by,
                                 recipient_by,
                                 ..
                             } => {
-                                recipient_by.includes(permanent.controller, affected_controller)
+                                (!*creature_source
+                                    || damage_source
+                                        .is_some_and(|id| self.damage_source_is_creature(id)))
+                                    && recipient_by
+                                        .includes(permanent.controller, affected_controller)
                                     && (*source_by == Actor::AnyPlayer
                                         || source_controller.is_some_and(|p| {
                                             source_by.includes(permanent.controller, p)
@@ -1343,6 +1348,16 @@ impl Game {
             }
         }
         self.object_lki(source).map(|lki| lki.controller)
+    }
+
+    fn damage_source_is_creature(&self, source: ObjectId) -> bool {
+        if let Ok(id) = self.lookup_current_permanent(source) {
+            return self.permanent_is_battlefield_creature(id);
+        }
+        if self.state.live(source).is_some() && self.stack_spell_controller(source).is_some() {
+            return self.state[source].types.is_creature();
+        }
+        self.object_lki(source).is_some_and(|lki| lki.was_creature)
     }
 
     fn damage_target_controller(&self, target: ProposedDamageTarget) -> Option<PlayerId> {

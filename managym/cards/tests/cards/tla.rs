@@ -16450,11 +16450,13 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         let object = card_of(&s, shield);
         s.game_mut().state[object].replacement_effects = vec![
             ReplacementEffect::ModifyDamage {
+                creature_source: false,
                 source_by: Actor::AnyPlayer,
                 recipient_by: Actor::You,
                 transform: DamageTransform::Prevent(2),
             },
             ReplacementEffect::ModifyDamage {
+                creature_source: false,
                 source_by: Actor::AnyPlayer,
                 recipient_by: Actor::You,
                 transform: DamageTransform::Double,

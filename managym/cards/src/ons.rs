@@ -1,14 +1,17 @@
 //! Onslaught.
 use managym_state::{
-    ability::{Effect, ObjectSelector, PlayerSelector, Scope},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
+    card::{
+        CardDefinition, CardType, CardTypes, DamageTransform, Keyword, Keywords,
+        PrintedCharacteristics, ReplacementEffect,
+    },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![glory_seeker(), insurrection()]
+    vec![glory_seeker(), gratuitous_violence(), insurrection()]
 }
 
 fn glory_seeker() -> CardDefinition {
@@ -25,6 +28,27 @@ fn glory_seeker() -> CardDefinition {
             power: Some(2),
             toughness: Some(2),
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gratuitous_violence() -> CardDefinition {
+    CardDefinition {
+        key: "ons.gratuitous_violence",
+        scryfall_id: "4b0c5d14-4fab-4034-a2d3-0d851ef67cbd",
+        printed: PrintedCharacteristics {
+            name: "Gratuitous Violence".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            replacement_effects: vec![ReplacementEffect::ModifyDamage {
+                creature_source: true,
+                source_by: Actor::You,
+                recipient_by: Actor::AnyPlayer,
+                transform: DamageTransform::Double,
+            }],
+            text_box: "If a creature you control would deal damage to a permanent or player, it deals double that damage instead.".into(),
             ..Default::default()
         },
         ..Default::default()

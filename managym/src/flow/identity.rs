@@ -62,6 +62,7 @@ impl Game {
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
+            was_creature: characteristics.is_creature(),
             animated_creature: characteristics.is_animated,
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,

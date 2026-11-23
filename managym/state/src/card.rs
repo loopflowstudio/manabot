@@ -489,6 +489,8 @@ pub enum DamageTransform {
 pub enum ReplacementEffect {
     PreventCombatDamageToOrFromSelf,
     ModifyDamage {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        creature_source: bool,
         source_by: super::ability::Actor,
         recipient_by: super::ability::Actor,
         transform: DamageTransform,

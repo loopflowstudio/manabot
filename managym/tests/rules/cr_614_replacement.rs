@@ -38,6 +38,7 @@ fn resolve_bolt_with_drivers(
             s.game_mut().state[object]
                 .replacement_effects
                 .push(ReplacementEffect::ModifyDamage {
+                    creature_source: false,
                     source_by: Actor::AnyPlayer,
                     recipient_by: Actor::You,
                     transform: *transform,

@@ -45,6 +45,7 @@ fn twinflame_tyrant() -> CardDefinition {
             toughness: Some(5),
             keywords: Keywords::of(&[Keyword::Flying]),
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
+                creature_source: false,
                 source_by: Actor::You,
                 recipient_by: Actor::Opponent,
                 transform: DamageTransform::Double,
