@@ -1,7 +1,9 @@
-at: 314de3ced79fa3aa3b3d3ff7fad2c77946f87a12
+at: bc5133e076adeb30819682e53abe8e97c69530b0
 first:
   - path: scratch/plan.md
     why: Card obligations, fixture results and remaining replay work
+  - path: managym/src/flow/turn.rs
+    why: Turn facts and exact-source damage history
   - path: managym/cards/src/fdn.rs
     why: Printed effects in resolution order
   - path: managym/cards/tests/cards/fdn.rs
