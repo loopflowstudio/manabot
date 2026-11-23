@@ -21,7 +21,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.failures import CapturedVector, CaptureScope, capture_scope
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -34,6 +34,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
+from manabot.infra.identity import canonical_sha256
 from manabot.infra.run_settings import RunSettings
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
@@ -64,11 +65,12 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
+    CapturedSnapshot,
     InMemorySnapshotVector,
-    InstalledSlot,
     SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
+    replay_snapshot,
 )
 from manabot.training.rollout.snapshots import (
     CaptureDecision,
@@ -92,7 +94,7 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
-from managym.recording import GameInputs, PlayerSetup, read_records, record_from_row
+from managym.recording import GameInputs, PlayerSetup, read_records
 from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
 from tests.fixtures.training_records import recording
@@ -172,14 +174,14 @@ def replay_collector(
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
 ) -> Iterator[Collector]:
-    vector = InMemorySnapshotVector.factory(space, Match(recipe.match), num_envs, 42)
     collector = open_collector(
         space,
         Match(recipe.match),
         Reward(RewardConfig()),
         num_envs=num_envs,
         opponent_mode="self",
-        snapshot_vector=vector,
+        snapshots=True,
+        seed=42,
         game_errors=game_errors,
         record_attempt=record_attempt,
         numerics=CollectionSession(device="cpu", seed=0),
@@ -1151,6 +1153,52 @@ def test_mlx_scalar_critic_only_step_and_zero_weight_adam_state() -> None:
         np.testing.assert_array_equal(value, adam[key])
 
 
+def test_saved_positional_bank_keeps_its_identity_and_warms_once() -> None:
+    space = ObservationSpace()
+    recipe, _ = replay_root(space)
+    config = SnapshotConfig(capacity=1, replay_fraction=1, fresh_floor=0)
+    # The saved entry predates the native replay field. Its signed rollout
+    # identity was computed from exactly these serialized keys.
+    saved_recipe = {
+        "match": recipe.match.model_dump(mode="json"),
+        "actions": list(recipe.actions),
+        "seed": recipe.seed,
+        "root_digest": recipe.root_digest,
+        "root_chooser": recipe.root_chooser,
+        "decision_memory": recipe.decision_memory,
+        "decision_memory_include_own": recipe.decision_memory_include_own,
+    }
+    key = int(canonical_sha256(saved_recipe)[:16], 16) >> 1
+    state = SnapshotBank(config).state().model_dump(mode="json")
+    state["entries"] = [
+        dict(
+            snapshot_id=key,
+            recipe=saved_recipe,
+            score=1.0,
+            score_generation=0,
+            last_visit_generation=0,
+        )
+    ]
+    bank = SnapshotBank.from_state(config, SnapshotBankState.model_validate(state))
+    assert bank.state().model_dump(mode="json")["entries"][0]["recipe"] == saved_recipe
+    with (
+        replay_collector(space, recipe, num_envs=2) as collector,
+        patch(
+            "manabot.training.rollout.snapshot_vector.replay_snapshot",
+            wraps=replay_snapshot,
+        ) as replayed,
+    ):
+        requests = [SlotInstall(slot, key, recipe) for slot in (1, 0)]
+        for _ in range(2):
+            installed = bank.install(collector._env, requests)
+            assert [(s.slot, s.root_digest) for s in installed] == [
+                (1, recipe.root_digest),
+                (0, recipe.root_digest),
+            ]
+        replayed.assert_called_once_with(recipe)
+    bank.close()
+
+
 def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> None:
     agent = scalar_backend_agent()
     space = agent.observation_space
@@ -1179,11 +1227,15 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
         for generation in range(1, 4):
             retained = []
             assignments = []
-            for i, (bank, collector) in enumerate(
-                zip(banks, (left, right), strict=True)
-            ):
+            # The warm bank also moves to a different producer after capture.
+            collectors = (left, right) if generation == 1 else (right, left)
+            for bank, collector in zip(banks, collectors, strict=True):
                 with (
                     bank.begin_batch() as plan,
+                    patch(
+                        "manabot.training.rollout.snapshot_vector.replay_snapshot",
+                        wraps=replay_snapshot,
+                    ) as replayed,
                     patch.object(
                         collector._env,
                         "install_slots",
@@ -1241,12 +1293,12 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                         # A row floor of two drains K=5 on both slots in three waves.
                         requests = [call.args[0] for call in installs.call_args_list]
                         assert [len(wave) for wave in requests] == [2, 2, 1]
-                        if generation == 2:
-                            assert all(
-                                (req.hot_handle is None) == (i == 1)
-                                for wave in requests
-                                for req in wave
-                            )
+                        assert replayed.call_count == int(
+                            generation == 2 and bank is banks[1]
+                        )
+                        handles = [req.hot_handle for wave in requests for req in wave]
+                        assert isinstance(handles[0], managym.GameSnapshot)
+                        assert all(h is handles[0] for h in handles)
                     assignments.append(
                         [
                             (v.snapshot_id, v.group_id, v.roots)
@@ -1335,9 +1387,7 @@ def test_failed_episodes_discard_captures_siblings_and_frozen_views() -> None:
                         }
                         assert success.seed != failure.seed
                         assert len(receipt.captures) == 4
-                        assert any(
-                            len(call.args[0]) == 1 for call in release.call_args_list
-                        )
+                        release.assert_not_called()
                     else:
                         assert [a.outcome for a in attempts[2:]] == [
                             "engine_error",
@@ -1385,13 +1435,28 @@ def test_numerical_error_and_unavailable_signal_leave_bank_unchanged() -> None:
             assert warmup.receipt is not None
             bank.commit(warmup.receipt, targets.signals)
         before = bank.state().model_dump_json()
-        released.reset_mock()
-        with pytest.raises(NumericalError), bank.begin_batch() as plan:
+        capture = collector._env.capture_slots
+        owned = []
+
+        def custom_capture(slots: Sequence[int]) -> list[CapturedSnapshot]:
+            captures = capture(slots)
+            for i, item in enumerate(captures):
+                handle = object()
+                owned.append(handle)
+                captures[i] = replace(item, hot_handle=handle)
+            return captures
+
+        with (
+            pytest.raises(NumericalError),
+            patch.object(collector._env, "capture_slots", side_effect=custom_capture),
+            bank.begin_batch() as plan,
+        ):
             batch = collect(collector, agent, 1, snapshot_plan=plan)
             assert plan.receipt is not None and len(plan.receipt.captures) == 2
             batch.rewards[0, 0] = float("nan")
             update_damped_iteration(backend, learner, batch, learning, 1)
-        assert sum(len(call.args[0]) for call in released.call_args_list) == 2
+        assert len(owned) == 2
+        assert [h for call in released.call_args_list for h in call.args[0]] == owned
         assert bank.state().model_dump_json() == before
         bank.close()
         bank = SnapshotBank(config.model_copy(update={"signal": "wdl_entropy"}))
@@ -1678,7 +1743,7 @@ def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
 
 
 @pytest.mark.parametrize(("replay_fraction", "horizon"), [(1.0, 3), (0.75, None)])
-def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
+def test_native_snapshot_self_play(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     replay_fraction: float,
@@ -1690,18 +1755,41 @@ def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
         "snapshot" not in base.model_dump()
         and "snapshot_bank" not in Counts().model_dump()
     )
+    group_size = 4 if horizon is not None else 2
     settings = SelfPlay.model_validate(
         base.model_dump()
         | {
             "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=0.9)
             if horizon is None
             else DampedPolicyLearning(gradient="damped_policy", filter_scope="actor"),
+            "workers": 2,
+            "streams": group_size,
+            "model": base.model.model_copy(
+                update={
+                    "decision_memory": "gru",
+                    "policy_film": True,
+                    "world": managym.WORLD_SETUP,
+                }
+            )
+            if horizon
+            else base.model,
+            "observation": ObservationConfig(
+                max_decision_records=128,
+                max_decision_references=1024,
+                max_decision_reference_details=8192,
+                max_decision_members=4096,
+            )
+            if horizon
+            else base.observation,
+            "collection_rows": 4,
+            "bootstrap_rows": 4,
+            "learner_rows": 4,
             "behavior": "ema-self",
             "transitions": 1,
             "games_per_stream": 1,
             "snapshot": SnapshotConfig(
                 capacity=2,
-                group_size=2,
+                group_size=group_size,
                 horizon=horizon,
                 replay_fraction=replay_fraction,
                 fresh_floor=0,
@@ -1735,7 +1823,6 @@ def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
                 settings,
                 run,
                 updates=update,
-                snapshot_vector=InMemorySnapshotVector.factory,
                 snapshot_scorer=score,
                 capture_predicate=capture,
             )
@@ -1783,7 +1870,11 @@ def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
         assert points.x[-1] == 2
         return float(points.y[-1])
 
-    assert latest("snapshot/starts") == latest("snapshot/groups_completed") * 2 > 0
+    assert (
+        latest("snapshot/starts")
+        == latest("snapshot/groups_completed") * group_size
+        > 0
+    )
     assert latest("snapshot/choices") == latest("snapshot/rows")
     assert (
         latest("snapshot/groups_discarded") == latest("snapshot/failed_branches") == 0
@@ -1839,7 +1930,7 @@ def test_snapshot_terminal_leaves_fresh_deck_exposure_and_skip_counts_intact() -
             deck_source=decks,
             opponent_mode="self",
             games_per_stream=2 if with_replay else 1,
-            snapshot_vector=InMemorySnapshotVector.factory,
+            snapshots=True,
             numerics=CollectionSession(device="cpu", seed=0),
         )
         try:
@@ -1918,7 +2009,6 @@ def test_scorer_failure_preserves_live_learner_ema_and_bank(
         seed=0,
         start=0,
         snapshot_bank=bank,
-        snapshot_vector=InMemorySnapshotVector.factory,
     )
     try:
         step(settings, learner, ema, collector, counts, rng, out=tmp_path)
@@ -1950,28 +2040,35 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
         }
     )
     with pytest.raises(ValueError, match=signal):
-        self_play_collector(
-            settings, start=0, seed=0, snapshot_vector=InMemorySnapshotVector.factory
-        )
+        self_play_collector(settings, start=0, seed=0)
     collector = self_play_collector(
         settings,
         start=0,
         seed=0,
-        snapshot_vector=InMemorySnapshotVector.factory,
         snapshot_scorer=lambda signals: 1.0,
     )
     close_collector(collector)
 
 
-def test_snapshot_collector_requires_one_worker_and_configured_callbacks() -> None:
-    settings = gray_ogre_self_play(horizon=2)
-    with pytest.raises(ValueError, match="workers=1"):
-        self_play_collector(
-            settings.model_copy(update={"workers": 2}),
-            start=0,
-            seed=0,
-            snapshot_vector=InMemorySnapshotVector.factory,
+@pytest.mark.parametrize("use_factory", [True, False])
+def test_deprecated_snapshot_factory_uses_native_deferred_slots(
+    use_factory: bool,
+) -> None:
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        vector = (
+            InMemorySnapshotVector.factory(ObservationSpace(), Match(), 1, 42)
+            if use_factory
+            else InMemorySnapshotVector(ObservationSpace(), 1, 42)
         )
+    try:
+        assert not vector.auto_reset
+        assert vector.next_fresh_seeds() == [42]
+    finally:
+        vector.close()
+
+
+def test_snapshot_callbacks_require_settings() -> None:
+    settings = gray_ogre_self_play(horizon=2)
     with pytest.raises(ValueError, match="require snapshot settings"):
         self_play_collector(
             settings, start=0, seed=0, snapshot_scorer=lambda signals: 1.0
@@ -1980,7 +2077,7 @@ def test_snapshot_collector_requires_one_worker_and_configured_callbacks() -> No
         self_play_collector(settings, start=0, seed=0, capture_predicate=lambda d: True)
 
 
-def test_snapshot_settings_require_both_seats_and_a_vector() -> None:
+def test_snapshot_settings_require_both_seats() -> None:
     settings = gray_ogre_self_play(horizon=2).model_dump() | {
         "snapshot": SnapshotConfig(capacity=1, replay_fraction=0.5, fresh_floor=0.5)
     }
@@ -1991,8 +2088,6 @@ def test_snapshot_settings_require_both_seats_and_a_vector() -> None:
     ):
         with pytest.raises(ValueError, match="both learning seats"):
             SelfPlay.model_validate(settings | changes)
-    with pytest.raises(ValueError, match="snapshot vector"):
-        self_play_collector(SelfPlay.model_validate(settings), seed=0, start=0)
 
 
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
@@ -2023,8 +2118,11 @@ def test_inspector_labels_a_cut_seat_trajectory_as_censored(
 def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> None:
     space = ObservationSpace()
     agent = small_agent(space)
-    recipe, source = replay_root(space)
-    early = source.snapshot()
+    _, source = replay_root(space)
+    root = source.snapshot()
+    chooser = root.acting_player
+    assert chooser in (0, 1)
+    recipe = SnapshotRecipe.from_replay_json(root.to_replay_json(), chooser)
     for _ in range(64):
         last = source.snapshot()
         if source.step(0)[2]:
@@ -2033,14 +2131,15 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
         pytest.fail("fixture did not reach a terminal decision")
     chooser = last.metadata().acting_player
     assert chooser in (0, 1)
-    final_recipe = SnapshotRecipe.from_inputs(
-        record_from_row(json.loads(last.to_replay_json())).games[0],
-        last.state_digest,
-        chooser,
+    final_recipe = SnapshotRecipe.from_replay_json(last.to_replay_json(), chooser)
+    early_branch = SnapshotBranch(
+        1,
+        recipe,
+        horizon=2,
+        restore_options=managym.RestoreOptions.shuffle_libraries(101),
     )
-    early_branch = SnapshotBranch(1, recipe, horizon=2, hot_handle=early)
-    end_branch = SnapshotBranch(2, final_recipe, hot_handle=last)
-    vector = CapturedVector(num_envs=4, seed=70, auto_reset=False)
+    end_branch = SnapshotBranch(2, final_recipe)
+    del root, last, source
     attempts: list[GameAttempt] = []
     policy = GameErrorPolicy()
 
@@ -2048,29 +2147,21 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
         attempts.append(attempt)
         return settle(state, attempt, policy)
 
-    # Direct prescribed starts supply all handles. The bank's multi-shard
-    # dispatcher is independent of this collector allocation fixture.
-    def install(requests: Sequence[SlotInstall]) -> list[InstalledSlot]:
-        loads = []
-        for request in requests:
-            if request.recipe is None:
-                loads.append(managym.SlotLoad.fresh(request.slot))
-            else:
-                assert isinstance(request.hot_handle, managym.GameSnapshot)
-                loads.append(
-                    managym.SlotLoad.snapshot(
-                        request.slot, request.hot_handle, request.restore_options
-                    )
-                )
-        return [
-            InstalledSlot(
-                r.slot,
-                r.source_digest or "",
-                r.acting_player if r.acting_player is not None else -1,
-            )
-            for r in vector.load_slots_into_buffers(loads)
-        ]
-
+    collector = open_collector(
+        space,
+        Match(recipe.match),
+        Reward(RewardConfig()),
+        num_envs=4,
+        seed=70,
+        opponent_mode="self",
+        games_per_stream=1,
+        game_errors=policy,
+        record_attempt=record,
+        snapshots=True,
+        workers=2,
+        numerics=CollectionSession(device="cpu", seed=0),
+    )
+    vector = collector._env
     step = vector.step_isolated_into_buffers
     calls = 0
 
@@ -2084,13 +2175,7 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
         step(actions, active, recover_capacity)
 
     with (
-        patch.object(
-            vector, "install_slots", side_effect=install, create=True
-        ) as installs,
-        patch.object(vector, "capture_slots", create=True, side_effect=AssertionError),
-        patch.object(
-            vector, "release_handles", create=True, side_effect=AssertionError
-        ),
+        patch.object(vector, "install_slots", wraps=vector.install_slots) as installs,
         patch.object(vector, "replace_failed_into_buffers", side_effect=AssertionError),
         patch.object(vector, "step_isolated_into_buffers", side_effect=fail_once),
         patch.object(
@@ -2106,18 +2191,6 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
             ),
         ),
     ):
-        collector = open_collector(
-            space,
-            Match(recipe.match),
-            Reward(RewardConfig()),
-            num_envs=4,
-            opponent_mode="self",
-            games_per_stream=1,
-            game_errors=policy,
-            record_attempt=record,
-            snapshot_vector=vector,
-            numerics=CollectionSession(device="cpu", seed=0),
-        )
         try:
             batch = collect(
                 collector,
@@ -2126,10 +2199,7 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
                 snapshot_starts=[
                     early_branch,
                     end_branch,
-                    replace(
-                        early_branch,
-                        restore_options=managym.RestoreOptions.shuffle_libraries(101),
-                    ),
+                    early_branch,
                     replace(
                         end_branch,
                         restore_options=managym.RestoreOptions.exact(
@@ -2154,7 +2224,7 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
                 failure.actions[-1] == 999
                 and failure.interventions[-1].op == "shuffle_libraries"
             )
-            assert vector.next_seeds == [70, 71, 76, 73]
+            assert vector.next_fresh_seeds() == [70, 71, 76, 73]
             assert [
                 (r.slot, r.recipe) for r in installs.call_args_list[-1].args[0]
             ] == [(2, None)]

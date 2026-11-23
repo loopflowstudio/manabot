@@ -1,5 +1,7 @@
 """Detached native slots can switch timelines without mixing viewer memory or fresh games."""
 
+from contextlib import closing
+from dataclasses import replace
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +15,8 @@ from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.producers import ShardedVectorEnv
+from manabot.training.rollout.snapshot_vector import SlotInstall, replay_snapshot
+from manabot.training.rollout.snapshots import root_id
 import managym
 from managym.decision import Command
 from managym.recording import CapturedVector, ScalarCapture, read_record, read_records
@@ -259,6 +263,89 @@ def test_detached_masked_capture_from_sharded_recording_vector() -> None:
     finally:
         producers.close()
     assert root.restore().state_digest() == root.state_digest
+
+
+def test_four_workers_share_cold_root_history_and_recapture_shuffled_branches() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_reference_details=2048,
+            max_decision_references=128,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    with closing(
+        ShardedVectorEnv(
+            4,
+            42,
+            workers=4,
+            auto_reset=False,
+            decision_memory=True,
+            decision_memory_include_own=True,
+        )
+    ) as vector:
+        buffers = allocate_vector_buffers(space, 4)
+        vector.set_buffers(buffers, layout=space.layout)
+        vector.reset_all_into_buffers(setup("open"))
+        vector.step_into_buffers([1, 0, 0, 0], [True, False, False, False])
+        neighbor, root = vector.capture_slots([3, 0])
+        assert (neighbor.slot, root.slot) == (3, 0)
+        order = [3, 0, 2, 1]
+        options = managym.RestoreOptions.shuffle_libraries(101)
+        siblings = [
+            SlotInstall(
+                slot, root_id(root.recipe), root.recipe, restore_options=options
+            )
+            for slot in order
+        ]
+        generations = vector.current_game_generations()
+        for invalid, reason in [
+            (replace(siblings[0], hot_handle=neighbor.hot_handle), "identity mismatch"),
+            (replace(siblings[0], slot=4), "invalid"),
+            (replace(siblings[0], slot=siblings[1].slot), "duplicate"),
+        ]:
+            with pytest.raises(ValueError, match=reason):
+                vector.install_slots([siblings[1], invalid])
+            assert vector.current_game_generations() == generations
+        corrupt = replace(root.recipe, replay_json="{}")
+        with pytest.raises(managym.AgentError, match="invalid snapshot replay"):
+            vector.install_slots([SlotInstall(0, -1, None), SlotInstall(3, 7, corrupt)])
+        assert vector.current_game_generations() == generations
+        with patch(
+            "manabot.training.rollout.snapshot_vector.replay_snapshot",
+            wraps=replay_snapshot,
+        ) as replayed:
+            assert [r.slot for r in vector.install_slots(siblings)] == order
+            replayed.assert_called_once_with(root.recipe)
+        prefixes = MemoryStore((64, 2048, 128, 256)).capture_live_rows(
+            buffers,
+            np.arange(4),
+            vector.current_game_seeds(),
+            vector.current_agent_indices(),
+            vector.current_game_generations(),
+            vector.decision_memory_cursors(),
+        )
+        shared = prefixes[0].tail
+        assert shared is not None and all(p.tail is shared for p in prefixes)
+        assert len({id(p.serving.segment) for p in prefixes}) == 4
+        assert len({p.identity.branch for p in prefixes}) == 4
+        assert isinstance(root.hot_handle, managym.GameSnapshot)
+        scalar = root.hot_handle.restore(options)
+        assert [s.root_digest for s in vector.capture_slots(order)] == [
+            scalar.state_digest()
+        ] * 4
+        vector.step_into_buffers([0, 1, 0, 1])
+        first, second = vector.capture_slots([1, 0])
+        assert first.root_digest != second.root_digest
+        scalar.step(0)
+        assert second.root_digest == scalar.state_digest()
+        assert second.recipe.replay_json is not None
+        assert (
+            json.loads(second.recipe.replay_json)["interventions"][-1]["op"]
+            == "shuffle_libraries"
+        )
+        assert replay_snapshot(second.recipe).state_digest == second.root_digest
 
 
 @pytest.mark.parametrize("captured", [False, True])

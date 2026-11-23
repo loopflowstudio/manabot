@@ -79,7 +79,7 @@ from manabot.training.rollout.matchups import (
     stream_matches,
 )
 from manabot.training.rollout.numerics import CollectionScope, CollectionSession
-from manabot.training.rollout.producers import BufferedStreams, ShardedVectorEnv
+from manabot.training.rollout.producers import BufferedStreams, open_native_streams
 from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.rollout.snapshot_vector import (
     SlotInstall,
@@ -737,6 +737,7 @@ def open_collector(
     adaptive: AdaptiveConfig | None = None,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
+    snapshots: bool = False,
     capture_predicate: CapturePredicate | None = None,
     operation: OperationScope = no_operation,
     games_path: Path | None = None,
@@ -754,18 +755,17 @@ def open_collector(
     RNG for learner rows and current-self opponents. The caller closes the
     collector with `close_collector`.
     """
-    if snapshot_bank is not None and snapshot_vector is None:
-        raise ValueError("snapshot bank requires a snapshot vector")
+    snapshots = snapshots or snapshot_bank is not None or snapshot_vector is not None
     if snapshot_vector is not None and workers != 1:
-        raise ValueError("snapshot collection requires workers=1")
-    if snapshot_vector is not None and (
+        raise ValueError("a custom snapshot vector requires workers=1")
+    if snapshots and (
         opponent_mode != "self"
         or learning_seats == "one"
         or adaptive is not None
         or root is not None
     ):
         raise ValueError(
-            "snapshot collection requires a snapshot vector and both-seat self-play"
+            "snapshot collection requires both-seat self-play with ordinary roots and no adaptive sampler"
         )
     if adaptive is not None and (
         opponent_mode != "self"
@@ -858,30 +858,15 @@ def open_collector(
         # Native decision capture is opt-in from the observation's capacity.
         memory = observation_space.config
         capture_decisions = memory.max_decision_records > 0
-        env = (
-            ShardedVectorEnv(
-                num_envs,
-                seed,
-                workers,
-                decision_memory=capture_decisions,
-                decision_memory_include_own=memory.decision_memory_include_own,
-                games_path=games_path,
-                record_fraction=record_fraction,
-            )
-            if workers > 1
-            else CapturedVector(
-                num_envs=num_envs,
-                seed=seed,
-                decision_memory=capture_decisions,
-                decision_memory_include_own=memory.decision_memory_include_own,
-                skip_trivial=True,
-                player_policies=("agent", "agent"),
-                **(
-                    {"games_path": games_path, "record_fraction": record_fraction}
-                    if games_path is not None
-                    else {}
-                ),
-            )
+        env = open_native_streams(
+            num_envs,
+            seed,
+            workers,
+            auto_reset=not snapshots,
+            decision_memory=capture_decisions,
+            decision_memory_include_own=memory.decision_memory_include_own,
+            games_path=games_path,
+            record_fraction=record_fraction,
         )
     else:
         from manabot.env.target_practice import TargetPracticeVector
@@ -890,7 +875,7 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
-        if snapshot_vector is not None:
+        if snapshots:
             if not isinstance(env, SnapshotVector):
                 raise ValueError("snapshot collection requires a snapshot vector")
             if not env.skip_trivial:
@@ -918,9 +903,7 @@ def open_collector(
             game_errors=game_errors,
             learner_seat=np.arange(num_envs, dtype=np.int64) % 2,
             stream_matches=[match] * num_envs,
-            stats=CollectorStats(
-                snapshot=SnapshotStats() if snapshot_vector is not None else None
-            ),
+            stats=CollectorStats(snapshot=SnapshotStats() if snapshots else None),
             snapshot_bank=snapshot_bank,
             game_error_state=GameErrorState(),
             profiler=Profiler(enabled=False),
@@ -952,9 +935,9 @@ def open_collector(
             _ordinals=[0] * num_envs,
             _reverse_cells=reverse_cells,
             capture_predicate=capture_predicate,
-            _fresh_ready=[True] * num_envs if snapshot_vector is not None else [],
+            _fresh_ready=[True] * num_envs if snapshots else [],
             _episodes=[_EpisodeAssignment() for _ in range(num_envs)]
-            if snapshot_vector is not None
+            if snapshots
             else [],
         )
         env.set_buffers(
@@ -1000,7 +983,7 @@ def open_collector(
                 device=numerics.device_name,
                 execution_rows=execution_rows,
             )
-        if snapshot_vector is None:
+        if not snapshots:
             for row in range(num_envs):
                 _expose(collector, row, "game_roots")
     except BaseException:

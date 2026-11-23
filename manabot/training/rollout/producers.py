@@ -20,6 +20,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.env.failures import CapturedVector
+from manabot.training.rollout.snapshot_vector import (
+    CapturedSnapshot,
+    InstalledSlot,
+    SlotInstall,
+    SnapshotRecipe,
+    bind_cold_start,
+)
 import managym
 from managym.recording import GameInputs
 
@@ -42,6 +49,23 @@ class ObservationRead:
     game_id: int
     seed: int
     revision: int
+
+
+def native_slot_load(request: SlotInstall, local_slot: int) -> managym.SlotLoad:
+    source, recipe = request.hot_handle, request.recipe
+    if recipe is None:
+        if source is not None or request.restore_options is not None:
+            raise ValueError("fresh slot cannot carry a snapshot or restore options")
+        return managym.SlotLoad.fresh(local_slot)
+    if not isinstance(source, managym.GameSnapshot) or (
+        source.state_digest,
+        source.seed,
+        source.acting_player,
+    ) != (recipe.root_digest, recipe.seed, recipe.root_chooser):
+        raise ValueError(
+            f"snapshot {request.snapshot_id} root identity mismatch in slot {request.slot}"
+        )
+    return managym.SlotLoad.snapshot(local_slot, source, request.restore_options)
 
 
 class BufferedStreams:
@@ -67,10 +91,6 @@ class BufferedStreams:
         if count != self.num_envs:
             raise ValueError("producer row count differs from global streams")
 
-    def _owned_shards(self) -> Sequence[StreamShard]:
-        """Buffer binding and cleanup include parked sources as well as active streams."""
-        return self._shards
-
     def set_buffers(
         self,
         buffers: dict[str, Array],
@@ -94,7 +114,7 @@ class BufferedStreams:
                     action_overflow,
                     layout=layout,
                 )
-                for shard in self._owned_shards()
+                for shard in self._shards
             ]
         )
 
@@ -342,6 +362,63 @@ class BufferedStreams:
             mask, lambda native, selected: native.slot_metadata(selected)
         )
 
+    def _validate_slots(self, slots: Sequence[int]) -> None:
+        self._check()
+        if len(set(slots)) != len(slots) or any(
+            slot < 0 or slot >= self.num_envs for slot in slots
+        ):
+            raise ValueError("invalid or duplicate snapshot slots")
+
+    def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
+        """Freeze only requested decisions, preserving caller order across shards."""
+        self._validate_slots(slots)
+        selected = set(slots)
+        handles = self.snapshot_slots([i in selected for i in range(self.num_envs)])
+        captures = []
+        for slot in slots:
+            source = handles[slot]
+            assert source is not None
+            chooser = source.acting_player
+            if chooser not in (0, 1):
+                raise ValueError(f"slot {slot} has no decision to capture")
+            recipe = SnapshotRecipe.from_replay_json(source.to_replay_json(), chooser)
+            captures.append(
+                CapturedSnapshot(slot, recipe, source, source.state_digest, chooser)
+            )
+        return captures
+
+    def release_handles(self, handles: Sequence[object]) -> None:
+        """Detached native snapshots are released by their last Python owner."""
+
+    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
+        """Validate global source bindings, then submit one mixed load per active shard."""
+        slots = [r.slot for r in installs]
+        self._validate_slots(slots)
+        replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]] = {}
+        calls = []
+        offsets = []
+        for shard in self._shards:
+            loads = [
+                native_slot_load(
+                    bind_cold_start(request, replayed), request.slot - shard.start
+                )
+                for request in installs
+                if shard.start <= request.slot < shard.stop
+            ]
+            if loads:
+                calls.append(partial(shard.native.load_slots_into_buffers, loads))
+                offsets.append(shard.start)
+        results = {
+            offset + result.slot: InstalledSlot(
+                offset + result.slot,
+                result.source_digest or "",
+                result.acting_player if result.acting_player is not None else -1,
+            )
+            for offset, batch in zip(offsets, self._run(calls), strict=True)
+            for result in batch
+        }
+        return [results[slot] for slot in slots]
+
     def current_game_generations(self) -> list[int]:
         self._check()
         return [
@@ -397,7 +474,7 @@ class BufferedStreams:
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            for shard in self._owned_shards():
+            for shard in self._shards:
                 shard.native.close()
             self._shards.clear()
 
@@ -418,6 +495,7 @@ class ShardedVectorEnv(BufferedStreams):
         seed: int,
         workers: int,
         *,
+        auto_reset: bool = True,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
         games_path: Path | None = None,
@@ -441,6 +519,7 @@ class ShardedVectorEnv(BufferedStreams):
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
                     skip_trivial=self.skip_trivial,
+                    auto_reset=auto_reset,
                     decision_memory=decision_memory,
                     decision_memory_include_own=decision_memory_include_own,
                     player_policies=("agent", "agent"),
@@ -481,3 +560,47 @@ class ShardedVectorEnv(BufferedStreams):
     def close(self) -> None:
         self._pool.shutdown(wait=True, cancel_futures=True)
         super().close()
+
+
+def open_native_streams(
+    num_envs: int,
+    seed: int,
+    workers: int,
+    *,
+    auto_reset: bool,
+    decision_memory: bool,
+    decision_memory_include_own: bool,
+    games_path: Path | None = None,
+    record_fraction: float = 1.0,
+) -> BufferedStreams | CapturedVector:
+    """Select the collector transport while keeping fresh recording on its native slots."""
+    if workers != 1:
+        return ShardedVectorEnv(
+            num_envs,
+            seed,
+            workers,
+            auto_reset=auto_reset,
+            decision_memory=decision_memory,
+            decision_memory_include_own=decision_memory_include_own,
+            games_path=games_path,
+            record_fraction=record_fraction,
+        )
+    native = CapturedVector(
+        num_envs=num_envs,
+        seed=seed,
+        auto_reset=auto_reset,
+        decision_memory=decision_memory,
+        decision_memory_include_own=decision_memory_include_own,
+        skip_trivial=True,
+        player_policies=("agent", "agent"),
+        **(
+            {"games_path": games_path, "record_fraction": record_fraction}
+            if games_path is not None
+            else {}
+        ),
+    )
+    return (
+        native
+        if auto_reset
+        else BufferedStreams(num_envs, [StreamShard(0, num_envs, native)])
+    )

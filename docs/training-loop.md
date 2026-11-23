@@ -284,7 +284,8 @@ also handles strided rows in rectangular batches.
 To replay an existing root directly, build a recipe with
 `SnapshotRecipe.from_replay_json(raw, chooser)` from a `managym-snapshot-v1`
 export (preserving any recorded boundary interventions) or
-`SnapshotRecipe.from_inputs(game, digest, chooser)` from retained `GameInputs`.
+`SnapshotRecipe.from_inputs(game, digest, chooser)` from a retained positional
+action prefix. Use the native export for semantic Commands or interventions.
 Open a collector with `snapshots=True` (works with `workers` 1, 2 or 4;
 implied when `snapshot_bank` is supplied, or pass a custom `snapshot_vector`)
 and pass `snapshot_starts=[SnapshotBranch(snapshot_id, recipe, horizon=3)]` to
@@ -294,7 +295,9 @@ on `SnapshotBranch` to intervene at the root (default exact restore): sharing a
 `shuffle_libraries(seed=...)` seed across siblings gives Common Random Numbers.
 `forced_first_action` is for direct `snapshot_starts` only (rejected in grouped
 `BatchPlan` schedules); if the forced action ends the game on install, the
-branch settles immediately with zero sampled decisions.
+branch settles immediately with zero sampled decisions. A direct allocation that
+repeats one cold snapshot ID across workers replays its prefix once. Use a
+`SnapshotBank` to keep that handle for later allocations.
 
 ### RLOO baselines, stratified filtering and `PLR⊥`
 

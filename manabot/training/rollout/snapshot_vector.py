@@ -6,45 +6,74 @@ buffers. Every installation must advance the slot generation.
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from typing import Literal, Protocol, Self, runtime_checkable
+from dataclasses import dataclass, replace
+import json
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol, runtime_checkable
+import warnings
 
 import numpy as np
+from pydantic import Field
 
-from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
-from manabot.training.rollout.producers import (
-    BufferedStreams,
-    ObservationRead,
-    StreamShard,
-)
 import managym
-from managym.recording import GameInputs, RecordingOptions
+from managym.recording import GameInputs, record_from_row
+
+if TYPE_CHECKING:
+    from manabot.training.rollout.producers import BufferedStreams, ObservationRead
 
 
 @dataclass(frozen=True)
 class SnapshotRecipe:
     match: MatchConfig
     seed: int
-    actions: tuple[int, ...]
+    actions: tuple[int | str, ...]
     root_digest: str
     root_chooser: Literal[0, 1]
     decision_memory: bool
     decision_memory_include_own: bool
+    replay_json: Annotated[
+        str | None, Field(exclude_if=lambda value: value is None)
+    ] = None
 
     @classmethod
     def from_inputs(
         cls, game: GameInputs, root_digest: str, root_chooser: Literal[0, 1]
     ) -> "SnapshotRecipe":
         """Bind only the committed self-play prefix and its resolved native setup."""
+        if game.interventions or game.object_candidate_frames:
+            raise ValueError(
+                "snapshot interventions and object frames require native replay JSON"
+            )
         prefix = game.actions[: game.committed]
         if game.committed is not None and game.committed > len(game.actions):
             raise ValueError("snapshot inputs missing committed actions")
         actions = tuple(action for action in prefix if isinstance(action, int))
         if len(actions) != len(prefix):
             raise ValueError("snapshot inputs require externally chosen actions")
+        return cls._from_game(game, actions, root_digest, root_chooser, None)
+
+    @classmethod
+    def from_replay_json(cls, raw: str, chooser: Literal[0, 1]) -> "SnapshotRecipe":
+        """Retain a native replay, including Commands and boundary interventions."""
+        row = json.loads(raw)
+        if not isinstance(row, dict) or row.get("schema") != "managym-snapshot-v1":
+            raise ValueError("expected a managym-snapshot-v1 replay")
+        [game] = record_from_row(row).games
+        if game.end is None or game.end.digest is None or game.end.status == "complete":
+            raise ValueError("snapshot requires a live decision")
+        return cls._from_game(game, tuple(game.actions), game.end.digest, chooser, raw)
+
+    @classmethod
+    def _from_game(
+        cls,
+        game: GameInputs,
+        actions: tuple[int | str, ...],
+        digest: str,
+        chooser: Literal[0, 1],
+        raw: str | None,
+    ) -> "SnapshotRecipe":
         setup = game.setup()
         return cls(
             MatchConfig.from_players(
@@ -55,10 +84,11 @@ class SnapshotRecipe:
             ),
             game.seed,
             actions,
-            root_digest,
-            root_chooser,
+            digest,
+            chooser,
             game.decision_memory,
             game.decision_memory_include_own,
+            raw,
         )
 
 
@@ -126,194 +156,81 @@ class SnapshotVector(Protocol):
         action_overflow: Literal["error", "first-legal"] = "error",
         *,
         layout: managym.ObservationLayout,
-    ) -> Sequence[ObservationRead | managym.ObservationRead]: ...
+    ) -> Sequence["ObservationRead | managym.ObservationRead"]: ...
 
 
 SnapshotVectorFactory = Callable[[ObservationSpace, Match, int, int], SnapshotVector]
 
 
-def replay_prefix(
-    live: CapturedVector, recipe: SnapshotRecipe, hot_handle: object | None
-) -> None:
-    """Reset a replay stream and apply the committed decisions of a single game."""
-    game = live.games[0]
-    if (game.decision_memory, game.decision_memory_include_own) != (
-        recipe.decision_memory,
-        recipe.decision_memory_include_own,
-    ):
-        raise ValueError("decision memory settings differ")
-    setup = (
-        hot_handle
-        if isinstance(hot_handle, managym.GameSetup)
-        else Match(recipe.match).to_rust()
+def replay_snapshot(recipe: SnapshotRecipe) -> managym.GameSnapshot:
+    """Rebuild a detached source once from native or legacy positional history."""
+    if recipe.replay_json is not None:
+        return managym.GameSnapshot.from_replay_json(recipe.replay_json)
+    env = managym.Env(
+        seed=recipe.seed,
+        decision_memory=recipe.decision_memory,
+        decision_memory_include_own=recipe.decision_memory_include_own,
     )
-    live.reset_all_into_buffers(setup)
-    live.reset_seeds_into_buffers([recipe.seed])
-    generation = live.current_game_generations()
+    env.reset(Match(recipe.match).to_rust())
     for action in recipe.actions:
-        live.step_into_buffers([action])
-    if live.current_game_generations() != generation:
-        raise ValueError("action prefix crossed a game terminal")
+        if not isinstance(action, int):
+            raise ValueError("legacy snapshot requires positional actions")
+        _, _, ended, truncated, _ = env.step(action)
+        if ended or truncated:
+            raise ValueError("action prefix crossed a game terminal")
+    return env.snapshot()
 
 
-class InMemorySnapshotVector(BufferedStreams):
-    """Serial reference producer with independently resettable one-slot vectors.
+def bind_cold_start(
+    request: SlotInstall,
+    replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]],
+) -> SlotInstall:
+    """Keep one replay per cold root in the caller's allocation."""
+    recipe = request.recipe
+    if recipe is None or request.hot_handle is not None:
+        return request
+    cached = replayed.get(request.snapshot_id)
+    if cached is None:
+        source = replay_snapshot(recipe)
+        replayed[request.snapshot_id] = recipe, source
+    else:
+        existing, source = cached
+        if existing is not recipe and existing != recipe:
+            raise ValueError(f"snapshot {request.snapshot_id} has conflicting recipes")
+    return replace(request, hot_handle=source)
 
-    Each slot parks its fresh native source during replay. A hot handle keeps
-    the resolved native setup; both paths replay the committed action prefix.
-    Slot generations advance on native resets and when a parked source resumes.
-    Only fresh sources write game records and statistics: a continuation
-    replays a prefix its fresh game already recorded, so it is not a game.
-    """
 
-    @classmethod
+class InMemorySnapshotVector:
+    """Deprecated native one-worker factory, removed in 0.4.0."""
+
+    @staticmethod
     def factory(
-        cls, observation_space: ObservationSpace, match: Match, num_envs: int, seed: int
-    ) -> Self:
-        # open_collector supplies the resolved match at its ordinary reset boundary.
-        return cls(observation_space, num_envs, seed)
+        observation_space: ObservationSpace, match: Match, num_envs: int, seed: int
+    ) -> "BufferedStreams":
+        return InMemorySnapshotVector(observation_space, num_envs, seed)
 
-    def __init__(
-        self,
-        observation_space: ObservationSpace,
-        num_envs: int,
-        seed: int,
-    ) -> None:
-        memory = observation_space.config
-
-        def streams(recording: RecordingOptions) -> list[StreamShard]:
-            return [
-                StreamShard(
-                    i,
-                    i + 1,
-                    CapturedVector(
-                        num_envs=1,
-                        seed=min(seed + i, 2**64 - 1),
-                        seed_stride=num_envs,
-                        stream_offset=i,
-                        decision_memory=memory.max_decision_records > 0,
-                        decision_memory_include_own=memory.decision_memory_include_own,
-                        player_policies=("agent", "agent"),
-                        **recording,
-                    ),
-                )
-                for i in range(num_envs)
-            ]
-
-        self._generation_bumps = [0] * num_envs
-        self._fresh = streams({})
-        self._replay = streams({"record_fraction": 0.0, "statistics_path": None})
-        super().__init__(num_envs, self._fresh.copy())
-
-    def _owned_shards(self) -> Sequence[StreamShard]:
-        return (*self._fresh, *self._replay)
-
-    def set_buffers(
-        self,
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> None:
-        super().set_buffers(buffers, action_overflow, layout=layout)
-        self._buffers = buffers
-        self._layout = layout
-        self._action_overflow = action_overflow
-
-    def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
-        captures = []
-        for slot in slots:
-            if not 0 <= slot < self.num_envs:
-                raise ValueError(f"invalid capture slot {slot}")
-            live = self._shards[slot].native
-            [digest] = live.native.state_digests()
-            [chooser] = live.current_agent_indices()
-            if digest is None or chooser not in (0, 1):
-                raise ValueError(f"slot {slot} has no decision to capture")
-            game = live.games[0]
-            recipe = SnapshotRecipe.from_inputs(game, digest, chooser)
-            captures.append(
-                CapturedSnapshot(slot, recipe, game.setup(), digest, chooser)
-            )
-        return captures
-
-    def release_handles(self, handles: Sequence[object]) -> None:
-        """Native setup references are owned and released by their Python holders."""
-
-    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
-        if any(request.restore_options is not None for request in installs):
-            raise ValueError("restore options require a native snapshot producer")
-        results = []
-        for request in installs:
-            slot, recipe = request.slot, request.recipe
-            if not 0 <= slot < self.num_envs:
-                raise ValueError(
-                    f"snapshot {request.snapshot_id} has invalid slot {slot}"
-                )
-            shard = (self._fresh if recipe is None else self._replay)[slot]
-            live = shard.native
-            if recipe is None and self._shards[slot] is self._replay[slot]:
-                # Replay overwrote the shared buffers. The parked fresh game
-                # still owns its original seed, state and recording.
-                result_keys = ("terminated", "truncated", "rewards")
-                live.write_observations_for_players(
-                    live.current_agent_indices(),
-                    {
-                        k: v[slot : slot + 1]
-                        for k, v in self._buffers.items()
-                        if k not in result_keys
-                    },
-                    self._action_overflow,
-                    layout=self._layout,
-                )
-                for key in result_keys:
-                    self._buffers[key][slot] = 0
-                self._generation_bumps[slot] += 1
-            elif recipe is None:
-                live.reset_seeds_into_buffers(live.current_game_seeds())
-            else:
-                try:
-                    replay_prefix(live, recipe, request.hot_handle)
-                except Exception as exc:
-                    raise ValueError(
-                        f"snapshot {request.snapshot_id} installation failed: {exc}"
-                    ) from exc
-            [digest] = live.native.state_digests()
-            [chooser] = live.current_agent_indices()
-            if digest is None or (
-                recipe is not None
-                and (digest, chooser) != (recipe.root_digest, recipe.root_chooser)
-            ):
-                raise ValueError(
-                    f"snapshot {request.snapshot_id} root identity mismatch in slot {slot}"
-                )
-            self._shards[slot] = shard
-            results.append(InstalledSlot(slot, digest, chooser))
-        return results
-
-    def current_game_generations(self) -> list[int]:
-        return [
-            a.native.current_game_generations()[0]
-            + b.native.current_game_generations()[0]
-            + bump
-            for a, b, bump in zip(
-                self._fresh, self._replay, self._generation_bumps, strict=True
-            )
-        ]
-
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> list[ObservationRead]:
-        reads = super().write_observations_for_players(
-            players, buffers, action_overflow, layout=layout
+    def __new__(
+        cls, observation_space: ObservationSpace, num_envs: int, seed: int
+    ) -> "BufferedStreams":
+        from manabot.training.rollout.producers import (
+            BufferedStreams,
+            open_native_streams,
         )
-        generations = self.current_game_generations()
-        return [
-            ObservationRead(r.slot, r.player, generations[r.slot], r.seed, r.revision)
-            for r in reads
-        ]
+
+        warnings.warn(
+            "InMemorySnapshotVector is deprecated and will be removed in 0.4.0; "
+            "use open_collector(..., snapshots=True)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        memory = observation_space.config
+        streams = open_native_streams(
+            num_envs,
+            seed,
+            workers=1,
+            auto_reset=False,
+            decision_memory=memory.max_decision_records > 0,
+            decision_memory_include_own=memory.decision_memory_include_own,
+        )
+        assert isinstance(streams, BufferedStreams)
+        return streams
