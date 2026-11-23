@@ -22,7 +22,7 @@ use crate::{
     },
     state::{
         ability::{LinkedGrant, PlayWindow},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId},
+        game_object::{CardId, ObjectId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
     },
@@ -122,23 +122,8 @@ const AIRBEND_COST: &str = "{2}";
 pub(crate) const FORETELL_ACTION_COST: &str = "{2}";
 
 impl Game {
-    /// Airbend the permanent: exile it and, unless it was a token, let its
-    /// owner cast that exiled card for {2}.
-    pub(crate) fn airbend_permanent(&mut self, permanent_id: PermanentId) {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return;
-        };
-        let object_id = permanent.object;
-        let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| PlayGrant {
-            cost: Some(ManaCost::parse(AIRBEND_COST)),
-            ..PlayGrant::new(object, owner)
-        });
-    }
-
-    /// Airbend a spell (CR 701.65a): it leaves the stack for exile, and its
-    /// owner may cast that card for {2}; a copy ceases to exist (CR 707.10a).
-    pub(crate) fn airbend_spell(&mut self, object_id: ObjectId) {
+    /// Airbend a permanent or spell. Only a card that reaches exile gets the grant.
+    pub(crate) fn airbend(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
         self.exile_with_play_grant(object_id, |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
@@ -198,7 +183,7 @@ impl Game {
 
     pub(crate) fn complete_foretell(&mut self, player: PlayerId, card: CardId) {
         let turn = self.state.turn.turn_number;
-        self.move_object_with_entry(
+        let exiled = self.move_object_with_entry(
             self.state.object_of(card),
             ZoneType::Exile,
             ZoneEntry {
@@ -206,7 +191,7 @@ impl Game {
                 ..ZoneEntry::default()
             },
         );
-        self.grant_if_exiled(self.state.object_of(card), |object| PlayGrant {
+        self.grant_if_exiled(exiled, |object| PlayGrant {
             after_turn: Some(turn),
             foretold: true,
             ..PlayGrant::new(object, player)
@@ -328,10 +313,7 @@ impl Game {
         {
             return;
         }
-        if let Some(object) = self.state.live(object_id) {
-            let grant = grant(object);
-            self.state.cast_permissions.grants.push(grant);
-        }
+        self.state.cast_permissions.grants.push(grant(object_id));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2), and "until the
@@ -398,8 +380,8 @@ impl Game {
     /// What casting `card` under `grant` costs: its foretell cost, the
     /// grant's alternative, or its mana cost. `None` when it has no cost to
     /// pay (a land is played, not cast).
-    pub(crate) fn grant_cast_cost(&self, grant: &PlayGrant, object: ObjectId) -> Option<ManaCost> {
-        let definition = &self.state[object];
+    pub(crate) fn grant_cast_cost(&self, grant: &PlayGrant) -> Option<ManaCost> {
+        let definition = &self.state[grant.object];
         if definition.types.is_land() {
             return None;
         }

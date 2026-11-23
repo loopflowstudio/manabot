@@ -211,7 +211,7 @@ impl Game {
             match self.zone_cast_permission(player, object)? {
                 ZoneCastPermission::LibraryTop => self.state[object].mana_cost.clone(),
                 ZoneCastPermission::Flashback(cost) => Some(cost),
-                ZoneCastPermission::Grant(grant) => self.grant_cast_cost(grant, object),
+                ZoneCastPermission::Grant(grant) => self.grant_cast_cost(grant),
             }
         }
     }

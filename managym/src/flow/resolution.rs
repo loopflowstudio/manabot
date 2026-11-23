@@ -1188,18 +1188,11 @@ impl Game {
                 let selected = self.select(what, frame);
                 let mut bent = false;
                 for object in selected {
-                    match self.state.zones.zone_of(object) {
-                        Some(ZoneType::Battlefield) => {
-                            if let Ok(id) = self.lookup_current_permanent(object) {
-                                self.airbend_permanent(id);
-                                bent = true;
-                            }
-                        }
-                        Some(ZoneType::Stack) => {
-                            self.airbend_spell(object);
-                            bent = true;
-                        }
-                        _ => {}
+                    if matches!(self.state.zones.zone_of(object), Some(ZoneType::Stack))
+                        || self.lookup_current_permanent(object).is_ok()
+                    {
+                        self.airbend(object);
+                        bent = true;
                     }
                 }
                 if bent {
