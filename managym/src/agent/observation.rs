@@ -487,6 +487,16 @@ pub struct StackObjectData {
     pub spell: Option<SpellData>,
 }
 
+impl StackObjectData {
+    pub fn effective_mana_value(&self) -> Option<u8> {
+        self.spell.as_ref().map(|spell| {
+            spell
+                .mana_cost
+                .mana_value_at(self.x.clamp(0, i32::from(u8::MAX)) as u8)
+        })
+    }
+}
+
 /// One continuous-effect record (`state::effect`) affecting a player or
 /// permanent, as its holder's `effects` list shows it. Every record from a
 /// resolved spell or ability is public.
@@ -2400,7 +2410,7 @@ fn ward_life(cost: Option<&PaymentCost>) -> i32 {
 /// ward and for a ward whose price is its mana value.
 fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
     match cost {
-        Some(cost @ PaymentCost::Life(_)) => {
+        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard)) => {
             crate::cards::tokens::rules_tokens(cost, default_content_pack())
                 .expect("registered rules payload")
         }

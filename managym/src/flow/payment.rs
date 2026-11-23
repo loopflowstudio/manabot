@@ -122,6 +122,7 @@ impl CostComponent {
                     ..Help::default()
                 },
             },
+            PaymentCost::Discard => Self::Discard,
             PaymentCost::Life(life) => Self::Life(*life),
         }
     }
@@ -311,7 +312,7 @@ pub struct PaymentProgress {
     pub committed: bool,
     pub player: PlayerId,
     /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
-    /// `Life` (`CostComponent::resolving`).
+    /// `Life` or `Discard` (`CostComponent::resolving`).
     pub owed: CostComponent,
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub receipt: PaymentReceipt,
@@ -732,6 +733,21 @@ impl Game {
             .unwrap_or_default()
     }
 
+    pub(crate) fn pay_discard_cost(
+        &mut self,
+        player: PlayerId,
+        casting: Option<ObjectId>,
+        object: ObjectId,
+        receipt: &mut PaymentReceipt,
+    ) -> Result<(), AgentError> {
+        if !self.discard_candidates(player, casting).contains(&object) {
+            return Err(AgentError("discard cost must be a card in hand".into()));
+        }
+        let discarded = self.move_object(object, ZoneType::Graveyard);
+        receipt.contribute(discarded, How::Discarded, Toward::Printed);
+        Ok(())
+    }
+
     /// Pay the component being paid with `object`: tap it, discard it, exile
     /// it, or commit to sacrificing it. Taps, discards and exiles happen now;
     /// a sacrifice is recorded and happens as the whole cost completes, so no
@@ -795,17 +811,13 @@ impl Game {
                 }
             }
             CostComponent::Discard => {
-                if !self
-                    .discard_candidates(player, payment.operation.spell())
-                    .contains(&object)
-                {
-                    return Err(AgentError("discard cost must be a card in hand".into()));
-                }
+                self.pay_discard_cost(
+                    player,
+                    payment.operation.spell(),
+                    object,
+                    &mut payment.receipt,
+                )?;
                 self.pending_choice = None;
-                let discarded = self.move_object(object, ZoneType::Graveyard);
-                payment
-                    .receipt
-                    .contribute(discarded, How::Discarded, Toward::Printed);
                 payment.owed.remove(0);
             }
             CostComponent::ExileFromHand => {

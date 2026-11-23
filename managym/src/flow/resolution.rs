@@ -69,6 +69,7 @@ impl Game {
                 })
                 .count() as i32,
             EffectValue::X => i32::from(frame.x),
+            EffectValue::NegativeX => -i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TriggeringManaValue => match frame.context_target {
                 // A spell that has left the stack is read as the card it became.
@@ -129,6 +130,7 @@ impl Game {
             EffectValue::Fixed(value) => *value,
             EffectValue::Objects { .. }
             | EffectValue::X
+            | EffectValue::NegativeX
             | EffectValue::ExcessDamage
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
@@ -2586,7 +2588,7 @@ impl Game {
             Some(StackObject::Spell(spell)) => spell.x,
             _ => 0,
         };
-        cost.mana_value.saturating_add(cost.x.saturating_mul(x))
+        cost.mana_value_at(x)
     }
 }
 

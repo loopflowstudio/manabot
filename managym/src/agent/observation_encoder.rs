@@ -1544,7 +1544,8 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
     out[card::IS_TOKEN] = bool_to_f32(card.is_token);
     out[card::IS_ALLY] = bool_to_f32(card.is_ally);
     out[card::IS_LESSON] = bool_to_f32(card.is_lesson);
-    out[card::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
+    out[card::HAS_WARD] =
+        bool_to_f32(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
     out[card::WARD_COST] = card.ward_cost as f32 / 10.0;
     out[card::HAS_KICKER] = bool_to_f32(card.kicker_cost > 0);
     out[card::KICKER_COST] = card.kicker_cost as f32 / 10.0;
@@ -1668,7 +1669,8 @@ fn encode_permanent_features(
         out[permanent::IS_TOKEN] = bool_to_f32(permanent.is_token);
         out[permanent::IS_ALLY] = bool_to_f32(card.is_ally);
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
-        out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
+        out[permanent::HAS_WARD] =
+            bool_to_f32(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
     }
     out[out.len() - 1] = 1.0;
@@ -1724,6 +1726,9 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
     if let Some(x) = x {
         out[stack::HAS_X] = 1.0;
         out[stack::X] = x as f32 / 10.0;
+    }
+    if let Some(value) = object.effective_mana_value() {
+        out[stack::EFFECTIVE_MANA_VALUE] = f32::from(value) / 10.0;
     }
     out[stack::KICKED] = bool_to_f32(object.kicked);
     if let Some(card) = &object.spell {

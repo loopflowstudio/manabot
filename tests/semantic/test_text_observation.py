@@ -779,6 +779,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "object_id": "the spell's exact object alias",
         "owner_id": "Spell: owner",
         "is_copy": "copy",
+        "effective_mana_value": "mana value including announced X",
         "announced_x": "X = (zero when the announced value is zero)",
         "stack_object_id": "S<n>",
         "kind": "spell/activated ability/triggered ability",

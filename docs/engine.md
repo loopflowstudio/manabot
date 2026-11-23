@@ -1162,6 +1162,16 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
 
+Targeting Scavenger Regent with an opposing spell or ability triggers ward.
+The spell or ability’s controller can discard a card of their choice to keep the spell or ability
+on the stack. Declining counters it.
+
+Exude Toxin costs {X}{B}{B}. At X=1 its stack mana value is 3. Casting it
+without paying its mana cost fixes X at zero, spends no mana, and gives it
+stack mana value 2. Both viewers can inspect this value. The v11 stack row
+keeps the selected printing’s base value in `mana_value` and reports the
+on-stack value in `effective_mana_value`.
+
 Entry replacements supply instructions for the new object, rather than facts
 carried from the old one. An "enters as a copy" choice (CR 614.1c) supplies
 copiable values before the other entry replacements are considered (CR

@@ -337,6 +337,9 @@ impl Serialize for StackObjectJson<'_> {
         if value.x != 0 {
             map.serialize_entry("x", &value.x)?;
         }
+        if let Some(spell) = value.spell.as_ref().filter(|spell| spell.mana_cost.x > 0) {
+            map.serialize_entry("x_symbols", &spell.mana_cost.x)?;
+        }
         map.end()
     }
 }
@@ -832,6 +835,8 @@ pub(super) struct WirePermanentData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireStackObjectData {
+    #[serde(default)]
+    pub x_symbols: u8,
     /// Derived ability text; absent on spells and historical observations.
     #[serde(default)]
     pub description: Option<String>,
@@ -1022,7 +1027,10 @@ impl From<WireStackObjectData> for StackObjectData {
             x: w.x,
             granted_keywords: w.granted_keywords,
             kicked: w.kicked,
-            spell: w.card.map(SpellData::from_legacy_card),
+            spell: w.card.map(|mut card| {
+                card.characteristics.mana_cost.x = w.x_symbols;
+                SpellData::from_legacy_card(card)
+            }),
         }
     }
 }

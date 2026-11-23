@@ -5277,25 +5277,30 @@ fn announced_x_reaches_the_stack_row() {
     let front = cast(&mut s, "United Front");
     choose_mode(&mut s, 3);
     let id = object_id(&s, front);
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    let (slot, spell) = observation
-        .stack_objects
-        .iter()
-        .enumerate()
-        .find(|(_, object)| {
-            object
-                .spell
-                .as_ref()
-                .is_some_and(|spell| spell.object_id == id)
-        })
-        .unwrap();
-    assert!(spell.spell.as_ref().unwrap().has_announced_x);
-    assert_eq!(spell.x, 3);
-    assert!(listed_card_row(&observation, id).is_none());
-    let encoded = encoded_default(&observation);
-    let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];
-    assert_eq!(&row[stack::HAS_X..stack::HAS_X + 2], &[1.0, 0.3]);
-    assert_eq!(row[stack::SPELL], 1.0);
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let observation = Observation::for_player(s.game(), viewer);
+        let (slot, spell) = observation
+            .stack_objects
+            .iter()
+            .enumerate()
+            .find(|(_, object)| {
+                object
+                    .spell
+                    .as_ref()
+                    .is_some_and(|spell| spell.object_id == id)
+            })
+            .unwrap();
+        assert!(spell.spell.as_ref().unwrap().has_announced_x);
+        assert_eq!(spell.x, 3);
+        assert!(listed_card_row(&observation, id).is_none());
+        let encoded = encoded_default(&observation);
+        let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];
+        assert_eq!(&row[stack::HAS_X..stack::HAS_X + 2], &[1.0, 0.3]);
+        assert_eq!(row[stack::SPELL], 1.0);
+        assert_eq!(spell.effective_mana_value(), Some(5));
+        assert_eq!(row[stack::MANA_VALUE], 0.2);
+        assert_eq!(row[stack::EFFECTIVE_MANA_VALUE], 0.5);
+    }
 }
 
 // --- Viewer safety -------------------------------------------------------

@@ -9,6 +9,8 @@ from typing import Literal
 from blake3 import blake3
 import pytest
 
+from manabot.env.observation import ObservationSpace, column, encode_observation
+from manabot.semantic.text_observation import capture_text_decision
 import managym
 from managym.decision import Command, DecisionFrame
 from managym.recording import (
@@ -752,3 +754,98 @@ def test_pending_adventure_target_command_survives_cold_restore() -> None:
         assert spell.characteristics.name == "Spew Flame"
         assert spell.targets[0].permanent_id in {ogre.id for ogre in ogres}
     assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Swamp": 24, "Scavenger Regent": 12}),
+                managym.PlayerConfig("b", {"Mountain": 24, "Lightning Bolt": 12}),
+            ]
+        )
+    )
+    for _ in range(160):
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        obs = env.observation_for_player(0)
+        toxin = next((o for o in frame.offers if "Exude Toxin" in o["label"]), None)
+        if toxin and sum(not p.tapped for p in obs.agent_permanents) >= 3:
+            env.execute_semantic_command_json(
+                Command("omen", frame.revision, toxin["id"]).to_json()
+            )
+            break
+        index = next(
+            (
+                i
+                for verb in ("play_land", "pass_priority")
+                for i, offer in enumerate(frame.offers)
+                if offer["verb"] == verb
+            ),
+            0,
+        )
+        env.step(index)
+    else:
+        pytest.fail("ordinary play never offered the payable X spell")
+
+    pending_frame = env.semantic_decision_frame_json()
+    frame = DecisionFrame.from_json(pending_frame)
+    zero_branch = env.snapshot().restore()
+    zero = next(o for o in frame.offers if "X = 0" in o["label"])
+    zero_branch.execute_semantic_command_json(
+        Command("announce-zero", frame.revision, zero["id"]).to_json()
+    )
+    payment = DecisionFrame.from_json(zero_branch.semantic_decision_frame_json())
+    pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
+    zero_branch.execute_semantic_command_json(
+        Command("pay-two", payment.revision, pay["id"]).to_json()
+    )
+    [zero_spell] = zero_branch.observation_for_player(0).stack_objects
+    assert zero_spell.effective_mana_value == 2
+    assert (
+        sum(p.tapped for p in zero_branch.observation_for_player(0).agent_permanents)
+        == 2
+    )
+    assert env.semantic_decision_frame_json() == pending_frame
+
+    [one] = [offer for offer in frame.offers if "X = 1" in offer["label"]]
+    command = Command("announce-one", frame.revision, one["id"]).to_json()
+    restored = managym.GameSnapshot.from_replay_json(
+        env.snapshot().to_replay_json()
+    ).restore()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    before = json.loads(env.search_witness_json())["rng_continuation"]
+    space = ObservationSpace()
+    for branch in (env, restored):
+        assert "cost {X}{B}{B}; mana value 3" in capture_text_decision(branch).text
+        for viewer in (0, 1):
+            obs = branch.observation_for_player(viewer)
+            row = encode_observation(space, obs)["stack"][0]
+            assert row[column("stack", "mana_value")] == pytest.approx(0.2)
+            assert row[column("stack", "effective_mana_value")] == pytest.approx(0.3)
+            [item] = obs.stack_objects
+            assert item.characteristics is not None
+            assert item.characteristics.name == "Exude Toxin"
+            assert item.characteristics.mana_cost.mana_value == 2
+            assert item.effective_mana_value == 3
+        assert (
+            sum(p.tapped for p in branch.observation_for_player(0).agent_permanents)
+            == 3
+        )
+    for _ in range(2):
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        passed = next(o for o in frame.offers if o["verb"] == "pass_priority")
+        command = Command(
+            f"pass-{frame.revision}", frame.revision, passed["id"]
+        ).to_json()
+        assert restored.execute_semantic_command_json(
+            command
+        ) == env.execute_semantic_command_json(command)
+        if not env.observation_for_player(0).stack_objects:
+            break
+    assert not env.observation_for_player(0).stack_objects
+    assert json.loads(env.search_witness_json())["rng_continuation"] != before
+    assert env.search_witness_json() == restored.search_witness_json()
+    assert env.state_digest() == restored.state_digest()

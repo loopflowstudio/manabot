@@ -937,8 +937,7 @@ pub enum StaticAbility {
     /// ignored.
     CharacteristicPower(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
-    /// target" trigger, "counter it unless that player pays [cost]". The
-    /// cost is mana or a waterbend ("Ward—Waterbend {4}").
+    /// target" trigger, "counter it unless that player pays [cost]".
     Ward(PaymentCost),
     /// "You may look at the top card of your library any time" (CR 401.2).
     LookAtLibraryTop,

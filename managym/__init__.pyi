@@ -1133,6 +1133,7 @@ class StackObject:
     object_id: int | None
     owner_id: int | None
     is_copy: bool | None
+    effective_mana_value: int | None
     announced_x: int | None
     description: str | None
     stack_object_id: int

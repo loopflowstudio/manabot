@@ -1708,6 +1708,20 @@ impl Game {
             Decision::Payment(payment) => {
                 let player = payment.player;
                 let (cost, help) = match &payment.owed {
+                    CostComponent::Discard => {
+                        let mut actions: Vec<_> = self
+                            .discard_candidates(player, None)
+                            .into_iter()
+                            .map(|object| Action::SelectCard { player, object })
+                            .collect();
+                        actions.push(Action::Decline { player });
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::Discard,
+                            actions,
+                            focus: source_focus,
+                        });
+                    }
                     // Paying life is one action under manual and automatic
                     // payment alike.
                     CostComponent::Life(life) => {
@@ -1724,7 +1738,7 @@ impl Game {
                         });
                     }
                     CostComponent::Mana { cost, help } => (cost, *help),
-                    _ => unreachable!("a resolution payment owes mana or life"),
+                    _ => unreachable!("unexpected resolution payment component"),
                 };
                 let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
@@ -2260,6 +2274,21 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::Payment(payment), Action::SelectCard { object, .. })
+                if matches!(payment.owed, CostComponent::Discard) =>
+            {
+                if let Err(error) =
+                    self.pay_discard_cost(payment.player, None, *object, &mut payment.receipt)
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(error);
+                }
+                let Decision::Payment(payment) = suspended.decision else {
+                    unreachable!()
+                };
+                self.finish_resolution_payment(payment, suspended.frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
                 let tapped = match &mut payment.owed {
                     CostComponent::Mana { cost, help } => self.resolution_help_tap(
@@ -2290,7 +2319,7 @@ impl Game {
                         return Ok(());
                     }
                     CostComponent::Mana { cost, .. } => cost.clone(),
-                    _ => unreachable!("a resolution payment owes mana or life"),
+                    _ => unreachable!("unexpected resolution payment component"),
                 };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
                     payment.committed = true;

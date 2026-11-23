@@ -10,7 +10,51 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![teval_arbiter_of_virtue(), twinmaw_stormbrood()]
+    vec![
+        teval_arbiter_of_virtue(),
+        twinmaw_stormbrood(),
+        scavenger_regent(),
+    ]
+}
+
+fn scavenger_regent() -> CardDefinition {
+    use managym_state::{
+        ability::{ObjectSelector, PaymentCost, Scope},
+        card::InsetSpell,
+        effect::Modification,
+    };
+    let toxin = PrintedCharacteristics {
+        name: "Exude Toxin".into(),
+        mana_cost: Some(ManaCost::parse("{X}{B}{B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Omen".into()],
+        spell_effects: vec![Effect::until_end_of_turn(
+            ObjectSelector::each(Scope::Battlefield, CardPredicate {
+                not_subtypes: vec!["Dragon".into()], ..CardPredicate::creature()
+            }),
+            Modification::ModifyPt { power: EffectValue::NegativeX, toughness: EffectValue::NegativeX },
+        )],
+        text_box: "Each non-Dragon creature gets -X/-X until end of turn. (Then shuffle this card into its owner's library.)".into(),
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "tdm.scavenger_regent",
+        scryfall_id: "0d4b46a3-847a-44a7-9f68-2cb4657cad61",
+        printed: PrintedCharacteristics {
+            name: "Scavenger Regent".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::Ward(PaymentCost::Discard)],
+            text_box: "Flying\nWard—Discard a card.".into(),
+            inset: Some(InsetSpell::Omen(toxin.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn twinmaw_stormbrood() -> CardDefinition {

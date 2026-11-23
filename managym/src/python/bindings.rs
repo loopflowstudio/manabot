@@ -2927,6 +2927,10 @@ impl PyStackObject {
         self.data.spell.as_ref().map(|s| s.is_copy)
     }
     #[getter]
+    fn effective_mana_value(&self) -> Option<u8> {
+        self.data.effective_mana_value()
+    }
+    #[getter]
     fn announced_x(&self) -> Option<i32> {
         self.data
             .spell

@@ -535,6 +535,7 @@ pub enum EffectValue {
     Fixed(i32),
     /// The resolving spell's announced X (CR 107.3).
     X,
+    NegativeX,
     /// Creatures `controller` controls with +1/+1 counters on them (Dai Li Agents).
     CreaturesWithCounters,
     BattlefieldMatching {
@@ -618,17 +619,17 @@ pub enum PaymentCost {
     Mana(ManaCost),
     Waterbend { generic: u8 },
     Life(u32),
+    Discard,
 }
 
 impl PaymentCost {
-    /// The mana this cost states, or `None` for a cost paid in life: a life
-    /// cost is not {0}. For readers of a definition (a ward's price); a
+    /// The mana this cost states, or `None` for a nonmana payment. For readers of a definition (a ward's price); a
     /// payment being made owes a `CostComponent`.
     pub fn mana(&self) -> Option<ManaCost> {
         match self {
             Self::Mana(cost) => Some(cost.clone()),
             Self::Waterbend { generic } => Some(ManaCost::default().with_generic(*generic)),
-            Self::Life(_) => None,
+            Self::Life(_) | Self::Discard => None,
         }
     }
 }

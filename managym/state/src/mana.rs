@@ -435,6 +435,11 @@ pub struct ManaCost {
 }
 
 impl ManaCost {
+    /// Mana value on the stack, counting each printed {X} at its announced value.
+    pub fn mana_value_at(&self, x: u8) -> u8 {
+        self.mana_value.saturating_add(self.x.saturating_mul(x))
+    }
+
     pub fn parse(text: &str) -> Self {
         let mut out = ManaCost::default();
         let mut chars = text.chars().peekable();

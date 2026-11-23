@@ -758,6 +758,7 @@ fn move_description(
 fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
+        EffectValue::NegativeX => "minus the announced value of X".into(),
         EffectValue::X => "the announced value of X".into(),
         EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
             let cards = match predicate {
@@ -853,6 +854,7 @@ fn payment_description(cost: &PaymentCost) -> String {
         PaymentCost::Mana(cost) => cost_description(cost),
         PaymentCost::Waterbend { generic } => format!("waterbend {generic}"),
         // Read after "pays" and "You may pay": the amount only.
+        PaymentCost::Discard => "a discarded card".into(),
         PaymentCost::Life(life) => format!("{life} life"),
     }
 }

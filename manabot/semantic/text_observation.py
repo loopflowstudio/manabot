@@ -1224,7 +1224,7 @@ class _Renderer:
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "
-                    f"mana value {card.mana_cost.mana_value}{_type_flags(card.card_types)}"
+                    f"mana value {item.effective_mana_value}{_type_flags(card.card_types)}"
                     f"{f'; keywords {keywords}' if keywords else ''}; unlisted type and keyword flags false; "
                     f"legendary {_yes(card.is_legendary)}. Rules: {card.text_box or '(empty)'}"
                 )

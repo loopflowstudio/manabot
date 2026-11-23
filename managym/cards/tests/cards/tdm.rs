@@ -359,3 +359,109 @@ fn free_exile_grant_casts_charring_bite_with_no_mana() {
     settle(&mut s);
     assert_eq!(zone_of(&s, spell), Some(ZoneType::Library));
 }
+
+#[test]
+fn scavenger_regent_exude_toxin_paid_and_free() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::zone_of,
+        play::{choose, choose_mode},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        flow::cast_permission::PlayGrant,
+        state::{card::SpellProfile, mana::ManaCost},
+    };
+    for (free, x) in [(false, 0), (false, 2), (true, 0)] {
+        let mut s = five_color_unfunded_setup(&["Scavenger Regent", "Gray Ogre"]);
+        let dragon = s.force_permanent_on_battlefield(1, "Scavenger Regent");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let ogre = card_of(&s, ogre);
+        let spell = move_from_library(
+            &mut s,
+            0,
+            "Scavenger Regent",
+            if free {
+                ZoneType::Exile
+            } else {
+                ZoneType::Hand
+            },
+        );
+        if free {
+            s.game_mut().state.cast_permissions.grant(PlayGrant {
+                cost: Some(ManaCost::default()),
+                ..PlayGrant::new(spell, PlayerId(0))
+            });
+        }
+        s.set_player_mana_pool(0, "2BB");
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        s.game_mut().scenario_refresh_priority().unwrap();
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == spell),
+        );
+        if !free {
+            choose_mode(&mut s, x);
+        }
+        assert_eq!(
+            top_spell(&s).spent.total() as usize,
+            if free { 0 } else { 2 + x }
+        );
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let observation = Observation::for_player(s.game(), viewer);
+            let item = &observation.stack_objects[0];
+            assert_eq!(item.spell.as_ref().unwrap().name, "Exude Toxin");
+            assert_eq!(item.x, x as i32);
+            assert_eq!(item.effective_mana_value(), Some(2 + x as u8));
+        }
+        let rng = s.game().state.rng.get_word_pos();
+        settle(&mut s);
+        assert_ne!(s.game().state.rng.get_word_pos(), rng);
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Library));
+        assert_eq!(
+            zone_of(&s, ogre),
+            Some(if x == 2 {
+                ZoneType::Graveyard
+            } else {
+                ZoneType::Battlefield
+            })
+        );
+        assert_eq!(s.game().characteristics(dragon).pt(), (4, 4));
+    }
+}
+
+#[test]
+fn scavenger_regent_ward_offers_each_discard_and_decline() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{permanent, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{agent::action::Action, state::game_object::Target};
+    let mut s = five_color_unfunded_setup(&["Scavenger Regent", "Lightning Bolt"]);
+    let dragon = s.force_permanent_on_battlefield(1, "Scavenger Regent");
+    let bolt = move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Hand);
+    let cards =
+        ["Mountain", "Forest"].map(|name| move_from_library(&mut s, 0, name, ZoneType::Hand));
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, bolt);
+    assert!(s.choose_target(Target::Permanent(dragon)));
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(offered_cards(&s).len(), 2);
+    let mut declined = fork_choosing(&s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut declined);
+    assert_eq!(permanent(&declined, dragon).damage, 0);
+    for card in cards {
+        assert!(offered_cards(&s).contains(&card));
+    }
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard {object,..} if *object == cards[0]),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, cards[0]), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, cards[1]), Some(ZoneType::Hand));
+    assert_eq!(permanent(&s, dragon).damage, 3);
+}
