@@ -1,13 +1,12 @@
 use std::hint::black_box;
 
-#[cfg(not(feature = "benchmark"))]
-#[path = "../src/benchmark_allocations.rs"]
-mod benchmark_allocations;
-#[cfg(feature = "benchmark")]
-use managym::benchmark_allocations;
-
-use managym::{match_fixtures::build_fixture, Game};
+use managym::{allocator, match_fixtures::build_fixture, Game};
 use serde::Serialize;
+
+// In the default build the library leaves allocator selection to the binary.
+#[cfg(not(any(feature = "benchmark", feature = "mimalloc")))]
+#[global_allocator]
+static ALLOCATOR: allocator::CountingAllocator = allocator::CountingAllocator;
 
 const FIXTURE_ID: &str = "interactive-heavy-80-w4-v1";
 const WARMUP_CLONE_COUNT: usize = 64;
@@ -49,9 +48,9 @@ struct AllocationReceipt {
 }
 
 fn measure(operation: impl FnOnce()) -> AllocationCounts {
-    benchmark_allocations::start();
+    allocator::start();
     operation();
-    let (allocations, allocated_bytes) = benchmark_allocations::stop();
+    let (allocations, allocated_bytes) = allocator::stop();
     AllocationCounts {
         allocations,
         allocated_bytes,
@@ -108,6 +107,10 @@ fn clone_receipt(baseline: AllocationCounts, expanded: AllocationCounts) -> Clon
 /// Cards hold definitions by shared pointer, so a clone's cost is the mutable
 /// state's alone, however large the definitions behind it.
 #[test]
+#[cfg_attr(
+    all(feature = "mimalloc", not(feature = "benchmark")),
+    ignore = "run with --features benchmark,mimalloc to count allocations under mimalloc"
+)]
 fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
     let root = build_fixture(FIXTURE_ID).expect("deterministic fixture");
     let baseline_game = root.clone();

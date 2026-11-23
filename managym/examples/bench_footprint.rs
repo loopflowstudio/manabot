@@ -56,18 +56,27 @@ fn main() -> Result<(), String> {
         "cold" => true,
         _ => return Err(USAGE.into()),
     };
-    println!("{}", json!({"mode": mode, "sizes": inline_sizes()}));
-    let (midgame, midgame_heap) = measure_fixture("interactive-midgame-48-w4-v1", cold)?;
-    let (heavy, heavy_heap) = measure_fixture("interactive-heavy-80-w4-v1", cold)?;
+    println!(
+        "{}",
+        json!({"allocator": managym::allocator::NAME, "mode": mode, "sizes": inline_sizes()})
+    );
+    let midgame = measure_fixture("interactive-midgame-48-w4-v1", cold)?;
+    let heavy = measure_fixture("interactive-heavy-80-w4-v1", cold)?;
+    for fixture in [&midgame, &heavy] {
+        println!("{}", json!(fixture.position));
+        for row in std::iter::once(&fixture.game).chain(&fixture.fields) {
+            println!("{}", json!(row));
+        }
+    }
     let Some(available_mib) = available_mib else {
         return Ok(());
     };
-    admit_bank(midgame_heap, heavy_heap, available_mib)?;
+    admit_bank(midgame.game.bytes, heavy.game.bytes, available_mib)?;
     let mut bank = Vec::with_capacity(MAX_BANK);
     for count in [0, 1000, MAX_BANK] {
         while bank.len() < count {
-            bank.push(midgame.clone());
-            bank.push(heavy.clone());
+            bank.push(midgame.root.clone());
+            bank.push(heavy.root.clone());
         }
         println!("{}", json!({"bank": count, "rss_kib": rss_kib()?}));
         black_box(&bank);

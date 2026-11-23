@@ -1,5 +1,6 @@
 """Time four-worker buffered steps and hash the contiguous arrays between calls."""
 
+import argparse
 from contextlib import closing
 import hashlib
 import json
@@ -14,6 +15,18 @@ import managym
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expect-allocator", choices=("system", "mimalloc"))
+    args = parser.parse_args()
+    if managym.ALLOCATION_COUNTING:
+        parser.error(
+            "allocation counting is enabled; rebuild without the benchmark feature"
+        )
+    if args.expect_allocator and args.expect_allocator != managym.NATIVE_ALLOCATOR:
+        parser.error(
+            f"expected allocator {args.expect_allocator}, loaded {managym.NATIVE_ALLOCATOR}"
+        )
+
     streams = 16
     batches = 128
     seed = 24
@@ -48,6 +61,7 @@ def main() -> None:
     print(
         json.dumps(
             {
+                "allocator": managym.NATIVE_ALLOCATOR,
                 "steps": steps,
                 "seconds": seconds,
                 "steps_per_s": steps / seconds,

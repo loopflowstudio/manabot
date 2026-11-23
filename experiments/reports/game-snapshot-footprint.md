@@ -102,7 +102,7 @@ The 2,048 decisions produced SHA-256 `6e1db496eca5346db1aa0546fa9145767bf20a5e28
 Reproduce the prefix with the checkout's release extension in a fresh process.
 
 ```sh
-uv run --extra play python scripts/bench_sharded_collection.py
+uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator system
 ```
 
 ## Allocation candidates
@@ -126,4 +126,13 @@ Total search times in execution order were 53.886, 64.565, 64.937 and 54.855 s. 
 
 Routing the counting allocator through mimalloc reproduced every inline size, per-field request count, requested byte total and fixture witness. Its ordinary bank read 15,344 / 56,464 / 460,528 KiB at 0 / 1,000 / 10,000 clones (increases of 40.16 / 434.75 MiB). The cold bank read 14,784 / 56,112 / 456,768 KiB (40.36 / 431.62 MiB). Each RSS point has one reading per mode. At this bank size the throughput gain came with a small observed reduction in resident memory.
 
-Carry an opt-in native Rust allocator into implementation. Keep allocation diagnostics able to count requests on the selected allocator, and build and test the extension that four-worker collection actually imports. Validate the feature on Linux before considering a default for training there. The local comparison used the two allocator variants of the task base; CI owns comparison with the committed budget reference.
+The native Cargo feature `mimalloc` retains the allocator used in this trial. The system allocator remains the default. Build the Rust budget examples with `--features mimalloc` for timing, or build `bench_footprint` with `--features benchmark,mimalloc` for request counts. Its opening JSON line identifies the backing allocator.
+
+Run the four-worker prefix against the local mimalloc extension.
+
+```sh
+uv run --extra play maturin develop --release --manifest-path managym/Cargo.toml --features python,mimalloc
+uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
+```
+
+For the system comparison, rebuild with `--features python` and pass `--expect-allocator system`. Both release wheels reported the expected allocator with counting disabled and reproduced the 2,048-decision digest above. Requesting mimalloc with the system wheel loaded stopped the script before timing. These short macOS samples support the opt-in feature. A Linux training default needs matched Linux measurements. CI compares the default engine with the committed Engine Budget reference.
