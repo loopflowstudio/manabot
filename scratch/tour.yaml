@@ -1,4 +1,4 @@
-at: 9ff136199c0355ffec59952f848a405c482eaed9
+at: 9de9c111cd290aaa21fc3074f4d2ceb43364a503
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -22,6 +22,12 @@ first:
     why: Trace the paid Equipment into the receipt
   - path: managym/cards/src/msh.rs
     why: Follow the Cube sacrifice into turn control
+  - path: managym/src/flow/action.rs
+    why: Match exile labels to the visible Equipment
+  - path: manabot/semantic/text_observation.py
+    why: Distinguish activation source from exile cost
+  - path: tests/academy/test_bracelet_offers.py
+    why: Follow both Commands through targeting and payment
   - path: managym/cards/tests/cards/eoe.rs
     why: Compare manual and automatic payment branches
   - path: managym/cards/tests/cards/msh.rs
