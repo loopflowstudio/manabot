@@ -74,6 +74,14 @@ The catalog adds `fdn.fiendish_panda` and `m21.heartfire_immolator`. Panda and S
 
 At `73f608af`, retargeting reads the announced clause for each slot directly. Sibling distinctness and combined mana-value bounds stay scoped to that clause. Panda and Immolator close the two additional object-lifetime witnesses. Four of 81 primary FDN rows are delivered.
 
+### Behavior review at 11f107c0
+
+Four directed debug fixtures passed again: Panda snapshot and Command replay, live source-power rechecks during retargeting and resolution, Immolator damage after source reentry, and Sandbender reanimation. Panda’s two viewer frames agreed across restores. This checks deterministic projection; the hidden-hand permutation and stale Command checks remain integrated obligations. The pair uses existing cost and token expressions.
+
+**Open consumer defect.** Stop the Immolator fixture after sacrifice, before resolving its activation. The Wurm will take three. The public stack record in `agent/observation.rs::StackObjectData` carries the source identity, printed definition and effect description, but omits the departed source’s effective power. Neither the stack tensor row nor the stack text can report the three from that record. Compare the same activation at base power two and after prowess, with history disabled. Project the public value for this source-relative read through the native observation and check both values in v11, text and Academy against the actual damage. Reuse the exact-source rules lookup.
+
+The working phase remains open for this projection and 77 primary rows. Lunar Convocation is the next authored interaction. Gate owns the broad suites and the later performance and integrated checks below.
+
 ## Next slice · Lunar Convocation
 
 Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections. Derive each intervening-if condition from the controller’s turn record when matching the end-step event and when resolving the ability. A card-local history flag would duplicate that record.
