@@ -178,6 +178,19 @@
       "U"
     ]
   },
+  "Anthem of Champions": {
+    "name": "Anthem of Champions",
+    "mana_cost": "{G}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +1/+1.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
   "Appa, Loyal Sky Bison": {
     "name": "Appa, Loyal Sky Bison",
     "mana_cost": "{4}{W}{W}",
@@ -2744,6 +2757,20 @@
     "oracle_text": "Destroy target artifact or land an opponent controls. Its controller may search their library for a basic land card, put it onto the battlefield tapped, then shuffle.\nDraw a card.",
     "colors": [
       "R"
+    ]
+  },
+  "Prideful Parent": {
+    "name": "Prideful Parent",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Cat",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, create a 1/1 white Cat creature token.",
+    "colors": [
+      "W"
     ]
   },
   "Prismatic Vista": {

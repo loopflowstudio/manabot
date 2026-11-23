@@ -814,3 +814,30 @@ fn token_copy_of_arahbo_triggers_on_its_own_entry_once() {
     assert_eq!(cats.len(), 1);
     assert_eq!(s.game().characteristics(cats[0]).pt(), (2, 2));
 }
+
+#[test]
+fn anthem_bonuses_parent_and_its_cat_while_in_play() {
+    let mut s = five_color_setup(&["Anthem of Champions", "Prideful Parent"]);
+    let opponent = s
+        .game_mut()
+        .create_token("token.cat_1_1_w", PlayerId(1), false)
+        .unwrap();
+    let anthem = enter_and_settle(&mut s, "Anthem of Champions");
+    enter_and_settle(&mut s, "Prideful Parent");
+    let parent = permanent_named(&s, "Prideful Parent");
+    let cats = s.battlefield_permanents_named(0, "Cat");
+    assert_eq!(cats.len(), 1);
+    for bonus in [1, 0] {
+        if bonus == 0 {
+            move_card(&mut s, anthem, ZoneType::Graveyard);
+        }
+        let view = s.game().characteristics(parent);
+        assert_eq!(view.pt(), (2 + bonus, 2 + bonus));
+        assert!(view.keywords.has(Keyword::Vigilance));
+        assert_eq!(
+            s.game().characteristics(cats[0]).pt(),
+            (1 + bonus, 1 + bonus)
+        );
+        assert_eq!(s.game().characteristics(opponent).pt(), (1, 1));
+    }
+}

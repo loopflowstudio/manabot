@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter and Regal Caracal. Eleven cards have documented deferrals and 204 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent and Anthem of Champions. Twelve cards have documented deferrals and 201 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -27,7 +27,7 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Run Away Together remains deferred.** With two creatures controlled by one player and none by the other, the spell has no legal pair. With one creature per player, changing control of one in response makes both targets illegal. If one leaves instead, its last known controller determines whether the surviving creature returns. These are acceptance positions for the missing definition. Native `TargetRequirement` has no different-controller relation, and `resolution_targets` rechecks each target independently except for shared creature type. The shared targeting authority needs the relation at selection and resolution. [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
 
-After the Prideful Parent and Anthem witness, audit Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
+The next Slice 2 group is per-source lifelink and life-gain triggers. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 
@@ -87,8 +87,9 @@ Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 
 - **Different controllers:** Run Away Together needs one two-creature targeting clause. In `flow/play.rs`, `remaining_legal_targets` excludes previously chosen objects but accepts another creature with the same controller. In `flow/resolution.rs`, `resolution_targets` rechecks each slot and has a group check only for shared creature type. Separate caster-relative clauses would wrongly reject a pair whose creatures exchanged controllers before resolution. Defer to choice continuations.
 
+- **Drakuseth, Maw of Flames (choice continuations).** The native test `trigger_target_distinctness_is_enforced_per_clause_at_submission` rejects duplicates within a clause and accepts the same object again in the next clause. Retargeting also checks distinctness only within the clause. The requirement’s `another` excludes the source, which is itself a legal target here. At resolution, `DealDamage` assigns one amount to every legal recipient of its active clause. Separate clauses could assign 4 and 3, but would commit separate damage batches for one simultaneous instruction. Pending support for excluding targets chosen in an earlier clause and applying both amounts in one batch.
+
 Candidates still to verify:
-- **Cross-target relational constraints:** `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
 - **Reveal-until-matching with random bottom:** `Spinner of Souls`.
 - Any additional row identified in Step 0 whose printed text requires a substantial new authority from a parallel track (e.g., verify `Circuitous Route` basic-or-Gate union search, `Campus Guide` search-shuffle-then-top, `Goblin Oriflamme` / `Kitesail Corsair` while-attacking static, `Pirate's Cutlass` entry attach).
 
@@ -100,8 +101,8 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 The Cat entry tests above cover the previous iteration's requests. The four authored cards now use `Ability::when_enters` in `managym/state/src/ability.rs` for entry triggers without an intervening condition. The subject still distinguishes Arahbo entering itself from another qualifying Cat entering. Regal Caracal uses one continuous ability for both grants and a separate printed token face for intrinsic lifelink.
 
-1. **Next playable position.** Author Prideful Parent and Anthem of Champions. With Anthem already in play, resolve Parent's entry trigger using the ordinary white Cat face. Check the effective power and toughness of Parent and its token before and after Anthem leaves, Parent's printed vigilance, and an opposing creature as a control. Apply the slice checks below and update both ledger rows.
-2. **Independent targeting audit.** Trace Drakuseth's primary target and its optional secondary targets through selection and resolution. Record which native rule keeps the primary out of the secondary group and assigns damage to each, or document the missing authority in the ledger. Continue partitioning the 204 unaudited rows by capability before authoring each group.
+1. **Parent and Anthem.** The directed FDN position resolves Parent’s entry with Anthem in play. Parent and its single ordinary Cat are 3/3 and 2/2, then 2/2 and 1/1 after Anthem leaves. Parent retains vigilance and the opposing Cat stays 1/1 throughout.
+2. **Targeting audit complete.** Drakuseth remains pending as documented above. Both authored rows and Drakuseth’s obligation are recorded in the FDN ledger.
 3. **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
    - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.
    - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).

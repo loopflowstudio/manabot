@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        anthem_of_champions(),
         arahbo_the_first_fang(),
         blasphemous_edict(),
         claws_out(),
@@ -25,6 +26,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         kellan_planar_trailblazer(),
         lightshell_duo(),
         luminous_rebuke(),
+        prideful_parent(),
         sire_of_seven_deaths(),
     ]
 }
@@ -328,6 +330,53 @@ fn helpful_hunter() -> CardDefinition {
                 }],
             )],
             text_box: "When this creature enters, draw a card.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn prideful_parent() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.prideful_parent",
+        scryfall_id: "b742117a-8a72-43b9-b05d-274829d138a2",
+        printed: PrintedCharacteristics {
+            name: "Prideful Parent".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+            )],
+            text_box: "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, create a 1/1 white Cat creature token.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn anthem_of_champions() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.anthem_of_champions",
+        scryfall_id: "42fe3a40-9cbe-4235-86f9-32576aaebba8",
+        printed: PrintedCharacteristics {
+            name: "Anthem of Champions".into(),
+            mana_cost: Some(ManaCost::parse("{G}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::YouControl(CardPredicate::creature()),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            })],
+            text_box: "Creatures you control get +1/+1.".into(),
             ..Default::default()
         },
         ..Default::default()
