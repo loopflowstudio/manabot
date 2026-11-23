@@ -755,6 +755,8 @@ def open_collector(
     """
     if snapshot_bank is not None and snapshot_vector is None:
         raise ValueError("snapshot bank requires a snapshot vector")
+    if snapshot_vector is not None and workers != 1:
+        raise ValueError("snapshot collection requires workers=1")
     if snapshot_vector is not None and (
         opponent_mode != "self"
         or learning_seats == "one"

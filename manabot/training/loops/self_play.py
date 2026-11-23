@@ -354,6 +354,21 @@ def self_play_collector(
         if scorer is not None and scorer is not snapshot_bank.scorer:
             raise ValueError("supplied snapshot bank already defines its scorer")
         scorer = snapshot_bank.scorer
+    if settings.snapshot is None:
+        if scorer is not None or capture_predicate is not None:
+            raise ValueError("scorer and capture_predicate require snapshot settings")
+    elif scorer is None:
+        if settings.snapshot.signal == "action_value_spread":
+            raise ValueError(
+                "self-play collects no action values for action_value_spread; supply a custom scorer"
+            )
+        if (
+            settings.snapshot.signal == "wdl_entropy"
+            and settings.model.value_kind != "categorical_wdl"
+        ):
+            raise ValueError(
+                "wdl_entropy requires a categorical_wdl critic or a custom scorer"
+            )
     if snapshot_state is not None:
         if settings.snapshot is None:
             raise ValueError("resuming a snapshot bank requires its snapshot settings")
@@ -782,6 +797,8 @@ def step(
                         settings.learning,
                         policy,
                     )
+                    assert plan.receipt is not None
+                    prepared = plan.bank.prepare_commit(plan.receipt, targets.signals)
                     metrics = learn(
                         settings, learner, ema, counts, batch, rng, targets=targets
                     )
@@ -789,8 +806,7 @@ def step(
                     metrics["decision_memory"] = learner.agent.memory_gates()
                 synchronize(device)
                 if plan is not None:
-                    assert plan.receipt is not None
-                    plan.bank.commit(plan.receipt, targets.signals)
+                    plan.bank.publish(prepared)
                     counts.snapshot_bank = plan.bank.state()
     except NumericalError as error:
         try:

@@ -202,8 +202,8 @@ seats, complete-game closure and a self-play behavior policy. Snapshot collectio
 and adaptive matchup sampling each own the episode schedule.
 
 Save this recipe as `snapshot_recipe.py`. It runs the single-process Python
-vector, which ignores `workers`. A recipe may also supply its own buffered
-`SnapshotVector` instance or a factory taking
+vector. Snapshot collection requires `workers=1`. A recipe may also supply its
+own buffered `SnapshotVector` instance or a factory taking
 `(observation_space, match, num_envs, seed)`.
 
 ```python
@@ -262,9 +262,10 @@ legal action count and current branch.
 The replay allowance is `min(replay_fraction, 1 - fresh_floor)` of episode
 starts. An empty bank starts fresh games and accrues no credit. Once the
 allowance funds a whole group, free streams draw its `group_size` siblings.
-At the batch floor they finish outstanding siblings and retries. A retry spends a replay start and can borrow against future fresh starts.
-Each group has up to `max_group_retries` retries (default one). Failed episodes lose their rows and captures. Exhausting a
-group's retries discards every sibling. [Game failures](training.md#game-failures)
+At the batch floor they finish outstanding siblings and retries. A retry spends
+a replay start and can borrow against future fresh starts. Each group has up to
+`max_group_retries` retries (default one). Failed episodes lose their rows and
+captures. Exhausting a group's retries discards every sibling. [Game failures](training.md#game-failures)
 
 `horizon=H` counts surfaced decisions across both seats of each continuation.
 At a terminal, each seat that acted receives its own result. At a horizon cut,
@@ -289,7 +290,11 @@ critic target is the mean across all siblings. Scalar returns use the rule's
 outcome or the frozen WDL distribution, with win probability minus loss
 probability for the actor. Descendants and singletons use the ordinary lambda
 targets. `root_actor_weight` on either learning rule scales the actor's root
-contribution (default 1).
+contribution (default 1). Each head scales its weights to mean one over the
+rows it trains in the whole batch. A minibatch containing only fresh rows
+therefore still reflects their weight relative to snapshot rows. Collection
+and reference KL diagnostics average over the trained rows of the reported
+minibatch.
 
 The advantage filter selects eligible rows independently within each
 `episode_source`. Diagnostics in `source_selection` report eligible and
@@ -330,16 +335,20 @@ with bank.begin_batch() as plan:
     batch = collect(collector, behavior_agent, num_steps, snapshot_plan=plan)
     admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
     targets = compute_batch_targets(backend, learner, admitted, learning, behavior_agent)
-    update_damped_iteration(backend, learner, batch, learning, iteration, targets=targets)
     assert plan.receipt is not None
-    bank.commit(plan.receipt, targets.signals)
+    prepared = bank.prepare_commit(plan.receipt, targets.signals)
+    update_damped_iteration(backend, learner, batch, learning, iteration, targets=targets)
+    bank.publish(prepared)
 ```
 
 Import `compute_batch_targets` from `manabot.training.updates.targets`. PPO
 also accepts `targets=`. For action-value spread, supply `action_values=` to
-the target computation in `batch.action_data.slots` order. An unavailable
-signal raises an error. Exiting the plan releases uncommitted captures. Close
-the bank before its vector to release cached handles.
+the target computation in `batch.action_data.slots` order. Ordinary self-play
+collects no per-action values. Use a custom scorer there to override
+`action_value_spread`. Built-in `wdl_entropy` requires a categorical WDL
+critic. Self-play checks these settings at startup and scores the batch before
+the optimizer or EMA advances. Exiting the plan releases uncommitted captures.
+Close the bank before its vector to release cached handles.
 
 ### Requirements, accounting and recovery
 
@@ -358,7 +367,8 @@ recipes in `Counts.snapshot_bank` alongside the learner under
 `out/state/save-*/state.json`. Resume restores them with an empty hot cache
 and new fresh-game and policy sampling seeds. Supply runtime predicates and
 scorers again. The Python vector replays the committed prefix and verifies the
-root digest on both hot and cold installs. [Recovery](training.md#recovery)
+root digest on both hot and cold installs. When a slot returns to fresh play,
+it resumes the parked game and its recording. [Recovery](training.md#recovery)
 
 ## Write your own loop
 

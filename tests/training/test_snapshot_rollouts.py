@@ -52,6 +52,7 @@ from manabot.training.loops.self_play import (
     learn,
     self_play,
     self_play_collector,
+    step,
 )
 from manabot.training.rollout.collection import (
     Collector,
@@ -1210,6 +1211,8 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                     targets = compute_batch_targets(
                         backend, learner, AdmittedRollout(agent, batch), learning
                     )
+                    prepared = bank.prepare_commit(receipt, targets.signals)
+                    assert bank.generation == generation - 1
                     if generation == 1:
                         assert not np.any(batch.sample_weight)
                         metrics = update_damped_iteration(
@@ -1267,9 +1270,9 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                             for v in receipt.visited_groups
                         ]
                     )
-                    bank.commit(receipt, targets.signals)
+                    bank.publish(prepared)
                     with pytest.raises(ValueError, match="stale"):
-                        bank.commit(receipt, targets.signals)
+                        bank.publish(prepared)
                     state = bank.state()
                     assert (
                         state.generation == generation
@@ -1916,6 +1919,100 @@ def test_snapshot_terminal_leaves_fresh_deck_exposure_and_skip_counts_intact() -
         finally:
             close_collector(collector)
     assert fresh_stats[0] == fresh_stats[1]
+
+
+@pytest.mark.parametrize("failure", ["exception", "nan"])
+def test_scorer_failure_preserves_live_learner_ema_and_bank(
+    tmp_path: Path, failure: str
+) -> None:
+    config = SnapshotConfig(
+        capacity=1,
+        replay_fraction=0,
+        fresh_floor=1,
+        capture=CapturePolicy(every_n_decisions=1, max_captures_per_batch=1),
+    )
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={
+            "snapshot": config,
+            "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=0.9),
+        }
+    )
+    counts = Counts()
+
+    def score(signals: EntrySignals) -> float:
+        if counts.updates == 0:
+            return float(signals.root_signals.policy_entropy.mean())
+        if failure == "exception":
+            raise ValueError("scorer failed")
+        return float("nan")
+
+    bank = SnapshotBank(config, scorer=score)
+    learner, ema = create(settings, seed=0)
+    assert ema is not None
+    rng = np.random.default_rng(0)
+    collector = self_play_collector(
+        settings,
+        seed=0,
+        start=0,
+        snapshot_bank=bank,
+        snapshot_vector=InMemorySnapshotVector.factory,
+    )
+    try:
+        step(settings, learner, ema, collector, counts, rng, out=tmp_path)
+        before = bank.state().model_dump_json()
+        params = deepcopy(learner.agent.state_dict())
+        averaged = deepcopy(ema.state_dict())
+        adam = deepcopy(learner.optimizer.state_dict())
+        assert adam["state"] and counts.updates == bank.generation == 1
+        with pytest.raises(ValueError, match="scorer failed|finite and nonnegative"):
+            step(settings, learner, ema, collector, counts, rng, out=tmp_path)
+        torch.testing.assert_close(learner.agent.state_dict(), params, atol=0, rtol=0)
+        torch.testing.assert_close(learner.optimizer.state_dict(), adam, atol=0, rtol=0)
+        torch.testing.assert_close(ema.state_dict(), averaged, atol=0, rtol=0)
+        assert counts.updates == 1 and bank.state().model_dump_json() == before
+        assert counts.snapshot_bank == bank.state()
+    finally:
+        close_collector(collector)
+
+
+@pytest.mark.parametrize("signal", ["action_value_spread", "wdl_entropy"])
+def test_self_play_rejects_unavailable_signals_without_custom_scorer(
+    signal: Literal["action_value_spread", "wdl_entropy"],
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={
+            "snapshot": SnapshotConfig(
+                capacity=1, replay_fraction=0.5, fresh_floor=0.5, signal=signal
+            )
+        }
+    )
+    with pytest.raises(ValueError, match=signal):
+        self_play_collector(
+            settings, start=0, seed=0, snapshot_vector=InMemorySnapshotVector.factory
+        )
+    collector = self_play_collector(
+        settings,
+        start=0,
+        seed=0,
+        snapshot_vector=InMemorySnapshotVector.factory,
+        scorer=lambda signals: 1.0,
+    )
+    close_collector(collector)
+
+
+def test_snapshot_collector_requires_one_worker_and_configured_callbacks() -> None:
+    settings = gray_ogre_self_play(horizon=2)
+    with pytest.raises(ValueError, match="workers=1"):
+        self_play_collector(
+            settings.model_copy(update={"workers": 2}),
+            start=0,
+            seed=0,
+            snapshot_vector=InMemorySnapshotVector.factory,
+        )
+    with pytest.raises(ValueError, match="require snapshot settings"):
+        self_play_collector(settings, start=0, seed=0, scorer=lambda signals: 1.0)
+    with pytest.raises(ValueError, match="require snapshot settings"):
+        self_play_collector(settings, start=0, seed=0, capture_predicate=lambda d: True)
 
 
 def test_snapshot_settings_require_both_seats_and_a_vector() -> None:

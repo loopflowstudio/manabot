@@ -1,8 +1,8 @@
 """Schedule sibling continuations and score retained roots after a successful update.
 
 A BatchPlan spends replay allowance in actual episode-start order. Its receipt
-joins capture-time observation rows to packed learner rows. Only commit publishes
-the scheduler and scores. Hot handles belong to the collecting vector and never
+joins capture-time observation rows to packed learner rows. Preparation scores
+the batch before learning; publication installs that generation after learning. Hot handles belong to the collecting vector and never
 enter the cold state.
 """
 
@@ -175,6 +175,15 @@ class BatchReceipt:
     captures: tuple[CapturedCandidate, ...]
     row_count: int
     plan: "BatchPlan" = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class PreparedCommit:
+    """Scored generation awaiting publication. The open plan still owns its handles."""
+
+    receipt: BatchReceipt
+    _state: SnapshotBankState
+    _captures: tuple[tuple[int, CapturedSnapshot], ...]
 
 
 class PackedDecision(Protocol):
@@ -554,11 +563,10 @@ class SnapshotBank:
             self._hot.clear()
 
     def commit(self, receipt: BatchReceipt, signals: BatchSignals) -> None:
-        """Publish scores and the scheduler together, once per successful update."""
-        with self._lock:
-            self._commit(receipt, signals)
+        """Score and publish together when no learner step intervenes."""
+        self.publish(self.prepare_commit(receipt, signals))
 
-    def _commit(self, receipt: BatchReceipt, signals: BatchSignals) -> None:
+    def _validate_receipt(self, receipt: BatchReceipt) -> None:
         plan = receipt.plan
         if (
             receipt.base_generation != self.generation
@@ -567,6 +575,14 @@ class SnapshotBank:
             or plan.receipt is not receipt
         ):
             raise ValueError("stale or already committed snapshot receipt")
+
+    def prepare_commit(
+        self, receipt: BatchReceipt, signals: BatchSignals
+    ) -> PreparedCommit:
+        """Validate and score against the receipt's generation without publishing it."""
+        with self._lock:
+            self._validate_receipt(receipt)
+            base = self._state
         config = self.config
         for column in fields(signals):
             values = getattr(signals, column.name)
@@ -575,8 +591,8 @@ class SnapshotBank:
         selected = getattr(signals, config.signal, None)
         if self.scorer is None and config.signal != "staleness" and selected is None:
             raise ValueError(f"snapshot signal {config.signal} unavailable")
-        generation = self.generation + 1
-        entries = {e.snapshot_id: e for e in self._state.entries}
+        generation = base.generation + 1
+        entries = {e.snapshot_id: e for e in base.entries}
         scores: dict[int, _ScoreRows] = defaultdict(_ScoreRows)
         latest: dict[int, CapturedCandidate] = {}
         for visit in receipt.visited_groups:
@@ -605,7 +621,7 @@ class SnapshotBank:
             scores[key].episodes.append(capture.episode_rows)
         for key, sample in scores.items():
             entry = entries[key]
-            age = max(0, self.generation - entry.last_visit_generation)
+            age = max(0, base.generation - entry.last_visit_generation)
             score = score_entry(sample, signals, config, selected, self.scorer, age)
             entries[key] = entry.model_copy(
                 update=dict(
@@ -640,32 +656,48 @@ class SnapshotBank:
             )
         )
         state = SnapshotBankState(
-            config_digest=self._state.config_digest,
+            config_digest=base.config_digest,
             generation=generation,
             scheduler=scheduler,
             entries=tuple(entries[k] for k in sorted(entries)),
         )
-        hot = {k: h for k, h in self._hot.items() if k in entries}
-        transferred = set()
-        for key, capture in latest.items():
-            handle = capture.snapshot.hot_handle
-            if key in entries and handle is not None:
-                assert plan.vector is not None
-                hot[key] = (plan.vector, handle)
-                transferred.add(id(capture.snapshot))
-        old_hot, self._state, self._hot = self._hot, state, hot
-        for key, (owner, handle) in old_hot.items():
-            if hot.get(key) is not old_hot[key]:
-                release_handles(owner, [handle])
-        if plan.vector is not None:
-            release_handles(
-                plan.vector,
-                [
-                    c.snapshot.hot_handle
-                    for c in receipt.captures
-                    if c.snapshot.hot_handle is not None
-                    and id(c.snapshot) not in transferred
-                ],
-            )
-        plan.candidates.clear()
-        plan.close()
+        captures = tuple(
+            (key, candidate.snapshot)
+            for key, candidate in latest.items()
+            if key in entries and candidate.snapshot.hot_handle is not None
+        )
+        return PreparedCommit(receipt, state, captures)
+
+    def publish(self, prepared: PreparedCommit) -> None:
+        """Install a prepared generation once, transferring surviving capture handles."""
+        with self._lock:
+            receipt = prepared.receipt
+            self._validate_receipt(receipt)
+            plan = receipt.plan
+            state = prepared._state
+            hot = {
+                e.snapshot_id: self._hot[e.snapshot_id]
+                for e in state.entries
+                if e.snapshot_id in self._hot
+            }
+            transferred = set()
+            for key, capture in prepared._captures:
+                assert plan.vector is not None and capture.hot_handle is not None
+                hot[key] = (plan.vector, capture.hot_handle)
+                transferred.add(id(capture))
+            old_hot, self._state, self._hot = self._hot, state, hot
+            for key, (owner, handle) in old_hot.items():
+                if hot.get(key) is not old_hot[key]:
+                    release_handles(owner, [handle])
+            if plan.vector is not None:
+                release_handles(
+                    plan.vector,
+                    [
+                        c.snapshot.hot_handle
+                        for c in receipt.captures
+                        if c.snapshot.hot_handle is not None
+                        and id(c.snapshot) not in transferred
+                    ],
+                )
+            plan.candidates.clear()
+            plan.close()
