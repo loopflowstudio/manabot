@@ -1,9 +1,8 @@
 # manabot.policy
 
-The policy contract every framework backend shares, and the host work that
-does not depend on a framework. **This package never imports an array
-framework** (PyTorch, MLX, JAX); it uses NumPy only
-(`tests/test_package_boundaries.py` enforces it).
+This package defines the policy contract shared by every backend. It prepares
+host inputs with NumPy and managym. `tests/test_package_boundaries.py` checks
+that it stays independent of PyTorch, MLX and JAX.
 
 ```python
 from manabot.backends import resolve
@@ -27,7 +26,9 @@ forward reads the result; no forward reads an observation dictionary.
   or repaired.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`) and trims the NumPy rows (`trim_observation`),
-  remapping object references to the trimmed table.
+  remapping object references to the trimmed table. Native scans measure the
+  last occupied row and furthest referenced row in each object segment for
+  each batch item. The policy supplies the columns, bases and segment bounds.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token

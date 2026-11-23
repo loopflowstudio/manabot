@@ -5414,6 +5414,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(catalog_token_renames, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     crate::python::layout_bindings::register(m)?;
+    crate::python::observation_extents::register(m)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;

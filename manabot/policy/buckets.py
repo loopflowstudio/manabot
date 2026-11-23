@@ -36,6 +36,7 @@ import numpy as np
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationBuffers, ObservationSpace, column, width
+import managym
 
 MIN_BUCKET = 8
 
@@ -141,47 +142,14 @@ def _capacities(space: ObservationSpace) -> dict[str, int]:
     }
 
 
-def _batch_extent(value: np.ndarray, axis: int) -> int:
-    """One past the last row along `axis` that any batch row uses (nonzero or NaN).
-
-    One reduction over the batch axis first, with no full-size temporary: a
-    learner minibatch is hundreds of megabytes of mostly zero padding, so this
-    pass is the measurement's cost.
-    """
-    flags = np.any(value, axis=0)
-    if flags.ndim > 1:
-        flags = np.any(flags, axis=tuple(d for d in range(flags.ndim) if d != axis - 1))
-    used = np.flatnonzero(flags)
-    return int(used[-1]) + 1 if used.size else 0
-
-
-def _last_rows(reversed_flags: np.ndarray) -> np.ndarray:
-    """[B] one past each row's last true entry, from C-contiguous [B,R] flags
-    whose rows are reversed (so `argmax` scans memory forward); zero if none."""
-    last = reversed_flags.shape[1] - np.argmax(reversed_flags, axis=1)
-    return np.where(reversed_flags.any(1), last, 0)
-
-
 def _extent(value: np.ndarray, axis: int) -> np.ndarray:
-    """[B] one past the last row along `axis` each batch row uses.
-
-    The batch's extent bounds every row's, so only that prefix is read per row
-    (buckets are usually a small part of the declared capacity). Each row's
-    prefix is flattened and its last nonzero element located, then divided
-    back to a row; seat-major buffers ([B, seats, rows, ...]) fold their seats
-    into the batch.
-    """
-    count = len(value)
-    extent = _batch_extent(value, axis)
-    if extent == 0:
-        return np.zeros(count, np.int64)
-    prefix = value[(slice(None),) * axis + (slice(0, extent),)]
-    seats = int(np.prod(prefix.shape[1:axis], dtype=np.int64))
-    width = int(np.prod(prefix.shape[axis + 1 :], dtype=np.int64))
-    flat = prefix.reshape(count * seats, -1)
-    elements = _last_rows(np.not_equal(flat[:, ::-1], 0, order="C"))
-    rows = np.where(elements > 0, (elements - 1) // width + 1, 0)
-    return rows.reshape(count, seats).max(1, initial=0)
+    """One past each item's last nonzero row, including poisoned padding."""
+    if value.dtype != np.float32:
+        # Test occupancy in the original dtype. A tiny float64 may round to zero.
+        value = np.not_equal(value, 0).astype(np.float32)
+    elif not value.flags.aligned:
+        value = value.copy()
+    return np.asarray(managym.observation_row_extents(value, axis), dtype=np.int64)
 
 
 def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
@@ -205,19 +173,6 @@ def has_history_events(obs: Mapping[str, object]) -> bool:
     return shape is not None and len(shape) == 3 and shape[-1] == _EVENT_WIDTH
 
 
-def _object_references(obs: ObservationBuffers) -> list[np.ndarray]:
-    """Every object reference in zero-based full object coordinates."""
-    references = [obs["action_focus"].astype(np.float32)]
-    references.extend(
-        obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES if key in obs
-    )
-    if has_history_events(obs):
-        references.extend(
-            obs[key][..., column] for key, column in ZERO_BASED_REFERENCES
-        )
-    return references
-
-
 def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]:
     """(axis, start, rows) of each object segment after the two player rows.
 
@@ -233,30 +188,11 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     return segments
 
 
-def _object_extents(
-    references: list[np.ndarray], capacities: dict[str, int]
-) -> dict[str, np.ndarray]:
-    """[B] rows of each card and permanent axis that any of a row's references names."""
-    segments = object_segments(capacities)
-    objects = segments[-1][1] + segments[-1][2]
-    count = len(references[0])
-    # Which full object coordinates each row's references name: integer parts
-    # of finite values inside the table; NaN and infinities name none.
-    named = np.zeros((count, objects), dtype=bool)
-    flat = named.reshape(-1)
-    offsets = np.arange(count, dtype=np.int64)[:, None] * objects
-    for values in references:
-        index = np.floor(_float32(values, -1.0)).reshape(count, -1)
-        inside = (index >= 0) & (index < objects)
-        flat[(offsets + index.astype(np.int64))[inside]] = True
-    needs = {axis: np.zeros(count, np.int64) for axis in OBJECT_AXES}
-    for axis, start, rows in segments:
-        if rows == 0:
-            continue
-        # This segment's columns, last first.
-        segment = np.ascontiguousarray(named[:, start + rows - 1 : start - 1 : -1])
-        needs[axis] = np.maximum(needs[axis], _last_rows(segment))
-    return needs
+def _reference_buffer(value: np.ndarray, base: int) -> tuple[np.ndarray, int]:
+    if value.dtype != np.float32:
+        # NumPy subtracts in the source dtype before rounding to float32.
+        return (value - base if base else value).astype(np.float32), 0
+    return (value if value.flags.aligned else value.copy()), base
 
 
 AXES: tuple[str, ...] = (
@@ -336,8 +272,20 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
             "relations",
             _reference_extent(obs[key][..., index], capacities["relations"]),
         )
-    for axis, rows in _object_extents(_object_references(obs), capacities).items():
-        need(axis, rows)
+    references = [_reference_buffer(obs["action_focus"], 0)]
+    for key, index in ONE_BASED_REFERENCES:
+        if key in obs:
+            references.append(_reference_buffer(obs[key][..., index], 1))
+    if has_history_events(obs):
+        for key, index in ZERO_BASED_REFERENCES:
+            references.append(_reference_buffer(obs[key][..., index], 0))
+
+    segments = object_segments(capacities)
+    extents = managym.observation_reference_extents(
+        references, [(start, length) for _, start, length in segments]
+    )
+    for (axis, _, _), rows in zip(segments, extents, strict=True):
+        need(axis, np.asarray(rows, dtype=np.int64))
     return np.stack([needs[axis] for axis in AXES], axis=1)
 
 

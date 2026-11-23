@@ -7,8 +7,10 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import FACT_OBJECT_INDEX
+from manabot.env.observation import FACT_OBJECT_INDEX, ObservationSpace, column
+from manabot.infra.config import ObservationConfig
 from manabot.policy.buckets import (
+    AXES,
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
     bucket,
@@ -67,18 +69,65 @@ def test_bucket_rule() -> None:
     assert bucket(0, 4) == 4
 
 
+def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            policy_history_version=1,
+            max_cards_per_player=9,
+            max_permanents_per_player=5,
+            max_stack_objects=3,
+        )
+    )
+    obs = {key: value[::-2] for key, value in space.allocate(9).items()}
+    # Full coordinates are players [0,2), cards [2,11), [11,20),
+    # permanents [20,25), [25,30), and stack [30,33).
+    obs["action_focus"][:] = -1
+    obs["action_focus"][0, 0, 0] = 10
+    obs["action_focus"][1, 0, 0] = 19
+    obs["facts"] = obs["facts"][:, ::-1, ::-1]
+    obs["facts"][2, 3, FACT_OBJECT_INDEX] = 25.75
+    obs["facts"][3, 2, FACT_OBJECT_INDEX] = 30
+    obs["events"][4, 1, column("events", "target_context")] = 32.5
+    obs["events"][0, 2, column("events", "source_context")] = np.inf
+    obs["events"][1, 1, column("events", "target_context")] = 33
+    obs["decklists"] = obs["decklists"][:, ::-1, ::-1, ::-1]
+    obs["decklists"][0, 0, 5, -1] = np.nan
+    obs["decklists"][1, 1, 2, 0] = 1
+    obs["decklists"][1, 0, 8, 1] = -0.0
+    obs["known_hand"] = obs["known_hand"].astype(">f8")
+    obs["known_hand"][4, 1, 6, 0] = 1e-200
+    # Conversion to float32 before subtracting one would name the next card
+    # in the second seat. The float32 spacing changes at 16.
+    obs["effects"] = obs["effects"].astype(np.float64)
+    obs["effects"][2, 0, column("effects", "source")] = 17 - 7e-7
+
+    expected = np.zeros((5, len(AXES)), dtype=np.int64)
+    for axis, rows in {
+        "facts": [0, 0, 4, 3, 0],
+        "effects": [0, 0, 1, 0, 0],
+        "cards": [9, 9, 5, 0, 0],
+        "permanents": [0, 0, 5, 5, 0],
+        "stack": [0, 0, 0, 0, 3],
+        "events": [3, 2, 0, 0, 2],
+        "known": [0, 0, 0, 0, 7],
+        "decklists": [6, 3, 0, 0, 0],
+    }.items():
+        expected[:, AXES.index(axis)] = rows
+    np.testing.assert_array_equal(row_needs(obs, space), expected, strict=True)
+
+
 def test_remapped_references_are_every_object_table_column() -> None:
     """A new object-table reference must be remapped, not trimmed silently."""
     layout = managym.observation_layout(policy_history=True)
     one_based: set[tuple[str, int]] = set()
     zero_based: set[tuple[str, int]] = set()
     for key, array in layout.items():
-        for column in array["columns"].values():
-            encoding = column["encoding"].lower()
-            if column["kind"] != "reference" or "object" not in encoding:
+        for field in array["columns"].values():
+            encoding = field["encoding"].lower()
+            if field["kind"] != "reference" or "object" not in encoding:
                 continue
             target = zero_based if encoding.startswith("zero-based") else one_based
-            target.add((key, column["index"]))
+            target.add((key, field["index"]))
         element = array.get("element")
         if element is not None and element["kind"] == "reference":
             assert key == "action_focus", key

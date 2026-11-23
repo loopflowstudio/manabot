@@ -85,6 +85,23 @@ class ObservationLayout:
     def dtypes(self) -> dict[str, str]: ...
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
 
+def observation_row_extents(buffer: np.ndarray, axis: int) -> list[int]:
+    """One past each item's last nonzero row, or zero for an empty slice.
+
+    A native float32 buffer has shape [batch, (seat), row, (column)].
+    Axis 1 selects unseated rows and axis 2 selects seated rows.
+    """
+
+def observation_reference_extents(
+    references: Sequence[tuple[np.ndarray, int]], segments: Sequence[tuple[int, int]]
+) -> list[list[int]]:
+    """Per-segment, per-item extents of referenced rows.
+
+    Each (native float32 buffer, base) supplies [batch, row, (column)]
+    coordinates with base 0 or 1. Segments are (zero-based start, length).
+    Finite coordinates are floored after subtracting the base.
+    """
+
 def observation_layout(
     *,
     policy_history: bool = False,
