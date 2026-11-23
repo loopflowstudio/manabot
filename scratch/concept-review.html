@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Concept Review · MTG-421 Ready-Now Foundations Authoring Surface</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #faf8f4;
+      --surface: #ffffff;
+      --surface-alt: #f3efe8;
+      --border: #ddd5c7;
+      --text: #1f1b16;
+      --muted: #62584c;
+      --accent: #7c4a1d;
+      --accent-soft: #f4e6d6;
+      --yes-bg: #e4f3e7;
+      --yes-fg: #1b5e2d;
+      --yes-bd: #9ed0aa;
+      --no-bg: #fce8e6;
+      --no-fg: #8c1d18;
+      --no-bd: #e6a8a3;
+      --exist-bg: #ebeef2;
+      --exist-fg: #344054;
+      --exist-bd: #c5ced9;
+      --prop-bg: #e7effc;
+      --prop-fg: #1849a9;
+      --prop-bd: #9ec0f5;
+      --warn-bg: #fef4dd;
+      --warn-fg: #7a4f01;
+      --warn-bd: #ebc878;
+      --code-bg: #f1ede6;
+      --shadow: 0 1px 2px rgba(20, 16, 12, 0.06);
+      --radius: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141210;
+        --surface: #1d1a17;
+        --surface-alt: #26221d;
+        --border: #38312a;
+        --text: #f0ebe3;
+        --muted: #ada396;
+        --accent: #e0a060;
+        --accent-soft: #312317;
+        --yes-bg: #142c1c;
+        --yes-fg: #8be0a2;
+        --yes-bd: #2a5f3b;
+        --no-bg: #331616;
+        --no-fg: #f7a19a;
+        --no-bd: #6b2b28;
+        --exist-bg: #23272e;
+        --exist-fg: #c2cad6;
+        --exist-bd: #404856;
+        --prop-bg: #17253b;
+        --prop-fg: #99c2ff;
+        --prop-bd: #2e4f82;
+        --warn-bg: #33260f;
+        --warn-fg: #f7cf79;
+        --warn-bd: #6d4f16;
+        --code-bg: #27221d;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 18px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+    }
+    .kicker {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 26px;
+      line-height: 1.25;
+      letter-spacing: -0.015em;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 19px;
+      line-height: 1.3;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    h3 {
+      margin: 16px 0 8px;
+      font-size: 15.5px;
+    }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 6px 0 12px; padding-left: 22px; }
+    li { margin-bottom: 5px; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+    }
+    code {
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 8px 0 12px;
+      line-height: 1.45;
+    }
+    .area-callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 12px 15px;
+      border-radius: 6px;
+      margin-top: 12px;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+      align-items: center;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .b-yes { background: var(--yes-bg); color: var(--yes-fg); border-color: var(--yes-bd); }
+    .b-no { background: var(--no-bg); color: var(--no-fg); border-color: var(--no-bd); }
+    .b-exist { background: var(--exist-bg); color: var(--exist-fg); border-color: var(--exist-bd); }
+    .b-prop { background: var(--prop-bg); color: var(--prop-fg); border-color: var(--prop-bd); }
+    .b-warn { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-bd); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .card.highlight {
+      border-color: var(--no-bd);
+      background: linear-gradient(180deg, var(--no-bg) 0%, var(--surface) 44px);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .pane {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .pane.existing { border-top: 3px solid var(--exist-bd); }
+    .pane.proposed { border-top: 3px solid var(--prop-bd); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--surface-alt);
+      font-size: 12.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    tr:last-child td { border-bottom: none; }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .stat .num {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .stat .lbl {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 10px 0 12px;
+    }
+    .flow-step {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 11px;
+      font-size: 13.5px;
+    }
+    .flow-step.fail {
+      background: var(--no-bg);
+      border-color: var(--no-bd);
+      color: var(--no-fg);
+    }
+    .flow-step.ok {
+      background: var(--yes-bg);
+      border-color: var(--yes-bd);
+      color: var(--yes-fg);
+    }
+    .arrow { color: var(--muted); font-weight: 700; }
+
+    .q-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .q-title {
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .q-opts {
+      list-style: none;
+      padding-left: 0;
+      margin: 6px 0 0;
+    }
+    .q-opts li {
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--surface-alt);
+      margin-bottom: 6px;
+      border: 1px solid var(--border);
+    }
+    .q-opts li.chosen {
+      border-color: var(--prop-bd);
+      background: var(--prop-bg);
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+
+  <header>
+    <div class="kicker">Concept Review · MTG-421 · Headless Graph Pass (post-Slice 1)</div>
+    <h1>Do the product's card-authoring concepts and <code>managym</code>'s code concepts line up?</h1>
+    <div class="area-callout">
+      <strong>Area reviewed and why:</strong> The <strong>card-authoring &amp; shared rules-vocabulary surface</strong> of <code>managym</code> (<code>managym/cards/src/</code>, <code>tokens.rs</code>, <code>managym/state/src/</code>, <code>managym/src/flow/{layers,proposed_event,damage,combat_actions,tick}.rs</code>, and the FDN ledger in <code>.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl</code>). Slice 1 delivered 1 card (<code>Lightshell Duo</code>) cleanly, leaving 218 of 222 candidate cards ahead; reviewing the whole surface now prevents stamping fragmented legacy vocabularies, colliding token keys, and unverified ledger assumptions onto 218 cards.
+    </div>
+    <div class="legend">
+      <span>Markers:</span>
+      <span class="badge b-exist">Existing</span> current code / current plan
+      <span class="badge b-prop">Proposed</span> updated model &amp; plan
+      <span class="badge b-yes">Aligned: Yes</span>
+      <span class="badge b-no">Aligned: No</span>
+      <span class="badge b-warn">Choice made for review</span>
+    </div>
+  </header>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="num">222</div>
+      <div class="lbl">FDN rows in MTG-421's 5 batches with <code>dependencies == []</code> at base</div>
+    </div>
+    <div class="stat">
+      <div class="num">1 + 3</div>
+      <div class="lbl">1 delivered (<code>Lightshell Duo</code>) + 3 already defined in code but stale in ledger</div>
+    </div>
+    <div class="stat">
+      <div class="num">6 of 8</div>
+      <div class="lbl">Product ↔ code concept pairings misaligned before scaling to 218 cards</div>
+    </div>
+    <div class="stat">
+      <div class="num">4</div>
+      <div class="lbl">Small shared primitives that unlock ~30–40 blocked rows cleanly</div>
+    </div>
+  </div>
+
+  <h2>1. Product Concepts vs. Code Concepts</h2>
+  <p class="muted">Every concept a card author, player, or researcher relies on in this area, paired against the actual types, records, and executors in <code>managym</code>.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%;">Product Concept</th>
+        <th style="width: 26%;">Code Concept(s) <span class="badge b-exist">Existing</span></th>
+        <th style="width: 10%;">Line Up?</th>
+        <th style="width: 42%;">What Is Wrong (or Why It Holds)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. "Ready-now" FDN queue row</strong><br /><span class="small muted">Author picks a card from the queue expecting it to compose on <code>main</code>, or clearly sees the exact missing authority.</span></td>
+        <td><code>fdn.jsonl</code> (<code>status == "definition pending"</code> &amp; <code>dependencies == []</code>) + <code>world::set_cards(&amp;["fdn"])</code></td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>One name for four distinct states + split ownership.</strong> The 222 rows mix: (a) 3 already-defined cards stale in the ledger (<code>Kellan</code>, <code>Imprisoned in the Moon</code>, <code>Doubling Season</code>), (b) ~150 genuinely composable cards, (c) ~30–40 cards missing 4 small shared primitives (including <code>TriggerCondition::GainsLife</code> for the plan's own <code>Ajani's Pridemate</code> witness!), and (d) ~12–15 cards needing major parallel engine tracks (<code>Confiscate</code>, <code>Curator of Destinies</code>, <code>Joraga Invocation</code>, <code>Taurean Mauler</code>, <code>Dryad Militant</code>, quality hexproof). Also <code>world::set_cards</code> filters first-printing prefixes, so reprints vanish from set queries.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Continuous static ability</strong><br /><span class="small muted">A lord, anthem, Aura, or Equipment declares one scope, optional condition, and one or more layered modifications.</span></td>
+        <td><code>StaticAbility::Continuous(StaticContinuous)</code> <strong>AND</strong> 7 legacy wrappers: <code>PtBuff</code>, <code>KeywordGrant</code>, <code>TypeGrant</code>, <code>AttachedSetsCharacteristics</code>, <code>AttachedHas</code>, <code>TriggeredGrant</code>, <code>SetsLandType</code></td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>One idea under two names (and 8 structs).</strong> <code>layers.rs</code> already lowers all 7 legacy variants into the same <code>Node</code>/<code>Modification</code> pipeline. Worse, <code>AttachedSetsCharacteristics</code> cannot set colors or card types (so it breaks on <code>Witness Protection</code> and <code>Eaten by Piranhas</code>), while <code>StaticContinuous</code> handles every layer except <code>SetName</code>. Authoring 38 FDN <code>characteristics</code> cards across legacy wrappers fractures the catalog.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Printed token face</strong><br /><span class="small muted">Two producers of "a 4/4 red Dragon with flying" share one token; a different stat/ability face is unmistakably distinct.</span></td>
+        <td><code>TokenDefinition</code> in <code>managym/cards/src/tokens.rs</code> keyed by bare type slugs (<code>token.dragon</code>, <code>token.soldier</code>, <code>token.spirit</code>, <code>token.bear</code>, <code>token.elf_warrior</code>)</td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>One name for two ideas.</strong> Earlier TLA/demo cards claimed bare keys for non-vanilla faces: <code>token.dragon</code> has <em>firebending 4</em>, <code>token.soldier</code> is a <em>2/2 red firebender</em>, <code>token.spirit</code> has a <em>block restriction</em>, <code>token.bear</code> is <em>4/4</em>, <code>token.elf_warrior</code> is <em>G/W</em>. Scryfall conformance skips tokens, so referencing <code>"token.dragon"</code> or <code>"token.soldier"</code> compiles and silently spawns the wrong creature.</td>
+      </tr>
+      <tr>
+        <td><strong>4. Replacement &amp; prevention effect</strong><br /><span class="small muted">"If [event] would happen, [transform] instead" — one CR 614–616 pipeline ordered by the affected player.</span></td>
+        <td>Split across 3 owners: <code>ReplacementEffect</code> (card-shaped <code>DoubleDamageToController</code>, <code>PreventDamageToController</code>, <code>OpponentDamagePlusCounters</code>), <code>StaticAbility::EntersTapped(CardPredicate)</code>, and <code>Modification::ExileIfWouldDie</code></td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>No single owner + card-shaped variants.</strong> <code>DoubleDamageToController</code> and <code>PreventDamageToController</code> have <strong>0</strong> real-card callers yet cannot express <code>Twinflame Tyrant</code>, <code>Gratuitous Violence</code>, or <code>Fog Bank</code>. <code>StaticAbility::EntersTapped</code> has no controller scope (cannot express <code>Authority of the Consuls</code>'s opponents-only entry tap). <code>ExileIfWouldDie</code> runs inside <code>normalize_proposal</code>, bypassing replacement choice.</td>
+      </tr>
+      <tr>
+        <td><strong>5. Lifelink life gain &amp; lifegain triggers</strong><br /><span class="small muted">One lifelinker dealing damage to multiple targets is 1 life-gain event (CR 702.15b/119.9); two lifelinkers are 2 events; "Whenever you gain life" triggers on each.</span></td>
+        <td><code>damage.rs::commit_damage</code> calls <code>commit_life_change</code> directly per <code>ProposedEvent::Damage</code>; no <code>TriggerCondition::GainsLife</code> exists</td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>Missing concept + wrong event granularity.</strong> A single 4/4 lifelink+trample creature hitting a 2/2 blocker and trampling to the player emits <strong>two</strong> <code>LifeChanged</code> events instead of one, bypassing <code>ProposedEvent::LifeChange</code>. And <code>TriggerCondition</code> cannot express <code>Ajani's Pridemate</code>, <code>Marauding Blight-Priest</code>, <code>Drogskol Reaver</code>, or <code>Twinblade Paladin</code> at all.</td>
+      </tr>
+      <tr>
+        <td><strong>6. Combat restrictions &amp; requirements</strong><br /><span class="small muted">A whole attack or block declaration obeys every restriction and maximizes requirements (CR 508.1c–d, 509.1b–c).</span></td>
+        <td>Sequential per-creature pop in <code>tick.rs</code> + post-hoc <code>cleanup_illegal_menace_blocks()</code> + 3 scattered enums (<code>BlockRestriction</code>, <code>StaticRestriction</code>, <code>Modification::{CantBlock, MustBeBlockedByAllAble}</code>)</td>
+        <td><span class="badge b-no">No</span></td>
+        <td><strong>Lifecycle mismatch.</strong> Local per-blocker filtering handles <code>Vampire Interloper</code> and <code>Stromkirk Noble</code> (though <code>eligible_blockers</code> doesn't filter <code>BlockRestriction::CantBlock</code> yet), and single-attacker <code>MustAttack</code> works for <code>Juggernaut</code> without attack taxes, but maximizing requirements across multiple attackers/blockers (<code>Joraga Invocation</code>) is impossible without whole-declaration solving.</td>
+      </tr>
+      <tr>
+        <td><strong>7. Card shell, tokens &amp; observability</strong><br /><span class="small muted">One executable card definition drives rules, Scryfall shell checks, learning tokens, and tensor/LLM visibility.</span></td>
+        <td><code>CardDefinition</code> + <code>PrintedCharacteristics</code> + <code>conformance_tests.rs</code> + <code>cards/tokens.rs</code> + <code>observability.rs</code></td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td><strong>Cleanly aligned.</strong> One definition is serialized directly to learning tokens and checked exhaustively by <code>observability.rs</code> and <code>scryfall_cards.json</code>. Constraint to preserve: never alter serialized tokens of frozen TLA/demo cards (<code>test_pinned_pilot.py</code>).</td>
+      </tr>
+      <tr>
+        <td><strong>8. Private mid-resolution choice &amp; replay</strong><br /><span class="small muted">Surveil/scry/order/discard resume the same frame, hide private cards from the opponent, and replay identically.</span></td>
+        <td><code>EffectFrame</code> + <code>Decision::{Surveil, OrderLibrary, Scry, Discard, ...}</code> + offered <code>Command</code>s</td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td><strong>Cleanly aligned</strong> for existing choice kinds (proven by <code>Lightshell Duo</code> across native, v11, LLM text, and Academy). Only brand-new private partition frames (<code>Curator of Destinies</code>) require new machinery.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Concrete Walkthrough: Normal Path, Failure &amp; Recovery</h2>
+  <div class="card">
+    <p>Walk what happens today <span class="badge b-exist">Existing</span> when an author picks three headline cards straight out of <code>scratch/plan.md</code> — <strong>Regal Caracal + Dragon Trainer</strong>, <strong>Ajani's Pridemate + lifelink trample</strong>, and <strong>Twinflame Tyrant + Authority of the Consuls</strong>:</p>
+
+    <h3>Path A — Token &amp; Static Authoring (<code>Dragon Trainer</code>, <code>Witness Protection</code>)</h3>
+    <div class="flow">
+      <div class="flow-step">Pick <code>Dragon Trainer</code> from <code>fdn.jsonl</code></div>
+      <span class="arrow">→</span>
+      <div class="flow-step">See <code>"token.dragon"</code> in <code>tokens.rs</code></div>
+      <span class="arrow">→</span>
+      <div class="flow-step fail"><strong>Failure:</strong> compiles &amp; passes Scryfall conformance, but spawns a TLA <em>firebending 4</em> Dragon!</div>
+      <span class="arrow">→</span>
+      <div class="flow-step"><strong>Recovery:</strong> inspect <code>tokens.rs</code> body, mint ad-hoc key (like <code>plain_spirit</code>)</div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">Pick <code>Witness Protection</code> (<code>characteristics</code>)</div>
+      <span class="arrow">→</span>
+      <div class="flow-step">Copy <code>AttachedSetsCharacteristics</code> from <code>Honest Work</code></div>
+      <span class="arrow">→</span>
+      <div class="flow-step fail"><strong>Failure:</strong> struct has no <code>colors</code> or <code>types</code> field; meanwhile <code>StaticContinuous</code> has both but lacks <code>SetName</code></div>
+      <span class="arrow">→</span>
+      <div class="flow-step ok"><span class="badge b-prop">Proposed</span> Add <code>Modification::SetName</code>; author all new statics in <code>StaticContinuous</code></div>
+    </div>
+
+    <h3>Path B — Headline Validation Witness (<code>Ajani's Pridemate</code> + Lifelink Combat)</h3>
+    <div class="flow">
+      <div class="flow-step">Pick <code>Ajani's Pridemate</code> (listed in plan's validation table)</div>
+      <span class="arrow">→</span>
+      <div class="flow-step fail"><strong>Failure 1:</strong> <code>TriggerCondition</code> has no <code>GainsLife</code> variant</div>
+      <span class="arrow">→</span>
+      <div class="flow-step fail"><strong>Failure 2:</strong> 4/4 lifelink+trample hits 2/2 blocker + player → <code>damage.rs:149</code> calls <code>commit_life_change</code> twice → <strong>2 Pridemate triggers instead of 1</strong></div>
+      <span class="arrow">→</span>
+      <div class="flow-step ok"><span class="badge b-prop">Proposed</span> Aggregate lifelink gain per source per damage batch via <code>ProposedEvent::LifeChange</code> + add <code>TriggerCondition::GainsLife</code></div>
+    </div>
+
+    <h3>Path C — Replacement Authoring (<code>Twinflame Tyrant</code>, <code>Gratuitous Violence</code>, <code>Fog Bank</code>, <code>Authority of the Consuls</code>)</h3>
+    <div class="flow">
+      <div class="flow-step">Check <code>ReplacementEffect</code> &amp; <code>StaticAbility::EntersTapped</code></div>
+      <span class="arrow">→</span>
+      <div class="flow-step fail"><strong>Failure:</strong> <code>DoubleDamageToController</code> only checks recipient; <code>EntersTapped</code> has no opponent filter; 4 cards tempt 4 one-off variants</div>
+      <span class="arrow">→</span>
+      <div class="flow-step ok"><span class="badge b-prop">Proposed</span> One composable <code>ModifyDamage</code> replacement + controller-scoped <code>EntersTapped</code></div>
+    </div>
+  </div>
+
+  <h2>3. Biggest Mismatch &amp; Recommendation (Before vs. After)</h2>
+  <div class="card highlight">
+    <h3>Biggest Mismatch: Treating a 222-row text-scanned queue as a flat 1-card-at-a-time backlog over ununified authoring vocabularies</h3>
+    <p><code>fdn.jsonl</code> was produced by a text-only planning pass (<em>"No games, tests or benchmarks were run"</em>). Treating all 222 <code>dependencies == []</code> rows as interchangeable "ready-now" cards—and deferring both missing-rule triage and authoring conventions until the end—means MTG-421 would spend dozens of tiny slices discovering missing primitives piecemeal, duplicating legacy <code>StaticAbility</code> and <code>ReplacementEffect</code> variants, risking silent token collisions, and colliding with parallel engine tracks.</p>
+
+    <div class="grid-2">
+      <div class="pane existing">
+        <div><span class="badge b-exist">Existing Plan &amp; Model</span></div>
+        <ul>
+          <li><strong>Flat queue:</strong> All 222 rows treated as one working loop; partition into delivered / previously defined / pending happens <em>"before closing the loop"</em>.</li>
+          <li><strong>1–2 card cadence:</strong> Slice 1 = 1 card (<code>Lightshell Duo</code>); Slice 2 = 2 cards (<code>Arahbo</code> + <code>Helpful Hunter</code>).</li>
+          <li><strong>Unsettled static authoring:</strong> Mixes <code>StaticAbility::Continuous</code> (<code>Imprisoned in the Moon</code>) with legacy <code>PtBuff</code> / <code>KeywordGrant</code> / <code>AttachedSetsCharacteristics</code>.</li>
+          <li><strong>Bare token keys:</strong> New tokens named ad-hoc alongside colliding TLA keys (<code>token.dragon</code>, <code>token.soldier</code>, <code>token.elf_warrior</code>).</li>
+          <li><strong>Hidden primitive gaps:</strong> Plan's own witness (<code>Ajani's Pridemate</code>) lacks <code>TriggerCondition::GainsLife</code> and hits per-target lifelink splitting in <code>damage.rs</code>.</li>
+          <li><strong>Ad-hoc replacements:</strong> Mentions Tyrant needing a predicate, without unifying <code>Gratuitous Violence</code>, <code>Fog Bank</code>, and <code>Authority of the Consuls</code>.</li>
+        </ul>
+      </div>
+
+      <div class="pane proposed">
+        <div><span class="badge b-prop">Proposed Plan &amp; Model</span></div>
+        <ul>
+          <li><strong>Upfront 3-bucket triage (Step 0):</strong> Sync the 3 stale rows first, then partition all 218 remaining rows against actual <code>managym-state</code> enums into <strong>Bucket A</strong> (composable today), <strong>Bucket B</strong> (4 small shared primitives), and <strong>Bucket C</strong> (explicitly deferred to parallel engine tracks).</li>
+          <li><strong>Capability-batched slices:</strong> Prove each shared convention/primitive on its hardest interaction first, then batch-author all 15–35 cards sharing those verbs together.</li>
+          <li><strong>One static authoring rule:</strong> Every new FDN static characteristic effect uses <code>StaticAbility::Continuous</code> (adding <code>Modification::SetName</code>). Freeze legacy variants for TLA so <code>test_pinned_pilot.py</code> stays green.</li>
+          <li><strong>Characteristic-qualified token keys:</strong> Preserve existing keys untouched; every new non-predefined creature token uses <code>token.&lt;name&gt;_&lt;p&gt;_&lt;t&gt;_&lt;colors&gt;[_&lt;kw&gt;]</code> (e.g. <code>token.cat_1_1_w</code>, <code>token.cat_1_1_w_lifelink</code>, <code>token.dragon_4_4_r_flying</code>).</li>
+          <li><strong>Per-source lifelink + <code>GainsLife</code>:</strong> Aggregate lifelink life gain per source per damage batch through <code>ProposedEvent::LifeChange</code>; add <code>TriggerCondition::GainsLife { who }</code>.</li>
+          <li><strong>Composable damage &amp; entry replacements:</strong> One <code>ModifyDamage</code> replacement + controller-scoped <code>EntersTapped</code> for Tyrant, Gratuitous Violence, Fog Bank, and Authority of the Consuls.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Concrete Code Shape — Before vs. After</h3>
+    <div class="grid-2">
+      <div>
+        <div class="small muted"><strong>Before</strong> <span class="badge b-exist">Existing</span> — 3 incompatible idioms for statics, tokens &amp; replacements</div>
+<pre>// Statics split across legacy wrappers + Continuous:
+StaticAbility::PtBuff(StaticPtBuff { ... })
+StaticAbility::KeywordGrant(StaticKeywordGrant { ... })
+StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
+    // Cannot set colors or card types!
+})
+
+// Token keys collide with TLA firebenders:
+Effect::create_tokens("token.dragon", 1)  // 4/4 firebending 4!
+Effect::create_tokens("token.soldier", 1) // 2/2 red firebender!
+
+// Replacements hardcode one card each:
+ReplacementEffect::DoubleDamageToController // 0 card callers
+StaticAbility::EntersTapped(pred)           // hits BOTH players</pre>
+      </div>
+      <div>
+        <div class="small muted"><strong>After</strong> <span class="badge b-prop">Proposed</span> — one composable shape per concept for all FDN cards</div>
+<pre>// One static form across all 38 FDN characteristics cards:
+StaticAbility::Continuous(StaticContinuous {
+    scope: StaticScope::Attached,
+    condition: None,
+    characteristic_defining: false,
+    modifications: vec![
+        Modification::SetName("Legitimate Businessperson".into()),
+        Modification::SetColors(Colors::from_iter([Color::Green, Color::White])),
+        Modification::SetCreatureTypes(vec!["Citizen".into()]),
+        Modification::LoseAllAbilities,
+        Modification::SetBasePt { power: Some(Fixed(1)), toughness: Some(Fixed(1)) },
+    ],
+})
+
+// Self-describing, collision-proof new token keys:
+Effect::create_tokens("token.dragon_4_4_r_flying", 1)
+Effect::create_tokens("token.cat_1_1_w_lifelink", 2)
+
+// Composable damage + scoped entry replacements:
+ReplacementEffect::ModifyDamage { source_by, source_predicate, recipient_by, combat_only, transform }
+StaticAbility::EntersTapped { who: Actor::Opponent, predicate: CardPredicate::creature() }</pre>
+      </div>
+    </div>
+  </div>
+
+  <h2>4. Counterexamples, What Must Survive &amp; Bucket C Boundaries</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Counterexamples That Shaped the Proposal</h3>
+      <ul>
+        <li><strong>Trampling lifelinker (CR 702.15b / 119.9):</strong> One 4/4 lifelink+trample creature hitting a 2/2 blocker and trampling for 2 must emit <em>one</em> +4 life-gain event (1 Pridemate trigger), while two 2/2 lifelinkers emit <em>two</em> events (2 triggers), and double strike emits 1 event in first-strike damage and 1 in normal damage. Prevented damage (<code>Fog Bank</code>) and <code>PlayersCantGainLife</code> emit <em>zero</em> triggers.</li>
+        <li><strong>Pinned pilot compatibility (<code>test_pinned_pilot.py</code>):</strong> Rewriting existing TLA cards out of legacy <code>StaticAbility</code> variants or renaming <code>token.dragon</code>/<code>token.soldier</code> would alter frozen catalog tokens. <em>Revision:</em> keep all existing keys and TLA definitions unchanged; apply the clean conventions to new FDN cards, and register any retired test-only replacement names in <code>token_renames.rs</code>.</li>
+        <li><strong><code>Joraga Invocation</code> vs. <code>Juggernaut</code>:</strong> 2 must-be-blocked attackers vs. 2 blockers (or 1 Menace + 1 non-Menace) breaks sequential per-blocker filtering (CR 509.1c requires maximizing requirements across the whole declaration). <code>Joraga Invocation</code> is genuinely blocked on a whole-declaration solver; <code>Vampire Interloper</code> and <code>Stromkirk Noble</code> are local prohibitions, and <code>Juggernaut</code>'s solo <code>MustAttack</code> is local on <code>main</code> (no attack taxes or max-attacker limits exist yet).</li>
+        <li><strong><code>AttachedHas</code> vs. <code>GrantActivated</code>:</strong> <code>StaticContinuous</code>'s <code>Modification::GrantActivated</code> does not set <code>granted_by</code> (needed only for <code>ObjectSelector::Grantor</code>). Verify whether any FDN Equipment references <code>Grantor</code>; if so, populate <code>granted_by</code> for <code>StaticScope::Attached</code> in <code>layers.rs</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Bucket C — Deferred to Parallel Engine Tracks <span class="badge b-prop">Proposed</span></h3>
+      <p class="small muted">Mark these pending in <code>fdn.jsonl</code> upfront with their exact missing authority instead of hacking one-off shortcuts in MTG-421:</p>
+      <ul>
+        <li><strong>Global combat-requirement solver (CR 509.1c):</strong> <code>Joraga Invocation</code>.</li>
+        <li><strong>Layer 2 static control-change:</strong> <code>Confiscate</code> (<code>layers.rs</code> currently omits Layer 2 control).</li>
+        <li><strong>Quality-scoped hexproof:</strong> <code>Knight of Grace</code>, <code>Knight of Malice</code>, <code>Elenda, Saint of Dusk</code>.</li>
+        <li><strong>All-zones Changeling / all creature types:</strong> <code>Taurean Mauler</code>, <code>Soulstone Sanctuary</code>.</li>
+        <li><strong>Private pile partition with opponent choice:</strong> <code>Curator of Destinies</code>.</li>
+        <li><strong>All-zone graveyard replacement (stack/hand/library):</strong> <code>Dryad Militant</code>, <code>Darksteel Colossus</code>.</li>
+        <li><strong>Cross-target relational constraints:</strong> <code>Run Away Together</code> (different controllers), <code>Drakuseth, Maw of Flames</code> (primary + up to 2 distinct other targets).</li>
+        <li><strong>Reveal-until-matching with random remainder:</strong> <code>Spinner of Souls</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>5. Choices Made for Review &amp; Separate Outcomes Outside This Work</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Choices Made for Review <span class="badge b-warn">Written into Plan</span></h3>
+      <ol>
+        <li><strong>Use <code>StaticAbility::Continuous</code> for all new FDN statics</strong> instead of older <code>PtBuff</code>/<code>KeywordGrant</code>/<code>AttachedSetsCharacteristics</code> wrappers. <em>Passed over:</em> migrating TLA cards now (breaks pinned pilot without benefit).</li>
+        <li><strong>Adopt characteristic-qualified keys for new non-predefined creature tokens</strong> (<code>token.&lt;name&gt;_&lt;p&gt;_&lt;t&gt;_&lt;colors&gt;[_&lt;kw&gt;]</code>) while keeping existing keys untouched. <em>Passed over:</em> ad-hoc adjectives like <code>plain_dragon</code> / <code>lifelink_cat</code> (re-collides on next set).</li>
+        <li><strong>Include 4 small shared primitives (Bucket B) inside MTG-421</strong> (per-source lifelink + <code>GainsLife</code>, composable <code>ModifyDamage</code> + scoped <code>EntersTapped</code>, <code>Modification::SetName</code> + small predicates/conditions, minor target/library-end options) rather than deferring all ~35 cards they unlock. <em>Passed over:</em> strict zero-engine-edit authoring (would drop <code>Ajani's Pridemate</code>, <code>Twinflame Tyrant</code>, <code>Authority of the Consuls</code>, and <code>Witness Protection</code> from MTG-421).</li>
+        <li><strong>Batch-author Bucket A cards by capability (15–35 cards/slice)</strong> after upfront 3-bucket triage, rather than continuing 1–2 cards per slice.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Outside This Work (Separate Outcomes)</h3>
+      <ul>
+        <li><strong>Reprint-aware set &amp; format legality in <code>world.rs</code>:</strong> <code>world::set_cards(&amp;["fdn"])</code> currently filters first-printing key prefixes (<code>fdn.*</code>), missing reprints like <code>Doubling Season</code> (<code>rav.*</code>) and <code>Imprisoned in the Moon</code> (<code>emn.*</code>). Fixing this requires an explicit per-set/format membership table reconciled against Wizards' official Standard inventory (noted in <code>fdn.md</code>).</li>
+        <li><strong>Retiring legacy <code>StaticAbility</code> variants across TLA:</strong> Removing <code>PtBuff</code>, <code>KeywordGrant</code>, <code>TypeGrant</code>, <code>AttachedSetsCharacteristics</code>, etc. from <code>managym-state</code> requires a checkpoint-boundary migration and <code>token_renames.rs</code> / pinned-pilot break after v11 cutover.</li>
+        <li><strong>Bucket C engine authorities:</strong> Global combat solver, Layer 2 control, quality hexproof, Changeling, private pile split, all-zone graveyard replacement, and cross-target relations belong to dedicated shared-engine Tasks.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>6. Questions for Review</h2>
+  <p class="muted small">Highlighted options are the choices written into <code>scratch/plan.md</code> for this headless run. Reply with e.g. <code>2b</code> or <code>3a</code> if you want to reverse any choice.</p>
+
+  <div class="q-block">
+    <div class="q-title">1. Authoring convention for new FDN static abilities (38 <code>characteristics</code> cards + lords)</div>
+    <ul class="q-opts">
+      <li class="chosen"><strong>1a (Chosen):</strong> Author all new FDN static characteristic effects via <code>StaticAbility::Continuous</code> (adding <code>Modification::SetName</code>), leaving legacy variants frozen on existing TLA cards for <code>test_pinned_pilot.py</code>.</li>
+      <li><strong>1b:</strong> Continue using legacy <code>PtBuff</code> / <code>KeywordGrant</code> / <code>AttachedSetsCharacteristics</code> for simple cards and <code>StaticContinuous</code> only for multi-layer Auras.</li>
+      <li><strong>1c:</strong> Migrate TLA cards to <code>StaticAbility::Continuous</code> now and record a pinned-pilot break with <code>scripts/pinned_pilot.py record</code>.</li>
+    </ul>
+  </div>
+
+  <div class="q-block">
+    <div class="q-title">2. Token key naming convention for new creature tokens in <code>managym/cards/src/tokens.rs</code></div>
+    <ul class="q-opts">
+      <li class="chosen"><strong>2a (Chosen):</strong> Use characteristic-qualified keys (<code>token.cat_1_1_w</code>, <code>token.cat_1_1_w_lifelink</code>, <code>token.dragon_4_4_r_flying</code>, <code>token.soldier_1_1_w</code>) for all new non-predefined creature tokens; keep existing keys untouched.</li>
+      <li><strong>2b:</strong> Keep short descriptive slugs (<code>token.cat</code>, <code>token.lifelink_cat</code>, <code>token.plain_dragon</code>, <code>token.white_soldier</code>) matching <code>token.plain_spirit</code>.</li>
+    </ul>
+  </div>
+
+  <div class="q-block">
+    <div class="q-title">3. Scope of Bucket B (4 small shared primitives) inside MTG-421</div>
+    <ul class="q-opts">
+      <li class="chosen"><strong>3a (Chosen):</strong> Land the 4 small local primitives inside MTG-421 (per-source lifelink + <code>GainsLife</code>, composable <code>ModifyDamage</code> + scoped <code>EntersTapped</code>, <code>SetName</code> + small predicates/conditions, minor target/library-end options) so headline cards (<code>Ajani's Pridemate</code>, <code>Twinflame Tyrant</code>, <code>Authority of the Consuls</code>, <code>Witness Protection</code>) ship now.</li>
+      <li><strong>3b:</strong> Keep MTG-421 strictly zero-engine-edit (Bucket A only) and defer all ~30–40 Bucket B cards to a separate engine primitives Task.</li>
+    </ul>
+  </div>
+
+  <div class="q-block">
+    <div class="q-title">4. Fate of unused test-only <code>DoubleDamageToController</code> &amp; <code>PreventDamageToController</code> when adding <code>ModifyDamage</code></div>
+    <ul class="q-opts">
+      <li class="chosen"><strong>4a (Chosen):</strong> Migrate their unit test to <code>ModifyDamage</code> and retire their names in <code>token_renames.rs</code> so there is one damage-replacement authority (verified against <code>test_pinned_pilot.py</code>).</li>
+      <li><strong>4b:</strong> Keep both legacy variants untouched alongside <code>ModifyDamage</code> to avoid touching <code>record_vocabulary.rs</code>.</li>
+    </ul>
+  </div>
+
+</main>
+</body>
+</html>

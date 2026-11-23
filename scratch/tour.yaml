@@ -1,0 +1,15 @@
+at: b9208b43d80329579b4568a85a50e3f72db23992
+first:
+  - path: managym/cards/src/fdn.rs
+    why: Lightshell Duo combines prowess and surveil on entry
+  - path: managym/state/src/ability.rs
+    why: Prowess defines one trigger for cards, tokens and grants
+  - path: managym/state/src/predicate.rs
+    why: Noncreature spells share one card predicate
+  - path: managym/cards/src/tla.rs
+    why: Sokka has prowess and grants it to other Allies
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Both library orders determine the next draw
+  - path: tests/semantic/test_text_observation.py
+    why: Replay each choice and compare both viewers
+hide: []
