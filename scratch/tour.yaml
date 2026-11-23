@@ -1,17 +1,21 @@
-at: d4852430b470ac51f87c2ceab8d56488a24d0ece
+at: be8d1c3b0ba7385ceaa1eae6e269acde799fa8f7
 first:
-  - path: managym/cards/src/dka.rs
-    why: Defines both Predator Ooze triggers
+  - path: managym/README.md
+    why: Describes combat history across viewers and source departure
+  - path: managym/cards/src/som.rs
+    why: Defines both Hellkite activations and the destruction selector
   - path: managym/src/flow/turn.rs
-    why: Owns exact damage pairs and their turn lifetime
+    why: Owns exact damage recipients across the turn
   - path: managym/src/flow/damage.rs
-    why: Records the pair when positive damage commits
-  - path: managym/src/flow/triggers.rs
-    why: Matches the departing creature against its damage source
+    why: Records combat hits after prevention
+  - path: managym/src/flow/resolution.rs
+    why: Selects current controllers and exact mana values
   - path: managym/src/agent/observation.rs
-    why: Projects live recipients into public permanent IDs
-  - path: managym/cards/tests/cards/dka.rs
-    why: Plays the attack, surviving block and later death
+    why: Projects damage history after the source leaves
+  - path: managym/cards/tests/cards/som.rs
+    why: Plays both copies and checks the turn reset
   - path: managym/src/agent/env/snapshot.rs
-    why: Exercises reentry, countering and viewer-relative joins
+    why: Replays Commands and restores a departed source’s activation
+  - path: tests/semantic/test_text_observation.py
+    why: Announces X and checks both Academy projections
 hide: []
