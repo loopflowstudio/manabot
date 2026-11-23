@@ -1,9 +1,13 @@
-at: fd4384cd97b7cff22728c9468e71cf2340aabc65
+at: 4d581dda963d8bd24e3ba49d6e33f0eda2ffeb6a
 first:
-  - path: managym/src/flow/damage.rs
-    why: Resolve the source controller used for lifelink
+  - path: managym/cards/src/kld.rs
+    why: Authority’s entry replacement and separate triggered gain
+  - path: managym/state/src/card.rs
+    why: Represent entry under an opponent’s control
   - path: managym/src/flow/proposed_event.rs
-    why: Match replacements against the same source facts
-  - path: managym/tests/rules/cr_614_replacement.rs
-    why: Resolve a borrowed spell and replay both replacement orders
+    why: Match the prospective controller before committing the move
+  - path: managym/cards/tests/cards/kld.rs
+    why: Cross ownership and control, then resolve both forks
+  - path: managym/cards/tests/cards/observability.rs
+    why: Bind the static ability to its catalog witness
 hide: []
