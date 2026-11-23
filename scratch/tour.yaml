@@ -1,0 +1,27 @@
+at: f2caa4fde913dfb70ccedea1d16d9ea2a1ee8b22
+first:
+  - path: docs/engine.md
+    why: What happens when a turn ends early
+  - path: managym/cards/src/chk.rs
+    why: Time Stop shares Sundial's instruction
+  - path: managym/src/flow/resolution.rs
+    why: Discard waiting triggers and exile the stack together
+  - path: managym/src/flow/decision.rs
+    why: Resume interrupted rules after state-based choices
+  - path: managym/src/flow/tick.rs
+    why: Ordinary and repeated cleanup share the priority loop
+  - path: managym/src/flow/stabilization.rs
+    why: Which cleanup actions and triggers open priority
+  - path: managym/src/flow/turn.rs
+    why: Preserve turn control and extra turns through cleanup
+  - path: managym/src/agent/effect_execution.rs
+    why: Describe pending turn termination to the chooser
+  - path: managym/cards/tests/cards/chk.rs
+    why: Cast Time Stop during opposing combat
+  - path: managym/src/flow/resolution_tests.rs
+    why: Fork at a mandatory pre-cleanup legend choice
+  - path: managym/tests/rules/cr_514_cleanup.rs
+    why: A legend choice during cleanup opens priority
+  - path: managym/cards/tests/cards/tla.rs
+    why: Verify who chooses each repeated cleanup discard
+hide: []

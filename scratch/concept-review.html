@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game procedure · MTG-422</title>
+<style>
+:root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
+</style>
+<main><small>Managym · MTG-422 · branch review at f2caa4fde against 0b1cc9cf</small>
+<h1>Can a caller resume the game from the choice in front of it?</h1>
+<p>A policy selects a legal action. Search can fork at that action, and replay can bind the same Command again at the same root. The engine owns everything between choices, including finishing a game before another player gets priority.</p>
+<aside><h2>Biggest mismatch · what counts as a game position?</h2>
+<p><b>Before, in the plan</b> &nbsp; Opening → ordinary turn → ending turn → cleanup. A suspended legend choice already carries a frame that says exactly how to finish ending the turn. A second procedure tag could disagree with that frame on restore.</p>
+<p><b>Proposed</b> &nbsp; Opening hands → Playing → Finished(result). Within Playing, Time Stop interrupts the current step. Its frame resumes the state-based check, then hands execution to ordinary cleanup. A second Time Stop during cleanup takes exactly that route again.</p></aside>
+<h2>Do the caller’s concepts and the code’s concepts line up?</h2>
+<table><thead><tr><th>Caller experience<th>Existing native owner<th>Fit today<tbody>
+<tr><td>Decide whether to keep the deal<td>Game::construct snapshots the deal and calls tick with TurnState initialized<td><b>No.</b> The caller gets past a strategic decision without acting.
+<tr><td>Choose for the controlled player<td>ActionSpace.player publishes the chooser. Decision.player() owns the resources.<td><b>Yes.</b> Combat-only control can end before a mandatory cleanup discard.
+<tr><td>Resume the interrupted turn ending<td>FrameCompletion::EndTurn and stabilize_before_priority<td><b>Yes.</b> A mandatory legend choice can suspend the check. Cleanup then handles discards and any priority window.
+<tr><td>Learn who won and why<td>is_game_over and winner_index count living players. finish_game_step guesses each loss reason from drew_when_empty.<td><b>No.</b> An explicit Pact loss at positive life would be reported as life_total. Commit causes when the rule applies and derive Env rewards and replay results from that record.
+</table>
+<h2>First proof · the second bottom card</h2>
+<p><b>Proposed interaction.</b> Both seats declare a second mulligan. After the redraw, select A as the deepest card. Fork at the next selection. Choose B, keep, finish opening actions, and draw through the library. B must appear before A. The opponent sees the public declarations and hand count. The owner retains knowledge of A and B after the opening cursor disappears.</p>
+<p><b>Failure and recovery.</b> Resubmit A’s old Command at B’s decision. Rejection must preserve the RNG, candidate objects, knowledge and state hash. Rebind at the live decision. The same B Command on the exact fork must reproduce the next offer and ordered events. Selecting C on a sibling must leave the original library intact. A subsequent shuffle invalidates the positional knowledge.</p>
+<p><b>Cost.</b> Publish one action per eligible object at each selection. Seven cards offer at most seven first selections. Drop round commitments after setup. Scalar and vector reset use the same decision, and encoders read only the viewer projection.</p>
+<h2>Counterexamples the model must keep</h2>
+<p>A turn-long control effect survives repeated cleanup. A combat-only one expires. Both can have the same active player. Keep control duration on the turn schedule. The branch’s Bloodbending fixture exercises both cases.</p>
+<p>A protected failed draw is consumed at its state-based check. Ten poison remains on the player. Removing Herald can therefore cause a later poison loss. Evaluate simultaneous candidates against the same pre-batch protections and commit a draw if both seats lose. An explicit win can finish resolution immediately. The terminal record must also represent a win without inventing a life or deck loss.</p>
+<h2>Questions for review</h2>
+<ol><li>Where does an interrupted turn ending resume? <b>1a · chosen</b> From the suspended frame. <b>1b</b> From a separate lifecycle position, which would also need to track the frame.</li>
+<li>Which bottom card does the caller choose first? <b>2a · chosen</b> Deepest, with the direction in the offer. <b>2b</b> Nearest the next draw, with that direction in the offer.</li></ol>
+</main></html>
