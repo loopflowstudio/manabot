@@ -472,7 +472,7 @@ wheels = [
 
 [[package]]
 name = "manabot"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "cloudpickle" },
@@ -591,7 +591,7 @@ training-runtime = [
 
 [[package]]
 name = "managym"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "managym" }
 dependencies = [
     { name = "numpy" },
