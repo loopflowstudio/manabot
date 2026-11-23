@@ -31,9 +31,7 @@ Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 
 
 ## Next working slice
 
-Resolve Demonic Pact's loss mode through an ordinary upkeep choice and a bound Command. Verify immediate loss on resolution and the Env reason and rewards. Flash Herald in response on a fork and verify play continues after resolution and after Herald leaves. Retain the original witness. The Pact row above specifies the other modes and their per-object history.
-
-In `flow/game.rs`, `Finished` currently stores only simultaneous state-based losses. In `flow/sba.rs`, the rules also use the Env reason string to decide whether a loss exists. When extending the outcome, let native causes determine commitment and derive the legacy reason at the consumer boundary. Keep one protection check over effective characteristics. Preserve simultaneous causes and draw rewards. Represent Finished as one typed result with two alternatives, losses by seat (including an instructed loss) or an explicit victory with its seat and cause. Derive winner and both rewards from the selected alternative. Include the alternative and cause in exact position identity and preserve snapshot compatibility. Restore and replay the pending Pact trigger on both branches. The protected branch retains the used mode on that incarnation and carries no deferred loss. Follow Pact with Maze's End to exercise an explicit victory with its own cause and Herald's opponent-win prohibition.
+Build Virulent Silencer using the existing combat-damage trigger and player-counter authority. Exercise a nontoken artifact creature and an artifact token alongside Fynn. Continue with Bracelet payment and Cube control at a nested payment. The Pact and Maze terminal slice is recorded below. The remaining Pact branches include countering, control change, blink and independent copies.
 
 ## Remaining cross-consumer obligations
 
@@ -104,3 +102,11 @@ The earlier size and private-restoration blocker is closed. This review reran th
 Fynn's definition adds two poison counters to the damaged player. The player counter projection supplies the public count to both viewers, counter facts and text. The SBA pass reads both seats before clearing failed draws, consults effective Herald abilities and commits both seats' loss causes. This covers a state-based loss. `GameProcedure::Finished { losses }` still has no cause for an instructed loss or an explicit win. The catalog lacks Demonic Pact, Maze's End, Virulent Silencer, The Dominion Bracelet and Construct a Cosmic Cube. Consequently none can supply its required native offer, observation or catalog learning tokens.
 
 The working phase remains open. Start with the Pact upkeep and Herald fork described under “Next working slice.” Then exercise Maze with nine distinct Gates plus a duplicate and with ten distinct Gates, including a failed search and an opposing Herald. The other outstanding rows above still require constructed witnesses, including Fynn in both damage steps and Cube control at payment. Bracelet has no activation to test yet. Its manual pip and source choices, restricted-first automatic spend, committed receipt and remaining pool are unverified. No full-suite or Engine Budget result is claimed here.
+
+### Instructed outcomes and explicit wins
+
+At seed 161, the Pact upkeep offered all four modes. The loss Command replayed identically on an exact fork. Without a response its controller lost. Flashing Herald in response kept the controller alive through resolution and subsequent removal. Only the three unused modes were offered at the next upkeep. A CPython 3.13 release run at seed 23 restored the pending upkeep from both a live snapshot and serialized replay. The same bound Command reached the same terminal witness on each branch and left the root unchanged.
+
+Maze's End returned to hand before the search. Nine Gate names plus a duplicate failed when the controller declined to find. Finding the tenth name won. With ten names already on the battlefield, declining to find also won, and an opposing Herald prevented the win. The Env fixture checked both seat assignments, the instructed loss reason and winner/loser rewards for each kind of outcome. Existing simultaneous-loss reward and reason projections passed. The full suite and Engine Budget remain at gate.
+
+At seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
