@@ -1,15 +1,11 @@
-at: 0e1ff25501bb1f9c0a86a9a0538201136d6a6d9c
+at: 8771c9fdaba572f67611b89ada91f85f6f069c24
 first:
-  - path: managym/cards/src/fdn.rs
-    why: Twinflame Tyrant selects source and recipient controllers
+  - path: managym/cards/src/usg.rs
+    why: Fog Bank’s printed characteristics and prevention ability
   - path: managym/state/src/card.rs
-    why: Shared transforms for doubling and partial prevention
+    why: A single replacement covers both endpoints
   - path: managym/src/flow/proposed_event.rs
-    why: Match controllers and apply the chosen replacement
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Eight Lightning Bolt casts distinguish both controller scopes
-  - path: managym/tests/rules/cr_614_replacement.rs
-    why: One battlefield tests both orders and the committed damage
-  - path: managym/src/cards/token_renames.rs
-    why: Retain checkpoint bindings for retired replacement names
+    why: Match combat endpoints and verify both replacement orders
+  - path: managym/cards/tests/cards/usg.rs
+    why: Replay a powered Fog Bank blocking Healer’s Hawk
 hide: []
