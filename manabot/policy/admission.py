@@ -258,7 +258,11 @@ def check(
         )
     sizes = bucketed.buckets.sizes if bucketed is not None else {}
     facts(
-        obs["facts"], sizes.get("facts", spec.space.config.max_facts), objects, catalog
+        raw["facts"],
+        spec.space.config.max_facts,
+        objects,
+        catalog,
+        prefix=sizes.get("facts"),
     )
     shared_effects(
         obs["effects"],
@@ -349,11 +353,18 @@ class Catalog:
 
 
 def facts(
-    rows: np.ndarray, max_facts: int, objects: int, catalog: Catalog | None
+    rows: np.ndarray,
+    max_facts: int,
+    objects: int,
+    catalog: Catalog | None,
+    *,
+    prefix: int | None = None,
 ) -> None:
     """Validate fact joins, kinds, catalog ids and consecutive program runs."""
     if rows.shape[1:] != (max_facts, FACT_DIM):
         raise ValueError(f"expected [batch, {max_facts}, {FACT_DIM}] facts")
+    if prefix is not None:
+        rows = rows[:, :prefix]
     valid = rows[..., FACT_VALID_INDEX]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("fact validity must be binary")

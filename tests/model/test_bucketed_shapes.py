@@ -268,6 +268,17 @@ def test_admission_preserves_padding_errors_and_original_mask_evidence() -> None
         assert rejected.value.tensors["failed"][-1, -1]
 
 
+def test_reconfigured_fact_capacity_checks_original_buffer_shape() -> None:
+    case = _policy()
+    agent = _bucketed(case.agent)
+    agent.prepare(case.obs)
+    # The old allocation and its measured prefix cannot stand in for a new contract.
+    agent.observation_space.config.max_facts = 8
+    for model in (case.agent, agent):
+        with pytest.raises(ValueError, match=r"^expected \[batch, 8, \d+\] facts$"):
+            model.prepare(case.obs)
+
+
 def test_trimmed_effect_partitions_keep_full_order_bounds_and_batch_strides() -> None:
     case = _policy()
     env = shared_effect_root(1)
