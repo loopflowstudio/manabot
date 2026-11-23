@@ -201,3 +201,176 @@ fn esper_origins_reveals_a_sorcery_and_stays_exiled_on_an_ordinary_return() {
     );
     assert_eq!(zone_of(&s, exiled), Some(ZoneType::Exile));
 }
+
+#[test]
+fn cecil_transforms_in_place_under_a_pending_bolt_and_protects_other_attackers() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        inspect::permanent,
+    };
+    use managym::{agent::action::ActionSpaceKind, state::game_object::Target};
+    let mut s = five_color_setup(&[
+        "Cecil, Dark Knight",
+        "Trusty Boomerang",
+        "Lightning Bolt",
+        "Rocky Rebuke",
+        "Gray Ogre",
+        "Wind Drake",
+    ]);
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    let equipment = s.force_permanent_on_battlefield(0, "Trusty Boomerang");
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Wind Drake");
+    let source = s.game().permanent_object(cecil).unwrap();
+    s.game_mut().state.permanents[equipment]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(source);
+    s.game_mut().state.permanents[cecil]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    set_counters(&mut s, cecil, CounterKind::PlusOnePlusOne, 1);
+    s.game_mut().state.players[0].life = 13;
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(cecil)));
+    if s.action_space().player == Some(PlayerId(1)) {
+        s.pass_priority();
+    }
+    cast(&mut s, "Rocky Rebuke");
+    assert!(s.choose_target(Target::Permanent(cecil)));
+    assert!(s.choose_target(Target::Permanent(victim)));
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert_eq!(s.life(0), 13);
+    let before = Observation::for_player(s.game(), PlayerId(1));
+    assert_eq!(before.continuation[0].trigger_damage, 3);
+    use managym::{
+        agent::{observation_encoder::FactKind, observation_layout::fact},
+        cards::tokens::{name_value, TokenKind},
+    };
+    let damage_tokens = [
+        (TokenKind::Text as u16, name_value("DamageEvent::Amount")),
+        (TokenKind::Integer as u16, 3),
+    ];
+    let program = &before.continuation[0].effect_execution;
+    let rank = program
+        .windows(2)
+        .position(|pair| pair == damage_tokens)
+        .unwrap();
+    let encoded = encode(&before, &ObservationEncoderConfig::default()).unwrap();
+    assert!(encoded
+        .facts
+        .chunks_exact(fact::WIDTH)
+        .any(
+            |row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32
+                && row[fact::VALUE] == TokenKind::Integer as u16 as f32
+                && row[fact::VALUE_2] == (rank + 1) as f32
+                && row[fact::DETAIL_HIGH + 1] == 3.0
+        ));
+    let front = before
+        .opponent_permanents
+        .iter()
+        .find(|p| p.characteristics.name == "Cecil, Dark Knight")
+        .unwrap();
+    resolve_top(&mut s);
+    assert_eq!(s.life(0), 10);
+    let after = Observation::for_player(s.game(), PlayerId(1));
+    let back = after
+        .opponent_permanents
+        .iter()
+        .find(|p| p.characteristics.name == "Cecil, Redeemed Paladin")
+        .unwrap();
+    assert_eq!((back.id, back.object_id), (front.id, front.object_id));
+    assert_eq!(s.game().permanent_object(cecil), Some(source));
+    assert_eq!(permanent(&s, equipment).attached_to, Some(source));
+    assert_eq!(back.plus1_counters, 1);
+    assert!(!back.tapped);
+    assert!(back.characteristics.keywords.lifelink);
+    resolve_top(&mut s);
+    assert_eq!(permanent(&s, cecil).damage, 3);
+    for id in [cecil, ally] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        if let Some(i) = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if [cecil, ally].contains(permanent))) {
+            s.step_action(i);
+        } else { s.decline_attack(); }
+    }
+    settle(&mut s);
+    let viewer = Observation::for_player(s.game(), PlayerId(1));
+    for name in ["Gray Ogre", "Wind Drake", "Cecil, Redeemed Paladin"] {
+        let row = viewer
+            .opponent_permanents
+            .iter()
+            .find(|p| p.characteristics.name == name)
+            .unwrap();
+        assert_eq!(
+            row.characteristics.keywords.indestructible,
+            name == "Gray Ogre"
+        );
+    }
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!s
+        .game()
+        .characteristics(ally)
+        .keywords
+        .has(Keyword::Indestructible));
+}
+
+#[test]
+fn cecil_uses_combat_damage_already_dealt_and_stays_a_knight_above_half_life() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        play::attack_with,
+    };
+    let mut s = five_color_setup(&["Cecil, Dark Knight"]);
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    clear_summoning_sickness(&mut s, cecil);
+    s.game_mut().state.players[0].life = 13;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, cecil);
+    s.advance_to_active_step(0, StepKind::CombatDamage);
+    assert_eq!(s.life(1), 18);
+    assert_eq!(s.life(0), 13);
+    // The pending trigger remembers the hit even if Cecil's power changes.
+    set_counters(&mut s, cecil, CounterKind::PlusOnePlusOne, 1);
+    resolve_top(&mut s);
+    assert_eq!(s.life(0), 11);
+    let view = Observation::for_player(s.game(), PlayerId(1));
+    let knight = view
+        .opponent_permanents
+        .iter()
+        .find(|p| p.characteristics.name == "Cecil, Dark Knight")
+        .unwrap();
+    assert!(knight.tapped && knight.characteristics.keywords.deathtouch);
+}
+
+#[test]
+fn cecil_trampling_over_a_lethal_blocker_leaves_one_damage_trigger() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        play::attack_with,
+    };
+    let mut s = five_color_setup(&["Cecil, Dark Knight", "Craw Wurm"]);
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    s.force_permanent_on_battlefield(1, "Craw Wurm");
+    clear_summoning_sickness(&mut s, cecil);
+    set_counters(&mut s, cecil, CounterKind::Trample, 1);
+    s.game_mut().state.players[0].life = 12;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, cecil);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::CombatDamage);
+    assert_eq!(s.life(1), 19);
+    assert!(s.game().state.permanents[cecil].is_none());
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    resolve_top(&mut s);
+    assert_eq!(s.life(0), 10);
+    assert!(s
+        .battlefield_permanents_named(0, "Cecil, Redeemed Paladin")
+        .is_empty());
+}

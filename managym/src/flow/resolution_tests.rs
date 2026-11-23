@@ -117,6 +117,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            trigger_damage: 0,
             program: false,
             remembered: Vec::new(),
             source_transforms: 0,
@@ -694,6 +695,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        trigger_damage: 0,
         program: false,
         remembered: Vec::new(),
         source_transforms: 0,

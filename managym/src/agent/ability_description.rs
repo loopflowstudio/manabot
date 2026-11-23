@@ -194,6 +194,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
                 Actor::AnyPlayer => "a graveyard",
             }
         ),
+        TriggerCondition::SourceDealsDamage => "this source deals damage".into(),
         TriggerCondition::DealsCombatDamage { subject, to, per } => {
             let to = actor_noun(*to);
             match per {
@@ -388,6 +389,9 @@ fn condition_text(condition: &Condition) -> String {
             "that target is a {}",
             predicate_description(predicate, "permanent")
         ),
+        Condition::AtMostHalfStartingLife => {
+            "your life total is half your starting life total or less".into()
+        }
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
         Condition::SourceMatches(predicate) => {
             format!("this is {}", predicate_description(predicate, "permanent"))
@@ -803,6 +807,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
+        EffectValue::TriggerDamage => "the damage dealt".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),

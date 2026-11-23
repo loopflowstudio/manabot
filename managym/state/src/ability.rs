@@ -150,6 +150,8 @@ pub enum TriggerCondition {
         whose: Actor,
         predicate: CardPredicate,
     },
+    /// Whenever this source deals damage to any recipient.
+    SourceDealsDamage,
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
     /// prevented damage excluded. `per` says whether it triggers once for
     /// each creature that does or once per combat damage step ("one or
@@ -182,6 +184,7 @@ pub enum TriggerCondition {
 /// ability. Definitions never use those outside `Effect::If`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Condition {
+    AtMostHalfStartingLife,
     YourTurn,
     Always,
     CardsDrawnAtLeast {
@@ -352,6 +355,7 @@ impl Condition {
             Condition::Kicked
             | Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
+            | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
             | Condition::CardsThisWayMatch(_)
@@ -565,6 +569,8 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
+    /// Actual amount of the damage event that triggered this ability.
+    TriggerDamage,
     /// The source permanent's current power ("where X is this creature's
     /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,

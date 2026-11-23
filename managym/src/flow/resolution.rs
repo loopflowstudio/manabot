@@ -79,6 +79,7 @@ impl Game {
                 _ => 0,
             },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
+            EffectValue::TriggerDamage => frame.trigger_damage,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::PowerTappedToPay => frame
                 .spent
@@ -128,6 +129,7 @@ impl Game {
             EffectValue::Fixed(value) => *value,
             EffectValue::Objects { .. }
             | EffectValue::X
+            | EffectValue::TriggerDamage
             | EffectValue::ExcessDamage
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
@@ -239,6 +241,7 @@ impl Game {
                 self.state.live(object),
             ),
             kicked: spell.kicked,
+            trigger_damage: 0,
             x: spell.x,
             spent: spell.spent.clone(),
             targets,
@@ -344,6 +347,7 @@ impl Game {
             ),
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
+            trigger_damage: 0,
             x: ability.x,
             spent: ability.paid,
             targets,
@@ -441,6 +445,7 @@ impl Game {
                 .and_then(|lki| lki.inherited_from),
             source_transforms: triggered.source_transforms,
             resolutions_this_turn,
+            trigger_damage: triggered.trigger_damage,
             x: triggered.x,
             spent: triggered.spent.clone(),
             targets,

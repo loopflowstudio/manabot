@@ -1,8 +1,8 @@
 //! Final Fantasy.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, ObjectSelector, PlayerSelector, TriggerCondition,
-        TriggerSubject,
+        Ability, Condition, Effect, EffectValue, Except, ObjectSelector, Per, PlayerSelector,
+        Scope, TriggerCondition, TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -15,7 +15,76 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![esper_origins(), sazh_s_chocobo()]
+    vec![cecil(), esper_origins(), sazh_s_chocobo()]
+}
+
+fn cecil() -> CardDefinition {
+    let text_box = "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.";
+    let back_text = "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.";
+    let creature = PrintedCharacteristics {
+        supertypes: vec!["Legendary".into()],
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Knight".into()],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "fin.cecil_dark_knight",
+        scryfall_id: "026e7167-d665-43d0-a51e-8df2d68cdb5e",
+        printed: PrintedCharacteristics {
+            name: "Cecil, Dark Knight".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::SourceDealsDamage,
+                intervening_if: None,
+                effects: vec![
+                    Effect::LoseLife {
+                        player: PlayerSelector::You,
+                        amount: EffectValue::TriggerDamage,
+                    },
+                    Effect::If {
+                        condition: Condition::AtMostHalfStartingLife,
+                        then: vec![
+                            Effect::Untap {
+                                what: ObjectSelector::This,
+                            },
+                            Effect::TransformSource,
+                        ],
+                        otherwise: vec![],
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..creature.clone()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
+            name: "Cecil, Redeemed Paladin".into(),
+            power: Some(4),
+            toughness: Some(4),
+            color_override: Some(Colors::from_iter([Color::White])),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Each {
+                        of: Scope::Battlefield,
+                        predicate: CardPredicate {
+                            attacking: true,
+                            ..CardPredicate::creature()
+                        },
+                        except: Some(Except::This),
+                        max_mana_value: None,
+                    },
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                )],
+            }],
+            text_box: back_text.into(),
+            ..creature
+        })),
+    }
 }
 
 fn esper_origins() -> CardDefinition {

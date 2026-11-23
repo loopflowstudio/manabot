@@ -93,6 +93,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "event",
     "event ordinal",
     "excess damage",
+    "DamageEvent::Amount",
     "excluded",
     "execution holder",
     "exile choice",
@@ -1025,6 +1026,13 @@ pub(crate) fn project_receipt(
     out.finish(frame);
 }
 
+/// The damage occurrence remains visible while its trigger waits or is stacked.
+pub(crate) fn project_trigger_damage(game: &Game, viewer: PlayerId, frame: &mut ContinuationFrame) {
+    let mut out = Projection::new(game, viewer, false);
+    out.field("DamageEvent::Amount", &frame.trigger_damage);
+    out.finish(frame);
+}
+
 /// Project a suspended effect frame's retained work. `text` additionally
 /// renders its description and summaries; the policy occurrence is identical
 /// either way.
@@ -1066,6 +1074,9 @@ pub(crate) fn project_frame(
     out.objects("created", &effect.created);
     if let Some(source) = &effect.selected_from {
         out.field("selection domain", source);
+    }
+    if effect.trigger_damage != 0 {
+        out.field("DamageEvent::Amount", &effect.trigger_damage);
     }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);

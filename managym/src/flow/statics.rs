@@ -779,6 +779,7 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
         };
         match condition {
+            Condition::AtMostHalfStartingLife => self.state.players[controller.0].life <= crate::state::player::Player::STARTING_LIFE / 2,
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,
             Condition::CardsDrawnAtLeast { count } => {

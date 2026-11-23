@@ -1222,6 +1222,7 @@ class ContinuationFrame:
     remembered: list[VisibleReference]
     inherited_from: VisibleReference | None
     attackers: str | None
+    trigger_damage: int
     source_transforms: int
     kind: int
     decision: int

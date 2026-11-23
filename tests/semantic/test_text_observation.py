@@ -1245,6 +1245,7 @@ def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
     }
     payload["frames"] = [
         frame | {"x": 6, "source_transforms": 1, "inherited_from": source},
+        frame | {"trigger_damage": 3},
         frame | {"kind": 6, "decision": 24, "can_decline": True},
         frame | {"kind": 6, "decision": 25, "mode": 2, "can_decline": True},
         frame | {"kind": 10, "decision": 7, "delayed_frequency": 1},
@@ -1254,6 +1255,7 @@ def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
     text = render_decision(_redigest(payload)).text
     for meaning in (
         "X = 6",
+        "triggering event dealt 3 damage",
         "transformed 2 times",
         "source inherits abilities from",
         "choose optional payment X",

@@ -117,6 +117,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             })
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
+        TriggerCondition::SourceDealsDamage => EventKinds::of(EventKind::SourceDealtDamage),
         TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
@@ -758,6 +759,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            trigger_damage: trigger.trigger_damage,
             program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
@@ -889,6 +891,7 @@ impl Game {
     pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
+            self.check_source_damage_triggers(&events);
             for event in events {
                 if matches!(
                     event,
@@ -902,6 +905,42 @@ impl Game {
                     let sources = self.trigger_ability_sources(&event);
                     self.check_triggers_for_event(&event, &sources);
                 }
+            }
+        }
+    }
+
+    /// “Whenever this deals damage” counts one hit across simultaneous recipients.
+    /// Per-recipient events remain available to history and recipient-specific rules.
+    fn check_source_damage_triggers(&mut self, events: &[GameEvent]) {
+        if !events
+            .iter()
+            .any(|event| matches!(event, GameEvent::DamageDealt { .. }))
+        {
+            return;
+        }
+        let sources = self.indexed_sources(EventKinds::of(EventKind::SourceDealtDamage));
+        if sources.is_empty() {
+            return;
+        }
+        let mut totals = std::collections::BTreeMap::<ObjectId, i32>::new();
+        for event in events {
+            if let GameEvent::DamageDealt {
+                source: Some(source),
+                amount,
+                ..
+            } = event
+            {
+                let total = totals.entry(*source).or_default();
+                *total = total.saturating_add(*amount as i32);
+            }
+        }
+        for source in sources {
+            if let Some(&amount) = totals.get(&source.lki.object) {
+                let event = GameEvent::SourceDealtDamage {
+                    source: source.lki.object,
+                    amount,
+                };
+                self.check_triggers_for_event(&event, std::slice::from_ref(&source));
             }
         }
     }
@@ -1118,6 +1157,10 @@ impl Game {
             };
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                trigger_damage: match event {
+                    GameEvent::SourceDealtDamage { amount, .. } => *amount,
+                    _ => 0,
+                },
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1383,6 +1426,7 @@ impl Game {
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
+            trigger_damage: 0,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -1449,6 +1493,7 @@ impl Game {
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                trigger_damage: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1568,6 +1613,7 @@ impl Game {
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                trigger_damage: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1857,6 +1903,9 @@ impl Game {
                         source_was_on_battlefield,
                         event,
                     )
+            }
+            (TriggerCondition::SourceDealsDamage, GameEvent::SourceDealtDamage { source, .. }) => {
+                *source == source_object
             }
             (TriggerCondition::Dies { subject }, GameEvent::CardMoved { from, to, .. }) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;

@@ -50,6 +50,7 @@ impl TriggerPlacement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingTrigger {
+    pub trigger_damage: i32,
     /// An inline program granted by a continuous effect, without catalog identity.
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
@@ -202,6 +203,9 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("context", &self.context)?;
         if self.player.is_some() {
             map.serialize_entry("player", &self.player)?;
+        }
+        if self.trigger_damage != 0 {
+            map.serialize_entry("trigger_damage", &self.trigger_damage)?;
         }
         if self.x != 0 {
             map.serialize_entry("x", &self.x)?;

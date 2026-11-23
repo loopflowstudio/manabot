@@ -139,6 +139,8 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub trigger_damage: i32,
     /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
     /// What was paid to cast the resolving spell, to cast the permanent whose
@@ -245,6 +247,7 @@ impl EffectFrame {
             controller,
             resolutions_this_turn: 0,
             kicked: false,
+            trigger_damage: 0,
             x: 0,
             spent: Default::default(),
             excess_damage: 0,
@@ -276,6 +279,7 @@ impl EffectFrame {
             source_identity: self.source_identity,
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
+            trigger_damage: self.trigger_damage,
             x: self.x,
             spent: self.spent.clone(),
             targets: self.targets.clone(),

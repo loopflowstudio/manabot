@@ -1074,6 +1074,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
+        TriggerCondition::SourceDealsDamage => "TriggerCondition::SourceDealsDamage",
         TriggerCondition::DealsCombatDamage { .. } => "TriggerCondition::DealsCombatDamage",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
     }
@@ -1104,6 +1105,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             whose: Actor::Opponent,
             predicate: CardPredicate::default(),
         },
+        TriggerCondition::SourceDealsDamage,
         TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::any(CardPredicate::creature()),
             to: Actor::You,
@@ -1191,6 +1193,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::CastFromGraveyard => "Condition::CastFromGraveyard",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::AtMostHalfStartingLife => "Condition::AtMostHalfStartingLife",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
@@ -1236,6 +1239,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::CastFromGraveyard,
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
+        Condition::AtMostHalfStartingLife,
         Condition::TargetDealtDamageThisTurn,
         Condition::SourceCountersAtLeast {
             kind: CounterKind::Quest,
@@ -3377,6 +3381,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
+        trigger_damage => [Rows("ContinuationProgram effect execution, trigger damage")],
         source_transforms => [Rows("Transforms fact rows, id = frame index + 1")],
         kind => [column(Relation, relation::FRAME_KIND)],
         decision => [column(Relation, relation::DECISION)],

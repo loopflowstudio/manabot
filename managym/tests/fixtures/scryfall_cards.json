@@ -6755,5 +6755,36 @@
     "colors": [
       "U"
     ]
+  },
+  "Cecil, Dark Knight": {
+    "name": "Cecil, Dark Knight",
+    "mana_cost": "{B}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Darkness",
+      "Deathtouch",
+      "Transform"
+    ],
+    "oracle_text": "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Cecil, Redeemed Paladin": {
+    "name": "Cecil, Redeemed Paladin",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Lifelink",
+      "Protect"
+    ],
+    "oracle_text": "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.",
+    "colors": [
+      "W"
+    ]
   }
 }

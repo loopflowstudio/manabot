@@ -176,6 +176,11 @@ pub enum GameEvent {
     CombatDamageToPlayers {
         creatures: Vec<PermanentId>,
     },
+    /// Trigger occurrence for one source across all recipients in a damage batch.
+    SourceDealtDamage {
+        source: ObjectId,
+        amount: i32,
+    },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {
         objects: Vec<ObjectEventRef>,
@@ -219,6 +224,7 @@ pub enum EventKind {
     TurnStarted,
     StepStarted,
     Surveilled,
+    SourceDealtDamage,
 }
 
 impl GameEvent {
@@ -236,6 +242,7 @@ impl GameEvent {
             GameEvent::PermanentSacrificed { .. } => EventKind::PermanentSacrificed,
             GameEvent::CardRevealed { .. } => EventKind::CardRevealed,
             GameEvent::CardMoved { .. } => EventKind::CardMoved,
+            GameEvent::SourceDealtDamage { .. } => EventKind::SourceDealtDamage,
             GameEvent::DamageDealt { .. } => EventKind::DamageDealt,
             GameEvent::LifeChanged { .. } => EventKind::LifeChanged,
             GameEvent::SpellCast { .. } => EventKind::SpellCast,

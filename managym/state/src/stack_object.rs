@@ -90,6 +90,8 @@ fn serialize_activation_source<S: serde::Serializer>(
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub trigger_damage: i32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.

@@ -759,6 +759,8 @@ class _Renderer:
             details.append(f"E{slot}: {self.fact_reference(reference)}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")
+        if relation.trigger_damage:
+            details.append(f"triggering event dealt {relation.trigger_damage} damage")
         if relation.source_transforms:
             details.append(
                 f"source transform count at activation/trigger {relation.source_transforms}"

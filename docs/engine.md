@@ -1014,6 +1014,15 @@ The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
 
+Cecil, Dark Knight transforms on the battlefield. If Cecil deals three damage
+while you have 13 life, the trigger remembers three. On resolution you fall to
+10, then untap Cecil and turn it over to Cecil, Redeemed Paladin. The same
+object keeps its counters, attachments and any spell already targeting it.
+If Cecil tramples over a blocker, one trigger counts the damage to both
+recipients. You still lose that life if Cecil dies in combat.
+When the Paladin attacks, its trigger gives the other attacking creatures
+indestructible until end of turn.
+
 Esper Origins illustrates a zone change with a different face up. Cast it from hand
 to surveil two and gain two life. Cast it from your graveyard for its flashback
 cost and it also exiles itself, then enters as Summon: Esper Maduin with finality

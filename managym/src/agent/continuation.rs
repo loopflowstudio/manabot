@@ -99,6 +99,9 @@ pub struct ContinuationFrame {
     /// Its token is a fact; its readable form comes from the rules predicate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attackers: Option<String>,
+    /// Amount actually dealt in the damage event that fired this trigger.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub trigger_damage: i32,
     /// Transform count captured for this ability's source (CR 701.27f).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub source_transforms: u32,
@@ -559,6 +562,7 @@ impl Game {
                     },
                     ability: Some(trigger.ability_index),
                     x: trigger.x,
+                    trigger_damage: trigger.trigger_damage,
                     source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
                     active_clause: Some(trigger.requirement_index),
                     targets: self.clause_targets(
@@ -570,6 +574,9 @@ impl Game {
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
                 };
+                if trigger.trigger_damage > 0 {
+                    super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
+                }
                 if trigger.program {
                     frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
                 }
@@ -635,6 +642,10 @@ impl Game {
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                frame.trigger_damage = ability.trigger_damage;
+                if ability.trigger_damage > 0 {
+                    super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
+                }
                 if ability.program {
                     frame.program(ability.inline_effects.as_deref().unwrap_or_default());
                 }
@@ -817,6 +828,7 @@ impl Game {
             }),
             x: effect.x,
             source_transforms: effect.source_transforms,
+            trigger_damage: effect.trigger_damage,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
             targets: effect

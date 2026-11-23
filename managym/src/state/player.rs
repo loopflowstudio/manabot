@@ -113,6 +113,8 @@ pub struct Player {
 }
 
 impl Player {
+    pub const STARTING_LIFE: i32 = 20;
+
     pub fn new(id: PublicId, index: usize, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -122,7 +124,7 @@ impl Player {
             known_hand: BTreeMap::new(),
             known_library: Default::default(),
             name: name.into(),
-            life: 20,
+            life: Self::STARTING_LIFE,
             drew_when_empty: false,
             alive: true,
             mana_pool: ManaPool::default(),
