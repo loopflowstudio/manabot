@@ -88,6 +88,7 @@ def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
     obs = {key: value[::-2] for key, value in space.allocate(9).items()}
     # Full coordinates are players [0,2), cards [2,11), [11,20),
     # permanents [20,25), [25,30), and stack [30,33).
+    obs["actions_valid"][:2, 0] = 1
     obs["action_focus"][:] = -1
     obs["action_focus"][0, 0, 0] = 10
     obs["action_focus"][1, 0, 0] = 19
@@ -112,6 +113,7 @@ def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
 
     expected = np.zeros((5, len(AXES)), dtype=np.int64)
     for axis, rows in {
+        "actions": [1, 1, 0, 0, 0],
         "facts": [0, 0, 4, 3, 0],
         "effects": [0, 0, 2, 0, 0],
         "details": [0, 0, 3, 0, 0],
@@ -151,12 +153,39 @@ def test_remapped_references_are_every_object_table_column() -> None:
         element = array.get("element")
         if element is not None and element["kind"] == "reference":
             assert key == "action_focus", key
-    obs = ObservationSpace(ObservationConfig(policy_history_version=1)).allocate(1)
+    space = ObservationSpace(ObservationConfig(policy_history_version=1))
+    obs = space.allocate(len(expected))
     assert {
         (key, index, base)
         for key, indices, base in object_reference_columns(obs)
         for index in indices
     } == expected
+    # Each native join alone must keep its destination, including empty
+    # object slots. A missing join would silently change bucket coordinates.
+    target = (
+        sum(
+            obs[key].shape[1]
+            for key in (
+                "agent_player",
+                "opponent_player",
+                "agent_cards",
+                "opponent_cards",
+                "agent_permanents",
+                "opponent_permanents",
+                "stack",
+            )
+        )
+        - 1
+    )
+    for batch, (key, index, base) in enumerate(sorted(expected)):
+        obs[key][batch, 0, index] = target + base
+    extents = space.layout.axis_extents(obs)
+    assert extents is not None
+    np.testing.assert_array_equal(
+        extents["stack"],
+        np.full(len(expected), obs["stack"].shape[1], np.int64),
+        strict=True,
+    )
 
 
 @pytest.mark.parametrize(

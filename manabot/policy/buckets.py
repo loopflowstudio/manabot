@@ -37,7 +37,6 @@ import numpy as np
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationBuffers, ObservationSpace, column, width
-import managym
 
 MIN_BUCKET = 8
 
@@ -90,11 +89,6 @@ OBJECT_REFERENCES = tuple(
     )
 )
 _EVENT_WIDTH = width("events")
-# Row joins into other variable axes.
-_DETAIL_SPAN = (column("effects", "detail_offset"), column("effects", "detail_count"))
-_MEMBER_SPAN = (column("effects", "member_offset"), column("effects", "member_count"))
-_RELATION_FRAME = column("relations", "frame")
-_ACTION_CONTINUATION = column("actions", "continuation")
 
 
 def bucket(need: int, capacity: int) -> int:
@@ -141,23 +135,6 @@ def _capacities(space: ObservationSpace) -> dict[str, int]:
     }
 
 
-def _extent(value: np.ndarray, axis: int) -> np.ndarray:
-    """One past each item's last nonzero row, including poisoned padding."""
-    if value.dtype != np.float32:
-        # Test occupancy in the original dtype. A tiny float64 may round to zero.
-        value = np.not_equal(value, 0).astype(np.float32)
-    elif not value.flags.aligned:
-        value = value.copy()
-    return np.asarray(managym.observation_row_extents(value, axis), dtype=np.int64)
-
-
-def _reference_extent(values: np.ndarray, capacity: int) -> np.ndarray:
-    """Largest finite one-based reference per item, floored and clamped to capacity."""
-    values = np.asarray(values, dtype=np.float32)
-    largest = values.max(axis=1, where=np.isfinite(values), initial=0)
-    return np.minimum(largest, capacity).astype(np.int64)
-
-
 def has_history_events(obs: Mapping[str, object]) -> bool:
     """Whether `events` holds policy-history rows, whose contexts name objects."""
     events = obs.get("events")
@@ -190,15 +167,6 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     return segments
 
 
-def _reference_buffer(value: np.ndarray, base: int) -> tuple[np.ndarray, int]:
-    if value.dtype != np.float32:
-        # NumPy subtracts in the source dtype before rounding to float32.
-        if base:
-            value = value - base
-        return value.astype(np.float32), 0
-    return (value if value.flags.aligned else value.copy()), base
-
-
 AXES: tuple[str, ...] = (
     "facts",
     "effects",
@@ -227,74 +195,19 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
     shapes differ from the declared layout: it is not trimmed, so the model
     rejects it exactly as it would without buckets.
     """
-    shapes = space.shapes
-    mask = obs.get("actions_valid")
-    if mask is None or mask.ndim != 2:
-        return None
-    count = len(mask)
-    if any(
-        key not in obs or obs[key].shape != (count, *shape)
-        for key, shape in shapes.items()
-        if not (
-            isinstance(obs, PrefixObservation)
-            and key in MEMORY_FIELDS
-            and key not in obs
-        )
-    ):
-        return None
-    capacities = _capacities(space)
-    needs = {axis: np.zeros(count, np.int64) for axis in AXES}
-
-    def need(axis: str, rows: np.ndarray) -> None:
-        needs[axis] = np.maximum(needs[axis], rows)
-
-    for axis, keys in ROW_KEYS.items():
-        for key in keys:
-            # actions_valid bounds action_focus, whose padding is -1.
-            if key != "action_focus" and key in obs:
-                need(axis, _extent(obs[key], 1))
-    for axis, keys in SEAT_KEYS.items():
-        for key in keys:
-            if key in obs:
-                need(axis, _extent(obs[key], 2))
-    # Live effect headers name detail and member spans [offset, offset + count).
-    effects = obs["effects"]
-    for axis, (offset, length) in (
-        ("details", _DETAIL_SPAN),
-        ("members", _MEMBER_SPAN),
-    ):
-        need(
-            axis,
-            _reference_extent(
-                # A narrow integer export can encode both fields but not their sum.
-                np.add(
-                    effects[..., offset],
-                    effects[..., length],
-                    dtype=np.result_type(effects.dtype, np.float32),
-                ),
-                capacities[axis],
-            ),
-        )
-    # Frame ids and action continuation joins index the relation axis.
-    for key, index in (
-        ("relations", _RELATION_FRAME),
-        ("actions", _ACTION_CONTINUATION),
-    ):
-        need(
-            "relations",
-            _reference_extent(obs[key][..., index], capacities["relations"]),
-        )
-    references = [_reference_buffer(obs["action_focus"], 0)]
-    for key, indices, base in object_reference_columns(obs):
-        references.extend(_reference_buffer(obs[key][..., i], base) for i in indices)
-
-    segments = object_segments(capacities)
-    extents = managym.observation_reference_extents(
-        references, [(start, length) for _, start, length in segments]
+    # Belief features belong to the policy, outside the native observation.
+    native = (
+        {key: value for key, value in obs.items() if not key.startswith("belief_")}
+        if "belief_card_def_ids" in obs
+        else obs
     )
-    for (axis, _, _), rows in zip(segments, extents, strict=True):
-        need(axis, np.asarray(rows, dtype=np.int64))
-    return np.stack([needs[axis] for axis in AXES], axis=1)
+    extents = space.layout.axis_extents(
+        native, omit_decision_memory=isinstance(obs, PrefixObservation)
+    )
+    if extents is None:
+        return None
+    zeros = np.zeros_like(extents["actions"])
+    return np.stack([extents.get(axis, zeros) for axis in AXES], axis=1)
 
 
 def sizes_of(

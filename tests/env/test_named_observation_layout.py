@@ -51,34 +51,49 @@ def test_column_constants_are_read_from_the_native_layout() -> None:
     assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
 
 
-def test_observation_row_extents_on_strided_and_empty_views() -> None:
-    rows = np.broadcast_to(np.array([[0, 1, 3.5]], np.float32), (2, 3))
-    assert managym.observation_row_extents(rows[:, ::-1], 1) == [2, 2]
-    assert managym.observation_row_extents(rows[:, :0], 1) == [0, 0]
-    assert managym.observation_row_extents(rows[:0], 1) == []
-    with pytest.raises(ValueError, match="strided"):
-        managym.observation_row_extents(rows, 2)
+@pytest.mark.parametrize("version", [9, 10, 11])
+def test_axis_extents_use_the_configured_layout(version: int) -> None:
+    layout = managym.ObservationLayout(
+        policy_input_version=version, max_stack_objects=32 if version == 11 else 0
+    )
+    obs = layout.allocate(3)
+    # Reverse the row and column strides and broadcast the batch stride.
+    deck = obs["decklists"][:, :, ::-1, ::-1]
+    deck[0, 1, 9, 0] = np.nan
+    obs["decklists"] = np.broadcast_to(deck[:1], deck.shape)
+    obs["action_focus"].fill(-1)
+    obs["actions_valid"][1, 2] = 1
+    obs["action_focus"][:, 2, 0] = 11
+    obs["action_focus"][:, 3, 0] = 31  # beyond every mask prefix
+    obs["actions"][2, 4, 0] = 1  # extends action rows, never eligible focus
+    extents = layout.axis_extents(obs)
+    assert extents is not None and ("stack" in extents) == (version == 11)
+    np.testing.assert_array_equal(
+        extents["cards"], np.array([0, 10, 0], np.int64), strict=True
+    )
+    np.testing.assert_array_equal(extents["actions"], [0, 3, 5])
+    np.testing.assert_array_equal(extents["decklists"], [10, 10, 10])
+    empty = layout.axis_extents(layout.allocate(0))
+    assert empty is not None and all(value.shape == (0,) for value in empty.values())
 
 
-def test_observation_row_extents_take_the_last_occupied_row_across_seats() -> None:
-    dense = np.zeros((3, 2, 10, 4), np.float32)
-    dense[0, 0, 1, 0] = 1
-    dense[0, 1, 9, 2] = np.nan
-    dense[1, 0, 7, 0] = 2
-    dense[1, 1, 9, 3] = -0.0
-    assert managym.observation_row_extents(dense, 2) == [10, 8, 0]
-
-
-def test_observation_reference_extents_on_broadcast_columns() -> None:
-    rows = np.broadcast_to(np.array([[0, 1, 3.5]], np.float32), (2, 3))
-    segments = [(0, 2), (2, 3), (5, 0)]
-    assert managym.observation_reference_extents([(rows, 1)], segments) == [
-        [1, 1],
-        [1, 1],
-        [0, 0],
-    ]
-    with pytest.raises(ValueError, match="batch sizes"):
-        managym.observation_reference_extents([(rows, 0), (rows[:1], 1)], segments)
+def test_axis_extents_require_matching_batched_arrays() -> None:
+    layout = managym.ObservationLayout(
+        max_decision_records=2,
+        max_decision_references=2,
+        max_decision_reference_details=2,
+        max_decision_members=2,
+    )
+    obs = layout.allocate(1)
+    del obs["decision_records"]
+    assert layout.axis_extents(obs) is None
+    assert layout.axis_extents(obs, omit_decision_memory=True) is not None
+    obs["extra"] = obs["facts"]
+    assert layout.axis_extents(obs, omit_decision_memory=True) is None
+    del obs["extra"]
+    obs["decision_members"] = obs["decision_members"][:, :1]
+    assert layout.axis_extents(obs, omit_decision_memory=True) is None
+    assert layout.axis_extents(layout.allocate()) is None
 
 
 def test_fact_kinds_are_named_native_row_kinds() -> None:

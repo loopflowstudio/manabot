@@ -186,6 +186,18 @@ impl ObservationLayout {
         Ok((PyTuple::empty_bound(py).into(), kwargs.into()))
     }
 
+    /// Occupied or referenced row extents per batch item. Keep all input
+    /// storage stable until return; the scan releases the GIL.
+    #[pyo3(signature = (obs, *, omit_decision_memory=false))]
+    fn axis_extents(
+        &self,
+        py: Python<'_>,
+        obs: &Bound<'_, PyAny>,
+        omit_decision_memory: bool,
+    ) -> PyResult<Option<PyObject>> {
+        super::layout_extents::axis_extents(py, self, obs, omit_decision_memory)
+    }
+
     #[getter]
     fn arrays(&self, py: Python<'_>) -> PyResult<PyObject> {
         arrays_dict(py, &self.arrays)
