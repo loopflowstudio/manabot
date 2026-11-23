@@ -166,3 +166,5 @@ mod woe;
 mod wth;
 #[path = "cards/zen.rs"]
 mod zen;
+#[path = "cards/znr.rs"]
+mod znr;

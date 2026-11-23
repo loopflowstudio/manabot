@@ -1,4 +1,16 @@
 {
+  "Marauding Blight-Priest": {
+    "name": "Marauding Blight-Priest",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Vampire Cleric",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, each opponent loses 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Drogskol Reaver": {
     "name": "Drogskol Reaver",
     "mana_cost": "{5}{W}{U}",

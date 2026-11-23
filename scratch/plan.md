@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate and Drogskol Reaver. Twelve cards have documented deferrals and 199 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate, Drogskol Reaver and Marauding Blight-Priest. Twelve cards have documented deferrals and 198 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -119,7 +119,9 @@ The closed-deck fixture in `managym/cards/tests/cards/dka.rs` checks both seats 
 
 **Behavior review at `28041bd2`.** Both debug DKA fixtures and both Academy/viewer-text cases passed again. The engine captures first- and double-strike participants when the first damage step begins. Regular damage reads that record and current double strike. Academy labels the existing pass offer from the projected turn flag. Removing Reaver’s abilities between steps preserved its participant flag and prevented a second hit. The combat-timing correction satisfies this working slice. The broader working phase still needs the Blight-Priest interaction and remaining authoring slices before gate.
 
-**Next slice.** Author Marauding Blight-Priest with the same life-gain trigger. Attack with Reaver alone and resolve both cards’ triggers in each damage step. Check life at 23/16 after the first pair and 26/12 after the second, with one draw per step. Use Reaver alone as the existing control. Check the life-gain condition in catalog learning tokens and viewer text. Full consumer and conformance suites remain at gate.
+**Marauding Blight-Priest.** The Zendikar Rising definition uses the shared controller life-gain trigger. With Reaver attacking alone, the native fixture resolved two triggers per damage step. The controller drew once each time and life totals reached 23/16, then 26/12. Both viewers saw the life-gain condition on the stack, and the card's learning tokens contained it. The first catalog run exposed a missing creature-type entry for Vampire. The shared subtype table now classifies it.
+
+**Next slice.** Begin the damage replacement work in Slice 3. Full consumer and conformance suites remain at gate.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
 1. Implement `ReplacementEffect::ModifyDamage` (migrating/retiring test-only `DoubleDamageToController` and `PreventDamageToController` cleanly with `token_renames.rs` and checking `test_pinned_pilot.py`) and opponent-scoped entry-tapped replacement (preserving Zhao's pinned tokens).
