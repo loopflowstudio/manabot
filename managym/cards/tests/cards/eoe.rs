@@ -163,3 +163,111 @@ fn lumen_class_frigate_levels_follow_its_charge_counters() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     assert!(!has_action(&s, stations), "station only as a sorcery");
 }
+
+#[test]
+fn silencer_and_fynn_count_artifact_creature_hits() {
+    use crate::support::{
+        game::{clear_summoning_sickness, until_end_of_turn},
+        play::{attack_with, pass_until, resolve_top},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::Keywords, effect::Modification},
+    };
+
+    for token in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Virulent Silencer", "Fynn, the Fangbearer"]);
+        let fynn = s.force_permanent_on_battlefield(0, "Fynn, the Fangbearer");
+        let silencer = s.force_permanent_on_battlefield(0, "Virulent Silencer");
+        let attacker = if token {
+            s.game_mut()
+                .create_token("token.ballistic_boulder", PlayerId(0), false)
+                .unwrap()
+        } else {
+            silencer
+        };
+        clear_summoning_sickness(&mut s, attacker);
+        until_end_of_turn(
+            &mut s,
+            attacker,
+            Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
+        );
+        s.game_mut().state.players[1]
+            .counters
+            .change(CounterKind::Poison, 6);
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, attacker);
+        let triggers = if token { 1 } else { 2 };
+        s.advance_until(
+            |s| {
+                s.game().state.stack_objects.len() == triggers
+                    && s.action_space().kind == ActionSpaceKind::Priority
+            },
+            "missing poison trigger".into(),
+        );
+        let source = card_of(&s, fynn);
+        s.game_mut().move_object(source, ZoneType::Exile);
+        resolve_top(&mut s);
+        assert_eq!(
+            s.game().state.players[1].counters.get(CounterKind::Poison),
+            8
+        );
+        if !token {
+            resolve_top(&mut s);
+        }
+        s.assert_life(1, 18);
+        assert_eq!(
+            s.game().state.players[1].counters.get(CounterKind::Poison),
+            if token { 8 } else { 10 }
+        );
+        assert_eq!(s.game().winner_index(), (!token).then_some(0));
+    }
+}
+
+#[test]
+fn silencer_requires_combat_damage_to_the_player() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, cast_card, pass_until, settle_targeting_opponent},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::card::ReplacementEffect};
+
+    for prevent in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Virulent Silencer", "Gray Ogre"]);
+        let attacker = s.force_permanent_on_battlefield(0, "Virulent Silencer");
+        clear_summoning_sickness(&mut s, attacker);
+        let defender = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        if prevent {
+            let object = card_of(&s, defender);
+            s.game_mut().state[object].replacement_effects =
+                vec![ReplacementEffect::PreventDamageToController { amount: 2 }];
+        }
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, attacker);
+        pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+        if prevent {
+            s.decline_block();
+        } else {
+            s.declare_block();
+        }
+        s.advance_to_step(StepKind::EndOfCombat);
+        s.assert_life(1, 20);
+        assert_eq!(
+            s.game().state.players[1].counters.get(CounterKind::Poison),
+            0
+        );
+    }
+
+    let mut s = five_color_unfunded_setup(&["Virulent Silencer", "Warstorm Surge"]);
+    s.force_permanent_on_battlefield(0, "Warstorm Surge");
+    let silencer = crate::support::game::force_new_card_in_hand(&mut s, 0, "Virulent Silencer");
+    s.set_player_mana_pool(0, "3");
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    cast_card(&mut s, silencer);
+    settle_targeting_opponent(&mut s);
+    s.assert_life(1, 18);
+    assert_eq!(
+        s.game().state.players[1].counters.get(CounterKind::Poison),
+        0
+    );
+}

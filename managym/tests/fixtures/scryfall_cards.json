@@ -5398,6 +5398,16 @@
       "G"
     ]
   },
+  "Virulent Silencer": {
+    "name": "Virulent Silencer",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Robot Assassin",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever a nontoken artifact creature you control deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)",
+    "colors": []
+  },
   "Valakut, the Molten Pinnacle": {
     "name": "Valakut, the Molten Pinnacle",
     "mana_cost": "",

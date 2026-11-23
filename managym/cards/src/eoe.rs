@@ -3,7 +3,10 @@
 //! activation's receipt; a Spacecraft's "N+" lines are static abilities
 //! conditioned on its charge counters.
 use managym_state::{
-    ability::{Condition, Effect, EffectValue, ObjectSelector},
+    ability::{
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
+        TriggerCondition, TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticScope,
@@ -15,7 +18,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![lumen_class_frigate()]
+    vec![lumen_class_frigate(), virulent_silencer()]
 }
 
 fn lumen_class_frigate() -> CardDefinition {
@@ -69,6 +72,41 @@ fn lumen_class_frigate() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn virulent_silencer() -> CardDefinition {
+    CardDefinition {
+        key: "eoe.virulent_silencer",
+        scryfall_id: "4120fcfc-3547-4774-a15d-b9cccac04e76",
+        printed: PrintedCharacteristics {
+            name: "Virulent Silencer".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Robot".into(), "Assassin".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        token: Some(false),
+                        card_types_any: vec![CardType::Artifact],
+                        ..CardPredicate::creature()
+                    }),
+                    to: Actor::Opponent,
+                    per: Per::Object,
+                },
+                effects: vec![Effect::GivePlayerCounters {
+                    player: PlayerSelector::EachOpponent,
+                    kind: CounterKind::Poison,
+                    count: 2,
+                }],
+            }],
+            text_box: "Whenever a nontoken artifact creature you control deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)".into(),
             ..Default::default()
         },
         ..Default::default()
