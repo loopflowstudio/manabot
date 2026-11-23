@@ -9,7 +9,7 @@ is roughly two million games per model.
 
 from collections.abc import Sequence
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRecord
 from etude.eval.records import Aligned, Fraction
@@ -17,6 +17,7 @@ from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Variable
 from etude.train.tracking import track
+from pydantic import Field
 
 from experiments import tla_trophies as trophies
 from experiments.tla_frontier import SIZES, SizeLabel, learning, model
@@ -45,12 +46,14 @@ class Config(trophies.Config):
     size: SizeLabel
     schedule_steps: int = TARGET_UPDATES
     tau_scale: float = 0.1
+    workers: Literal[1, 2, 4] = Field(default=1, exclude_if=lambda value: value == 1)
 
 
 def settings(config: Config) -> "SelfPlay":
     base = trophies.settings(config)
     return base.model_copy(
         update={
+            "workers": config.workers,
             "model": model(config.size).model_copy(
                 update={"focus_film": True, "stream_norm": True}
             ),
@@ -81,6 +84,7 @@ def training_jobs(
     usd_per_run: float = 12.0,
     attempts: int = 12,
     threads: int = 4,
+    workers: Literal[1, 2, 4] = 1,
     streams: int = 256,
     rows: int = 512,
     checkpoint_every: int = 250,
@@ -94,6 +98,7 @@ def training_jobs(
                 updates=updates,
                 schedule_steps=TARGET_UPDATES,
                 threads=threads,
+                workers=workers,
                 streams=streams,
                 rows=rows,
                 checkpoint_every=checkpoint_every,
