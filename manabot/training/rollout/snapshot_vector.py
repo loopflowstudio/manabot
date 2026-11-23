@@ -21,7 +21,7 @@ from manabot.training.rollout.producers import (
     StreamShard,
 )
 import managym
-from managym.recording import GameInputs
+from managym.recording import GameInputs, RecordingOptions
 
 
 @dataclass(frozen=True)
@@ -136,6 +136,8 @@ class InMemorySnapshotVector(BufferedStreams):
     Each slot parks its fresh native source during replay. A hot handle keeps
     the resolved native setup; both paths replay the committed action prefix.
     The sum of the two native generations advances on resets of either source.
+    Only fresh sources write game records and statistics: a continuation
+    replays a prefix its fresh game already recorded, so it is not a game.
     """
 
     @classmethod
@@ -153,7 +155,7 @@ class InMemorySnapshotVector(BufferedStreams):
     ) -> None:
         memory = observation_space.config
 
-        def streams() -> list[StreamShard]:
+        def streams(recording: RecordingOptions) -> list[StreamShard]:
             return [
                 StreamShard(
                     i,
@@ -166,13 +168,14 @@ class InMemorySnapshotVector(BufferedStreams):
                         decision_memory=memory.max_decision_records > 0,
                         decision_memory_include_own=memory.decision_memory_include_own,
                         player_policies=("agent", "agent"),
+                        **recording,
                     ),
                 )
                 for i in range(num_envs)
             ]
 
-        self._fresh = streams()
-        self._replay = streams()
+        self._fresh = streams({})
+        self._replay = streams({"record_fraction": 0.0, "statistics_path": None})
         super().__init__(num_envs, self._fresh.copy())
 
     def set_buffers(

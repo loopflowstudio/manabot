@@ -21,6 +21,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -33,6 +34,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
+from manabot.infra.run_settings import RunSettings
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_parameters,
@@ -86,7 +88,8 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import compute_batch_targets
 import managym
-from managym.recording import GameInputs, PlayerSetup
+from managym.recording import GameInputs, PlayerSetup, read_records
+from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
@@ -522,6 +525,42 @@ def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() ->
         assert (batch.snapshot_id[2:] == -1).all() and (
             batch.branch_group_id[2:] == -1
         ).all()
+
+
+@torch.no_grad()
+def test_recorded_games_and_statistics_hold_only_fresh_games(tmp_path: Path) -> None:
+    """A continuation replays its root's prefix; recording it would count it twice."""
+    space = ObservationSpace()
+    agent = small_agent(space)
+    recipe, _ = replay_root(space)
+    branch = SnapshotBranch(3, recipe, horizon=1, branch_group_id=8)
+    scope = CaptureScope(
+        tmp_path / "failures",
+        settings=RunSettings(record_games=1, statistics=True),
+    )
+    with capture_scope(scope), replay_collector(space, recipe) as collector:
+        collect(
+            collector,
+            agent,
+            3,
+            snapshot_starts=[branch, replace(branch, branch_index=1)],
+        )
+        assert collector.stats.games == 1
+    played = [
+        game
+        for record in read_records(tmp_path / "games")
+        for game in record.games
+        if game.actions
+    ]
+    assert len(played) == 1 and played[0].end is not None
+    assert played[0].end.status == "complete"
+    finished = [
+        row
+        for path in (tmp_path / "statistics").glob("*.jsonl")
+        for row in read_statistics(path)
+        if row.terminal
+    ]
+    assert len(finished) == 1
 
 
 def test_provenance_rejects_misaligned_arrays_invalid_values_and_mixed_spans() -> None:

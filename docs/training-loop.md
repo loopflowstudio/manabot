@@ -202,8 +202,9 @@ seats, complete-game closure and a self-play behavior policy. Snapshot collectio
 and adaptive matchup sampling each own the episode schedule.
 
 Save this recipe as `snapshot_recipe.py`. It runs the single-process Python
-vector. A recipe may also supply its own buffered `SnapshotVector` instance or
-a factory taking `(observation_space, match, num_envs, seed)`.
+vector, which ignores `workers`. A recipe may also supply its own buffered
+`SnapshotVector` instance or a factory taking
+`(observation_space, match, num_envs, seed)`.
 
 ```python
 from typing import Literal
@@ -341,12 +342,13 @@ the bank before its vector to release cached handles.
 
 ### Requirements, accounting and recovery
 
-Fresh games supply the outcome and game-setting tables and the rates
-`decisions_per_game`, `skipped_share` and `games_per_hour`. A replay-only
-update writes empty tables and omits those rates. Total throughput includes
-both sources. Under `snapshot/`, `starts` and `choices` include retries,
-`rows` and `captures` count retained work, and `terminals` and `horizon_cuts`
-count each branch ending once. `groups_completed`, `groups_discarded` and
+Fresh games supply the outcome and game-setting tables, recorded games
+(`record_games`), statistics and the rates `decisions_per_game`,
+`skipped_share` and `games_per_hour`. A replay-only update writes empty
+tables and omits those rates. Total throughput includes both sources. Under
+`snapshot/`, `starts` and `choices` include retries, `rows` and `captures`
+count retained work, and `terminals` and `horizon_cuts` count each branch
+ending once. `groups_completed`, `groups_discarded` and
 `failed_branches` report group and retry outcomes.
 
 Each successful update commits its scores, allocation counters and RNG together.
