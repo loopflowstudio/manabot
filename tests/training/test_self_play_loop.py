@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from manabot.backends.torch import policy as policy_module
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
@@ -27,7 +27,9 @@ from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import CLOCKS, Counts, SelfPlay, self_play
 from manabot.training.rollout.collection import Collector, RolloutBatch
+from manabot.training.state.backend import SelfPlayBackend
 from manabot.training.updates.selection import UpdateDiagnostics
+from manabot.training.updates.targets import BatchTargets
 from tests.fixtures.training_records import recording
 
 SEED = 197
@@ -177,7 +179,7 @@ def test_resume_refuses_changed_model_settings(
     saved = json.loads(state.read_text())
     assert saved["extra"]["model"] == settings.model.checkpoint_payload()
     initial = out / "policies/00000000-raw.safetensors"
-    assert "model" not in loop.load_metadata(initial)["bc"]["counts"]
+    assert "model" not in load_metadata(initial)["bc"]["counts"]
     if legacy_state:
         del saved["extra"]["model"]
         state.write_text(json.dumps(saved))
@@ -323,8 +325,11 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         rng: np.random.Generator,
         *,
         out: Path,
+        backend: SelfPlayBackend | None = None,
     ) -> dict[str, object]:
-        row = original_step(settings, learner, ema, collector, counts, rng, out=out)
+        row = original_step(
+            settings, learner, ema, collector, counts, rng, out=out, backend=backend
+        )
         coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
         assert coordinates["coordinates/updates"] == 1
         assert "coordinates/model" not in coordinates
@@ -381,6 +386,9 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
         counts: Counts,
         batch: RolloutBatch,
         rng: np.random.Generator,
+        *,
+        backend: SelfPlayBackend,
+        targets: BatchTargets | None = None,
     ) -> UpdateDiagnostics:
         raise NumericalError(
             "fixture_nonfinite", {"values": torch.tensor([float("nan")])}

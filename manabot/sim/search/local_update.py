@@ -29,7 +29,7 @@ from numpy.typing import NDArray
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
-from manabot.belief.protocol import SamplerBackend
+from manabot.belief.protocol import belief_sampling
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling_types import sampling_digest
 from manabot.belief.state import (
@@ -42,6 +42,7 @@ from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.local_update_receipt import (
     FloatArray,
@@ -95,7 +96,7 @@ class LocalUpdateTeacher:
         sha256: str,
         config: LocalSearchConfig,
         *,
-        backend: SamplerBackend,
+        backend: PolicyLoader,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
         native_encoder: bool = True,
@@ -133,20 +134,21 @@ class LocalUpdateTeacher:
                 raise ValueError(
                     "sampler generating policy or world differs from rollout policy"
                 )
+            sampling = belief_sampling(backend)
             model = load_belief_sampler(
                 sampler.path,
-                codec=backend.belief,
+                codec=sampling,
                 expected_checkpoint_identity=sampler.sha256,
                 expected_dataset_identity=sampler.dataset_identity,
                 expected_schema_identity=sampler.schema_identity,
                 expected_policy_identity=sha256,
                 expected_world_identity=sampler.world_identity,
             )
-            backend.belief.freeze_sampler(model)
+            sampling.freeze_sampler(model)
             self._sampler_authority = LearnedHandSampler(model, sampler.sha256)
         elif config.sampling == "compatible_prior":
             self._sampler_authority = PhysicalHandSampler(
-                backend.belief.PhysicalDistribution()
+                belief_sampling(backend).PhysicalDistribution()
             )
         self.hand_sampler = self._sampler_authority
         if hand_sampler is not None:
