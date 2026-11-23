@@ -163,6 +163,8 @@ Restoring the native game clone after Hunter's sacrifice choice reproduced the e
 
 The v11 fact joins the active player row for either viewer. The turn owns one boolean. The native restore fixture at `556b0dc2` compares end-step hashes for sacrifice and decline. Command replay and Academy parity remain integrated checks.
 
+Behavior review at `9a119c98`: five focused Rust tests passed (both Hunter fixtures, Prowler ward, copied Island death versus exile, and default catalog token spans). Three Python controls passed for the public death fact in text, tensors and serialized observations, hidden-hand permutations, and manual mana Commands with stale rejection. Prowler uses the shared controller end-step condition, counter effect and ward payment. Both ward choices reached their expected outcomes. The Prowler working slice is satisfied. The restored branches exercised native clones; end-to-end Command replay and Academy parity remain open.
+
 ## Next slice · Incinerating Blast
 
 Author Blast as ordered damage followed by the existing Effect::discard_draw(1, 1), as used in the TLA catalog. The cost-primary ledger classification does not imply a casting cost. Start with lethal damage to a legal creature and retain the private discard choice during that same resolution. This distinguishes a target lost before resolution from one dealt lethal damage during it. Fork the pending discard after Blast deals damage. Offer decline and every legal card in hand. Resolve decline and two different discards from that fork, checking the discarded identity and one draw only in each paid branch. From a fork before damage, remove the sole target and verify that resolution offers no discard and draws nothing. Use this decision for the replay and privacy fixture below.
