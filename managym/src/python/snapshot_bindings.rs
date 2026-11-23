@@ -17,6 +17,11 @@ impl PyGameSnapshot {
     }
 
     #[getter]
+    fn acting_player(&self) -> Option<usize> {
+        self.0.acting_player()
+    }
+
+    #[getter]
     fn seed(&self) -> u64 {
         self.0.seed()
     }
@@ -56,6 +61,11 @@ impl PyGameSnapshot {
 pub(super) struct PyRestoreOptions(pub(super) RestoreOptions);
 #[pymethods]
 impl PyRestoreOptions {
+    #[getter]
+    fn forced_first_action(&self) -> Option<usize> {
+        self.0.forced_first_action
+    }
+
     #[new]
     fn new() -> Self {
         Self(RestoreOptions::default())

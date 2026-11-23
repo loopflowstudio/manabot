@@ -329,7 +329,22 @@ impl VectorEnv {
     }
 
     pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
-        self.envs.iter().map(Env::exposure_json).collect()
+        self.selected_exposure(None)
+    }
+
+    pub(crate) fn selected_exposure(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<String>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| active.is_none_or(|mask| mask[*slot]))
+            .map(|(_, env)| env.exposure_json())
+            .collect()
     }
 
     /// Configure only before allocation of roots; native authored setups are the authority.
@@ -1096,6 +1111,80 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::{GameSetup, PlayerConfig},
     };
+
+    #[test]
+    fn deferred_steps_construct_and_encode_only_requested_games() {
+        use crate::{agent::vector_env::SlotLoad, flow::setup::CONSTRUCTIONS};
+        let load = |vector: &mut VectorEnv, request: SlotLoad| {
+            vector
+                .load_slots_into(
+                    &[request],
+                    |_, _| Ok(()),
+                    |_, _, terminal| {
+                        assert!(!terminal);
+                        Ok(())
+                    },
+                )
+                .unwrap()
+                .pop()
+                .unwrap()
+                .0
+        };
+        for isolated in [false, true] {
+            let mut vector =
+                VectorEnv::new(1, u64::MAX, true, [PlayerPolicy::Agent; 2]).with_auto_reset(false);
+            let before = CONSTRUCTIONS.get();
+            let players = ["a", "b"]
+                .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 12)])));
+            vector.reset_all(players.to_vec()).unwrap();
+            let root = vector
+                .snapshot_slots(&[true])
+                .unwrap()
+                .pop()
+                .flatten()
+                .unwrap();
+            let branch = || SlotLoad::Snapshot(0, root.clone(), Default::default());
+            load(&mut vector, branch());
+            assert_eq!(vector.next_fresh_seeds(), [u64::MAX]);
+            let writes = std::cell::Cell::new(0);
+            let observe = |obs: &crate::agent::observation::Observation, done| {
+                writes.set(writes.get() + 1);
+                assert_eq!(obs.action_space.actions.is_empty(), done);
+            };
+            for steps in 1..=64 {
+                if isolated {
+                    vector
+                        .step_isolated_into(&[0], &[true], false, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                } else {
+                    vector
+                        .step_into(&[0], None, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                }
+                assert_eq!(writes.get(), steps);
+                if vector.current_agent_indices() == [-1] {
+                    break;
+                }
+            }
+            assert_eq!(vector.current_agent_indices(), [-1]);
+            load(&mut vector, branch());
+            vector
+                .step_isolated_into(&[999], &[true], false, |_, _, _, _, _| {
+                    panic!("a poisoned slot must not encode a replacement opening")
+                })
+                .unwrap();
+            load(&mut vector, branch());
+            assert_eq!(CONSTRUCTIONS.get() - before, 1);
+            assert_eq!(load(&mut vector, SlotLoad::Fresh(0)).seed, u64::MAX);
+            assert_eq!(CONSTRUCTIONS.get() - before, 2);
+        }
+    }
 
     #[test]
     fn decision_observations_keep_chooser_and_active_mask() {

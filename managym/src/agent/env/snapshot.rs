@@ -240,6 +240,11 @@ impl GameSnapshot {
         SnapshotMetadata::from_position(&self.state, self.action_space.as_ref())
     }
 
+    /// Read the saved decision owner without collecting the board summary.
+    pub fn acting_player(&self) -> Option<usize> {
+        snapshot_chooser(self.action_space.as_ref(), self.state.is_game_over())
+    }
+
     pub fn seed(&self) -> u64 {
         self.reset_seed
     }
@@ -274,6 +279,13 @@ impl GameSnapshot {
     }
 }
 
+fn snapshot_chooser(space: Option<&ActionSpace>, terminal: bool) -> Option<usize> {
+    space
+        .filter(|_| !terminal)
+        .and_then(|s| s.player)
+        .map(|p| p.0)
+}
+
 impl SnapshotMetadata {
     fn from_position(state: &TrackedState, space: Option<&ActionSpace>) -> Self {
         let mut definitions = BTreeSet::new();
@@ -305,7 +317,7 @@ impl SnapshotMetadata {
             stack_len: state.stack_objects.len(),
             action_count: space.map_or(0, |s| s.actions.len()),
             action_kind: space.map(|s| s.kind),
-            acting_player: space.and_then(|s| s.player).map(|p| p.0),
+            acting_player: snapshot_chooser(space, terminal),
             terminal,
             active_card_defs: definitions.into_iter().collect(),
         }

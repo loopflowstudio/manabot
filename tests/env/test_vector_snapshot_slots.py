@@ -1,6 +1,10 @@
 """Detached native slots can switch timelines without mixing viewer memory or fresh games."""
 
+from contextlib import closing
+from dataclasses import replace
 import json
+from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -11,8 +15,16 @@ from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.producers import ShardedVectorEnv
+from manabot.training.rollout.snapshot_vector import SlotInstall, replay_snapshot
+from manabot.training.rollout.snapshots import root_id
 import managym
+from managym.decision import Command
+from managym.recording import CapturedVector, ScalarCapture, read_record, read_records
+from managym.replay import replay_failure_inputs
+from managym.statistics import read_statistics
 from tests.env.test_game_snapshot import setup
+from tests.env.test_vector_reducers import History
+from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
 def test_overwriting_a_sibling_matches_dense_scalar_and_shares_immutable_history() -> (
@@ -253,12 +265,98 @@ def test_detached_masked_capture_from_sharded_recording_vector() -> None:
     assert root.restore().state_digest() == root.state_digest
 
 
-def test_return_to_fresh_restores_the_sampled_roster_and_seed() -> None:
+def test_four_workers_share_cold_root_history_and_recapture_shuffled_branches() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_reference_details=2048,
+            max_decision_references=128,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    with closing(
+        ShardedVectorEnv(
+            4,
+            42,
+            workers=4,
+            auto_reset=False,
+            decision_memory=True,
+            decision_memory_include_own=True,
+        )
+    ) as vector:
+        buffers = allocate_vector_buffers(space, 4)
+        vector.set_buffers(buffers, layout=space.layout)
+        vector.reset_all_into_buffers(setup("open"))
+        vector.step_into_buffers([1, 0, 0, 0], [True, False, False, False])
+        neighbor, root = vector.capture_slots([3, 0])
+        assert (neighbor.slot, root.slot) == (3, 0)
+        order = [3, 0, 2, 1]
+        options = managym.RestoreOptions.shuffle_libraries(101)
+        siblings = [
+            SlotInstall(
+                slot, root_id(root.recipe), root.recipe, restore_options=options
+            )
+            for slot in order
+        ]
+        generations = vector.current_game_generations()
+        for invalid, reason in [
+            (replace(siblings[0], hot_handle=neighbor.hot_handle), "identity mismatch"),
+            (replace(siblings[0], slot=4), "invalid"),
+            (replace(siblings[0], slot=siblings[1].slot), "duplicate"),
+        ]:
+            with pytest.raises(ValueError, match=reason):
+                vector.install_slots([siblings[1], invalid])
+            assert vector.current_game_generations() == generations
+        corrupt = replace(root.recipe, replay_json="{}")
+        with pytest.raises(managym.AgentError, match="invalid snapshot replay"):
+            vector.install_slots([SlotInstall(0, -1, None), SlotInstall(3, 7, corrupt)])
+        assert vector.current_game_generations() == generations
+        with patch(
+            "manabot.training.rollout.snapshot_vector.replay_snapshot",
+            wraps=replay_snapshot,
+        ) as replayed:
+            assert [r.slot for r in vector.install_slots(siblings)] == order
+            replayed.assert_called_once_with(root.recipe)
+        prefixes = MemoryStore((64, 2048, 128, 256)).capture_live_rows(
+            buffers,
+            np.arange(4),
+            vector.current_game_seeds(),
+            vector.current_agent_indices(),
+            vector.current_game_generations(),
+            vector.decision_memory_cursors(),
+        )
+        shared = prefixes[0].tail
+        assert shared is not None and all(p.tail is shared for p in prefixes)
+        assert len({id(p.serving.segment) for p in prefixes}) == 4
+        assert len({p.identity.branch for p in prefixes}) == 4
+        assert isinstance(root.hot_handle, managym.GameSnapshot)
+        scalar = root.hot_handle.restore(options)
+        assert [s.root_digest for s in vector.capture_slots(order)] == [
+            scalar.state_digest()
+        ] * 4
+        vector.step_into_buffers([0, 1, 0, 1])
+        first, second = vector.capture_slots([1, 0])
+        assert first.root_digest != second.root_digest
+        scalar.step(0)
+        assert second.root_digest == scalar.state_digest()
+        assert second.recipe.replay_json is not None
+        assert (
+            json.loads(second.recipe.replay_json)["interventions"][-1]["op"]
+            == "shuffle_libraries"
+        )
+        assert replay_snapshot(second.recipe).state_digest == second.root_digest
+
+
+@pytest.mark.parametrize("captured", [False, True])
+def test_return_to_fresh_restores_the_sampled_roster_and_seed(captured: bool) -> None:
     match = Match(
         MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     roster = elemental_roster(match)
-    vector = managym.VectorEnv(1, seed=42, auto_reset=False)
+    vector = (CapturedVector if captured else managym.VectorEnv)(
+        num_envs=1, seed=42, auto_reset=False
+    )
     vector.set_uniform_roster(roster)
     space = ObservationSpace()
     vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
@@ -273,4 +371,131 @@ def test_return_to_fresh_restores_the_sampled_roster_and_seed() -> None:
     assert fresh.seed == 42
     assert vector.current_matchup_indices() == [(a, b)]
     [seats] = vector.current_player_configs()
-    assert [seat.decklist for seat in seats] == [roster[i].decklist for i in (a, b)]
+    decks = [roster[i].decklist for i in (a, b)]
+    assert [seat.decklist for seat in seats] == decks
+    if isinstance(vector, CapturedVector):
+        assert [seat.decklist for seat in vector.game_inputs(0).players] == decks
+        vector.close()
+
+
+@pytest.mark.parametrize("isolated", [False, True])
+def test_captured_deferred_terminals_write_fresh_games_once(
+    tmp_path: Path, isolated: bool
+) -> None:
+    games = tmp_path / "games.jsonl"
+    stats = tmp_path / "stats.jsonl"
+    vector = CapturedVector(
+        num_envs=3,
+        seed=2**64 - 1,
+        auto_reset=False,
+        games_path=games,
+        statistics_path=stats,
+        reducers=[History()],
+    )
+    space = ObservationSpace()
+    arrays = allocate_vector_buffers(space, 3)
+    vector.set_buffers(arrays, layout=space.layout)
+    vector.reset_all_into_buffers(setup())
+    root, _, _ = vector.snapshot_slots([True, False, False])
+    assert root is not None
+    step = vector.step_isolated_into_buffers if isolated else vector.step_into_buffers
+    with patch.object(
+        managym.GameSnapshot,
+        "to_replay_json",
+        side_effect=AssertionError("serialized hot branch"),
+    ):
+        vector.load_slots_into_buffers([managym.SlotLoad.snapshot(1, root)])
+        for count in range(1, 65):
+            step([0, 0, 0], [True, False, False])
+            if arrays["terminated"][0]:
+                break
+        else:
+            pytest.fail("fixture did not reach terminal")
+        [record] = read_records(games)
+        assert record.games[0].end.status == "complete"
+        assert len(record.games[0].actions) == count
+        assert vector.rows()[0][0][:3] == (count, 0, "complete")
+        vector.load_slots_into_buffers([managym.SlotLoad.snapshot(0, root)])
+        step([0, 0, 0], [True, True, False])
+        [fresh] = vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
+        assert fresh.seed == 2**64 - 1
+        assert vector.next_seeds == [fresh.seed] * 3
+        step([0, 0, 0], [True, False, False])
+        vector.close()
+        vector.close()
+    ended = [g for r in read_records(games) for g in r.games]
+    assert [(g.stream, len(g.actions), g.end.status) for g in ended] == [
+        (0, count, "complete"),
+        (0, 1, "interrupted"),
+        (2, 0, "interrupted"),
+    ]
+    assert [(s.stream, s.terminal) for s in read_statistics(stats)] == [
+        (0, True),
+        (0, False),
+        (2, False),
+    ]
+    assert sorted((n, status) for n, _, status, _ in vector.rows()[0]) == sorted(
+        (len(g.actions), g.end.status) for g in ended
+    )
+
+
+@pytest.mark.parametrize("journal", [False, True])
+def test_branch_record_reproduces_commands_interventions_and_failed_suffix(
+    tmp_path: Path, journal: bool
+) -> None:
+    source = managym.Env(seed=23)
+    scalar = ScalarCapture(seed=23)
+    frame, _ = record_until_object_candidate(source, scalar)
+    command = Command(
+        "branch",
+        frame.revision,
+        frame.offers[0]["id"],
+        object_preconditions=(frame.object_candidates[0],),
+    )
+    source.execute_semantic_command_json(command.to_json())
+    root = source.snapshot()
+    scalar.close()
+    cursor = tmp_path / "journal.jsonl"
+    vector = CapturedVector(
+        num_envs=1,
+        auto_reset=False,
+        journal_path=cursor if journal else None,
+        failure_directory=tmp_path / "failures",
+    )
+    space = ObservationSpace()
+    vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+    vector.reset_all_into_buffers(setup())
+    vector.load_slots_into_buffers(
+        [
+            managym.SlotLoad.snapshot(
+                0, root, managym.RestoreOptions.shuffle_libraries(123)
+            )
+        ]
+    )
+    vector.step_into_buffers([0])
+    if journal:
+        saved = read_record(cursor).games[0]
+        assert saved.actions[-1] == 0 and any(
+            isinstance(a, str) and json.loads(a) == json.loads(command.to_json())
+            for a in saved.actions
+        )
+        assert saved.interventions[-1].op == "shuffle_libraries"
+    with pytest.raises(managym.AgentError):
+        vector.step_into_buffers([999])
+    vector.close()
+    del source, root, vector
+    [path] = (tmp_path / "failures").glob("*.jsonl")
+    evidence = read_record(path)
+    game = evidence.games[0]
+    assert game.seed == 23 and game.actions[-2:] == [0, 999]
+    assert game.committed == len(game.actions) - 1
+    assert (
+        game.object_candidate_frames
+        and game.interventions[-1].at_action == len(game.actions) - 2
+    )
+    [result] = replay_failure_inputs(evidence)
+    assert (
+        result["at_retained_failure"]
+        and result["matches_binding"]
+        and result["matches_error"]
+    )

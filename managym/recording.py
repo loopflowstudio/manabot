@@ -641,7 +641,7 @@ class _Capture:
         return self.snapshot()
 
     def snapshot(self) -> GameRecord:
-        """Copy cached cursors only; never enter the native library from a watchdog."""
+        """Copy replay inputs without accessing a live native game from a watchdog."""
         evidence = self._snapshot()
         return evidence.model_copy(update={"boundary": self._boundary}, deep=True)
 
@@ -681,12 +681,14 @@ class _Capture:
         if not self._selected(game) or game.end is not None or not game.players:
             return
         game.end = end
-        record = self._snapshot()
-        record = record.model_copy(update={"games": [game], "boundary": None})
         if self.games_path is not None:
+            record = self._record_of(game)
             self._append_row(
                 self.games_path, record.model_dump(mode="json", by_alias=True)
             )
+
+    def _record_of(self, game: GameInputs) -> GameRecord:
+        return self._snapshot().model_copy(update={"games": [game], "boundary": None})
 
     def _append_row(self, path: Path, row: object) -> None:
         output = self._outputs.get(path)
@@ -1257,6 +1259,7 @@ class CapturedVector(_Capture):
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
+        auto_reset: bool = True,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
         reducers: list[Reducer[Any]] | None = None,
@@ -1272,11 +1275,17 @@ class CapturedVector(_Capture):
         self._analysis_active = [False] * num_envs if reducers else []
         self._analysis_indices = [0] * num_envs if reducers else []
         self.stride = seed_stride or num_envs
+        self.decision_memory = decision_memory or decision_memory_include_own
+        self.auto_reset = auto_reset
+        self._branch_roots: list[
+            tuple[managym.GameSnapshot, managym.RestoreOptions] | None
+        ] = [None] * num_envs
         self.skip_trivial = skip_trivial
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
-            decision_memory=decision_memory or decision_memory_include_own,
+            auto_reset=auto_reset,
+            decision_memory=self.decision_memory,
             decision_memory_include_own=decision_memory_include_own,
             seed=seed,
             skip_trivial=skip_trivial,
@@ -1293,7 +1302,7 @@ class CapturedVector(_Capture):
                 stream=stream_offset + i,
                 seed=min(seed + i, 2**64 - 1),
                 players=[],
-                decision_memory=decision_memory or decision_memory_include_own,
+                decision_memory=self.decision_memory,
                 decision_memory_include_own=decision_memory_include_own,
             )
             for i in range(num_envs)
@@ -1344,6 +1353,8 @@ class CapturedVector(_Capture):
         layout: managym.ObservationLayout | None = None,
     ) -> None:
         self.native.set_buffers(buffers, action_overflow, layout=layout)
+        self._terminated = buffers["terminated"]
+        self._truncated = buffers["truncated"]
         # NumPy owns these buffers; preserve their native encoding ABI as evidence.
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
@@ -1408,6 +1419,26 @@ class CapturedVector(_Capture):
         for rows in reduction.rows:
             rows.clear()
 
+    def _end_current_analysis(
+        self,
+        mask: list[bool],
+        infos: Sequence[dict[str, Any]] = (),
+        *,
+        reason: str | None = None,
+    ) -> None:
+        selected = [i for i, on in enumerate(mask) if on]
+        if selected:
+            for index, raw in zip(
+                selected, self.native.current_exposure(mask), strict=True
+            ):
+                info = infos[index] if infos else {}
+                self._end_analysis(
+                    index,
+                    raw,
+                    winner=info.get("winner_index"),
+                    reason=info.get("game_error", reason),
+                )
+
     def close(self) -> None:
         if self._closed:
             return
@@ -1421,11 +1452,49 @@ class CapturedVector(_Capture):
                 ),
             )
         self._flush_statistics(partial=True)
-        if any(self._analysis_active):
-            for index, raw in enumerate(self.native.current_exposure()):
-                self._end_analysis(index, raw, reason="capture closed")
+        self._end_current_analysis(self._analysis_active, reason="capture closed")
         self._close_output()
         self.flush_policy_actions()
+
+    def _selected(self, game: GameInputs) -> bool:
+        slot = game.stream - self.games[0].stream
+        return self._branch_roots[slot] is None and super()._selected(game)
+
+    def _record_of(self, game: GameInputs) -> GameRecord:
+        return self._evidence_for([game], "step")
+
+    def game_inputs(self, slot: int) -> GameInputs:
+        """Join a detached branch's native replay prefix to its attempted suffix."""
+        return self._materialize(self.games[slot])
+
+    def _materialize(self, suffix: GameInputs) -> GameInputs:
+        # A branch keeps just its suffix until its first durable journal or
+        # failure. A materialized game already carries its resolved seats.
+        root = self._branch_roots[suffix.stream - self.games[0].stream]
+        if root is None or suffix.players:
+            return suffix
+        source, options = root
+        raw = source.restore(options).snapshot().to_replay_json()
+        [prefix] = record_from_row(json.loads(raw)).games
+        return suffix.model_copy(
+            update={
+                "players": prefix.players,
+                "decision_memory": prefix.decision_memory,
+                "decision_memory_include_own": prefix.decision_memory_include_own,
+                "actions": [*prefix.actions, *suffix.actions],
+                "committed": len(prefix.actions) + (suffix.committed or 0),
+                "interventions": prefix.interventions,
+                "object_candidate_frames": prefix.object_candidate_frames,
+            }
+        )
+
+    def _activate_journal(self, native: Any) -> None:
+        activating = self._pending_journal_path is not None
+        super()._activate_journal(native)
+        if activating:
+            for slot, game in enumerate(self.games):
+                if not game.players and self._branch_roots[slot] is not None:
+                    self.games[slot] = self.game_inputs(slot)
 
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
@@ -1442,7 +1511,7 @@ class CapturedVector(_Capture):
         return self._evidence(
             mode="vector",
             operation=operation,
-            games=games,
+            games=[self._materialize(game) for game in games],
             skip_trivial=self.skip_trivial,
             player_policies=self.player_policies,
             seed_stride=self.stride,
@@ -1561,66 +1630,106 @@ class CapturedVector(_Capture):
         self._returned()
         self._synchronize()
 
-    def _synchronize(self, *, completed: bool = False) -> None:
-        seeds = self.native.current_game_seeds()
-        # Generations, not seeds, mark a new game: saturated seed succession and
-        # same-seed resets repeat a seed. They are process-local, never evidence.
+    def load_slots_into_buffers(
+        self, requests: Sequence[managym.SlotLoad]
+    ) -> list[managym.SlotLoadResult]:
+        """Publish recording roots only after native admission of the whole batch."""
+        if not requests:
+            return []
+        self._activate_journal(self.native)
+        if self._game_journal is not None:
+            self._begin_boundary(self._snapshot(), "load_slots", setup_known=False)
+        self._executing()
+        results = self.native.load_slots_into_buffers(requests)
+        self._returned()
+        self._synchronize(
+            loads={
+                result.slot: request.branch_root
+                for result, request in zip(results, requests, strict=True)
+            }
+        )
+        return results
+
+    def _synchronize(
+        self,
+        *,
+        finished: set[int] | None = None,
+        loads: dict[int, tuple[managym.GameSnapshot, managym.RestoreOptions] | None]
+        | None = None,
+    ) -> None:
         generations = self.native.current_game_generations()
         restarted = [
-            index
-            for index, (old, new) in enumerate(
-                zip(self._generations, generations, strict=True)
-            )
-            if old != new
+            i
+            for i, generation in enumerate(generations)
+            if generation != self._generations[i]
         ]
         self._generations = generations
+        ended = finished or set()
         if restarted:
             self._flush_statistics()
-        players = self.native.current_player_configs() if restarted else []
         infos = (
             self.native.get_last_info()
-            if any(self.recording_mask()) or self._reductions
+            if ended and (self._recording or self._reductions)
             else []
         )
+        for index in sorted(ended):
+            game = self.games[index]
+            info = infos[index] if infos else {}
+            self._write_game(
+                game,
+                GameEnd(
+                    status="complete",
+                    winner=info.get("winner_index"),
+                    digest=info.get("record_terminal_digest"),
+                ),
+            )
+        if self._reductions and ended and not self.auto_reset:
+            # Deferred terminals still own their exposure until replaced.
+            mask = [
+                active and i in ended for i, active in enumerate(self._analysis_active)
+            ]
+            self._end_current_analysis(mask, infos)
         if restarted and self._reductions:
             for index, receipts in enumerate(self.native.take_exposure()):
                 for raw in receipts:
-                    info = infos[index] if completed else {}
                     self._end_analysis(
                         index,
                         raw,
-                        winner=info.get("winner_index"),
-                        reason=info.get("game_error") if completed else "root replaced",
+                        winner=infos[index].get("winner_index")
+                        if index in ended
+                        else None,
+                        reason=None if index in ended else "root replaced",
                     )
+        # Branches carry their own immutable setup. Read native deck draws only
+        # when a fresh root is installed (including an eager terminal reset).
+        loads = loads or {}
+        has_fresh_root = any(loads.get(i) is None for i in restarted)
+        players = self.native.current_player_configs() if has_fresh_root else []
+        seeds = self.native.current_game_seeds() if restarted else []
         for index in restarted:
             game = self.games[index]
-            if game.actions and self._selected(game):
-                info = infos[index]
+            if game.actions and index not in ended:
                 self._write_game(
-                    game,
-                    GameEnd(
-                        status="complete" if completed else "interrupted",
-                        reason=None if completed else "root replaced",
-                        winner=info.get("winner_index") if completed else None,
-                        digest=info.get("record_terminal_digest")
-                        if completed
-                        else None,
-                    ),
+                    game, GameEnd(status="interrupted", reason="root replaced")
                 )
+            self._branch_roots[index] = loads.get(index)
             game.restart(seeds[index])
-            # The ending row owns the old setup; retain the new native root only
-            # after writing it, including disclosure resolved for the new seed.
+            if self._reductions:
+                self._analysis_active[index] = False
+            if self._branch_roots[index] is not None:
+                game.players = []
+                if self._game_journal is not None:
+                    self.games[index] = self.game_inputs(index)
+                continue
+            game.decision_memory = self.decision_memory
             game.players = _retain_players(players[index], seeds[index])
-        if self._reductions and self._reduction.error is None:
-            for index in restarted:
+            if self._reductions and self._reduction.error is None:
                 self._analysis_indices[index] = 0
                 self._analysis_active[index] = True
-                self._reductions[index].start(self.games[index].players)
+                self._reductions[index].start(game.players)
                 if self._reductions[index].error is not None:
                     self._reduction.fail(self._reductions[index].error)
-        self.next_seeds = [
-            min(game.seed + self.stride, 2**64 - 1) for game in self.games
-        ]
+        self.next_seeds = self.native.next_fresh_seeds()
         if self._boundary is not None:
             self._boundary.setup_known = True
         if self._game_journal is not None:
@@ -1738,7 +1847,14 @@ class CapturedVector(_Capture):
                 for annotation in (annotations or [None] * len(self.games))
             ]
         hook_observations = (
-            self.native.decision_observations(enabled) if hook_annotations else []
+            self.native.decision_observations(
+                [
+                    on and active
+                    for on, active in zip(enabled, self._analysis_active, strict=True)
+                ]
+            )
+            if hook_annotations
+            else []
         )
         attempted = []
         for index, (game, action, selected, actor, frame) in enumerate(
@@ -1806,13 +1922,31 @@ class CapturedVector(_Capture):
                     "vector batch failed: committed analysis coverage is unknown"
                 )
             raise
-        infos = (
-            self.native.get_last_info()
-            if isolated and (any(selected_games) or self._reductions)
-            else []
-        )
+        infos = self.native.get_last_info() if isolated else []
+        if infos and self._reductions:
+            # Known rejected choices contribute no decision; finish their committed exposure.
+            failed_analysis = [
+                on
+                and active
+                and bool(info.get("game_error"))
+                and info.get("game_error_class") != "NativePanic"
+                for on, active, info in zip(
+                    enabled, self._analysis_active, infos, strict=True
+                )
+            ]
+            self._end_current_analysis(failed_analysis, infos)
         for index, (game, on) in enumerate(zip(self.games, enabled, strict=True)):
-            if on and not (infos and infos[index].get("game_error")):
+            if not on:
+                continue
+            if infos and infos[index].get("game_error"):
+                if self._reductions:
+                    self._analysis_active[index] = False
+                self._write_game(
+                    game, GameEnd(status="failed", reason=infos[index]["game_error"])
+                )
+                if self._branch_roots[index] is not None:
+                    self.games[index] = self.game_inputs(index)
+            else:
                 game.committed = len(game.actions)
         self._returned()
         if hook_observations:
@@ -1834,7 +1968,18 @@ class CapturedVector(_Capture):
                     self._analysis_indices[index] += 1
                     if reduction.error is not None:
                         self._reduction.fail(reduction.error)
-        self._synchronize(completed=True)
+        finished = (
+            {
+                i
+                for i, on in enumerate(enabled)
+                if on
+                and (self._terminated[i] or self._truncated[i])
+                and not (infos and infos[i].get("game_error"))
+            }
+            if buffered
+            else {i for i, (_, _, term, trunc, _) in enumerate(result) if term or trunc}
+        )
+        self._synchronize(finished=finished)
         return result
 
 

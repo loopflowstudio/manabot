@@ -440,6 +440,8 @@ stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
 observation JSON or opens hidden zones. `snapshot.state_digest` returns the
 cached state digest and `snapshot.seed` returns the originating reset seed.
+Use `snapshot.acting_player` to read the chooser alone. It returns `None`
+at a terminal and skips the board summary.
 
 `snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
@@ -536,7 +538,10 @@ print(games.next_fresh_seeds())
   not write to `games_path` or fresh statistics/exposure; branch replay inputs
   (including interventions) are materialized lazily on failure or when
   journaling, and `managym.replay` replays vector records with branch
-  interventions.
+  interventions. Call `game_inputs(slot)` for the resolved setup, original
+  commitments and attempted suffix of one slot. This materializes the branch
+  prefix on demand. A terminal step settles a recorded fresh game immediately,
+  including its winner and final digest, even when its replacement comes later.
 
 ## Ask questions of recorded games
 
