@@ -1,7 +1,7 @@
-at: 22109054c61521580979e698be09c984ca117fe6
+at: abdd8f0e2e4df0aafe10c8d874e4f0407a3616a7
 first:
   - path: managym/src/flow/combat_actions.rs
-    why: Enumerate assignments before committing simultaneous damage
+    why: Assign blocker and defender damage in one batch
   - path: managym/cards/tests/cards/tla.rs
     why: Play the trample split and replay its Command
   - path: managym/src/flow/damage.rs

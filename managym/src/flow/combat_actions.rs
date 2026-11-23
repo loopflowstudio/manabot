@@ -191,15 +191,16 @@ impl Game {
             let attacker_ref = self.permanent_object(attacker_id);
             let attacker_deals = self.creature_deals_damage_in_pass(attacker_id, pass);
 
-            let attacker_power = self.characteristics(attacker_id).power.max(0);
-            let attacker_keywords = self.characteristics(attacker_id).keywords;
+            let characteristics = self.characteristics(attacker_id);
+            let attacker_power = characteristics.power.max(0);
+            let attacker_keywords = characteristics.keywords;
             let attacker_has_trample = attacker_keywords.has(Keyword::Trample);
             let attacker_has_deathtouch = attacker_keywords.has(Keyword::Deathtouch);
 
             let declared_blockers = combat
                 .attacker_to_blockers
                 .get(&attacker_id)
-                .cloned()
+                .map(Vec::as_slice)
                 .unwrap_or_default();
             let was_blocked = !declared_blockers.is_empty();
             let blockers: Vec<PermanentId> = declared_blockers
@@ -208,20 +209,7 @@ impl Game {
                 .filter(|blocker_id| self.still_in_combat(*blocker_id))
                 .collect();
 
-            if !was_blocked && attacker_deals {
-                events.push(ProposedEvent::Damage {
-                    source: attacker_ref,
-                    target: ProposedDamageTarget::Player(defender),
-                    amount: attacker_power,
-                    combat: true,
-                });
-                continue;
-            }
-
             for blocker_id in &blockers {
-                if !self.still_in_combat(*blocker_id) {
-                    continue;
-                }
                 let blocker_ref = self.permanent_object(*blocker_id);
                 if !self.creature_deals_damage_in_pass(*blocker_id, pass) {
                     continue;
@@ -285,18 +273,16 @@ impl Game {
                     }));
                 };
                 can_trample &= assigned >= lethal;
-                if let Some(target) = self.permanent_object(blocker_id) {
-                    events.push(ProposedEvent::Damage {
-                        source: attacker_ref,
-                        target: ProposedDamageTarget::Object(target),
-                        amount: assigned,
-                        combat: true,
-                    });
-                }
+                events.push(ProposedEvent::Damage {
+                    source: attacker_ref,
+                    target: ProposedDamageTarget::Object(blocker.object),
+                    amount: assigned,
+                    combat: true,
+                });
                 remaining_damage -= assigned;
             }
 
-            if attacker_has_trample && remaining_damage > 0 {
+            if !was_blocked || (can_trample && remaining_damage > 0) {
                 events.push(ProposedEvent::Damage {
                     source: attacker_ref,
                     target: ProposedDamageTarget::Player(defender),
