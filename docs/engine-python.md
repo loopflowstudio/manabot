@@ -455,8 +455,11 @@ ordered boundary interventions (such as reseeds, library reshuffles,
 determinizations, decision-memory transitions, and forced built-in overrides),
 the catalog `card_digest`, and the expected `state_digest`.
 `GameSnapshot.from_recipe_json(raw)` validates the schema and catalog digest,
-replays every action and intervention natively, checks `state_digest`, and
-fails closed on any corruption or world mismatch.
+replays every action and intervention natively, and checks `state_digest`.
+The recipe also carries a checksum over its inputs, including the chooser and
+decision-memory settings that the rules digest omits. If the source issued
+object-bearing semantic frames, the recipe retains their fingerprints so a
+reopened Command can use the same object bindings.
 
 An `Env` modified by unjournaled test or search helpers (`scenario_*`,
 `materialize_possible_world`, `materialize_sampled_hand`, `step_structured`,

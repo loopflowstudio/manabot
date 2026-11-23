@@ -118,6 +118,8 @@ class RecordWalker:
             seed=self.game.seed,
             skip_trivial=record.skip_trivial,
             player_policies=record.resolved_player_policies,
+            decision_memory=self.game.decision_memory,
+            decision_memory_include_own=self.game.decision_memory_include_own,
         )
         self._capture_cards = capture_cards
         if capture_cards:
@@ -478,6 +480,7 @@ def _replay_game_inputs(
         )
         if evidence.mode == "vector"
         else managym.Env(
+            player_policies=evidence.resolved_player_policies,
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
             decision_memory=game.decision_memory,

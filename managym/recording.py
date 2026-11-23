@@ -1911,6 +1911,7 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
         mode="scalar",
         operation="step",
         skip_trivial=row["skip_trivial"],
+        player_policies=trace.get("player_policies"),
         identities=row["identities"],
         context=row["context"],
         seconds=row["seconds"],
@@ -1920,6 +1921,10 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
                 seed=game["seed"],
                 players=trace["player_configs"],
                 actions=trace["actions"],
+                decision_memory=trace.get("decision_memory", True),
+                decision_memory_include_own=trace.get(
+                    "decision_memory_include_own", False
+                ),
                 end=GameEnd(
                     status="complete" if game["terminal"] else "interrupted",
                     winner_retained=False,

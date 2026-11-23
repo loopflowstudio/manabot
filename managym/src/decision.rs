@@ -256,22 +256,7 @@ impl Game {
         let projection = offers.projection();
         let projection_value = serde_json::to_value(projection).expect("projection serializes");
         let fingerprint = decision_fingerprint(self.decision_epoch, &projection_value);
-        let mut object_candidates = Vec::new();
-        if let Ok(presentation) = self.structured_offers() {
-            let mut private = self.semantic_object_candidates.borrow_mut();
-            for (offer_id, role, candidate_id, object_ref) in
-                presentation.object_candidate_bindings()
-            {
-                let address = ObjectCandidateAddress {
-                    decision_fingerprint: fingerprint.clone(),
-                    offer_id: offer_id.0,
-                    role: role.0,
-                    candidate_id: candidate_id.0,
-                };
-                private.insert(address.clone(), object_ref);
-                object_candidates.push(address);
-            }
-        }
+        let object_candidates = self.bind_frame_candidates(&fingerprint);
         Ok(DecisionFrame {
             schema_version: SEMANTIC_DECISION_VERSION,
             revision: self.decision_epoch,
@@ -292,6 +277,47 @@ impl Game {
                 .expect("projection carries offers"),
             object_candidates,
         })
+    }
+
+    fn bind_frame_candidates(&self, fingerprint: &str) -> Vec<ObjectCandidateAddress> {
+        let mut object_candidates = Vec::new();
+        if let Ok(presentation) = self.structured_offers() {
+            let mut private = self.semantic_object_candidates.borrow_mut();
+            for (offer_id, role, candidate_id, object_ref) in
+                presentation.object_candidate_bindings()
+            {
+                let address = ObjectCandidateAddress {
+                    decision_fingerprint: fingerprint.to_owned(),
+                    offer_id: offer_id.0,
+                    role: role.0,
+                    candidate_id: candidate_id.0,
+                };
+                private.insert(address.clone(), object_ref);
+                object_candidates.push(address);
+            }
+        }
+        object_candidates
+    }
+
+    /// Cold replay retains fingerprints of issued object-bearing frames. Only
+    /// rebind those frames; projecting every decision would authorize addresses
+    /// the source never issued.
+    pub(crate) fn restore_frame_candidates(
+        &self,
+        remaining: &mut std::collections::BTreeSet<String>,
+    ) -> Result<(), SemanticError> {
+        if remaining.is_empty() || self.is_game_over() {
+            return Ok(());
+        }
+        let offers = self
+            .structured_search_offers()
+            .map_err(|e| SemanticError::IllegalCommand(e.to_string()))?;
+        let projection = serde_json::to_value(offers.projection()).expect("projection serializes");
+        let fingerprint = decision_fingerprint(self.decision_epoch, &projection);
+        if remaining.remove(&fingerprint) && self.bind_frame_candidates(&fingerprint).is_empty() {
+            return Err(SemanticError::UnknownObjectCandidate);
+        }
+        Ok(())
     }
 
     /// Project the composite viewer-safe Observation at the current revision.

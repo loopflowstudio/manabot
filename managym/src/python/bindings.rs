@@ -3508,6 +3508,14 @@ fn compact_search_witness(witness: &SearchStateWitness) -> Value {
 
 #[cfg(feature = "python")]
 impl PyEnv {
+    pub(super) fn from_live(env: Env) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(env)),
+            selected_guard: false,
+            prepared_lease: None,
+        }
+    }
+
     fn reject_guarded_mutation(&self, operation: &str) -> PyResult<()> {
         if self.selected_guard {
             return Err(PyAgentError::new_err(format!(
@@ -4230,6 +4238,18 @@ impl PyEnv {
         Ok(env.compare_profile(&baseline))
     }
 
+    /// Save this live boundary for independent continuations.
+    fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .snapshot()
+                .map(super::snapshot_bindings::PyGameSnapshot)
+                .map_err(map_agent_err)
+        })
+    }
+
     /// Independent copy of this env (current game state cloned; stepping the
     /// clone never mutates the original). Profiling/tracking disabled.
     fn clone_env(&self) -> PyResult<PyEnv> {
@@ -4577,11 +4597,7 @@ impl PyEnv {
         let branch = env
             .materialize_sampled_hand(viewer, constraints_json, &hand, seed)
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Materialize one identity-bound canonical world into an isolated Env.
@@ -4607,11 +4623,7 @@ impl PyEnv {
                 refresh_opponent_commitment,
             )
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Validate and atomically apply one revision-bound semantic Command
@@ -5455,6 +5467,9 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<super::snapshot_bindings::PyGameSnapshot>()?;
+    m.add_class::<super::snapshot_bindings::PyRestoreOptions>()?;
+    m.add_class::<super::snapshot_bindings::PySnapshotMetadata>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;
     m.add_class::<ObservationRead>()?;

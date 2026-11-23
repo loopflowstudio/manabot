@@ -122,64 +122,10 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
-/// Private scalar replay input for failure diagnostics and training exposure.
-#[derive(Clone, Debug)]
-struct NativeActionTrace {
-    seed: u64,
-    /// Fixed at reset; forks share it rather than copying the decklists.
-    player_configs: Arc<[PlayerConfig]>,
-    mana_floats: [ManaFloats; 2],
-    mana_payment: [ManaPayment; 2],
-    decision_memory_enabled: bool,
-    decision_memory_include_own: bool,
-    disclosure: DecklistDisclosure,
-    actions: Vec<usize>,
-}
-
-// Retained evidence predates game-level ownership. Preserve its seat spelling
-// at serialization only; no player carries this value in the live game.
-impl serde::Serialize for NativeActionTrace {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        #[derive(serde::Serialize)]
-        struct RetainedSeat<'a> {
-            #[serde(flatten)]
-            player: &'a PlayerConfig,
-            #[serde(skip_serializing_if = "ManaFloats::is_off")]
-            mana_floats: ManaFloats,
-            #[serde(skip_serializing_if = "ManaPayment::is_manual")]
-            mana_payment: ManaPayment,
-            #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
-            disclosure: DecklistDisclosure,
-        }
-        let players: Vec<_> = self
-            .player_configs
-            .iter()
-            .zip(self.mana_floats)
-            .zip(self.mana_payment)
-            .map(|((player, mana_floats), mana_payment)| RetainedSeat {
-                mana_payment,
-                mana_floats,
-                player,
-                disclosure: self.disclosure,
-            })
-            .collect();
-        let mut record = serializer.serialize_struct(
-            "NativeActionTrace",
-            2 + usize::from(self.decision_memory_include_own)
-                + usize::from(!self.decision_memory_enabled),
-        )?;
-        record.serialize_field("player_configs", &players)?;
-        if !self.decision_memory_enabled {
-            record.serialize_field("decision_memory", &false)?;
-        }
-        if self.decision_memory_include_own {
-            record.serialize_field("decision_memory_include_own", &true)?;
-        }
-        record.serialize_field("actions", &self.actions)?;
-        record.end()
-    }
-}
+mod provenance;
+mod snapshot;
+use provenance::{GameProvenance, RecordedAction};
+pub use snapshot::{GameSnapshot, RestoreOptions, SnapshotMetadata};
 
 #[derive(Debug)]
 pub struct Env {
@@ -189,7 +135,8 @@ pub struct Env {
     // Observation::for_player deliberately omits events. Built-in index stepping
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
-    action_trace: Option<NativeActionTrace>,
+    provenance: Option<GameProvenance>,
+    reset_setup: Option<Arc<GameSetup>>,
     collect_statistics: bool,
     retained_statistics: Vec<crate::flow::statistics::GameStatistics>,
     drained_generation: Option<u64>,
@@ -285,7 +232,8 @@ impl Env {
             heuristics: [None, None],
             heuristic_events: Vec::new(),
             player_policies: [PlayerPolicy::Agent; 2],
-            action_trace: None,
+            provenance: None,
+            reset_setup: None,
             collect_statistics: false,
             retained_statistics: Vec::new(),
             drained_generation: None,
@@ -322,6 +270,7 @@ impl Env {
             heuristic_events: self.heuristic_events.clone(),
             player_policies: self.player_policies,
             reset_seed: self.reset_seed,
+            reset_setup: self.reset_setup.clone(),
             decision_memory_enabled: self.decision_memory_enabled,
             decision_memory_include_own: self.decision_memory_include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
@@ -338,11 +287,34 @@ impl Env {
         &mut self,
         player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        let player_configs = player_configs.into();
-        // Admit submitted decks at the fallible environment boundary, before
-        // Game construction can panic on them.
+        let mut player_configs = player_configs.into();
+        if player_configs.len() != 2 {
+            return Err(AgentError(format!(
+                "expected exactly 2 player configs, got {}",
+                player_configs.len()
+            )));
+        }
+        player_configs.decklists = player_configs.decklists.resolve(self.seed).into();
+        // Game creation panics on these; reject them as errors first.
         crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
+        let content = crate::cards::content_pack::default_content_pack();
+        for player in player_configs.iter() {
+            for name in player.deck.main.keys() {
+                if content.definition_id(name).is_none() {
+                    return Err(AgentError(format!("unknown card in decklist: {name}")));
+                }
+            }
+            for (name, count) in &player.deck.sideboard {
+                let valid = content
+                    .definition_id(name)
+                    .and_then(|id| content.definition(id))
+                    .is_some_and(|definition| !definition.is_token);
+                if *count == 0 || !valid {
+                    return Err(AgentError(format!("invalid sideboard card: {name}")));
+                }
+            }
+        }
         let _scope = self.profiler.track("env_reset");
         if self.capture == Some(CaptureMode::Exposure) && self.game.is_some() {
             self.retained_exposure.push(self.exposure_json()?);
@@ -352,16 +324,16 @@ impl Env {
                 self.retained_statistics.push(summary);
             }
         }
-        self.action_trace = Some(NativeActionTrace {
-            seed: self.seed,
-            disclosure: player_configs.decklists.resolve(self.seed),
-            mana_floats: player_configs.mana_floats,
-            mana_payment: player_configs.mana_payment,
-            player_configs: Arc::from(player_configs.players.clone()),
-            decision_memory_enabled: self.decision_memory_enabled
-                || self.decision_memory_include_own,
+        let setup = Arc::new(player_configs.clone());
+        self.reset_setup = Some(setup.clone());
+        self.provenance = Some(GameProvenance {
+            setup,
+            skip_trivial: self.skip_trivial,
+            player_policies: self.player_policies,
+            decision_memory: self.decision_memory_enabled || self.decision_memory_include_own,
             decision_memory_include_own: self.decision_memory_include_own,
-            actions: Vec::new(),
+            actions: Arc::default(),
+            interventions: Arc::default(),
         });
         let mut game = Game::construct(
             player_configs,
@@ -467,9 +439,9 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("capture before reset".into()))?;
         serde_json::to_string(&serde_json::json!({
-            "seed": self.action_trace.as_ref().map(|trace| trace.seed),
+            "seed": self.reset_seed,
             "terminal": game.is_game_over(),
-            "trace": self.action_trace,
+            "trace": self.provenance,
             "cards": self.card_capture_value()?,
         }))
         .map_err(|e| AgentError(e.to_string()))
@@ -534,9 +506,9 @@ impl Env {
 
     /// Setups this game was reset with; empty before the first reset.
     pub fn player_configs(&self) -> &[PlayerConfig] {
-        self.action_trace
-            .as_ref()
-            .map_or(&[], |trace| &trace.player_configs[..])
+        self.reset_setup
+            .as_deref()
+            .map_or(&[], |s| s.players.as_slice())
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
@@ -554,9 +526,9 @@ impl Env {
         serde_json::json!({
             "schema": "managym-native-failure-v1",
             "match_state_hash_version": crate::MATCH_STATE_HASH_VERSION,
-            "seed": self.seed,
+            "seed": self.reset_seed,
             "skip_trivial": self.skip_trivial,
-            "trace": self.action_trace,
+            "trace": self.provenance,
             "failed_action_index": action,
             "post_error_state": self.game.as_ref().map(|game| game.state.deterministic_hash_value()),
             "post_error_pending_choice": self.game.as_ref().map(|game| &game.pending_choice),
@@ -585,6 +557,9 @@ impl Env {
 
     /// Set chooser policies without changing game configuration or world identity.
     pub fn with_player_policies(mut self, policies: [PlayerPolicy; 2]) -> Self {
+        if self.player_policies != policies && self.game.is_some() {
+            self.provenance = None;
+        }
         self.player_policies = policies;
         self
     }
@@ -598,6 +573,7 @@ impl Env {
         let chooser = self
             .current_agent_index()
             .ok_or_else(|| AgentError("no active chooser".into()))?;
+        let external_action = action;
         let policy = self.player_policies[chooser];
         let action = if policy == PlayerPolicy::Agent {
             if action == -1 {
@@ -614,7 +590,7 @@ impl Env {
             }
             let mut obs = self.observation_for_player(chooser)?;
             obs.recent_events.clone_from(&self.heuristic_events);
-            policy.select_action(self, &obs)?
+            policy.select_for_step(self, &obs)?
         };
         let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
         // A mixed game's rewards belong to its external seat, also when a
@@ -622,7 +598,11 @@ impl Env {
         if self.external_seat().is_some_and(|seat| seat != chooser) {
             reward = -reward;
         }
-        self.settle_players(obs, reward, terminated, truncated, info)
+        let result = self.settle_players(obs, reward, terminated, truncated, info)?;
+        if let Some(trace) = &mut self.provenance {
+            trace.push(RecordedAction::Index(external_action));
+        }
+        Ok(result)
     }
 
     /// The agent seat of a mixed game; None when both or neither seat is external.
@@ -655,7 +635,7 @@ impl Env {
             if terminated || truncated || chooser == external {
                 return Ok((obs, reward, terminated, truncated, info));
             }
-            let action = self.player_policies[chooser].select_action(self, &obs)?;
+            let action = self.player_policies[chooser].select_for_step(self, &obs)?;
             (obs, reward, terminated, truncated, info) = self.step_once(action)?;
             reward = -reward;
         }
@@ -696,9 +676,6 @@ impl Env {
         };
 
         let done = game.step(action)?;
-        if let Some(trace) = &mut self.action_trace {
-            trace.actions.push(action);
-        }
         let mut result = finish_game_step(game, agent, done);
         // The profiler scope borrows self, so this cannot call remember_heuristic_events.
         if self.player_policies.contains(&PlayerPolicy::Heuristic) {
@@ -789,6 +766,7 @@ impl Env {
         if result.2 {
             self.add_profiler_info(&mut result.4);
         }
+        self.provenance = None;
         self.remember_heuristic_events(&result.0);
         let (observation, reward, terminated, truncated, info) = result;
         Ok((observation, reward, terminated, truncated, info, 1))
@@ -815,6 +793,7 @@ impl Env {
         if result.2 {
             self.add_profiler_info(&mut result.4);
         }
+        self.provenance = None;
         self.remember_heuristic_events(&result.0);
         let (observation, reward, terminated, truncated, info) = result;
         Ok((
@@ -1166,7 +1145,16 @@ impl Env {
             .execute_semantic_command_with_observation(command)
             .map_err(|error| AgentError(error.to_string()))?;
         self.remember_heuristic_events(&observation);
+        self.record_command(command);
         Ok(transition)
+    }
+
+    fn record_command(&mut self, command: &SemanticCommand) {
+        if let Some(trace) = &mut self.provenance {
+            trace.push(RecordedAction::Command(
+                serde_json::to_string(command).expect("Command serializes"),
+            ));
+        }
     }
 
     pub fn step_semantic_command(
@@ -1189,6 +1177,7 @@ impl Env {
             0.0
         };
         self.remember_heuristic_events(&observation);
+        self.record_command(command);
         Ok((
             transition,
             observation,
@@ -1253,16 +1242,13 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
-        let semantic_surface = (
-            game.state.deterministic_hash_value(),
+        Ok(snapshot::state_digest(
+            &game.state,
             &game.current_action_space,
             &game.pending_choice,
             game.skip_trivial,
             game.skip_trivial_count,
-        );
-        let canonical = serde_json::to_vec(&semantic_surface)
-            .expect("semantic differential surface serializes");
-        Ok(blake3::hash(&canonical).to_hex().to_string())
+        ))
     }
 
     pub fn info(&self) -> InfoDict {
@@ -1320,10 +1306,11 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?
-            .clone();
-        let mut branch = self.branch_from_game(game);
-        branch.action_trace = self.action_trace.clone();
+            .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?;
+        let mut branch = self.branch_from_game(game.clone());
+        if !game.decision_memory_enabled {
+            branch.provenance = self.provenance.clone();
+        }
         Ok(branch)
     }
 
@@ -1346,6 +1333,7 @@ impl Env {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
+        self.provenance = None;
         game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
@@ -1355,6 +1343,9 @@ impl Env {
             AgentError("env.selected_reseed_rollout called before reset".to_string())
         })?;
         game.reseed(seed);
+        if let Some(trace) = &mut self.provenance {
+            trace.record_reseed(seed);
+        }
         Ok(())
     }
 
@@ -1507,6 +1498,7 @@ impl Env {
         if self.game.as_ref().is_some_and(|game| game.is_game_over()) {
             return Err(AgentError(format!("env.{method} called after game over")));
         }
+        self.provenance = None;
         self.game
             .as_mut()
             .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
@@ -1590,6 +1582,7 @@ impl Env {
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
         game.require_open_decklist(PlayerId(perspective))?;
+        self.provenance = None;
         game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
@@ -1605,6 +1598,7 @@ impl Env {
             .game
             .as_mut()
             .ok_or_else(|| AgentError("env.random_playout called before reset".to_string()))?;
+        self.provenance = None;
         game.reseed(seed);
         game.random_playout(max_steps, None)
     }
@@ -1791,6 +1785,16 @@ impl Env {
     }
 
     pub fn random_action_index(&mut self) -> Result<usize, AgentError> {
+        let action = self.sample_action_index()?;
+        self.provenance = None;
+        Ok(action)
+    }
+
+    pub(super) fn forget_provenance(&mut self) {
+        self.provenance = None;
+    }
+
+    pub(super) fn sample_action_index(&mut self) -> Result<usize, AgentError> {
         let game = self
             .game
             .as_mut()
@@ -1890,7 +1894,7 @@ mod hand_snapshot_tests {
             assert_eq!(snapshot.cards, original.cards);
             assert_eq!(snapshot.revision, original.revision);
             assert_eq!(branch.selected_witness().unwrap(), witness);
-            assert_eq!(branch.action_trace.as_ref().unwrap().seed, 42);
+            assert_eq!(branch.reset_seed(), 42);
             branch.selected_reseed_rollout(123).unwrap();
             assert_eq!(branch.hand_snapshot(1).unwrap(), snapshot);
             branch.step(0).unwrap();

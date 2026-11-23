@@ -1,0 +1,97 @@
+//! Python ownership boundary for immutable positions and independent live Envs.
+#![allow(clippy::useless_conversion)]
+
+use super::bindings::{map_agent_err, ActionSpaceEnum, PhaseEnum, PyEnv};
+use crate::agent::{GameSnapshot, RestoreOptions, SnapshotMetadata};
+use pyo3::prelude::*;
+
+#[pyclass(name = "GameSnapshot", frozen)]
+pub(super) struct PyGameSnapshot(pub(super) GameSnapshot);
+
+#[pymethods]
+impl PyGameSnapshot {
+    #[pyo3(signature = (options=None))]
+    fn restore(&self, py: Python<'_>, options: Option<&PyRestoreOptions>) -> PyResult<PyEnv> {
+        let options = options.map(|o| o.0).unwrap_or_default();
+        py.allow_threads(|| self.0.restore(options))
+            .map(PyEnv::from_live)
+            .map_err(map_agent_err)
+    }
+
+    fn metadata(&self) -> PySnapshotMetadata {
+        PySnapshotMetadata(self.0.metadata())
+    }
+
+    fn to_recipe_json(&self, py: Python<'_>) -> PyResult<String> {
+        py.allow_threads(|| self.0.to_recipe_json())
+            .map_err(map_agent_err)
+    }
+
+    #[staticmethod]
+    fn from_recipe_json(py: Python<'_>, raw: &str) -> PyResult<Self> {
+        py.allow_threads(|| GameSnapshot::from_recipe_json(raw))
+            .map(Self)
+            .map_err(map_agent_err)
+    }
+}
+
+#[pyclass(name = "RestoreOptions", frozen)]
+pub(super) struct PyRestoreOptions(RestoreOptions);
+#[pymethods]
+impl PyRestoreOptions {
+    #[new]
+    fn new() -> Self {
+        Self(RestoreOptions::default())
+    }
+    #[staticmethod]
+    #[pyo3(signature = (*, reseed=None))]
+    fn exact(reseed: Option<u64>) -> Self {
+        Self(RestoreOptions::exact(reseed))
+    }
+}
+
+#[pyclass(name = "SnapshotMetadata", frozen)]
+pub(super) struct PySnapshotMetadata(SnapshotMetadata);
+#[pymethods]
+impl PySnapshotMetadata {
+    #[getter]
+    fn turn(&self) -> u32 {
+        self.0.turn
+    }
+    #[getter]
+    fn phase(&self) -> PhaseEnum {
+        self.0.phase.into()
+    }
+    #[getter]
+    fn life(&self) -> [i32; 2] {
+        self.0.life
+    }
+    #[getter]
+    fn board_counts(&self) -> [usize; 2] {
+        self.0.board_counts
+    }
+    #[getter]
+    fn stack_len(&self) -> usize {
+        self.0.stack_len
+    }
+    #[getter]
+    fn action_count(&self) -> usize {
+        self.0.action_count
+    }
+    #[getter]
+    fn action_kind(&self) -> Option<ActionSpaceEnum> {
+        self.0.action_kind.map(Into::into)
+    }
+    #[getter]
+    fn acting_player(&self) -> Option<usize> {
+        self.0.acting_player
+    }
+    #[getter]
+    fn terminal(&self) -> bool {
+        self.0.terminal
+    }
+    #[getter]
+    fn active_card_defs(&self) -> Vec<u32> {
+        self.0.active_card_defs.iter().map(|id| id.0).collect()
+    }
+}

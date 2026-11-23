@@ -158,7 +158,7 @@ impl DecklistMode {
 }
 
 /// Who chooses sources and colors after a seat commits to a mana payment.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ManaPayment {
     Auto,
@@ -187,7 +187,7 @@ impl ManaPayment {
 }
 
 /// Priority float offers for the chooser.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ManaFloats {
     #[default]
