@@ -1,5 +1,7 @@
-at: 4edddb75411d0b82aa3ad4ee4a1250c0df13a6a3
+at: 5b6d4989598d110c3df104029d8b57f8b064f90d
 first:
+  - path: docs/engine-python.md
+    why: Public reset and terminal outcome contracts
   - path: managym/cards/tests/cards/ori.rs
     why: Resolve Pact on two responding branches
   - path: managym/cards/tests/cards/dgm.rs

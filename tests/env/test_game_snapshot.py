@@ -18,7 +18,7 @@ from managym.recording import (
     records_from_source,
 )
 from managym.replay import replay_failure_inputs, walk
-from tests.fixtures.recorded_commands import record_until_object_candidate
+from tests.fixtures.recorded_commands import preferred_action, record_until_object_candidate
 
 
 def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
@@ -642,18 +642,11 @@ def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
             action.action_type == managym.ActionEnum.CHOOSE_MODE for action in actions
         ):
             break
-        choice = next(
-            (
-                i
-                for kind in (
-                    managym.ActionEnum.PRIORITY_PLAY_LAND,
-                    managym.ActionEnum.PRIORITY_CAST_SPELL,
-                    managym.ActionEnum.PRIORITY_PASS_PRIORITY,
-                )
-                for i, action in enumerate(actions)
-                if action.action_type == kind
-            ),
-            0,
+        choice = preferred_action(
+            actions,
+            managym.ActionEnum.PRIORITY_PLAY_LAND,
+            managym.ActionEnum.PRIORITY_CAST_SPELL,
+            managym.ActionEnum.PRIORITY_PASS_PRIORITY,
         )
         obs = env.step(choice)[0]
     else:

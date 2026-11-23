@@ -6,7 +6,7 @@ This is the working-phase design at `0b1cc9cfef9c1a98430c825b9764a49237182696`. 
 
 ## Cards and behavior witnesses
 
-Each row is an interaction for integrated validation. The expected results come from the set reviews, printed rules and release notes. The turn-ending receipts below cover Time Stop, Sundial and the cleanup interaction with Secret of Bloodbending. The opening-hand receipts cover Quicksilver and Leyline Axe through entry and activation. Fynn and Herald now have definitions and a poison-loss witness. Equipping Fynn, five new card definitions and the remaining interaction witnesses are open. Define each card in `managym/cards/src/<first-printing set>.rs`, register it in the native catalog, and put its directed test in the corresponding set suite. Use the printing's Scryfall ID and definition key. Update only the delivered rows' implementation records in the FDN ledger.
+Each row is an interaction for integrated validation. The expected results come from the set reviews, printed rules and release notes. Define each card in `managym/cards/src/<first-printing set>.rs`, register it in the native catalog, and put its directed test in the corresponding set suite. Use the printing's Scryfall ID and definition key. Update only the delivered rows' implementation records in the FDN ledger.
 
 | Foundations card (set module) | Constructed interaction and observable result |
 |---|---|
@@ -82,7 +82,7 @@ Ordinary reset now stops at the starting seat’s declaration. The opening works
 
 - At seed 103, both seats redrew twice. Each second selection offered six exact objects. Commands for all legal bottom and entry choices replayed on independent forks, stale Commands failed, and the original witness stayed intact. Each chooser saw its bottom positions and the other seat saw none. Both viewers saw the Axe and Quicksilver enter before turn one. Quicksilver’s turn-one activation still cost five.
 - At seed 104, the starting seat kept its seven original objects. The other seat redrew down to zero without asking the starting seat again.
-- The FDN equip fixture moved both keywords and +1/+1 between two Gray Ogres. The MSH fixture paid four generic mana for a normal entry’s power-up, received both counters and exhausted the activation for that object. Equipping Fynn and connecting in both damage steps remains open.
+- The FDN equip fixture moved both keywords and +1/+1 between two Gray Ogres. The MSH fixture paid four generic mana for a normal entry’s power-up, received both counters and exhausted the activation for that object.
 
 The CPython 3.13 release build passed scalar/vector opening parity at seed 213. Two different private bottom selections produced identical opposing viewer JSON and different owner library facts; an owner-perspective sample preserved the owner's full observation. Academy restored all seven bottom offers and the frame hash on reconnect and accepted the retained Command. The existing Bloodbending text-policy authority tests, saved-column-prefix test, direct Torch attachment projection and entry-turn tensor mutation passed. The native card shells matched their Scryfall fixtures.
 
@@ -98,10 +98,6 @@ The release build at the earlier sync failed the 4096-byte GameState assertion. 
 ### Behavior review at `237b4511` — continue implementation
 
 The earlier size and private-restoration blocker is closed. This review reran the seed-213 scalar/vector opening fixture and both private-bottom snapshot cases against the installed extension (3 passed). The second-bottom case restores after a private commitment, replays the original action to the same witness, and branches to a different owner view while preserving the opponent view. The existing debug binaries passed 12 focused cases covering CR 103, Time Stop, controlled cleanup, Fynn, Herald, simultaneous terminal conditions and Env reasons/rewards.
-
-Fynn's definition adds two poison counters to the damaged player. The player counter projection supplies the public count to both viewers, counter facts and text. The SBA pass reads both seats before clearing failed draws, consults effective Herald abilities and commits both seats' loss causes. This covers a state-based loss. `GameProcedure::Finished { losses }` still has no cause for an instructed loss or an explicit win. The catalog lacks Demonic Pact, Maze's End, Virulent Silencer, The Dominion Bracelet and Construct a Cosmic Cube. Consequently none can supply its required native offer, observation or catalog learning tokens.
-
-The working phase remains open. Start with the Pact upkeep and Herald fork described under “Next working slice.” Then exercise Maze with nine distinct Gates plus a duplicate and with ten distinct Gates, including a failed search and an opposing Herald. The other outstanding rows above still require constructed witnesses, including Fynn in both damage steps and Cube control at payment. Bracelet has no activation to test yet. Its manual pip and source choices, restricted-first automatic spend, committed receipt and remaining pool are unverified. No full-suite or Engine Budget result is claimed here.
 
 ### Instructed outcomes and explicit wins
 
