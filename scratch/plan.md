@@ -8,6 +8,8 @@ Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, th
 
 **Regal Caracal.** The Amonkhet definition creates two white Cat tokens with printed lifelink. Alongside the ordinary Cat all three were 2/2 with lifelink. Removing Caracal returned all three to 1/1 and only the two new Cats kept lifelink. Caracal and the opposing Cat received no lifelink from its ability.
 
+**Behavior review at `edac17e6`.** Four directed Rust tests passed in the debug test profile: the two Arahbo positions, the self-entry learning-token comparison and Caracal's removal. Five Python cases passed (the Hunter draw and four Lightshell cases). At the Hunter trigger-order decision both source-bound Commands reproduced the transition and digest on independent forks. Reusing each capture failed without changing the committed branch or its root. The privacy check covers the closed opponent's semantic observation and Academy projection. This satisfies the Cat iteration. The working phase stays open for the remaining 204 audits, starting with the Parent and Anthem position below. Full debug, pinned-pilot and browser checks remain with gate.
+
 ### Behavior after the shared repair at `12096ae8`
 
 **Surveil knowledge after resolution.** Milling either inspected card shifts the other to known position 0 for the chooser. Keeping both and reversing their order changes only positions 0 and 1. Hill Giant and Forest, previously placed by Accumulate Wisdom, remain known at positions 3 and 4. Four Lightshell cases passed on the release extension rebuilt from merged snapshot `8aef2be7`, covering native observations, v11, text, closed-opponent privacy and replay on independent forks.
