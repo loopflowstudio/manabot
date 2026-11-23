@@ -281,6 +281,11 @@ counters on its source even if its power has since changed. Its activation
 spends three incubation counters during payment. Countering the ability
 leaves them spent, and resolving it creates the flying Drake.
 
+Death triggers check whether each permanent was a creature as it left the
+battlefield. High-Society Hunter draws for each other nontoken creature that
+dies alongside it, including a land that was copying a creature. Sacrificing
+a creature token to its attack trigger puts a counter on Hunter without a draw.
+
 Delayed abilities compose event matching, frequency, expiry, captured subjects
 and effects. `CreateDelayedTrigger.event` only matches the event;
 `DelayedFrequency::Once` consumes its watcher on the first match, even if the

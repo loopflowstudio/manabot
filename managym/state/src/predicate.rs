@@ -162,6 +162,20 @@ impl CardPredicate {
         power: i32,
         added_types: &[CardType],
     ) -> bool {
+        self.matches_with_types(object, kind, mana_value, power, &|ty| {
+            object.types.types.contains(&ty) || added_types.contains(&ty)
+        })
+    }
+
+    /// Match with the card types in effect at the event boundary.
+    pub fn matches_with_types(
+        &self,
+        object: &PrintedCharacteristics,
+        kind: ObjectKind,
+        mana_value: u8,
+        power: i32,
+        has_type: &impl Fn(CardType) -> bool,
+    ) -> bool {
         if self.namesake
             || self.with_counter
             || self.attacking
@@ -193,7 +207,7 @@ impl CardPredicate {
         }
         if !self.any_of.is_empty()
             && !self.any_of.iter().any(|alternative| {
-                alternative.matches_printing(object, kind, mana_value, power, added_types)
+                alternative.matches_with_types(object, kind, mana_value, power, has_type)
             })
         {
             return false;
@@ -223,9 +237,6 @@ impl CardPredicate {
         if self.min_power.is_some_and(|min| power < min) {
             return false;
         }
-        let has_type = |card_type: CardType| {
-            object.types.types.contains(&card_type) || added_types.contains(&card_type)
-        };
         if let Some(card_type) = self.card_type {
             if !has_type(card_type) {
                 return false;

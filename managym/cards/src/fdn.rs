@@ -22,6 +22,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         drake_hatcher(),
         felling_blow(),
         fiendish_panda(),
+        high_society_hunter(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
@@ -437,6 +438,52 @@ fn fiendish_panda() -> CardDefinition {
                 },
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn high_society_hunter() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature attacks, you may sacrifice another creature. If you do, put a +1/+1 counter on this creature.\nWhenever another nontoken creature dies, draw a card.";
+    CardDefinition {
+        key: "fdn.high_society_hunter",
+        scryfall_id: "51da4a4b-ea12-4169-a7cf-eb4427f13e84",
+        printed: PrintedCharacteristics {
+            name: "High-Society Hunter".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Noble".into()],
+            power: Some(5),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            text_box: text_box.into(),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::may_sacrifice(CardPredicate::creature(), true),
+                        Effect::if_you_do(vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )]),
+                    ],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::another(CardPredicate {
+                            token: Some(false),
+                            ..CardPredicate::creature()
+                        }),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                },
+            ],
             ..Default::default()
         },
         ..Default::default()

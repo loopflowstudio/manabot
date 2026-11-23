@@ -149,15 +149,17 @@ The catalog fixture update at `ef9a8011` supplied reference data. Count delivery
 
 Behavior review at `a36dcdb2`: both `drake_hatcher` debug card tests and the native snapshot test passed. Three focused text tests passed: Hatcher pending damage, manual mana-source Commands (including stale rejection with unchanged digest), and hidden-hand permutations. Hatcher spends only counters, so the earlier pooled-mana and receipt controls still apply. The Hatcher slice meets its working obligations. Continue the working phase with Hunter; the 73 primary rows, integrated replay/privacy parity and Engine Budget checks remain open.
 
-## Next slice · High-Society Hunter
+## Implemented slice · High-Society Hunter
 
-From the same attack trigger, take the optional sacrifice and decline it in a sibling. Use a creature token to distinguish paying the sacrifice from qualifying for a death draw. Then destroy Hunter, another friendly nontoken creature and an opposing nontoken creature together. Expect two draws. Inspect the existing departure and trigger matching paths before adding a query. The deciding facts are which creatures died, their token status at departure and which one was Hunter. Link the passing fixture in the FDN cost-payment row.
+The two `high_society_hunter` native card fixtures passed. From one attack trigger, sacrificing a Cat added a counter without drawing and declining kept the Cat. Fumigate destroyed Hunter, a friendly Gray Ogre and an opposing Island copying Gray Ogre. Both viewers saw two Hunter death triggers. Restoring the pending game yielded two draws or one after countering a trigger. Only Hunter’s controller saw the drawn cards in hand. The existing Predator Ooze damage/death fixture also passed. The shared departure predicate reads creature status and power from the exact departed permanent. Token status is stable across appearances. Vampire is now a classified creature subtype.
 
-First make the simultaneous-death case discriminate between the two current readers in `flow/triggers.rs::subject_matches_moved_object`. Include a nontoken noncreature card copying a creature at departure among the two qualifying victims. Its destination card alone cannot answer Hunter’s question. Use the pre-batch snapshot to identify listeners and the exact departed object’s effective creature and token status to qualify each victim. Share that creature-status read with Predator Ooze. Preserve ordinary entry predicate semantics. Keep one pending draw per qualifying death. Restore with both draws pending and counter one in a sibling. Check both viewers can identify the public triggers and only the entitled viewer learns a private draw. This exercises the matcher before adding any new history storage.
+## Next slice · Cackling Prowler
+
+Use the sacrificed Cat to exercise Prowler’s end-step death check alongside Hunter. Cover ward payment, a turn without a qualifying death, and the turn boundary.
 
 ## Evidence to carry forward
 
-The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+The 72 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 

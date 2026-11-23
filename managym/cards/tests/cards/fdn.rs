@@ -947,3 +947,116 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
     assert!(s.battlefield_permanents_named(0, "Drake").is_empty());
     assert_eq!(counters_of(&s, second, Incubation), 0);
 }
+
+#[test]
+fn high_society_hunter_can_sacrifice_a_token_or_decline() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{counters, offered_cards},
+        play::{choose, select_card},
+    };
+    use managym::agent::action::Action;
+
+    let mut s = five_color_setup(&["High-Society Hunter"]);
+    let hunter = s.force_permanent_on_battlefield(0, "High-Society Hunter");
+    let token = s
+        .game_mut()
+        .create_token("token.cat", PlayerId(0), false)
+        .unwrap();
+    let cat = card_of(&s, token);
+    clear_summoning_sickness(&mut s, hunter);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, hunter);
+    s.advance_until(
+        |s| !offered_cards(s).is_empty(),
+        "Hunter sacrifice choice".into(),
+    );
+    assert_eq!(offered_cards(&s), vec![cat]);
+    let pending = s.game().clone();
+    let hand = s.zone_size(0, ZoneType::Hand);
+    for sacrifice in [false, true] {
+        *s.game_mut() = pending.clone();
+        if sacrifice {
+            select_card(&mut s, cat);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+        assert_eq!(s.game().state.permanents[token].is_none(), sacrifice);
+        assert_eq!(counters(&s, hunter), i32::from(sacrifice));
+        assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+    }
+}
+
+#[test]
+fn high_society_hunter_draws_for_simultaneous_nontoken_deaths() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::hand,
+        play::{cast, cast_card},
+    };
+    use managym::{
+        agent::observation::Observation,
+        state::{
+            ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+            game_object::Target,
+            player::ManaPayment,
+        },
+    };
+    let mut s = five_color_setup(&[
+        "High-Society Hunter",
+        "Gray Ogre",
+        "Fumigate",
+        "Lightning Bolt",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let hunter = s.force_permanent_on_battlefield(0, "High-Society Hunter");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let island = s.force_permanent_on_battlefield(1, "Island");
+    let original = s.game().state[card_of(&s, ogre)].clone();
+    let copy = card_of(&s, island);
+    s.game_mut().state[copy].become_copy_of(&original, &[]);
+    let hunter_key = s.game().state[card_of(&s, hunter)].definition_id;
+    cast(&mut s, "Fumigate");
+    s.advance_until(
+        |s| s.game().state.stack_objects.len() == 2,
+        "Hunter's two death triggers".into(),
+    );
+    let pending = s.game().clone();
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        assert_eq!(obs.stack_objects.len(), 2);
+        assert!(obs.stack_objects.iter().all(|a| a.source_card_registry_key
+            == hunter_key.0 as i32
+            && a.ability_index == Some(1)));
+    }
+    for counter in [false, true] {
+        *s.game_mut() = pending.clone();
+        if counter {
+            let trigger = s.game().state.stack_objects.last().unwrap().id();
+            let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+            s.game_mut().state[bolt].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
+            s.game_mut().state[bolt].spell_effects = vec![Effect::CounterAbility {
+                what: ObjectSelector::Target(TargetSpec::Ability),
+            }];
+            cast_card(&mut s, bolt);
+            assert!(s.choose_target(Target::StackAbility(trigger)));
+        }
+        let before = hand(&s, 0);
+        settle(&mut s);
+        let drawn: Vec<_> = hand(&s, 0)
+            .into_iter()
+            .filter(|c| !before.contains(c))
+            .collect();
+        assert_eq!(drawn.len(), if counter { 1 } else { 2 });
+        let own = Observation::for_player(s.game(), PlayerId(0));
+        let foe = Observation::for_player(s.game(), PlayerId(1));
+        for card in drawn {
+            let object = &s.game().state[card];
+            assert!(own.agent_cards.iter().any(|c| c.zone == ZoneType::Hand
+                && c.id == object.id.0 as i32
+                && c.characteristics.name == object.name));
+        }
+        assert!(foe.opponent_cards.iter().all(|c| c.zone != ZoneType::Hand));
+    }
+}

@@ -1840,6 +1840,20 @@
       "U"
     ]
   },
+  "High-Society Hunter": {
+    "name": "High-Society Hunter",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Creature — Vampire Noble",
+    "power": "5",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, you may sacrifice another creature. If you do, put a +1/+1 counter on this creature.\nWhenever another nontoken creature dies, draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
   "Hill Giant": {
     "name": "Hill Giant",
     "mana_cost": "{3}{R}",

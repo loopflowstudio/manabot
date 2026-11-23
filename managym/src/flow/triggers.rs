@@ -2168,18 +2168,32 @@ impl Game {
             _ => return false,
         };
         let departed = event.departed_object();
-        let animated = departed
-            .and_then(|object| self.object_lki(object))
-            .map(|lki| lki.animated_creature)
-            .unwrap_or_else(|| {
-                self.state
-                    .permanent_of(moved_object)
-                    .filter(|id| self.state.permanents[*id].is_some())
-                    .is_some_and(|id| self.characteristics(id).is_animated)
-            });
+        let lki = departed.and_then(|object| self.object_lki(object));
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
+            let card = &self.state[moved_object];
+            if let Some(lki) = lki {
+                // Object kind belongs to the physical slot across appearances.
+                return predicate.matches_with_types(
+                    card,
+                    card.kind(),
+                    card.mana_value_cost().map_or(0, |cost| cost.mana_value),
+                    lki.power,
+                    &|ty| {
+                        if ty == CardType::Creature {
+                            lki.was_creature
+                        } else {
+                            card.types.types.contains(&ty)
+                        }
+                    },
+                );
+            }
+            let animated = self
+                .state
+                .permanent_of(moved_object)
+                .filter(|id| self.state.permanents[*id].is_some())
+                .is_some_and(|id| self.characteristics(id).is_animated);
             predicate.matches(
-                &self.state[moved_object],
+                card,
                 self.object_power(moved_object),
                 if animated { &[CardType::Creature] } else { &[] },
             )
@@ -2192,7 +2206,7 @@ impl Game {
                 let object = departed.unwrap_or(moved_object);
                 source_was_on_battlefield
                     && self.state.turn.damage_pairs.contains(source_object, object)
-                    && self.object_lki(object).map_or_else(
+                    && lki.map_or_else(
                         || {
                             self.lookup_current_permanent(object)
                                 .is_ok_and(|id| self.characteristics(id).is_creature())
