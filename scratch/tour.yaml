@@ -1,7 +1,7 @@
-at: fd14d66f65c703518bc1117372d5b685f36130e7
+at: d0d0e8437650c8a84c72c165a71daed7ff744bca
 first:
   - path: managym/cards/tests/cards/tla.rs
-    why: Resolve both lifelink combat branches through end of combat
+    why: Compare committed damage, gains and counters after replacement replay
   - path: managym/tests/support/play.rs
     why: Return the fork that replayed the bound Command
   - path: managym/src/flow/combat_actions.rs
