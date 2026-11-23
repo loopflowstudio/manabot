@@ -1,4 +1,4 @@
-at: f9a251a95c9d736904359af4378608b11a4bc259
+at: a5dc5600c62862cb1d36125e53e818946ca451f9
 first:
   - path: managym/src/agent/observation.rs
     why: Projects the activated ability’s exact source power

@@ -17,9 +17,11 @@ def choose(env: managym.Env, description: str) -> None:
 
 @pytest.mark.parametrize("power", [2, 3])
 def test_pending_immolator_power_matches_damage(power: int) -> None:
+    # Leave one untapped Mountain for the activation in both positions.
+    lands = ("Mountain", "Mountain") if power == 3 else ("Mountain",)
     env = priority_root(
         ("Lightning Bolt",),
-        ("Heartfire Immolator", "Mountain", "Mountain"),
+        ("Heartfire Immolator", *lands),
         opponent=("Craw Wurm",),
     )
     if power == 3:
@@ -32,11 +34,6 @@ def test_pending_immolator_power_matches_damage(power: int) -> None:
 
     choose(env, "Activate ability")
     choose(env, "Craw Wurm")
-    if any(
-        "Pay the offered cost" in a.description
-        for a in capture_text_decision(env).actions
-    ):
-        choose(env, "Pay the offered cost")
 
     for viewer in (0, 1):
         obs = env.observation_for_player(viewer)
