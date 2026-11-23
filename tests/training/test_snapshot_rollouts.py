@@ -1733,7 +1733,7 @@ def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
                 run,
                 updates=update,
                 snapshot_vector=InMemorySnapshotVector.factory,
-                scorer=score,
+                snapshot_scorer=score,
                 capture_predicate=capture,
             )
             pointer = json.loads((out / "state/current.json").read_bytes())
@@ -1955,7 +1955,7 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
         start=0,
         seed=0,
         snapshot_vector=InMemorySnapshotVector.factory,
-        scorer=lambda signals: 1.0,
+        snapshot_scorer=lambda signals: 1.0,
     )
     close_collector(collector)
 
@@ -1970,7 +1970,9 @@ def test_snapshot_collector_requires_one_worker_and_configured_callbacks() -> No
             snapshot_vector=InMemorySnapshotVector.factory,
         )
     with pytest.raises(ValueError, match="require snapshot settings"):
-        self_play_collector(settings, start=0, seed=0, scorer=lambda signals: 1.0)
+        self_play_collector(
+            settings, start=0, seed=0, snapshot_scorer=lambda signals: 1.0
+        )
     with pytest.raises(ValueError, match="require snapshot settings"):
         self_play_collector(settings, start=0, seed=0, capture_predicate=lambda d: True)
 

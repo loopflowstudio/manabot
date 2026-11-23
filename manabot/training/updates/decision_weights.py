@@ -1,4 +1,4 @@
-"""Per-head coefficients for a weighted rollout, its logical minibatches and execution chunks."""
+"""Per-decision actor and critic loss weights across logical minibatches and execution chunks."""
 
 import numpy as np
 

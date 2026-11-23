@@ -101,7 +101,7 @@ class EntrySignals:
     age_since_visit: int
 
 
-ScorerFn = Callable[[EntrySignals], float]
+SnapshotScorer = Callable[[EntrySignals], float]
 _RECIPE = TypeAdapter(SnapshotRecipe)
 
 
@@ -120,7 +120,10 @@ class SnapshotEntry(Strict):
     visits: int = Field(default=0, ge=0)
 
     def priority(
-        self, config: SnapshotConfig, generation: int, scorer: ScorerFn | None = None
+        self,
+        config: SnapshotConfig,
+        generation: int,
+        scorer: SnapshotScorer | None = None,
     ) -> float:
         if config.signal == "staleness" and scorer is None:
             return max(0, generation - self.last_visit_generation)
@@ -471,7 +474,7 @@ def score_entry(
     signals: BatchSignals,
     config: SnapshotConfig,
     selected: np.ndarray | None,
-    scorer: ScorerFn | None,
+    scorer: SnapshotScorer | None,
     age: int,
 ) -> float:
     if config.signal == "staleness" and scorer is None:
@@ -500,7 +503,7 @@ class SnapshotBank:
     """A bounded set of scored roots, published one complete generation at a time."""
 
     def __init__(
-        self, config: SnapshotConfig, *, scorer: ScorerFn | None = None
+        self, config: SnapshotConfig, *, scorer: SnapshotScorer | None = None
     ) -> None:
         self._lock = RLock()
         self.config = config.model_copy(deep=True)
@@ -525,7 +528,7 @@ class SnapshotBank:
         config: SnapshotConfig,
         state: SnapshotBankState,
         *,
-        scorer: ScorerFn | None = None,
+        scorer: SnapshotScorer | None = None,
     ) -> Self:
         bank = cls(config, scorer=scorer)
         if bank._state.config_digest != state.config_digest:

@@ -25,6 +25,12 @@ from manabot.training.updates.backend import (
     PPOPolicy,
     ppo_rl,
 )
+from manabot.training.updates.decision_weights import (
+    actor_term,
+    batch_weights,
+    critic_term,
+    logical_weights,
+)
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -33,12 +39,6 @@ from manabot.training.updates.health import (
 )
 from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
-from manabot.training.updates.weights import (
-    actor_term,
-    batch_weights,
-    critic_term,
-    logical_weights,
-)
 
 
 def update_iteration(

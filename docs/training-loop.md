@@ -325,7 +325,7 @@ A full bank evicts the lowest-priority entry, breaking ties by oldest visit
 and then snapshot ID. Built-in staleness evicts by oldest visit and then ID,
 so newly captured roots can enter the bank.
 
-Pass a runtime `scorer` to `self_play` or `SnapshotBank` for a custom priority.
+Pass a runtime `snapshot_scorer` to `self_play` (or `scorer` to `SnapshotBank`) for a custom priority.
 It receives `EntrySignals(root_signals, episode_signals, age_since_visit)`
 and returns a finite nonnegative number. Both slices contain read-only NumPy
 arrays in packed row order.

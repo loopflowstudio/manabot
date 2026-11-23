@@ -93,10 +93,10 @@ from manabot.training.rollout.snapshot_vector import (
 )
 from manabot.training.rollout.snapshots import (
     CapturePredicate,
-    ScorerFn,
     SnapshotBank,
     SnapshotBankState,
     SnapshotConfig,
+    SnapshotScorer,
 )
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -340,7 +340,7 @@ def self_play_collector(
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
     snapshot_state: SnapshotBankState | None = None,
-    scorer: ScorerFn | None = None,
+    snapshot_scorer: SnapshotScorer | None = None,
     capture_predicate: CapturePredicate | None = None,
 ) -> Collector:
     """Native streams seeded from the run seed and the update they start at.
@@ -351,13 +351,15 @@ def self_play_collector(
     if snapshot_bank is not None:
         if snapshot_bank.config != settings.snapshot:
             raise ValueError("snapshot bank differs from self-play settings")
-        if scorer is not None and scorer is not snapshot_bank.scorer:
+        if snapshot_scorer is not None and snapshot_scorer is not snapshot_bank.scorer:
             raise ValueError("supplied snapshot bank already defines its scorer")
-        scorer = snapshot_bank.scorer
+        snapshot_scorer = snapshot_bank.scorer
     if settings.snapshot is None:
-        if scorer is not None or capture_predicate is not None:
-            raise ValueError("scorer and capture_predicate require snapshot settings")
-    elif scorer is None:
+        if snapshot_scorer is not None or capture_predicate is not None:
+            raise ValueError(
+                "snapshot_scorer and capture_predicate require snapshot settings"
+            )
+    elif snapshot_scorer is None:
         if settings.snapshot.signal == "action_value_spread":
             raise ValueError(
                 "self-play collects no action values for action_value_spread; supply a custom scorer"
@@ -373,10 +375,10 @@ def self_play_collector(
         if settings.snapshot is None:
             raise ValueError("resuming a snapshot bank requires its snapshot settings")
         snapshot_bank = SnapshotBank.from_state(
-            settings.snapshot, snapshot_state, scorer=scorer
+            settings.snapshot, snapshot_state, scorer=snapshot_scorer
         )
     elif settings.snapshot is not None and snapshot_bank is None:
-        snapshot_bank = SnapshotBank(settings.snapshot, scorer=scorer)
+        snapshot_bank = SnapshotBank(settings.snapshot, scorer=snapshot_scorer)
     collector = open_collector(
         ObservationSpace(settings.observation),
         Match(root_match(settings)),
@@ -962,7 +964,7 @@ def self_play_games(
     *,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
-    scorer: ScorerFn | None = None,
+    snapshot_scorer: SnapshotScorer | None = None,
     capture_predicate: CapturePredicate | None = None,
 ) -> Iterator[Collector]:
     """Scope fresh native streams, append-only game ledgers and failure capture."""
@@ -989,7 +991,7 @@ def self_play_games(
             record_attempt=record_attempt,
             operation=failures.operation,
             snapshot_state=counts.snapshot_bank,
-            scorer=scorer,
+            snapshot_scorer=snapshot_scorer,
             snapshot_vector=snapshot_vector,
             snapshot_bank=snapshot_bank,
             capture_predicate=capture_predicate,
@@ -1011,7 +1013,7 @@ def self_play(
     recipe: str | None = None,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
-    scorer: ScorerFn | None = None,
+    snapshot_scorer: SnapshotScorer | None = None,
     capture_predicate: CapturePredicate | None = None,
 ) -> Path:
     """Train to the target. A supplied bank seeds a fresh run.
@@ -1056,7 +1058,7 @@ def self_play(
             counts,
             snapshot_vector=snapshot_vector,
             snapshot_bank=snapshot_bank,
-            scorer=scorer,
+            snapshot_scorer=snapshot_scorer,
             capture_predicate=capture_predicate,
         ) as collector:
             if counts.updates == 0:
