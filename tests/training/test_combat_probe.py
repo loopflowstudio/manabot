@@ -117,12 +117,38 @@ def test_gap_uses_original_slots_and_omits_empty_side(
     metrics = gap_shifts(scoring_policy(space, False), [rows], columns)
     assert metrics == {
         "gap": 3,
+        "saturated": 0,
         "decisions": 1,
         "shift_decisions/mine": 1,
         "shift/my_creatures_0_1": 0,
         "shift/my_creatures_9_9": 0,
     }
     np.testing.assert_array_equal(rows["agent_permanents"], original)
+
+
+def test_saturation_counts_both_tails_across_unequal_chunks(
+    rollout: tuple[RolloutBatch, ObservationSpace],
+) -> None:
+    batch, space = rollout
+    cols = combat_columns(space)
+    assert cols is not None
+    indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 4)
+    rows = batch.observations(indexes).observation
+    # Put controlled logits into the original legal slots.
+    declared = rows["actions"][..., cols.declared]
+    rows["actions"][..., cols.declare_attacker] = (
+        declared * np.array([0, 5, 12, -15])[:, None]
+    )
+
+    def evaluate(obs: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+        return obs["actions"][..., cols.declare_attacker], np.zeros(len(obs["actions"]))
+
+    policy = scoring_policy(space, False)
+    policy.evaluate.side_effect = evaluate
+    chunks = [{k: v[:3] for k, v in rows.items()}, {k: v[3:] for k, v in rows.items()}]
+    metrics = gap_shifts(policy, chunks, cols)
+    assert metrics["gap"] == 0.5
+    assert metrics["saturated"] == 0.5
 
 
 def test_no_combat_or_legacy_layout_omits_metrics(
@@ -186,6 +212,7 @@ def test_shifts_in_game_units_condition_on_boards_with_creatures(
     policy.evaluate.side_effect = evaluate
     expected = {
         "gap": 9,
+        "saturated": 0.5,
         "decisions": 2,
         "shift_decisions/mine": 2,
         "shift_decisions/theirs": 1,

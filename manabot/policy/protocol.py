@@ -53,6 +53,7 @@ class Settings:
     collection_kl: float
     tau: float
     max_grad_norm: float
+    reference_forward_kl: float = 0.0
 
 
 @dataclass(frozen=True)

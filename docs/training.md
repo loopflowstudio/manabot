@@ -550,6 +550,8 @@ DampedPolicyLearning(gradient="damped_policy", iteration_schedule=IterationSched
 DampedPolicyLearning(gradient="damped_policy", decision_schedule=LearnerDecisionSchedule(transitions=8_800_000))
 ```
 
+To advance the learning rate and τ by one reference iteration per batch of B learner decisions, set `transitions = B × (reference_steps − 1)`.
+
 | Learning record | What its rates read | Past the horizon |
 | --- | --- | --- |
 | `DampedPolicyLearning` | The absolute iteration, or that iteration mapped onto `iteration_schedule.steps` when a schedule is declared ([step sizes](learning.md#4-update)) | The mapped iteration stays at its last value |
@@ -890,7 +892,8 @@ uv run etude train manabot/recipes/local.py --experiment no-probe \
 
 The probe scores the updated policy on up to `combat_probe_rows` decisions
 per kind from that update's batch. The gap measures the policy's preference
-for declaring. The four shifts measure how that preference changes when either
+for declaring. Saturation counts the share of decisions with an absolute gap
+above 9.2. The four shifts measure how that preference changes when either
 player's creatures are edited. For the metric keys, sample counts, missing
 values and measured cost, see [Combat probe](experiment-metrics.md#combat-probe).
 

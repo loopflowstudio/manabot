@@ -66,6 +66,7 @@ import managym
 LEARNING = DampedPolicyLearning(
     gradient="damped_policy",
     advantage_quantile=0.5,
+    reference_forward_kl=0.002,
     min_advantage=0,
     max_grad_norm=0.01,
 )
@@ -77,7 +78,13 @@ _COUNTS = (
     "actor_exposures",
     "critic_exposures",
 )
-_POLICY_TERMS = ("entropy", "collection_kl", "reference_kl", "advantage_abs_mean")
+_POLICY_TERMS = (
+    "entropy",
+    "collection_kl",
+    "reference_kl",
+    "reference_forward_kl",
+    "advantage_abs_mean",
+)
 
 
 @pytest.fixture(scope="module")
@@ -343,3 +350,28 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
                     admitted.admit_rows(np.array([0]), 1)
             with pytest.raises(ValueError, match="were not admitted"):
                 admitted.rows(np.array([0]), "cpu")
+
+
+def test_actor_filtered_floor_is_the_reported_penalty(
+    captured: tuple[PolicyCheckpoint, RolloutBatch],
+) -> None:
+    weights, batch = captured
+    backend = resolve("torch")
+    results: list[UpdateDiagnostics] = []
+    for coefficient in (0.0, 0.002):
+        learning = LEARNING.model_copy(
+            update={"filter_scope": "actor", "reference_forward_kl": coefficient}
+        )
+        learner = backend.learner.Learner(
+            backend.load(weights)[0],
+            "cpu",
+            minibatch_rows=batch.actions.size,
+            execution_rows=2,
+        )
+        results.append(update_damped_iteration(backend, learner, batch, learning, 1))
+    control, floor = results
+    assert 0 < floor["actor_exposures"] < floor["critic_exposures"]
+    assert floor["reference_forward_kl"] == control["reference_forward_kl"] > 0
+    assert floor["policy_loss"] - control["policy_loss"] == pytest.approx(
+        0.002 * floor["reference_forward_kl"], rel=1e-5
+    )

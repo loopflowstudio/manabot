@@ -259,7 +259,11 @@ publish, land or choose the next Graph step from here.
   on their saved prefix.
 - Model or training-path changes: use `uv run etude train manabot/recipes/local.py`
   for the local CPU smoke. Inspect update rows for per-phase collection and
-  learning seconds. When saved training state gains a field, check that
+  learning seconds: `etude.train.read.read(<home>/track, <experiment>,
+  <run>).points(metric, clock="updates")` (`.metrics()` lists names). To try a
+  learning field the recipe does not expose, copy `local.py` into `.runs/`
+  with config fields that `model_copy` `settings(config).learning`; such a
+  single-job file refuses `--seed` other than 0. When saved training state gains a field, check that
   emitted `coordinates/` values are scalar numbers. When adjusting input or
   embedding scales, perturb the feature at initialization and measure the
   resulting change in the full object token with its usual streams enabled.
@@ -734,6 +738,19 @@ publish, land or choose the next Graph step from here.
   DB (2026-11-17). A quote prints the selected runs and the committed ceiling,
   then refuses or prices; confirm with `etude runs --experiment <name>` that
   nothing launched. `etude report` exits 1 until the experiment has a run.
+  An experiment-file edit while runs are launched must keep their resume
+  identity: for each `etude.launch.client.default().standing(<experiment>)`
+  record, call `read_training_jobs(Path(file), given)` with its
+  `launch.params` as `--kebab-name value` arguments and compare the request's
+  `job.config` with `record.launch.spec.config` byte for byte (a JSON string).
+  `params` alone differ by launch arguments and prove nothing.
+- Live experiment report from the mini's evaluation: rsync
+  `mini-heart.local:etude-eval/<study>/track/` into `.runs/`, then
+  `ETUDE_TRACK_DIR=<copy> doppler run -p manabot -c prd -- uv run --extra
+  reports --extra artifacts etude report experiments/<file>.py --source
+  r2://manabot/jobs/<experiment> --out <dir>` (about a minute). A stale local
+  track renders a page of "names tournament …, which nothing holds" warnings
+  with empty panels; that is missing data, not a broken report.
 - Decision memory in self-play (`ModelConfig.decision_memory`): the smallest
   real run is `tests/training/test_memory_self_play.py`'s `settings()`: Gray
   Ogre decks, the four `max_decision_*` capacities, and

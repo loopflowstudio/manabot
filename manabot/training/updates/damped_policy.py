@@ -74,6 +74,7 @@ def minibatch_objective(
     clip: float,
     collection_kl: float,
     tau: float,
+    reference_forward_kl: float = 0.0,
     policy_weight: float = 1.0,
     value_weight: float = 1.0,
 ) -> tuple[Array, Array, Array]:
@@ -99,6 +100,7 @@ def minibatch_objective(
             clip=clip,
             collection_kl=collection_kl,
             tau=tau,
+            reference_forward_kl=reference_forward_kl,
         ),
         actor_mask,
     )
@@ -223,6 +225,7 @@ def update_damped_iteration(
         "iteration": iteration,
         "learning_rate": rate,
         "tau": tau,
+        "reference_forward_kl_coefficient": learning.reference_forward_kl,
         "schedule_clock": (
             "learner_transitions"
             if learning.decision_schedule is not None
@@ -311,6 +314,7 @@ def update_damped_iteration(
                 entropy=0.0,
                 collection_kl=0.0,
                 reference_kl=0.0,
+                reference_forward_kl=0.0,
                 clip_fraction=0.0,
             )
             for offset in range(0, len(logical_rows), execution_rows):
@@ -353,6 +357,7 @@ def update_damped_iteration(
                                 clip=learning.clip,
                                 collection_kl=learning.collection_kl,
                                 tau=tau,
+                                reference_forward_kl=learning.reference_forward_kl,
                                 policy_weight=policy_weight,
                                 value_weight=value_weight,
                             ),
@@ -404,13 +409,18 @@ def update_damped_iteration(
                         float(rl.reverse_kl(logs, behavior_logs, valid).mean())
                         * value_weight
                     )
+                    magnet_logs = rl.reference_logs(reference, valid)
                     totals["reference_kl"] += (
-                        float(
-                            rl.reverse_kl(
-                                logs, rl.reference_logs(reference, valid), valid
-                            ).mean()
-                        )
+                        float(rl.reverse_kl(logs, magnet_logs, valid).mean())
                         * value_weight
+                    )
+                    totals["reference_forward_kl"] += (
+                        float(
+                            rl.selected_mean(
+                                rl.forward_kl(logs, magnet_logs, valid), actor_mask
+                            )
+                        )
+                        * policy_weight
                     )
                     totals["clip_fraction"] += (
                         float(

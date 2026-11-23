@@ -43,6 +43,7 @@ has not been run, so typing the command again launches what is new.
 | --- | --- | --- | --- | --- |
 | [elemental](elemental.py) | the current recipe, with a checkpoint ladder | `elemental`: fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs, played by [`elemental_play`](elemental_play.py) | grid score, deck matrix and rankings, crosstable of pairs |
 | [seat_comparison](seat_comparison.py) | comparing method arms | `seat-comparison-one` and `seat-comparison-both`, four seeds each | — | score by update, one-seat dotted |
+| [tla_trophies](tla_trophies.py) | monitoring combat decisions on the full TLA trophy population | packed w64 seeds on 7,859 training pools | fixed four-leg deals from 873 held-out pools against the capped heuristic | strength, play behaviour and combat probes |
 | [tla_frontier](tla_frontier.py) | comparing model sizes on a deck corpus | one wall-bounded job per size, named for the regime record whose settings it restates | each size against its earlier self, the heuristic and the other size | progress curves and head to head |
 | [batched_baseline](batched_baseline.py) | one GPU recipe ([size and batching study](reports/longer-learning-017.md)) | `batched_baseline` | — | self-play performance and learning curves |
 | [belief](belief.py) | a job that starts from another run | `policy`, then `sampler` from its final checkpoint once state shows it finished ([guide](../docs/training.md#a-recipe-that-starts-from-another-run)) | — | self-play curves and sampler metrics |
