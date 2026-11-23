@@ -21,3 +21,5 @@ Use the public question “does another damage step follow?” as the damage-pas
 Model Fog Bank’s single prevention ability with one either-endpoint identity check on combat damage.
 
 Twinflame Tyrant uses controller scopes and a damage transform. Add the source predicate and combat endpoint restrictions with the cards that exercise them. Wall of Stone survives a doubled Lightning Bolt, so the same test can inspect marked damage in every creature case.
+
+The controller fixture changes the Bolt’s controller after targets are chosen. A single point of prevention makes both replacement orders distinguishable on the fork.

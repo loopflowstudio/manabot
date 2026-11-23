@@ -1335,24 +1335,6 @@ impl Game {
         candidates
     }
 
-    /// Read controller and creature status from the same incarnation of the source.
-    fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
-        if let Ok(id) = self.lookup_current_permanent(source) {
-            let permanent = self.state.permanents[id].as_ref()?;
-            return Some((
-                permanent.controller,
-                self.permanent_is_battlefield_creature(id),
-            ));
-        }
-        if self.state.live(source).is_some() {
-            if let Some(controller) = self.stack_spell_controller(source) {
-                return Some((controller, self.state[source].types.is_creature()));
-            }
-        }
-        self.object_lki(source)
-            .map(|lki| (lki.controller, lki.was_creature))
-    }
-
     fn damage_target_controller(&self, target: ProposedDamageTarget) -> Option<PlayerId> {
         match target {
             ProposedDamageTarget::Player(player) => Some(player),

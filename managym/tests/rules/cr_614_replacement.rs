@@ -230,3 +230,83 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
     assert!(!permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 0);
 }
+
+#[test]
+fn lifelink_spell_uses_its_stack_controller_for_doubling_and_gain() {
+    use managym::state::{card::Keyword, stack_object::StackObject};
+
+    for competing in [false, true] {
+        let mut s = Scenario::new(
+            deck_of("Mountain", "Lightning Bolt"),
+            deck(&[("Twinflame Tyrant", 40)]),
+            614_006,
+        );
+        s.advance_to_active_step(0, StepKind::Main);
+        s.force_permanent_on_battlefield(1, "Twinflame Tyrant");
+        if competing {
+            let land = s.force_permanent_on_battlefield(0, "Mountain");
+            let object = card_of(&s, land);
+            s.game_mut().state[object]
+                .replacement_effects
+                .push(ReplacementEffect::ModifyDamage {
+                    creature_source: false,
+                    source_by: Actor::AnyPlayer,
+                    recipient_by: Actor::You,
+                    transform: DamageTransform::Prevent(1),
+                });
+        }
+        let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
+        let bolt = move_card(&mut s, bolt, ZoneType::Hand);
+        s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("R").into();
+        s.game_mut().scenario_refresh_priority().unwrap();
+        crate::support::play::cast_card(&mut s, bolt);
+        assert!(s.choose_target(Target::Player(PlayerId(0))));
+        let spell = now(&s, bolt);
+        s.game_mut().state[spell].keywords.insert(Keyword::Lifelink);
+        let Some(StackObject::Spell(top)) = s.game_mut().state.stack_objects.last_mut() else {
+            panic!("expected Lightning Bolt on the stack");
+        };
+        top.controller = PlayerId(1);
+        s.drain_events();
+        s.pass_priority();
+        s.pass_priority();
+        let outcome = |s: &mut Scenario| (s.drain_events(), [s.life(0), s.life(1)]);
+        let verify = |(events, life): &(Vec<GameEvent>, [i32; 2]), amount: i32| {
+            assert_eq!(*life, [20 - amount, 20 + amount]);
+            assert_eq!(committed_damage(events, PlayerId(0)), Some(amount as u32));
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|e| matches!(
+                        e,
+                        GameEvent::LifeChanged {
+                            player: PlayerId(1),
+                            ..
+                        }
+                    ))
+                    .count(),
+                1
+            );
+        };
+        if competing {
+            assert_eq!(s.action_space().player, Some(PlayerId(0)));
+            let mut amounts = Vec::new();
+            for mode in 0..2 {
+                let play = || {
+                    let mut fork = s.clone();
+                    crate::support::play::choose_mode(&mut fork, mode);
+                    outcome(&mut fork)
+                };
+                let result = play();
+                assert_eq!(result, play());
+                let amount = 20 - result.1[0];
+                verify(&result, amount);
+                amounts.push(amount);
+            }
+            amounts.sort();
+            assert_eq!(amounts, [4, 5]);
+        } else {
+            verify(&outcome(&mut s), 6);
+        }
+    }
+}
