@@ -705,7 +705,8 @@ pub struct Game {
 
 // Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
 // with bench_footprint before raising a ceiling. Object and Permanent repeat
-// for each occupied row, while the aggregate ceilings use 128-byte buckets.
+// for each occupied row. TrackedState allows 32 bytes for its revisions
+// in addition to the GameState ceiling.
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     use crate::state::game_object::Object;
@@ -714,7 +715,7 @@ const _: () = {
     assert!(size_of::<Object>() <= 96);
     assert!(size_of::<Permanent>() <= 168);
     assert!(size_of::<GameState>() <= 4096);
-    assert!(size_of::<TrackedState>() <= 4096);
+    assert!(size_of::<TrackedState>() <= 4128);
     assert!(size_of::<Game>() <= 5248);
     let cache_limit = if cfg!(debug_assertions) { 104 } else { 96 };
     assert!(size_of::<DerivedCache>() <= cache_limit);
