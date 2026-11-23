@@ -51,6 +51,7 @@ pub fn deck_of(land: &str, card: &str) -> BTreeMap<String, usize> {
 
 /// A two-player game driven by tests. Construction and setup live here;
 /// directed play is in `play.rs` and reads are in `inspect.rs`.
+#[derive(Clone)]
 pub struct Scenario {
     pub(super) game: Game,
 }

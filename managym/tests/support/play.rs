@@ -374,9 +374,7 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
 /// A copy of the scenario in which the offered action at `index` was taken:
 /// one line of play from a choice, leaving `s` at the choice.
 pub fn fork_stepping(s: &Scenario, index: usize) -> Scenario {
-    let mut fork = Scenario {
-        game: s.game().clone(),
-    };
+    let mut fork = s.clone();
     fork.step_action(index);
     fork
 }

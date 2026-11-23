@@ -1,4 +1,4 @@
-at: 0ea0c204a09868069695c71ebcaddba949276f03
+at: 9ff136199c0355ffec59952f848a405c482eaed9
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -25,5 +25,5 @@ first:
   - path: managym/cards/tests/cards/eoe.rs
     why: Compare manual and automatic payment branches
   - path: managym/cards/tests/cards/msh.rs
-    why: Replay payment on the delegated turn
+    why: Fork sacrifice, countering and delegated payment
 hide: []
