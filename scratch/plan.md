@@ -17,7 +17,7 @@
 
 Snapshot library-order pins retain inspected object identities across exact forks and replay. Viewer observations expose only the positions known to that viewer.
 
-Slice 2 audit resumed. Taurean Mauler needs Changeling across zones. Soulstone Sanctuary needs every creature type only while animated. Both are Bucket C: definition matching checks explicit subtype membership in `managym/state/src/effect.rs`, and battlefield layers add and match individual subtypes in `managym/src/flow/layers.rs`. The complete debug suite, pinned-pilot compatibility suite and browser checks remain gate evidence. Decomposition and performance measurement follow working behavior.
+The Run Away Together audit is complete. Its ledger row records the missing controller comparison at casting and resolution. The next audit starts with Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The next playable witness is Arahbo plus Helpful Hunter, including both trigger orders, the draw, and the resulting Cat's characteristics. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 
@@ -25,10 +25,10 @@ Authoring Foundations cards should be direct, predictable, and collision-free: o
 
 ### Canonical authoring model (and choices made for review)
 
-1. **Upfront 3-bucket readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). Before authoring more cards, sync the 3 already-defined stale rows in `fdn.jsonl` and classify all 218 remaining rows against actual `managym-state` enums:
-   - **Bucket A — Composable today (~150+ rows):** Zero engine edits needed; batch-author in capability-grouped slices of ~15–35 cards instead of 1–2 cards per slice.
-   - **Bucket B — Unlocked by 4 small local primitives (~30–40 rows):** Land each shared primitive once with directed counterexamples, observability guards, and learning tokens, then batch-author every FDN card it unlocks.
-   - **Bucket C — Explicitly deferred (~12–15 rows):** Record as `definition pending` in `fdn.jsonl` with the exact missing authority and owning parallel track. Do not add one-off shortcuts.
+1. **Upfront 3-bucket readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). The three existing definitions are reconciled. Classify the remaining 207 unaudited rows against native selection, execution and observation. The task brief allows “minimal local primitives”. Treat the designs below as proposals until the audit establishes their callers and scope:
+   - **Bucket A — Composable today:** Zero engine edits needed; batch-author in capability-grouped slices of ~15–35 cards instead of 1–2 cards per slice.
+   - **Bucket B — Unlocked by minimal local primitives:** Land each shared primitive once with directed counterexamples, observability guards, and learning tokens, then batch-author every FDN card it unlocks.
+   - **Bucket C — Explicitly deferred:** Record as `definition pending` in `fdn.jsonl` with the exact missing authority and owning parallel track. Do not add one-off shortcuts.
    - *Choice made for review:* Include the 4 small local primitives (Bucket B) in MTG-421 rather than restricting MTG-421 to zero-engine-edit cards (which would exclude headline witnesses like `Ajani's Pridemate`, `Twinflame Tyrant`, `Authority of the Consuls`, and `Witness Protection`).
 
 2. **One continuous static authoring form (`StaticAbility::Continuous`).** `managym/src/flow/layers.rs` already lowers every legacy `StaticAbility` wrapper (`PtBuff`, `KeywordGrant`, `TypeGrant`, `AttachedSetsCharacteristics`, `AttachedHas`, `TriggeredGrant`, `SetsLandType`) into one `Node`/`Modification` layer pass, while `AttachedSetsCharacteristics` cannot express color or card-type changes (`Witness Protection`, `Eaten by Piranhas`).
@@ -80,7 +80,7 @@ Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 Candidates still to verify:
 - **Cross-target relational constraints:** `Drakuseth, Maw of Flames` (primary + up to 2 distinct other targets).
 - **Reveal-until-matching with random bottom:** `Spinner of Souls`.
-- Any additional row identified in Step 0 whose printed text requires a substantial new authority from a parallel track (e.g., verify `Elenda` starting-life threshold, `Circuitous Route` basic-or-Gate union search, `Campus Guide` search-shuffle-then-top, `Goblin Oriflamme` / `Kitesail Corsair` while-attacking static, `Pirate's Cutlass` entry attach).
+- Any additional row identified in Step 0 whose printed text requires a substantial new authority from a parallel track (e.g., verify `Circuitous Route` basic-or-Gate union search, `Campus Guide` search-shuffle-then-top, `Goblin Oriflamme` / `Kitesail Corsair` while-attacking static, `Pirate's Cutlass` entry attach).
 
 ## Execution sequence
 
