@@ -2,6 +2,14 @@
 
 **Next slice:** add Muldrotha to the same graveyard as Zul Ashur's targeted Zombie. Expose the choice of permission and, for Muldrotha, the permanent type charged to that exact source. Start with the existing Zul Ashur fixture and fork before the cast. Only the Muldrotha branch should consume a quota. Keep the ordinary one-offer Command when one route exists. Bilbo/Adventure, the two prepared links, the other ledger rows and the Engine Budget remain pending.
 
+## Decision contract for the next slice
+
+Publish one action per legal object, profile and consequential choice of terms in the current native decision. Choose directly between “cast Hungry Ghoul using Zul Ashur” and “cast Hungry Ghoul using Muldrotha, spending creature.” Keep X, modes, targets and actual payment at their existing decision points. A second permission-selection decision would add a search edge before either branch can diverge. Preserve the existing Command encoding and order for an unambiguous ordinary play. Bind ambiguous offers by exact object, stable profile and selected terms including the source incarnation and quota type where applicable. Never persist a position in an enumeration as the meaning of that selection.
+
+The legal offers are derived within the current decision. Immutable printed programs belong to the shared catalog. Grants, prepared links and spent quotas belong to the game position. Save only the selected terms and necessary continuation in pending cast state, including the parent for resolution casts. Cost preview and execution take that selection explicitly. The stack retains the profile and applicable movement rules after sources disappear. A restored fork reconstructs the pending decision with its original terms. Recheck command preconditions before mutation. After commitment, countering the spell leaves costs and quota spent. Do not cache candidate lists across games or forks.
+
+Start with the two Hungry Ghoul actions in one priority frame. Compare their visible policy inputs, then fork, pay, counter and inspect access to a second creature. Reload a saved pending payment and complete the same Command. Also invalidate the original offer by moving and returning its target. Verify rejection leaves both mana and quota intact. Distinguish a source-specific usage choice from redundant timing modifiers that add no choice. Retain equally priced routes when the resulting state or applicable rules differ. Measure decision width alongside search work on the existing Engine Budget fixtures.
+
 ## Implemented slice · Zul Ashur
 
 At `97593abf6c9f1224f515f1cc5ea1fb6c0e819760`, Zul Ashur resolves its tap ability into the same exact-object grant record used by exile effects. The cast records whether flashback was used before announcement. Both viewers can see who may cast the Zombie and for what cost and duration. A same-named Zombie in the same graveyard has no such permission. Multiple permissions with different costs, quotas or expiry still need a choice and a plural observation.
@@ -23,7 +31,7 @@ Nine native tests and both Python cases passed (the Zul text test passed on reru
 
 ## Scope
 
-The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” The single-route fixture establishes exact-object access. It leaves open how a player chooses which permission to spend.
+The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” The single-route fixture establishes exact-object access. The overlap fixture below makes the choice of permission observable.
 
 ## Batch to deliver
 
