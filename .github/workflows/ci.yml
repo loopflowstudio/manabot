@@ -89,7 +89,7 @@ jobs:
         working-directory: managym
         run: |
           cargo nextest run --profile ci
-          cargo test --locked --features benchmark --test content_pack_clone_allocations
+          cargo test --locked --features benchmark --test content_pack_clone_allocations --example bench_footprint
 
       - name: Upload Rust test timings
         if: always()

@@ -15,10 +15,10 @@ Both roots came from `match_fixtures::build_fixture`. The 48-decision fixture dr
 | `interactive-midgame-48-w4-v1` | 15 | 340 | `bc54c4159f3c61d5dbb368fc25f05eec4a5ec1a5efec46b6c94164dbad387ccc` | `17b492e4c9efe30cf461ec097739ea7e7eb723948b07a28c8a0539f36684f600` |
 | `interactive-heavy-80-w4-v1` | 28 | 499 | `f27e14b7bea2dc858a0a8e84c564bc75f4f1438bf848fa5cc371182c2dd918a8` | `fc4d7757b6b9116dd61252ead2bfff9c5a86f9c5ad1603faff63bd332f9829fb` |
 
-Build from the repository root and run each cache mode in a fresh process. Each invocation writes JSON Lines for both fixtures. On macOS and Linux, `--bank-mib` also samples live RSS with `ps`. These commands assume 1 GiB available for the bank.
+Build the system-allocator baseline from the repository root and run each cache mode in a fresh process. Each invocation writes JSON Lines for both fixtures. On macOS and Linux, `--bank-mib` also samples live RSS with `ps`. These commands assume 1 GiB available for the bank.
 
 ```sh
-cargo build --locked --release --manifest-path managym/Cargo.toml --features benchmark --example bench_footprint
+cargo build --locked --release --manifest-path managym/Cargo.toml --no-default-features --features benchmark --example bench_footprint
 managym/target/release/examples/bench_footprint exact --bank-mib 1024
 managym/target/release/examples/bench_footprint cold --bank-mib 1024
 ```
@@ -87,10 +87,10 @@ The diverse-statics damage step grows about fourfold per doubling of board size,
 Both the timing and the separate allocation pass returned digest `2f90bd126a98e659c8c17ca4f09e58aab97eb270055e9dc80591c8370e04d99b`. Reproduce these runs from the repository root.
 
 ```sh
-cargo build --locked --release --manifest-path managym/Cargo.toml --example bench_steps --example bench_search
+cargo build --locked --release --manifest-path managym/Cargo.toml --no-default-features --example bench_steps --example bench_search
 uv run --no-project scripts/engine_budget.py sample --candidate managym/target/release/examples --artifact scratch/budget-recording
-cargo run --locked --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-creatures diverse-statics --sizes 4,8,16 --layers clone,step
-cargo run --locked --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-creatures diverse-statics --sizes 4,8,16 --layers clone,step --allocations
+cargo run --locked --release --no-default-features --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-creatures diverse-statics --sizes 4,8,16 --layers clone,step
+cargo run --locked --release --no-default-features --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-creatures diverse-statics --sizes 4,8,16 --layers clone,step --allocations
 ```
 
 ## Four-worker collection
@@ -99,9 +99,10 @@ One CPython 3.13.15 process ran four persistent `ShardedVectorEnv` worker thread
 
 The 2,048 decisions produced SHA-256 `6e1db496eca5346db1aa0546fa9145767bf20a5e28116361e3eb93b9211224c1` over the action rows, masks, chosen indices, terminations and rewards on every batch. The standalone baseline was 36,470 steps/s. This measures the CPU producer prefix; model inference and training updates are outside its scope.
 
-Reproduce the prefix with the checkout's release extension in a fresh process.
+Build the system-allocator release extension and reproduce the prefix in a fresh process.
 
 ```sh
+uv run --extra play maturin develop --release --manifest-path managym/Cargo.toml --no-default-features --features python
 uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator system
 ```
 
