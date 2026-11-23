@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import mlx.core as mx
 from mlx.utils import tree_flatten
 
-from manabot.backends.mlx.arrays import mlx_device
+from manabot.backends.mlx.arrays import all_finite, mlx_device
 from manabot.backends.mlx.checkpoint import require_supported
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
@@ -22,31 +22,21 @@ from manabot.policy.protocol import Precision as MLXPrecision
 from manabot.policy.readings import fresh_readings
 from manabot.training.learning import Precision
 
-_THREADS = 1
-
 
 def configure(threads: int, precision: Precision, device: str) -> None:
-    global _THREADS
-    target = mlx_device(device)
+    """Set the MLX device. MLX manages its own CPU thread pool."""
     if precision == "tf32":
         raise ValueError("precision tf32 requires CUDA")
-    _THREADS = threads
-    mx.set_default_device(target)
-
-
-def threads() -> int:
-    return _THREADS
+    mx.set_default_device(mlx_device(device))
 
 
 @contextmanager
 def scoped(threads: int, precision: Precision, device: str) -> Iterator[None]:
-    global _THREADS
-    previous_device, previous_threads = mx.default_device(), _THREADS
+    previous_device = mx.default_device()
     try:
         configure(threads, precision, device)
         yield
     finally:
-        _THREADS = previous_threads
         mx.set_default_device(previous_device)
 
 
@@ -99,7 +89,6 @@ class Runtime:
 
     precision: MLXPrecision | None
     configure = staticmethod(configure)
-    threads = staticmethod(threads)
     scoped = staticmethod(scoped)
     preserve_rng = staticmethod(preserve_rng)
     synchronize = staticmethod(synchronize)
@@ -121,9 +110,8 @@ class Runtime:
         if pretrained is not None:
             if pretrained.config != config:
                 raise ValueError("pretrained policy has another model config")
-            if not all(
-                bool(mx.all(mx.isfinite(value)))
-                for _, value in tree_flatten(pretrained.parameters())
+            if not all_finite(
+                value for _, value in tree_flatten(pretrained.parameters())
             ):
                 raise ValueError("pretrained policy contains nonfinite tensors")
             return pretrained

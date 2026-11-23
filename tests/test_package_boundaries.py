@@ -760,7 +760,7 @@ exercise_choice_inspection(Path(sys.argv[1]))
 
 def exercise_choice_inspection(out: Path) -> None:
     from itertools import count
-    from unittest.mock import patch
+    from unittest.mock import Mock, patch
 
     import numpy as np
 
@@ -768,7 +768,7 @@ def exercise_choice_inspection(out: Path) -> None:
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.verify import choice_corpus
-    from manabot.verify.learning_regression import inspect_policy
+    from manabot.verify.learning_regression import inspect_policy, score_choices
     import managym
 
     # Freeze the prefix at 32 native decisions, independent of runner speed.
@@ -804,3 +804,10 @@ def exercise_choice_inspection(out: Path) -> None:
         case.name for case in cases[:2]
     ]
     assert snapshot.maximum_invariance_error <= 1e-4
+
+    # A finite original and a nonfinite reload must fail the comparison.
+    restored = Mock(wraps=policy)
+    logits, values = policy.evaluate(policy.prepare(cases[0].obs, inference=True))
+    restored.evaluate.return_value = logits, np.full_like(values, np.nan)
+    with pytest.raises(ValueError, match="nonfinite frozen checkpoint output"):
+        score_choices(policy, restored, cases[:1])

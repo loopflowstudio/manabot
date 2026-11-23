@@ -139,11 +139,19 @@ def exercise_continuation(root: Path) -> None:
         for name, value in live.items():
             np.testing.assert_array_equal(value, arrays[name], err_msg=name)
 
+    moment = next(
+        name for name in arrays if name.startswith("adam.") and name.endswith(".m")
+    )
     for invalid, header, match in (
         (arrays, {**metadata, "backend": "torch"}, "backend"),
         (arrays, {**metadata, "schema": "0"}, "schema"),
         ({k: v for k, v in arrays.items() if k != "adam.step"}, metadata, "keys"),
         ({**arrays, "adam.step": mx.array([1])}, metadata, "shape or dtype"),
+        (
+            {**arrays, moment: mx.full_like(arrays[moment], float("nan"))},
+            metadata,
+            "nonfinite",
+        ),
     ):
         mx.save_safetensors(snapshot, invalid, header)
         with pytest.raises(ValueError, match=match):

@@ -20,6 +20,7 @@ import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
+from manabot.backends.mlx.arrays import all_finite
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
@@ -108,15 +109,7 @@ def restore(
                 raise ValueError(f"incompatible MLX snapshot shape or dtype for {name}")
         if int(arrays["adam.step"]) != counts.optimizer_updates:
             raise ValueError("MLX Adam step differs from the saved optimizer count")
-        if not bool(
-            mx.stack(
-                [
-                    mx.all(mx.isfinite(v))
-                    for v in arrays.values()
-                    if mx.issubdtype(v.dtype, mx.floating)
-                ]
-            ).all()
-        ):
+        if not all_finite(arrays.values()):
             raise ValueError("nonfinite MLX training snapshot")
         trees = tree_unflatten(arrays)
         agent.update(trees["learner"])

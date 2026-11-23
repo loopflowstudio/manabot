@@ -46,6 +46,7 @@ from manabot.policy.prepare import Layout, Tables
 from manabot.policy.readings import Readings
 
 if TYPE_CHECKING:
+    from manabot.policy.protocol import BackendPolicy
     import managym
 
 type ParameterArrays = Mapping[str, np.ndarray]
@@ -372,8 +373,19 @@ def checkpoint_metadata(
     return metadata
 
 
+def restore_value_semantic(policy: "BackendPolicy", semantic: object) -> None:
+    """Apply the saved critic units in place. Older files can omit the declaration."""
+    if semantic is None:
+        return
+    if semantic not in ("signed_outcome", "win_logit"):
+        raise ValueError("unsupported checkpoint value semantic")
+    if policy.value_semantic is not None and policy.value_semantic != semantic:
+        raise ValueError("checkpoint value semantic conflicts with its critic")
+    policy.value_semantic = semantic
+
+
 def save_policy_checkpoint(
-    agent: Any,
+    agent: "BackendPolicy",
     obs_space: ObservationSpace,
     path: str | Path,
     *,
@@ -382,7 +394,6 @@ def save_policy_checkpoint(
     readings: Readings,
     architecture: ArchitectureReceipt,
     player_configs: "Sequence[managym.PlayerConfig] | None",
-    parameter_names: Sequence[str] | None = None,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
@@ -425,12 +436,7 @@ def save_policy_checkpoint(
             raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
     meta = checkpoint_metadata(record)
     # Keep the writer's parameter order for positional Adam snapshots.
-    names = (
-        [torch_name(name) for name in parameters]
-        if parameter_names is None
-        else list(parameter_names)
-    )
-    meta["parameter_names"] = json.dumps(names)
+    meta["parameter_names"] = json.dumps([torch_name(name) for name in parameters])
     container = PolicyCheckpoint(
         model=agent.config,
         space=obs_space,

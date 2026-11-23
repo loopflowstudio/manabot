@@ -62,7 +62,10 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
 
 def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
     return {
-        key: torch.from_numpy(value) for key, value in choice_inputs.encode(raw).items()
+        key: torch.from_numpy(value)
+        for key, value in choice_inputs.encode(
+            raw, observation_schema.ObservationSpace()
+        ).items()
     }
 
 

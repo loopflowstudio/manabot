@@ -20,11 +20,8 @@ from manabot.policy.buckets import (
 import managym
 
 
-def encode(raw: managym.Observation) -> dict[str, np.ndarray]:
-    return {
-        key: value[None]
-        for key, value in encode_observation(ObservationSpace(), raw).items()
-    }
+def encode(raw: managym.Observation, space: ObservationSpace) -> dict[str, np.ndarray]:
+    return {key: value[None] for key, value in encode_observation(space, raw).items()}
 
 
 def reorder_offers(

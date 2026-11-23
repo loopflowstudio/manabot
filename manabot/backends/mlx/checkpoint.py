@@ -43,6 +43,7 @@ from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     read_container,
     read_metadata,
+    restore_value_semantic,
     save_policy_checkpoint,
 )
 from manabot.policy.protocol import Precision
@@ -292,13 +293,8 @@ class MLXBackend:
         world_binding = json.loads(checkpoint.metadata["world_binding"])
         validate_policy_input(policy, world_binding)
         policy.world_binding = world_binding
-        record = json.loads(checkpoint.metadata.get("bc", "{}"))
-        semantic = record.get("value_semantic")
-        if semantic not in (None, "signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        if policy.value_semantic is not None and semantic != policy.value_semantic:
-            raise ValueError("checkpoint value semantic conflicts with its critic")
-        policy.value_semantic = semantic
+        training = json.loads(checkpoint.metadata.get("bc", "{}"))
+        restore_value_semantic(policy, training.get("value_semantic"))
         return policy, checkpoint.space
 
     read_policy = staticmethod(read_container)

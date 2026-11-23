@@ -1,7 +1,7 @@
 """Replayable native choices for capacity tests and frozen-policy inspection.
 
 Collect model-independent authored-game prefixes, retain seed/action traces and
-both encoders, and select public action classes without arbitrary instance IDs.
+encoded observations, and select public action classes without arbitrary instance IDs.
 This corpus contains no strategic labels and never trains a model.
 """
 
@@ -21,6 +21,7 @@ from manabot.env.observation import (
     ACTION_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     STACK_DEFINITION_INDEX,
+    ObservationSpace,
 )
 from manabot.verify.choice_inputs import encode, reorder_offers
 import managym
@@ -169,8 +170,10 @@ def _pair(groups: dict[str, list[int]], closest: bool) -> tuple[list[int], list[
     if not closest:
         return groups[keys[0]], groups[keys[-1]]
 
+    fields = {key: _flatten(json.loads(key)) for key in keys}
+
     def distance(pair: tuple[str, str]) -> tuple[bool, int]:
-        left, right = (_flatten(json.loads(key)) for key in pair)
+        left, right = fields[pair[0]], fields[pair[1]]
         # Prefer the same verb, then the fewest differing public fields.
         # Registry keys are categorical identities, never a numeric distance.
         return left[0] != right[0], sum(a != b for a, b in zip_longest(left, right))
@@ -186,6 +189,7 @@ def collect_choices(
     buckets: dict[int, list[Case]] = defaultdict(list)
     counts: Counter[str] = Counter()
     findings: list[dict[str, object]] = []
+    observation_space = ObservationSpace()
     # Eight whole-game prefixes per round; both seats are visited naturally.
     for game in range(8):
         seed = 50_000 + round_index * 8 + game
@@ -215,7 +219,7 @@ def collect_choices(
                     for index, signature in enumerate(signatures):
                         groups[signature].append(index)
                     if len(groups) > 1:
-                        obs = encode(raw)
+                        obs = encode(raw, observation_space)
                         assert int(obs["actions_valid"].sum()) == len(actions), (
                             "legal mask count"
                         )
@@ -223,14 +227,14 @@ def collect_choices(
                             assert (
                                 obs["action_focus"][0, index, : len(action.focus)] >= 0
                             ).all(), "unresolved focus"
-                        # Reverse native offers before running both encoders.
-                        space, original = raw.action_space, actions
-                        space.actions = original[::-1]
+                        # Check native encoding against a permutation of its output.
+                        space = raw.action_space
+                        space.actions = actions[::-1]
                         raw.action_space = space
                         try:
-                            reversed_obs = encode(raw)
+                            reversed_obs = encode(raw, observation_space)
                         finally:
-                            space.actions = original
+                            space.actions = actions
                             raw.action_space = space
                         expected = reorder_offers(
                             obs, np.arange(len(actions) - 1, -1, -1)
@@ -240,11 +244,11 @@ def collect_choices(
                                 reversed_obs[key], expected[key], strict=True
                             )
                         counts[f"audited_family_{family}"] += 1
-                        selected = _pair(groups, closest)
                         # Reservoir sampling within each family avoids priority dominance.
                         seen = counts[f"audited_family_{family}"]
                         slot = rng.randrange(seen)
                         if len(buckets[family]) < 6 or slot < 6:
+                            selected = _pair(groups, closest)
                             root = env.state_digest()
                             left, right = env.clone_env(), env.clone_env()
                             left.step(selected[0][0])

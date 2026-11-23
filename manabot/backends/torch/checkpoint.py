@@ -48,6 +48,7 @@ from manabot.policy.checkpoint import (
     from_torch_state,
     read_metadata,
     read_saved_container,
+    restore_value_semantic,
     save_policy_checkpoint,
     torch_name,
 )
@@ -140,13 +141,7 @@ def restore_policy(
         checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
     record = checkpoint.record()
-    value_semantic = record.get("bc", {}).get("value_semantic")
-    if value_semantic is not None:
-        if value_semantic not in ("signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
-            raise ValueError("checkpoint value semantic conflicts with its critic")
-        agent.value_semantic = value_semantic
+    restore_value_semantic(agent, record.get("bc", {}).get("value_semantic"))
     world_binding = record["world_binding"]
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding

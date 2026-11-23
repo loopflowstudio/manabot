@@ -170,38 +170,38 @@ def score_choices(
 
     def evaluate(
         policy: BackendPolicy, observation: ObservationBuffers
-    ) -> tuple[np.ndarray, np.ndarray]:
-        return policy.evaluate(policy.prepare(observation, inference=True))
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logits, values = policy.evaluate(policy.prepare(observation, inference=True))
+        probabilities = _softmax(logits)
+        if not np.isfinite(probabilities).all() or not np.isfinite(values).all():
+            raise ValueError("nonfinite frozen checkpoint output")
+        return logits, probabilities, values
 
     stacked = {
         key: np.concatenate([case.obs[key] for case in cases], axis=0)
         for key in cases[0].obs
     }
-    logits, values = evaluate(agent, stacked)
-    probabilities = _softmax(logits)
-    if not np.isfinite(probabilities).all() or not np.isfinite(values).all():
-        raise ValueError("nonfinite frozen checkpoint output")
-    loaded_logits, loaded_values = evaluate(restored, stacked)
+    _, probabilities, values = evaluate(agent, stacked)
+    _, loaded_probabilities, loaded_values = evaluate(restored, stacked)
     errors = [
-        float(np.abs(_softmax(loaded_logits) - probabilities).max()),
+        float(np.abs(loaded_probabilities - probabilities).max()),
         float(np.abs(loaded_values - values).max()),
     ]
     scores: list[ChoiceScore] = []
     for row, case in enumerate(cases):
         obs = case.obs
-        single, value = evaluate(agent, obs)
-        p = _softmax(single)
-        valid = np.asarray(obs["actions_valid"])
+        single, p, value = evaluate(agent, obs)
+        valid = obs["actions_valid"]
         count = int(valid.sum())
-        order = list(reversed(range(count)))
-        offers, offer_value = evaluate(agent, reorder_offers(obs, order))
-        objects, object_value = evaluate(agent, reorder_objects(obs))
+        order = np.arange(count - 1, -1, -1)
+        _, offers, offer_value = evaluate(agent, reorder_offers(obs, order))
+        _, objects, object_value = evaluate(agent, reorder_objects(obs))
         errors.extend(
             [
                 float(np.abs(p[0] - probabilities[row]).max()),
                 float(np.abs(value[0] - values[row]).max()),
-                float(np.abs(_softmax(offers)[0, :count] - p[0, order]).max()),
-                float(np.abs(_softmax(objects) - p).max()),
+                float(np.abs(offers[0, :count] - p[0, order]).max()),
+                float(np.abs(objects - p).max()),
                 float(np.abs(offer_value - value).max()),
                 float(np.abs(object_value - value).max()),
                 float(p[valid == 0].sum()),
@@ -344,7 +344,7 @@ def inspect_baseline(
         if findings or not rows or time.perf_counter() >= deadline:
             raise ValueError(f"native corpus audit incomplete or failed: {findings}")
         collisions = {
-            case.name: input_collisions(case) for case in rows if input_collisions(case)
+            case.name: groups for case in rows if (groups := input_collisions(case))
         }
         if collisions:
             raise ValueError(f"public choices lost in encoded inputs: {collisions}")

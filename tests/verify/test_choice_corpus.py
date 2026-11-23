@@ -3,13 +3,11 @@
 import json
 
 import numpy as np
-import torch
 
-from manabot.env.observation import STACK_SOURCE_INDEX
+from manabot.env.observation import STACK_SOURCE_INDEX, ObservationSpace
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify import choice_inputs
-from manabot.verify.action_cases import encode
 from manabot.verify.choice_corpus import _signatures, action_inputs
 from manabot.verify.text_observation import priority_root
 import managym
@@ -42,7 +40,9 @@ def test_payment_source_names_the_battlefield_object() -> None:
     assert permanent.id != permanent.object_id
     descriptor = json.loads(signatures[index])[-1][0]
     assert descriptor[:3] == ["permanent", "self", permanent.registry_key]
-    inputs = action_inputs(encode(raw), len(signatures), "clean")
+    inputs = action_inputs(
+        choice_inputs.encode(raw, ObservationSpace()), len(signatures), "clean"
+    )
     focus = inputs[index].focus[0]
     assert focus is not None and focus.kind == "permanents"
 
@@ -62,25 +62,24 @@ def test_stack_aliases_share_a_signature_and_reach_collision_inputs() -> None:
     action = space.actions[0]
     signatures = []
     inputs = []
+    observation_space = ObservationSpace()
     for identity in (spell.stack_object_id, spell.object_id):
         action.focus = [identity]
         space.actions = [action]
         raw.action_space = space
         signatures.append(_signatures(raw))
-        obs = encode(raw)
+        obs = choice_inputs.encode(raw, observation_space)
         inputs.append(action_inputs(obs, 1, "clean"))
         focus = inputs[-1][0].focus[0]
         assert focus is not None and focus.kind == "stack"
-        torch.testing.assert_close(
-            torch.tensor(focus.features), obs["stack"][0, 0], rtol=0, atol=0
-        )
+        np.testing.assert_array_equal(focus.features, obs["stack"][0, 0])
     assert signatures[0] == signatures[1]
     assert inputs[0] == inputs[1]
 
 
 def test_permutations_preserve_stack_sources_card_turn_state_and_names() -> None:
     raw = priority_root(("Waterbending Lesson",), ("Island",)).scenario_refresh()
-    obs = choice_inputs.encode(raw)
+    obs = choice_inputs.encode(raw, ObservationSpace())
     first_permanent = 2 + 2 * obs["agent_cards"].shape[1]
     permanent_count = obs["agent_permanents"].shape[1]
     first_stack = first_permanent + 2 * permanent_count

@@ -29,7 +29,7 @@ import mlx.nn as nn
 import mlx.optimizers as optim
 from mlx.utils import tree_flatten, tree_map
 
-from manabot.backends.mlx.arrays import flat_numpy
+from manabot.backends.mlx.arrays import all_finite, flat_numpy
 from manabot.backends.mlx.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
 
@@ -207,9 +207,7 @@ class Learner:
                 self.optimizer.update(self.agent, clipped)
                 self.agent.clear_cache()
                 parameters = tree_flatten(self.agent.parameters())
-                finite = mx.all(
-                    mx.isfinite(mx.concatenate([p.flatten() for _, p in parameters]))
-                )
+                finite = all_finite(p for _, p in parameters)
                 mx.eval(finite, self.agent.parameters(), self.optimizer.state)
                 if not bool(finite):
                     raise NumericalError(

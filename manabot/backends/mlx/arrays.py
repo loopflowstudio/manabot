@@ -6,7 +6,7 @@ live in unified memory, so conversion copies but never transfers between
 devices, and the `device` argument the updates pass is ignored.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
 import mlx.core as mx
 from mlx.utils import tree_flatten
@@ -67,6 +67,11 @@ def to_numpy(array: mx.array) -> np.ndarray:
 def float32(array: mx.array) -> mx.array:
     """A forward output in float32, whatever precision the forward ran in."""
     return array.astype(FLOAT)
+
+
+def all_finite(arrays: Iterable[mx.array]) -> mx.array:
+    """Reduce each tensor before stacking, so the check never packs a second model."""
+    return mx.stack([mx.isfinite(value).all() for value in arrays]).all()
 
 
 def flat_numpy(tree: Mapping[str, object] | list[object]) -> dict[str, np.ndarray]:
