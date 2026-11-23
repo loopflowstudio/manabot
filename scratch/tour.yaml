@@ -1,4 +1,4 @@
-at: 9176fdf507ac4352a596dfea81add5885408b91b
+at: 8bfa6b9aecc383c9c8d2832e634dbb3230b3f3c9
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
@@ -11,9 +11,9 @@ first:
   - path: managym/cards/tests/cards/akh.rs
     why: Remove Caracal and inspect each remaining Cat
   - path: managym/cards/src/fdn.rs
-    why: Arahbo and Hunter compose entry effects
+    why: Foundations entry triggers and controller-scoped anthem
   - path: managym/cards/tests/cards/fdn.rs
-    why: Copy Arahbo and resolve both Hunter trigger orders
+    why: Cat interactions before and after Anthem leaves play
   - path: managym/cards/tests/cards/observability.rs
     why: Self-entry changes the trigger subject learning tokens
   - path: managym/cards/src/tokens.rs
