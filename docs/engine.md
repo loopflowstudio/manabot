@@ -1071,9 +1071,9 @@ kind `Token`, and neither it nor the copy has a `CardId`. A definition's
 `is_token` says only that its catalog row is a token definition's; an object's
 kind is the authority for what it is.
 
-Copies are made through `Object::token_copy` and `Object::spell_copy`, with
-their viewer id, owner and kind set at creation. The zone allocator supplies
-their `ObjectId`.
+Token creation replacements finish before the allocator assigns the token's
+viewer id, owner and kind. Spell copies use `Object::spell_copy`. The zone
+allocator supplies each copy's `ObjectId`.
 
 A Clone is still a card. A copy effect changes an object's copiable values
 (CR 707.2) and is recorded on that object (`copy`); it does not make a copy
@@ -1124,8 +1124,10 @@ An ability keeps one source identity through pending triggers, the stack and
 child resolution frames. Its captured definition and the retained base
 printing supply definition provenance after departure; these reads never
 borrow a later appearance's copy or transformed face. Battlefield facts come
-from LKI. The retained base preserves the engine's existing departure behavior;
-it does not capture additional copy exceptions or transformed mana value.
+from LKI. When an ability creates a token copy of its source, it takes the
+source's copiable values at resolution or, after departure, at the moment it
+left. A Clone that returns as a different creature keeps its new form while
+the earlier ability copies the departed form.
 
 A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
 on it, and a delayed trigger watching one creature retires on it. Code picks

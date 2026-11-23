@@ -12,7 +12,7 @@ use crate::{
     },
     state::{
         card::{CardDefId, PrintedCharacteristics, Restriction, StaticAbility},
-        effect::{CopyEffect, Modification},
+        effect::Modification,
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
@@ -405,24 +405,23 @@ impl Game {
     /// token's `CopyEffect` records both and the definition at the root.
     pub(crate) fn prepare_token_copy(
         &mut self,
-        copy: Object,
+        values: &crate::state::game_object::CopiableValues,
         controller: PlayerId,
-        exceptions: Vec<Modification>,
+        exceptions: &[Modification],
     ) -> ObjectId {
         let id = self.state.id_gen.next_id();
         // Token status is the object's kind, not a copiable value; only an
         // exception's write detaches the shared definition (`DerefMut`).
-        let mut copy = Object::token_copy(copy, id, controller);
-        for exception in &exceptions {
-            let copiable = exception.apply_copiable(&mut copy);
-            debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
-        }
-        let mut effect = copy.copy.take().unwrap_or(CopyEffect {
-            of: copy.definition_id,
-            exceptions: Vec::new(),
-        });
-        effect.exceptions.extend(exceptions);
-        copy.copy = Some(effect);
+        let mut copy = Object::from_definition(
+            id,
+            controller,
+            values.definition_id,
+            std::sync::Arc::clone(&values.definition.printed),
+            true,
+        );
+        copy.set_front_face(values.front.clone());
+        copy.copy = values.copy.clone();
+        copy.apply_copy_exceptions(exceptions);
         self.add_object(copy)
     }
 
@@ -666,7 +665,18 @@ impl Game {
             }
         }
 
-        if let Some(lki) = departing_lki {
+        if let Some(mut lki) = departing_lki {
+            let object = self.state.entry_object(object_id);
+            let content = default_content_pack();
+            let catalog_form = content
+                .definition(object.definition_id)
+                .is_some_and(|definition| {
+                    definition.is_token != object.is_card()
+                        && definition.printed == object.copiable_definition()
+                });
+            if object.copy.is_some() || object.front_face().is_some() || !catalog_form {
+                lki.copiable = Some(std::sync::Arc::new(content.copiable_values(object)));
+            }
             self.record_object_lki(lki);
         }
         let cast_spell = (old_zone == Some(ZoneType::Stack))

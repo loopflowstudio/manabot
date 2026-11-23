@@ -1587,7 +1587,7 @@ impl Game {
                     })
                     .chain([Action::Decline { player: *player }])
                     .collect(),
-                focus: vec![self.state[*object_id].id],
+                focus: vec![self.state.entry_object(*object_id).id],
             },
             Decision::ChoosePaymentX { player, .. } => ActionSpace {
                 player: Some(*player),

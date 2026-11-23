@@ -6743,5 +6743,17 @@
     "colors": [
       "G"
     ]
+  },
+  "Homunculus Horde": {
+    "name": "Homunculus Horde",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Homunculus",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, create a token that's a copy of this creature.",
+    "colors": [
+      "U"
+    ]
   }
 }

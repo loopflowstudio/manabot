@@ -466,6 +466,23 @@ impl TrackedState {
         &mut self.state.suspended_decision
     }
 
+    /// At stable priority with an empty stack only delayed instructions can
+    /// still refer to a departed form. Pending decisions never reach this point.
+    pub(crate) fn release_resolved_forms(&mut self) {
+        if self.state.stack_objects.is_empty() {
+            let delayed = &self.state.delayed_triggers;
+            self.state.object_lki.retain_forms(|object| {
+                delayed.iter().any(|trigger| {
+                    trigger.source_identity.object() == object
+                        || trigger
+                            .remembered
+                            .iter()
+                            .any(|binding| binding.object == object)
+                })
+            });
+        }
+    }
+
     pub(crate) fn object_lki_mut(&mut self) -> &mut ObjectLkiLog {
         &mut self.state.object_lki
     }

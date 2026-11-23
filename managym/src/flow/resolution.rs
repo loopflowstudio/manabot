@@ -2361,40 +2361,27 @@ impl Game {
         self.state.permanents[permanent_id].as_mut()
     }
 
-    /// The copiable values a token copy of `copied` takes (CR 707.2). A
-    /// departed object (an ability's source that has left) supplies its
-    /// retained base printing and kind, never a later appearance's copy or
-    /// face; its last copy and face state are not retained (MTG-354).
+    /// Read the current form or the exact appearance's final values (CR 608.2h).
     fn copy_source(&self, copied: ObjectId, exceptions: Vec<Modification>) -> TokenSource {
-        if let Ok(row) = self.state.object(copied) {
-            return TokenSource::Copy {
-                definition_id: row.definition_id,
-                definition: default_content_pack().object_row(row),
-                front: row.front_face().cloned(),
-                copy: row.copy.clone(),
-                exceptions,
-            };
-        }
-        let (definition_id, printed, kind) = self
-            .state
-            .objects
-            .retained_definition(copied)
-            .expect("copied object storage");
-        TokenSource::Copy {
-            definition_id,
-            definition: crate::state::card::ObjectDefinition {
-                key: "",
-                scryfall_id: None,
-                printed: std::sync::Arc::clone(printed),
-                is_token: kind != crate::state::game_object::ObjectKind::Card,
-                back_face: default_content_pack()
-                    .definition(definition_id)
-                    .and_then(|row| row.back_face.clone()),
-            },
-            front: None,
-            copy: None,
-            exceptions,
-        }
+        let content = default_content_pack();
+        let values = if let Ok(object) = self.state.object(copied) {
+            content.copiable_values(object)
+        } else {
+            let lki = self.object_lki(copied).expect("departed copy source");
+            lki.copiable.as_deref().cloned().unwrap_or_else(|| {
+                let definition = content
+                    .definition(lki.definition_id)
+                    .expect("catalog copy source")
+                    .clone();
+                crate::state::game_object::CopiableValues {
+                    definition_id: lki.definition_id,
+                    definition,
+                    front: None,
+                    copy: None,
+                }
+            })
+        };
+        TokenSource::Copy { values, exceptions }
     }
 
     /// Check whether a target is (still) legal for a given TargetSpec, from

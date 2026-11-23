@@ -111,14 +111,8 @@ pub(crate) enum TokenSource {
     /// The token definition with this `token.*` key.
     Registered(String),
     Copy {
-        definition_id: crate::state::card::CardDefId,
-        /// The copied object as it stood; the token takes its `printed`.
-        definition: crate::state::card::ObjectDefinition,
-        front: Option<(
-            crate::state::card::CardDefId,
-            std::sync::Arc<crate::state::card::PrintedCharacteristics>,
-        )>,
-        copy: Option<crate::state::effect::CopyEffect>,
+        #[serde(flatten)]
+        values: crate::state::game_object::CopiableValues,
         exceptions: Vec<crate::state::effect::Modification>,
     },
 }
@@ -786,23 +780,8 @@ impl Game {
         for _ in 0..count {
             let object = match &definition {
                 TokenSource::Registered(key) => self.prepare_token(key, controller),
-                TokenSource::Copy {
-                    definition_id,
-                    definition,
-                    front,
-                    copy,
-                    exceptions,
-                } => {
-                    let mut template = crate::state::game_object::Object::from_definition(
-                        crate::state::game_object::PublicId(0),
-                        controller,
-                        *definition_id,
-                        std::sync::Arc::clone(&definition.printed),
-                        true,
-                    );
-                    template.set_front_face(front.clone());
-                    template.copy = copy.clone();
-                    Some(self.prepare_token_copy(template, controller, exceptions.clone()))
+                TokenSource::Copy { values, exceptions } => {
+                    Some(self.prepare_token_copy(values, controller, exceptions))
                 }
             };
             if let Some(object) = object {

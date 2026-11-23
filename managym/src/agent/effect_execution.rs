@@ -615,6 +615,7 @@ impl<'a> Projection<'a> {
             )
         });
         let ObjectLki {
+            copiable,
             transforms,
             inherited_from,
             granted_abilities,
@@ -635,6 +636,13 @@ impl<'a> Projection<'a> {
             presentation_id: _,
         } = lki;
         self.field("last known definition", definition_id);
+        if let Some(values) = copiable {
+            self.tokens
+                .append_definition(&values.definition)
+                .expect("last copiable definition tokens");
+            self.field("copy exceptions", &values.copy);
+            self.note(|| format!("Last copiable form: {}.", values.definition.name));
+        }
         let counter_values: Vec<_> = counters.iter().collect();
         self.field(
             "last known characteristics",
@@ -795,10 +803,13 @@ impl<'a> Projection<'a> {
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
                         TokenSource::Copy {
-                            definition_id,
-                            definition,
-                            front,
-                            copy,
+                            values:
+                                crate::state::game_object::CopiableValues {
+                                    definition_id,
+                                    definition,
+                                    front,
+                                    copy,
+                                },
                             exceptions,
                         } => {
                             self.reference(

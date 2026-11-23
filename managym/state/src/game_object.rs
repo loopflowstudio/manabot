@@ -276,20 +276,31 @@ pub enum ObjectLookupError {
     WrongZone,
 }
 
+/// The values copied from one exact appearance, before new exceptions apply.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CopiableValues {
+    pub definition_id: CardDefId,
+    pub definition: crate::card::ObjectDefinition,
+    pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
+    pub copy: Option<crate::effect::CopyEffect>,
+}
+
 /// Battlefield facts retained for a departed exact object.
 ///
-/// This deliberately stores identity and mutable facts, not a cloned card
-/// definition. `definition_id` resolves through the match's immutable
-/// `ContentPack` and does not clone card semantics into mutable state.
+/// Ordinary copiable values resolve through the immutable catalog. A departure
+/// with a distinct form retains its shared definition and copy exceptions.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    /// Ordinary appearances use their immutable catalog row directly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copiable: Option<Arc<CopiableValues>>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<crate::card::CardDefId>,
     /// Effective grants retained at the event boundary, including after ability loss.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub granted_abilities: Box<[crate::ability::EffectiveTrigger]>,
     pub keywords: crate::card::Keywords,
     /// Its creature types as it last existed (CR 608.2h), sorted; read when
     /// a departed target's partners must share one (Secret Tunnel).
@@ -343,6 +354,13 @@ fn serialize_lki_object<S: serde::Serializer>(
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ObjectLkiLog {
     by_object: BTreeMap<ObjectId, ObjectLki>,
+    indexes: Box<DepartureIndexes>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct DepartureIndexes {
+    /// Departures still carrying extra copiable values.
+    forms: std::collections::BTreeSet<ObjectId>,
     /// The departed object that occupied each battlefield slot, by
     /// `PermanentId`; a slot is never reused.
     by_permanent: Vec<Option<ObjectId>>,
@@ -352,11 +370,29 @@ impl ObjectLkiLog {
     pub fn insert(&mut self, lki: ObjectLki) {
         let object = lki.object;
         let slot = lki.permanent.0;
-        if self.by_permanent.len() <= slot {
-            self.by_permanent.resize(slot + 1, None);
+        if self.indexes.by_permanent.len() <= slot {
+            self.indexes.by_permanent.resize(slot + 1, None);
         }
-        self.by_permanent[slot].get_or_insert(object);
+        self.indexes.by_permanent[slot].get_or_insert(object);
+        if lki.copiable.is_some() {
+            self.indexes.forms.insert(object);
+        }
         self.by_object.insert(object, lki);
+    }
+
+    /// Release extra values once no resolution can read the departed form.
+    /// Only visits departures that still own a snapshot.
+    pub fn retain_forms(&mut self, mut keep: impl FnMut(ObjectId) -> bool) {
+        self.indexes.forms.retain(|object| {
+            if keep(*object) {
+                return true;
+            }
+            self.by_object
+                .get_mut(object)
+                .expect("indexed departure")
+                .copiable = None;
+            false
+        });
     }
 
     pub fn get(&self, object: ObjectId) -> Option<&ObjectLki> {
@@ -369,7 +405,8 @@ impl ObjectLkiLog {
 
     /// The departed object that occupied a battlefield slot.
     pub fn for_permanent(&self, permanent: PermanentId) -> Option<&ObjectLki> {
-        self.by_permanent
+        self.indexes
+            .by_permanent
             .get(permanent.0)
             .copied()
             .flatten()
@@ -426,17 +463,6 @@ impl ObjectVec<Object> {
     /// This is definition provenance, never a lookup of a departed object.
     pub fn retained_base(&self, object: ObjectId) -> Option<(CardDefId, &PrintedCharacteristics)> {
         self.get(object.slot()).map(Object::retained_base)
-    }
-
-    /// [`ObjectVec::retained_base`] as the shared row, with the slot's kind.
-    pub fn retained_definition(
-        &self,
-        object: ObjectId,
-    ) -> Option<(CardDefId, &Arc<PrintedCharacteristics>, ObjectKind)> {
-        self.get(object.slot()).map(|row| {
-            let (id, printed) = row.retained_definition();
-            (id, printed, row.kind())
-        })
     }
 
     /// Viewer identity and ownership are stable across appearances.
@@ -591,16 +617,24 @@ impl Object {
         self.registry_key = PublicId(source.definition_id.0);
         self.definition = source.copiable_definition();
         self.front = source.front.clone();
-        for exception in exceptions {
-            exception.apply_copiable(self);
-        }
-        let mut copy = source.copy.clone().unwrap_or(crate::effect::CopyEffect {
-            of: source.definition_id,
-            exceptions: Vec::new(),
-        });
-        copy.exceptions.extend(exceptions.iter().cloned());
-        self.copy = Some(copy);
+        self.copy = source.copy.clone();
+        self.apply_copy_exceptions(exceptions);
         self.printed = Some(printed);
+    }
+
+    /// Record the copy's root and apply new exceptions after inherited ones.
+    pub fn apply_copy_exceptions(&mut self, exceptions: &[crate::effect::Modification]) {
+        for exception in exceptions {
+            let copiable = exception.apply_copiable(self);
+            debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
+        }
+        self.copy
+            .get_or_insert_with(|| crate::effect::CopyEffect {
+                of: self.definition_id,
+                exceptions: Vec::new(),
+            })
+            .exceptions
+            .extend_from_slice(exceptions);
     }
 
     /// The base that a zone move restores, including fixture edits. It never
@@ -610,9 +644,7 @@ impl Object {
         (id, &**row)
     }
 
-    /// [`Object::retained_base`] as the shared row, for consumers that build a
-    /// new object from it (a token copy of a departed source).
-    pub fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
+    fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
         self.printed
             .as_ref()
             .or(self.front.as_ref())

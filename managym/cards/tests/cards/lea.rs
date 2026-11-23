@@ -311,7 +311,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     // newly defined card moves this value and nothing else does.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v17:94d92b93456d9809b73e27aee828d66dd10e2e8448de8cbf74fd24fb170e63db"
+        "v17:a0945520cdacb1011210ec19104778e0a2eff2f16ae6802d766ae223837a377a"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();
@@ -339,4 +339,120 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert_eq!(s.game().state[clone].power, Some(3));
     assert_eq!(s.game().state[clone].toughness, Some(3));
     assert!(s.game().state[clone].copy.is_none());
+}
+
+#[test]
+fn departed_clone_creates_joo_dee_before_the_sacrifice_choice() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, offered_cards},
+        play::{activate, pass_until},
+    };
+
+    let name = "Joo Dee, One of Many";
+    let mut s = five_color_setup(&["Clone", name]);
+    let source = s.force_permanent_on_battlefield(1, name);
+    let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(source)));
+    settle(&mut s);
+    let permanent = permanent_of(&s, clone).unwrap();
+    clear_summoning_sickness(&mut s, permanent);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, permanent, 0);
+    move_card(&mut s, clone, ZoneType::Hand);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    let tokens = s.battlefield_permanents_named(0, name);
+    assert_eq!(tokens.len(), 1);
+    let token = card_of(&s, tokens[0]);
+    assert!(!s.game().state[token].is_card());
+    assert!(offered_cards(&s).contains(&token));
+}
+
+#[test]
+fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
+    use managym::{state::player::PlayerConfig, Env};
+    let horde = "Homunculus Horde";
+    let mut s = five_color_setup(&["Clone", horde, "Gray Ogre", "Scout's Warning"]);
+    let original = s.force_permanent_on_battlefield(1, horde);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    s.game_mut().state.turn.history[0].cards_drawn = 1;
+    cast(&mut s, "Scout's Warning");
+    resolve_top(&mut s);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+
+    let parent = s.game().clone();
+    let pending = parent.state.deterministic_hash();
+    let departed = now(&s, clone);
+    let returned = move_card(&mut s, clone, ZoneType::Hand);
+    cast_card(&mut s, returned);
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+
+    // Save the constructed decision boundary through the native Env API.
+    let mut env = Env::new(1, false, false, false);
+    env.reset(
+        ["a", "b"]
+            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+            .to_vec(),
+    )
+    .unwrap();
+    *env.benchmark_game_mut() = s.game().clone();
+    let snapshot = env.snapshot().unwrap();
+    let mut restored = snapshot.restore(Default::default()).unwrap();
+    *s.game_mut() = restored.benchmark_game_mut().clone();
+    resolve_top(&mut s);
+    assert_eq!(current_object(&s, clone).name, "Gray Ogre");
+    assert_eq!(s.battlefield_permanents_named(0, horde).len(), 1);
+    let token = crate::support::inspect::card_of(&s, s.battlefield_permanents_named(0, horde)[0]);
+    assert!(!s.game().state[token].is_card());
+    let values = s.game().state[token].copiable_definition();
+    assert!(s.game().object_lki(departed).unwrap().copiable.is_none());
+    assert!(s.game().state.stack_objects.is_empty());
+
+    assert_eq!(parent.state.deterministic_hash(), pending);
+    *s.game_mut() = parent;
+    resolve_top(&mut s);
+    let copies = s.battlefield_permanents_named(0, horde);
+    assert_eq!(copies.len(), 2);
+    let live_token = copies
+        .into_iter()
+        .map(|id| crate::support::inspect::card_of(&s, id))
+        .find(|id| !s.game().state[*id].is_card())
+        .unwrap();
+    assert_eq!(s.game().state[live_token].copiable_definition(), values);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+#[test]
+fn clone_legion_offers_the_entering_clone_token_as_focus() {
+    use crate::support::{game::set_counters, play::target_opponent};
+    use managym::state::permanent::CounterKind;
+
+    let mut s = five_color_setup(&["Clone Legion", "Clone", "Gray Ogre"]);
+    let clone = s.force_permanent_on_battlefield(1, "Clone");
+    set_counters(&mut s, clone, CounterKind::PlusOnePlusOne, 1);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    cast(&mut s, "Clone Legion");
+    target_opponent(&mut s);
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let focus = s.action_space().focus.clone();
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let copies = s.battlefield_permanents_named(0, "Gray Ogre");
+    assert_eq!(copies.len(), 2);
+    let token =
+        crate::support::inspect::card_of(&s, *copies.iter().find(|id| **id != ogre).unwrap());
+    assert!(!s.game().state[token].is_card());
+    assert_eq!(focus, [s.game().state[token].id]);
 }

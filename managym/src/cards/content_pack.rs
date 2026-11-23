@@ -357,6 +357,18 @@ impl ContentPack {
         }
     }
 
+    pub(crate) fn copiable_values(
+        &self,
+        object: &Object,
+    ) -> crate::state::game_object::CopiableValues {
+        crate::state::game_object::CopiableValues {
+            definition_id: object.definition_id,
+            definition: self.object_row(object),
+            front: object.front_face().cloned(),
+            copy: object.copy.clone(),
+        }
+    }
+
     /// A new card object of the card named `name`.
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: PublicId) -> Option<Object> {
         self.instantiate_row(self.definition_id(name)?, owner, object_id)

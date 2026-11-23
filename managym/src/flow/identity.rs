@@ -47,6 +47,7 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            copiable: None,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics
@@ -107,8 +108,7 @@ impl Game {
     }
 
     /// Resolve a departed object's immutable meaning through the match's
-    /// shared content pack. LKI stores only `CardDefId`, never a definition
-    /// clone.
+    /// shared content pack by the final shown definition id.
     pub fn object_lki_definition(&self, object_ref: ObjectId) -> Option<&ObjectDefinition> {
         let lki = self.object_lki(object_ref)?;
         default_content_pack().definition(lki.definition_id)

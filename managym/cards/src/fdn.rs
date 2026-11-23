@@ -18,6 +18,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         blasphemous_edict(),
         claws_out(),
+        homunculus_horde(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
@@ -47,6 +48,29 @@ fn sire_of_seven_deaths() -> CardDefinition {
             ]),
             statics: vec![StaticAbility::Ward(PaymentCost::Life(7))],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn homunculus_horde() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.homunculus_horde",
+        scryfall_id: "470c4d03-340a-4e0e-a59f-f19d05497785",
+        printed: PrintedCharacteristics {
+            name: "Homunculus Horde".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Homunculus".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Draws { who: Actor::You, nth: Some(2) },
+                effects: vec![Effect::CreateTokenCopy { of: ObjectSelector::This, exceptions: vec![] }],
+            }],
+            text_box: "Whenever you draw your second card each turn, create a token that's a copy of this creature.".into(),
             ..Default::default()
         },
         ..Default::default()
