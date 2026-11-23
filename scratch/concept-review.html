@@ -2,7 +2,7 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review at 4409ede0</small>
+<main><small>MTG-420 · engine review at 8fd1eff3</small>
 <h1>Does one battlefield target stay one rules event when two cards leave?</h1>
 <p>Yes for Lost Days. A search policy targets Ragnarok once. The owner then chooses how Fang and Vanille enter the library. The next instruction creates a Clue. Search needs a fork at that choice with the spell still resolving.</p>
 <h2>Existing · restore either library order</h2>
@@ -18,13 +18,21 @@
 <tr><td>Two physical cards under one target<td>Both CardIds resolve to Ragnarok’s ObjectId. A token copy owns neither constituent.<td>Yes
 <tr><td>A triggered copy effect can finish after its source leaves<td>CopiableValues for the departed appearance. The Horde trigger survives Clone returning as Gray Ogre.<td>Yes
 <tr><td>Resolve a departure and keep its consequences together<td>EventResult carries both arrivals. The general move_object_with_entry API completes immediately and returns its first arrival.<td>No · the same zone change has two caller contracts.
-<tr><td>Give the decision to the responsible seat<td>meld_order_choice reads the owner for library and graveyard. Exile has no corresponding timestamp choice here.<td>No · owner and exiling player can differ.
+<tr><td>Give the decision to the responsible seat<td>meld_order_choice reads the owner for library and graveyard. Epic Downfall supplies its controller for exile.<td>Yes · the native Commands distinguish owner and exiling opponent.
 <tr><td>Search a hidden battlefield from the acting viewer’s knowledge<td>Manifest Dread still needs a viewer projection and possible-world witness with distinct hidden printings.<td>No · the public meld witness cannot establish private search behavior.</table>
 <section><h2>Biggest mismatch · asking for the successor of a permanent</h2>
 <p><b>Existing.</b> An object handle alone admits a token, an ordinary card or a genuine pair. An immediate move returning one handle cannot express a pending order or tell a linked effect which two arrivals it owns.</p>
 <p><b>Proposed.</b> A battlefield departure submits one zone-change proposal. After replacements fix the destination, the batch retains any ordering decision and resumes the original instruction with all its arrivals. Carry the player performing the exile into this decision. Preserve the cheap single-card path where the source zone guarantees it, including a draw from the library.</p></section>
-<h2>Proposed · the counterexample to owner ordering</h2>
-<p>Have the opponent exile a genuine Ragnarok. At the timestamp decision, fork with Ragnarok still present. Restore each branch, submit a different order as the exiling player and inspect the exact exile appearances and relative timestamps. Replay a spent Command and check that history and both timestamps stay fixed. Retain the owner’s library-order test as the control. Portable replay and stale rejection at this new boundary still need evidence.</p>
-<p>After exile, test Manifest Dread with two roots that differ only in the hidden printing. Exact forks must retain that printing. Opponent observations, policy inputs and search may expose only the permitted information. Measure encoding and fork cost before settling the shared form representation.</p>
-<h2>Review questions</h2><ol><li>Which interaction should drive the next change? <b>1a · Opponent exile (selected)</b> distinguishes the two seats. 1b · Manifest first examines privacy while leaving departure ownership open.</li>
-<li>What should a battlefield move return to its continuation? <b>2a · The complete event result (selected)</b> preserves linked arrivals. 2b · A primary handle requires callers to rediscover the other card after the move.</li></ol></main></html>
+<h2>Existing · one exile, two recoverable histories</h2>
+<table><thead><tr><th>Epic Downfall decision<th>Owner’s exile list, earliest first<th>What the fork retains
+<tbody><tr><td>Opponent has two offers<td>Existing entries<td>One targetable Ragnarok
+<tr><td>Restore and choose Fang first<td>Existing entries → Fang → Vanille<td>Two new exact appearances
+<tr><td>Restore and choose Vanille first<td>Existing entries → Vanille → Fang<td>The same physical cards in reverse order
+<tr><td>Submit either spent Command again<td>Identical entries and order<td>Rejection leaves the event ledger intact</table>
+<p>The FIN test <code>ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent</code> checks both branches from one native snapshot. Portable replay remains an open check.</p>
+<h2>Proposed · one death, two arrivals, one trigger</h2>
+<p>Lethal damage offers the strongest next control. The state-based action already puts its simultaneous deaths in an <code>EffectFrame</code> with <code>EventBinding::Deaths</code>. Restore both graveyard orders there. Give Ragnarok a legal permanent to destroy and a distinct nonlegendary card to return. Both branches must expose one death ability and resolve its two instructions once. The second physical arrival must never count as another dying creature.</p>
+<p>Use that retained batch as the reference when auditing immediate callers. A single-card result and a call that can finish immediately are separate promises. Even a single card entering as Clone can require input. Search must be able to fork before the choice and resume the instruction that owned it. Measure the cost on ordinary games and Search-64 before adopting a larger common record.</p>
+<p>Manifest Dread supplies the independent privacy test. Two exact forks may hold different hidden printings while the opponent sees the same 2/2 and legal choices. A copy inherits the public form. A lasting ability retains its chosen program and source appearance across movement. Neither caller needs a hidden definition to identify a battlefield target.</p>
+<h2>Review questions</h2><ol><li>Which witness should implement first? <b>1a · Lethal damage (selected)</b> checks death cardinality and continuation ownership. 1b · Manifest checks hidden backing first.</li>
+<li>Where should a pending order live? <b>2a · In the existing event batch (selected)</b> restores the remaining instructions with the decision. 2b · A separate order queue would need to synchronize both records on every fork.</li></ol></main></html>
