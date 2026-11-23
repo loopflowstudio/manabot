@@ -284,7 +284,11 @@ A record holds the seed and both decks, so it holds both hands. Files use mode
 cards; Academy still shows each viewer only what that seat could see.
 
 Rows written before this format (`native-failure-v1` receipts and journals)
-read through the same functions. `FailureEvidence` and `read_failure` are the
+read through the same functions. Private snapshot replays (`managym-snapshot-v1`
+exported by `GameSnapshot.to_replay_json()`) also open directly through
+`read_record`, `read_records`, `records_from_source`, `walk`, and
+`managym academy replay`, executing any recorded boundary interventions natively.
+`FailureEvidence` and `read_failure` are the
 former names of `GameRecord` and `read_record`; they warn and are removed in
 0.4.0.
 
@@ -347,6 +351,114 @@ A persistence error after execution does not mean the operation did not run.
 Retain existing evidence and repair storage before starting a new attempt;
 there is no automatic retry or game skipping. Local durability cannot protect
 against host deletion: collect private files before removing the machine.
+
+## Save and restore game positions
+
+An immutable `GameSnapshot` can restore independent games on several threads,
+even after the source `Env` is gone. Here two opening choices share the same
+unseen library order.
+
+```python
+import json
+from pathlib import Path
+
+import managym
+from managym.journal import DurableJournal
+from managym.recording import read_record
+from managym.replay import walk
+
+game = managym.Env(seed=42, decision_memory=True, decision_memory_include_own=True)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+game.reset(managym.GameSetup(players, decklists="closed"))
+
+snapshot = game.snapshot()
+meta = snapshot.metadata()
+print(meta.turn, meta.phase, meta.action_count, meta.terminal)
+# 1 PhaseEnum.PrecombatMain 6 False
+
+del game
+branch_a = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=0)
+)
+branch_b = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=1)
+)
+
+# Atomically save both decks and the branch seed in an owner-only file.
+replay_path = Path("branch-a.json")
+DurableJournal(replay_path).replace(json.loads(branch_a.snapshot().to_replay_json()))
+
+reopened = managym.GameSnapshot.from_replay_json(replay_path.read_text())
+continuation = reopened.restore()
+assert continuation.state_digest() == branch_a.state_digest()
+
+# The same snapshot replay feeds managym.replay and Academy Watch directly.
+replay = walk(read_record(replay_path))
+for _ in replay:
+    pass
+print(replay.stop.status, replay.stop.index)
+# interrupted 1
+```
+
+```bash
+uv run --no-project --python .venv/bin/python python -m managym.replay branch-a.json --seconds 30
+uv run --no-project managym academy replay branch-a.json
+```
+
+`game.snapshot()` accepts a decision boundary or a finished game and raises
+before the first reset. Each restored game starts a fresh generation with
+empty projection caches. The source keeps its profiler, statistics and
+recording sinks. Use `snapshot.restore()` for exact continuation, or pass
+`RestoreOptions` to change the branch at its root.
+
+| Constructor | Effect at the saved boundary |
+|---|---|
+| `RestoreOptions()` / `RestoreOptions.exact(*, reseed=None, ...)` | Preserves full game authority state. Supply `reseed` to replace only future rules RNG. |
+| `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
+| `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
+
+Each constructor also accepts two keyword arguments.
+
+- `enable_decision_memory` defaults to the live capture setting. Set it to
+  `False` to freeze the existing logs or `True` to append from this boundary.
+  Both retain the prefix and the setting for own-seat records. Search forks
+  (`Env.clone_env()` and `fork_exact()`) always freeze their logs.
+- `forced_first_action` commits one legal index after sampling and setting
+  capture. It returns the resulting game, including a terminal result.
+  Restore rejects a terminal root, an out-of-range index or a choice changed
+  by determinization. For a built-in seat it records the override for replay.
+
+`snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
+(`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
+controller, including tokens), `stack_len`, `action_count`, `action_kind`
+(`ActionSpaceEnum | None`), `acting_player` (`int | None`), `terminal`, and
+sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
+stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
+and `action_kind` and `acting_player` are `None`. Reading metadata never builds
+observation JSON or opens hidden zones.
+
+`snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
+settings, committed external actions, and ordered branch interventions. It
+retains fingerprints for issued semantic frames so Commands keep their object
+bindings. `GameSnapshot.from_replay_json(raw)` checks the schema, catalog and
+replay checksum, replays the inputs, and verifies the final state digest.
+
+`read_record(path)` checks the snapshot replay and its intervention offsets before
+simulation. `walk(record)` then yields the verified decisions and reports
+the first detected divergence if the rules have changed.
+
+Unrecorded operations such as `scenario_*`, hidden-world materialization,
+structured submissions, and external `random_action_index()` calls still
+allow in-memory restore. Export raises when it cannot reconstruct the prefix.
+
+Keep snapshot replays private. Academy opens one as a **Recorded game** when
+forced-decision skipping is enabled, both seats use `agent`, and decklist
+disclosure agrees. The acting view hides the opponent’s hand. The spectator
+response includes both hands. The board draws the bottom seat’s cards and
+shows the top seat’s hand count. Branch seeds stay on the server.
 
 ## Ask questions of recorded games
 

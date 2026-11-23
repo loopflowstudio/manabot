@@ -128,6 +128,7 @@ impl Game {
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
+        self.state.library_order_pins_mut(player).clear();
         self.state.known_library_mut(player).forget_order();
         let state = &mut *self.state;
         state
@@ -620,6 +621,7 @@ impl Game {
                 && !(zone == ZoneType::Exile && self.is_foretold(object_id))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
+            self.state.library_order_pins_mut(owner).remove(&object_id);
             if entry.library_top_departure {
                 self.state.known_library_mut(owner).remove_top()
             } else if entry.inspected_library_departure {
@@ -687,6 +689,7 @@ impl Game {
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
         let entered_definition = self.state[object_id].definition_id;
         if to_zone == ZoneType::Library {
+            self.state.library_order_pins_mut(owner).insert(object_id);
             // A copied or transformed source can restore a different printing.
             // Never carry its old visible definition into the hidden zone.
             let same_definition = entered_definition == definition;

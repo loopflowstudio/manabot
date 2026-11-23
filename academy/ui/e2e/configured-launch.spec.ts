@@ -135,3 +135,12 @@ test('a recorded collector game opens with both seat names and its training labe
   await expect(plates.filter({ hasText: 'urza' })).toHaveCount(1);
   await expect(page.getByTestId('board-card').first()).toBeVisible();
 });
+
+test('a snapshot opens as a recorded game with optional spectator reveal', async ({ page }) => {
+  const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { snapshot_replay: string };
+  await page.goto(addresses.snapshot_replay);
+  await expect(page.getByTestId('recording-heading')).toHaveText('Recorded game');
+  await expect(page.getByTestId('replay-perspective')).toContainText('Acting view');
+  await page.getByRole('checkbox', { name: 'Show both hands' }).check();
+  await expect(page.getByTestId('replay-perspective')).toContainText('Both hands');
+});

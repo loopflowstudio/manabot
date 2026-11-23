@@ -350,6 +350,26 @@ payment rules. See the audit's
 [ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
 
+### Native allocator
+
+Native builds use `mimalloc` by default (`default = ["mimalloc"]`). Pass
+`--no-default-features` to Cargo to select the system allocator instead. For a
+Python build, run the following commands from the repository root to build and
+measure four-worker collection.
+
+```bash
+uv run --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
+```
+
+For the system comparison, pass `--no-default-features --features python` and
+`--expect-allocator system`. `--no-sync` preserves the local build. The
+benchmark checks the loaded extension's `managym.NATIVE_ALLOCATOR` before
+timing. The separate Cargo feature `benchmark` counts Rust allocation requests
+on either allocator and sets `managym.ALLOCATION_COUNTING` to true. Use it for
+footprint diagnostics. Collection timings require counting to be disabled.
+
 ## Style
 
 ```rust

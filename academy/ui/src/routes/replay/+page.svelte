@@ -130,7 +130,7 @@
           : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only'
             : 'Interrupted · saved recording only');
   const sourceLabel = $derived(index?.source_kind === 'play' ? 'Recorded Play game' : index?.source_kind === 'training' ? 'Training game'
-    : index?.source_kind ? 'Evaluation game' : index?.watch ? 'Watch' : 'Recorded game');
+    : index?.source_kind ? 'Evaluation game' : index?.watch && !index.record_stop ? 'Watch' : 'Recorded game');
   const perspectiveText = $derived(!current ? ''
     : current.kind === 'choice' && current.decision
       ? `${current.revealed ? 'Both hands · spectator view' : `Acting view · seat ${current.viewer + 1}`} · chooser seat ${current.decision.viewer + 1}`

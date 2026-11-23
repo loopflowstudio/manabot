@@ -19,7 +19,7 @@ use pyo3::{
     buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyDict, PyList, PyModule},
+    types::{PyDict, PyList, PyModule, PySet},
 };
 #[cfg(feature = "python")]
 use serde::{Deserialize, Serialize};
@@ -3508,6 +3508,14 @@ fn compact_search_witness(witness: &SearchStateWitness) -> Value {
 
 #[cfg(feature = "python")]
 impl PyEnv {
+    pub(super) fn from_live(env: Env) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(env)),
+            selected_guard: false,
+            prepared_lease: None,
+        }
+    }
+
     fn reject_guarded_mutation(&self, operation: &str) -> PyResult<()> {
         if self.selected_guard {
             return Err(PyAgentError::new_err(format!(
@@ -3888,21 +3896,17 @@ impl PyEnv {
         }
         let policies =
             crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(
-                Env::new(
-                    seed,
-                    skip_trivial,
-                    enable_profiler,
-                    enable_behavior_tracking,
-                )
-                .with_player_policies(policies)
-                .with_decision_memory(decision_memory)
-                .with_decision_memory_include_own(decision_memory_include_own),
-            )),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(Self::from_live(
+            Env::new(
+                seed,
+                skip_trivial,
+                enable_profiler,
+                enable_behavior_tracking,
+            )
+            .with_player_policies(policies)
+            .with_decision_memory(decision_memory)
+            .with_decision_memory_include_own(decision_memory_include_own),
+        ))
     }
 
     fn reset(
@@ -4228,6 +4232,42 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(env.compare_profile(&baseline))
+    }
+
+    /// Apply one recorded operation at the current live boundary.
+    fn _apply_intervention_json(&self, raw: &str) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._apply_intervention_json")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .apply_intervention_json(raw)
+            .map_err(map_agent_err)
+    }
+
+    /// Remove and bind the current fingerprint if the recording issued it.
+    fn _restore_frame_candidates(&self, remaining: &Bound<'_, PySet>) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._restore_frame_candidates")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .restore_frame_candidates(|key| {
+                remaining
+                    .discard(key)
+                    .map_err(|e| AgentError(e.to_string()))
+            })
+            .map_err(map_agent_err)
+    }
+
+    /// Save this live boundary for independent continuations.
+    fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .snapshot()
+                .map(super::snapshot_bindings::PyGameSnapshot)
+                .map_err(map_agent_err)
+        })
     }
 
     /// Independent copy of this env (current game state cloned; stepping the
@@ -4577,11 +4617,7 @@ impl PyEnv {
         let branch = env
             .materialize_sampled_hand(viewer, constraints_json, &hand, seed)
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Materialize one identity-bound canonical world into an isolated Env.
@@ -4607,11 +4643,7 @@ impl PyEnv {
                 refresh_opponent_commitment,
             )
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Validate and atomically apply one revision-bound semantic Command
@@ -5372,6 +5404,8 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
+    m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(
         "MAX_DECISION_CODE",
         crate::agent::continuation::MAX_DECISION_CODE,
@@ -5455,6 +5489,9 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<super::snapshot_bindings::PyGameSnapshot>()?;
+    m.add_class::<super::snapshot_bindings::PyRestoreOptions>()?;
+    m.add_class::<super::snapshot_bindings::PySnapshotMetadata>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;
     m.add_class::<ObservationRead>()?;
