@@ -30,6 +30,24 @@ impl Ability {
         }
     }
 
+    /// Prowess (CR 702.108) is the same triggered ability on a card, token or grant.
+    pub fn prowess() -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
+                    not_card_types: vec![super::card::CardType::Creature],
+                    ..Default::default()
+                },
+            ),
+            effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::This,
+                Modification::pump(1, 1),
+            )],
+        }
+    }
+
     pub fn effects(&self) -> &[Effect] {
         match self {
             Ability::Triggered { effects, .. } => effects,

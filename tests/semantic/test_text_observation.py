@@ -1379,18 +1379,119 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> 
     assert any(
         frame.kind == 6 and frame.decision == 23 for frame in observation.continuation
     )
-    # Capture/Command execution preserves root isolation, replay and stale rejection.
-    before = env.state_digest()
     for action in decision.actions:
-        branch = env.clone_env()
-        replay = env.clone_env()
-        branch_decision = capture_text_decision(branch)
-        submit_response(branch, branch_decision, action.reference)
-        submit_response(replay, capture_text_decision(replay), action.reference)
-        assert branch.state_digest() == replay.state_digest()
-        with pytest.raises(SemanticContractError):
-            submit_response(branch, branch_decision, action.reference)
-    assert env.state_digest() == before
+        _replay_text_choice(env, action.reference)
+
+
+def _lightshell_surveil(first: str, second: str) -> managym.Env:
+    env = managym.Env(seed=23)
+    deck = {"Lightshell Duo": 1, "Island": 4, "Plains": 5, first: 1, second: 1}
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", deck),
+                managym.PlayerConfig("b", {"Mountain": 20}),
+            ],
+            decklists="closed",
+            mana_payment=("auto", "auto"),
+        )
+    )
+    # Clear the two-card hand to set their relative library order. Move the
+    # other cards into position so these two are the entire remaining library.
+    env.scenario_clear_hand(0)
+    for name in (first, second):
+        env.scenario_force_card_in_hand(0, name)
+    env.scenario_clear_hand(0)
+    for _ in range(4):
+        env.scenario_force_battlefield(0, "Island", ready=True)
+    for name in ("Lightshell Duo",) + ("Plains",) * 5:
+        env.scenario_force_card_in_hand(0, name)
+    env.scenario_refresh()
+    _choose(env, "Cast ")
+    return env
+
+
+def _replay_text_choice(root: managym.Env, reference: str) -> managym.Env:
+    before = root.state_digest()
+    branch, replay = root.clone_env(), root.clone_env()
+    decision = capture_text_decision(branch)
+    result = submit_response(branch, decision, reference)
+    assert submit_response(replay, capture_text_decision(replay), reference) == result
+    after = branch.state_digest()
+    assert after == replay.state_digest()
+    with pytest.raises(SemanticContractError):
+        submit_response(branch, decision, reference)
+    assert branch.state_digest() == after
+    assert root.state_digest() == before
+    return branch
+
+
+@pytest.mark.parametrize("stage", ["surveil", "order library top"])
+def test_lightshell_duo_private_choices_reach_each_viewer(stage: str) -> None:
+    names = ("Gray Ogre", "Hill Giant")
+    orders = (names, names[::-1])
+    roots = [_lightshell_surveil(*order) for order in orders]
+    space = ObservationSpace()
+    for env, order in zip(roots, orders, strict=True):
+        if stage == "order library top":
+            _choose(env, "Keep on top")
+        assert env.current_agent_index() == 0
+        decision = capture_text_decision(env)
+        assert f"Stage: {stage}." in decision.text
+        own = env.observation_for_player(0)
+        cards = [c for c in own.agent_cards if c.zone == managym.ZoneEnum.LIBRARY]
+        assert [c.characteristics.name for c in cards] == list(order)
+        inspected = decision_surface_view(env, 0)["agent"]["inspected"]
+        assert [c["id"] for c in inspected] == [c.id for c in cards]
+        rows = encode_observation(space, own)
+        count = 3 if stage == "surveil" else 2
+        assert len(decision.actions) == np.count_nonzero(rows["actions_valid"]) == count
+        focus = rows["action_focus"][:2, 0]
+        assert min(focus) >= 0 and focus[0] != focus[1]
+        for name, action in zip(order, decision.actions[:2], strict=True):
+            assert name in action.description
+
+    left, right = roots
+    other = left.semantic_observation_json(1)
+    assert other == right.semantic_observation_json(1)
+    table = decision_surface_view(left, 1)
+    assert table == decision_surface_view(right, 1)
+    for name in names:
+        assert name not in other and name not in json.dumps(table)
+    with pytest.raises(managym.AgentError, match="no active decision"):
+        left.capture_decision(1)
+    left_rows, right_rows = [
+        encode_observation(space, env.observation_for_player(1)) for env in roots
+    ]
+    assert not left_rows["actions_valid"].any()
+    for key in left_rows:
+        np.testing.assert_array_equal(left_rows[key], right_rows[key], err_msg=key)
+
+
+def test_lightshell_duo_replays_every_surveil_choice() -> None:
+    names = ("Gray Ogre", "Hill Giant")
+    root = _lightshell_surveil(*names)
+    mill_first, mill_second, keep = capture_text_decision(root).actions
+    for name, action in zip(names, (mill_first, mill_second), strict=True):
+        branch = _replay_text_choice(root, action.reference)
+        assert name not in branch.semantic_observation_json(1)
+        mill_other, finish = capture_text_decision(branch).actions
+        for choice, expected in [(mill_other, set(names)), (finish, {name})]:
+            committed = _replay_text_choice(branch, choice.reference)
+            assert {
+                c.characteristics.name
+                for c in committed.observation_for_player(1).opponent_cards
+                if c.zone == managym.ZoneEnum.GRAVEYARD
+            } == expected
+
+    order = _replay_text_choice(root, keep.reference)
+    cards = order.observation_for_player(0).agent_cards
+    definitions = {c.characteristics.name: c.registry_key for c in cards}
+    for name, choice in zip(names, capture_text_decision(order).actions, strict=True):
+        branch = _replay_text_choice(order, choice.reference)
+        assert (
+            branch.observation_for_player(0).agent.known_library[0] == definitions[name]
+        )
 
 
 def test_suki_hand_power_reaches_text_and_policy_input() -> None:

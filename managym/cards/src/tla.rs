@@ -4094,20 +4094,7 @@ fn firebending_student() -> CardDefinition {
             power: Some(1),
             toughness: Some(2),
             abilities: vec![
-                Ability::Triggered {
-                    intervening_if: None,
-                    condition: TriggerCondition::casts(
-                        Actor::You,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
-                    ),
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::This,
-                        Modification::pump(1, 1),
-                    )],
-                },
+                Ability::prowess(),
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
@@ -5171,20 +5158,7 @@ fn iguana_parrot() -> CardDefinition {
             power: Some(2),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
-            abilities: vec![Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            }],
+            abilities: vec![Ability::prowess()],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6343,20 +6317,7 @@ fn mai_jaded_edge() -> CardDefinition {
             subtypes: vec!["Human".into(), "Noble".into()],
             power: Some(1),
             toughness: Some(3),
-            abilities: vec![Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            }],
+            abilities: vec![Ability::prowess()],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 exhaust: true,
                 mana_cost: ManaCost::parse("{3}"),
@@ -6425,20 +6386,7 @@ fn master_pakku() -> CardDefinition {
             power: Some(1),
             toughness: Some(3),
             abilities: vec![
-                Ability::Triggered {
-                    intervening_if: None,
-                    condition: TriggerCondition::casts(
-                        Actor::You,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
-                    ),
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::This,
-                        Modification::pump(1, 1),
-                    )],
-                },
+                Ability::prowess(),
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::BecomesTapped {
@@ -8446,14 +8394,6 @@ fn sokka_tenacious_tactician() -> CardDefinition {
         not_card_types: vec![CardType::Creature],
         ..Default::default()
     };
-    let prowess = || Ability::Triggered {
-        intervening_if: None,
-        condition: TriggerCondition::casts(Actor::You, noncreature()),
-        effects: vec![Effect::until_end_of_turn(
-            ObjectSelector::This,
-            Modification::pump(1, 1),
-        )],
-    };
     let other_allies = || StaticScope::OtherYouControl(CardPredicate::subtype("Ally"));
 
     CardDefinition {
@@ -8469,7 +8409,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Menace]),
             abilities: vec![
-                prowess(),
+                Ability::prowess(),
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::casts(Actor::You, noncreature()),
@@ -8484,7 +8424,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
                 }),
                 StaticAbility::TriggeredGrant(StaticTriggeredGrant {
                     scope: other_allies(),
-                    ability: Box::new(prowess()),
+                    ability: Box::new(Ability::prowess()),
                 }),
             ],
             text_box: text_box.into(),
@@ -10498,20 +10438,7 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
             power: Some(3),
             toughness: Some(2),
             abilities: vec![
-                Ability::Triggered {
-                    intervening_if: None,
-                    condition: TriggerCondition::casts(
-                        Actor::You,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
-                    ),
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::This,
-                        Modification::pump(1, 1),
-                    )],
-                },
+                Ability::prowess(),
                 Ability::Triggered {
                     condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                     intervening_if: None,
@@ -10550,20 +10477,7 @@ fn ty_lee_chi_blocker() -> CardDefinition {
             toughness: Some(1),
             keywords: Keywords::of(&[Keyword::Flash]),
             abilities: vec![
-                Ability::Triggered {
-                    intervening_if: None,
-                    condition: TriggerCondition::casts(
-                        Actor::You,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
-                    ),
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::This,
-                        Modification::pump(1, 1),
-                    )],
-                },
+                Ability::prowess(),
                 Ability::Triggered {
                     condition: TriggerCondition::EntersTheBattlefield {
                         subject: TriggerSubject::This,

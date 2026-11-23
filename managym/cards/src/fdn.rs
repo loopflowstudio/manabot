@@ -20,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         claws_out(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
+        lightshell_duo(),
         luminous_rebuke(),
         sire_of_seven_deaths(),
     ]
@@ -161,6 +162,35 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                         otherwise: vec![],
                     }],
                     ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn lightshell_duo() -> CardDefinition {
+    let text_box = "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhen this creature enters, surveil 2. (Look at the top two cards of your library, then put any number of them into your graveyard and the rest on top of your library in any order.)";
+    CardDefinition {
+        key: "fdn.lightshell_duo",
+        scryfall_id: "bb75315c-ea8f-4eb0-899e-c73ef75fc396",
+        printed: PrintedCharacteristics {
+            name: "Lightshell Duo".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rat".into(), "Otter".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::prowess(),
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::Surveil { count: 2 }],
                 },
             ],
             text_box: text_box.into(),

@@ -5,7 +5,7 @@
 //! token printing, or `None` when it has none.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TriggerCondition, TriggerSubject,
+        Ability, Effect, EffectValue, ObjectSelector, Per, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardType, CardTypes, Keyword, Keywords,
@@ -250,20 +250,7 @@ fn monk() -> TokenDefinition {
         "token.monk",
         "388180bd-cc96-4b18-9ddd-18a3f7e06282",
         PrintedCharacteristics {
-            abilities: vec![Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            }],
+            abilities: vec![Ability::prowess()],
             ..creature(base, 1, 1, [Color::Red])
         },
     )

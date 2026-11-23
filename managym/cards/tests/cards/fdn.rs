@@ -701,3 +701,52 @@ fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
     assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
+
+#[test]
+fn lightshell_duo_orders_or_mills_and_gains_prowess() {
+    use crate::support::{
+        game::pin_top,
+        inspect::{library_top, offered_cards, zone_of},
+        play::{cast, choose, fork_selecting, pass_until, resolve_top, select_card},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+
+    let mut s = five_color_setup(&["Lightshell Duo", "Scout's Warning"]);
+    let cards = pin_top(&mut s, &["Island", "Forest"]);
+    cast(&mut s, "Lightshell Duo");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let duo = permanent_named(&s, "Lightshell Duo");
+    assert_eq!(s.game().characteristics(duo).pt(), (3, 4));
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert_eq!(offered_cards(&s), cards);
+
+    // Choosing one card for the graveyard leaves the other on top.
+    for (i, &card) in cards.iter().enumerate() {
+        let mut mill = fork_selecting(&s, card);
+        choose(&mut mill, |a| matches!(a, Action::Decline { .. }));
+        assert_eq!(zone_of(&mill, card), Some(ZoneType::Graveyard));
+        assert_eq!(library_top(&mill, 0), cards[1 - i]);
+    }
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(offered_cards(&s), cards);
+
+    for (i, &first) in cards.iter().enumerate() {
+        let second = cards[1 - i];
+        let mut keep = fork_selecting(&s, first);
+        select_card(&mut keep, second);
+        cast(&mut keep, "Scout's Warning");
+        resolve_top(&mut keep);
+        assert_eq!(keep.game().characteristics(duo).pt(), (4, 5));
+        assert_eq!(
+            library_top(&keep, 0),
+            first,
+            "prowess resolves before the draw"
+        );
+        resolve_top(&mut keep);
+        assert_eq!(zone_of(&keep, first), Some(ZoneType::Hand));
+        assert_eq!(library_top(&keep, 0), second);
+        keep.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(keep.game().characteristics(duo).pt(), (3, 4));
+    }
+}
