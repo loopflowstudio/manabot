@@ -1,7 +1,9 @@
-at: 0ed6707c1048d7345fb98629388ab9a21ceeb8b7
+at: 5272c4930a969d573d8d52c2dec07ea245d3784d
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Run Away Together needs a cross-target controller check
   - path: managym/cards/src/fdn.rs
     why: Lightshell Duo combines prowess and surveil on entry
   - path: managym/state/src/ability.rs
