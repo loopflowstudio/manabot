@@ -113,6 +113,36 @@ fn volcanic_torrent_offers_regent_and_its_free_omen() {
     assert!(spell.spent.is_empty());
 }
 
+/// Raising only the inset's printed cost leaves the physical hit unchanged.
+/// The free payment must not make an equal-value spell eligible.
+#[test]
+fn volcanic_torrent_excludes_an_equal_value_omen_on_a_cheaper_hit() {
+    use managym::state::{card::InsetSpell, mana::ManaCost};
+    use std::sync::Arc;
+
+    let mut s = five_color_setup(&["Volcanic Torrent", "Scavenger Regent"]);
+    let regents: Vec<_> = s
+        .game()
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.name == "Scavenger Regent")
+        .map(|(id, _)| id)
+        .collect();
+    for id in regents {
+        let Some(InsetSpell::Omen(omen)) = &mut s.game_mut().state[id].inset else {
+            unreachable!()
+        };
+        Arc::make_mut(omen).mana_cost = Some(ManaCost::parse("{3}{B}{B}"));
+    }
+    let hit = cascade_over(&mut s, &["Scavenger Regent"])[0];
+    let offers = &s.action_space().actions;
+    assert_eq!(offers.len(), 2);
+    assert!(offers
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard { object, .. } if *object == hit)));
+    assert!(offers.iter().any(|a| matches!(a, Action::Decline { .. })));
+}
+
 /// Declining the cast bottoms the hit with every other exiled card.
 #[test]
 fn volcanic_torrent_cascade_may_be_declined() {
