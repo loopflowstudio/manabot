@@ -1,25 +1,28 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>When does a card remember?</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Can either Hellkite activate?</title>
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:54rem;margin:3rem auto;padding:0 1rem 3rem}h1,h2{line-height:1.15}h2{margin-top:2rem}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:4px solid #888;padding-inline:1rem}li{margin:.45rem 0}small{font-weight:bold}
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
-<h1>Which creature did this Ooze damage?</h1>
-<p>A player deciding whether to destroy a wounded creature needs to know whether its death will grow Predator Ooze. A damage mark gives the amount. Two identical Oozes on the battlefield make the missing fact visible.</p>
-<aside><h2>Biggest mismatch · damage has a recipient and a source</h2>
-<p><b>Existing.</b> The damage commit sees the recipient’s exact object reference. It marks damage and emits <code>DamageDealt</code> with a permanent slot. The mark alone cannot distinguish the two Oozes.</p>
-<p><b>Proposed.</b> Record each distinct source–recipient pair when positive damage lands. When a creature dies, match its departing incarnation to each listening Ooze. A second hit from the same Ooze still gives one trigger for that death. Two Oozes that hit it each earn one.</p></aside>
-<h2>One saved position, three continuations</h2>
-<table><thead><tr><th>After Ooze wounds a surviving creature</th><th>Expected death triggers</th></tr></thead><tbody>
-<tr><td>Destroy it this turn</td><td>One. The counter arrives on resolution.</td></tr>
-<tr><td>Restore. Exile the wounded creature, return it and destroy it</td><td>Zero. The returned creature never took the hit.</td></tr>
-<tr><td>Restore. Exile the Ooze, return it and destroy the original victim</td><td>Zero. The returned Ooze never dealt the hit.</td></tr></tbody></table>
-<p>These are proposed checks. Restore before the death to recover the relation and lawful choices. Restore after the trigger is stacked to recover that trigger once. Countering it leaves the Ooze’s counters unchanged. Keep its attack counter separate in each comparison.</p>
+<h1>Can either Steel Hellkite activate after only one hits?</h1>
+<p>Yes. Imagine two Hellkites, A and B. A dealt combat damage to the opposing player. Both can announce X, including zero. Only A’s ability can destroy that player’s matching nonlands.</p>
+<aside><h2>Biggest mismatch · a legal activation can accomplish nothing</h2>
+<p><b>Existing.</b> The activated ability’s <code>once_each_turn</code> flag and the permanent’s <code>activated_this_turn</code> record already determine whether a use remains. The damage commit sees the combat hit and emits a viewer event. The turn’s <code>DamageHistory</code> currently retains permanent recipients only.</p>
+<p><b>Proposed.</b> Record the damaged seat against the exact combat source. Offer each affordable X for either unused ability. Spend the use on activation. On resolution, use the captured source to find eligible players, then check each nonland’s current controller and mana value.</p></aside>
+<h2>One save after A hits · proposed checks</h2>
+<table><tr><th>Choice from the save</th><th>What the player sees</th></tr>
+<tr><td>Activate A for zero</td><td>The opponent’s zero-mana nonland token is destroyed. Their land and your matching token survive.</td></tr>
+<tr><td>Restore and activate B for zero</td><td>The activation resolves without destroying anything. If countered instead, B has still spent its use.</td></tr>
+<tr><td>Restore, activate A, then return A to hand in response</td><td>The stack still identifies the damaged seat. Restoring here and passing priority reproduces destruction. A matching permanent that changed to your control survives.</td></tr>
+<tr><td>Restore and advance the turn</td><td>Both uses are available. Neither copy qualifies from the old hit. The saved parent still has A’s hit.</td></tr></table>
+<p>Prevented damage records no hit. An unchanged life total can also mean damage was dealt while life was locked. Only the committed combat damage distinguishes these outcomes.</p>
 <h2>Do the product and code concepts line up?</h2>
 <table><thead><tr><th>Player’s question</th><th>Existing native owner</th><th>Match</th></tr></thead><tbody>
 <tr><td>How many creatures did this Fumigate destroy?</td><td>The resolution frame binds the committed destruction batch across child choices.</td><td>Yes</td></tr>
 <tr><td>Was this my first gain? Had I also lost life when my end step began?</td><td>The committed gain ordinal identifies Cat Collector’s event. Lunar Convocation’s two conditions read controller turn history. Gain before casting it counts. Paying after the end step begins cannot add the Bat trigger.</td><td>Yes</td></tr>
 <tr><td>Has this Connoisseur ability already resolved?</td><td>The resolution count belongs to the exact source, face and ability. Countering a trigger leaves its count intact.</td><td>Yes</td></tr>
 <tr><td>Which power does this pending ability use?</td><td>Panda’s target requirement and Immolator’s damage use the captured source with live or last-known power. Immolator’s pending stack value reaches both viewers.</td><td>Yes</td></tr>
-<tr><td>Did this Ooze damage that departing creature?</td><td>The permanent’s marked damage and the emitted event serve different uses. The death matcher needs the earlier pair of incarnations.</td><td>No</td></tr></tbody></table>
-<h2>What survives a turn?</h2>
-<p><b>Proposed.</b> Keep the pair in native turn state through priority, snapshot restore and search forks. Clear it at the turn boundary. Use the same relation to project viewer-safe joins on visible objects for Academy, policy input and text, including with optional history disabled. Compare two equally wounded boards where different Oozes dealt the hit. Hidden identities must stay private.</p>
-<h2>Review questions</h2><ol><li>What should a death trigger consult? <b>1a</b> The committed turn relation (selected). <b>1b</b> Reconstruct the source from the event transcript.</li><li>Which fixture should establish identity first? <b>2a</b> Restore one hit and vary which permanent leaves and returns (selected). <b>2b</b> Exercise only the uninterrupted combat.</li></ol></main></html>
+<tr><td>Did this Ooze damage that departing creature?</td><td>DamageHistory retains the two incarnations. The death matcher and v11 relation read the pair. Repeated hits produced one trigger in the snapshot fixture.</td><td>Yes</td></tr>
+<tr><td>Can I activate, and whose permanents will it destroy?</td><td>The activation limit has an owner. The player damage event has no retained combat-player relation for the resolving ability to query.</td><td>No</td></tr>
+<tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
+<h2>What a restore must recover</h2>
+<p><b>Proposed.</b> Persist and hash the committed seat relation through the turn, including after the source leaves. Keep the announced X and exact source on the stack. Publish the eligible seats in the native viewer projection for the live and pending ability so v11, text and Academy can show the same consequence with history disabled. Replay the same bound Command from equal roots and compare frames and outcomes.</p>
+<h2>Review questions</h2><ol><li>When should the hit matter? <b>1a</b> At resolution (selected). <b>1b</b> Hide activations that would destroy nothing, removing a legal choice.</li><li>Which restore tests the design? <b>2a</b> Before activation only. <b>2b</b> Also after source departure with the ability pending (selected).</li></ol></main></html>
