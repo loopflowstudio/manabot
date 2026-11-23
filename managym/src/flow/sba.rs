@@ -4,7 +4,7 @@
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
-        game::{Game, GameOutcome, GameProcedure, LossCauses, WinCause},
+        game::{Game, GameOutcome, GameProcedure, LossCauses},
         proposed_event::{EventBinding, ProposedEvent},
     },
     state::{
@@ -71,9 +71,9 @@ impl Game {
         }
     }
 
-    pub fn win_game(&mut self, winner: PlayerId, cause: WinCause) {
+    pub fn win_game(&mut self, winner: PlayerId) {
         if !self.is_game_over() && !self.protected_from_loss(PlayerId(1 - winner.0)) {
-            self.state.procedure = GameProcedure::Finished(GameOutcome::Victory { winner, cause });
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Victory { winner });
         }
     }
 

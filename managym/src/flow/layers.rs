@@ -159,8 +159,17 @@ impl ReadSet {
 
     fn condition(&mut self, condition: &Condition) {
         match condition {
-            Condition::ControlsAtLeast { predicate, .. }
-            | Condition::BattlefieldAtLeast { predicate, .. }
+            Condition::ControlsAtLeast {
+                predicate,
+                distinct_names,
+                ..
+            } => {
+                self.predicate(predicate);
+                if *distinct_names {
+                    self.fields |= NAME;
+                }
+            }
+            Condition::BattlefieldAtLeast { predicate, .. }
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
             }
@@ -849,15 +858,18 @@ impl<'a> Context<'a> {
                     .count()
                     >= *count
             }
-            Condition::ControlsAtLeast { count, predicate } => {
-                self.objects
-                    .keys()
-                    .filter(|&&id| {
-                        self.controller(id) == self.controller(source)
-                            && self.matches(id, predicate, Some(source))
-                    })
-                    .count()
-                    >= *count
+            Condition::ControlsAtLeast {
+                count,
+                predicate,
+                distinct_names,
+            } => {
+                let matching = self.objects.keys().filter(|&&id| {
+                    self.controller(id) == self.controller(source)
+                        && self.matches(id, predicate, Some(source))
+                });
+                super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
+                    self.objects[id].view.name.as_str()
+                })
             }
             Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
             Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),

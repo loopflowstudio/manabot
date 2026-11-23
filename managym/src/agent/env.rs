@@ -1854,14 +1854,13 @@ mod terminal_tests {
 
     #[test]
     fn instructed_outcomes_pay_both_seats() {
-        use crate::flow::game::WinCause;
         let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
         for winner in [0, 1] {
             for explicit_win in [false, true] {
                 let mut game = root.clone();
                 let loser = 1 - winner;
                 if explicit_win {
-                    game.win_game(PlayerId(winner), WinCause::MazesEnd);
+                    game.win_game(PlayerId(winner));
                 } else {
                     game.lose_game(PlayerId(loser));
                 }

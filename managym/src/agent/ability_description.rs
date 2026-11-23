@@ -342,15 +342,25 @@ fn condition_text(condition: &Condition) -> String {
             predicate_description(predicate, "matching")
         ),
         Condition::ControlsAtLeast {
+            distinct_names: false,
             count: 1,
             predicate,
         } => format!(
             "you control a {}",
             predicate_description(predicate, "permanent")
         ),
-        Condition::ControlsAtLeast { count, predicate } => format!(
-            "you control {count} or more {}s",
-            predicate_description(predicate, "permanent")
+        Condition::ControlsAtLeast {
+            count,
+            predicate,
+            distinct_names,
+        } => format!(
+            "you control {count} or more {}s{}",
+            predicate_description(predicate, "permanent"),
+            if *distinct_names {
+                " with different names"
+            } else {
+                ""
+            }
         ),
         Condition::BattlefieldAtLeast { count, predicate } => format!(
             "there are {count} or more {}s on the battlefield",
@@ -981,7 +991,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             crate::state::ability::PlayerControlDuration::NextTurn => "turn",
         }),
         TakeExtraTurn => "Take an extra turn after this one".into(),
-        WinWithDistinctGates => "If you control ten or more Gates with different names, you win the game".into(),
+        WinGame => "You win the game".into(),
         LoseGame => "You lose the game".into(),
         EndTheTurn => "End the turn".into(),
         AdditionalCombatPhase { attackers } => match attackers {
@@ -1299,6 +1309,19 @@ fn roman(chapter: u8) -> &'static str {
 mod tests {
     use super::*;
     use crate::state::ability::TargetRequirement;
+
+    #[test]
+    fn distinct_name_threshold_describes_the_required_permanents() {
+        let condition = Condition::ControlsAtLeast {
+            count: 10,
+            predicate: CardPredicate::subtype("Gate"),
+            distinct_names: true,
+        };
+        assert_eq!(
+            condition_text(&condition),
+            "you control 10 or more Gate permanents with different names"
+        );
+    }
 
     #[test]
     fn trigger_descriptions_fill_one_template_per_event() {

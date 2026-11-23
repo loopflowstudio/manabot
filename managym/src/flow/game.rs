@@ -49,12 +49,7 @@ pub enum GameProcedure {
 #[serde(untagged)]
 pub enum GameOutcome {
     Losses { losses: [LossCauses; 2] },
-    Victory { winner: PlayerId, cause: WinCause },
-}
-
-#[derive(Clone, Copy, Debug, serde::Serialize)]
-pub enum WinCause {
-    MazesEnd,
+    Victory { winner: PlayerId },
 }
 
 /// Loss conditions committed for one seat.

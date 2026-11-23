@@ -207,7 +207,7 @@ impl Game {
     pub fn winner_index(&self) -> Option<usize> {
         use super::game::{GameOutcome, GameProcedure};
         match self.state.procedure {
-            GameProcedure::Finished(GameOutcome::Victory { winner, .. }) => Some(winner.0),
+            GameProcedure::Finished(GameOutcome::Victory { winner }) => Some(winner.0),
             GameProcedure::Finished(GameOutcome::Losses { losses }) => {
                 losses.iter().position(|loss| !loss.any())
             }

@@ -194,6 +194,8 @@ pub enum Condition {
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        distinct_names: bool,
         count: usize,
         predicate: CardPredicate,
     },
@@ -1061,7 +1063,7 @@ pub enum Effect {
     /// cleanup step, which proceeds as usual.
     EndTheTurn,
     LoseGame,
-    WinWithDistinctGates,
+    WinGame,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -1839,7 +1841,7 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
-            | Effect::WinWithDistinctGates
+            | Effect::WinGame
             | Effect::LoseGame
             | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }

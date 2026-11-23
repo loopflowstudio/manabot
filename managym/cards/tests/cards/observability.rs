@@ -689,7 +689,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::TransformSource => "Effect::TransformSource",
         Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
-        Effect::WinWithDistinctGates => "Effect::WinWithDistinctGates",
+        Effect::WinGame => "Effect::WinGame",
         Effect::LoseGame => "Effect::LoseGame",
         Effect::EndTheTurn => "Effect::EndTheTurn",
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
@@ -1009,7 +1009,7 @@ fn effect_witnesses() -> Vec<Effect> {
             duration: managym::state::ability::PlayerControlDuration::NextCombat,
         },
         Effect::TakeExtraTurn,
-        Effect::WinWithDistinctGates,
+        Effect::WinGame,
         Effect::LoseGame,
         Effect::EndTheTurn,
         Effect::AdditionalCombatPhase {
@@ -1234,6 +1234,7 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::AnyGraveyardAtLeast { count: 20 },
         Condition::ControlsAtLeast {
+            distinct_names: false,
             count: 1,
             predicate: CardPredicate::creature(),
         },
@@ -5880,4 +5881,14 @@ fn player_control_card_costs_and_trigger_threshold_reach_learning_tokens() {
         name_value("TriggerCondition::NthCounter")
     )));
     assert!(cube.contains(&(TokenKind::Variant, name_value("Effect::WhenYouDo"))));
+}
+
+#[test]
+fn mazes_end_exposes_its_distinct_name_threshold_and_win_instruction() {
+    let maze = tokens_of(&card_definition("Maze's End"));
+    let passage = tokens_of(&card_definition("Fabled Passage"));
+    let field = (TokenKind::Field, name_value("distinct_names"));
+    assert!(maze.contains(&field));
+    assert!(!passage.contains(&field));
+    assert!(maze.contains(&(TokenKind::Variant, name_value("Effect::WinGame"))));
 }

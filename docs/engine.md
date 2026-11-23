@@ -205,8 +205,9 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest. Version 18 includes the game procedure, with private opening progress
-or the simultaneous loss causes committed at the end of the game. The struct is destructured without
+digest. Version 19 records the winning seat for a card-instructed victory.
+The game procedure also records private opening progress and simultaneous
+loss causes. The struct is destructured without
 `..`, so a new field fails to compile until its canonical treatment is chosen;
 pointers, capacities, timings and observation projections are excluded, and
 the RNG is represented by eight draws from a clone, never advanced.

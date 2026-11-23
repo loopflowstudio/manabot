@@ -1151,15 +1151,8 @@ impl Game {
                 }
                 None
             }
-            Effect::WinWithDistinctGates => {
-                let names = self
-                    .layer_views(self.iter_battlefield_permanents(frame.controller))
-                    .filter(|(_, view)| view.subtypes.iter().any(|kind| kind == "Gate"))
-                    .map(|(_, view)| view.name.clone())
-                    .collect::<std::collections::BTreeSet<_>>();
-                if names.len() >= 10 {
-                    self.win_game(frame.controller, super::game::WinCause::MazesEnd);
-                }
+            Effect::WinGame => {
+                self.win_game(frame.controller);
                 None
             }
             Effect::LoseGame => {

@@ -1,6 +1,6 @@
 //! Dragon's Maze.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector},
+    ability::{Condition, Effect, EffectValue, ObjectSelector},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
         ReplacementEffect,
@@ -18,11 +18,33 @@ pub(super) fn cards() -> Vec<CardDefinition> {
             types: CardTypes::new([CardType::Land]),
             replacement_effects: vec![ReplacementEffect::EntersTapped],
             activated_abilities: vec![
-                ActivatedAbilityDefinition { tap_source: true, effects: vec![Effect::add_mana(Mana::parse("C"))], ..Default::default() },
-                ActivatedAbilityDefinition { tap_source: true, return_source: true, mana_cost: ManaCost::parse("{3}"), effects: vec![
-                    Effect::search_library(CardPredicate::subtype("Gate"), EffectValue::Fixed(1), vec![Effect::return_to_battlefield(ObjectSelector::Selected, false)]),
-                    Effect::WinWithDistinctGates,
-                ], ..Default::default() },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::add_mana(Mana::parse("C"))],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    return_source: true,
+                    mana_cost: ManaCost::parse("{3}"),
+                    effects: vec![
+                        Effect::search_library(
+                            CardPredicate::subtype("Gate"),
+                            EffectValue::Fixed(1),
+                            vec![Effect::return_to_battlefield(ObjectSelector::Selected, false)],
+                        ),
+                        Effect::If {
+                            condition: Condition::ControlsAtLeast {
+                                count: 10,
+                                predicate: CardPredicate::subtype("Gate"),
+                                distinct_names: true,
+                            },
+                            then: vec![Effect::WinGame],
+                            otherwise: vec![],
+                        },
+                    ],
+                    ..Default::default()
+                },
             ],
             text_box: "This land enters tapped.\n{T}: Add {C}.\n{3}, {T}, Return this land to its owner's hand: Search your library for a Gate card, put it onto the battlefield, then shuffle. If you control ten or more Gates with different names, you win the game.".into(),
             ..Default::default()
