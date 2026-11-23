@@ -39,9 +39,13 @@ The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn con
 | `construct_a_cosmic_cube_requires_the_plan_to_be_sacrificed` | Doubling Season turned the second draw trigger into two 2/1 Villains with menace and two plan counters. Both viewers saw eight counters. Removing the Plan before sacrifice or countering the separately targeted trigger preserved the opponent’s turn. After successful resolution seat zero chose which of seat one’s Mountains paid for its Gray Ogre. The bound Command reproduced the same successor, spent seat one’s mana and left seat zero’s pool and the fork root intact. |
 | `player_control_card_costs_and_trigger_threshold_reach_learning_tokens`, `every_trigger_condition_and_ability_reaches_the_learning_tokens`, `each_counter_kind_reaches_a_fact_row` | The catalog exposes the grantor exile, power reduction, counter crossing and reflexive trigger. The plan counter joins its permanent through the existing counter fact rows. |
 
-## Remaining cross-consumer obligations
+### Two-Bracelet offers through `f09d8335`
 
-**Bracelet offer completed.** The seed-161 fixture checked both tensor focus slots against their permanent rows. Each bound activation exiled the same Equipment and produced the same receipt and mana pool as indexed play. On the rebuilt CPython 3.13 extension, both seed-23 text and Academy Commands matched indexed play at targeting and after payment. Academy’s offer label named Gray Ogre and the visible Bracelet permanent ID. Semantic text identified the same cost by its battlefield alias. The full suite and paired 10% Engine Budget remain at gate.
+Seven focused native cases passed at the earlier review. Seed 161 exposed a gap in those checks: the offer focused the Equipment permanent but described its underlying card as the exile cost. At `9de9c111` the native description names Gray Ogre as the ability source and the visible Bracelet permanent as the cost. Semantic text uses the same two focus slots and the viewer's battlefield aliases. Academy carries the native label.
+
+The seed-161 fixture checked both tensor joins and compared each bound activation with indexed play through exile, payment receipt and remaining mana. On the rebuilt CPython 3.13 extension, the seed-23 semantic and Academy Commands matched indexed play at targeting and after payment for either Bracelet. The fixture in `tests/academy/test_bracelet_offers.py` now selects the indexed action independently by the Ogre and Bracelet permanent IDs. This catches a shared offer-binding error even if both Commands agree.
+
+## Remaining cross-consumer obligations
 
 **Decisions and control.** Use the ordinary native `Decision`, `Action` and semantic Command binding for each new choice. Keep `ActionSpace.player` as the chooser, `Decision.player()` as the rules subject and the active player as turn owner. Retain `TurnState.player_controls`, `Effect::ControlPlayer` and `Game::shares_information` for all three control sources. A skipped combat preserves pending next-combat control. Exercise a legal foretell or land play as a priority special action during delegated play. Pregame actions have no priority window. Neither a control effect nor a new procedure grants sideboard access or authority to concede for another seat.
 
@@ -129,10 +133,6 @@ At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact
 
 At `5d6e00bb` the native probe admitted Silencer alone among the three cards. At `0ea0c204` the rebuilt CPython 3.13 extension admitted Bracelet, Cube and Silencer together. The earlier review passed nine focused native cases and the seed-23 Pact parity fixture. Three focused Python cases subsequently passed across the paid and unpaid Bloodbending decision surfaces and Academy reconnect at a pending delegated discard.
 
-### Behavior review at `758e0910` — continue the working phase
+### Next slice
 
-Seven focused debug cases passed in the existing card test binary. The two seed-161 fixtures reproduced the Bracelet payment and Cube control branches above. Five observability cases checked the control-card learning tokens, control relations, counter facts, restricted mana and payment references.
-
-One defect remains in the two-Bracelet offer. With both Bracelets on Gray Ogre, native focus identifies the Ogre permanent followed by the particular Equipment permanent. The native cost description formats the grantor's underlying card object ID instead. The semantic text formatter presents both permanent references as ability sources, then appends the cost description with the card ID. Thus the reference attached to “exile” uses a different identity from the Equipment reference in the same offer. The current native fixture checks each representation separately and passes. The tensor encoder traverses both focus slots, but this fixture does not check their encoded rows.
-
-Use the visible Equipment permanent reference for the exile cost and label the Ogre alone as the activation source. Extend the two-offer fixture through tensor joins, rendered text and Academy's accessible offer labels. Execute each bound activation Command and compare the exact exiled object, receipt and floating pool against its native branch. The Cube fixture already replays its nested payment Command and checks the chooser, resource owner, hidden actions and unchanged root. Full-suite validation and the paired Engine Budget remain at gate.
+At gate, run the full suite and the paired same-runner 10% Engine Budget described above. Check the semantic digests alongside the timings, including the effect of opening decisions on ordinary games. Focused card and Command results do not establish that budget.
