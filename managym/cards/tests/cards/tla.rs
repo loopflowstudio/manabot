@@ -16426,7 +16426,13 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
     use managym::flow::event::DamageTarget;
     use managym::state::card::ReplacementEffect;
 
-    for prohibit_gain in [false, true] {
+    // Preventing first absorbs the hit. Doubling first leaves two damage,
+    // so only Cindermaw distinguishes the last two outcomes.
+    for (prohibit_gain, mode, hits_expected, gains_expected) in [
+        (false, 0, &[][..], &[][..]),
+        (false, 1, &[2][..], &[2][..]),
+        (true, 1, &[2][..], &[][..]),
+    ] {
         let mut s = five_color_setup(&[
             "Foggy Swamp Spirit Keeper",
             "Ajani's Pridemate",
@@ -16453,8 +16459,6 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         assert_eq!(s.life(1), 20);
         let root = s.game().clone();
         let before = witness(&root);
-        // Preventing first absorbs the hit. Doubling first leaves two damage.
-        let mode = if prohibit_gain { 1 } else { 0 };
         let mut replay = crate::support::play::command(
             &mut s,
             |a| matches!(a, Action::ChooseMode { mode: choice, .. } if *choice == mode),
@@ -16476,13 +16480,16 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
                     _ => None,
                 })
                 .collect();
-            assert_eq!(hits.as_slice(), if prohibit_gain { &[2][..] } else { &[] });
-            assert_eq!(branch.life(1), if prohibit_gain { 18 } else { 20 });
-            assert_eq!(branch.life(0), 20);
-            assert!(attacker_life_gains(branch, combat_start).is_empty());
+            assert_eq!(hits, hits_expected);
+            assert_eq!(
+                branch.life(1),
+                20 - hits_expected.iter().sum::<u32>() as i32
+            );
+            assert_eq!(attacker_life_gains(branch, combat_start), gains_expected);
+            assert_eq!(branch.life(0), 20 + gains_expected.iter().sum::<i32>());
             assert_eq!(
                 counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
-                0
+                gains_expected.len() as i32
             );
         }
         assert_eq!(witness(s.game()), witness(replay.game()));

@@ -13,3 +13,5 @@ Audit each capability group before authoring it. For Arahbo and Helpful Hunter, 
 Use Foggy Swamp Visions to copy Arahbo from the graveyard without another Arahbo on the battlefield. For Caracal, create the ordinary Cat directly from the same token face Arahbo uses so a second lord does not obscure the change in power and toughness.
 
 Combat assignments use the existing modal Command. For multiple blockers the attacker chooses an amount per blocker in declaration order, so the engine never materializes the Cartesian product of allocations.
+
+Replay doubling first without Giant Cindermaw as the positive control for prohibited lifelink.

@@ -1,7 +1,7 @@
-at: d0d0e8437650c8a84c72c165a71daed7ff744bca
+at: e3dc630e758da48549ead966bac995ad100cc432
 first:
   - path: managym/cards/tests/cards/tla.rs
-    why: Compare committed damage, gains and counters after replacement replay
+    why: Compare replacement order with and without Giant Cindermaw
   - path: managym/tests/support/play.rs
     why: Return the fork that replayed the bound Command
   - path: managym/src/flow/combat_actions.rs
