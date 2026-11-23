@@ -14,3 +14,5 @@
 - Retain every simultaneous loss cause per seat. Preserve the historical empty-draw precedence in the single-reason Env field so one consumer's projection does not erase facts from the committed result.
 
 - Use byte-sized opening counters (at most seven) and allocate the combat workspace only during combat. Compacting the opening state alone still failed the synced 4096-byte assertion. The paired budget at gate will measure the combat allocation.
+
+- Return the same terminal info from indexed and semantic Env steps. Derive it from the committed native outcome so restoring a snapshot needs no second stored receipt.

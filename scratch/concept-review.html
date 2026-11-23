@@ -4,29 +4,24 @@
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
 </style>
-<main><small>Managym · MTG-422 · reviewed at fef35840</small>
+<main><small>Managym · MTG-422 · reviewed at 6fe0ae50</small>
 <h1>Do the caller’s decisions and results have one native owner?</h1>
 <p>From reset, a policy needs the current chooser and every legal action. Search must be able to fork there. Once the game finishes, evaluation needs a stable result for either seat.</p>
-<aside><h2>Biggest mismatch · why did the game end?</h2>
-<p><b>Existing</b> · <code>Finished { losses: [LossCauses; 2] }</code> keeps simultaneous life, poison and failed-draw causes. The state-based check asks whether a cause has an Env reason string to decide whether anyone lost. Maze’s End can win while both seats have positive life, full libraries and zero poison. Neither seat supplies a loss cause in that position.</p>
-<p><b>Proposed</b> · Let Finished carry one typed result: losses by seat, or an explicit victory naming its seat and cause. Pact contributes an immediate instructed loss. Maze contributes an immediate victory. Derive winner, draw, seat rewards and compatibility labels from that result. Keep the pending action and combat workspace out of the result.</p></aside>
-<h2>From reset to a result</h2>
-<table><thead><tr><th>Caller action or question<th>Native owner today<th>Fit<tbody>
-<tr><td>Keep or redraw, then choose private bottom order<td>OpeningHands and opening_actions publish each seat’s declaration and exact hand objects, deepest first.<td><b>Yes.</b> Each selection costs one action per candidate. Search branches at the actual choice.
-<tr><td>Place a retained Axe or Quicksilver before turn one<td>BeginOnBattlefield and the Enter stage publish eligible objects plus finish.<td><b>Yes.</b> The move becomes public. Eligibility and the rest of the hand stay private.
-<tr><td>Resume after Time Stop or Sundial interrupts combat<td>FrameCompletion::EndTurn resumes the mandatory state-based check. Ordinary cleanup owns discard and repeated priority.<td><b>Yes.</b> The legend choice can suspend this transition.
-<tr><td>Spend the controlled player’s resources<td>ActionSpace.player identifies the chooser. The action identifies the rules subject.<td><b>Yes.</b> Bloodbending exercises duration. Bracelet’s nested payment remains an open witness.
-<tr><td>Read a simultaneous draw and both seat rewards<td>Finished preserves each seat’s causes. Env projects the existing single reason.<td><b>Yes.</b> A life loss and failed draw can survive together.
-<tr><td>Win by finding ten Gate names, or lose to a Pact instruction<td>Finished describes only losses measured by the state-based check.<td><b>No.</b> Recording a fabricated opposing loss would attribute Maze’s victory to the wrong seat and rule.
+<aside><h2>Biggest mismatch · the same finish has two receipts</h2>
+<p><b>Existing.</b> Resolve Pact’s loss instruction. An indexed Env step reports the winner and the losing seat’s <code>instructed_loss</code> reason. A semantic Env step computes the chooser’s reward separately and returns an empty info dictionary. An evaluator changing how it submits a decision loses the explanation for the score.</p>
+<p><b>Proposed.</b> Both step methods project reward and info from the committed game for the chooser captured before the step. Keep each method’s own observation and transition. Reading a result should never drain events or advance the game.</p></aside>
+<h2>From reset to evaluation</h2>
+<table><thead><tr><th>Caller interaction<th>Code owner<th>Fit<tbody>
+<tr><td>Keep, redraw and choose private bottom order<td>OpeningHands publishes exact objects deepest first.<td>Yes. A fork can vary one commitment without exposing it to the opponent.
+<tr><td>Place an eligible permanent before turn one<td>BeginOnBattlefield and the Enter stage offer placement and finish.<td>Yes. Both opening cards use the same action.
+<tr><td>Resume interrupted combat into cleanup<td>FrameCompletion::EndTurn retains the return point across a mandatory choice.<td>Yes. Cleanup can grant priority and repeat.
+<tr><td>Choose for another seat<td>ActionSpace.player owns choice. Action.player() identifies whose resources apply.<td>Yes. Bloodbending exercises the distinction. Cube’s nested payment still needs a witness.
+<tr><td>Distinguish victory, one seat losing and simultaneous losses<td>GameProcedure::Finished holds GameOutcome. Losses retain multiple causes per seat. Victory names the winner and cause.<td>Yes. Maze can win after a failed search with ten distinct Gate names already in play.
+<tr><td>Read the reason after either Env step<td>finish_game_step builds terminal info. step_semantic_command returns empty_info_dict().<td>No. The submission method determines which result fields reach the caller.
 </table>
-<h2>A recoverable choice</h2>
-<p>At seed 103, both seats redrew twice. After the first bottom selection, the owner saw six legal objects. Reusing the previous Command failed. Binding the second selection at the live offer reproduced the next state on an exact fork. Choosing another object on a sibling preserved the root. The other viewer learned neither bottom identity. Axe and Quicksilver then entered publicly on turn zero.</p>
-<p>Seed 213 restored a saved position after the first private selection. Both viewer projections and the exact search witness matched. Replaying the original choice reproduced its successor. The CPython 3.13 release build met the 4096-byte inline GameState ceiling. The allocation cost during combat awaits the paired Engine Budget.</p>
-<h2>What happens when a result is prevented?</h2>
-<p><b>Observed</b> · At seed 161 Fynn raised the defender from eight to ten poison. Herald kept the defender in play until it left. At seed 704302 simultaneous losses produced a draw with both causes retained on the seat that had also failed to draw.</p>
-<p><b>Proposed test</b> · Choose Pact’s loss mode, then fork with its trigger on the stack. Resolve the original at positive life and read the loss and both rewards immediately. On the fork, flash in Herald and resolve Pact. Remove Herald and resume play. The used mode stays used, and the resolved instruction has expired. In contrast, ten poison remains on the player and is checked again. Save and restore the pending trigger, bind the same Commands and compare each successor witness.</p>
-<p>Herald also prohibits an opponent’s explicit win. Exercise Maze’s End on either side of that restriction. Test the restriction against the seat trying to win at resolution. An unprotected opponent losing to an independent rule still ends the game.</p>
-<h2>Questions for review</h2>
-<ol><li>How should Maze’s End appear in a terminal record? <b>1a · selected</b> Record the acting ability controller’s victory and its cause. <b>1b</b> Record an opposing loss.</li>
-<li>What survives a protected Pact resolution? <b>2a · selected</b> Keep the spent mode on that object and resume play. <b>2b</b> Keep a pending loss to reconsider when protection ends.</li></ol>
-</main></html>
+<h2>One Pact upkeep, two successors</h2>
+<p><b>Recorded.</b> At seed 23, restoring the pending upkeep from a snapshot or replay and submitting the original loss-mode Command reproduced the terminal witness. At seed 161, flashing Herald before resolution let play continue after Herald later left. The next upkeep offered three modes. Protection consumed the instruction. Ten poison on a protected player behaves differently because the counters survive for the next state-based check.</p>
+<p><b>Failure and recovery.</b> Seed 103 exercised stale rejection during ordered bottoming. Recover by reading the current offer and binding a fresh Command. Seed 213 restored that decision after one private commitment and reproduced its successor. Applying the same recovery at Pact must preserve the spent mode, pending trigger, both views and root witness.</p>
+<p><b>First check proposed.</b> Fork immediately before the final pass resolving Pact. Submit the corresponding index and bound Command. Compare both returned info dictionaries, chooser-relative rewards and successor witnesses. Repeat with the protected live game, an explicit Maze victory and a simultaneous draw. A live step and a draw both pay zero. Only the draw is terminal. Rollout cap accounting and Monte Carlo scoring retain their own meanings.</p>
+<h2>Questions for review</h2><ol><li>Which step returns the terminal explanation? <b>1a · selected</b> Both Env methods. <b>1b</b> Indexed steps only.</li>
+<li>Where should recovery get that explanation? <b>2a · selected</b> Derive it from the restored native result. <b>2b</b> Persist a second receipt alongside the game.</li></ol></main></html>
