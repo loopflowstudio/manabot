@@ -58,15 +58,17 @@ fn semantic_direct_hash_preserves_viewer_bytes_and_event_exclusion() {
         for (with_chooser, terminal) in [(true, false), (false, false), (false, true)] {
             let mut game = root.clone();
             if terminal {
-                game.state.procedure = managym::flow::game::GameProcedure::Finished {
-                    losses: [
-                        Default::default(),
-                        managym::flow::game::LossCauses {
-                            life_total: true,
-                            ..Default::default()
-                        },
-                    ],
-                };
+                game.state.procedure = managym::flow::game::GameProcedure::Finished(
+                    managym::flow::game::GameOutcome::Losses {
+                        losses: [
+                            Default::default(),
+                            managym::flow::game::LossCauses {
+                                life_total: true,
+                                ..Default::default()
+                            },
+                        ],
+                    },
+                );
             }
             assert_eq!(game.is_game_over(), terminal);
             game.state.observation_events.clear();

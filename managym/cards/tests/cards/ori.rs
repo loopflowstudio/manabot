@@ -188,3 +188,52 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         assert!(s.game().state.stack_objects.is_empty());
     }
 }
+
+#[test]
+fn demonic_pact_loss_can_be_answered_with_herald() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, command, settle},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Demonic Pact", "Herald of Eternal Dawn"]);
+    s.force_permanent_on_battlefield(0, "Demonic Pact");
+    let herald = force_new_card_in_hand(&mut s, 0, "Herald of Eternal Dawn");
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "4WWW");
+    assert_eq!(s.action_space().actions.len(), 4);
+    let root = s.game().clone();
+    for protected in [false, true] {
+        *s.game_mut() = root.clone();
+        command(&mut s, |action| {
+            matches!(action, Action::ChooseMode { mode: 3, .. })
+        });
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        if protected {
+            cast_card(&mut s, herald);
+            settle(&mut s);
+            let permanent = s.battlefield_permanents_named(0, "Herald of Eternal Dawn")[0];
+            let object = s.game().state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .object;
+            s.game_mut().move_object(object, ZoneType::Exile);
+            s.pass_priority();
+            assert!(!s.game().is_game_over());
+            s.advance_to_active_step(1, StepKind::Upkeep);
+            s.advance_to_active_step(0, StepKind::Upkeep);
+            assert_eq!(s.action_space().actions.len(), 3);
+            assert!(!s
+                .action_space()
+                .actions
+                .iter()
+                .any(|action| matches!(action, Action::ChooseMode { mode: 3, .. })));
+        } else {
+            s.pass_priority();
+            s.pass_priority();
+            s.assert_winner(1);
+            assert!(s.game().state.loss(0).unwrap().instructed);
+        }
+    }
+}

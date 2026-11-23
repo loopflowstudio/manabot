@@ -4,7 +4,7 @@
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
-        game::{Game, GameProcedure, LossCauses},
+        game::{Game, GameOutcome, GameProcedure, LossCauses, WinCause},
         proposed_event::{EventBinding, ProposedEvent},
     },
     state::{
@@ -55,6 +55,28 @@ impl Game {
         groups
     }
 
+    fn protected_from_loss(&self, player: PlayerId) -> bool {
+        self.layer_views(self.iter_battlefield_permanents(player))
+            .any(|(_, view)| {
+                view.static_abilities
+                    .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
+            })
+    }
+
+    pub fn lose_game(&mut self, player: PlayerId) {
+        if !self.is_game_over() && !self.protected_from_loss(player) {
+            let mut losses = [LossCauses::default(); 2];
+            losses[player.0].instructed = true;
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
+        }
+    }
+
+    pub fn win_game(&mut self, winner: PlayerId, cause: WinCause) {
+        if !self.is_game_over() && !self.protected_from_loss(PlayerId(1 - winner.0)) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Victory { winner, cause });
+        }
+    }
+
     /// Evaluate both seats against the battlefield before applying this batch.
     fn commit_state_based_losses(&mut self) -> bool {
         let losses = std::array::from_fn(|seat| {
@@ -63,15 +85,9 @@ impl Game {
                 life_total: player.life <= 0,
                 poison: player.counters.get(CounterKind::Poison) >= 10,
                 deck_empty: player.drew_when_empty,
+                ..Default::default()
             };
-            if causes.reason().is_some()
-                && self
-                    .layer_views(self.iter_battlefield_permanents(PlayerId(seat)))
-                    .any(|(_, view)| {
-                        view.static_abilities
-                            .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
-                    })
-            {
+            if causes.any() && self.protected_from_loss(PlayerId(seat)) {
                 Default::default()
             } else {
                 causes
@@ -83,8 +99,8 @@ impl Game {
                 self.state.players[seat].drew_when_empty = false;
             }
         }
-        if losses.iter().any(|causes| causes.reason().is_some()) {
-            self.state.procedure = GameProcedure::Finished { losses };
+        if losses.iter().any(|causes| causes.any()) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
             return true;
         }
         false

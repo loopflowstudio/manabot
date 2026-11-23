@@ -1261,7 +1261,7 @@ impl Game {
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
-        loop {
+        while !self.is_game_over() {
             if let Some(mut batch) = frame.batch.take() {
                 match self.advance_event_batch(&mut batch) {
                     BatchProgress::Choice { player, candidates } => {

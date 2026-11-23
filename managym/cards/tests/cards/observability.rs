@@ -689,6 +689,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::TransformSource => "Effect::TransformSource",
         Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
+        Effect::LoseGame => "Effect::LoseGame",
         Effect::EndTheTurn => "Effect::EndTheTurn",
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
         Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
@@ -1007,6 +1008,7 @@ fn effect_witnesses() -> Vec<Effect> {
             duration: managym::state::ability::PlayerControlDuration::NextCombat,
         },
         Effect::TakeExtraTurn,
+        Effect::LoseGame,
         Effect::EndTheTurn,
         Effect::AdditionalCombatPhase {
             attackers: Some(CardPredicate::creature()),

@@ -828,6 +828,18 @@
       "B"
     ]
   },
+  "Demonic Pact": {
+    "name": "Demonic Pact",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, choose one that hasn't been chosen —\n• This enchantment deals 4 damage to any target and you gain 4 life.\n• Target opponent discards two cards.\n• Draw two cards.\n• You lose the game.",
+    "colors": [
+      "B"
+    ]
+  },
   "Deserter's Disciple": {
     "name": "Deserter's Disciple",
     "mana_cost": "{1}{R}",

@@ -205,9 +205,13 @@ impl Game {
     }
 
     pub fn winner_index(&self) -> Option<usize> {
-        if !self.is_game_over() {
-            return None;
+        use super::game::{GameOutcome, GameProcedure};
+        match self.state.procedure {
+            GameProcedure::Finished(GameOutcome::Victory { winner, .. }) => Some(winner.0),
+            GameProcedure::Finished(GameOutcome::Losses { losses }) => {
+                losses.iter().position(|loss| !loss.any())
+            }
+            _ => None,
         }
-        (0..2).find(|seat| self.state.loss(*seat).is_none())
     }
 }

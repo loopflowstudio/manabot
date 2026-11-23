@@ -42,18 +42,36 @@ use crate::{
 pub enum GameProcedure {
     OpeningHands(crate::flow::opening::OpeningHands),
     Playing,
-    Finished { losses: [LossCauses; 2] },
+    Finished(GameOutcome),
 }
 
-/// Conditions that applied to one seat in the committed SBA batch.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+#[serde(untagged)]
+pub enum GameOutcome {
+    Losses { losses: [LossCauses; 2] },
+    Victory { winner: PlayerId, cause: WinCause },
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub enum WinCause {
+    MazesEnd,
+}
+
+/// Loss conditions committed for one seat.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize)]
 pub struct LossCauses {
     pub life_total: bool,
     pub deck_empty: bool,
     pub poison: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub instructed: bool,
 }
 
 impl LossCauses {
+    pub fn any(self) -> bool {
+        self.life_total || self.deck_empty || self.poison || self.instructed
+    }
+
     /// Single-reason projection for Env clients, preserving empty-draw precedence.
     pub fn reason(self) -> Option<&'static str> {
         if self.deck_empty {
@@ -62,6 +80,8 @@ impl LossCauses {
             Some("life_total")
         } else if self.poison {
             Some("poison")
+        } else if self.instructed {
+            Some("instructed_loss")
         } else {
             None
         }
@@ -125,7 +145,7 @@ impl GameState {
 
     pub fn loss(&self, seat: usize) -> Option<LossCauses> {
         match self.procedure {
-            GameProcedure::Finished { losses } if losses[seat].reason().is_some() => {
+            GameProcedure::Finished(GameOutcome::Losses { losses }) if losses[seat].any() => {
                 Some(losses[seat])
             }
             _ => None,
@@ -133,7 +153,7 @@ impl GameState {
     }
 
     pub(crate) fn is_game_over(&self) -> bool {
-        matches!(self.procedure, GameProcedure::Finished { .. })
+        matches!(self.procedure, GameProcedure::Finished(_))
     }
 
     /// Put the same appearance in a zone without a zone change. Callers own

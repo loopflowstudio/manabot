@@ -1151,6 +1151,10 @@ impl Game {
                 }
                 None
             }
+            Effect::LoseGame => {
+                self.lose_game(frame.controller);
+                None
+            }
             Effect::EndTheTurn => {
                 // CR 725.1a: collect occurrences from earlier instructions
                 // before discarding them. Later triggers wait for cleanup.
