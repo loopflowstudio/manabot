@@ -83,3 +83,15 @@ All 20 turn-ending, cleanup and Bloodbending debug tests passed again with nexte
 | Time Stop above increasing numbers of spells, copies and abilities during combat, with a cleanup discard and a waiting trigger | Measure the actual transition into cleanup, its first choice, and exact-fork cost. Check surviving stack, event and schedule digests. |
 
 The later gate owns the complete debug suite, schema and package checks, representative Academy interaction, model compatibility and budget evidence. The receipts above cover the turn-ending slice.
+
+## Behavior review at fbe485a9
+
+**Return to implementation.** The turn-ending slice has focused evidence. Three working-phase blockers remain.
+
+- **Opening hands.** Reset two ordinary decks with at least seven cards each. `Game::construct` deals and immediately ticks ordinary turn state. Neither seat receives a keep/mulligan offer. The seven-card count in `cr_103_5_opening_hands_have_seven_cards` passes even with the entire choice missing. Implement the opening lifecycle above and exercise both private bottom orders and retained Axe/Quicksilver entry through reset, Commands, both viewer projections and exact forks.
+- **Terminal arbitration.** At the SBA checkpoint the predicates in `flow/sba.rs` read life and failed draws, and Env infers a reason afterward. A healthy player reaching ten poison has no corresponding loss predicate. Implement the shared poison state and arbiter, then test simultaneous losses and a protected failed draw followed by removal of Herald. Check the committed result, reason and both seat rewards through the shared consumers.
+- **Card and payment coverage.** Of the ten planned new cards, only Time Stop has a definition in the native set modules. The existing Bloodbending and Sundial fixtures cannot establish the missing cards' behavior. Complete the remaining nine rows above. For Bracelet, bind a granted activation with competing restricted and ordinary mana and compare automatic spending, each meaningful manual choice and the committed receipt. This slice introduced no payment change to validate independently.
+
+Time Stop and Sundial both resolve `Effect::EndTheTurn`. The shared return frame projects the same registered “end the turn” field to effect-execution tokens and text. The seed-725 debug fixture passed again in this review. It suspended at the legend choice, preserved both branches and the root hash, then reached cleanup with the new death trigger. The cleanup-discard fixture checks one semantic offer per native action, replays each on independent clones and verifies that reusing the old Commands leaves the resulting witness intact. The earlier receipts above cover controlled cleanup and Academy reconnect. They do not exercise private opening-hand choices, controlled Bracelet payment or terminal outcome projection.
+
+The full debug suite, compatibility checks and paired Engine Budget remain with gate after the missing semantics have focused witnesses.
