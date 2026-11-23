@@ -117,6 +117,15 @@ The probe exposed two disclosures. The registry key named the printing directly,
 
 The paired native fixture in `managym/cards/tests/cards/dsk.rs` now applies manifest entry to Gray Ogre or Forest. Both opponent-priority roots have identical complete permanent records and encoded permanent buffers; each controller sees the selected definition, and each exact snapshot restores its printing. The public object join uses the battlefield id. From `managym/`, `cargo test --locked -p managym-cards --test cards -- manifest_dread fin::ragnarok` passed all six fixtures. The CPython 3.13 release extension was rebuilt and imported. The fixture supplies the private selection. Playing the spell, turning the permanent up, copying its public form without a backing definition, and integrated viewer checks remain open.
 
+Behavior review at `66840a3a` reran the paired Manifest Dread fixture and all five Ragnarok fixtures with the debug command above. All six passed. The native permanent-projection criterion is satisfied. The paired test compares complete permanent records and the opponent permanent buffer at priority. Its snapshot assertions inspect both private printings. It starts after selection and exercises no Manifest Dread Command, payment or recorded replay.
+
+Two consumer findings keep the working phase open:
+
+- The opponent row in the passing fixture has `registry_key = -1`. The v11 encoder writes zero in its definition column. The permanent formatter in `manabot/semantic/text_observation.py` unconditionally calls `definition(permanent.registry_key)`, which raises `TextEncodingError("unbound definition")` for an absent key. Render the anonymous permanent without a catalog lookup and exercise both roots through capture and text rendering, including object aliases and available actions. This finding comes from tracing the reader, pending an end-to-end reproduction.
+- Manifest a transforming front and copy the 2/2. Entry stores the backing definition ID alongside the anonymous characteristics. `ContentPack::copiable_values` retains that ID and `object_row` even looks up its catalog back face. The copy payload therefore carries private printing data. Give the anonymous form an independent copiable value and check the token and a copy of that token from both seats. The paired permanent fixture exercises only the original appearance.
+
+Full debug and package suites belong to gate. The spell selection, turn-up spends, stale selection, recorded replay and integrated viewer comparisons remain working-phase checks.
+
 ### Next slice · Cast Manifest Dread
 
 Cast the spell and restore the controller’s pending private choice. Select each of the two cards in sibling forks. Follow both Commands through manifest entry, the other card’s public graveyard arrival and the opponent’s first priority. Check the controller’s inspection, the public 2/2 and the information legitimately disclosed by the graveyard. Keep the paired-root fixture as the control with identical public information. Exercise one- and zero-card libraries through the same resolution.
