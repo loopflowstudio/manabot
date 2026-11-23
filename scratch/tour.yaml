@@ -1,5 +1,7 @@
-at: 2ace17228e3de6b6819403df2da890e676af58a4
+at: 72d87467cea0bf705d61954b0326bdae5646be98
 first:
+  - path: managym/src/flow/resolution_tests.rs
+    why: Follow both suspended Time Stop cleanup choices
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
   - path: managym/src/flow/game.rs
