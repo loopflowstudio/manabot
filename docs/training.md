@@ -643,9 +643,11 @@ that record compound fields remain readable.
 freezes a checkpoint's raw or EMA policy and collects a declared population
 with unique seeds and whole-game development/held-out splits; no weights
 change. It returns at once when `out` binds the same policy, population, match,
-reference and step cap; a different request refuses. Scalar and
-categorical values are supported; belief-input policies are not. The protocol
-is in
+reference and step cap; a different request refuses. Each backend draws offers
+from its game-local action seed. The journal records the drawn offer's
+probability, policy entropy in nats and KL(policy || reference) over legal offers.
+Scalar and categorical values are supported; belief-input policies are not.
+The protocol is in
 [ataraxos-omitted-controls](../experiments/reports/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 

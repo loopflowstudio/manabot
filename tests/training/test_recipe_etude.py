@@ -1,9 +1,12 @@
 """Recipes use Etude run inputs and keep downstream policy provenance."""
 
 import hashlib
+import math
 from pathlib import Path
+from typing import Literal
 
 from etude.experiment import observe
+import numpy as np
 import pytest
 
 from experiments import belief
@@ -22,8 +25,10 @@ from manabot.training.loops.self_play import (
 )
 from manabot.training.rollout.selection_data import (
     SelectionDataset,
+    SelectionDraw,
     SelectionGameSpec,
     collect_selection,
+    selection_prediction,
 )
 from tests.fixtures.training_records import recording
 
@@ -84,6 +89,35 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     assert dataset.policy_identity == hashlib.sha256(original).hexdigest()
     assert policy.read_bytes() == original
     assert (tmp_path / "sampler/belief.pt").is_file()
+
+
+@pytest.mark.parametrize(
+    ("reference", "expected_kl"),
+    [
+        ("uniform", 0.5 * math.log(1.5) + 0.5 * math.log(0.75)),
+        ("action_type_uniform", 0.25 * math.log(2)),
+    ],
+)
+def test_selection_statistics_follow_the_draw_and_legal_offer_types(
+    reference: Literal["uniform", "action_type_uniform"], expected_kl: float
+) -> None:
+    # The first two offers share a type. The final slot is padding.
+    encoded = {
+        "actions": np.eye(2)[[0, 0, 1, 1]],
+        "actions_valid": np.array([1, 1, 1, 0]),
+    }
+    prediction = selection_prediction(
+        SelectionDraw(2, -0.75, np.array([0.5, 0.25, 0.25, 0], dtype=np.float32)),
+        encoded,
+        reference,
+    )
+    assert (prediction.action, prediction.value, prediction.probability) == (
+        2,
+        -0.75,
+        0.25,
+    )
+    assert prediction.entropy == pytest.approx(1.5 * math.log(2))
+    assert prediction.reference_kl == pytest.approx(expected_kl)
 
 
 def test_selection_step_keeps_replayed_population_and_refuses_stale_output(

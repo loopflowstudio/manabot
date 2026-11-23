@@ -28,6 +28,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
+from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import BackendPolicy
 import managym
 from managym.decision import Command, DecisionFrame, Observation
@@ -47,6 +48,15 @@ class SelectionGameSpec(Strict):
 
 
 @dataclass(frozen=True)
+class SelectionDraw:
+    """One sampled offer, its critic value and the policy mass in offer order."""
+
+    action: int
+    value: float
+    probabilities: np.ndarray  # [action capacity], zero on padding
+
+
+@dataclass(frozen=True)
 class SelectionPrediction:
     action: int
     value: float
@@ -58,11 +68,29 @@ class SelectionPrediction:
 class SelectionPredictor(Protocol):
     """Frozen-policy numerics with an independently seeded game-local stream."""
 
-    def predict(
-        self,
-        encoded: dict[str, np.ndarray],
-        reference: Literal["uniform", "action_type_uniform"],
-    ) -> SelectionPrediction: ...
+    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw: ...
+
+
+def selection_prediction(
+    draw: SelectionDraw,
+    encoded: dict[str, np.ndarray],
+    reference: Literal["uniform", "action_type_uniform"],
+) -> SelectionPrediction:
+    """Report entropy and KL(policy || reference) in nats for the sampled decision."""
+    probabilities = draw.probabilities
+    ref = reference_distribution(
+        {key: encoded[key][None] for key in ("actions_valid", "actions")}, reference
+    )[0]
+    logs = np.log(np.maximum(probabilities, 1e-12))
+    return SelectionPrediction(
+        action=draw.action,
+        value=draw.value,
+        probability=float(probabilities[draw.action]),
+        entropy=float(-(probabilities * logs).sum()),
+        reference_kl=float(
+            (probabilities * (logs - np.log(np.maximum(ref, 1e-12)))).sum()
+        ),
+    )
 
 
 class FrozenRecord(Strict):
@@ -195,7 +223,9 @@ def collect_selection_game(
             encoded = encode_observation(space, raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            prediction = predictor.predict(encoded, reference)
+            prediction = selection_prediction(
+                predictor.predict(encoded), encoded, reference
+            )
             action = prediction.action
             row = SelectionDecision(
                 step=len(rows),

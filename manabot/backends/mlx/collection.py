@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import cast
 
 import mlx.core as mx
 import numpy as np
@@ -22,11 +22,11 @@ from manabot.backends.mlx.rollout import check_packed, observation_arrays, packi
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
-from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.learning import Precision
 from manabot.training.rollout.numerics import SampledRows
-from manabot.training.rollout.selection_data import SelectionPrediction
+from manabot.training.rollout.selection_data import SelectionDraw
 
 
 class CollectionSession:
@@ -148,11 +148,7 @@ class SelectionPredictor:
         self.agent = agent
         self._key = mx.random.key(seed)
 
-    def predict(
-        self,
-        encoded: dict[str, np.ndarray],
-        reference: Literal["uniform", "action_type_uniform"],
-    ) -> SelectionPrediction:
+    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
         batch = {key: value[None] for key, value in encoded.items()}
         prepared = self.agent.prepare(batch, inference=True)
         logits_np, value_np = self.agent.evaluate(prepared)
@@ -160,13 +156,4 @@ class SelectionPredictor:
         probabilities = mx.softmax(logits, axis=-1)
         self._key, draw = mx.random.split(self._key)
         action = int(mx.random.categorical(logits[0], key=draw))
-        probs_np = to_numpy(probabilities)
-        logs = np.log(np.maximum(probs_np, 1e-12))
-        ref = reference_distribution(batch, reference)
-        return SelectionPrediction(
-            action,
-            float(value_np[0]),
-            float(probs_np[0, action]),
-            float(-(probs_np * logs).sum()),
-            float((probs_np * (logs - np.log(np.maximum(ref, 1e-12)))).sum()),
-        )
+        return SelectionDraw(action, float(value_np[0]), to_numpy(probabilities[0]))
