@@ -469,6 +469,15 @@ publish, land or choose the next Graph step from here.
   attack and block panels by title when taking a Playwright screenshot.
   For chunk-size parity on the same positions and weights, run
   `tests/training/test_combat_probe.py`.
+- Card-capture rejections in a retained evaluation (`match_failed: …
+  CapturedCards`): the arena key's `evaluation.json` `error` names the
+  validator message, and `failures/` stays empty for it. Find every rejected
+  match with `grep -l '<message>' */evaluation.json` under the arena output
+  directory, copy each key's `games/deals/*.jsonl` (all legs of one deal) into
+  `.runs/`, and replay each line through `capture_verified_game(GameTrace(
+  data=json.loads(line)))` → `retain_evidence` → `trace_card_tables`; no
+  checkpoint inference is needed. MTG-415: 51 MTG-408 trophy matches (204
+  games) replayed in about 3 minutes.
 - Old checkpoints in a local evaluation: a checkpoint from a TLA
   frontier run (such as u1952 at `.runs/qa/final.pt` or the
   `experiments/best_player_on_main.py` artifact) refuses the CLI's default
