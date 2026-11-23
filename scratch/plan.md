@@ -76,7 +76,9 @@ At `73f608af`, retargeting reads the announced clause for each slot directly. Si
 
 ## Next slice · Lunar Convocation
 
-Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections.
+Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections. Derive each intervening-if condition from the controller’s turn record when matching the end-step event and when resolving the ability. A card-local history flag would duplicate that record.
+
+First restore the same post-Food decision twice. Pay life before the end step in one branch and after the gain-only trigger is pending in the other. Only the first branch offers both trigger orders. A later payment cannot create a missed trigger. Compare viewer-safe decision frames and witnesses on repeated restore, resolve each offered order and verify the original root. Keep equal gain and loss as a separate control against deriving occurrence from the net life change.
 
 ## Evidence to carry forward
 
