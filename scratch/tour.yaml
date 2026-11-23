@@ -1,7 +1,9 @@
-at: c37efca3232056b73b6c85972fe897a12a6d434d
+at: 27a8e0ff0e88f534216adae112ac4c6e4385d277
 first:
   - path: docs/engine-python.md
     why: What both players see after reset
+  - path: managym/src/flow/setup.rs
+    why: Seeded deal initializes the opening procedure
   - path: managym/src/flow/opening.rs
     why: Declarations, private bottom order and pregame entry
   - path: managym/src/flow/tick.rs

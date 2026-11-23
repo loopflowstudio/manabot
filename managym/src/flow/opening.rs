@@ -62,6 +62,23 @@ impl OpeningHands {
 }
 
 impl Game {
+    fn redraw_opening_hand(&mut self, player: PlayerId) {
+        for object in self
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, player)
+            .to_vec()
+        {
+            self.move_object(object, ZoneType::Library);
+        }
+        self.shuffle_library(player);
+        for _ in 0..7 {
+            if let Some(object) = self.state.zones.top(ZoneType::Library, player) {
+                self.move_object(object, ZoneType::Hand);
+            }
+        }
+    }
+
     fn opening_entries(&self, player: PlayerId) -> impl Iterator<Item = ObjectId> + '_ {
         self.state
             .zones
@@ -85,32 +102,34 @@ impl Game {
     pub(crate) fn opening_actions(&self) -> Option<ActionSpace> {
         let opening = self.state.opening.as_ref()?;
         let player = PlayerId(opening.seat);
-        let (kind, actions) = if opening.stage == Stage::Bottom {
-            (
+        let (kind, actions) = match opening.stage {
+            Stage::Bottom => (
                 ActionSpaceKind::LookAndSelect,
                 self.selection_zone_objects(player, ZoneType::Hand)
                     .into_iter()
                     .map(|object| Action::SelectCard { player, object })
                     .collect(),
-            )
-        } else if opening.stage == Stage::Enter {
-            let actions = self
-                .opening_entries(player)
-                .map(|object| Action::SelectCard { player, object })
-                .chain([Action::Decline { player }])
-                .collect();
-            (ActionSpaceKind::LookAndSelect, actions)
-        } else {
-            let mut actions = vec![Action::ChooseMode { player, mode: 0 }];
-            if !self
-                .state
-                .zones
-                .zone_objects(ZoneType::Hand, player)
-                .is_empty()
-            {
-                actions.push(Action::ChooseMode { player, mode: 1 });
+            ),
+            Stage::Enter => {
+                let actions = self
+                    .opening_entries(player)
+                    .map(|object| Action::SelectCard { player, object })
+                    .chain([Action::Decline { player }])
+                    .collect();
+                (ActionSpaceKind::LookAndSelect, actions)
             }
-            (ActionSpaceKind::Modal, actions)
+            Stage::Declare => {
+                let mut actions = vec![Action::ChooseMode { player, mode: 0 }];
+                if !self
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Hand, player)
+                    .is_empty()
+                {
+                    actions.push(Action::ChooseMode { player, mode: 1 });
+                }
+                (ActionSpaceKind::Modal, actions)
+            }
         };
         Some(ActionSpace {
             kind,
@@ -124,12 +143,12 @@ impl Game {
         let mut opening = self.state.opening.take().unwrap();
         let seat = opening.seat;
         let player = PlayerId(seat);
-        match action {
-            Action::ChooseMode { mode, .. } if opening.stage == Stage::Declare && *mode <= 1 => {
+        match (opening.stage, action) {
+            (Stage::Declare, Action::ChooseMode { mode, .. }) if *mode <= 1 => {
                 opening.kept[seat] = *mode == 0;
                 opening.mulligans[seat] += *mode;
             }
-            Action::SelectCard { object, .. } if opening.stage == Stage::Bottom => {
+            (Stage::Bottom, Action::SelectCard { object, .. }) => {
                 let object = self.move_object(*object, ZoneType::Library);
                 self.reposition_library_object(player, object, opening.bottomed);
                 opening.bottomed += 1;
@@ -155,10 +174,10 @@ impl Game {
                     .zone_objects(ZoneType::Hand, player)
                     .is_empty();
             }
-            Action::SelectCard { object, .. } if opening.stage == Stage::Enter => {
+            (Stage::Enter, Action::SelectCard { object, .. }) => {
                 self.move_object(*object, ZoneType::Battlefield);
             }
-            Action::Decline { .. } if opening.stage == Stage::Enter => opening.seat += 1,
+            (Stage::Enter, Action::Decline { .. }) => opening.seat += 1,
             _ => {
                 self.state.opening = Some(opening);
                 return Err(AgentError("invalid opening-hand choice".into()));
@@ -198,21 +217,7 @@ impl Game {
                     if opening.kept[index] {
                         continue;
                     }
-                    let player = PlayerId(index);
-                    for object in self
-                        .state
-                        .zones
-                        .zone_objects(ZoneType::Hand, player)
-                        .to_vec()
-                    {
-                        self.move_object(object, ZoneType::Library);
-                    }
-                    self.shuffle_library(player);
-                    for _ in 0..7 {
-                        if let Some(object) = self.state.zones.top(ZoneType::Library, player) {
-                            self.move_object(object, ZoneType::Hand);
-                        }
-                    }
+                    self.redraw_opening_hand(PlayerId(index));
                 }
             }
         }

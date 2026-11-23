@@ -102,9 +102,7 @@ def test_builtins_match_separate_native_selectors_with_live_combat_events() -> N
             break
 
 
-def test_normal_reset_offers_both_seats_the_same_opening_choices_in_scalar_and_vector() -> (
-    None
-):
+def test_scalar_and_vector_reset_offer_both_seats_the_same_opening_choices() -> None:
     scalar = managym.Env(seed=213)
     batch = managym.VectorEnv(1, seed=213)
     observation, _ = scalar.reset(players())
