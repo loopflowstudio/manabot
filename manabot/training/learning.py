@@ -38,6 +38,9 @@ class Learning(Strict):
     filter_kind: Literal["top_count", "quantile"] = "top_count"
     filter_scope: Literal["actor_critic", "actor"] = "actor_critic"
     retained_fraction: float = Field(default=0.5, gt=0, le=1)
+    root_actor_weight: float = Field(
+        default=1.0, ge=0, exclude_if=lambda value: value == 1.0
+    )
     min_advantage: float = Field(default=0, ge=0)
     reference: Literal["uniform", "action_type_uniform"] = "uniform"
     learning_rate: Schedule = Schedule(initial=2.5e-4, decay=9)
@@ -102,6 +105,9 @@ class DampedPolicyLearning(Strict):
     filter_kind: Literal["quantile", "top_count"] = "quantile"
     filter_scope: Literal["actor_critic", "actor"] = "actor_critic"
     advantage_quantile: float = Field(default=0.75, ge=0, le=1)
+    root_actor_weight: float = Field(
+        default=1.0, ge=0, exclude_if=lambda value: value == 1.0
+    )
     min_advantage: float = Field(default=0.01, ge=0)
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform"
     clip: float = Field(default=0.2, gt=0, lt=1)
