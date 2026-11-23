@@ -1,4 +1,4 @@
-at: be8d1c3b0ba7385ceaa1eae6e269acde799fa8f7
+at: 87f3480ef1884546ae7484f4f417427104bbd609
 first:
   - path: managym/README.md
     why: Describes combat history across viewers and source departure
@@ -12,6 +12,8 @@ first:
     why: Selects current controllers and exact mana values
   - path: managym/src/agent/observation.rs
     why: Projects damage history after the source leaves
+  - path: managym/src/agent/observation_encoder.rs
+    why: Encodes hit seats relative to each viewer
   - path: managym/cards/tests/cards/som.rs
     why: Plays both copies and checks the turn reset
   - path: managym/src/agent/env/snapshot.rs

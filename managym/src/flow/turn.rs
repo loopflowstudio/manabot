@@ -157,13 +157,14 @@ impl DamageHistory {
     }
 
     pub fn combat_players(&self, source: ObjectId) -> impl Iterator<Item = PlayerId> + '_ {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .filter(move |player| {
-                self.0
-                    .binary_search(&DamagePair(source, DamageRecipient::CombatPlayer(*player)))
-                    .is_ok()
-            })
+        let first = DamagePair(source, DamageRecipient::CombatPlayer(PlayerId(0)));
+        let start = self.0.partition_point(|pair| *pair < first);
+        self.0[start..].iter().map_while(move |pair| match pair {
+            DamagePair(object, DamageRecipient::CombatPlayer(player)) if *object == source => {
+                Some(*player)
+            }
+            _ => None,
+        })
     }
 
     fn insert(&mut self, pair: DamagePair) {

@@ -1132,22 +1132,20 @@ fn encode_into_memory(
             .and_then(|object| object_to_index.get(&object))
             .map_or(0.0, |index| (index + 1) as f32)
     };
+    let combat_damage_flags = |seats: &[usize]| {
+        [obs.agent.player_index, obs.opponent.player_index]
+            .map(|seat| bool_to_f32(seats.contains(&(seat as usize))))
+    };
     for (permanents, out) in [
         (&obs.agent_permanents, &mut *out.agent_permanents),
         (&obs.opponent_permanents, &mut *out.opponent_permanents),
     ] {
         for (row, permanent) in out.chunks_mut(config.permanent_dim()).zip(permanents) {
             if config.layout == InputLayout::OneToken {
-                row[permanent::COMBAT_DAMAGE_TO_ME] = bool_to_f32(
-                    permanent
-                        .combat_damage_to_players
-                        .contains(&(obs.agent.player_index as usize)),
-                );
-                row[permanent::COMBAT_DAMAGE_TO_OPPONENT] = bool_to_f32(
-                    permanent
-                        .combat_damage_to_players
-                        .contains(&(obs.opponent.player_index as usize)),
-                );
+                [
+                    row[permanent::COMBAT_DAMAGE_TO_ME],
+                    row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
+                ] = combat_damage_flags(&permanent.combat_damage_to_players);
             }
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
@@ -1161,16 +1159,10 @@ fn encode_into_memory(
         .iter_mut()
         .zip(&obs.stack_objects)
     {
-        row[stack::COMBAT_DAMAGE_TO_ME] = bool_to_f32(
-            object
-                .combat_damage_to_players
-                .contains(&(obs.agent.player_index as usize)),
-        );
-        row[stack::COMBAT_DAMAGE_TO_OPPONENT] = bool_to_f32(
-            object
-                .combat_damage_to_players
-                .contains(&(obs.opponent.player_index as usize)),
-        );
+        [
+            row[stack::COMBAT_DAMAGE_TO_ME],
+            row[stack::COMBAT_DAMAGE_TO_OPPONENT],
+        ] = combat_damage_flags(&object.combat_damage_to_players);
         row[stack::SOURCE_POWER] = object.source_power.unwrap_or_default() as f32 / 10.0;
         row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);

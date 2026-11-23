@@ -22,3 +22,5 @@ Damage history uses a sorted vector for the typically small set of distinct hits
 For Hellkite, use a pending activation after source departure to test whether eligible seats remain visible without a live source row.
 
 Hellkite shares the sorted damage history with Ooze. The two player seats fit in two viewer-relative flags on each v11 permanent or pending activation.
+
+Compression retains the sorted pair representation and reads the combat-player range directly. Permanent and stack rows share the same viewer-relative seat conversion.
