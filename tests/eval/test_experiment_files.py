@@ -42,6 +42,7 @@ from experiments import (
     opponent_memory,
     seat_comparison,
     tla_frontier,
+    tla_frontier_snapshots,
     tla_trophies,
     tla_trophies_floor,
 )
@@ -66,6 +67,11 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (
+        tla_frontier_snapshots,
+        (),
+        {"baseline": 1, "plr-vine-rloo": 1},
+    ),
     (tla_trophies, (), {"trophy-w64-raw": 3}),
     (
         tla_trophies_floor,
@@ -108,6 +114,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",
+        "tla_frontier_snapshots",
         "tla_trophies",
         "tla_trophies_floor",
     }
