@@ -272,7 +272,7 @@ def test_invalid_sensitivity_rejected_before_read(
         )
 
 
-def test_report_counts_invalid_draws(
+def test_report_scores_joint_presence_and_counts_invalid_hands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dataset = _dataset()
@@ -286,8 +286,8 @@ def test_report_counts_invalid_draws(
         *,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
-        # One invalid hand violates minima/size; another violates capacity/size.
-        return torch.tensor([(0, 0), (3, 0)], dtype=torch.int64)
+        # The first two hands each violate multiple public constraints.
+        return torch.tensor([(0, 0), (3, 1), (2, 0), (1, 1)], dtype=torch.int64)
 
     monkeypatch.setattr(AutoregressiveBeliefSampler, "sample", invalid_sample)
     report = torch_report(
@@ -295,11 +295,25 @@ def test_report_counts_invalid_draws(
         checkpoint=checkpoint,
         checkpoint_identity=digest,
         training_dataset_path=data,
-        sample_counts=(2,),
+        sample_counts=(4,),
     )
     for row in report.measurements:
-        assert row.learned is not None and row.learned.support_violations == 2
+        arm = row.learned
+        assert arm is not None
+        assert (arm.support_violations, arm.sampled_hands) == (2, 4)
+        assert arm.calibration_bins[5] == CalibrationBin(1, 0.5, 0.0)
+        assert arm.calibration_bins[7] == CalibrationBin(1, 0.75, 1.0)
+        assert arm.inclusion_brier == 0.15625
+        assert arm.inclusion_ece == 0.375
+        assert arm.conjunction_brier == 0.25
         assert row.physical_prior.support_violations == 0
+
+
+def test_single_card_prior_reports_certain_presence_without_pairs() -> None:
+    arm = belief_fit.evaluate_physical_sampler(_dataset(width=1).games[0].examples)
+    assert arm.calibration_bins[-1] == CalibrationBin(1, 1.0, 1.0)
+    assert arm.inclusion_brier == arm.inclusion_ece == 0.0
+    assert arm.conjunction_brier is None
 
 
 def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:

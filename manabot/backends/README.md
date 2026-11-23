@@ -132,7 +132,10 @@ stream; the generator's state is saved only in a numerical incident.
 Belief inference uses host observations and the policy's admission and
 evaluation methods. Search receives a hand sampler; the selected backend
 owns its physical or learned sampling arithmetic, random stream and learned
-state. Verification uses a policy loader for frozen choices. Numerical parity takes a
+state. For held-out sampler reports, Torch scores the target hand and draws
+hands from the public inputs. The host computes inclusion calibration, Brier
+scores and support violations from one decision's draws at a time.
+Verification uses a policy loader for frozen choices. Numerical parity takes a
 fresh learner and the conversions between canonical and framework arrays. Each forward reads a `Prepared` batch
 from host preparation; inference probes use `inference=True`.
 
