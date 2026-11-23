@@ -6,8 +6,7 @@ directory and its metadata (`training/state/incidents.py`).
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 import random
 from typing import TYPE_CHECKING, Any, BinaryIO
 
@@ -22,13 +21,10 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
 if TYPE_CHECKING:
+    from etude.train.tracking import TrainingRun
+
+    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
-
-
-@contextmanager
-def preserve_rng() -> Iterator[None]:
-    with torch.random.fork_rng(devices=[]):
-        yield
 
 
 def save(value: object, stream: BinaryIO) -> None:
@@ -267,3 +263,19 @@ def capture_incident(
             for name, value in batch_tensors.items()
         ),
     )
+
+
+def restore(
+    run: TrainingRun, learner: Learner, ema: BackendPolicy | None, counts: Counts
+) -> None:
+    objects: dict[str, object] = {
+        "learner": learner.agent,
+        "optimizer": learner.optimizer,
+    }
+    if ema is not None:
+        objects["ema"] = ema
+    run.resume(**objects, extra=counts)
+
+
+def framework() -> dict[str, str | None]:
+    return {"torch": str(torch.__version__), "cuda": torch.version.cuda}

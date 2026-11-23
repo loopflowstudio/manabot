@@ -1,9 +1,15 @@
 """Per-decision actor and critic loss weights across logical minibatches and execution chunks."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
-from manabot.training.rollout.collection import RolloutBatch
-from manabot.training.updates.backend import RL, Array, Arrays, Device
+if TYPE_CHECKING:
+    from manabot.training.rollout.collection import RolloutBatch
+    from manabot.training.updates.backend import Arrays, Device
+    from manabot.training.updates.objective import Array, LossTerms
 
 
 def batch_weights(
@@ -53,7 +59,7 @@ def logical_weights(
 
 
 def actor_term(
-    rl: RL, values: Array, mask: Array, share: float, weights: Array | None
+    rl: LossTerms, values: Array, mask: Array, share: float, weights: Array | None
 ) -> Array:
     """This execution chunk's contribution to the logical actor mean."""
     if weights is None:
@@ -61,7 +67,9 @@ def actor_term(
     return rl.weighted_sum(values, weights[:, 0])
 
 
-def critic_term(rl: RL, values: Array, share: float, weights: Array | None) -> Array:
+def critic_term(
+    rl: LossTerms, values: Array, share: float, weights: Array | None
+) -> Array:
     """This execution chunk's contribution to the logical critic mean."""
     if weights is None:
         return values.mean() * share

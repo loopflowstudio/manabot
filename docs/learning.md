@@ -302,11 +302,12 @@ has a separate job:
 The **behavior policy** is the frozen weights that played the batch, and the
 ratio measures how far the learner has moved from them. From
 `damped_policy_loss` in
-[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
+[`manabot/training/updates/objective.py`](../manabot/training/updates/objective.py):
 
 ```python
-ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
-surrogate = clipped_surrogate(ratio_logs, advantages, clip)
+chosen_behavior = rl.action_logs(rl.constant(behavior_logs), actions)
+ratio_logs = rl.action_logs(logs, actions) - chosen_behavior
+surrogate = rl.clipped_surrogate(ratio_logs, advantages, clip)
 ```
 
 Collection stores log-probabilities for every legal action, because the KL term
@@ -501,7 +502,7 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 ## Fidelity to the sources
 
-`damped_policy_loss` in `manabot/backends/torch/rl.py` owns the
+`damped_policy_loss` in `manabot/training/updates/objective.py` owns the
 objective and `update_damped_iteration` in
 `manabot/training/updates/damped_policy.py` applies it; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
@@ -577,7 +578,8 @@ each piece they are made of as a public function.
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | [`compute_batch_targets`](../manabot/training/updates/targets.py) |
-| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Damped objective | `damped_policy_loss`, `minibatch_objective` in [`training/updates/objective.py`](../manabot/training/updates/objective.py) |
+| Loss terms | `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter and per-source diagnostics | [`select_sources`](../manabot/training/updates/selection.py) |
