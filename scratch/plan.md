@@ -140,3 +140,11 @@ On the rebuilt CPython 3.13 extension, the seed-23 Pact Command matched indexed 
 ### Simplification at `c2c94d20`
 
 OpeningHands now labels bottom and battlefield selections from its own stage. The text verification fixture follows offered actions from reset to first-main priority. The legend scan drops one controller’s accumulated groups when it encounters the exemption. Review the ordinary legend choice in the suspended cleanup fork alongside Sakashima’s two-Bracelet exemption. The existing receipts predate this cut.
+
+### Decomposition review at `d876ed49` — criterion pending
+
+Maze’s End and Fabled Passage share SelectCards and ControlsAtLeast. Maze shuffles on either branch before testing ten distinct effective Gate names. Passage binds the fetched land only on success, shuffles, then counts four lands before untapping that object. Both condition evaluators pass their effective battlefield views to controlled_threshold. WinGame calls the native win prohibition and commits GameOutcome::Victory. The former Gate-counting resolution arm and WinCause::MazesEnd are gone. Only the retired token spelling remains. The Maze and Passage interaction fixtures exercise the surviving instructions; their earlier receipts apply to this cut.
+
+The post-compression seed-213 scalar/vector opening-label test, ordinary cleanup legend-choice test and Sakashima/two-Bracelet test passed. The seed-725 suspended Time Stop fork failed at the pending “turn is ending” assertion before either fork executed. Its fixture constructs a fresh game and forces the stack before completing opening hands. The published action space is LegendRule, while decision_context returns the opening stage before reading the pending end-turn completion. This fixture cannot establish behavior during play.
+
+Next slice: advance the seed-725 fixture through the native keep choices before setting up the position, assert that play has started, and rerun both fork choices with the pending-context assertion intact. Reassess the engine only if the failure persists in play. Gate and its performance measurement remain pending.
