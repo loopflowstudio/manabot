@@ -102,9 +102,9 @@ class CollectionScope:
             for start in range(0, count, width):
                 with profiler.track("Observation preparation"):
                     obs = self.inference.prepare(
-                        select_rows(
-                            observation, np.arange(start, min(start + width, count))
-                        )
+                        observation
+                        if width >= count
+                        else select_rows(observation, slice(start, start + width))
                     )
                 with profiler.track("Policy inference and action selection"):
                     with forward_precision(self.session.precision, self.session.device):
@@ -123,7 +123,7 @@ class CollectionScope:
                     )
                     value_parts.append(value.reshape(-1))
                     if obs.bucket_needs is not None:
-                        needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+                        needs_parts.append(obs.bucket_needs)
                 # Only small outputs survive a chunk, never Prepared or activations.
                 del obs, logits, value
             logs = torch.cat(logs_parts)

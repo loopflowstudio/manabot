@@ -22,7 +22,7 @@ _SCALAR_TYPES = (int, float, complex, bool, str, bytes, type(None))
 
 
 def _host_scalars(value: tuple[object, ...]) -> bool:
-    """Schedule metadata (packed sizes and lengths, bucket needs): a tuple of
+    """Schedule metadata (packed sizes and lengths): a tuple of
     plain scalars holds no array leaf, and visiting each integer dominated
     the transfer of large minibatches."""
     return all(type(item) in _SCALAR_TYPES for item in value)
@@ -54,7 +54,11 @@ def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str,
     if isinstance(value, leaf):
         return {prefix: value}
     if is_dataclass(value) and not isinstance(value, type):
-        children = ((f.name, getattr(value, f.name)) for f in fields(value))
+        children = (
+            (f.name, getattr(value, f.name))
+            for f in fields(value)
+            if not f.metadata.get("host_only")
+        )
     elif isinstance(value, tuple):
         if _host_scalars(value):
             return {}
@@ -79,6 +83,7 @@ def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> A
                     getattr(value, f.name), moved, f"{prefix}/{f.name}"
                 )
                 for f in fields(value)
+                if not f.metadata.get("host_only")
             },
         )
     if isinstance(value, tuple):
@@ -107,6 +112,25 @@ def on_device(
     batch: Prepared[np.ndarray] | CatalogPrograms[np.ndarray],
     device: torch.device | str,
 ) -> Prepared[Tensor] | CatalogPrograms[Tensor]:
+    return transfer(batch, device)[0]
+
+
+@overload
+def transfer(
+    batch: Prepared[np.ndarray], device: torch.device | str
+) -> tuple[Prepared[Tensor], int, int]: ...
+
+
+@overload
+def transfer(
+    batch: CatalogPrograms[np.ndarray], device: torch.device | str
+) -> tuple[CatalogPrograms[Tensor], int, int]: ...
+
+
+def transfer(
+    batch: Prepared[np.ndarray] | CatalogPrograms[np.ndarray],
+    device: torch.device | str,
+) -> tuple[Prepared[Tensor] | CatalogPrograms[Tensor], int, int]:
     """Move a prepared batch with one contiguous, pinned CUDA copy per dtype.
 
     CPU tensors share writable NumPy memory. Scalar metadata and packed sequence
@@ -118,6 +142,7 @@ def on_device(
         key: torch.from_numpy(value if value.flags.writeable else value.copy())
         for key, value in arrays.items()
     }
+    transferred = copies = 0
     if device.type != "cpu":
         groups: dict[torch.dtype, list[str]] = {}
         for key, tensor in tensors.items():
@@ -129,10 +154,13 @@ def on_device(
                 sum(sizes), dtype=dtype, pin_memory=device.type == "cuda"
             )
             torch.cat([tensors[key].reshape(-1) for key in keys], out=block)
+            transferred += block.numel() * block.element_size()
+            copies += 1
             block = block.to(device, non_blocking=device.type == "cuda")
             for key, part in zip(keys, block.split(sizes), strict=True):
                 moved[key] = part.view(tensors[key].shape)
         tensors = moved
-    return cast(
+    moved_batch = cast(
         "Prepared[Tensor] | CatalogPrograms[Tensor]", _replace_arrays(batch, tensors)
     )
+    return moved_batch, transferred, copies

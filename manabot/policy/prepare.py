@@ -18,7 +18,7 @@ validates ids or partitions.
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import cached_property
 from hashlib import sha256
@@ -578,7 +578,7 @@ class Prepared[A]:
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
-    bucket_needs: tuple[tuple[int, ...], ...] | None = None
+    bucket_needs: np.ndarray | None = field(default=None, metadata={"host_only": True})
     # Input v11 appends one shared stack segment before optional belief rows.
     stack: A | None = None
     stack_rows: A | None = None
@@ -732,6 +732,8 @@ def prepare(
         ownership = np.concatenate(
             (ownership, belief.owners == 0, np.zeros((batch, 1), bool)), 1
         )
+    if not ownership.flags.writeable:
+        ownership = ownership.copy()
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)

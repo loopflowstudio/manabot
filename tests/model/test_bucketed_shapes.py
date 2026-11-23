@@ -180,7 +180,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(agent) as scope:
         prepared = scope.prepare(host_inputs(obs))
-        assert prepared.bucket_needs is not None
+        assert isinstance(prepared.bucket_needs, np.ndarray)
         assert (
             sizes_of(
                 np.asarray(prepared.bucket_needs),

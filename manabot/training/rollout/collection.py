@@ -856,11 +856,16 @@ def _capture_memory(collector: Collector, rows: np.ndarray) -> tuple[Prefix, ...
         )
 
 
-def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
-    """Freeze bootstrap fields and prefix versions without padded memory."""
+def _retain_obs_rows(
+    collector: Collector, rows: np.ndarray, *, bootstrap: bool = False
+) -> ObservationBuffers:
+    """Borrow live buffers for this decision, or own them across later bootstrap reads."""
     with collector.profiler.track("Observation retention"):
+        indexes: np.ndarray | slice = rows
+        if not bootstrap and np.array_equal(rows, np.arange(collector.num_envs)):
+            indexes = slice(None)
         obs = {
-            key: collector._buffers[key][rows]
+            key: collector._buffers[key][indexes]
             for key in collector.observation_space.shapes
             if key not in MEMORY_FIELDS
         }
@@ -870,8 +875,6 @@ def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffe
                 _capture_memory(collector, rows),
                 collector._memory_store.capacities,
             )
-        # Training convention (VectorEnv): action_focus as float32.
-        obs["action_focus"] = obs["action_focus"].astype(np.float32)
         return obs
 
 
@@ -1647,7 +1650,7 @@ def _build_batch(
     values = np.zeros((num_steps, num_envs), dtype=np.float32)
     if num_envs > collector.num_envs:
         raise ValueError("bootstrap rows exceed native streams")
-    next_obs = _retain_obs_rows(collector, np.arange(num_envs))
+    next_obs = _retain_obs_rows(collector, np.arange(num_envs), bootstrap=True)
     next_done = np.zeros((num_envs,), dtype=bool)
     # Flatten in time-major order, matching scalar credit/selected actions.
     action_data = PackedActions.concatenate(

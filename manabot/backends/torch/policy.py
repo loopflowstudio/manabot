@@ -37,7 +37,7 @@ from manabot.backends.torch._semantic_cards import (
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 
 # Local imports
-from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.belief.range import BeliefError
@@ -45,7 +45,7 @@ from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
 )
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
@@ -466,6 +466,9 @@ class ActorCritic(nn.Module):
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
+        self._binding_cache: (
+            tuple[ModelConfig, ObservationConfig, Readings, str] | None
+        ) = None
         self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
@@ -497,7 +500,18 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        return admission.binding(self.config, self.observation_space, self.readings)
+        # Config fields and the readings mapping can be replaced or edited in place.
+        config = self.observation_space.config
+        cached = self._binding_cache
+        if cached is None or cached[:3] != (self.config, config, self.readings):
+            cached = (
+                self.config.model_copy(deep=True),
+                config.model_copy(deep=True),
+                dict(self.readings),
+                admission.binding(self.config, self.observation_space, self.readings),
+            )
+            self._binding_cache = cached
+        return cached[3]
 
     def _admission_spec(self) -> admission.Spec:
         key = (
@@ -591,17 +605,12 @@ class ActorCritic(nn.Module):
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
-            binding=spec.binding,
+            binding=self._binding(),
             action_capacity=capacity,
             select_programs=not inference and not self.bucketed_shapes,
         )
 
-        return replace(
-            batch,
-            bucket_needs=None
-            if needs is None
-            else tuple(tuple(map(int, row)) for row in needs),
-        )
+        return replace(batch, bucket_needs=needs)
 
     def _evaluate_outputs(
         self, batch: Prepared[np.ndarray]
@@ -1346,15 +1355,9 @@ class PolicyInference:
         )
         if self.cache_catalog:
             batch = replace(batch, programs=None)
-        arrays = (
-            []
-            if self.device.type == "cpu"
-            else array_fields(batch, np.ndarray).values()
-        )
-        self.transfer_bytes = sum(array.nbytes for array in arrays)
-        self.transfers = len({array.dtype for array in arrays})
+        moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
         return replace(
-            self.memory.bind(on_device(batch, self.device), obs),
+            self.memory.bind(moved, obs),
             guard=self._forward_check,
         )
 

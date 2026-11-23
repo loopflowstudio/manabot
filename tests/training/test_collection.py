@@ -161,6 +161,10 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collect(collector, agent, 7)
+    assert all(
+        not np.shares_memory(data, collector._buffers[key])
+        for key, data in first.next_obs.items()
+    )
     first_logs = first.observations().log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
