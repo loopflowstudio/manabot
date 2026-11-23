@@ -1,4 +1,4 @@
-at: f747f145d0077b2657659b1f246a25f7f95f6296
+at: fd8678451bff02227bac5f64dd98027a12656ce1
 first:
   - path: managym/cards/src/fdn.rs
     why: Panda combines a graveyard predicate with source power
@@ -6,6 +6,8 @@ first:
     why: Each target is checked against its captured source
   - path: managym/src/flow/triggers.rs
     why: Announcement uses the same requirement as resolution
+  - path: managym/src/flow/retarget.rs
+    why: Retargeting groups sibling targets by their announced clause
   - path: managym/src/agent/env/snapshot.rs
     why: Replays Panda after either object changes zones
   - path: managym/cards/tests/cards/m21.rs

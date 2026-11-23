@@ -99,7 +99,7 @@ The catalog adds `fdn.fiendish_panda` and `m21.heartfire_immolator`. Panda and S
 
 ### Delete when the shared reader takes over
 
-- Consolidate the repeated power/LKI lookups in `Game::effect_value`, `power_toughness_or_lki` and `within_source_bound` as callers move. SourcePower already handles departure here. Preserve Combustion Man's existing reentry behavior and Sandbender Scavengers' graveyard-target bound. Replace the bespoke bound in `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared clause can express its full behavior. Preserve authored token bytes for existing definitions, including compatibility mappings if representation changes.
+- Source power, power tapped to pay and the graveyard target bound share `permanent_power_or_lki`. Triggering power and target toughness still use a battlefield slot and its departure record. Preserve Combustion Man's existing reentry behavior and Sandbender Scavengers' graveyard-target bound. Replace the bespoke bound in `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared clause can express its full behavior. Preserve authored token bytes for existing definitions, including compatibility mappings if representation changes.
 - Preserve `PaymentReceipt`, ordered `EventResult` and the shared event ledger. New aggregates can extend those owners directly.
 
 ## Directed interactions for integrated validation

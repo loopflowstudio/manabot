@@ -11,10 +11,21 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{PlayerId, Target},
+        game_object::{AbilitySource, PlayerId, Target},
         stack_object::StackObject,
     },
 };
+
+/// Activated abilities without an explicit slot mapping use their first clause.
+fn requirement_index(stacked: &StackObject, slot: usize) -> Option<usize> {
+    match stacked {
+        StackObject::Spell(spell) => spell.target_req_indices.get(slot).copied(),
+        StackObject::TriggeredAbility(trigger) => trigger.target_req_indices.get(slot).copied(),
+        StackObject::ActivatedAbility(ability) => {
+            Some(ability.target_req_indices.get(slot).copied().unwrap_or(0))
+        }
+    }
+}
 
 impl Game {
     /// The stack index of a spell or ability target.
@@ -32,16 +43,16 @@ impl Game {
         index: usize,
         slot: usize,
     ) -> Option<TargetRequirement> {
-        match &self.state.stack_objects[index] {
+        let stacked = &self.state.stack_objects[index];
+        let clause = requirement_index(stacked, slot)?;
+        match stacked {
             StackObject::Spell(spell) => {
                 let requirements =
                     self.state[spell.object].target_requirements_for_mode(spell.mode);
-                requirements
-                    .get(*spell.target_req_indices.get(slot)?)
-                    .cloned()
+                requirements.get(clause).cloned()
             }
             StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
-                .get(ability.target_req_indices.get(slot).copied().unwrap_or(0))
+                .get(clause)
                 .cloned(),
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
@@ -57,9 +68,7 @@ impl Game {
                             .effects()
                     }
                 };
-                effect_target_requirements(effects)
-                    .get(*triggered.target_req_indices.get(slot)?)
-                    .cloned()
+                effect_target_requirements(effects).get(clause).cloned()
             }
         }
     }
@@ -81,32 +90,22 @@ impl Game {
         let stacked = &self.state.stack_objects[index];
         let controller = stacked.controller();
         let targets = stacked.targets();
-        let indices: Vec<usize> = match stacked {
-            StackObject::Spell(spell) => spell.target_req_indices.clone(),
-            StackObject::TriggeredAbility(triggered) => triggered.target_req_indices.clone(),
-            StackObject::ActivatedAbility(ability) => (0..targets.len())
-                .map(|slot| ability.target_req_indices.get(slot).copied().unwrap_or(0))
-                .collect(),
-        };
+        let clause = requirement_index(stacked, *slot);
         let x = match stacked {
             StackObject::Spell(s) => s.x,
             StackObject::ActivatedAbility(a) => a.x,
             StackObject::TriggeredAbility(t) => t.x,
         };
         let current = targets.get(*slot).copied();
-        let source = crate::state::game_object::AbilitySource::new(
-            stacked.source_object(),
-            stacked.source_ref(),
-        );
+        let source = AbilitySource::new(stacked.source_object(), stacked.source_ref());
         let self_target = stacked.as_target();
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
         let other_targets = targets
             .iter()
-            .zip(&indices)
             .enumerate()
-            .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
-            .map(|(_, (target, _))| *target);
+            .filter(|(other, _)| *other != *slot && requirement_index(stacked, *other) == clause)
+            .map(|(_, target)| *target);
         self.targets_for_source(&requirement, controller, source)
             .filter(|target| Some(*target) != current && *target != self_target)
             .filter(|target| {
