@@ -1,63 +1,15 @@
-at: bbbd9e4db2b2d1f047132ef9717eae599fc82748
+at: e1e2379303eb536854c4e418cf0501c00817c920
 first:
-  - path: managym/state/src/ability.rs
-    why: Shared life-gain trigger for three printed abilities
-  - path: managym/cards/src/znr.rs
-    why: One opposing life loss per controller life gain
-  - path: managym/cards/tests/cards/znr.rs
-    why: Follow both triggers through both damage steps
-  - path: managym/README.md
-    why: Public meaning of the two combat flags
-  - path: managym/src/agent/observation.rs
-    why: Both viewers read the same combat history
-  - path: managym/src/agent/observation_layout.rs
-    why: Append combat flags to v11 columns
-  - path: academy/ui/src/lib/board/prompt.ts
-    why: Label the pass leading to regular damage
-  - path: managym/cards/src/dka.rs
-    why: Reaver draws for each committed gain
-  - path: managym/cards/tests/cards/dka.rs
-    why: Resolve each draw between damage steps
-  - path: managym/src/flow/tick.rs
-    why: Give players priority after first strike
-  - path: managym/cards/tests/cards/tla.rs
-    why: Compare replacement order with and without Giant Cindermaw
-  - path: managym/tests/support/play.rs
-    why: Return the fork that replayed the bound Command
-  - path: managym/src/flow/combat_actions.rs
-    why: Assign blocker and defender damage in one batch
-  - path: managym/src/flow/damage.rs
-    why: Read source keywords once before committing damage
-  - path: managym/src/flow/proposed_event.rs
-    why: Group damage by source and verify both Pridemate outcomes
-  - path: managym/cards/src/m11.rs
-    why: Pridemate turns each gain into one counter
-  - path: scratch/plan.md
-    why: Delivered behavior and remaining readiness audit
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Foundation card dispositions and definition locations
-  - path: managym/cards/src/akh.rs
-    why: Caracal grants lifelink and creates two Cats
-  - path: managym/cards/tests/cards/akh.rs
-    why: Remove Caracal and inspect each remaining Cat
   - path: managym/cards/src/fdn.rs
-    why: Foundations entry triggers and controller-scoped anthem
+    why: Twinflame Tyrant selects source and recipient controllers
+  - path: managym/state/src/card.rs
+    why: Shared transforms for doubling and partial prevention
+  - path: managym/src/flow/proposed_event.rs
+    why: Match controllers and apply the chosen replacement
   - path: managym/cards/tests/cards/fdn.rs
-    why: Parent and Cat as Anthem enters and leaves
-  - path: managym/cards/tests/cards/observability.rs
-    why: Self-entry changes the trigger subject learning tokens
-  - path: managym/cards/src/tokens.rs
-    why: Ordinary and lifelink white Cat faces
-  - path: managym/src/flow/triggers.rs
-    why: Match entering Cats by effective characteristics and token status
-  - path: managym/state/src/predicate.rs
-    why: Noncreature spells share one card predicate
-  - path: managym/cards/src/tla.rs
-    why: Sokka has prowess and grants it to other Allies
-  - path: managym/src/flow/decision.rs
-    why: Surveil partitions the inspected prefix before ordering
-  - path: managym/src/flow/zones.rs
-    why: Committed departures shift retained knowledge
-  - path: tests/semantic/test_text_observation.py
-    why: Compare combat windows and replay private surveil choices
+    why: Eight Lightning Bolt casts distinguish both controller scopes
+  - path: managym/tests/rules/cr_614_replacement.rs
+    why: Affected player orders prevention and doubling
+  - path: managym/src/cards/token_renames.rs
+    why: Retain checkpoint bindings for retired replacement names
 hide: []
