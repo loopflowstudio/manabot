@@ -194,8 +194,12 @@ def score_choices(
         valid = obs["actions_valid"]
         count = int(valid.sum())
         order = np.arange(count - 1, -1, -1)
-        _, offers, offer_value = evaluate(agent, reorder_offers(obs, order))
-        _, objects, object_value = evaluate(agent, reorder_objects(obs))
+        _, offers, offer_value = evaluate(
+            agent, reorder_offers(obs, order, agent.observation_space.layout)
+        )
+        _, objects, object_value = evaluate(
+            agent, reorder_objects(obs, agent.observation_space.layout)
+        )
         errors.extend(
             [
                 float(np.abs(p[0] - probabilities[row]).max()),

@@ -110,9 +110,9 @@ class CollectionScope:
         for start in range(0, count, width):
             with profiler.track("Observation preparation"):
                 obs = self.inference.prepare(
-                    select_rows(
-                        observation, np.arange(start, min(start + width, count))
-                    )
+                    observation
+                    if width >= count
+                    else select_rows(observation, slice(start, start + width))
                 )
             with profiler.track("Policy inference and action selection"):
                 logits, value = agent.forward_distribution(obs)

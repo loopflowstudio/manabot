@@ -18,18 +18,14 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
+    ObservationBuffers,
     ObservationSpace,
     column,
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, check
-from manabot.policy.buckets import (
-    bucket_sizes,
-    object_columns,
-    row_needs,
-    trim_observation,
-)
+from manabot.policy.buckets import bucket_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
 from manabot.policy.readings import fresh_readings, legacy_readings, read_numeric
 from manabot.verify.representation import shared_effect_root
@@ -61,6 +57,19 @@ def _tables(agent: ActorCritic) -> Tables:
         {name: value.detach().numpy() for name, value in agent.named_buffers()},
         Layout(agent.readings),
     )
+
+
+def original_object_slots(
+    obs: ObservationBuffers, views: ObservationBuffers
+) -> np.ndarray:
+    """Original coordinates in compact order, directly from each segment's width."""
+    parts = []
+    start = 0
+    for key in (*OBJECT_VALIDITY_KEYS, "stack_valid"):
+        if key in obs:
+            parts.append(start + np.arange(views[key].shape[1]))
+            start += obs[key].shape[1]
+    return np.concatenate(parts)
 
 
 @pytest.mark.parametrize(
@@ -104,20 +113,19 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     )
     check(obs, spec, obs["actions_valid"].astype(bool))
     device_input(agent, tensors)
-    buckets = (
-        bucket_sizes(obs, agent.observation_space, objects=agent.object_trimming())
+    measured = (
+        bucket_observation(obs, space, None, objects=agent.object_trimming())
         if bucketed
         else None
     )
-    trimmed = obs
-    if buckets is not None:
-        trimmed = trim_observation(obs, buckets)
+    assert (measured is not None) == bucketed
+    trimmed = measured.rows if measured is not None else obs
+    slots = original_object_slots(obs, trimmed)
     prepared = prepare(
-        trimmed,
+        measured or obs,
         tables,
         bucketed=bucketed,
         binding=spec.binding,
-        action_capacity=space.config.max_actions,
         live_tokens=True,
     )
     expected_cards = tables.rows(trimmed["semantic_cards"])
@@ -146,7 +154,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     objects = prepared.validity.shape[1]
     focus = trimmed["action_focus"][b, a]
     np.testing.assert_array_equal(
-        prepared.focus, b[:, None] * objects + focus.clip(min=0)
+        prepared.focus, b[:, None] * objects + np.searchsorted(slots, focus.clip(min=0))
     )
     np.testing.assert_array_equal(
         prepared.live_index, np.flatnonzero(prepared.validity)
@@ -154,13 +162,9 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     np.testing.assert_array_equal(
         prepared.live_offsets, np.r_[0, (prepared.validity != 0).sum(1).cumsum()]
     )
-    ownership = agent._is_agent_template
-    if buckets is not None and buckets.trims_objects:
-        ownership = torch.cat(
-            [ownership[:, part] for part in object_columns(buckets)], 1
-        )
+    ownership = agent._is_agent_template[:, slots]
     np.testing.assert_array_equal(prepared.is_agent, ownership.expand(3, -1).numpy())
-    compact = prepare(trimmed, tables, inference=True, bucketed=bucketed)
+    compact = prepare(measured or obs, tables, inference=True, bucketed=bucketed)
     assert compact.facts.kinds.shape[1] == (
         trimmed["facts"].shape[1]
         if bucketed
@@ -281,18 +285,25 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
     readings = legacy_readings(space) if legacy else fresh_readings(space)
     agent = ActorCritic(space, config, bucketed_shapes=True, readings=readings)
     actual = agent.prepare(obs)
-    buckets = bucket_sizes(obs, space, objects=True)
-    assert buckets is not None and buckets.trims_objects
-    compact = trim_observation(obs, buckets)
+    measured = bucket_observation(obs, space, None, objects=True)
+    assert measured is not None and measured.buckets.trims_objects
+    # Independently renumber raw coordinates by their positions among kept slots.
+    slots = original_object_slots(obs, measured.rows)
+    compact = {key: value.copy() for key, value in measured.rows.items()}
+    for key, fields in space.layout.object_references.items():
+        for index, base in fields:
+            values = compact[key] if index is None else compact[key][..., index]
+            present = values >= base
+            values[present] = np.searchsorted(slots, values[present] - base) + base
+    compact["actions_valid"] = obs["actions_valid"]
     expected = prepare(
         compact,
         agent._admission_spec().tables,
         bucketed=True,
         binding=actual.binding,
-        action_capacity=space.config.max_actions,
         value_token=agent.value_token is not None,
     )
-    expected = replace(expected, bucket_needs=row_needs(obs, space))
+    expected = replace(expected, bucket_needs=measured.needs)
     np.testing.assert_equal(asdict(actual), asdict(expected))
     # A pending frame masks its positional columns even for saved scalar readings.
     trimmed = compact["relations"]
@@ -400,12 +411,12 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
         bucketed_shapes=True,
     )
     obs["card_turn_state"][:, :, 31] = 1
-    buckets = bucket_sizes(obs, agent.observation_space, objects=True)
-    assert buckets is not None
-    trimmed = trim_observation(obs, buckets)
+    measured = bucket_observation(obs, space, None, objects=True)
+    assert measured is not None
+    trimmed = measured.rows
     assert trimmed["card_turn_state"].shape[2] == trimmed["agent_cards"].shape[1]
     assert trimmed["card_turn_state"].shape[2] >= 32
-    batch = prepare(trimmed, _tables(agent), bucketed=True)
+    batch = prepare(measured, _tables(agent))
     np.testing.assert_array_equal(
         batch.agent_cards[..., -1], trimmed["card_turn_state"][:, 0]
     )

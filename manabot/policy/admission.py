@@ -56,8 +56,12 @@ from manabot.env.shared_effects import (
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
 )
-from manabot.infra.config import ModelConfig
-from manabot.policy.buckets import BucketedObservation
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_observation,
+    object_trimming,
+)
 from manabot.policy.decision_memory import (
     admit_memory,
     retained_memory,
@@ -102,6 +106,29 @@ def binding(model: ModelConfig, space: ObservationSpace, readings: Readings) -> 
     return key + f"\nreadings={sorted(readings.items())}"
 
 
+class BindingCache:
+    """Reuse a binding while the model, observation config and readings match its snapshot."""
+
+    def __init__(self) -> None:
+        self.snapshot: tuple[ModelConfig, ObservationConfig, Readings, str] | None = (
+            None
+        )
+
+    def get(
+        self, model: ModelConfig, space: ObservationSpace, readings: Readings
+    ) -> str:
+        cached = self.snapshot
+        if cached is None or cached[:3] != (model, space.config, readings):
+            cached = (
+                model.model_copy(deep=True),
+                space.config.model_copy(deep=True),
+                dict(readings),
+                binding(model, space, readings),
+            )
+            self.snapshot = cached
+        return cached[3]
+
+
 @dataclass(frozen=True)
 class Spec:
     """Configuration and immutable vocabularies shared by admission and preparation."""
@@ -121,6 +148,19 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
     if not (np.isfinite(mask) & ((mask == 0) | (mask == 1))).all():
         raise ValueError("invalid_action_mask")
     return mask.astype(bool)
+
+
+def admit(
+    obs: ObservationBuffers, spec: Spec, legal: np.ndarray, *, bucketed: bool
+) -> BucketedObservation | None:
+    """Validate in original coordinates and return the measured views for preparation."""
+    measured = (
+        bucket_observation(obs, spec.space, None, objects=object_trimming(spec.model))
+        if bucketed
+        else None
+    )
+    check(obs, spec, legal, measured)
+    return measured
 
 
 def check(

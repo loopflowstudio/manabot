@@ -77,6 +77,30 @@ def test_axis_extents_use_the_configured_layout(version: int) -> None:
     assert empty is not None and all(value.shape == (0,) for value in empty.values())
 
 
+@pytest.mark.parametrize("version", [9, 10, 11])
+def test_axis_buffers_locate_each_measured_row_dimension(version: int) -> None:
+    layout = managym.ObservationLayout(policy_input_version=version)
+    buffers = layout.axis_buffers
+    rows = layout.allocate(1)
+    extents = layout.axis_extents(rows)
+    assert extents is not None and extents.keys() == buffers.keys()
+    shapes = layout.shapes
+    # Plant only the final row of each companion, including seat-major buffers.
+    for axis, companions in buffers.items():
+        for key, dim in companions:
+            row = rows[key]
+            capacity = shapes[key][dim]
+            last = [0] * row.ndim
+            last[dim + 1] = capacity - 1
+            row[tuple(last)] = 1
+            if key == "action_focus":
+                rows["actions_valid"][0, -1] = 1
+            measured = layout.axis_extents(rows)
+            assert measured is not None and measured[axis][0] == capacity, key
+            row[tuple(last)] = 0
+            rows["actions_valid"][0, -1] = 0
+
+
 def test_axis_extents_require_matching_batched_arrays() -> None:
     layout = managym.ObservationLayout(
         max_decision_records=2,

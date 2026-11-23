@@ -609,17 +609,17 @@ def prepare(
     memory_fold: bool = False,
     memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
-    action_capacity: int | None = None,
     select_programs: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. `action_capacity` retains full logit coordinates after trimming.
+    are packed. Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    action_capacity = None
     bucket_needs = object_remap = None
     if isinstance(obs, BucketedObservation):
         bucketed = True

@@ -43,7 +43,11 @@ from manabot.backends.mlx.rl import NumericalError
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
-from manabot.policy.buckets import bucket_observation, row_needs
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_observation,
+    object_trimming,
+)
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
     Packed,
@@ -287,6 +291,10 @@ class _Static:
     tables: Tables
     space: ObservationSpace
     cache: dict[str, mx.array] = field(default_factory=dict)
+    binding_cache: admission.BindingCache = field(
+        default_factory=admission.BindingCache
+    )
+    spec_cache: tuple[str, admission.Spec] | None = None
 
 
 def parameter_ids(parameters: dict[str, object]) -> tuple[int, ...]:
@@ -413,10 +421,7 @@ class MLXActorCritic(nn.Module):
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
-        return (
-            self.config.value_aggregation != "historical_mean"
-            and self.belief_count_buckets == 0
-        )
+        return object_trimming(self.config)
 
     @property
     def inference_device(self) -> mx.Device | mx.DeviceType:
@@ -586,12 +591,30 @@ class MLXActorCritic(nn.Module):
         """MLX does not implement decision memory."""
         return {}
 
+    def _binding(self) -> str:
+        return self._static.binding_cache.get(
+            self.config, self.observation_space, self.readings
+        )
+
+    def _admission_spec(self) -> admission.Spec:
+        key = self._binding()
+        cached = self._static.spec_cache
+        if cached is None or cached[0] != key or cached[1].model is not self.config:
+            cached = (
+                key,
+                admission.Spec(
+                    self.config, self.observation_space, self._static.tables, 0
+                ),
+            )
+            self._static.spec_cache = cached
+        return cached[1]
+
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
-        needs = self.check_observation(obs)
-        return self.prepare_admitted(obs, inference=inference, needs=needs)
+        measured = self._admit_observation(obs)
+        return self._prepare_rows(measured or obs, inference)
 
     def prepare_admitted(
         self,
@@ -607,21 +630,25 @@ class MLXActorCritic(nn.Module):
             if self.bucketed_shapes
             else None
         )
+        return self._prepare_rows(bucketed or obs, inference)
+
+    def _prepare_rows(
+        self, obs: ObservationBuffers | BucketedObservation, inference: bool
+    ) -> Prepared[np.ndarray]:
         return prepare(
-            bucketed or obs,
+            obs,
             self._static.tables,
             inference=inference,
             bucketed=self.bucketed_shapes,
-            binding=admission.binding(
-                self.config,
-                space,
-                self._static.tables.layout.readings,
-            ),
+            binding=self._binding(),
         )
 
     def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
         """The shared admission checks on raw rows, before booleans or lookups."""
-        tables = self._static.tables
+        measured = self._admit_observation(obs)
+        return None if measured is None else measured.needs
+
+    def _admit_observation(self, obs: ObservationBuffers) -> BucketedObservation | None:
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -632,10 +659,9 @@ class MLXActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": mx.array(mask), "failed": mx.array(failed)},
             ) from error
-        admission.check(
-            obs, admission.Spec(self.config, self._static.space, tables, 0), legal
+        return admission.admit(
+            obs, self._admission_spec(), legal, bucketed=self.bucketed_shapes
         )
-        return row_needs(obs, self._static.space) if self.bucketed_shapes else None
 
     # Programs ----------------------------------------------------------------------
 
@@ -731,9 +757,7 @@ class MLXActorCritic(nn.Module):
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
-        if batch.binding != admission.binding(
-            self.config, static.space, static.tables.layout.readings
-        ):
+        if batch.binding != self._binding():
             raise ValueError("prepared batch belongs to another policy configuration")
         hidden = self.dims.hidden
         b = batch.batch
@@ -1146,7 +1170,7 @@ class PolicyInference:
         self._closed = False
         self._weights = parameter_ids(agent.parameters())
         self._precision = agent.precision
-        self._binding = agent.config.model_dump_json()
+        self._binding = agent._binding()
         agent.clear_cache()
 
     def _check(self) -> None:
@@ -1160,7 +1184,7 @@ class PolicyInference:
             else cast_state == (self._weights, current)
         )
         if (
-            self._binding != self.agent.config.model_dump_json()
+            self._binding != self.agent._binding()
             or self._precision != self.agent.precision
             or not same_weights
         ):

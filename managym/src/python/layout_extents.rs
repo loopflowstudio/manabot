@@ -111,7 +111,7 @@ fn last_occupied(values: &[f32]) -> Option<usize> {
 struct Table {
     axis: &'static str,
     rows: Rows,
-    // Unusual dtypes carry coordinates computed in their source arithmetic.
+    // Non-f32 exports (including native int32 action_focus) use source arithmetic.
     joins: Vec<(Join, Option<Rows>)>,
 }
 

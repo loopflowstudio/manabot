@@ -22,6 +22,7 @@ never a native default.
 """
 
 from collections.abc import Mapping
+from functools import cached_property
 from typing import Any, ItemsView, KeysView, ValuesView
 import warnings
 
@@ -228,6 +229,11 @@ class ObservationSpace(gym.spaces.Space):
                 for name, shape in self.shapes.items()
             }
         )
+
+    @cached_property
+    def axis_buffers(self) -> dict[str, list[tuple[str, int]]]:
+        """Variable row axes of this layout, reused across preparation calls."""
+        return self.layout.axis_buffers
 
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed buffers for this space, with `leading_dims` before each shape."""

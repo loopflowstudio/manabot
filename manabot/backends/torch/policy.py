@@ -45,11 +45,15 @@ from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
 )
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import BucketedObservation, bucket_observation
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_observation,
+    object_trimming,
+)
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
@@ -442,9 +446,7 @@ class ActorCritic(nn.Module):
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
-        self._binding_cache: (
-            tuple[ModelConfig, ObservationConfig, Readings, str] | None
-        ) = None
+        self._binding_cache = admission.BindingCache()
         self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
@@ -476,21 +478,14 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        # Config fields and the readings mapping can be replaced or edited in place.
-        config = self.observation_space.config
-        cached = self._binding_cache
-        if cached is None or cached[:3] != (self.config, config, self.readings):
-            cached = (
-                self.config.model_copy(deep=True),
-                config.model_copy(deep=True),
-                dict(self.readings),
-                admission.binding(self.config, self.observation_space, self.readings),
-            )
-            self._binding_cache = cached
-        return cached[3]
+        return self._binding_cache.get(
+            self.config, self.observation_space, self.readings
+        )
 
     def _admission_spec(self) -> admission.Spec:
         key = (
+            id(self.config),
+            id(self.observation_space),
             self._binding(),
             tuple(
                 (name, id(value), value._version)
@@ -556,10 +551,10 @@ class ActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
             ) from error
-        bucketed = self.observation_buckets(obs)
         spec = self._admission_spec()
-        admission.check(obs, spec, legal, bucketed)
-        return bucketed, spec.tables
+        return admission.admit(
+            obs, spec, legal, bucketed=self.bucketed_shapes
+        ), spec.tables
 
     def prepare_admitted(
         self,
@@ -871,10 +866,7 @@ class ActorCritic(nn.Module):
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
-        return (
-            self.config.value_aggregation != "historical_mean"
-            and self.belief_count_buckets == 0
-        )
+        return object_trimming(self.config)
 
     def _attend_objects(
         self,

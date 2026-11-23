@@ -186,6 +186,43 @@ impl ObservationLayout {
         Ok((PyTuple::empty_bound(py).into(), kwargs.into()))
     }
 
+    /// Buffers on each variable axis and their row dimensions before batching.
+    #[getter]
+    fn axis_buffers(&self) -> BTreeMap<&'static str, Vec<(String, usize)>> {
+        let mut buffers = BTreeMap::new();
+        for (key, array) in &self.arrays {
+            if let Some((axis, dimension)) = crate::agent::observation_extents::row_axis(key, array)
+            {
+                buffers
+                    .entry(axis)
+                    .or_insert_with(Vec::new)
+                    .push((key.clone(), dimension - 1));
+            }
+        }
+        buffers
+    }
+
+    /// Object coordinate columns and their index bases. None denotes the whole buffer.
+    #[getter]
+    fn object_references(&self) -> BTreeMap<String, Vec<(Option<usize>, usize)>> {
+        use crate::agent::observation_extents::{joins, Join};
+        let mut references = BTreeMap::new();
+        for key in self.arrays.keys() {
+            for join in joins(key, self.config.policy_history) {
+                let field = match *join {
+                    Join::Objects => (None, 0),
+                    Join::Object(column, base) => (Some(column), base),
+                    _ => continue,
+                };
+                references
+                    .entry(key.clone())
+                    .or_insert_with(Vec::new)
+                    .push(field);
+            }
+        }
+        references
+    }
+
     /// Occupied or referenced row extents per batch item. Keep all input
     /// storage stable until return; the scan releases the GIL.
     #[pyo3(signature = (obs, *, omit_decision_memory=false))]

@@ -14,22 +14,23 @@ logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
 Every backend's forward reads a `Prepared` batch. With bucketed shapes,
-Torch measures occupied and referenced rows before admission. The resulting
-`BucketedObservation` pairs views of the original rows with their extents.
+Torch and MLX measure occupied and referenced rows before admission. The
+resulting `BucketedObservation` pairs views of the original rows with their extents.
 Host preparation uses those extents to translate object joins and restore
 the full action width.
 
 - `admission.py` owns the checks an observation batch passes before a policy
   reads it: shapes and binary validity, definition and vocabulary references,
   fact programs, shared-effect partitions, continuation, naming and action
-  joins, permanent links, recent events and belief rows. `check(obs, spec,
-  legal)` runs them all, and every backend calls it on the raw rows.
+  joins, permanent links, recent events and belief rows. Both backends call
+  `admit` on the host and prepare the views it validated.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
   measures each item's occupied rows, object references, continuation joins
-  and effect spans. `bucket_views` slices the batch in original coordinates.
+  and effect spans. `bucket_views` reads the buffer names and row dimensions
+  from `ObservationLayout.axis_buffers` and slices in original coordinates.
   `object_map` supplies the lookup for joins into the trimmed object table.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed

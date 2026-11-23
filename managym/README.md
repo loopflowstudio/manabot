@@ -666,7 +666,11 @@ layout, checkpoint admission and measurement commands are documented in
 For a batched allocation, `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape
-mismatch returns `None`.
+mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
+the buffer names and their unbatched row dimensions. For a pair `(key, dim)`,
+`layout.shapes[key][dim]` is the configured capacity of that axis.
+`layout.object_references` lists each buffer's object-reference columns and
+their index bases. A `None` column means every element is a reference.
 
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.

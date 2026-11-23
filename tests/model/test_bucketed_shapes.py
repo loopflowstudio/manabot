@@ -15,15 +15,16 @@ from manabot.env.observation import (
     column,
     encode_observation,
 )
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.buckets import (
     AXES,
     bucket,
+    bucket_observation,
     bucket_sizes,
-    object_reference_columns,
     row_needs,
     sizes_of,
 )
+from manabot.policy.prepare import prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
@@ -142,50 +143,87 @@ def test_bucket_extents_cover_full_csr_spans_in_narrow_exports() -> None:
 def test_remapped_references_are_every_object_table_column() -> None:
     """A new object-table reference must be remapped, not trimmed silently."""
     layout = managym.observation_layout(policy_history=True)
-    expected: set[tuple[str, int, int]] = set()
+    # Give each reference its own batch item, so no other join can keep its target.
+    joins: dict[tuple[str, str], tuple[int, int]] = {}
     for key, array in layout.items():
-        for field in array["columns"].values():
+        for name, field in array["columns"].items():
             encoding = field["encoding"].lower()
-            if field["kind"] != "reference" or "object" not in encoding:
-                continue
-            base = 0 if encoding.startswith("zero-based") else 1
-            expected.add((key, field["index"], base))
+            if field["kind"] == "reference" and "object" in encoding:
+                joins[key, name] = (
+                    field["index"],
+                    0 if encoding.startswith("zero-based") else 1,
+                )
         element = array.get("element")
         if element is not None and element["kind"] == "reference":
-            assert key == "action_focus", key
+            assert key == "action_focus"
+            joins[key, ""] = 0, 0
     space = ObservationSpace(ObservationConfig(policy_history_version=1))
-    obs = space.allocate(len(expected))
     assert {
         (key, index, base)
-        for key, indices, base in object_reference_columns(obs)
-        for index in indices
-    } == expected
-    # Each native join alone must keep its destination, including empty
-    # object slots. A missing join would silently change bucket coordinates.
+        for key, fields in space.layout.object_references.items()
+        for index, base in fields
+    } == {
+        (key, index if name else None, base)
+        for (key, name), (index, base) in joins.items()
+    }
+    count = len(joins)
+    obs = space.allocate(count)
+    obs["actions_valid"][:, 0] = obs["events_valid"][:, 0] = 1
+    for key in ("relations", "effects", "facts"):
+        obs[key][:, 0, column(key, "valid")] = 1
+    obs["effects"][:, 0, column("effects", "member_count")] = 1
+    # Last stack slot, after the removable card and permanent padding.
     target = (
-        sum(
-            obs[key].shape[1]
-            for key in (
-                "agent_player",
-                "opponent_player",
-                "agent_cards",
-                "opponent_cards",
-                "agent_permanents",
-                "opponent_permanents",
-                "stack",
-            )
-        )
-        - 1
+        1
+        + 2 * (obs["agent_cards"].shape[1] + obs["agent_permanents"].shape[1])
+        + obs["stack"].shape[1]
     )
-    for batch, (key, index, base) in enumerate(sorted(expected)):
-        obs[key][batch, 0, index] = target + base
+    for row, ((key, _), (index, base)) in enumerate(joins.items()):
+        obs[key][row, 0, index] = target + base
     extents = space.layout.axis_extents(obs)
     assert extents is not None
     np.testing.assert_array_equal(
-        extents["stack"],
-        np.full(len(expected), obs["stack"].shape[1], np.int64),
-        strict=True,
+        extents["stack"], np.full(count, obs["stack"].shape[1])
     )
+    measured = bucket_observation(obs, space, None, objects=True)
+    assert measured is not None and measured.buckets.trims_objects
+    policy = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            recent_events=True,
+            world=managym.WORLD_SETUP,
+        ),
+    )
+    batch = prepare(measured, policy._admission_spec().tables)
+    assert (
+        batch.effects is not None
+        and batch.events is not None
+        and batch.stack_targets is not None
+    )
+    destinations = {
+        ("facts", "object"): batch.facts.targets.reshape(count, -1)[:, 0],
+        ("effects", "controller"): batch.effects.controller,
+        ("effects", "source"): batch.effects.source_object,
+        ("effect_members", "object"): batch.effects.routes,
+        ("stack", "source"): batch.stack_targets.reshape(count, -1)[:, 0],
+        ("action_focus", ""): batch.focus[:, 0],
+    }
+    for i, name in enumerate(("source", "reference")):
+        destinations["relations", name] = batch.relation_objects[i].reshape(count, -1)[
+            :, 0
+        ]
+    for i, name in enumerate(("source_context", "target_context")):
+        destinations["events", name] = batch.events.focus[:, 0, i]
+    for i, name in enumerate(("attached_to", "blocking")):
+        targets = batch.link_targets[i].reshape(count, 2, -1)
+        for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
+            destinations[key, name] = targets[:, seat, 0]
+    assert destinations.keys() == joins.keys()
+    objects = batch.validity.shape[1]
+    for row, key in enumerate(joins):
+        assert destinations[key][row] == (row + 1) * objects - 1, key
 
 
 @pytest.mark.parametrize(
