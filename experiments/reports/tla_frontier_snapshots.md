@@ -16,4 +16,4 @@ Exploratory run comparing PLR + Vine-RLOO snapshot self-play (`plr-vine-rloo`) a
 
 ## Runs and results
 
-_Pending `6b4a1a` sync and `experiment-run`._
+2026-11-23 — The two-update timing smoke is blocked before rental. At `c21ade43acc106ece8b3110a75acbdf1eddc84fe`, after syncing parent Task `6b4a1a` through `a4af50f3f8`, a four-stream CPU check opened the snapshot arm's collector with the planned four workers and failed before the first game with `ValueError: snapshot bank requires a snapshot vector`. The parent supplies native slot restoration, but `self_play_collector` still passes no vector by default, and `open_collector` accepts an explicit snapshot vector only with one worker. Etude listed no runs for `tla_frontier_snapshots`. Neither arm rented a machine or produced a checkpoint. The four-worker timing smoke and all milestone evaluations remain pending the parent's collector integration.

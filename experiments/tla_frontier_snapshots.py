@@ -11,9 +11,13 @@ heuristic) play `tla_frontier`'s 16 paired trophy deals (4 crossed legs = 64 gam
 per comparison). Design notes and results live in
 `experiments/reports/tla_frontier_snapshots.md`.
 
-    uv run etude launch experiments/tla_frontier_snapshots.py --revision COMMIT --rent l4 --max-usd 25
-    uv run etude eval experiments/tla_frontier_snapshots.py --source r2://manabot/jobs --rent cpu32 --max-usd 25
-    uv run etude report experiments/tla_frontier_snapshots.py --source r2://manabot/jobs --open
+    uv run --extra artifacts etude launch experiments/tla_frontier_snapshots.py --revision COMMIT --source r2://manabot/jobs --rent l4 --max-usd 25
+
+Once both training runs are recorded, repeat the launch at the same revision
+to schedule missing checkpoint matches on CPU32 under the experiment cap:
+
+    uv run --extra artifacts etude launch experiments/tla_frontier_snapshots.py --revision COMMIT --source r2://manabot/jobs --rent cpu32 --max-usd 25
+    uv run --extra artifacts etude report experiments/tla_frontier_snapshots.py --source r2://manabot/jobs --open
 """
 
 from __future__ import annotations
