@@ -31,7 +31,7 @@ Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 
 
 ## Player-control cards
 
-The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn control effect. The next integrated checks are the remaining cross-consumer obligations below. The full suite and paired Engine Budget belong at gate.
+The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn control effect. Their native definitions and seed-161 fixtures landed at `0ea0c204`. At `a7cbb302` the Cube fixture forks one shared position where the sacrifice and countering branches diverge. The full suite and paired Engine Budget belong at gate.
 
 | Seed 161 native fixture | Observed outcome |
 |---|---|
@@ -40,6 +40,8 @@ The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn con
 | `player_control_card_costs_and_trigger_threshold_reach_learning_tokens`, `every_trigger_condition_and_ability_reaches_the_learning_tokens`, `each_counter_kind_reaches_a_fact_row` | The catalog exposes the grantor exile, power reduction, counter crossing and reflexive trigger. The plan counter joins its permanent through the existing counter fact rows. |
 
 ## Remaining cross-consumer obligations
+
+**Next slice.** Follow the two-Bracelet offer from the native observation through policy input, semantic text and Academy. Both actions activate the same creature and exile different Equipment. Check that each consumer can identify the chosen object before committing, then replay its Command and compare the exile, payment receipt and remaining mana with the native fork. Reuse the existing object references and Command binding wherever they carry that distinction. The seed-161 native receipt above establishes the expected branches. The recorded Academy reconnect check exercised Bloodbending.
 
 **Decisions and control.** Use the ordinary native `Decision`, `Action` and semantic Command binding for each new choice. Keep `ActionSpace.player` as the chooser, `Decision.player()` as the rules subject and the active player as turn owner. Retain `TurnState.player_controls`, `Effect::ControlPlayer` and `Game::shares_information` for all three control sources. A skipped combat preserves pending next-combat control. Exercise a legal foretell or land play as a priority special action during delegated play. Pregame actions have no priority window. Neither a control effect nor a new procedure grants sideboard access or authority to concede for another seat.
 
@@ -113,7 +115,7 @@ Maze's End returned to hand before the search. Nine Gate names plus a duplicate 
 
 At `4edddb75`, seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
 
-At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact steps reached the same exact terminal state with reward −1, but the semantic info dictionary was empty. Three mana encoding/filter fixtures also passed at this revision. Bracelet still needs a payment witness through its own granted activation.
+At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact steps reached the same exact terminal state with reward −1, but the semantic info dictionary was empty. Three mana encoding/filter fixtures also passed at this revision.
 
 ### Env parity and card interactions through `5466dbe3`
 
@@ -123,12 +125,6 @@ At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact
 - At `14d58670`, the opposing seat flashed Herald while Maze’s activation was on the stack and Maze was already in hand. Herald resolved first and prevented victory despite ten distinct Gate names.
 - At seed 161, the Maze land fixture played the land, observed tapped entry, advanced to the controller's next upkeep, and confirmed the mana choice added exactly one colorless. Both Maze fixtures passed. The seed-23 Pact outcome parity fixture also passed against the installed release extension.
 
-### Behavior review at `5d6e00bb` — return to implementation
+### Native admission and release checks
 
-The native admission probe `managym.unsupported_cards(["The Dominion Bracelet", "Construct a Cosmic Cube", "Virulent Silencer"])` returned exactly the Cube and Bracelet. The EOE and MSH native definitions contain neither card. This blocks both interactions before a legal offer exists for any consumer.
-
-Implement the two-Bracelet grant and payment fork described above, including restricted-first automatic spending, distinct manual spends, the receipt and floating remainder. Implement Cube’s second-draw and threshold triggers, then follow the successful sacrifice through its respondable targeted trigger to the controlled seat’s nested payment. Check the bound chooser, resource owner and unchanged fork root. Both cards still require the shared observation and token checks above.
-
-The focused debug binary passed nine Pact, Maze, Silencer and Axe/Fynn cases. The seed-23 Python Pact snapshot fixture passed against the installed extension with `uv run --no-sync --with blake3 pytest -q tests/env/test_game_snapshot.py -k pact`. Indexed and semantic outcome parity is closed. The working phase remains incomplete. Full-suite validation and the paired Engine Budget remain at gate.
-
-At `0ea0c204` the rebuilt CPython 3.13 release extension admitted Bracelet, Cube and Silencer together. Three focused Python cases passed across the paid and unpaid Bloodbending decision surfaces and Academy reconnect at a pending delegated discard.
+At `5d6e00bb` the native probe admitted Silencer alone among the three cards. At `0ea0c204` the rebuilt CPython 3.13 extension admitted Bracelet, Cube and Silencer together. The earlier review passed nine focused native cases and the seed-23 Pact parity fixture. Three focused Python cases subsequently passed across the paid and unpaid Bloodbending decision surfaces and Academy reconnect at a pending delegated discard.
