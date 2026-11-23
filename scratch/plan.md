@@ -113,7 +113,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-- Author Marauding Blight-Priest and Drogskol Reaver using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
+- Start with Drogskol Reaver. Its two combat damage steps distinguish batch-local aggregation from a per-combat tally. Check the committed gain, pending draw trigger and resolved draw in each step. Then author Marauding Blight-Priest. Implement both using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
 - Check the life-gain condition in the catalog learning tokens and its viewer text. Keep the consumer and conformance suites at gate.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
