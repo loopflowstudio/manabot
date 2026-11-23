@@ -6,7 +6,7 @@ The implemented cohort covers six Foundations primary rows and the cross-set wit
 
 ## Next slice
 
-Concept review at `19671178` found no model change. Keep the search choice, battlefield condition and terminal instruction separately owned. Maze checks distinct effective names after either search branch. Passage counts lands on the branch with a moved object to untap. Both use the shared threshold. The next focused check is the post-compression opening offer label and suspended legend choice, paired with Sakashima’s exemption. Gate still owns the complete suite, package and schema checks, representative Academy play, captured mid-game snapshot compatibility and the paired same-runner 10% Engine Budget.
+Gate is next. Run the complete suite, package and schema checks, representative Academy play, model and captured mid-game snapshot compatibility, and the paired same-runner 10% Engine Budget described below. The focused opening-label and legend-rule checks passed, including both forks of the repaired seed-725 fixture.
 
 ## Cards and behavior witnesses
 
@@ -137,14 +137,8 @@ At seed 161, nine names plus a duplicate failed on decline, finding the tenth wo
 
 On the rebuilt CPython 3.13 extension, the seed-23 Pact Command matched indexed play across live and replay-restored snapshots. Both checkpoint formats passed catalog-growth binding, and the saved-column-prefix case passed. The native rename table exposed the retired Maze variant.
 
-### Simplification at `c2c94d20`
+### Post-compression review
 
-OpeningHands now labels bottom and battlefield selections from its own stage. The text verification fixture follows offered actions from reset to first-main priority. The legend scan drops one controller’s accumulated groups when it encounters the exemption. Review the ordinary legend choice in the suspended cleanup fork alongside Sakashima’s two-Bracelet exemption. The existing receipts predate this cut.
+Maze’s End and Fabled Passage share the search and battlefield-count logic. Maze checks ten distinct effective Gate names after either search branch. Passage checks four lands only after a successful find, when it has a fetched object to untap. Review found no further simplification here.
 
-### Decomposition review at `d876ed49` — criterion pending
-
-Maze’s End and Fabled Passage share SelectCards and ControlsAtLeast. Maze shuffles on either branch before testing ten distinct effective Gate names. Passage binds the fetched land only on success, shuffles, then counts four lands before untapping that object. Both condition evaluators pass their effective battlefield views to controlled_threshold. WinGame calls the native win prohibition and commits GameOutcome::Victory. The former Gate-counting resolution arm and WinCause::MazesEnd are gone. Only the retired token spelling remains. The Maze and Passage interaction fixtures exercise the surviving instructions; their earlier receipts apply to this cut.
-
-The post-compression seed-213 scalar/vector opening-label test, ordinary cleanup legend-choice test and Sakashima/two-Bracelet test passed. The seed-725 suspended Time Stop fork failed at the pending “turn is ending” assertion before either fork executed. Its fixture constructs a fresh game and forces the stack before completing opening hands. The published action space is LegendRule, while decision_context returns the opening stage before reading the pending end-turn completion. This fixture cannot establish behavior during play.
-
-Seed 725 now takes both native keep offers and asserts Playing before constructing the stack. The directed test passed: both legend choices resumed cleanup, resolved the surviving trigger and preserved the original state hash. Gate and its performance measurement remain pending.
+The seed-213 scalar/vector opening-label check, ordinary cleanup legend choice and Sakashima/two-Bracelet exemption passed. Seed 725 initially failed before either fork because it built the stack during opening hands. At `72d87467`, the fixture in `managym/src/flow/resolution_tests.rs` took both native keep choices and asserted Playing before constructing the position. The directed test passed with “turn is ending” visible at the legend choice. Either choice resumed cleanup and resolved the surviving trigger for three life while the original state hash stayed unchanged.
