@@ -2,7 +2,7 @@
 
 The Task brief gives the design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
 
-Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. Cecil is next. Meld, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
+Esper Origins is playable at `03ac59cd`; the shared transformed-return sequence landed at `3ba289bf`. The departed Clone copy witness is next, followed by Cecil. Meld, manifest, the wider cohort, integrated consumer checks and the 10% Engine Budget remain open.
 
 ## Cohort and interaction fixtures
 
@@ -42,7 +42,11 @@ Esper and the TLA Sagas already express a transformed return as two moves. The s
 
 The recorded checks above precede the upstream merge at `19aa9fc4`. Upstream added saved live positions at `f7d353b8` and changed the native allocator at `52f8f2e4`. Include saved-position restoration when checking form identity and pending choices. Use the merged allocator on both sides of the budget comparison.
 
-**Next slice — Cecil.** Resolve Cecil’s damage trigger, lose the matching amount of life, then check the starting-life threshold for transformation. Exercise the back face’s indestructible grant to other attackers. Exercise transformation in place with counters, an attachment and an outstanding target. Follow the same object into the viewer projection with its new face and abilities. Start from `Effect::TransformSource` in `flow/resolution.rs`, which already checks the source's transform count. Keep that path if the witness passes. Then play Fang/Vanille and Manifest Dread before selecting the common representation.
+**Next slice — resolve a copy after its source returns.** Give Clone the form of Homunculus Horde. Trigger its second-draw ability, then fork. In one branch resolve with Clone present. In the other remove Clone, return it copying another creature, save with the original trigger pending, restore and resolve. Both tokens must have Horde’s copiable values; the returned Clone keeps its new form. Check the targetless trigger resolves once and the parent is unchanged. This is the cheapest probe of the source contract: both cards and the trigger already exist. First record the current outcome, then fix the departed read. Leave the backing representation open through the three remaining form probes.
+
+The stack owns the chosen program, controller and exact source reference. A copy instruction reads copiable values at resolution while that appearance exists, or its final copiable values on departure. Freezing values at trigger placement would miss an in-place change before resolution. Effective power at departure is a separate rules query (Immolator); a temporary pump must never enter a copy. Capture the needed immutable value before movement resets the object. Keep it reachable through a suspended choice, rollback, exact fork and saved-position restore. Share printed definitions; avoid cloning a battlefield or retaining an unbounded history for one pending ability. Measure fork allocation and retained values after outstanding references expire.
+
+**Then Cecil.** Resolve Cecil’s damage trigger, lose the matching amount of life, then check the starting-life threshold for transformation. Exercise the back face’s indestructible grant to other attackers. Exercise transformation in place with counters, an attachment and an outstanding target. Follow the same object into the viewer projection with its new face and abilities. Start from `Effect::TransformSource` in `flow/resolution.rs`, which already checks the source's transform count. Keep that path if the witness passes. Then play Fang/Vanille and Manifest Dread before selecting the common representation.
 
 ## Native implementation and deletions
 
