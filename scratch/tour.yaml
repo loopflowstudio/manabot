@@ -1,13 +1,19 @@
-at: 1169bdcb1a7dd8922ad2e18c707f776ea33d327d
+at: 9c66f306d83d04ce661d8b1b041608211df0a8a0
 first:
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
   - path: managym/cards/src/fin.rs
-    why: Read Cecil’s two triggers and Esper’s transformed return.
+    why: Read Fang, Cecil and Esper’s printed abilities.
   - path: managym/state/src/ability.rs
     why: See the source, event quantity and life condition.
+  - path: managym/src/flow/zones.rs
+    why: Return each committed move’s destination appearances.
+  - path: managym/src/flow/proposed_event.rs
+    why: Collect departures and bind one result per event.
+  - path: managym/src/flow/decision.rs
+    why: Follow paired arrivals through ordering and discard binding.
   - path: managym/src/flow/triggers.rs
-    why: Collect simultaneous damage and retain each trigger’s amount.
+    why: Match graveyard departures and collect simultaneous damage.
   - path: managym/src/flow/resolution.rs
     why: Read captured quantities and resolve against the exact source.
   - path: managym/src/agent/continuation.rs
@@ -18,12 +24,6 @@ first:
     why: Declare the chosen attackers through native actions.
   - path: managym/state/src/game_object.rs
     why: Inspect copiable values retained on departure.
-  - path: managym/src/flow/zones.rs
-    why: Follow movement, face identity and prospective entry.
-  - path: managym/src/flow/proposed_event.rs
-    why: Keep both destination appearances with one movement result.
-  - path: managym/src/flow/decision.rs
-    why: Follow paired arrivals through ordering and discard binding.
   - path: managym/src/agent/effect_execution.rs
     why: Project pending copies from their captured values.
   - path: managym/src/flow/stabilization.rs

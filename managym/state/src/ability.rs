@@ -150,6 +150,8 @@ pub enum TriggerCondition {
         whose: Actor,
         predicate: CardPredicate,
     },
+    /// One or more physical cards leave the controller’s graveyard in one event.
+    CardsLeaveYourGraveyard,
     /// Whenever this source deals damage to any recipient.
     SourceDealsDamage,
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with

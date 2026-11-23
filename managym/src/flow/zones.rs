@@ -7,7 +7,7 @@ use crate::{
         decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
-        proposed_event::{ProposedEvent, ZoneEntry},
+        proposed_event::{EventResult, ProposedEvent, ZoneEntry},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -16,7 +16,6 @@ use crate::{
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        payment::PaymentReceipt,
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
@@ -24,20 +23,6 @@ use crate::{
         zone::ZoneType,
     },
 };
-
-/// The rules facts a zone-change successor can read. Entry replacements
-/// belong to `ZoneEntry`, separately from facts about the departing object.
-#[derive(Clone, Debug, Default)]
-struct CarryOver {
-    /// CR 400.7d: a permanent can read how its spell was cast.
-    cast: Option<CastFacts>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct CastFacts {
-    x: u8,
-    spent: PaymentReceipt,
-}
 
 impl Game {
     pub(crate) fn set_known_hand_count(
@@ -624,7 +609,7 @@ impl Game {
         entry: ZoneEntry,
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-    ) -> bool {
+    ) -> EventResult {
         let departing_ref = old_zone.map(|_| object_id);
         let owner = self.state.entry_object(object_id).owner;
 
@@ -683,18 +668,6 @@ impl Game {
             .then(|| self.find_spell_on_stack_index(object_id))
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
-        let carry = CarryOver {
-            cast: match cast_spell {
-                Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
-                    Some(CastFacts {
-                        x: spell.x,
-                        spent: spell.spent.clone(),
-                    })
-                }
-                _ => None,
-            },
-        };
-
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
@@ -736,8 +709,9 @@ impl Game {
                 &self.state[object_id],
             );
             permanent.controller = holder;
-            permanent.was_cast = carry.cast.is_some();
-            if let Some(cast) = carry.cast {
+            // CR 400.7d: the permanent remembers how its spell was cast.
+            if let Some(StackObject::Spell(cast)) = cast_spell {
+                permanent.was_cast = true;
                 permanent.cast_x = cast.x;
                 permanent.cast_spent = cast.spent;
             }
@@ -802,7 +776,11 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(1));
         }
         self.assert_library_knowledge();
-        true
+        EventResult {
+            committed: true,
+            moved: [Some(object_id), None],
+            excess_damage: None,
+        }
     }
 
     /// `player` bent: record the kind in their turn history and emit the

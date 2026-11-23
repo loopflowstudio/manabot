@@ -1994,6 +1994,7 @@ impl Observation {
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
+            | GameEvent::CardsLeftGraveyard { .. }
             | GameEvent::SourceDealtDamage { .. }
             | GameEvent::CombatDamageToPlayers { .. }
             | GameEvent::LibrarySearched { .. }

@@ -1149,6 +1149,18 @@
       "W"
     ]
   },
+  "Fang, Fearless l'Cie": {
+    "name": "Fang, Fearless l'Cie",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)",
+    "colors": [
+      "B"
+    ]
+  },
   "Fatal Fissure": {
     "name": "Fatal Fissure",
     "mana_cost": "{1}{B}",

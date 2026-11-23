@@ -8,3 +8,4 @@
 - Use Rocky Rebuke to make tapped Cecil deal noncombat damage above a pending Lightning Bolt. Run unblocked combat separately to check the above-half boundary after Cecil's power changes.
 - Cecil already ships on this branch. Share its combat declaration fixture with the existing single-attacker tests.
 - Treat the compress step as a behavior-preserving pass over the movement and copy paths that the planned meld departure will use. The Fang and Vanille implementation and its forked ordering fixtures remain open.
+- Implement Fang’s graveyard-departure trigger independently of the pair. The movement authority can return the exact minted appearance directly, which removes the caller’s successor lookup.

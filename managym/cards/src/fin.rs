@@ -15,7 +15,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![cecil(), esper_origins(), sazh_s_chocobo()]
+    vec![cecil(), esper_origins(), fang(), sazh_s_chocobo()]
 }
 
 fn cecil() -> CardDefinition {
@@ -84,6 +84,30 @@ fn cecil() -> CardDefinition {
             text_box: back_text.into(),
             ..creature
         })),
+    }
+}
+
+fn fang() -> CardDefinition {
+    CardDefinition {
+        key: "fin.fang_fearless_lcie",
+        scryfall_id: "f73a5cbb-905f-4b99-8d23-9d1b6bd47ee8",
+        printed: PrintedCharacteristics {
+            name: "Fang, Fearless l'Cie".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            supertypes: vec!["Legendary".into()],
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::OnceEachTurn { condition: Box::new(TriggerCondition::CardsLeaveYourGraveyard) },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards { count: EffectValue::Fixed(1) }, Effect::LoseLife { player: PlayerSelector::You, amount: EffectValue::Fixed(1) }],
+            }],
+            text_box: "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)".into(),
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }
 

@@ -176,6 +176,9 @@ pub enum GameEvent {
     CombatDamageToPlayers {
         creatures: Vec<PermanentId>,
     },
+    CardsLeftGraveyard {
+        owner: PlayerId,
+    },
     /// Trigger occurrence for one source across all recipients in a damage batch.
     SourceDealtDamage {
         source: ObjectId,
@@ -224,6 +227,7 @@ pub enum EventKind {
     TurnStarted,
     StepStarted,
     Surveilled,
+    CardsLeftGraveyard,
     SourceDealtDamage,
 }
 
@@ -242,6 +246,7 @@ impl GameEvent {
             GameEvent::PermanentSacrificed { .. } => EventKind::PermanentSacrificed,
             GameEvent::CardRevealed { .. } => EventKind::CardRevealed,
             GameEvent::CardMoved { .. } => EventKind::CardMoved,
+            GameEvent::CardsLeftGraveyard { .. } => EventKind::CardsLeftGraveyard,
             GameEvent::SourceDealtDamage { .. } => EventKind::SourceDealtDamage,
             GameEvent::DamageDealt { .. } => EventKind::DamageDealt,
             GameEvent::LifeChanged { .. } => EventKind::LifeChanged,

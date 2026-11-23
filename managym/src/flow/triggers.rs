@@ -21,7 +21,7 @@ use crate::{
         },
         card::CardType,
         effect::{EffectDuration, Modification},
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -117,6 +117,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             })
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
+        TriggerCondition::CardsLeaveYourGraveyard => EventKinds::of(EventKind::CardsLeftGraveyard),
         TriggerCondition::SourceDealsDamage => EventKinds::of(EventKind::SourceDealtDamage),
         TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
@@ -886,12 +887,45 @@ impl Game {
         }
     }
 
+    pub(super) fn graveyard_departure_sources(&self) -> Vec<TriggerSourceSnapshot> {
+        self.indexed_sources(EventKinds::of(EventKind::CardsLeftGraveyard))
+    }
+
     /// Departures look back to the whole pre-batch battlefield. Entry and
     /// counter events see the completed battlefield, including every entrant.
-    pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
+    pub(crate) fn process_event_batch(
+        &mut self,
+        before: &[TriggerSourceSnapshot],
+        graveyard_sources: &[TriggerSourceSnapshot],
+    ) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
             self.check_source_damage_triggers(&events);
+            if !graveyard_sources.is_empty() {
+                let mut departed = [false; 2];
+                for event in &events {
+                    if let GameEvent::CardMoved {
+                        object_id,
+                        from: Some(ZoneType::Graveyard),
+                        ..
+                    } = event
+                    {
+                        if let Some((_, owner, ObjectKind::Card)) =
+                            self.state.objects.provenance(*object_id)
+                        {
+                            departed[owner.0] = true;
+                        }
+                    }
+                }
+                for (seat, _) in departed.into_iter().enumerate().filter(|(_, left)| *left) {
+                    self.check_triggers_for_event(
+                        &GameEvent::CardsLeftGraveyard {
+                            owner: PlayerId(seat),
+                        },
+                        graveyard_sources,
+                    );
+                }
+            }
             for event in events {
                 if matches!(
                     event,
@@ -1904,6 +1938,10 @@ impl Game {
                         event,
                     )
             }
+            (
+                TriggerCondition::CardsLeaveYourGraveyard,
+                GameEvent::CardsLeftGraveyard { owner },
+            ) => source_controller == *owner,
             (TriggerCondition::SourceDealsDamage, GameEvent::SourceDealtDamage { source, .. }) => {
                 *source == source_object
             }

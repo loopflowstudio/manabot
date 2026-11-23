@@ -585,6 +585,21 @@ impl Game {
         } else {
             Vec::new()
         };
+        // CR 603.10a: graveyard-departure triggers look back, including when
+        // the source enters the battlefield from the graveyard in this batch.
+        let graveyard_sources = if batch.events.iter().any(|pending| {
+            matches!(
+                pending.event,
+                ProposedEvent::ZoneMove {
+                    from: Some(ZoneType::Graveyard),
+                    ..
+                }
+            )
+        }) {
+            self.graveyard_departure_sources()
+        } else {
+            Vec::new()
+        };
         let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
@@ -619,7 +634,7 @@ impl Game {
                 }
             }
             if sacrifices {
-                self.process_event_batch(&sources);
+                self.process_event_batch(&sources, &[]);
             }
         }
         for (pending, departing_lki) in batch.events.iter().zip(departing) {
@@ -631,10 +646,6 @@ impl Game {
             if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
                 *entry = entry.for_zone(*to);
             }
-            let moved_object = match &event {
-                ProposedEvent::ZoneMove { object_id, .. } => Some(*object_id),
-                _ => None,
-            };
             let excess_damage = match &event {
                 ProposedEvent::Damage {
                     source,
@@ -698,16 +709,9 @@ impl Game {
                 self.emit(GameEvent::CardRevealed { owner, definition });
                 (owner, definition, known_before)
             });
-            let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
-            // CR 400.7: the object this move made, or the same object when
-            // it entered its first zone (CR 400.11).
-            let moved_object = moved_object.filter(|_| committed).and_then(|object_id| {
-                self.state
-                    .zones
-                    .successor(object_id)
-                    .or_else(|| self.state.live(object_id))
-            });
-            if committed {
+            let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            result.excess_damage = excess_damage;
+            if result.committed {
                 if matches!(
                     batch.binding,
                     EventBinding::Moved {
@@ -715,10 +719,10 @@ impl Game {
                         ..
                     }
                 ) {
-                    if let Some(object_id) = moved_object.filter(|object_id| {
-                        self.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
-                    }) {
-                        self.put_on_bottom_of_library(object_id);
+                    for object_id in result.arrivals() {
+                        if self.state.zones.zone_of(object_id) == Some(ZoneType::Library) {
+                            self.put_on_bottom_of_library(object_id);
+                        }
                     }
                 }
                 if let Some((owner, definition, known_before)) = revealed_hand {
@@ -727,11 +731,7 @@ impl Game {
                 died.extend(death);
                 hits.extend(hit);
             }
-            results.push(EventResult {
-                committed,
-                excess_damage,
-                moved: [moved_object, None],
-            });
+            results.push(result);
         }
         if let EventBinding::Moved {
             linked: Some((source, returns)),
@@ -765,7 +765,7 @@ impl Game {
         if !hits.is_empty() {
             self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
         }
-        self.process_event_batch(&sources);
+        self.process_event_batch(&sources, &graveyard_sources);
         BatchProgress::Complete { results, followups }
     }
 
@@ -1414,8 +1414,8 @@ impl Game {
         event: ProposedEvent,
         lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-    ) -> bool {
-        match event {
+    ) -> EventResult {
+        let committed = match event {
             ProposedEvent::Damage {
                 source,
                 target,
@@ -1439,7 +1439,11 @@ impl Game {
                 from,
                 to,
                 entry,
-            } => self.commit_zone_move(object_id, from, to, entry, lki, followups),
+            } => return self.commit_zone_move(object_id, from, to, entry, lki, followups),
+        };
+        EventResult {
+            committed,
+            ..Default::default()
         }
     }
 

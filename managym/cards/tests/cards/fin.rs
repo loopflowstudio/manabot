@@ -1,12 +1,15 @@
 //! Final Fantasy card behavior through native casting, choices and zone moves.
 use crate::support::{
-    game::{clear_summoning_sickness, five_color_setup, pin_top, set_counters, Scenario},
+    game::{
+        clear_summoning_sickness, five_color_setup, move_card, pin_top, plant_in_graveyard,
+        set_counters, Scenario,
+    },
     inspect::{
         counters_of, library_top, now, offered_cards, permanent, permanent_of, top_spell, zone_of,
     },
     play::{
-        attack_with, attack_with_group, cast, cast_card, command, resolve_top, settle,
-        spend_colorless,
+        attack_with, attack_with_group, cast, cast_card, command, resolve_everything, resolve_top,
+        settle, spend_colorless,
     },
 };
 use managym::{
@@ -362,4 +365,34 @@ fn cecil_trampling_over_a_lethal_blocker_leaves_one_damage_trigger() {
     assert!(s
         .battlefield_permanents_named(0, "Cecil, Redeemed Paladin")
         .is_empty());
+}
+
+#[test]
+fn fang_draws_and_loses_life_once_when_cards_leave_its_controllers_graveyard() {
+    let mut s = five_color_setup(&["Fang, Fearless l'Cie", "Gray Ogre", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Fang, Fearless l'Cie");
+    let opponent = plant_in_graveyard(&mut s, 1, "Mountain");
+    let first = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let second = plant_in_graveyard(&mut s, 0, "Lightning Bolt");
+    let draw = library_top(&s, 0);
+    move_card(&mut s, opponent, ZoneType::Exile);
+    assert!(s.game().state.pending_triggers.is_empty());
+    move_card(&mut s, first, ZoneType::Exile);
+    move_card(&mut s, second, ZoneType::Exile);
+    resolve_everything(&mut s);
+    s.assert_life(0, 19);
+    assert_eq!(zone_of(&s, draw), Some(ZoneType::Hand));
+}
+
+#[test]
+fn fang_returning_from_the_graveyard_sees_only_later_departures() {
+    let name = "Fang, Fearless l'Cie";
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let fang = plant_in_graveyard(&mut s, 0, name);
+    let ogre = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    move_card(&mut s, fang, ZoneType::Battlefield);
+    assert!(s.game().state.pending_triggers.is_empty());
+    move_card(&mut s, ogre, ZoneType::Hand);
+    resolve_everything(&mut s);
+    s.assert_life(0, 19);
 }
