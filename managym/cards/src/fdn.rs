@@ -188,13 +188,7 @@ fn lightshell_duo() -> CardDefinition {
             toughness: Some(4),
             abilities: vec![
                 Ability::prowess(),
-                Ability::Triggered {
-                    condition: TriggerCondition::EntersTheBattlefield {
-                        subject: TriggerSubject::This,
-                    },
-                    intervening_if: None,
-                    effects: vec![Effect::Surveil { count: 2 }],
-                },
+                Ability::when_enters(TriggerSubject::This, vec![Effect::Surveil { count: 2 }]),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -305,13 +299,10 @@ fn arahbo_the_first_fang() -> CardDefinition {
                     toughness: LayerValue::Fixed(1),
                 }],
             })],
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::ThisOr(Box::new(other_nontoken_cat)),
-                },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
-            }],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::ThisOr(Box::new(other_nontoken_cat)),
+                vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -330,15 +321,12 @@ fn helpful_hunter() -> CardDefinition {
             subtypes: vec!["Cat".into()],
             power: Some(1),
             toughness: Some(1),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::DrawCards {
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 }],
-            }],
+            )],
             text_box: "When this creature enters, draw a card.".into(),
             ..Default::default()
         },

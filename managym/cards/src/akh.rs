@@ -1,6 +1,6 @@
 //! Amonkhet.
 use managym_state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, TriggerSubject},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
         StaticAbility, StaticContinuous, StaticScope,
@@ -15,6 +15,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
 }
 
 fn regal_caracal() -> CardDefinition {
+    let text_box = "Other Cats you control get +1/+1 and have lifelink.\nWhen this creature enters, create two 1/1 white Cat creature tokens with lifelink.";
     CardDefinition {
         key: "akh.regal_caracal",
         scryfall_id: "cd349f95-3eae-4ef2-abf8-e911bb8e93e5",
@@ -29,14 +30,19 @@ fn regal_caracal() -> CardDefinition {
                 scope: StaticScope::OtherYouControl(CardPredicate::subtype("Cat")),
                 condition: None,
                 characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt { power: LayerValue::Fixed(1), toughness: LayerValue::Fixed(1) }, Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink]))],
+                modifications: vec![
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(1),
+                        toughness: LayerValue::Fixed(1),
+                    },
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
+                ],
             })],
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("token.cat_1_1_w_lifelink", 2)],
-            }],
-            text_box: "Other Cats you control get +1/+1 and have lifelink.\nWhen this creature enters, create two 1/1 white Cat creature tokens with lifelink.".into(),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.cat_1_1_w_lifelink", 2)],
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

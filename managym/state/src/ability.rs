@@ -19,6 +19,14 @@ pub enum Ability {
 }
 
 impl Ability {
+    pub fn when_enters(subject: TriggerSubject, effects: Vec<Effect>) -> Self {
+        Self::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield { subject },
+            intervening_if: None,
+            effects,
+        }
+    }
+
     /// The triggered rule represented by printed or granted ward (CR 702.21).
     pub fn ward(cost: PaymentCost) -> Self {
         Self::Triggered {
