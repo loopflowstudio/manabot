@@ -31,10 +31,16 @@ name = "managym"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["mimalloc"]
 python = ["dep:pyo3"]
 # Opt-in measurement only; ordinary wheels have no allocation-counter overhead.
 benchmark = []
+mimalloc = ["dep:mimalloc"]
+
+[[example]]
+name = "bench_footprint"
+required-features = ["benchmark"]
+test = true
 
 [[example]]
 name = "bench_observation"
@@ -67,6 +73,7 @@ managym-cards = { path = "cards" }
 managym-state = { path = "state" }
 blake3 = "1"
 base64 = "0.22"
+mimalloc = { version = "0.1", default-features = false, optional = true }
 rand = "0.8"
 rand_chacha = "0.3"
 pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }

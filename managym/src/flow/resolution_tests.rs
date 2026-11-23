@@ -4448,3 +4448,220 @@ fn hidden_knowledge_search_reveals_do_not_displace_a_known_top() {
             .unwrap();
     }
 }
+
+#[test]
+fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules_shuffle() {
+    use crate::flow::decision::EffectFrame;
+    use rand::RngCore;
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(owner);
+        game.run_frame(EffectFrame::new(
+            owner,
+            vec![Effect::LookAndSelect {
+                look: 12.into(),
+                min_select: 0,
+                max_select: 1,
+                predicate: CardPredicate::default(),
+                reveal: false,
+                to_battlefield: false,
+                random_order: true,
+            }],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let inspected = game.library_top_objects(owner, 12);
+        let space = game.current_action_space.clone();
+        let mut sibling = game.clone();
+        game.shuffle_unseen_libraries(101);
+        sibling.shuffle_unseen_libraries(101);
+        assert_eq!(game.library_top_objects(owner, 12), inspected);
+        assert_eq!(game.current_action_space, space);
+        checked_command(&mut game, Action::Decline { player: owner });
+        checked_command(&mut sibling, Action::Decline { player: owner });
+        let order = |game: &Game| {
+            game.state
+                .zones
+                .zone_objects(ZoneType::Library, owner)
+                .to_vec()
+        };
+        let before = order(&game);
+        let mut sorted_bottom = before[..12].to_vec();
+        sorted_bottom.sort();
+        let mut sorted_inspected = inspected;
+        sorted_inspected.sort();
+        assert_eq!(sorted_bottom, sorted_inspected);
+        assert!(game.state.players[owner.0].known_library.is_empty());
+        let rng = game.state.rng.clone().next_u64();
+        game.shuffle_unseen_libraries(77);
+        sibling.shuffle_unseen_libraries(77);
+        let after = order(&game);
+        assert_eq!(after, order(&sibling));
+        assert_eq!(&after[..12], &before[..12]);
+        assert_ne!(after[12..], before[12..]);
+        assert_eq!(game.state.rng.clone().next_u64(), rng);
+        let drawn = game.state.card_of(*after.last().unwrap()).unwrap();
+        game.draw_cards(owner, 1);
+        assert!(game
+            .state
+            .zone_cards(ZoneType::Hand, owner)
+            .any(|card| card == drawn));
+
+        game.shuffle_library(owner);
+        let fresh = order(&game);
+        game.shuffle_unseen_libraries(77);
+        let reshuffled = order(&game);
+        assert!(fresh
+            .iter()
+            .zip(reshuffled)
+            .any(|(old, new)| sorted_bottom.contains(old) && *old != new));
+    }
+}
+
+#[test]
+fn snapshot_shuffle_holds_the_searched_library_and_releases_private_facts_in_a_new_deal() {
+    use crate::{flow::decision::EffectFrame, state::ability::DistinctSearchEnd};
+    let owner = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut game, _, _) = fixture(owner);
+    let order = |game: &Game, seat| {
+        game.state
+            .zones
+            .zone_objects(ZoneType::Library, seat)
+            .to_vec()
+    };
+    game.remember_library_objects(owner, &order(&game, owner));
+    game.run_frame(EffectFrame::new(
+        viewer,
+        vec![Effect::SearchDistinctNames {
+            predicate: CardPredicate::default(),
+            count: 2,
+            end: DistinctSearchEnd::Hand,
+        }],
+    ));
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    let searched = order(&game, viewer);
+    let frozen = order(&game, owner);
+    game.shuffle_unseen_libraries(82);
+    assert_eq!(order(&game, viewer), searched);
+    assert_eq!(order(&game, owner), frozen);
+    game.determinize(viewer, 35).unwrap();
+    let before = order(&game, owner);
+    game.shuffle_unseen_libraries(82);
+    assert_ne!(order(&game, owner), before);
+    let fixed = order(&game, viewer);
+    game.shuffle_unseen_libraries(83);
+    assert_eq!(order(&game, viewer), fixed);
+}
+
+#[test]
+fn snapshot_shuffle_preserves_a_visible_top_after_the_look_permission_ends() {
+    let owner = PlayerId(0);
+    let mut game = Game::new(
+        ["a", "b"]
+            .map(|name| {
+                PlayerConfig::new(
+                    name,
+                    BTreeMap::from([
+                        ("Hakoda, Selfless Commander".into(), 1),
+                        ("Mountain".into(), 32),
+                    ]),
+                )
+            })
+            .to_vec(),
+        42,
+        false,
+    );
+    let hakoda = game
+        .scenario_force_battlefield(owner, "Hakoda, Selfless Commander", true)
+        .unwrap();
+    game.refresh_priority_actions(owner);
+    let top = game.library_top_objects(owner, 1);
+    game.move_object(game.permanent_object(hakoda).unwrap(), ZoneType::Graveyard);
+    assert!(!game.looks_at_library_top(owner));
+    // An unrelated bottom placement forgets bounded facts, including the top.
+    let bottom = game.library_top_objects(owner, 2)[1];
+    game.put_on_bottom_of_library(bottom);
+    assert!(game.library_facts(owner, owner).is_empty());
+    game.shuffle_unseen_libraries(7);
+    assert_eq!(game.library_top_objects(owner, 1), top);
+    assert_eq!(
+        game.state.zones.zone_objects(ZoneType::Library, owner)[0],
+        bottom
+    );
+}
+
+#[test]
+fn snapshot_constrained_determinize_retry_preserves_live_capture() {
+    use crate::flow::decision::EffectFrame;
+    let owner = PlayerId(0);
+    let viewer = PlayerId(1);
+    let deck = BTreeMap::from([("Mountain".into(), 24), ("Lightning Bolt".into(), 1)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        42,
+        true,
+    );
+    let has_bolt = |g: &Game| {
+        g.state
+            .zones
+            .zone_objects(ZoneType::Hand, owner)
+            .iter()
+            .any(|object| g.state[*object].name == "Lightning Bolt")
+    };
+    if !has_bolt(&game) {
+        game.scenario_force_card_in_hand(owner, "Lightning Bolt")
+            .unwrap();
+    }
+    // The unconstrained first deal puts the only eligible card in the
+    // library. A mandatory selection in the hand must therefore retry.
+    let seed = (0..8)
+        .find(|seed| {
+            let mut ordinary = game.clone();
+            ordinary.determinize(viewer, *seed).unwrap();
+            !has_bolt(&ordinary)
+        })
+        .unwrap();
+    game.run_frame(EffectFrame::new(
+        owner,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate {
+                card_type: Some(CardType::Instant),
+                ..Default::default()
+            },
+            min: 1,
+            max: 1.into(),
+            effects: Vec::new(),
+            if_declined: Vec::new(),
+        }],
+    ));
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    game.decision_memory_enabled = true;
+    game.decision_memory_include_own = true;
+    game.determinize(viewer, seed).unwrap();
+    assert!(has_bolt(&game));
+    game.step(0).unwrap();
+    game.step(0).unwrap();
+    assert!(game.decision_memory.iter().all(|log| !log.is_empty()));
+}
+
+#[test]
+fn snapshot_shuffle_preserves_a_declined_library_cast() {
+    use crate::flow::decision::EffectFrame;
+    let owner = PlayerId(1);
+    let (mut game, _, _) = fixture(owner);
+    let object = game
+        .library_from_top(owner)
+        .find(|id| game.state[*id].types.is_creature())
+        .unwrap();
+    game.state
+        .zones
+        .reposition(ZoneType::Library, owner, object, usize::MAX);
+    game.run_frame(EffectFrame::new(owner, vec![Effect::CastLibraryTopFree]));
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    checked_command(&mut game, Action::Decline { player: owner });
+    game.shuffle_unseen_libraries(12);
+    assert_eq!(game.library_top_objects(owner, 1), [object]);
+}
