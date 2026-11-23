@@ -1,10 +1,18 @@
-at: 97374c70f5084cc3aa1b5f998944fc71cfea21d9
+at: ef9a8011b9238a11aab11994c01e4b9b492f9a0a
 first:
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Records the Felling Blow obligation and its fixture
+  - path: managym/README.md
+    why: Explains damage binding and counter payment
   - path: managym/cards/src/fdn.rs
-    why: Binds the two targets and orders the instructions
+    why: Defines Drake Hatcher using both rules
+  - path: managym/src/flow/damage.rs
+    why: Captures each committed player hit
+  - path: managym/src/flow/triggers.rs
+    why: Binds the matching hit to each occurrence
+  - path: managym/src/flow/payment.rs
+    why: Spends incubation before stacking the activation
+  - path: managym/src/agent/continuation.rs
+    why: Projects pending amounts to each viewer
   - path: managym/cards/tests/cards/fdn.rs
-    why: Checks damage attribution across target reentries and replay
-  - path: managym/cards/tests/cards/observability.rs
-    why: Checks both instructions reach the catalog tokens
+    why: Exercises unequal hits and both paid branches
+  - path: managym/src/agent/env/snapshot.rs
+    why: Restores the same combat and each pending trigger
