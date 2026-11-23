@@ -693,7 +693,12 @@ def main() -> None:
     try:
         records = read_records(args.path)
         evidence = next(records)
-    except (OSError, ValueError, StopIteration) as error:
+    except StopIteration:
+        parser.error(
+            f"no game records in {args.path}: a directory is read for its .jsonl"
+            " records; pass a snapshot recipe .json file directly"
+        )
+    except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
     if not evidence.needs_reproduction:
         results = []
