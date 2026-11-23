@@ -17,7 +17,11 @@
 
 Snapshot library-order pins retain inspected object identities across exact forks and replay. Viewer observations expose only the positions known to that viewer.
 
-The Run Away Together audit is complete. Its ledger row records the missing controller comparison at casting and resolution. The next audit starts with Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The next playable witness is Arahbo plus Helpful Hunter, including both trigger orders, the draw, and the resulting Cat's characteristics. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
+At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in `tests/semantic/test_text_observation.py` (74 deselected).
+
+**Run Away Together remains deferred.** With two creatures controlled by one player and none by the other, the spell has no legal pair. With one creature per player, changing control of one in response makes both targets illegal. If one leaves instead, its last known controller determines whether the surviving creature returns. These are acceptance positions for the missing definition. Native `TargetRequirement` has no different-controller relation, and `resolution_targets` rechecks each target independently except for shared creature type. The shared targeting authority needs the relation at selection and resolution. [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+
+The next audit starts with Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The next playable witness is Arahbo plus Helpful Hunter, including both trigger orders, the draw, and the resulting Cat's characteristics. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 
