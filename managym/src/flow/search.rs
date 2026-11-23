@@ -42,48 +42,9 @@ impl Game {
     /// Zone swaps retain exact appearances and leave the future rules RNG alone.
     pub fn shuffle_unseen_libraries(&mut self, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let mut fixed: BTreeSet<_> = self.pending_public_entries().into_iter().collect();
-        fixed.extend(self.captured_bindings().map(|binding| binding.object));
-        let mut searched = [false; 2];
-        if let Some(suspended) = &self.state.suspended_decision {
-            for part in suspended.continuation() {
-                match part {
-                    ResolutionRef::Frame(frame) => fixed.extend(&frame.selected),
-                    ResolutionRef::Decision(decision) => {
-                        fixed.extend(decision.revealed_objects());
-                        if let Some((_, inspected)) = decision.inspected_library_objects() {
-                            fixed.extend(inspected);
-                        }
-                        match decision {
-                            Decision::SearchNamed { owner, .. }
-                            | Decision::SearchDistinctNames { player: owner, .. } => {
-                                searched[owner.0] = true
-                            }
-                            Decision::SelectCards {
-                                from,
-                                candidates,
-                                selected,
-                                ..
-                            } => {
-                                fixed.extend(candidates);
-                                fixed.extend(selected);
-                                if let Some(source) = from {
-                                    if source.zone == ZoneType::Library {
-                                        searched[source.owner.0] = true;
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+        let fixed = self.pending_library_objects();
         let visible_tops = self.visible_library_tops();
         for owner in [PlayerId(0), PlayerId(1)] {
-            if searched[owner.0] {
-                continue;
-            }
             let knowledge = &self.state.players[owner.0].known_library;
             let library = self.state.zones.zone_objects(ZoneType::Library, owner);
             let slots: Vec<_> = library
@@ -106,6 +67,47 @@ impl Game {
                     .swap(ZoneType::Library, owner, slots[i], slots[j]);
             }
         }
+    }
+
+    /// Pending instructions retain exact objects. A search over a library
+    /// also retains the entire order presented to its chooser.
+    fn pending_library_objects(&self) -> BTreeSet<ObjectId> {
+        let mut fixed: BTreeSet<_> = self.pending_public_entries().into_iter().collect();
+        fixed.extend(self.captured_bindings().map(|binding| binding.object));
+        if let Some(suspended) = &self.state.suspended_decision {
+            for part in suspended.continuation() {
+                match part {
+                    ResolutionRef::Frame(frame) => fixed.extend(&frame.selected),
+                    ResolutionRef::Decision(decision) => {
+                        fixed.extend(decision.revealed_objects());
+                        if let Some((_, inspected)) = decision.inspected_library_objects() {
+                            fixed.extend(inspected);
+                        }
+                        let searched = match decision {
+                            Decision::SearchNamed { owner, .. }
+                            | Decision::SearchDistinctNames { player: owner, .. } => Some(*owner),
+                            Decision::SelectCards {
+                                from,
+                                candidates,
+                                selected,
+                                ..
+                            } => {
+                                fixed.extend(candidates);
+                                fixed.extend(selected);
+                                from.as_ref()
+                                    .filter(|s| s.zone == ZoneType::Library)
+                                    .map(|s| s.owner)
+                            }
+                            _ => None,
+                        };
+                        if let Some(owner) = searched {
+                            fixed.extend(self.library_from_top(owner));
+                        }
+                    }
+                }
+            }
+        }
+        fixed
     }
 
     /// Sample one world consistent with `perspective`'s observation.

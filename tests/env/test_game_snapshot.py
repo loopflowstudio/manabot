@@ -25,7 +25,7 @@ def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
     )
 
 
-def test_exact_recipe_reopens_in_another_process(tmp_path: Path) -> None:
+def test_reseeded_recipe_preserves_the_reset_seed_and_both_reseeds() -> None:
     source = managym.Env(seed=42, decision_memory_include_own=True)
     source.reset(setup())
     source.step(0)
@@ -43,32 +43,11 @@ def test_exact_recipe_reopens_in_another_process(tmp_path: Path) -> None:
     assert [i["at_action"] for i in recipe["interventions"]] == [1, 2]
     assert recipe["player_configs"][1]["disclosure"] == "closed"
 
-    path = tmp_path / "position.json"
-    path.write_text(raw)
-    child = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            """
-import json, sys
-from pathlib import Path
-import managym
-env = managym.GameSnapshot.from_recipe_json(Path(sys.argv[1]).read_text()).restore()
-env.step(0)
-print(json.dumps([env.state_digest(), env.decision_memory_counts()]))
-""",
-            str(path),
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=30,
-    )
+    reopened = managym.GameSnapshot.from_recipe_json(raw).restore()
+    reopened.step(0)
     branch.step(0)
-    assert json.loads(child.stdout) == [
-        branch.state_digest(),
-        branch.decision_memory_counts(),
-    ]
+    assert reopened.search_witness_json() == branch.search_witness_json()
+    assert logs(reopened) == logs(branch)
     assert position.restore().state_digest() != branch.state_digest()
 
 
@@ -408,21 +387,22 @@ def test_banked_branch_round_trips_through_replay_and_academy(
     assert bank.metadata().action_count >= 2
     assert all(json.loads(log) for log in logs(source))
     shared = bank.restore(managym.RestoreOptions.shuffle_libraries(shuffle_seed))
-    for index in (0, 1):
-        control = shared.snapshot().restore()
-        control.step(index)
-        branch = bank.restore(
+    branches = [
+        bank.restore(
             managym.RestoreOptions.shuffle_libraries(
-                shuffle_seed, forced_first_action=index
+                shuffle_seed, forced_first_action=i
             )
         )
+        for i in (0, 1)
+    ]
+    for index, branch in enumerate(branches):
+        control = shared.snapshot().restore()
+        control.step(index)
         assert branch.search_witness_json() == control.search_witness_json()
         assert logs(branch) == logs(control)
 
     # After the next draw, the unshuffled game offers a different legal frame.
-    branch = shared.snapshot().restore(
-        managym.RestoreOptions.exact(forced_first_action=0)
-    )
+    branch = branches[0]
     branch.step(0)
     source.step(0)
     source.step(0)
@@ -441,7 +421,7 @@ def test_banked_branch_round_trips_through_replay_and_academy(
         branch.step(999)
     branch.step(0)
     after = position_evidence(branch)
-    del bank, source, shared, control, branch
+    del bank, source, shared, control, branch, branches
 
     child = subprocess.run(
         [

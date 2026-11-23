@@ -8,10 +8,11 @@ prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
+from collections import defaultdict, deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 import hashlib
-from itertools import chain, repeat
+from itertools import chain
 import json
 from pathlib import Path
 import subprocess
@@ -84,27 +85,19 @@ def _build_name(identities: Mapping[str, object]) -> str:
 type BoundaryOperation = Intervention | Literal["issue_frame"]
 
 
-def replay_boundaries(game: GameInputs) -> Iterator[Sequence[BoundaryOperation]]:
-    """Yield ordered frame reads and native interventions, including the final boundary."""
-    count = len(game.actions) + 1
-    if not game.interventions and not game.issued_frame_boundaries:
-        yield from repeat((), count)
-        return
-    frames = set(game.issued_frame_boundaries)
-    applied = 0
-    for index in range(count):
-        operations: list[BoundaryOperation] = []
-        if index + applied in frames:
-            operations.append("issue_frame")
-        while (
-            applied < len(game.interventions)
-            and game.interventions[applied].at_action == index
-        ):
-            operations.append(game.interventions[applied])
-            applied += 1
-            if index + applied in frames:
-                operations.append("issue_frame")
-        yield operations
+def replay_boundaries(game: GameInputs) -> dict[int, list[BoundaryOperation]]:
+    """Group native operations and frame reads by the next external action."""
+    boundaries: dict[int, list[BoundaryOperation]] = defaultdict(list)
+    frames = deque(sorted(set(game.issued_frame_boundaries)))
+    for applied, op in enumerate(game.interventions):
+        # A frame ordinal counts both actions and intervening operations.
+        # Reads at this operation's ordinal precede the operation itself.
+        while frames and frames[0] <= op.at_action + applied:
+            boundaries[frames.popleft() - applied].append("issue_frame")
+        boundaries[op.at_action].append(op)
+    for ordinal in frames:
+        boundaries[ordinal - len(game.interventions)].append("issue_frame")
+    return boundaries
 
 
 def apply_boundary(env: managym.Env, operations: Sequence[BoundaryOperation]) -> bool:
@@ -209,8 +202,8 @@ class RecordWalker:
             count = max(0, count - 1)
         boundaries = replay_boundaries(game)
 
-        def enter(operations: Sequence[BoundaryOperation]) -> None:
-            if apply_boundary(self.env, operations):
+        def enter(index: int) -> None:
+            if apply_boundary(self.env, boundaries.get(index, ())):
                 self.observation = self.env.observation_for_player(
                     self.env.current_agent_index() or 0
                 )
@@ -219,9 +212,8 @@ class RecordWalker:
 
         index = 0
         try:
-            following = next(boundaries)
             for index, action in enumerate(game.actions[:count]):
-                enter(following)
+                enter(index)
                 if (
                     index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
@@ -271,12 +263,11 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
-                following = next(boundaries)
                 # Compare the consumer immediately after its action. The retained
                 # next digest includes any interventions before the next decision.
                 expected = target.state_digest() if apply is not None else None
                 if after is not None:
-                    apply_boundary(target, following)
+                    apply_boundary(target, boundaries.get(index + 1, ()))
                     if target.state_digest() != after:
                         raise ValueError("transition digest differs")
                 if apply is None:
@@ -292,7 +283,7 @@ class RecordWalker:
                     )
                 yield decision
             index = count
-            enter(following)
+            enter(count)
             end = game.end
             if (
                 end is not None
@@ -576,8 +567,9 @@ def _replay_game_inputs(
         else:
             reached = env.reset(setup)[0]
         phase = "prefix"
-        for offset, operations in enumerate(replay_boundaries(game)):
-            if operations:
+        boundaries = replay_boundaries(game)
+        for offset in range(len(game.actions) + 1):
+            if operations := boundaries.get(offset):
                 index, phase = offset, "intervention"
                 agreement.at_retained_failure = False
                 if not isinstance(env, managym.Env):

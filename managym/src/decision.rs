@@ -17,6 +17,7 @@ use crate::{
         observation::{EventData, Observation as AgentObservation},
         structured_offer::{
             ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission, PublicCommitment,
+            StructuredOfferError, StructuredOfferProjection,
         },
     },
     flow::game::Game,
@@ -166,6 +167,17 @@ impl std::fmt::Display for SemanticError {
     }
 }
 
+impl From<StructuredOfferError> for SemanticError {
+    fn from(error: StructuredOfferError) -> Self {
+        match error {
+            StructuredOfferError::NoActiveActionSpace | StructuredOfferError::GameOver => {
+                Self::NoActiveDecision
+            }
+            other => Self::IllegalCommand(other.to_string()),
+        }
+    }
+}
+
 impl std::error::Error for SemanticError {}
 
 fn semantic_viewer_hash(viewer_state_json: &str) -> String {
@@ -179,11 +191,11 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// Canonical digest of one complete decision frame projection.
-fn decision_fingerprint(revision: u64, projection_value: &Value) -> String {
+fn decision_fingerprint(revision: u64, projection: &StructuredOfferProjection) -> String {
     let payload = json!({
         "schema_version": SEMANTIC_DECISION_VERSION,
         "revision": revision,
-        "projection": projection_value,
+        "projection": projection,
     });
     sha256_hex(&serde_json::to_vec(&payload).expect("fingerprint payload serializes"))
 }
@@ -244,37 +256,15 @@ impl Game {
         if self.is_game_over() {
             return Err(SemanticError::GameOver);
         }
-        let offers = self
-            .structured_search_offers()
-            .map_err(|error| match error {
-                crate::agent::structured_offer::StructuredOfferError::NoActiveActionSpace
-                | crate::agent::structured_offer::StructuredOfferError::GameOver => {
-                    SemanticError::NoActiveDecision
-                }
-                other => SemanticError::IllegalCommand(other.to_string()),
-            })?;
-        let projection = offers.projection();
-        let projection_value = serde_json::to_value(projection).expect("projection serializes");
-        let fingerprint = decision_fingerprint(self.decision_epoch, &projection_value);
+        let projection = self.structured_search_offers()?.into_projection();
+        let fingerprint = decision_fingerprint(self.decision_epoch, &projection);
         let object_candidates = self.bind_frame_candidates(&fingerprint);
         Ok(DecisionFrame {
             schema_version: SEMANTIC_DECISION_VERSION,
             revision: self.decision_epoch,
             actor: projection.actor,
             fingerprint,
-            offers: projection_value
-                .get("offers")
-                .and_then(Value::as_array)
-                .map(|array| {
-                    array
-                        .iter()
-                        .map(|value| {
-                            serde_json::from_value(value.clone())
-                                .expect("offer round-trips through canonical value")
-                        })
-                        .collect()
-                })
-                .expect("projection carries offers"),
+            offers: projection.offers,
             object_candidates,
         })
     }
@@ -301,23 +291,25 @@ impl Game {
 
     /// Cold replay retains fingerprints of issued object-bearing frames. Only
     /// rebind those frames; projecting every decision would authorize addresses
-    /// the source never issued.
+    /// the source never issued. Returns whether this boundary issued bindings.
     pub(crate) fn restore_frame_candidates(
         &self,
         remaining: &mut std::collections::BTreeSet<String>,
-    ) -> Result<(), SemanticError> {
+    ) -> Result<bool, SemanticError> {
         if remaining.is_empty() || self.is_game_over() {
-            return Ok(());
+            return Ok(false);
         }
         let offers = self
             .structured_search_offers()
             .map_err(|e| SemanticError::IllegalCommand(e.to_string()))?;
-        let projection = serde_json::to_value(offers.projection()).expect("projection serializes");
-        let fingerprint = decision_fingerprint(self.decision_epoch, &projection);
-        if remaining.remove(&fingerprint) && self.bind_frame_candidates(&fingerprint).is_empty() {
+        let fingerprint = decision_fingerprint(self.decision_epoch, offers.projection());
+        if !remaining.remove(&fingerprint) {
+            return Ok(false);
+        }
+        if self.bind_frame_candidates(&fingerprint).is_empty() {
             return Err(SemanticError::UnknownObjectCandidate);
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Project the composite viewer-safe Observation at the current revision.
@@ -438,15 +430,7 @@ impl Game {
             });
         }
 
-        let offers = self
-            .structured_search_offers()
-            .map_err(|error| match error {
-                crate::agent::structured_offer::StructuredOfferError::NoActiveActionSpace
-                | crate::agent::structured_offer::StructuredOfferError::GameOver => {
-                    SemanticError::NoActiveDecision
-                }
-                other => SemanticError::IllegalCommand(other.to_string()),
-            })?;
+        let offers = self.structured_search_offers()?;
         let projection = offers.projection();
         let actor = PlayerId(projection.actor as usize);
         let public_commitment = projection

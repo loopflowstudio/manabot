@@ -85,6 +85,10 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub(crate) fn is_game_over(&self) -> bool {
+        self.players.iter().any(|player| !player.alive)
+    }
+
     /// Put the same appearance in a zone without a zone change. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
     pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {

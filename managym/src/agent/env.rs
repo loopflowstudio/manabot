@@ -1144,47 +1144,47 @@ impl Env {
         &mut self,
         command: &SemanticCommand,
     ) -> Result<SemanticTransition, AgentError> {
+        self.commit_command(command)
+            .map(|(transition, _, _)| transition)
+    }
+
+    fn commit_command(
+        &mut self,
+        command: &SemanticCommand,
+    ) -> Result<(SemanticTransition, Observation, bool), AgentError> {
         self.require_external_chooser()?;
-        let (transition, observation, _) = self
+        let (transition, observation, done) = self
             .game
             .as_mut()
             .ok_or_else(|| AgentError("env.execute_semantic_command called before reset".into()))?
             .execute_semantic_command_with_observation(command)
             .map_err(|error| AgentError(error.to_string()))?;
         self.remember_heuristic_events(&observation);
-        self.record_command(command);
-        Ok(transition)
-    }
-
-    fn record_command(&mut self, command: &SemanticCommand) {
         if let Some(trace) = &mut self.provenance {
             trace.push(RecordedAction::Command(
                 serde_json::to_string(command).expect("Command serializes"),
             ));
         }
+        Ok((transition, observation, done))
     }
 
     pub fn step_semantic_command(
         &mut self,
         command: &SemanticCommand,
     ) -> Result<(SemanticTransition, Observation, f64, bool, bool, InfoDict), AgentError> {
-        self.require_external_chooser()?;
-        let game = self.game.as_mut().ok_or_else(|| {
-            AgentError("env.step_semantic_command called before reset".to_string())
-        })?;
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.step_semantic_command called before reset".into()))?;
         let actor = current_agent(game)?;
-        let (transition, observation, done) = game
-            .execute_semantic_command_with_observation(command)
-            .map_err(|error| AgentError(error.to_string()))?;
+        let (transition, observation, done) = self.commit_command(command)?;
         let reward = if done {
-            game.winner_index()
+            self.winner_index()
                 .map(|winner| if winner == actor.0 { 1.0 } else { -1.0 })
                 .unwrap_or(0.0)
         } else {
             0.0
         };
-        self.remember_heuristic_events(&observation);
-        self.record_command(command);
         Ok((
             transition,
             observation,
@@ -1337,6 +1337,14 @@ impl Env {
 
     pub fn selected_reseed_rollout(&mut self, seed: u64) -> Result<(), AgentError> {
         self.apply_intervention(Intervention::Reseed { seed })
+    }
+
+    /// Replay the operation payload of a retained boundary intervention.
+    #[cfg(feature = "python")]
+    pub(crate) fn apply_intervention_json(&mut self, raw: &str) -> Result<(), AgentError> {
+        let op = serde_json::from_str(raw)
+            .map_err(|e| AgentError(format!("invalid snapshot intervention: {e}")))?;
+        self.apply_intervention(op)
     }
 
     fn apply_intervention(&mut self, op: Intervention) -> Result<(), AgentError> {

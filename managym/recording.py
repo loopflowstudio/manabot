@@ -2078,35 +2078,33 @@ def _read_snapshots(path: Path) -> Iterator[GameRecord]:
         first = source.readline()
         if not first:
             return
-        if not first.endswith(b"\n"):
-            try:
-                incomplete = json.loads(first)
-            except json.JSONDecodeError:
-                incomplete = None
-            if (
-                isinstance(incomplete, dict)
-                and incomplete.get("schema") == "managym-snapshot-v1"
-                and path.suffix != ".jsonl"
-            ):
-                yield record_from_row(incomplete)
-                return
-            if (
-                isinstance(incomplete, dict)
-                and incomplete.get("schema") == "training-game-checkpoint-v1"
-            ):
+        terminated = first.endswith(b"\n")
+        try:
+            row = json.loads(first)
+        except json.JSONDecodeError:
+            if not terminated:
+                row = None  # A torn append.
+            elif path.suffix == ".json":
+                row = json.loads(first + source.read())
+                if (
+                    not isinstance(row, dict)
+                    or row.get("schema") != "managym-snapshot-v1"
+                ):
+                    raise
+            else:
+                raise
+        schema = row.get("schema") if isinstance(row, dict) else None
+        # A snapshot is a standalone JSON document. Appended journal rows
+        # become durable only once their terminating newline is present.
+        if not terminated and not (
+            schema == "managym-snapshot-v1" and path.suffix != ".jsonl"
+        ):
+            if schema == "training-game-checkpoint-v1":
                 raise ValueError("incomplete initial training checkpoint")
             warnings.warn(
                 "Incomplete final game record; ignored", RuntimeWarning, stacklevel=2
             )
             return
-        try:
-            row = json.loads(first)
-        except json.JSONDecodeError:
-            if path.suffix != ".json":
-                raise
-            row = json.loads(first + source.read())
-            if not isinstance(row, dict) or row.get("schema") != "managym-snapshot-v1":
-                raise
         if not isinstance(row, dict):
             raise ValueError("expected a game record object")
         second = source.readline()
