@@ -26,6 +26,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fiendish_panda(),
         high_society_hunter(),
         hungry_ghoul(),
+        incinerating_blast(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
         lunar_insight(),
@@ -510,6 +511,26 @@ fn high_society_hunter() -> CardDefinition {
                     }],
                 },
             ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn incinerating_blast() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.incinerating_blast",
+        scryfall_id: "d58e20ab-c5ca-4295-884d-78efdaa83243",
+        printed: PrintedCharacteristics {
+            name: "Incinerating Blast".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![
+                Effect::deal_damage(6, ObjectSelector::Target(TargetSpec::Creature)),
+                Effect::discard_draw(1, 1),
+            ],
+            text_box: "Incinerating Blast deals 6 damage to target creature.\nYou may discard a card. If you do, draw a card.".into(),
             ..Default::default()
         },
         ..Default::default()

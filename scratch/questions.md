@@ -36,3 +36,5 @@ The pending damage binding exceeded the 4096-byte GameState ceiling with trigger
 For Hunter, use a nontoken noncreature copying a creature as one simultaneous victim. This makes the departure and destination readings distinguishable.
 
 Prowler’s turn-wide fact uses the active player row as its v11 join for either viewer. The turn owns the single boolean.
+
+Blast's discard fixture uses Forest and Mountain as the caster's entire hand so each paid branch can track both the discarded card and the retained card.

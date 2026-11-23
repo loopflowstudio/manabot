@@ -1109,3 +1109,73 @@ fn cackling_prowler_ward_counters_a_spell_unless_two_is_paid() {
         assert_eq!(s.game().state.permanents[prowler].is_none(), pay);
     }
 }
+
+#[test]
+fn incinerating_blast_offers_discard_only_after_damaging_a_legal_target() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{now, permanent},
+        play::{cast_card, fork_choosing, resolve_top},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::player::ManaPayment,
+    };
+
+    let mut s = five_color_setup(&["Incinerating Blast", "Gray Ogre"]);
+    let caster = PlayerId(0);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let creature = card_of(&s, victim);
+    let first = force_new_card_in_hand(&mut s, 0, "Forest");
+    let second = force_new_card_in_hand(&mut s, 0, "Mountain");
+    let spell = force_new_card_in_hand(&mut s, 0, "Incinerating Blast");
+    cast_card(&mut s, spell);
+    s.choose_target_named("Gray Ogre");
+    let pending = s.game().clone();
+    let library = pending.state.zones.size(ZoneType::Library, caster);
+
+    resolve_top(&mut s);
+    assert_eq!(permanent(&s, victim).damage, 6);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(caster));
+    assert_eq!(s.action_space().actions.len(), 3);
+    for discard in [None, Some(first), Some(second)] {
+        let action = discard.map_or(Action::Decline { player: caster }, |object| {
+            Action::SelectCard {
+                player: caster,
+                object,
+            }
+        });
+        let branch = fork_choosing(&s, |offered| *offered == action);
+        let state = &branch.game().state;
+        assert_eq!(
+            state.zones.size(ZoneType::Library, caster),
+            library - usize::from(discard.is_some())
+        );
+        assert_eq!(state.zones.size(ZoneType::Hand, caster), 2);
+        for card in [first, second] {
+            let zone = if Some(card) == discard {
+                ZoneType::Graveyard
+            } else {
+                ZoneType::Hand
+            };
+            assert!(state.zones.contains(now(&branch, card), zone, caster));
+        }
+        assert!(state
+            .zones
+            .contains(now(&branch, creature), ZoneType::Graveyard, PlayerId(1)));
+    }
+
+    *s.game_mut() = pending;
+    move_card(&mut s, creature, ZoneType::Exile);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    let state = &s.game().state;
+    assert!(state.stack_objects.is_empty());
+    assert_eq!(
+        state.zones.zone_objects(ZoneType::Hand, caster).to_vec(),
+        [first, second]
+    );
+    assert_eq!(state.zones.size(ZoneType::Library, caster), library);
+}

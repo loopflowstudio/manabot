@@ -165,13 +165,15 @@ The v11 fact joins the active player row for either viewer. The turn owns one bo
 
 Behavior review at `9a119c98`: five focused Rust tests passed (both Hunter fixtures, Prowler ward, copied Island death versus exile, and default catalog token spans). Three Python controls passed for the public death fact in text, tensors and serialized observations, hidden-hand permutations, and manual mana Commands with stale rejection. Prowler uses the shared controller end-step condition, counter effect and ward payment. Both ward choices reached their expected outcomes. The Prowler working slice is satisfied. The restored branches exercised native clones; end-to-end Command replay and Academy parity remain open.
 
-## Next slice · Incinerating Blast
+## Incinerating Blast · native fixture passed
 
-Author Blast as ordered damage followed by the existing Effect::discard_draw(1, 1), as used in the TLA catalog. The cost-primary ledger classification does not imply a casting cost. Start with lethal damage to a legal creature and retain the private discard choice during that same resolution. This distinguishes a target lost before resolution from one dealt lethal damage during it. Fork the pending discard after Blast deals damage. Offer decline and every legal card in hand. Resolve decline and two different discards from that fork, checking the discarded identity and one draw only in each paid branch. From a fork before damage, remove the sole target and verify that resolution offers no discard and draws nothing. Use this decision for the replay and privacy fixture below.
+Blast uses the existing damage and optional discard/draw effects in printed order. Gray Ogre had six damage marked when the caster could decline or discard either Forest or Mountain. Each paid fork put the selected card in the graveyard, kept the other in hand and drew once. Decline kept both cards and drew nothing. Exiling the Ogre from the pre-resolution fork returned directly to priority with the hand and library intact.
+
+Next, use the private discard decision for end-to-end Command replay and Academy viewer-privacy parity.
 
 ## Evidence to carry forward
 
-Eight of 81 primary rows have definitions and directed fixtures. Hunter, Hatcher and Prowler are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+Eight of 81 primary rows have definitions and directed fixtures. Hunter, Hatcher, Prowler and Blast are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 
