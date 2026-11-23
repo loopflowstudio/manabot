@@ -1,8 +1,13 @@
 //! Final Fantasy card behavior through native casting, choices and zone moves.
 use crate::support::{
-    game::{five_color_setup, pin_top, Scenario},
-    inspect::{counters_of, library_top, now, offered_cards, permanent_of, top_spell, zone_of},
-    play::{cast, cast_card, command, resolve_top, settle, spend_colorless},
+    game::{clear_summoning_sickness, five_color_setup, pin_top, set_counters, Scenario},
+    inspect::{
+        counters_of, library_top, now, offered_cards, permanent, permanent_of, top_spell, zone_of,
+    },
+    play::{
+        attack_with, attack_with_group, cast, cast_card, command, resolve_top, settle,
+        spend_colorless,
+    },
 };
 use managym::{
     agent::{
@@ -204,11 +209,7 @@ fn esper_origins_reveals_a_sorcery_and_stays_exiled_on_an_ordinary_return() {
 
 #[test]
 fn cecil_transforms_in_place_under_a_pending_bolt_and_protects_other_attackers() {
-    use crate::support::{
-        game::{clear_summoning_sickness, set_counters},
-        inspect::permanent,
-    };
-    use managym::{agent::action::ActionSpaceKind, state::game_object::Target};
+    use managym::state::game_object::Target;
     let mut s = five_color_setup(&[
         "Cecil, Dark Knight",
         "Trusty Boomerang",
@@ -294,11 +295,7 @@ fn cecil_transforms_in_place_under_a_pending_bolt_and_protects_other_attackers()
         clear_summoning_sickness(&mut s, id);
     }
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        if let Some(i) = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if [cecil, ally].contains(permanent))) {
-            s.step_action(i);
-        } else { s.decline_attack(); }
-    }
+    attack_with_group(&mut s, &[cecil, ally]);
     settle(&mut s);
     let viewer = Observation::for_player(s.game(), PlayerId(1));
     for name in ["Gray Ogre", "Wind Drake", "Cecil, Redeemed Paladin"] {
@@ -322,10 +319,6 @@ fn cecil_transforms_in_place_under_a_pending_bolt_and_protects_other_attackers()
 
 #[test]
 fn cecil_uses_combat_damage_already_dealt_and_stays_a_knight_above_half_life() {
-    use crate::support::{
-        game::{clear_summoning_sickness, set_counters},
-        play::attack_with,
-    };
     let mut s = five_color_setup(&["Cecil, Dark Knight"]);
     let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
     clear_summoning_sickness(&mut s, cecil);
@@ -350,10 +343,6 @@ fn cecil_uses_combat_damage_already_dealt_and_stays_a_knight_above_half_life() {
 
 #[test]
 fn cecil_trampling_over_a_lethal_blocker_leaves_one_damage_trigger() {
-    use crate::support::{
-        game::{clear_summoning_sickness, set_counters},
-        play::attack_with,
-    };
     let mut s = five_color_setup(&["Cecil, Dark Knight", "Craw Wurm"]);
     let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
     s.force_permanent_on_battlefield(1, "Craw Wurm");

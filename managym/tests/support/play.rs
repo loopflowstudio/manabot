@@ -276,21 +276,29 @@ impl Scenario {
 
 /// Attack with `attacker` and decline every other offered attacker.
 pub fn attack_with(s: &mut Scenario, attacker: PermanentId) {
-    let mut attacked = false;
+    attack_with_group(s, &[attacker]);
+}
+
+/// Declare every requested attacker and decline the others.
+pub fn attack_with_group(s: &mut Scenario, attackers: &[PermanentId]) {
+    let mut declared = 0;
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let space = s.action_space().clone();
-        let index = space.actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker)
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if attackers.contains(permanent))
         });
         match index {
             Some(index) => {
                 s.step_action(index);
-                attacked = true;
+                declared += 1;
             }
             None => s.decline_attack(),
         }
     }
-    assert!(attacked, "expected to attack");
+    assert_eq!(
+        declared,
+        attackers.len(),
+        "expected every attacker to attack"
+    );
 }
 
 // ---------------------------------------------------------------------------

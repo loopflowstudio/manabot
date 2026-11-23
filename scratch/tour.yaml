@@ -1,4 +1,4 @@
-at: c977065ddb3056a4e190fc4c4fd491f8b414d1ef
+at: a37aff9aa4ff4e3248841e66063da7f0c2674e5c
 first:
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
@@ -14,6 +14,8 @@ first:
     why: Follow the quantity into the viewer’s stack frame.
   - path: managym/cards/tests/cards/fin.rs
     why: Play the threshold, pending target and lethal combat cases.
+  - path: managym/tests/support/play.rs
+    why: Declare the chosen attackers through native actions.
   - path: managym/state/src/game_object.rs
     why: Inspect copiable values retained on departure.
   - path: managym/src/flow/zones.rs

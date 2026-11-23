@@ -6,3 +6,4 @@
 - Use Scout's Warning for the Horde fixture. Its draw triggers Horde and its flash permission lets the same physical Clone return as Gray Ogre above the pending trigger. Exercise a native in-memory GameSnapshot on this constructed position.
 - Keep Cecil first as the one-card control for the paired Ragnarok and token-copy movement probes. Use the pending library-order choice as the recovery boundary.
 - Use Rocky Rebuke to make tapped Cecil deal noncombat damage above a pending Lightning Bolt. Run unblocked combat separately to check the above-half boundary after Cecil's power changes.
+- Cecil already ships on this branch. Share its combat declaration fixture with the existing single-attacker tests.
