@@ -420,6 +420,27 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     assert_eq!(zones.generations().collect::<Vec<_>>(), [1, 0, 0, 0]);
 }
 
+/// A card taken out of exile and later placed in a library has crossed two
+/// boundaries. Neither its old id nor a link to its successor may find it.
+#[test]
+fn cr_400_7_separated_card_cannot_revive_its_exile_appearance() {
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 420);
+    let card = s.game().state.players[0].deck[0];
+    let initial = s.game().state.object_of(card);
+    let exile = s.game_mut().move_object(initial, ZoneType::Exile);
+    let parked = s.game_mut().state.zones.depart(exile).unwrap();
+    assert_eq!(s.game().state.object_of(card), parked);
+    assert_ne!(parked, exile);
+    let arrival = s.game_mut().move_object(parked, ZoneType::Library);
+    assert_eq!(s.game().state.object_of(card), arrival);
+    assert_eq!(s.game().state.zones.successor(exile), None);
+    assert_eq!(s.game().state.zones.zone_of(exile), None);
+    assert_eq!(
+        s.game().state.zones.zone_of(arrival),
+        Some(ZoneType::Library)
+    );
+}
+
 /// A physical card retains its identity and printing while its appearances
 /// change; the current-object bridge rejects departed appearances.
 #[test]

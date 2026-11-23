@@ -174,6 +174,15 @@ struct SlotState {
     zone: Option<ZoneType>,
 }
 
+impl SlotState {
+    fn advance_generation(&mut self) {
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("object generation overflow");
+    }
+}
+
 impl ZoneManager {
     /// The player whose `zone` holds `object`.
     fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
@@ -211,9 +220,8 @@ impl ZoneManager {
     }
 
     /// Whether `object` is the appearance its slot holds now. An object in
-    /// no zone (a sideboard card, a token not yet created, or one that ceased
-    /// to exist) is still the slot's latest; see [`ZoneManager::zone_of`] for
-    /// existence.
+    /// no zone can still be the slot's latest. Use [`ZoneManager::zone_of`]
+    /// to check existence.
     #[inline]
     pub fn is_latest(&self, object: ObjectId) -> bool {
         self.slots
@@ -266,6 +274,17 @@ impl ZoneManager {
         }
     }
 
+    /// Retire the appearance leaving a zone (CR 400.7). Its slot can back
+    /// another object before its physical card next occupies a zone alone.
+    pub fn depart(&mut self, object: ObjectId) -> Option<ObjectId> {
+        let zone = self.zone_of(object)?;
+        self.remove_from_zone(object, zone);
+        let state = &mut self.slots.states[object.slot()];
+        state.zone = None;
+        state.advance_generation();
+        Some(ObjectId::in_slot(object.slot(), state.generation))
+    }
+
     /// Move `object` from wherever it is to the end of `holder`'s `to_zone`
     /// and return the appearance this makes (CR 400.7): a new generation of
     /// its slot when it leaves a zone, the same id when it enters its first.
@@ -281,15 +300,13 @@ impl ZoneManager {
     ) -> ObjectId {
         debug_assert!(self.is_latest(object), "a stale object cannot move");
         let slot = object.slot();
-        let mut moved = object;
-        if let Some(old_zone) = self.zone_of(object) {
-            self.remove_from_zone(object, old_zone);
-            let generation = &mut self.slots.states[slot].generation;
-            *generation = generation
-                .checked_add(1)
-                .expect("object generation overflow");
-            moved = ObjectId::in_slot(slot, *generation);
-        }
+        let moved = self.depart(object).unwrap_or_else(|| {
+            let state = &mut self.slots.states[slot];
+            if state.generation != 0 {
+                state.advance_generation();
+            }
+            ObjectId::in_slot(slot, state.generation)
+        });
         match self.store_mut(to_zone, holder) {
             ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, moved)),
             ZoneStore::Objects(zone) => zone.push(moved),
