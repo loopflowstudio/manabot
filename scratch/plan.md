@@ -134,7 +134,9 @@ The broader query work can proceed one instruction at a time. In `managym/src/fl
 
 The FDN ledger records the native fixture for `fdn.felling_blow`. From one pending spell, Gray Ogre gained a +1/+1 counter and dealt three noncombat damage to Steel Hellkite. Returning the Hellkite from exile preserved the Ogre's counter and prevented damage. Returning the Ogre prevented both effects. Restoring the intact spell reproduced the counter and the attributed hit. Both focused cards tests passed, including the catalog tokens for counter placement and power damage. Ordered target requirements and the existing damage instruction handled all four resolutions.
 
-**Next slice — Drake Hatcher.** Exercise incubation counters from actual combat damage to a player, then remove three counters to create the Drake.
+At `0ad573b3`, the fixture checks the committed damage event’s source, recipient and amount on both intact resolutions and checks for zero hits on either blink. The same two authored instructions supply the catalog tokens. This closes the card-level obligation using the announced target slots and live power. The repeated intact branch restores a game clone. Command replay and viewer parity remain in integrated validation.
+
+**Next slice — Drake Hatcher.** The FDN ledger calls for “Combat amount becomes counters; counter-removal activation creates Drake.” Restore the same combat position with different amounts of damage getting through to the player. Inspect the resulting incubation counters and the legal activation below and at three counters, then pay three and resolve the Drake token. Use the amount on the committed damage event. The exact-source membership used by Steel Hellkite records which player was hit and cannot supply the amount. Hatcher belongs to the additional cost-payment cohort, so delivering it leaves the primary-row count unchanged.
 
 ## Evidence to carry forward
 
