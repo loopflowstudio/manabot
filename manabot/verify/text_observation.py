@@ -10,7 +10,6 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     ResponseProtocolError,
     TextDecision,
@@ -20,7 +19,7 @@ from manabot.semantic.text_observation import (
     submit_response,
 )
 import managym
-from managym.decision import Observation, SemanticContractError, apply_semantic_command
+from managym.decision import SemanticContractError, apply_semantic_command
 from managym.decision_capture import CardReference, DecisionInput
 
 
@@ -44,21 +43,25 @@ def priority_root(
         )
     )
     # Keep both dealt hands for this turn-position fixture.
-    for _seat in range(2):
-        env.step(0)
-    while env.observation_for_player(env.current_agent_index()).turn.turn_number == 0:
-        _choose(env, "decline")
+    env.step(0)
+    obs = env.step(0)[0]
     for _ in range(20):
-        contract = SemanticDecisionContract.from_env(env)
-        observation = Observation.from_json(
-            env.semantic_observation_json(contract.frame.actor)
-        )
-        if observation.viewer_state["turn"]["phase"] == 1:
+        if obs.turn.turn_number and obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
             break
-        contract.apply(env, contract.frame.find_verb("pass_priority")["id"])
+        action_type = (
+            managym.ActionEnum.DECLINE_CHOICE
+            if obs.turn.turn_number == 0
+            else managym.ActionEnum.PRIORITY_PASS_PRIORITY
+        )
+        index = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if action.action_type == action_type
+        )
+        obs = env.step(index)[0]
     else:
         raise AssertionError("main phase not reached")
-    actor = contract.frame.actor
+    actor = obs.agent.player_index
     env.scenario_clear_hand(actor)
     for card in hand:
         env.scenario_force_card_in_hand(actor, card)

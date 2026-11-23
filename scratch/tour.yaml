@@ -1,5 +1,7 @@
-at: 6591d3861d6eedac5268badb3ff6f27aaaec1dd6
+at: 792c3d51816f2a4760f214abdc73d74575a57dcd
 first:
+  - path: docs/engine.md
+    why: Opening decisions and terminal outcomes visible to callers
   - path: managym/src/flow/game.rs
     why: Opening, ordinary play and committed terminal causes
   - path: managym/src/flow/sba.rs
