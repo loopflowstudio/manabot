@@ -2,7 +2,7 @@
 
 The vector restores the retained setup and committed actions (or a hot handle),
 checks the resulting game digest, and publishes the chooser into its execution
-buffers. Every installation must start a new native game generation.
+buffers. Every installation must advance the slot generation.
 """
 
 from collections.abc import Callable, Sequence
@@ -135,7 +135,7 @@ class InMemorySnapshotVector(BufferedStreams):
 
     Each slot parks its fresh native source during replay. A hot handle keeps
     the resolved native setup; both paths replay the committed action prefix.
-    The sum of the two native generations advances on resets of either source.
+    Slot generations advance on native resets and when a parked source resumes.
     Only fresh sources write game records and statistics: a continuation
     replays a prefix its fresh game already recorded, so it is not a game.
     """
@@ -174,6 +174,7 @@ class InMemorySnapshotVector(BufferedStreams):
                 for i in range(num_envs)
             ]
 
+        self._generation_bumps = [0] * num_envs
         self._fresh = streams({})
         self._replay = streams({"record_fraction": 0.0, "statistics_path": None})
         super().__init__(num_envs, self._fresh.copy())
@@ -181,12 +182,20 @@ class InMemorySnapshotVector(BufferedStreams):
     def set_buffers(
         self,
         buffers: dict[str, np.ndarray],
-        action_overflow: str = "error",
+        action_overflow: Literal["error", "first-legal"] = "error",
         *,
         layout: managym.ObservationLayout,
     ) -> None:
         super().set_buffers(buffers, action_overflow, layout=layout)
-        for shard in self._replay:
+        self._buffers = buffers
+        self._layout = layout
+        self._action_overflow = action_overflow
+        for slot, active in enumerate(self._shards):
+            shard = (
+                self._fresh[slot]
+                if active is self._replay[slot]
+                else self._replay[slot]
+            )
             shard.native.set_buffers(
                 {k: v[shard.start : shard.stop] for k, v in buffers.items()},
                 action_overflow,
@@ -223,7 +232,24 @@ class InMemorySnapshotVector(BufferedStreams):
                 )
             shard = (self._fresh if recipe is None else self._replay)[slot]
             live = shard.native
-            if recipe is None:
+            if recipe is None and self._shards[slot] is self._replay[slot]:
+                # Replay overwrote the shared buffers. The parked fresh game
+                # still owns its original seed, state and recording.
+                result_keys = ("terminated", "truncated", "rewards")
+                live.write_observations_for_players(
+                    live.current_agent_indices(),
+                    {
+                        k: v[slot : slot + 1]
+                        for k, v in self._buffers.items()
+                        if k not in result_keys
+                    },
+                    self._action_overflow,
+                    layout=self._layout,
+                )
+                for key in result_keys:
+                    self._buffers[key][slot] = 0
+                self._generation_bumps[slot] += 1
+            elif recipe is None:
                 live.reset_seeds_into_buffers(live.current_game_seeds())
             else:
                 game = live.games[0]
@@ -266,7 +292,10 @@ class InMemorySnapshotVector(BufferedStreams):
         return [
             a.native.current_game_generations()[0]
             + b.native.current_game_generations()[0]
-            for a, b in zip(self._fresh, self._replay, strict=True)
+            + bump
+            for a, b, bump in zip(
+                self._fresh, self._replay, self._generation_bumps, strict=True
+            )
         ]
 
     def write_observations_for_players(

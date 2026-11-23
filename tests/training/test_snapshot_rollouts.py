@@ -546,21 +546,20 @@ def test_recorded_games_and_statistics_hold_only_fresh_games(tmp_path: Path) -> 
             snapshot_starts=[branch, replace(branch, branch_index=1)],
         )
         assert collector.stats.games == 1
-    played = [
-        game
-        for record in read_records(tmp_path / "games")
-        for game in record.games
-        if game.actions
+    recorded = [
+        game for record in read_records(tmp_path / "games") for game in record.games
     ]
+    assert all(game.end is not None and game.end.reason != "reset" for game in recorded)
+    played = [game for game in recorded if game.actions]
     assert len(played) == 1 and played[0].end is not None
     assert played[0].end.status == "complete"
-    finished = [
+    statistics = [
         row
         for path in (tmp_path / "statistics").glob("*.jsonl")
         for row in read_statistics(path)
-        if row.terminal
     ]
-    assert len(finished) == 1
+    assert [row.terminal for row in statistics if row.seed == played[0].seed] == [True]
+    assert sum(row.terminal for row in statistics) == 1
 
 
 def test_provenance_rejects_misaligned_arrays_invalid_values_and_mixed_spans() -> None:
