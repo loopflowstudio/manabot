@@ -1,15 +1,13 @@
-at: 50d0f59f0c706253a4c6a990220824a5b1e8acbb
+at: 314de3ced79fa3aa3b3d3ff7fad2c77946f87a12
 first:
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Original and restored end steps, then ward payment choices
-  - path: managym/src/flow/zones.rs
-    why: Records death from the departing creature
-  - path: managym/src/flow/triggers.rs
-    why: Delayed watchers read the same departure
+  - path: scratch/plan.md
+    why: Card obligations, fixture results and remaining replay work
   - path: managym/cards/src/fdn.rs
-    why: Prowler uses ward and the shared turn fact
-  - path: managym/cards/tests/cards/observability.rs
-    why: Both viewers see the active player's fact
+    why: Printed effects in resolution order
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Discard forks and target legality through native play
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Coverage evidence for each Foundations card
 hide:
   - path: protocol/
     why: Schema copies reflect the optional turn field
