@@ -21,6 +21,8 @@ def report() -> Report:
 
 
 def train(config: LocalConfig) -> None:
+    from manabot.backends import resolve
+
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
     with track(clocks=CLOCKS, config=config) as run:
         self_play(
@@ -29,6 +31,7 @@ def train(config: LocalConfig) -> None:
             updates=config.updates,
             kind="smoke",
             recipe="manabot.recipes.local",
+            backend=resolve(config.backend),
         )
         games = run.out / "games"
         if any(games.glob("*.jsonl")):

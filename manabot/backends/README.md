@@ -24,14 +24,13 @@ A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
 preparation, the checkpoint container and the `BackendPolicy`,
-`BackendLearner` and `Backend` protocols. Tracked training, evaluation and the CLI
-run the PyTorch backend, which is also the reference every other backend is
-checked against.
+`BackendLearner` and `Backend` protocols. Tracked training defaults to PyTorch. The baseline, local and Elemental recipes
+also accept MLX. PyTorch supplies evaluation and the parity reference.
 
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | experimental policy and damped update; bf16 for wide models, f32 otherwise | [mlx.md](mlx.md) |
+| `mlx` | scalar damped training, Etude continuation and portable policies | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
@@ -119,9 +118,7 @@ Pass the selected backend through training execution, monitoring and
 verification. A caller that only runs inference takes a `BackendPolicy`; a
 caller that collects, learns or captures a numerical incident also needs the
 capabilities for that work. The fresh loop accepts a `SelfPlayBackend` for construction,
-collection, the update, EMA and portable export. The maintained tracked
-recipes select Torch explicitly. Older calls to the self-play functions
-default to Torch. Tracked self-play admits the backend’s `Continuation`
+collection, the update, EMA and portable export. The tracked recipes select the configured backend and default to Torch. Tracked self-play admits the backend’s `Continuation`
 before accessing run state. See the [fresh MLX example](mlx.md#what-the-backend-covers).
 
 The collector receives a numerical session that owns policy inference,
@@ -148,7 +145,9 @@ evaluates the policy through its backend. Both frameworks export through
 `policy.checkpoint.save_policy_checkpoint`. Belief-sampler fitting takes an
 explicit `BeliefTrainer` from the caller. MLX supports fresh collection,
 bucketed inference, scalar damped updates and portable policy export.
-Tracked training and recovery use Torch.
+For tracked MLX training, Etude commits a callback export of the raw weights,
+EMA and Adam alongside its JSON counts and model readings. Torch uses its
+registered learner, optimizer and EMA objects.
 
 The tracked self-play loop restores Adam, EMA, model readings and counts,
 then starts new game and sampling streams at the saved update. Its policy
@@ -408,9 +407,9 @@ metadata = read_metadata("policy.safetensors")
 metadata["world_binding"], metadata["hypers"]["agent_hypers"]
 ```
 
-Optimizer state, update snapshots and incident tensors are PyTorch files and
-keep the `.pt` suffix; they are not policy checkpoints and no other backend
-reads them.
+Torch uses `.pt` for optimizer state, update snapshots and numerical incidents.
+MLX writes its own continuation and incident tensors as safetensors. Only
+portable policy exports can be read by either backend.
 
 ### Convert an older `.pt` checkpoint
 

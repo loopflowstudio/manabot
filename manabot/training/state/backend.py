@@ -19,9 +19,12 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.training.updates.backend import Learner, LearnerFile, UpdateBackend
 
 if TYPE_CHECKING:
+    from etude.train.tracking import TrainingRun
+
     from manabot.belief.encoding import BeliefEncodingSchema
     from manabot.infra.config import ModelConfig
     from manabot.training.learning import Precision
+    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor
@@ -41,6 +44,7 @@ class IncidentCapture:
     shapes: dict[str, object]
     state_tensor_bytes: int
     full_batch_captured: bool
+    suffix: str = ".pt"
 
 
 class TrainingState(Protocol):
@@ -165,9 +169,16 @@ class SelfPlayBackend(UpdateBackend, Protocol):
 class Continuation(TrainingState, Protocol):
     """Objects Etude can restore together, plus this framework's incident evidence."""
 
-    def resume_objects(
-        self, learner: SelfPlayLearner, ema: BackendPolicy | None
-    ) -> dict[str, object]: ...
+    def restore(
+        self,
+        run: TrainingRun,
+        learner: SelfPlayLearner,
+        ema: BackendPolicy | None,
+        counts: Counts,
+    ) -> Callable[[Path], None] | None:
+        """Restore the live objects and supply a staged export for callback saves."""
+        ...
+
     def framework(self) -> dict[str, str | None]: ...
 
 

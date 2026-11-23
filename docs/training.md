@@ -1093,7 +1093,8 @@ triggering minibatch for optimizer failures) and `state.pt` (learner, Adam,
 EMA, gradients and RNGs, up to 512 MiB). These may contain invalid state; they
 never become admitted policies or recovery snapshots and cannot replay the
 whole iteration. The last valid checkpoint is unchanged. Collection and
-learning timers settle in `finally`.
+learning timers settle in `finally`. MLX writes `tensors.safetensors` and
+`state.safetensors` under the same evidence and state tensor byte limits.
 
 ### Validation
 
@@ -1112,8 +1113,10 @@ is `experiments/data/etu126/cuda-admission-20261008.json` in the artifact store.
 
 There is one recovery contract: a run carries on from the last state it saved,
 and Etude does the saving, the carrying and the calling again. The loop
-registers its learner, Adam, EMA and counts with `run.resume` and calls
-`run.save()` every update; it has no state file or resume branch of its own.
+calls `run.save()` every update. Torch registers its learner, Adam, EMA and counts
+with Etude. MLX registers counts and exports its arrays into the same staged save
+through a callback. Resume uses the backend that wrote the run.
+[Tracked MLX training](../manabot/backends/mlx.md#tracked-training-and-recovery)
 
 | The run | What carries it on |
 | --- | --- |

@@ -5,7 +5,7 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from etude.report import Report
 from etude.train.tracking import track
@@ -18,13 +18,18 @@ from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import self_play_report
-from manabot.verify.learning_regression import BaselineReport, report_recipe
+
+if TYPE_CHECKING:
+    from manabot.verify.learning_regression import BaselineReport
 
 BASELINE_STEPS = 128
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 
 
 class BaselineConfig(RunSettings):
+    backend: Literal["torch", "mlx"] = Field(
+        default="torch", exclude_if=lambda value: value == "torch"
+    )
     updates: int = Field(default=BASELINE_STEPS, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
@@ -73,15 +78,19 @@ def train(config: BaselineConfig) -> None:
 
     with track(clocks=CLOCKS, config=config) as run:
         self_play(
-            settings(config), run, updates=config.updates, backend=resolve("torch")
+            settings(config),
+            run,
+            updates=config.updates,
+            backend=resolve(config.backend),
         )
 
 
 def evaluate(
     config: BaselineConfig, directory: Path, *, seed: int, seconds: float = 1680
-) -> BaselineReport:
+) -> "BaselineReport":
     """Evaluate the initial and endpoint policies on the nightly paired-deal cohort."""
     from manabot.backends import resolve
+    from manabot.verify.learning_regression import report_recipe
 
     return report_recipe(
         directory,

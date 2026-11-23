@@ -936,22 +936,24 @@ def self_play(
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
-        objects = state.resume_objects(learner, ema)
         # Check the saved architecture and input contract before restoring tensors.
-        saved_counts = run.resume(extra=Counts())
-        saved_model = saved_counts.model
-        if saved_model is None and saved_counts.updates > 0:
+        counts = run.resume(extra=Counts())
+        saved_model = counts.model
+        if saved_model is None and counts.updates > 0:
             initial = run.out / "policies/00000000-raw.safetensors"
             saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
         model = resume_model(saved_model, settings.model)
         readings = resume_readings(
-            saved_counts,
+            counts,
             learner.agent.readings,
             learner.agent.observation_space,
         )
-        counts = run.resume(**objects, extra=Counts())
+        export = state.restore(run, learner, ema, counts)
         counts.model = model
         counts.readings = readings
+        if export is not None:
+            # Install before steps() can save at a deadline, even at update zero.
+            run.save(export=export)
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):

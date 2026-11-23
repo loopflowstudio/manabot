@@ -8,7 +8,7 @@ and uses PyTorch as its numerical reference
 ([parity check](README.md#parity-check)). The ordinary pilot gates timing on
 those checks. The [MPS retest](../../experiments/reports/mps_retest.md) explicitly
 measures approximate half-precision arms too; it reports failing tolerances
-alongside timing and does not treat execution as numerical equivalence. The tracked recipes, evaluation and the CLI use PyTorch.
+alongside timing and does not treat execution as numerical equivalence. Evaluation uses PyTorch.
 
 ```python
 from manabot.backends import resolve
@@ -51,12 +51,11 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 ## What the backend covers
 
-MLX supports fresh scalar damped self-play with catalog record ids, table
+MLX supports tracked and fresh scalar damped self-play with catalog record ids, table
 attention and a masked-mean critic. Inputs v9 through v11 use the same saved
 column readings as Torch. The model supports stream normalization, focus and
 policy FiLM, and v11 stack and known-library rows. Collection and learning
-support bucketed shapes and bounded execution chunks. The tracked baseline
-and Elemental recipes use Torch for training and recovery.
+support bucketed shapes and bounded execution chunks. The baseline, local and Elemental recipes accept `backend="mlx"` for training and recovery.
 
 Run one fresh baseline iteration on Apple Silicon with the recipe’s model,
 learning rule and both-seat routing. Give each run a new output directory.
@@ -83,8 +82,28 @@ collection, learning, EMA and milestone export. The output directory holds
 `policies/00000001-raw.safetensors` and, when averaging is enabled,
 `policies/00000001-ema.safetensors`. Both readers can load either file.
 The returned policies are the live sources of those exports.
-To carry an Etude run forward, the tracked loop requires a backend that can
-restore the registered policy, Adam, EMA and counts. Torch supplies that capability.
+### Tracked training and recovery
+
+Run the bounded local recipe through one update, then continue the same run.
+
+```sh
+uv run --extra mlx etude train manabot/recipes/local.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
+uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates=2
+```
+
+Etude stages `training.safetensors` and `state.json` in one save and commits
+the folder through `state/current.json`. It restores raw and EMA weights,
+Adam moments, learning rate, step and cumulative counts. Restore checks the
+model settings, saved column readings, lookup tables, backend, schema and
+array names, dtypes and shapes before loading the weights. Game streams and
+sampling start again at the saved update. Portable policy exports can start
+a fresh learner on either backend.
+
+A numerical failure ends the attempt. Under `numerical-incident/`, the JSON
+record names the invariant, attempted update and last policy exports.
+`tensors.safetensors` retains bounded evidence from up to 16 rollout rows
+within 32 MiB. `state.safetensors` holds the failure-time model, Adam, EMA
+and RNG state when their tensors fit within 512 MiB.
 
 Fresh construction and checkpoint loading both call `require_supported`.
 It reports unsupported settings together, including belief inputs, decision
@@ -162,7 +181,7 @@ A policy built without a precision follows the
 [one width rule](../../docs/training.md#reduced-precision) every GPU backend
 shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
 below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
-precision always wins. This does not enable an MLX training CLI.
+precision always wins. Tracked recipes use the precision declared by their settings.
 
 ```python
 from manabot.backends import resolve

@@ -231,6 +231,10 @@ class MLXBackend:
 
         return Runtime(self.precision)
 
+    @property
+    def state(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.state")
+
     save_policy = staticmethod(save_checkpoint)
 
     @property

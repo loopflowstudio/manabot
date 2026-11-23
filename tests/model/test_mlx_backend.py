@@ -9,7 +9,6 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import time
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -94,7 +93,6 @@ from manabot.training.loops.self_play import (
     device_settings,
     fresh_iteration,
     learn,
-    self_play,
 )
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.verify.choice_corpus import collect_choices
@@ -549,14 +547,6 @@ def test_configured_mlx_precision_and_device_scope(baseline_model: ModelConfig) 
         ObservationSpace(settings.observation), settings.model
     )
     assert agent.precision == "bfloat16"
-
-
-def test_mlx_refuses_tracked_self_play_before_accessing_run_state() -> None:
-    settings = baseline.settings(baseline.BaselineConfig(device="mps"))
-    run = Mock()
-    with pytest.raises(ValueError, match="mlx does not support resumable self-play"):
-        self_play(settings, run, updates=1, backend=resolve("mlx"))
-    assert not run.mock_calls
 
 
 @pytest.mark.parametrize("exceptional", [False, True])

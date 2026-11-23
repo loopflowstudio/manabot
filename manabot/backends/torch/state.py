@@ -21,6 +21,9 @@ from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
 if TYPE_CHECKING:
+    from etude.train.tracking import TrainingRun
+
+    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
 
 
@@ -262,14 +265,16 @@ def capture_incident(
     )
 
 
-def resume_objects(learner: Learner, ema: BackendPolicy | None) -> dict[str, object]:
+def restore(
+    run: TrainingRun, learner: Learner, ema: BackendPolicy | None, counts: Counts
+) -> None:
     objects: dict[str, object] = {
         "learner": learner.agent,
         "optimizer": learner.optimizer,
     }
     if ema is not None:
         objects["ema"] = ema
-    return objects
+    run.resume(**objects, extra=counts)
 
 
 def framework() -> dict[str, str | None]:

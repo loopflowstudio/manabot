@@ -12,7 +12,6 @@ from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field
 
-from manabot.experiment.numerics import NumericsReceipt, check_numerics
 from manabot.infra.run_settings import RunSettings
 from manabot.recipes.builders import elemental_self_play
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
@@ -23,6 +22,9 @@ NUMERICS_SECONDS = 1800
 
 
 class ElementalConfig(RunSettings):
+    backend: Literal["torch", "mlx"] = Field(
+        default="torch", exclude_if=lambda value: value == "torch"
+    )
     updates: int = Field(default=3200, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     # Run the CUDA numerics gate before the first update; refuse to train on failure.
@@ -32,6 +34,8 @@ class ElementalConfig(RunSettings):
 
 def gate(directory: Path) -> None:
     """Pass the CUDA numerics gate once per run directory."""
+    from manabot.experiment.numerics import NumericsReceipt, check_numerics
+
     receipt = directory / "numerical-validation.json"
     if (
         receipt.exists()
@@ -63,7 +67,12 @@ def train(config: ElementalConfig) -> None:
 
     with track(clocks=CLOCKS, config=config) as run:
         if config.validate_numerics:
+            if config.backend != "torch":
+                raise ValueError("the CUDA numerics gate requires Torch")
             gate(run.out / "numerics")
         self_play(
-            settings(config), run, updates=config.updates, backend=resolve("torch")
+            settings(config),
+            run,
+            updates=config.updates,
+            backend=resolve(config.backend),
         )

@@ -29,6 +29,7 @@ _FILES = frozenset(
         "rl",
         "rollout",
         "runtime",
+        "state",
     }
 )
 
