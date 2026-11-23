@@ -150,7 +150,7 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
-    /// The cards the resolution's latest discard or mill moved ("this way").
+    /// The objects discarded, milled or revealed by the latest such instruction.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub this_way: Vec<ObjectId>,

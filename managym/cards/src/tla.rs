@@ -6151,7 +6151,7 @@ fn leaves_from_the_vine() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(
+                Ability::chapter(
                     1,
                     vec![
                         Effect::MillCards {
@@ -6161,7 +6161,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         Effect::create_tokens("token.food", 1),
                     ],
                 ),
-                chapter(
+                Ability::chapter(
                     2,
                     vec![Effect::TargetClause {
                         requirement: TargetRequirement {
@@ -6176,7 +6176,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         )],
                     }],
                 ),
-                chapter(
+                Ability::chapter(
                     3,
                     vec![Effect::If {
                         condition: Condition::GraveyardAtLeast {
@@ -9220,8 +9220,8 @@ fn the_cave_of_two_lovers() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(1, vec![Effect::create_tokens("token.ally", 2)]),
-                chapter(
+                Ability::chapter(1, vec![Effect::create_tokens("token.ally", 2)]),
+                Ability::chapter(
                     2,
                     vec![Effect::search_library(
                         CardPredicate {
@@ -9232,7 +9232,7 @@ fn the_cave_of_two_lovers() -> CardDefinition {
                         vec![Effect::return_to_hand(ObjectSelector::Selected)],
                     )],
                 ),
-                chapter(
+                Ability::chapter(
                     3,
                     vec![Effect::Earthbend {
                         count: EffectValue::Fixed(3),
@@ -9423,9 +9423,9 @@ fn the_legend_of_kuruk() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(1, scry_then_draw()),
-                chapter(2, scry_then_draw()),
-                chapter(3, return_transformed()),
+                Ability::chapter(1, scry_then_draw()),
+                Ability::chapter(2, scry_then_draw()),
+                Ability::chapter(3, return_transformed()),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9468,7 +9468,7 @@ fn the_legend_of_kyoshi() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(
+                Ability::chapter(
                     1,
                     vec![Effect::DrawCards {
                         count: EffectValue::GreatestPowerYouControl {
@@ -9476,7 +9476,7 @@ fn the_legend_of_kyoshi() -> CardDefinition {
                         },
                     }],
                 ),
-                chapter(
+                Ability::chapter(
                     2,
                     vec![
                         Effect::Earthbend {
@@ -9490,7 +9490,7 @@ fn the_legend_of_kyoshi() -> CardDefinition {
                         },
                     ],
                 ),
-                chapter(3, return_transformed()),
+                Ability::chapter(3, return_transformed()),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9538,15 +9538,15 @@ fn the_legend_of_roku() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(
+                Ability::chapter(
                     1,
                     vec![Effect::ExileTopCardsToPlay {
                         count: 3,
                         until: PlayWindow::ThroughYourNextTurn,
                     }],
                 ),
-                chapter(2, vec![one_mana_of_any_color(None)]),
-                chapter(3, return_transformed()),
+                Ability::chapter(2, vec![one_mana_of_any_color(None)]),
+                Ability::chapter(3, return_transformed()),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9600,7 +9600,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(
+                Ability::chapter(
                     1,
                     vec![Effect::EachPlayerChoosesToExile {
                         predicate: CardPredicate {
@@ -9609,7 +9609,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
                         },
                     }],
                 ),
-                chapter(
+                Ability::chapter(
                     2,
                     vec![Effect::TargetClause {
                         requirement: TargetRequirement::one(TargetSpec::Opponent),
@@ -9629,7 +9629,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
                         }],
                     }],
                 ),
-                chapter(3, return_transformed()),
+                Ability::chapter(3, return_transformed()),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9810,7 +9810,7 @@ fn the_rise_of_sozin() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Saga".into()],
             abilities: vec![
-                chapter(
+                Ability::chapter(
                     1,
                     vec![Effect::destroy(ObjectSelector::Each {
                         of: Scope::Battlefield,
@@ -9819,14 +9819,14 @@ fn the_rise_of_sozin() -> CardDefinition {
                         max_mana_value: None,
                     })],
                 ),
-                chapter(
+                Ability::chapter(
                     2,
                     vec![Effect::TargetClause {
                         requirement: TargetRequirement::one(TargetSpec::Opponent),
                         effects: vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
                     }],
                 ),
-                chapter(3, return_transformed()),
+                Ability::chapter(3, return_transformed()),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -11710,15 +11710,6 @@ fn zuko_s_exile() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
-    }
-}
-
-/// A Saga's chapter ability (CR 714.2).
-fn chapter(chapter: u8, effects: Vec<Effect>) -> Ability {
-    Ability::Triggered {
-        intervening_if: None,
-        condition: TriggerCondition::Chapter { chapter },
-        effects,
     }
 }
 

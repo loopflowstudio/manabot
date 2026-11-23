@@ -295,6 +295,9 @@ impl Serialize for StackObjectJson<'_> {
         if let Some(spell) = &value.spell {
             let card = spell.legacy_card(value.x);
             map.serialize_entry("card", &CardJson(&card))?;
+            if spell.cast_from_graveyard {
+                map.serialize_entry("cast_from_graveyard", &true)?;
+            }
         }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
         map.serialize_entry("controller_id", &value.controller_id)?;
@@ -702,6 +705,8 @@ pub(super) struct WireCardData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WirePermanentData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub front_mana_value: Option<u8>,
     /// Effective colors when a layer changes the copiable colors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colors: Option<Vec<String>>,
@@ -828,6 +833,8 @@ pub(super) struct WireStackObjectData {
     /// Whether a spell's kicker cost was paid (CR 702.33).
     #[serde(default)]
     pub kicked: bool,
+    #[serde(default)]
+    pub cast_from_graveyard: bool,
     /// A spell's card record (zone stack, with its announced X); absent for
     /// abilities and in historical captures, whose card lists held spells.
     #[serde(default)]
@@ -870,6 +877,7 @@ impl From<WirePermanentData> for PermanentData {
     fn from(w: WirePermanentData) -> Self {
         let card = w.card;
         Self {
+            front_mana_value: w.front_mana_value,
             colors: w.colors,
             keyword_counter_timestamps: w.keyword_counter_timestamps,
             transforms: w.transforms,
@@ -937,6 +945,7 @@ impl PermanentData {
 impl Serialize for PermanentData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         WirePermanentData {
+            front_mana_value: self.front_mana_value,
             colors: self.colors.clone(),
             keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),
             transforms: self.transforms,
@@ -992,7 +1001,10 @@ impl From<WireStackObjectData> for StackObjectData {
             x: w.x,
             granted_keywords: w.granted_keywords,
             kicked: w.kicked,
-            spell: w.card.map(SpellData::from_legacy_card),
+            spell: w.card.map(|card| SpellData {
+                cast_from_graveyard: w.cast_from_graveyard,
+                ..SpellData::from_legacy_card(card)
+            }),
         }
     }
 }
@@ -1006,6 +1018,7 @@ impl SpellData {
             registry_key: card.registry_key,
             is_copy: card.is_token,
             has_announced_x: card.x.is_some(),
+            cast_from_graveyard: false,
             characteristics: card.characteristics,
         }
     }

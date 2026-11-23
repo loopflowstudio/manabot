@@ -528,6 +528,11 @@ pub struct ContinuousEffectData {
 }
 
 impl PermanentData {
+    pub fn mana_value(&self) -> u8 {
+        self.front_mana_value
+            .unwrap_or(self.characteristics.mana_cost.mana_value)
+    }
+
     /// Its timestamp: renewed by an attachment, otherwise its id.
     pub fn timestamp(&self) -> i32 {
         self.timestamp.unwrap_or(self.id)
@@ -754,6 +759,8 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WirePermanentData")]
 pub struct PermanentData {
+    /// Mana value from the front of a transformed permanent (CR 202.3b).
+    pub front_mana_value: Option<u8>,
     pub characteristics: CharacteristicsData,
     /// Underlying object identity; absent only during historical decoding.
     pub object_id: Option<i32>,
@@ -1447,6 +1454,7 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_copy: !object.is_card(),
             has_announced_x: has_x,
+            cast_from_graveyard: game.was_cast_from_graveyard(spell),
             characteristics: CharacteristicsData {
                 power: game.object_power(spell.object),
                 ..Self::printed_characteristics_data(game, spell.object)
@@ -1487,7 +1495,11 @@ impl Observation {
         permanent: &Permanent,
         characteristics: &Characteristics,
     ) {
+        let object = &game.state[permanent.object];
         let pdat = PermanentData {
+            front_mana_value: object
+                .is_transformed()
+                .then(|| object.mana_value_cost().map_or(0, |cost| cost.mana_value)),
             colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
                 characteristics
                     .colors
@@ -2426,6 +2438,7 @@ pub struct SpellData {
     pub registry_key: i32,
     pub is_copy: bool,
     pub has_announced_x: bool,
+    pub cast_from_graveyard: bool,
     pub characteristics: CharacteristicsData,
 }
 impl std::ops::Deref for SpellData {

@@ -972,6 +972,8 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    @property
+    def mana_value(self) -> int: ...
     characteristics: ObservationCharacteristics
     # Underlying object identity; live/normalized observations always have it.
     object_id: int | None
@@ -1082,6 +1084,8 @@ class StackObject:
     x: int
     # Keywords a static grants this spell on the stack.
     granted_keywords: Keywords | None
+    @property
+    def cast_from_graveyard(self) -> bool: ...
     # Whether a spell's kicker cost was paid.
     kicked: bool
     @property

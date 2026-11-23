@@ -1657,7 +1657,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
-        out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
+        out[permanent::MANA_VALUE] = f32::from(permanent.mana_value()) / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
         out[permanent::IS_ARTIFACT] = bool_to_f32(card.card_types.is_artifact);
@@ -1727,6 +1727,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
     }
     out[stack::KICKED] = bool_to_f32(object.kicked);
     if let Some(card) = &object.spell {
+        out[stack::CAST_FROM_GRAVEYARD] = bool_to_f32(card.cast_from_graveyard);
         out[stack::IS_COPY] = bool_to_f32(card.is_copy);
         out[stack::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[stack::POWER] = card.power as f32 / 10.0;

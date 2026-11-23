@@ -6715,5 +6715,33 @@
     ],
     "oracle_text": "Reach, first strike\nVigilance, menace\nTrample, lifelink\nWard—Pay 7 life.",
     "colors": []
+  },
+  "Esper Origins": {
+    "name": "Esper Origins",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Transform",
+      "Flashback"
+    ],
+    "oracle_text": "Surveil 2. You gain 2 life. If this spell was cast from a graveyard, exile it, then put it onto the battlefield transformed under its owner's control with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)\nFlashback {3}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Summon: Esper Maduin": {
+    "name": "Summon: Esper Maduin",
+    "mana_cost": "",
+    "type_line": "Enchantment Creature — Saga Elemental",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Reveal the top card of your library. If it's a permanent card, put it into your hand.\nII — Add {G}{G}.\nIII — Other creatures you control get +2/+2 and gain trample until end of turn.",
+    "colors": [
+      "G"
+    ]
   }
 }

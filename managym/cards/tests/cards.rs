@@ -54,6 +54,8 @@ mod emn;
 mod eoe;
 #[path = "cards/fdn.rs"]
 mod fdn;
+#[path = "cards/fin.rs"]
+mod fin;
 #[path = "cards/frf.rs"]
 mod frf;
 #[path = "cards/fut.rs"]

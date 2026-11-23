@@ -382,6 +382,7 @@ fn condition_text(condition: &Condition) -> String {
             .map(condition_text)
             .collect::<Vec<_>>()
             .join(" or "),
+        Condition::CastFromGraveyard => "this spell was cast from a graveyard".into(),
         Condition::Kicked => "it was kicked".into(),
         Condition::TargetMatches(predicate) => format!(
             "that target is a {}",
@@ -395,7 +396,7 @@ fn condition_text(condition: &Condition) -> String {
         Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
         Condition::CardsThisWayMatch(predicate) => format!(
-            "a {} was milled or discarded this way",
+            "the cards found this way include a {}",
             predicate_description(predicate, "card")
         ),
         Condition::TriggeringSpellMatches(predicate) => format!(
@@ -1060,6 +1061,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Scry { count } => format!("Scry {count}"),
         Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { random_order, reveal, to_battlefield, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them {} and the rest on the bottom in {} order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards"), if *to_battlefield { "onto the battlefield" } else { "into your hand" }, if *random_order { "a random" } else { "your chosen" }),
+        RevealLibraryTop => "Reveal the top card of your library".into(),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),

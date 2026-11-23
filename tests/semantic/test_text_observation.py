@@ -423,6 +423,32 @@ def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
     return stack.split("\n", 1)[0], continuation.splitlines()
 
 
+def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
+    env = priority_root(("Esper Origins",), ("Forest",) * 6)
+    for from_graveyard in (False, True):
+        _choose(env, "Cast ")
+        if not from_graveyard:
+            _choose(env, "Pay the offered cost")
+        stack, _ = _stack_and_continuation(env)
+        assert ("; cast from graveyard." in stack) == from_graveyard
+        _choose(env, "Pass priority")
+        _choose(env, "Pass priority")
+        _choose(env, "Decline / finish")
+        # Surveil kept both cards. Choose their order before resolution resumes.
+        for _ in range(2):
+            decision = capture_text_decision(env)
+            assert decision.actions[0].description.startswith("Select ")
+            submit_response(env, decision, decision.actions[0].reference)
+
+    saga = next(
+        line
+        for line in capture_text_decision(env).text.splitlines()
+        if "(Summon: Esper Maduin)" in line and "summoning sick" in line
+    )
+    assert "mana value 2;" in saga
+    assert "finality counters 1; lore counters 1;" in saga
+
+
 def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
     """`kicked` records bargain too; the text says which cost was taken."""
     env = priority_root(("Archon's Glory",), ("Gray Ogre", "Prophetic Prism", "Plains"))

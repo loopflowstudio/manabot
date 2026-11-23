@@ -19,6 +19,15 @@ pub enum Ability {
 }
 
 impl Ability {
+    /// A Saga's chapter ability (CR 714.2).
+    pub fn chapter(chapter: u8, effects: Vec<Effect>) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::Chapter { chapter },
+            effects,
+        }
+    }
+
     /// The triggered rule represented by printed or granted ward (CR 702.21).
     pub fn ward(cost: PaymentCost) -> Self {
         Self::Triggered {
@@ -237,6 +246,8 @@ pub enum Condition {
     AnyOf(Vec<Condition>),
     /// Resolution only: the resolving spell was kicked (CR 702.33).
     Kicked,
+    /// The resolving spell was cast from a graveyard. A spell copy was never cast.
+    CastFromGraveyard,
     /// Resolution only: the frame's primary target is still a permanent and
     /// matches [predicate] ("if that creature is an Ally").
     TargetMatches(CardPredicate),
@@ -261,7 +272,7 @@ pub enum Condition {
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
-    /// Resolution only: a card the scope's latest mill or discard moved matches
+    /// Resolution only: a card the scope's latest mill, discard or reveal found matches
     /// [predicate] ("When you discard a nonland card this way").
     CardsThisWayMatch(CardPredicate),
     /// Resolution only: the spell whose casting triggered the ability
@@ -339,6 +350,7 @@ impl Condition {
     pub fn is_resolution_only(&self) -> bool {
         match self {
             Condition::Kicked
+            | Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
@@ -1234,6 +1246,8 @@ pub enum Effect {
         max_select: usize,
         predicate: CardPredicate,
     },
+    /// Reveal the top card and bind it as a card revealed this way.
+    RevealLibraryTop,
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
     PutTopCardsInHand { count: usize },
@@ -1771,6 +1785,7 @@ impl Effect {
             | Effect::Scry { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
+            | Effect::RevealLibraryTop
             | Effect::PutTopCardsInHand { .. }
             | Effect::Learn
             | Effect::Modal { .. }

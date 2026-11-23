@@ -11,7 +11,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::{CardDefId, Restriction, StaticAbility},
+        card::{CardDefId, PrintedCharacteristics, Restriction, StaticAbility},
         effect::{CopyEffect, Modification},
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
@@ -494,6 +494,10 @@ impl Game {
         self.state.observation_events_mut().push(event);
     }
 
+    pub(crate) fn was_cast_from_graveyard(&self, spell: &SpellOnStack) -> bool {
+        spell.cast_from == ZoneType::Graveyard && self.state[spell.object].is_card()
+    }
+
     pub(crate) fn push_spell_to_stack(
         &mut self,
         object: ObjectId,
@@ -576,7 +580,11 @@ impl Game {
                 matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
             }) { ZoneType::Exile } else { to_zone };
         entry = entry.for_zone(to_zone);
-        if to_zone == ZoneType::Battlefield && self.enters_as_saga(object_id, &entry) {
+        if to_zone == ZoneType::Battlefield
+            && self
+                .battlefield_entry_face(object_id, &entry)
+                .is_some_and(PrintedCharacteristics::is_saga)
+        {
             entry.counters.change(CounterKind::Lore, 1);
         }
         ProposedEvent::ZoneMove {
@@ -587,16 +595,21 @@ impl Game {
         }
     }
 
-    /// Whether the face that enters is a Saga: the back face when it enters
-    /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
-    fn enters_as_saga(&self, object: ObjectId, entry: &ZoneEntry) -> bool {
-        let printed = self.state.entry_object(object);
-        if entry.transformed {
-            if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
-                return back.is_saga();
-            }
-        }
-        printed.is_saga()
+    /// The face that would enter (CR 712.14). A missing face or an instant
+    /// or sorcery face cannot enter the battlefield (CR 304.4, 307.4).
+    pub(super) fn battlefield_entry_face(
+        &self,
+        object: ObjectId,
+        entry: &ZoneEntry,
+    ) -> Option<&PrintedCharacteristics> {
+        let object = self.state.entry_object(object);
+        let face = if entry.transformed {
+            let (_, back) = default_content_pack().back_face_row(object.definition_id)?;
+            back.printed.as_ref()
+        } else {
+            object
+        };
+        (!face.types.is_spell()).then_some(face)
     }
 
     // Keep the evaluated proposal fields together with its pre-move LKI and
@@ -793,7 +806,10 @@ impl Game {
         let Some(object) = self.state.permanents[permanent].as_ref().map(|p| p.object) else {
             return;
         };
-        if self.state[object].is_transformed() {
+        if let Some((_, front)) = self.state[object].front_face() {
+            if front.types.is_spell() {
+                return;
+            }
             self.state[object].turn_front_face_up();
         } else if !self.show_back_face(object) {
             return;
@@ -813,6 +829,9 @@ impl Game {
         let Some(back) = default_content_pack().back_face(definition) else {
             return false;
         };
+        if back.1.types.is_spell() {
+            return false;
+        }
         self.state[object].turn_back_face_up(back);
         true
     }

@@ -977,7 +977,7 @@ class _Renderer:
             if state.shared_effects is not None:
                 optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
             lines.append(
-                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}. Rules: {characteristics.text_box or '(empty)'}"
+                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {permanent.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
@@ -1209,6 +1209,8 @@ class _Renderer:
                 granted := _keywords(item.granted_keywords)
             ):
                 details.append(f"granted keywords {granted}")
+            if item.cast_from_graveyard:
+                details.append("cast from graveyard")
             if item.kicked:
                 details.append(self.taken_cost(item.source_card_registry_key).taken)
             if targets:

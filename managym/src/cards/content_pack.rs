@@ -235,9 +235,14 @@ impl ContentPack {
 
     /// The back face's row of the double-faced card whose front is `front`.
     pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<PrintedCharacteristics>)> {
+        let (id, row) = self.back_face_row(front)?;
+        Some((id, Arc::clone(&row.printed)))
+    }
+
+    pub(crate) fn back_face_row(&self, front: CardDefId) -> Option<(CardDefId, &ObjectDefinition)> {
         self.definition(front)?.back_face.as_ref()?;
         let back = CardDefId(front.0 + 1);
-        Some((back, Arc::clone(&self.definitions[back.0 as usize].printed)))
+        Some((back, &self.definitions[back.0 as usize]))
     }
 
     /// The front face whose back face is `back`; `None` for any other row.

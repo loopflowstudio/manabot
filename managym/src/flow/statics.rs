@@ -6,6 +6,7 @@ use crate::{
         decision::EffectFrame,
         game::{Game, Revisions},
         layers::{matches_view, Context, SourceSeed},
+        proposed_event::ZoneEntry,
         triggers::TriggerIndex,
     },
     state::{
@@ -524,24 +525,40 @@ impl Game {
     pub(crate) fn entry_matches_predicate(
         &self,
         object: ObjectId,
+        entry: &ZoneEntry,
         predicate: &CardPredicate,
     ) -> bool {
-        if self.state.live(object).is_some() {
-            return self.object_matches_predicate(object, predicate);
-        }
         if predicate.from_battlefield_this_turn {
-            return false;
+            return self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
+                && self.state.turn.graveyard_from_battlefield.contains(&object)
+                && self.entry_matches_predicate(
+                    object,
+                    entry,
+                    &CardPredicate {
+                        from_battlefield_this_turn: false,
+                        ..predicate.clone()
+                    },
+                );
         }
+        let Some(face) = self.battlefield_entry_face(object, entry) else {
+            return false;
+        };
         let row = self.state.entry_object(object);
         let power = if predicate.reads_power() {
-            row.power_cda().map_or_else(
-                || row.power.unwrap_or(0),
-                |cda| self.cda_power(cda, row.owner),
+            face.power_cda().map_or_else(
+                || face.power.unwrap_or(0),
+                |cda| self.cda_power(cda, entry.controller.unwrap_or(row.owner)),
             )
         } else {
             0
         };
-        predicate.matches_object_with_power(row, power)
+        predicate.matches_printing(
+            face,
+            row.kind(),
+            row.mana_value_cost().map_or(0, |c| c.mana_value),
+            power,
+            &[],
+        )
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
@@ -821,6 +838,10 @@ impl Game {
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)
             }),
+            Condition::CastFromGraveyard => source
+                .and_then(|object| self.find_spell_on_stack_index(object))
+                .is_some_and(|index| matches!(&self.state.stack_objects[index],
+                    crate::state::stack_object::StackObject::Spell(spell) if self.was_cast_from_graveyard(spell))),
             Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))

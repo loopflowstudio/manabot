@@ -2157,6 +2157,10 @@ pub struct PyPermanent {
 #[pymethods]
 impl PyPermanent {
     #[getter]
+    fn mana_value(&self) -> u8 {
+        self.data.mana_value()
+    }
+    #[getter]
     fn colors(&self) -> Option<Vec<String>> {
         self.data.colors.clone()
     }
@@ -2851,6 +2855,13 @@ impl PyStackObject {
     #[setter]
     fn set_granted_keywords(&mut self, value: Option<PyKeywords>) {
         self.data.granted_keywords = value.map(Into::into);
+    }
+    #[getter]
+    fn cast_from_graveyard(&self) -> bool {
+        self.data
+            .spell
+            .as_ref()
+            .is_some_and(|spell| spell.cast_from_graveyard)
     }
     #[getter]
     fn kicked(&self) -> bool {

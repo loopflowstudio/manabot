@@ -822,13 +822,9 @@ impl Game {
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
-                    // Returning transformed requires a back face (CR 712.14a).
                     if *to == ZoneType::Battlefield
-                        && ((!self.state[object].is_card() && from != Some(ZoneType::Battlefield))
-                            || (*transformed
-                                && default_content_pack()
-                                    .back_face(self.state[object].definition_id)
-                                    .is_none()))
+                        && !self.state[object].is_card()
+                        && from != Some(ZoneType::Battlefield)
                     {
                         continue;
                     }
@@ -1924,9 +1920,23 @@ impl Game {
                     max_select: *max_select,
                 })
             }
+            Effect::RevealLibraryTop => {
+                frame.this_way = self
+                    .reveal_library_top(frame.controller)
+                    .into_iter()
+                    .collect();
+                None
+            }
             Effect::PutTopCardsInHand { count } => {
                 for object_id in self.library_top_objects(frame.controller, *count) {
-                    self.move_object(object_id, ZoneType::Hand);
+                    self.move_object_with_entry(
+                        object_id,
+                        ZoneType::Hand,
+                        ZoneEntry {
+                            library_top_departure: true,
+                            ..Default::default()
+                        },
+                    );
                 }
                 self.invalidate_mana_cache(frame.controller);
                 None

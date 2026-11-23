@@ -721,6 +721,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Scry { .. } => "Effect::Scry",
         Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
+        Effect::RevealLibraryTop => "Effect::RevealLibraryTop",
         Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
         Effect::Learn => "Effect::Learn",
         Effect::Modal { .. } => "Effect::Modal",
@@ -771,7 +772,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 83;
+const EFFECT_VARIANTS: usize = 84;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -875,6 +876,7 @@ fn effect_witnesses() -> Vec<Effect> {
             max_select: 1,
             predicate: creature(),
         },
+        Effect::RevealLibraryTop,
         Effect::PutTopCardsInHand { count: 1 },
         Effect::Learn,
         Effect::Modal {
@@ -1186,6 +1188,7 @@ fn condition_token(condition: &Condition) -> &'static str {
             "Condition::OpponentLostLifeThisTurnAtLeast"
         }
         Condition::AnyOf(_) => "Condition::AnyOf",
+        Condition::CastFromGraveyard => "Condition::CastFromGraveyard",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
@@ -1230,6 +1233,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
         Condition::AnyOf(vec![Condition::YourTurn]),
+        Condition::CastFromGraveyard,
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
         Condition::TargetDealtDamageThisTurn,
@@ -2983,6 +2987,7 @@ impl Buffer {
         match self {
             Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
             Buffer::Relation => Some(relation::VALID),
+            Buffer::Stack => Some(stack::VALID),
             Buffer::Facts => Some(fact::VALID),
             Buffer::Action => Some(action::VALID),
             _ => Some(self.width() - 1),
@@ -3257,6 +3262,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        front_mana_value => [column(Permanent, permanent::MANA_VALUE)],
         colors => [Fact(FactKind::EffectiveColor)],
         keyword_counter_timestamps => [Fact(FactKind::KeywordCounterTimestamp)],
         transforms => [Fact(FactKind::Transforms)],
@@ -3350,6 +3356,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         owner_id => [Side],
         registry_key => [Join(Stack, stack::DEFINITION)],
         is_copy => [column(Stack, stack::IS_COPY)],
+        cast_from_graveyard => [column(Stack, stack::CAST_FROM_GRAVEYARD)],
         has_announced_x => [column(Stack, stack::HAS_X)],
         characteristics => [Rows("CharacteristicsData below")],
     }));

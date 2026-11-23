@@ -827,7 +827,8 @@ impl Game {
         if pending.copy_chosen {
             return None;
         }
-        let (scope, predicate, _) = self.entry_copy_terms(*object)?;
+        let (scope, predicate, _) =
+            Self::entry_copy_terms(self.battlefield_entry_face(*object, entry)?)?;
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
@@ -859,7 +860,9 @@ impl Game {
         let pending = &mut batch.events[batch.cursor];
         pending.copy_chosen = true;
         let ProposedEvent::ZoneMove {
-            object_id: object, ..
+            object_id: object,
+            ref entry,
+            ..
         } = pending.event
         else {
             return;
@@ -868,7 +871,10 @@ impl Game {
             return;
         };
         let source = self.state[source.object].clone();
-        let Some((_, _, exceptions)) = self.entry_copy_terms(object) else {
+        let Some((_, _, exceptions)) = self
+            .battlefield_entry_face(object, entry)
+            .and_then(Self::entry_copy_terms)
+        else {
             return;
         };
         let exceptions = exceptions.to_vec();
@@ -883,16 +889,13 @@ impl Game {
     /// The scope, predicate and copy exceptions of the card's "enter as a
     /// copy" replacement, if it has one.
     fn entry_copy_terms(
-        &self,
-        object: ObjectId,
+        face: &crate::state::card::PrintedCharacteristics,
     ) -> Option<(
         crate::state::ability::Scope,
         &crate::state::predicate::CardPredicate,
         &[crate::state::effect::Modification],
     )> {
-        self.state
-            .entry_object(object)
-            .replacement_effects
+        face.replacement_effects
             .iter()
             .find_map(|effect| match effect {
                 ReplacementEffect::EntersAsCopy {
@@ -1021,6 +1024,8 @@ impl Game {
                     return false;
                 }
                 self.state.zones.is_latest(*object_id)
+                    && (*to != ZoneType::Battlefield
+                        || self.battlefield_entry_face(*object_id, entry).is_some())
             }
         }
     }
@@ -1140,9 +1145,10 @@ impl Game {
                 let entering_controller = entry
                     .controller
                     .unwrap_or(self.state.entry_object(*object_id).owner);
-                let mut entries: Vec<_> = self
-                    .state
-                    .entry_object(*object_id)
+                let Some(face) = self.battlefield_entry_face(*object_id, entry) else {
+                    return Vec::new();
+                };
+                let mut entries: Vec<_> = face
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -1190,7 +1196,7 @@ impl Game {
                     };
                     for (definition_index, ability) in view.static_abilities.iter().enumerate() {
                         if matches!(ability, StaticAbility::EntersTapped(predicate)
-                            if self.entry_matches_predicate(*object_id, predicate))
+                            if self.entry_matches_predicate(*object_id, entry, predicate))
                         {
                             entries.push(ReplacementCandidate {
                                 identity: ReplacementId {
@@ -1254,7 +1260,10 @@ impl Game {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
-                        _ => self.entry_matches_predicate(object_id, predicate),
+                        ProposedEvent::ZoneMove { entry, .. } => {
+                            self.entry_matches_predicate(object_id, entry, predicate)
+                        }
+                        _ => unreachable!("counter placement"),
                     };
                     let matches_kind = match event {
                         ProposedEvent::CounterChange { kind: placed, .. } => {

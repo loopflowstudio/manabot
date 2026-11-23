@@ -99,7 +99,7 @@ impl<'a> Board<'a> {
         self.raw.turn.active_player_id == self.raw.agent.id
     }
     fn mana_value(&self, p: &PermanentData) -> i32 {
-        p.characteristics.mana_cost.mana_value as i32
+        i32::from(p.mana_value())
     }
     fn lands(&self, untapped: bool) -> i32 {
         self.raw

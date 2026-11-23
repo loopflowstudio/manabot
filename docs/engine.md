@@ -978,6 +978,14 @@ The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
 
+Esper Origins illustrates a zone change with a different face up. Cast it from hand
+to surveil two and gain two life. Cast it from your graveyard for its flashback
+cost and it also exiles itself, then enters as Summon: Esper Maduin with finality
+and lore counters. The stack spell, exiled card and Saga each have their own
+`ObjectId` and share one `CardId`. The Saga has mana value two and no mana cost.
+Its first chapter reveals the top card to both players. A permanent card goes
+to hand and any other card stays known on top.
+
 A token is an object with no card behind it. Take one Spirit token through a
 turn:
 

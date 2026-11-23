@@ -75,6 +75,17 @@ impl Game {
         LibraryKnowledge::bound(&mut knowledge.own);
     }
 
+    /// Both seats learn the top position even if the revealed card stays there.
+    pub(crate) fn reveal_library_top(&mut self, owner: PlayerId) -> Option<ObjectId> {
+        let object = self.state.zones.top(ZoneType::Library, owner)?;
+        let definition = self.state[object].definition_id;
+        let knowledge = self.state.known_library_mut(owner);
+        knowledge.public.insert(0, definition);
+        LibraryKnowledge::bound(&mut knowledge.public);
+        self.emit(crate::flow::event::GameEvent::CardRevealed { owner, definition });
+        Some(object)
+    }
+
     pub(crate) fn refresh_visible_library_tops(&mut self) {
         let visible = self.visible_library_tops();
         for owner in [PlayerId(0), PlayerId(1)] {
