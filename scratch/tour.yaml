@@ -1,4 +1,4 @@
-at: b9208b43d80329579b4568a85a50e3f72db23992
+at: 80425a2cbf66b400fdf2eaf30dcdad2740d89673
 first:
   - path: managym/cards/src/fdn.rs
     why: Lightshell Duo combines prowess and surveil on entry
@@ -10,6 +10,10 @@ first:
     why: Sokka has prowess and grants it to other Allies
   - path: managym/cards/tests/cards/fdn.rs
     why: Both library orders determine the next draw
+  - path: managym/src/flow/decision.rs
+    why: Surveil partitions the inspected prefix before ordering
+  - path: managym/src/flow/zones.rs
+    why: Committed departures shift retained knowledge
   - path: tests/semantic/test_text_observation.py
     why: Replay each choice and compare both viewers
 hide: []
