@@ -208,6 +208,6 @@ impl Game {
         if !self.is_game_over() {
             return None;
         }
-        self.state.players.iter().position(|p| p.alive)
+        (0..2).find(|seat| self.state.loss(*seat).is_none())
     }
 }

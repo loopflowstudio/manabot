@@ -301,7 +301,7 @@ impl Game {
             announcing: None,
             paid: Vec::new(),
         };
-        if let Some(opening) = &self.state.opening {
+        if let Some(opening) = self.state.opening() {
             let (stage, instruction) = opening.instruction();
             view.stage = stage.into();
             view.instruction = if viewer == actor {

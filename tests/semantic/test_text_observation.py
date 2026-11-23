@@ -34,6 +34,7 @@ import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
+from managym.experience_projection import serialize_observation
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -688,6 +689,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_agent": "the viewer's own section",
         "is_active": "active player",
         "life": "life",
+        "counters": "public counter kinds and counts",
         "zone_counts": "zone counts",
         "graveyard_lessons": "graveyard Lessons",
         "combat_mana": "combat mana",
@@ -832,6 +834,18 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
         "non-Human creature spell it casts; expires at step end."
     ) in text
     assert "Combat mana:" not in text
+
+
+def test_player_poison_count_reaches_text_and_academy() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    state = payload["observation"]["viewer_state"]
+    state["opponent"]["counters"] = {"poison": 8}
+    assert "counters 8 poison" in render_decision(_redigest(payload)).text
+    observation = managym.Observation.from_json(json.dumps(state))
+    projected = serialize_observation(observation)
+    assert projected["opponent"]["counters"] == {"poison": 8}
+    assert "counters" not in projected["agent"]
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:

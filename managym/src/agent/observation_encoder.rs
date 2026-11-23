@@ -1784,6 +1784,16 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             effect: None,
         })
     };
+    for player in [&obs.agent, &obs.opponent] {
+        for (kind, count) in &player.counters {
+            push(
+                player.id,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
+            );
+        }
+    }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
@@ -2356,6 +2366,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2394,6 +2405,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },

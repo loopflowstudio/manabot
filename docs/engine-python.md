@@ -51,7 +51,17 @@ Reset starts before turn one. Each seat can keep or mulligan. After both seats
 declare, those taking a mulligan redraw and privately choose cards for the
 bottom of their library, deepest first. After both keep, each can put eligible
 cards from their opening hand onto the battlefield in any order. Finishing
-passes that opportunity to the next seat.
+passes that opportunity to the next seat. A snapshot taken between bottom
+selections restores the chooser, the remaining offers and each viewer’s
+knowledge of the cards already placed.
+
+Both players’ observations expose public player counters through
+`player.counters`, keyed by kind (for example, `"poison"`). Ten poison
+counters cause a loss at the next state-based check unless the player is
+protected. Terminal step info reports the losing seat’s reason under
+`p0_loss_reason` or `p1_loss_reason`. When several causes apply to a seat,
+the reported reason is the first applicable one in the order `deck_empty`,
+`life_total`, `poison`. A simultaneous loss by both seats is a draw.
 
 Run `uv run --no-project --python .venv/bin/python play.py`. It starts a game
 from two bundled decks and executes the first legal action, then prints the

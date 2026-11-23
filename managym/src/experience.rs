@@ -532,6 +532,8 @@ pub struct LegacyPlayerView {
     pub is_active: bool,
     pub is_agent: bool,
     pub life: i32,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
     pub zone_counts: BTreeMap<String, u32>,
     pub library_count: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

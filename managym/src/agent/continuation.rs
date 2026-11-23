@@ -370,7 +370,7 @@ impl Game {
     pub fn continuation_frames(&self, viewer: PlayerId) -> Vec<ContinuationFrame> {
         // Same top-to-bottom ordering as Observation.stack_objects.
         let mut frames = Vec::new();
-        if let Some(opening) = &self.state.opening {
+        if let Some(opening) = self.state.opening() {
             frames.extend(opening.frames());
         }
         for object in self.state.stack_objects.iter().rev() {

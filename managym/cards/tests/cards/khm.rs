@@ -74,3 +74,51 @@ fn seize_the_spoils_discards_a_chosen_card_then_draws_two_and_makes_a_treasure()
         assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
     }
 }
+
+#[test]
+fn fynn_poison_and_herald_loss_protection() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, pass_until},
+    };
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    for protected in [false, true] {
+        let mut s = five_color_setup(&["Fynn, the Fangbearer", "Herald of Eternal Dawn"]);
+        let fynn = s.force_permanent_on_battlefield(0, "Fynn, the Fangbearer");
+        clear_summoning_sickness(&mut s, fynn);
+        s.game_mut().state.players[1]
+            .counters
+            .change(CounterKind::Poison, 8);
+        let herald =
+            protected.then(|| s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn"));
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, fynn);
+        while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+            s.decline_block();
+        }
+        s.advance_to_step(StepKind::EndOfCombat);
+        for viewer in [0, 1] {
+            let obs = Observation::for_player(s.game(), PlayerId(viewer));
+            let poisoned = if viewer == 1 {
+                &obs.agent
+            } else {
+                &obs.opponent
+            };
+            assert_eq!(poisoned.counters["poison"], 10);
+        }
+        assert_eq!(s.game().is_game_over(), !protected);
+        if let Some(herald) = herald {
+            s.game_mut().state.players[1].drew_when_empty = true;
+            s.pass_priority();
+            assert!(!s.game().state.players[1].drew_when_empty);
+            let object = s.game().state.permanents[herald].as_ref().unwrap().object;
+            s.game_mut().move_object(object, ZoneType::Exile);
+            s.pass_priority();
+        }
+        s.assert_winner(0);
+        assert_eq!(s.game().state.loss(1).unwrap().reason(), Some("poison"));
+    }
+}

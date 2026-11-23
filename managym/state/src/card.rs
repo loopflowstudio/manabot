@@ -911,6 +911,7 @@ pub enum StaticAbility {
     AdditionalLandPlayEachPlayer,
     /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
     LegendRuleDoesntApply,
+    CantLoseAndOpponentsCantWin,
     /// "Activated abilities of [predicate] you control cost {generic} less to
     /// activate. This effect can't reduce the mana in that cost to less than
     /// one mana" (Training Grounds); applies to the generic part, mana

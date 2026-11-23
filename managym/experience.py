@@ -496,6 +496,9 @@ class LegacyPlayerView(ProtocolModel):
     id: UInt32
     is_active: bool
     is_agent: bool
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     life: Int32
     zone_counts: dict[str, UInt32]
     library_count: UInt32

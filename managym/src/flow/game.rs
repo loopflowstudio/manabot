@@ -38,9 +38,39 @@ use crate::{
     },
 };
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum GameProcedure {
+    OpeningHands(crate::flow::opening::OpeningHands),
+    Playing,
+    Finished { losses: [LossCauses; 2] },
+}
+
+/// Conditions that applied to one seat in the committed SBA batch.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+pub struct LossCauses {
+    pub life_total: bool,
+    pub deck_empty: bool,
+    pub poison: bool,
+}
+
+impl LossCauses {
+    /// Single-reason projection for Env clients, preserving empty-draw precedence.
+    pub fn reason(self) -> Option<&'static str> {
+        if self.deck_empty {
+            Some("deck_empty")
+        } else if self.life_total {
+            Some("life_total")
+        } else if self.poison {
+            Some("poison")
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub opening: Option<crate::flow::opening::OpeningHands>,
+    pub procedure: GameProcedure,
     pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,
@@ -60,7 +90,7 @@ pub struct GameState {
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
-    pub combat: Option<CombatState>,
+    pub combat: Option<Box<CombatState>>,
     pub mana_cache: [Option<Mana>; 2],
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,
@@ -86,8 +116,24 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn opening(&self) -> Option<&crate::flow::opening::OpeningHands> {
+        match &self.procedure {
+            GameProcedure::OpeningHands(opening) => Some(opening),
+            _ => None,
+        }
+    }
+
+    pub fn loss(&self, seat: usize) -> Option<LossCauses> {
+        match self.procedure {
+            GameProcedure::Finished { losses } if losses[seat].reason().is_some() => {
+                Some(losses[seat])
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn is_game_over(&self) -> bool {
-        self.players.iter().any(|player| !player.alive)
+        matches!(self.procedure, GameProcedure::Finished { .. })
     }
 
     /// Put the same appearance in a zone without a zone change. Callers own

@@ -810,8 +810,12 @@ class _Renderer:
                 f"{zone} {count}"
                 for zone, count in zip(_ZONES, player.zone_counts, strict=True)
             )
+            counter_text = ", ".join(
+                f"{n} {kind}" for kind, n in player.counters.items()
+            )
+            counters = f"counters {counter_text}; " if counter_text else ""
             lines += [
-                f"{self.name(player.id)}: life {player.life}; active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
+                f"{self.name(player.id)}: life {player.life}; {counters}active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
                 "Mana pool: "
                 + ", ".join(
                     f"{symbol} {count}"

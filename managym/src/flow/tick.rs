@@ -215,20 +215,20 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
-                self.state.combat = Some(CombatState::default());
+                self.state.combat = Some(Box::<CombatState>::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 combat.blockers_to_declare = eligible;
             }
             _ => {}
@@ -306,7 +306,7 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
@@ -350,7 +350,7 @@ impl Game {
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
                     let assignments: Vec<_> = self

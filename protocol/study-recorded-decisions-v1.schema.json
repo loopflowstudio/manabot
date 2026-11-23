@@ -1471,6 +1471,13 @@
           ],
           "format": "int32"
         },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
         "effects": {
           "description": "Continuous effects on this player, in timestamp order.",
           "type": "array",

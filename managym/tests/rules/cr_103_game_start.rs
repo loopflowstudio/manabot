@@ -105,7 +105,7 @@ fn cr_103_opening_commands_keep_private_bottom_order_and_enter_before_turn_one()
         s.step_action(done);
     }
     assert_eq!(s.game().state.turn.turn_number, 1);
-    assert!(s.game().state.opening.is_none());
+    assert!(s.game().state.opening().is_none());
     let object = s
         .game()
         .state

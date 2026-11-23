@@ -1148,6 +1148,11 @@ pub enum Effect {
         player: PlayerSelector,
         amount: EffectValue,
     },
+    GivePlayerCounters {
+        player: PlayerSelector,
+        kind: CounterKind,
+        count: i32,
+    },
     /// The source deals `amount` damage to the selected players.
     DealDamageToPlayer {
         player: PlayerSelector,
@@ -1679,9 +1684,9 @@ impl Effect {
             return Some(spec);
         }
         match self {
-            Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } => {
-                player.target_spec()
-            }
+            Effect::GivePlayerCounters { player, .. }
+            | Effect::LoseLife { player, .. }
+            | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),

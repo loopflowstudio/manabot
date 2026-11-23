@@ -39,6 +39,7 @@ pub enum CounterKind {
     /// No rules meaning of its own; station puts them on and a Spacecraft's
     /// or Planet's "N+" abilities count them (CR 702.184).
     Charge,
+    Poison,
 }
 
 impl CounterKind {
@@ -59,6 +60,7 @@ impl CounterKind {
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
+            CounterKind::Poison => "poison",
             CounterKind::Charge => "charge",
         }
     }
@@ -71,7 +73,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 15] = [
+    pub const ALL: [CounterKind; 16] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -87,6 +89,7 @@ impl CounterKind {
         CounterKind::Age,
         CounterKind::Ice,
         CounterKind::Charge,
+        CounterKind::Poison,
     ];
 }
 

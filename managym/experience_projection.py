@@ -374,6 +374,7 @@ def _serialize_player(
         "is_active": bool(player.is_active),
         "is_agent": bool(player.is_agent),
         "life": int(player.life),
+        **({"counters": dict(player.counters)} if player.counters else {}),
         **(
             {"hand_only_until": int(player.hand_only_until)}
             if player.hand_only_until is not None

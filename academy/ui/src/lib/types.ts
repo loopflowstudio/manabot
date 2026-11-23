@@ -165,6 +165,7 @@ export interface PlayerState {
   /** Player id whose next turn ends this player's hand-only casting. */
   hand_only_until?: number;
   no_maximum_hand_size?: boolean;
+  counters?: Record<string, number>;
   combat_mana?: number;
   inspected?: CardState[];
   sideboard?: SideboardCard[];

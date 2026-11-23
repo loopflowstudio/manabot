@@ -19,6 +19,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         claws_out(),
         hungry_ghoul(),
+        herald_of_eternal_dawn(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
         leyline_axe(),
@@ -281,6 +282,26 @@ fn leyline_axe() -> CardDefinition {
                 }),
             ],
             text_box: "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3}".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn herald_of_eternal_dawn() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.herald_of_eternal_dawn",
+        scryfall_id: "c9fdfebf-98e0-4718-bac3-6eee1cd0623d",
+        printed: PrintedCharacteristics {
+            name: "Herald of Eternal Dawn".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
+            statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
+            text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
             ..Default::default()
         },
         ..Default::default()

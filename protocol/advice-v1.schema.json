@@ -2890,6 +2890,13 @@
           "default": null,
           "title": "Combat Mana"
         },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
         "effects": {
           "items": {
             "$ref": "#/$defs/ContinuousEffectView"

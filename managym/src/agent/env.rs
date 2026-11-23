@@ -91,13 +91,8 @@ fn finish_game_step(
                 InfoValue::String("draw".to_string()),
             );
         }
-        for (i, player) in game.state.players.iter().enumerate() {
-            if !player.alive {
-                let reason = if player.drew_when_empty {
-                    "deck_empty"
-                } else {
-                    "life_total"
-                };
+        for i in 0..2 {
+            if let Some(reason) = game.state.loss(i).and_then(|loss| loss.reason()) {
                 insert_info(
                     &mut info,
                     format!("p{i}_loss_reason"),
@@ -1857,6 +1852,58 @@ impl Env {
             }
         }
         insert_info(info, "profiler", InfoValue::Map(out));
+    }
+}
+
+#[cfg(test)]
+mod terminal_tests {
+    use super::*;
+
+    #[test]
+    fn terminal_rewards_and_reasons_read_the_committed_batch() {
+        let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
+        for simultaneous in [false, true] {
+            let mut game = root.clone();
+            game.state.players[1]
+                .counters
+                .change(crate::state::permanent::CounterKind::Poison, 10);
+            if simultaneous {
+                game.state.players[0].life = 0;
+                game.state.players[0].drew_when_empty = true;
+            }
+            let mut fork = game.clone();
+            for position in [&mut game, &mut fork] {
+                position.perform_state_based_actions();
+                for seat in 0..2 {
+                    let (_, reward, done, _, info) =
+                        finish_game_step(position, PlayerId(seat), position.is_game_over());
+                    assert!(done);
+                    assert_eq!(
+                        reward,
+                        if simultaneous {
+                            0.0
+                        } else if seat == 0 {
+                            1.0
+                        } else {
+                            -1.0
+                        }
+                    );
+                    assert_eq!(info["p1_loss_reason"], InfoValue::String("poison".into()));
+                    if simultaneous {
+                        let causes = position.state.loss(0).unwrap();
+                        assert!(causes.life_total && causes.deck_empty);
+                        assert_eq!(
+                            info["p0_loss_reason"],
+                            InfoValue::String("deck_empty".into())
+                        );
+                    }
+                }
+            }
+            assert_eq!(
+                game.state.deterministic_hash(),
+                fork.state.deterministic_hash()
+            );
+        }
     }
 }
 

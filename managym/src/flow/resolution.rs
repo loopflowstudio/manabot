@@ -548,7 +548,7 @@ impl Game {
             }
             Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
             Target::StackAbility(id) => self.find_ability_on_stack_index(id).is_some(),
-            Target::Player(player) => self.state.players[player.0].alive,
+            Target::Player(player) => self.state.loss(player.0).is_none(),
         }
     }
 
@@ -951,6 +951,16 @@ impl Game {
             }
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
                 self.distribute_counters(frame.controller, *kind, *count)
+            }
+            Effect::GivePlayerCounters {
+                player,
+                kind,
+                count,
+            } => {
+                for seat in self.selected_players(player, frame) {
+                    self.state.players[seat.0].counters.change(*kind, *count);
+                }
+                None
             }
             Effect::DealDamageToPlayer { player, amount } => {
                 let amount = self.effect_value(amount, frame);

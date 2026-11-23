@@ -445,6 +445,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
         flying,
+        deathtouch,
         no_counters,
         in_combat,
         token,
@@ -479,6 +480,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
                 .collect::<Vec<_>>()
                 .join(" or "),
         );
+    }
+    if *deathtouch {
+        terms.push("deathtouch".into());
     }
     if *flying {
         terms.push("flying".into());
@@ -935,6 +939,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             let cost = payment_description(cost);
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
         },
+        GivePlayerCounters {player, kind, count} => format!("Give {} {count} {} counters", player_description(player), kind.name()),
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),

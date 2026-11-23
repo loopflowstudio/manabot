@@ -45,7 +45,7 @@ impl Game {
     }
 
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
-        if self.state.opening.is_some() {
+        if self.state.opening().is_some() {
             return match action {
                 Action::ChooseMode { mode: 0, .. } => Some("Keep hand".into()),
                 Action::ChooseMode { mode: 1, .. } => Some("Mulligan".into()),
@@ -974,7 +974,7 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        if self.state.opening.is_some() {
+        if self.state.opening().is_some() {
             return self.choose_opening(action);
         }
         match action {

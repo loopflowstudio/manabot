@@ -136,7 +136,7 @@ impl Game {
             payment_cache: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {
-                opening: Some(Default::default()),
+                procedure: crate::flow::game::GameProcedure::OpeningHands(Default::default()),
                 cards: CardVec::new(cards),
                 objects,
                 permanents: PermanentVec::default(),

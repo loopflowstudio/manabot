@@ -503,7 +503,8 @@ mod tests {
     #[test]
     fn capture_matches_the_final_snapshot_of_an_unresolved_spell_copy() {
         let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
-        game.lose_game(PlayerId(0));
+        game.state.players[0].life = 0;
+        game.perform_state_based_actions();
         assert!(game.is_game_over());
 
         let mut moves = copy_moves(&game, copy);

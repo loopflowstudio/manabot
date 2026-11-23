@@ -864,6 +864,7 @@ class Player:
     sideboard_counts: Optional[Dict[int, int]]
     remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
+    counters: dict[str, int]
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory

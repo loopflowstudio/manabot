@@ -214,7 +214,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
         name: _,
         life: _,
         drew_when_empty: _,
-        alive: _,
+        counters: _,
         mana_pool: _,
         combat_mana_pool: _,
     } = player;
@@ -237,7 +237,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
             "drew_when_empty",
             Seen::Transient("the player loses at the next state-based check"),
         ),
-        ("alive", Seen::Transient("the game ends")),
+        ("counters", Seen::Fact(FactKind::Counter)),
         (
             "mana_pool",
             Seen::Player(player::MANA_WHITE, player::RESTRICTED_LESSON_WHITE),
@@ -721,6 +721,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Tap { .. } => "Effect::Tap",
         Effect::Untap { .. } => "Effect::Untap",
         Effect::RemoveAllCounters { .. } => "Effect::RemoveAllCounters",
+        Effect::GivePlayerCounters { .. } => "Effect::GivePlayerCounters",
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
@@ -776,7 +777,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 83;
+const EFFECT_VARIANTS: usize = 84;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -795,6 +796,11 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
         Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+        Effect::GivePlayerCounters {
+            player: PlayerSelector::EachOpponent,
+            kind: CounterKind::Poison,
+            count: 2,
+        },
         Effect::PutCountersFrom {
             from: ObjectSelector::Triggering,
             on: ObjectSelector::This,
@@ -1355,6 +1361,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "iko",
             "drannith_magistrate_stops_opponents_casting_from_the_graveyard",
         ),
+        StaticAbility::CantLoseAndOpponentsCantWin => witnessed(
+            "StaticAbility::CantLoseAndOpponentsCantWin",
+            Seen::Actions("its controller continues playing despite a loss condition"),
+            "Herald of Eternal Dawn",
+            "fdn",
+            "herald_protects_against_a_failed_draw_in_its_last_sba_batch",
+        ),
         StaticAbility::LegendRuleDoesntApply => witnessed(
             "StaticAbility::LegendRuleDoesntApply",
             Seen::Actions("no legend-rule choice is asked of its controller"),
@@ -1718,6 +1731,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::CantLoseAndOpponentsCantWin,
         StaticAbility::LegendRuleDoesntApply,
         StaticAbility::ActivatedAbilitiesCostLess {
             predicate: creature(),
@@ -3112,6 +3126,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_agent => [Side],
         is_active => [column(Player, player::IS_ACTIVE)],
         life => [column(Player, player::LIFE)],
+        counters => [Fact(FactKind::Counter)],
         zone_counts => [Columns(Player, player::LIBRARY_COUNT, 7)],
         graveyard_lessons => [column(Player, player::GRAVEYARD_LESSONS)],
         combat_mana => [column(Player, player::COMBAT_MANA)],
@@ -3925,6 +3940,23 @@ fn ogre_state() -> (Scenario, PermanentId) {
 }
 
 #[test]
+fn poison_counters_join_the_affected_player_for_both_viewers() {
+    let (mut s, _) = ogre_state();
+    s.game_mut().state.players[1]
+        .counters
+        .change(CounterKind::Poison, 8);
+    let token = name_value("CounterKind::poison");
+    for viewer in [0, 1] {
+        let owner = 1 - viewer;
+        let row = fact_row(&facts_about(&s, viewer, owner), FactKind::Counter, token);
+        assert_eq!(row[fact::VALUE], 0.8);
+        assert!(facts_about(&s, viewer, 1 - owner)
+            .iter()
+            .all(|row| row[fact::ID_HIGH..fact::ID_HIGH + 2] != id_columns(token)));
+    }
+}
+
+#[test]
 fn each_counter_kind_reaches_a_fact_row() {
     for kind in CounterKind::ALL {
         let (mut baseline, ogre) = ogre_state();
@@ -4450,14 +4482,14 @@ fn declare(
             .unwrap()
             .attacking = true;
     }
-    s.game_mut().state.combat = Some(managym::flow::combat::CombatState {
+    s.game_mut().state.combat = Some(Box::new(managym::flow::combat::CombatState {
         attackers: attackers.to_vec(),
         attacker_to_blockers: blocks
             .map(|(attacker, blocker)| (attacker, vec![blocker]))
             .into_iter()
             .collect(),
         ..Default::default()
-    });
+    }));
 }
 
 /// Attacking has been a permanent column since v4 (column 27).

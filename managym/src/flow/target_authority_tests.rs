@@ -462,14 +462,14 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
         assert!(game.flush_triggers().is_none());
         game.resolve_top_of_stack();
         game.perform_state_based_actions();
-        if game.state.players[0].alive {
+        if game.state.loss(0).is_none() {
             game.resolve_top_of_stack();
             game.perform_state_based_actions();
         }
         // CR 405.2: last placed resolves first. CR 704.5a: lose at zero
         // before the next ability resolves. Both placements must be choices.
         assert_eq!(game.state.players[0].life, expected_life);
-        assert_eq!(game.state.players[0].alive, expected_alive);
+        assert_eq!(game.state.loss(0).is_none(), expected_alive);
     }
 }
 

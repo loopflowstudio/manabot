@@ -12,3 +12,5 @@
 - Use turn zero for pregame entries. Store the turn a permanent entered so power-up keeps its discount through any priority during repeated cleanup.
 
 - Retain every simultaneous loss cause per seat. Preserve the historical empty-draw precedence in the single-reason Env field so one consumer's projection does not erase facts from the committed result.
+
+- Use byte-sized opening counters (at most seven) and allocate the combat workspace only during combat. Compacting the opening state alone still failed the synced 4096-byte assertion. The paired budget at gate will measure the combat allocation.

@@ -1494,6 +1494,20 @@
     "oracle_text": "({T}: Add {G}.)",
     "colors": []
   },
+  "Fynn, the Fangbearer": {
+    "name": "Fynn, the Fangbearer",
+    "mana_cost": "{1}{G}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhenever a creature you control with deathtouch deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Gather the White Lotus": {
     "name": "Gather the White Lotus",
     "mana_cost": "{4}{W}",
@@ -1756,6 +1770,21 @@
     "oracle_text": "Whenever Hei Bai enters or attacks, you may sacrifice another creature or artifact. If you do, put two +1/+1 counters on Hei Bai.\nWhen Hei Bai leaves the battlefield, put its counters on target creature you control.",
     "colors": [
       "B",
+      "W"
+    ]
+  },
+  "Herald of Eternal Dawn": {
+    "name": "Herald of Eternal Dawn",
+    "mana_cost": "{4}{W}{W}{W}",
+    "type_line": "Creature — Angel",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.",
+    "colors": [
       "W"
     ]
   },

@@ -145,7 +145,7 @@ impl ReadSet {
         if !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying {
+        if p.flying || p.deathtouch {
             self.fields |= KEYWORDS;
         }
         if p.min_power.is_some() || p.max_power.is_some() {
@@ -1214,6 +1214,7 @@ pub(super) fn matches_view(
     // A permanent is on the battlefield, never a graveyard card.
     !p.from_battlefield_this_turn
         && (!p.namesake || source_name == Some(view.name.as_str()))
+        && (!p.deathtouch || view.keywords.has(Keyword::Deathtouch))
         && (!p.flying || view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))

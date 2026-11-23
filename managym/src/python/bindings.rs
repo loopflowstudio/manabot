@@ -1106,6 +1106,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub life: i32,
     #[pyo3(get, set)]
+    pub counters: BTreeMap<String, i32>,
+    #[pyo3(get, set)]
     pub zone_counts: Vec<i32>,
     #[pyo3(get, set)]
     pub graveyard_lessons: i32,
@@ -1436,6 +1438,7 @@ impl From<PlayerData> for PyPlayer {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
@@ -1479,6 +1482,7 @@ impl From<PyPlayer> for PlayerData {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,

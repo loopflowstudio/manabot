@@ -73,7 +73,7 @@ impl Scenario {
     }
 
     fn keep_opening_hands(&mut self) {
-        while self.game.state.opening.is_some() {
+        while self.game.state.opening().is_some() {
             let index = self
                 .game
                 .action_space()

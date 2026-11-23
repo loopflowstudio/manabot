@@ -43,6 +43,8 @@ pub struct PlayerData {
     pub is_agent: bool,
     pub is_active: bool,
     pub life: i32,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
     pub zone_counts: [i32; 7],
     /// Lesson cards in this player's graveyard.
     pub graveyard_lessons: i32,
@@ -1234,6 +1236,11 @@ impl Observation {
             is_agent,
             is_active: game.active_player() == player,
             life: p.life,
+            counters: p
+                .counters
+                .iter()
+                .map(|(k, n)| (k.name().into(), n))
+                .collect(),
             zone_counts,
             graveyard_lessons: game.count_graveyard_matching(
                 player,

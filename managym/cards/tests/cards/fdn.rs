@@ -728,3 +728,21 @@ fn leyline_axe_moves_its_grants_when_equipped_again() {
         }
     }
 }
+
+#[test]
+fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
+    let mut s = five_color_setup(&["Herald of Eternal Dawn"]);
+    let herald = s.force_permanent_on_battlefield(0, "Herald of Eternal Dawn");
+    s.game_mut().state.permanents[herald]
+        .as_mut()
+        .unwrap()
+        .damage = 6;
+    s.game_mut().state.players[0].drew_when_empty = true;
+    s.pass_priority();
+    assert!(s.game().state.permanents[herald].is_none());
+    assert!(!s.game().is_game_over());
+    assert!(!s.game().state.players[0].drew_when_empty);
+    s.game_mut().state.players[0].drew_when_empty = true;
+    s.pass_priority();
+    assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
+}

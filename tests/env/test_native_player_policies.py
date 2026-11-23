@@ -129,18 +129,38 @@ def test_scalar_and_vector_reset_offer_both_seats_the_same_opening_choices() -> 
     assert observation.turn.turn_number == 1
 
 
-def test_other_seat_cannot_distinguish_private_bottom_choices() -> None:
+@pytest.mark.parametrize("second_bottom", [False, True])
+def test_other_seat_cannot_distinguish_private_bottom_choices(
+    second_bottom: bool,
+) -> None:
     env = managym.Env(seed=213)
     env.reset(players())
     env.step(1)
     env.step(0)
+    if second_bottom:
+        env.step(0)  # Finish the first round's bottom selection.
+        env.step(1)  # Mulligan again, then commit the deepest card.
+        env.step(0)
     choices = env.observation_for_player(0).action_space.actions
+    assert len(choices) == (6 if second_bottom else 7)
     other_index = next(
         i for i, a in enumerate(choices) if a.description != choices[0].description
     )
-    branch = env.clone_env()
+    snapshot = env.snapshot()
+    branch = snapshot.restore()
+    assert branch.search_witness_json() == env.search_witness_json()
+    for seat in (0, 1):
+        assert (
+            branch.observation_for_player(seat).toJSON()
+            == env.observation_for_player(seat).toJSON()
+        )
     env.step(0)
     branch.step(other_index)
+    restored = managym.GameSnapshot.from_replay_json(
+        snapshot.to_replay_json()
+    ).restore()
+    restored.step(0)
+    assert restored.search_witness_json() == env.search_witness_json()
     assert (
         env.observation_for_player(1).toJSON()
         == branch.observation_for_player(1).toJSON()
