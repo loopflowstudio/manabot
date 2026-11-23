@@ -2098,7 +2098,7 @@ impl Game {
 
     /// `player` looks at their library's top card and may cast it for free.
     fn library_top_free_cast(
-        &self,
+        &mut self,
         player: PlayerId,
         spends: Option<OnceEachTurnKey>,
     ) -> Option<Decision> {
@@ -2107,6 +2107,8 @@ impl Game {
             .zones
             .zone_objects(ZoneType::Library, player)
             .last()?;
+        // Even declining this offer leaves evidence about the next draw.
+        self.state.library_order_pins_mut(player).insert(object);
         let decision = Decision::CastDuringResolution {
             player,
             paid: false,

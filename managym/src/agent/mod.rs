@@ -17,3 +17,5 @@ pub mod rollout_pool;
 pub mod shared_effects;
 pub mod structured_offer;
 pub mod vector_env;
+
+pub use env::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};

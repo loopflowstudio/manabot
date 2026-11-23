@@ -568,8 +568,13 @@ mod tests {
                 ("Prophetic Prism".into(), 1),
             ]),
         );
-        let mut game =
-            Game::construct(players.into(), 17, true, Some(CaptureMode::Exposure), false);
+        let mut game = Game::construct(
+            &players.into(),
+            17,
+            true,
+            Some(CaptureMode::Exposure),
+            false,
+        );
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
         game.create_token("token.treasure", payer, false).unwrap();
@@ -610,7 +615,7 @@ mod tests {
         use crate::flow::turn::PhaseKind;
         let (active, defender) = (PlayerId(0), PlayerId(1));
         let mut game = Game::construct(
-            configs_with_card("Mountain").into(),
+            &configs_with_card("Mountain").into(),
             17,
             true,
             Some(CaptureMode::Exposure),

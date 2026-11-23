@@ -34,22 +34,22 @@ deployment secrets in Doppler `manabot/prd` (Jack Heart, 2026-10-14).
 `etude.gg` and its legacy aliases redirect to `manabot.gg`, preserving paths
 and queries; hosted play is available at both `play.manabot.gg` and
 `academy.manabot.gg` (equivalent addresses selected by Jack Heart, 2026-10-14).
-Namecheap is the registrar and Cloudflare manages DNS. Existing service
-identifiers stay unchanged.
-The shared Etude experiment services retain their names. "Sepia Etude" remains
-the name of the visual language.
+Namecheap is the registrar and Cloudflare manages DNS. Existing and shared Etude
+service identifiers stay unchanged. "Sepia Etude" remains the name of the visual
+language.
 
-Name a thing for what it is where it is produced, not for how one consumer
-uses it. managym produces observations, encodings and card tokens for any
-consumer, so its API says `catalog_tokens` and `record_vocabulary`; manabot may
-name the same value by its use. Rename a published name with a deprecated alias
-that warns and states its removal release; serialized configuration keys,
+Name a thing for what it is where it is produced (`catalog_tokens`,
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`). Do not
+reuse established repository terms (`recipe` for training recipes, `manifest`
+for content packs, `replay` for seed-and-action replays) for unrelated concepts,
+even in internal types or when a brief uses them informally. Rename published
+names via a deprecated alias stating the removal release; serialized keys,
 checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
 through the `managym.bots` provider entry points; optional historical replay/advice
-capabilities use `managym.academy.bots`. manabot never imports Academy.
+capabilities use `managym.academy.bots`.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
