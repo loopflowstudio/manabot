@@ -940,3 +940,11 @@ menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
 would finish it. The same address rules as payment previews apply, and the
 call is read-only in the same way.
+
+At the combat damage step, the attacking player assigns damage among the
+remaining blockers. Each choice names the attacker, the current blocker and
+the amount. A trampler can assign damage to the defending player once every
+blocker has been assigned lethal damage. For example, a 5-power trampler
+blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
+the rest. Without trample, that sole blocker takes all 5. The engine deals
+the assignments together after the final choice.

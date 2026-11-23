@@ -146,6 +146,10 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "placed on bottom",
     "placement",
     "pre-event object",
+    "combat damage source",
+    "minimum assignment",
+    "last blocker",
+    "assigned combat damage",
     "remaining",
     "remaining instructions",
     "remaining iteration subjects",
@@ -1169,6 +1173,22 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
+        }
+        Decision::AssignCombatDamage {
+            attacker,
+            blocker,
+            minimum,
+            remaining,
+            last,
+            assigned,
+            ..
+        } => {
+            out.object("combat damage source", *attacker);
+            out.object("target", *blocker);
+            out.field("minimum assignment", minimum);
+            out.field("remaining", remaining);
+            out.field("last blocker", last);
+            out.field("assigned combat damage", assigned);
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

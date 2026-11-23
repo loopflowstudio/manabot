@@ -136,6 +136,27 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::AssignCombatDamage {
+                        attacker,
+                        blocker,
+                        remaining,
+                        last,
+                        ..
+                    } => {
+                        let rest = remaining - *mode as i32;
+                        let recipient = if *last {
+                            "to defending player"
+                        } else {
+                            "left to assign"
+                        };
+                        Some(format!(
+                            "{} assigns {mode} to {}, {rest} {recipient}",
+                            self.characteristics(self.state.permanent_of(*attacker)?)
+                                .name,
+                            self.characteristics(self.state.permanent_of(*blocker)?)
+                                .name
+                        ))
+                    }
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
                         let object_id = candidate.source();

@@ -454,6 +454,16 @@ pub enum SelectionOrigin {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    AssignCombatDamage {
+        player: PlayerId,
+        attacker: ObjectId,
+        blocker: ObjectId,
+        minimum: i32,
+        remaining: i32,
+        last: bool,
+        pass: crate::flow::game::CombatDamagePass,
+        assigned: Vec<i32>,
+    },
     OrderReplacement {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
@@ -716,7 +726,8 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::OrderReplacement { player, .. }
+            Decision::AssignCombatDamage { player, .. }
+            | Decision::OrderReplacement { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -819,7 +830,8 @@ impl Decision {
                 offer: ResolutionCastOffer::LibraryTop { object },
                 ..
             } => std::slice::from_ref(object),
-            Decision::OrderReplacement { .. }
+            Decision::AssignCombatDamage { .. }
+            | Decision::OrderReplacement { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -1317,12 +1329,15 @@ impl Game {
                             }
                             crate::flow::sba::SbaProgress::Stable => {}
                         }
-                        if !self.is_game_over() {
-                            frame.batch = self.combat_damage_batch(
-                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
-                            );
-                        }
                         frame.completion = FrameCompletion::Continue;
+                        if !self.is_game_over() {
+                            self.assign_combat_damage(
+                                frame,
+                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
+                                Vec::new(),
+                            );
+                            return;
+                        }
                         continue;
                     }
                     FrameCompletion::Paid { player, payment } => {
@@ -1561,6 +1576,24 @@ impl Game {
             })
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::AssignCombatDamage {
+                player,
+                attacker,
+                blocker,
+                minimum,
+                remaining,
+                ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (*minimum..=*remaining)
+                    .map(|amount| Action::ChooseMode {
+                        player: *player,
+                        mode: amount as usize,
+                    })
+                    .collect(),
+                focus: vec![self.state[*attacker].id, self.state[*blocker].id],
+            },
             Decision::OrderReplacement { player, candidates } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -2101,6 +2134,28 @@ impl Game {
                 self.choose_entry_copy(&mut batch, of);
                 suspended.frame.batch = Some(batch);
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::AssignCombatDamage {
+                    pass,
+                    minimum,
+                    remaining,
+                    assigned,
+                    ..
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                let Some(amount) = i32::try_from(*mode)
+                    .ok()
+                    .filter(|v| (*minimum..=*remaining).contains(v))
+                else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("illegal combat damage assignment".into()));
+                };
+                let mut amounts = assigned.clone();
+                amounts.push(amount);
+                self.assign_combat_damage(suspended.frame, *pass, amounts);
                 Ok(())
             }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {

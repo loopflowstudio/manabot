@@ -112,6 +112,7 @@ _STAGES = frozenset(
         "select_milled",
         "select_cards",
         "order_replacement",
+        "assign_combat_damage",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -216,6 +217,7 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
+    "assign combat damage",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (

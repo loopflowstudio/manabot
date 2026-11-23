@@ -6,7 +6,7 @@ use crate::{
     agent::action::AgentError,
     flow::{
         combat::CombatState,
-        decision::{EffectFrame, FrameCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
     },
@@ -112,13 +112,32 @@ impl Game {
             CombatDamagePass::Normal
         };
         let mut frame = EffectFrame::new(self.active_player(), Vec::new());
-        frame.batch = self.combat_damage_batch(pass);
         frame.completion = if first_strike {
             FrameCompletion::CombatNormal
         } else {
             FrameCompletion::Continue
         };
-        self.run_frame(frame);
+        self.assign_combat_damage(frame, pass, Vec::new());
+    }
+
+    pub(crate) fn assign_combat_damage(
+        &mut self,
+        mut frame: EffectFrame,
+        pass: CombatDamagePass,
+        assigned: Vec<i32>,
+    ) {
+        match self.combat_damage_batch(pass, &assigned) {
+            Ok(batch) => {
+                frame.batch = Some(batch);
+                self.run_frame(frame);
+            }
+            Err(decision) => {
+                *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame,
+                    decision: *decision,
+                });
+            }
+        }
     }
 
     /// Whether a creature recorded in combat still takes part: one that
@@ -155,8 +174,13 @@ impl Game {
     /// One combat damage step (CR 510.2): every assignment is dealt, then
     /// the creatures that dealt damage to a player are announced together
     /// for "deals combat damage to a player" triggers.
-    pub(crate) fn combat_damage_batch(&self, pass: CombatDamagePass) -> Option<EventBatch> {
-        let combat = self.state.combat.as_ref()?;
+    fn combat_damage_batch(
+        &self,
+        pass: CombatDamagePass,
+        assignments: &[i32],
+    ) -> Result<EventBatch, Box<Decision>> {
+        let combat = self.state.combat.as_ref().expect("combat damage step");
+        let mut choices = assignments.iter().copied();
         let defender = self.non_active_player();
         let mut events = Vec::new();
 
@@ -165,9 +189,7 @@ impl Game {
                 continue;
             }
             let attacker_ref = self.permanent_object(attacker_id);
-            if !self.creature_deals_damage_in_pass(attacker_id, pass) {
-                continue;
-            }
+            let attacker_deals = self.creature_deals_damage_in_pass(attacker_id, pass);
 
             let attacker_power = self.characteristics(attacker_id).power.max(0);
             let attacker_keywords = self.characteristics(attacker_id).keywords;
@@ -186,7 +208,7 @@ impl Game {
                 .filter(|blocker_id| self.still_in_combat(*blocker_id))
                 .collect();
 
-            if !was_blocked {
+            if !was_blocked && attacker_deals {
                 events.push(ProposedEvent::Damage {
                     source: attacker_ref,
                     target: ProposedDamageTarget::Player(defender),
@@ -215,8 +237,12 @@ impl Game {
                 }
             }
 
+            if !attacker_deals {
+                continue;
+            }
             let mut remaining_damage = attacker_power;
-            for blocker_id in blockers {
+            let mut can_trample = attacker_has_trample;
+            for (index, &blocker_id) in blockers.iter().enumerate() {
                 if remaining_damage <= 0 {
                     break;
                 }
@@ -232,7 +258,33 @@ impl Game {
                 } else {
                     needed_damage
                 };
-                let assigned = remaining_damage.min(lethal);
+                // CR 510.1c and 702.19b: damage can be divided freely among
+                // blockers. Only assigning damage to the defender requires lethal.
+                let last = index + 1 == blockers.len();
+                let minimum = if !last {
+                    0
+                } else if can_trample {
+                    lethal.min(remaining_damage)
+                } else {
+                    remaining_damage
+                };
+                let assigned = if minimum == remaining_damage {
+                    minimum
+                } else if let Some(amount) = choices.next() {
+                    amount
+                } else {
+                    return Err(Box::new(Decision::AssignCombatDamage {
+                        player: self.active_player(),
+                        attacker: attacker_ref.unwrap(),
+                        blocker: blocker.object,
+                        minimum,
+                        remaining: remaining_damage,
+                        last,
+                        pass,
+                        assigned: assignments.to_vec(),
+                    }));
+                };
+                can_trample &= assigned >= lethal;
                 if let Some(target) = self.permanent_object(blocker_id) {
                     events.push(ProposedEvent::Damage {
                         source: attacker_ref,
@@ -255,7 +307,7 @@ impl Game {
         }
         let mut batch = self.event_batch(events);
         batch.binding = EventBinding::Combat;
-        Some(batch)
+        Ok(batch)
     }
 
     fn creature_deals_damage_in_pass(

@@ -666,8 +666,8 @@ impl DerefMut for TrackedState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CombatDamagePass {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CombatDamagePass {
     FirstStrike,
     NormalWithFirstStrike,
     Normal,

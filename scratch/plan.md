@@ -109,7 +109,9 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Next fixture.** Play through attack, block and trample assignment with Ajani’s Pridemate on the battlefield. Assign 2 to the blocker and 3 to the defending player. Check that combat produces one gain of 5 and one +1/+1 counter. Repeat with two lifelink sources dealing the same amounts in one damage step and require two counters.
+The directed combat fixture in `managym/cards/tests/cards/tla.rs` plays a 5-power lifelinker against a 2/2. It checks all four trample offers, commits the 2/3 split through the shared Command on two forks, and checks stale rejection. Without trample all 5 go to the blocker. Both cases require one gain of 5 and one Pridemate counter.
+
+**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in one damage step and require two counters.
 
 Then cover the remaining boundaries and callers.
 

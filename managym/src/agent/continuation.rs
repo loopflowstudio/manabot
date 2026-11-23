@@ -1039,13 +1039,14 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 31;
+pub const MAX_DECISION_CODE: u8 = 32;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
 /// new ones, never renumber.
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
+        Decision::AssignCombatDamage { .. } => 32,
         Decision::OrderReplacement { .. } => 29,
         Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
@@ -1346,6 +1347,16 @@ mod tests {
                 cost: ManaCost::default(),
                 spent: Default::default(),
                 completion: Box::new(SpendCompletion::Foretell(game.state.players[0].deck[0])),
+            },
+            Decision::AssignCombatDamage {
+                player,
+                attacker: game.state.players[0].deck[0],
+                blocker: game.state.players[1].deck[0],
+                minimum: 2,
+                remaining: 5,
+                last: true,
+                pass: crate::flow::game::CombatDamagePass::Normal,
+                assigned: Vec::new(),
             },
             Decision::OrderReplacement {
                 player: PlayerId(0),

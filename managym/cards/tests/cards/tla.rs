@@ -16303,3 +16303,77 @@ fn aang_returning_to_library_cannot_remember_its_departed_back_face() {
         assert!(player.known_library.is_empty());
     }
 }
+
+#[test]
+fn combat_assignment_deals_all_five_damage_as_one_lifelink_gain() {
+    for trample in [false, true] {
+        let mut s = five_color_setup(&[
+            "Foggy Swamp Spirit Keeper",
+            "Gray Ogre",
+            "Ajani's Pridemate",
+        ]);
+        let attacker = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+        let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+        let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        clear_summoning_sickness(&mut s, attacker);
+        set_counters(&mut s, attacker, CounterKind::PlusOnePlusOne, 3);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        if trample {
+            until_end_of_turn(
+                &mut s,
+                attacker,
+                Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+            );
+        }
+        attack_with(&mut s, attacker);
+        s.advance_to_active_step(0, StepKind::DeclareBlockers);
+        let combat_start = s.game().state.events.len();
+        s.declare_block();
+        if trample {
+            pass_until(&mut s, ActionSpaceKind::Modal);
+            let splits = offer_labels(&s);
+            assert_eq!(splits.len(), 4);
+            for (label, blocker) in splits.iter().zip(2..=5) {
+                assert!(
+                    label.contains(&format!(
+                        "{blocker} to Gray Ogre, {} to defending player",
+                        5 - blocker
+                    )),
+                    "{label}"
+                );
+            }
+            crate::support::play::command(&mut s, |a| {
+                matches!(a, Action::ChooseMode { mode: 2, .. })
+            });
+        }
+        s.advance_to_active_step(0, StepKind::EndOfCombat);
+        let events: Vec<_> = s.game().state.events.iter().skip(combat_start).collect();
+        let gains: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::LifeChanged {
+                    player: PlayerId(0),
+                    old,
+                    new,
+                } if new > old => Some(new - old),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(gains, [5]);
+        let blocker_damage: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::DamageDealt {
+                    target: managym::flow::event::DamageTarget::Permanent(id),
+                    amount,
+                    ..
+                } if *id == blocker => Some(*amount),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(blocker_damage, [if trample { 2 } else { 5 }]);
+        assert_eq!(s.life(0), 25);
+        assert_eq!(s.life(1), if trample { 17 } else { 20 });
+        assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 1);
+    }
+}
