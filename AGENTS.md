@@ -898,8 +898,8 @@ through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
 
-The repository depends on the released Etude SDK from PyPI (0.4.4 or newer
-for fixed behaviour curve ranges). Etude's shared records, storage and
+The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
+for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
 errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
