@@ -497,6 +497,27 @@ def test_nonfinite_gradient_rejects_before_adam() -> None:
     assert torch.isfinite(model.weight).all()
 
 
+def test_post_step_refusal_keeps_the_clipped_gradient_sample() -> None:
+    model = torch.nn.Linear(1, 1, bias=False, device=DEVICE)
+    optimizer = torch.optim.SGD(model.parameters(), lr=float("inf"))
+    health = _health()
+    with pytest.raises(
+        NumericalError, match="nonfinite_parameters_after_step"
+    ) as caught:
+        gradient_step(
+            model.weight.sum(),
+            model,
+            optimizer,
+            0.5,
+            recorder=OptimizerHealth(health, 1, backend=torch_backend),
+        )
+    assert caught.value.health == health
+    assert health["optimizer_steps"] == 0 and health["rejected_steps"] == 1
+    assert health["sampled_steps"] == 1
+    assert health["gradient_norm_after"] == pytest.approx(0.5, abs=1e-6)
+    assert "parameter_delta_l2" not in health
+
+
 def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
     model = torch.nn.Linear(2, 2, device=DEVICE)
     control = torch.nn.Linear(2, 2, device=DEVICE)

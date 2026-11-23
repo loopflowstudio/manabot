@@ -200,14 +200,6 @@ class LearnerFile(Protocol):
         """Nothing computed inside records a gradient."""
         ...
 
-    def critic_gradient_norms(self, model: Any) -> tuple[float, float | None]: ...
-    def gradient_health(
-        self, model: Any, norm_before: Array, critic_norms: tuple[float, float | None]
-    ) -> dict[str, float | int]: ...
-    def parameter_health(
-        self, parameters: list[Any], before: list[Array]
-    ) -> dict[str, float]: ...
-
 
 class AdmittedRollout(Protocol):
     """A rollout batch admitted once for one policy (`backend.rollout`)."""

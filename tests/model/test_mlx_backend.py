@@ -95,6 +95,7 @@ from manabot.training.loops.self_play import (
     learn,
 )
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
 import managym
@@ -825,8 +826,16 @@ def test_half_overflow_refuses_update(tmp_path: Path) -> None:
             )
 
     loss = learner.loss(overflow)[0]
-    with pytest.raises(NumericalError, match="nonfinite_objective"):
-        learner.step(loss, 0.1)
+    health = NumericalHealth(optimizer_steps=0, rejected_steps=0, sampled_steps=0)
+    with pytest.raises(NumericalError, match="nonfinite_objective") as caught:
+        learner.step(
+            loss, 0.1, recorder=OptimizerHealth(health, 1, backend=mlx_backend)
+        )
+    assert (
+        caught.value.health
+        == health
+        == dict(optimizer_steps=0, rejected_steps=1, sampled_steps=0)
+    )
     for key, value in learner.parameters().items():
         np.testing.assert_array_equal(value, before[key])
     assert int(learner.optimizer.step) == 0

@@ -127,6 +127,9 @@ def test_damped_update_agrees_with_the_torch_backend(
     assert expected["gradient_norm"] > LEARNING.max_grad_norm
     for key in _COUNTS:
         assert actual[key] == expected[key], key
+    assert actual["numerical"]["sampled_steps"] == int(name == "torch")
+    for field in ("gradient_norm_critic_readout", "parameter_delta_l2"):
+        assert (field in actual["numerical"]) == (name == "torch")
     assert actual["numerical"]["optimizer_steps"] == 1
     assert actual["loss"] == pytest.approx(expected["loss"], rel=LOSS_TOLERANCE)
     assert actual["gradient_norm"] == pytest.approx(

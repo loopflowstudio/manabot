@@ -297,10 +297,7 @@ def test_the_conformance_check_sees_a_wrong_signature() -> None:
     ]
     assert _violations(_Wrong(), LearnerFile, "wrong") == [
         "wrong.check_objective: missing",
-        "wrong.critic_gradient_norms: missing",
-        "wrong.gradient_health: missing",
         "wrong.no_grad: requires 'enabled', which the protocol does not pass",
-        "wrong.parameter_health: missing",
     ]
 
 

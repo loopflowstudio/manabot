@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -47,7 +47,7 @@ class StepRecorder(Protocol):
 
     def rejecting(self) -> AbstractContextManager[object]: ...
 
-    def record_step(self, parameters: list[object], before: list[object]) -> None: ...
+    def record_step(self) -> None: ...
 
 
 def check_objective(loss: mx.array) -> None:
@@ -217,7 +217,7 @@ class Learner:
                         {f"parameter/{name}": p for name, p in parameters},
                     )
                 if recorder is not None:
-                    recorder.record_step([], [])
+                    recorder.record_step()
         return norm
 
     def gradients(self, loss: mx.array) -> ParameterArrays:
@@ -231,17 +231,3 @@ class Learner:
 
 def _untracked(section: str) -> AbstractContextManager[object]:
     return nullcontext()
-
-
-def critic_gradient_norms(model: Any) -> tuple[float, float | None]:
-    raise NotImplementedError("MLX does not expose sampled gradient health")
-
-
-def gradient_health(
-    model: Any, norm_before: Any, critic_norms: tuple[float, float | None]
-) -> dict[str, float | int]:
-    raise NotImplementedError("MLX does not expose sampled gradient health")
-
-
-def parameter_health(parameters: list[Any], before: list[Any]) -> dict[str, float]:
-    raise NotImplementedError("MLX does not expose sampled parameter health")
