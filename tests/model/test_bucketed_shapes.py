@@ -126,6 +126,17 @@ def test_row_needs_keep_strided_padding_and_referenced_objects() -> None:
     np.testing.assert_array_equal(row_needs(obs, space), expected, strict=True)
 
 
+def test_bucket_extents_cover_full_csr_spans_in_narrow_exports() -> None:
+    space = ObservationSpace()
+    obs = space.allocate(1)
+    headers = obs["effects"].astype(np.uint8)
+    headers[0, 0, column("effects", "member_offset")] = 250
+    headers[0, 0, column("effects", "member_count")] = 10
+    obs["effects"] = headers
+    needs = row_needs(obs, space)
+    assert needs is not None and needs[0, AXES.index("members")] == 260
+
+
 def test_remapped_references_are_every_object_table_column() -> None:
     """A new object-table reference must be remapped, not trimmed silently."""
     layout = managym.observation_layout(policy_history=True)
@@ -246,7 +257,7 @@ def test_rejections_match_default(
     for model in (case.agent, agent):
         with pytest.raises(ValueError, match=message) as error:
             model.forward_distribution(device_input(model, obs))
-        errors.append(str(error.value))
+        errors.append((type(error.value), str(error.value)))
     assert errors[0] == errors[1]
 
 

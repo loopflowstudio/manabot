@@ -145,10 +145,10 @@ def _capacities(space: ObservationSpace) -> dict[str, int]:
         "relations": shapes["relations"][0],
         "actions": shapes["actions"][0],
         "events": shapes["events"][0],
-        "cards": space.config.max_cards_per_player,
-        "known": space.config.max_cards_per_player,
-        "decklists": space.config.max_cards_per_player,
-        "permanents": space.config.max_permanents_per_player,
+        "cards": shapes["agent_cards"][0],
+        "known": shapes["known_hand"][1],
+        "decklists": shapes["decklists"][1],
+        "permanents": shapes["agent_permanents"][0],
         "stack": shapes["stack"][0] if "stack" in shapes else 0,
     }
 
@@ -281,7 +281,13 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
         need(
             axis,
             _reference_extent(
-                effects[..., offset] + effects[..., length], capacities[axis]
+                # A narrow integer export can encode both fields but not their sum.
+                np.add(
+                    effects[..., offset],
+                    effects[..., length],
+                    dtype=np.result_type(effects.dtype, np.float32),
+                ),
+                capacities[axis],
             ),
         )
     # Frame ids and action continuation joins index the relation axis.
