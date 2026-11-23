@@ -101,6 +101,21 @@ near the decision boundary, so shifts of 2–3 change play. Forward KL 0.002
 attacks less into an untapped opposing 9/9 than the control (−3.5 against
 −1.7 at update 400). Forward KL 0.01 moves least.
 
+At update 1,000 the partial re-lock of tau ×2 alone still follows the
+board, more strongly than the open arm. An untapped opposing 9/9 moves its
+attack gap by −7.0 (−3.5 for the combined arm, −1.8 for the control at
+update 400), and a 9/9 of its own by +8.0 (+2.7). Its confident attacks are
+mostly confident in the right places, which is consistent with it losing no
+strength; what it gives up is exploration of the rarer option where it is
+saturated.
+
+| Seed 40902, update 1,000 (probes ±10 updates) | Attack gap | Saturated attacks | Attack shift: their untapped 9/9 | Attack shift: my 9/9 |
+| --- | ---: | ---: | ---: | ---: |
+| Tau ×2 + forward KL 0.002 | 1.7 | 0% | −3.5 | +2.7 |
+| Tau ×2 | 6.0 | 39% | −7.0 | +8.0 |
+| Tau ×4 | 5.2 | 27% | −5.4 | +5.0 |
+| Control, update 400 (three seeds) | 7.8 | 37% | −1.8 | +8.6 |
+
 ![Attack gap shift under board edits](../data/mtg408/report/attack-shifts.png)
 ![Block gap shift under board edits](../data/mtg408/report/block-shifts.png)
 
