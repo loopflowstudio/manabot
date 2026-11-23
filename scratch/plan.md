@@ -113,8 +113,8 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-- At `e0a2a0e2`, both damage passes had committed before the first priority window. The native Reaver fixture now observes a gain of 3, one pending trigger and one resolved draw in each step. Removing Reaver on a fork after the first draw leaves the players at 23 and 17 with only one card drawn.
-- Next, author Marauding Blight-Priest with the shared life-gain trigger and exercise the opponent’s life loss.
+- Drogskol Reaver is authored in `managym/cards/src/dka.rs` with the shared controller life-gain trigger. At `e0a2a0e2`, both damage passes committed before players received priority. At `c88cd93d`, the turn loop gives players priority between damage steps. The native fixture in `managym/cards/tests/cards/dka.rs` observes 23/17 life with one draw after first strike, then 26/14 with two draws after regular damage. Each step put exactly one trigger on the stack. Moving Reaver to the graveyard on the fork after the first draw left life at 23/17 and the draw count at one.
+- Next, author Marauding Blight-Priest with the same trigger. In one unblocked Reaver combat, resolve the Priest’s trigger in each damage step and check that the opponent loses 1 additional life per gain of 3.
 - Check the life-gain condition in the catalog learning tokens and its viewer text. Keep the consumer and conformance suites at gate.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
