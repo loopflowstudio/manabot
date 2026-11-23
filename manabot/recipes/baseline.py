@@ -52,6 +52,9 @@ def settings(config: BaselineConfig) -> SelfPlay:
         run_settings=config.run_settings,
         learning=DampedPolicyLearning(
             gradient="damped_policy",
+            # Twice the rule's default tau keeps combat choices from locking
+            # (experiments/reports/tla_trophies_floor.md).
+            tau_scale=0.1,
             iteration_schedule=IterationSchedule(steps=config.updates),
         ),
         device=config.device,
