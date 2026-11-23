@@ -81,7 +81,9 @@ The ordinary self-play loop and `fresh_iteration` share policy creation,
 collection, learning, EMA and milestone export. The output directory holds
 `policies/00000001-raw.safetensors` and, when averaging is enabled,
 `policies/00000001-ema.safetensors`. Both readers can load either file.
-The returned policies are the live sources of those exports.
+The returned policies are the live sources of those exports. Frozen-choice inspection
+reads them on MLX using the NumPy corpus and its offer and object permutations.
+
 ### Tracked training and recovery
 
 Run the bounded local recipe through one update, then continue the same run.

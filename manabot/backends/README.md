@@ -112,14 +112,15 @@ choose the backend inside `main()` or the child entry point and pass it to the
 reusable functions. Having a CLI in the same file does not make its library
 functions composition roots.
 
-### Collection, belief and recovery
+### Fresh collection and portable export
 
-Pass the selected backend through training execution, monitoring and
-verification. A caller that only runs inference takes a `BackendPolicy`; a
-caller that collects, learns or captures a numerical incident also needs the
-capabilities for that work. The fresh loop accepts a `SelfPlayBackend` for construction,
-collection, the update, EMA and portable export. The tracked recipes select the configured backend and default to Torch. Tracked self-play admits the backend’s `Continuation`
-before accessing run state. See the [fresh MLX example](mlx.md#what-the-backend-covers).
+`fresh_iteration(settings, backend=..., seed=..., out=...)` runs one collection,
+learner update and EMA step in a new directory. It returns the live policies
+and counts and writes separate raw and EMA policies when averaging is enabled.
+Both frameworks use `policy.checkpoint.save_policy_checkpoint`. Either reader
+can play or inspect an export whose architecture it supports. A learner initialized
+from one starts with fresh Adam state and counts.
+See the [fresh baseline example](mlx.md#what-the-backend-covers).
 
 The collector receives a numerical session that owns policy inference,
 precision and sampling. Native game streams, seat routing and complete-game
@@ -129,40 +130,47 @@ collection uses its private generator seeded at `seed + 1`, shared by learner
 actions and current-self opponent actions. A resumed run starts a fresh
 stream; the generator's state is saved only in a numerical incident.
 
+### Tracked recipes
+
+Baseline, local and Elemental select the framework through their `backend`
+setting, which defaults to `"torch"`. On Apple Silicon, `backend="mlx"`
+runs scalar damped self-play. The recipes use the same collection, learning,
+EMA and portable export as the fresh iteration. Etude also records metrics,
+cumulative clocks and training saves. The loop requires the backend's
+`Continuation` capability before accessing run state.
+
+### Continuing a run
+
+Resume the same Etude run from its committed save in the original backend.
+Torch registers its learner, optimizer and EMA objects. MLX saves raw and EMA
+weights and Adam arrays in `training.safetensors` alongside Etude’s JSON state.
+The loop restores the saved model readings, optimizer and cumulative counts,
+then starts fresh game and sampling streams at the saved update. Source, world,
+input, artifact digest and stage-lineage checks still apply. See the
+[two-attempt CLI example](mlx.md#tracked-training-and-recovery).
+
+Exact update replay uses collector and RNG snapshots. Torch retains its
+format-4 snapshots and the historical `torch_rng` field, restoring framework
+RNG last. Snapshots and incident evidence use the producing backend’s format.
+
+### Inspection and belief
+
+Frozen-choice inspection accepts a `PolicyLoader`. It keeps the observations
+and their offer and object permutations in NumPy and evaluates them through
+`policy.prepare(..., inference=True)`. The MLX reader can inspect a portable
+policy with Torch absent. A collected corpus stores the arrays in
+`observations.npz`, keyed by `<case name>/<buffer name>`. Numerical parity
+also takes a fresh learner and the framework's gradient and parameter mappings.
+
 Belief inference uses host observations and the policy's admission and
-evaluation methods. Search receives a hand sampler; the selected backend
-owns its physical or learned sampling arithmetic, random stream and learned
-state. For held-out sampler reports, Torch scores the target hand and draws
-hands from the public inputs. The host computes inclusion calibration, Brier
-scores and support violations from one decision's draws at a time.
-Verification uses a policy loader for frozen choices. Numerical parity takes a
-fresh learner and the conversions between canonical and framework arrays. Each forward reads a `Prepared` batch
-from host preparation; inference probes use `inference=True`.
+evaluation methods. Search receives a hand sampler. Its backend owns sampling
+arithmetic, the random stream and learned state. Fitting takes a
+`BeliefTrainer`. For held-out reports, Torch scores the target and samples
+hands. The host pools calibration, Brier scores and support violations per decision.
 
-Health reporting keeps step and rejection counters on the host, with tensor
-measurements supplied by the learner. Importing `training.updates.ppo`,
-`training.updates.damped_policy`, any `training.rollout` module or
-`sim.search.sampling` does not import Torch. Executing an operation still
-requires a backend that implements it. Frozen-policy inspection loads and
-evaluates the policy through its backend. Both frameworks export through
-`policy.checkpoint.save_policy_checkpoint`. Belief-sampler fitting takes an
-explicit `BeliefTrainer` from the caller. MLX supports fresh collection,
-bucketed inference, scalar damped updates and portable policy export.
-For tracked MLX training, Etude commits a callback export of the raw weights,
-EMA and Adam alongside its JSON counts and model readings. Torch uses its
-registered learner, optimizer and EMA objects.
-
-The tracked self-play loop restores Adam, EMA, model readings and counts,
-then starts new game and sampling streams at the saved update. Its policy
-exports can also seed a fresh learner. Separately, exact update replay uses
-collector and RNG snapshots. State
-serialization and optimizer validation belong to the selected backend;
-world, source, artifact digest and stage-lineage admission still apply before
-execution. Torch recovery retains its format-4 update snapshots, including
-the historical `torch_rng` field, and restores framework RNG last. Those
-files and incident evidence remain framework-specific; passing a different
-backend does not convert them. Use the original admitted source and backend
-to resume a retained run.
+Health reporting keeps step and rejection counters on the host. The learner
+supplies sampled tensor measurements. The update, rollout and search-sampling
+modules can all be imported with Torch absent.
 
 ## Algorithms are written once
 
