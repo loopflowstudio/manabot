@@ -1,13 +1,33 @@
 //! Dragon's Maze card interactions.
 use crate::support::{
-    game::{five_color_setup, force_new_card_in_hand},
-    inspect::{card_of, zone_of},
-    play::{activate, cast_card, command, pay_rest, resolve_top},
+    game::{five_color_setup, five_color_unfunded_setup, force_new_card_in_hand},
+    inspect::{card_of, library_card, tapped, zone_of},
+    play::{activate, cast_card, command, pay_rest, play_land, resolve_top, tap_for_mana},
 };
 use managym::{
     agent::action::Action,
-    state::{player::ManaPayment, zone::ZoneType},
+    flow::turn::StepKind,
+    state::{
+        mana::Mana,
+        player::{ManaFloats, ManaPayment},
+        zone::ZoneType,
+    },
 };
+
+#[test]
+fn mazes_end_enters_tapped_and_produces_colorless_after_untapping() {
+    let mut s = five_color_unfunded_setup(&["Maze's End"]);
+    s.game_mut().mana_floats[0] = ManaFloats::All;
+    let maze = play_land(&mut s, "Maze's End");
+    assert!(tapped(&s, maze));
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    tap_for_mana(&mut s, maze);
+    assert!(tapped(&s, maze));
+    assert_eq!(
+        s.game().state.players[0].mana_pool.mana(),
+        &Mana::parse("C")
+    );
+}
 
 #[test]
 fn mazes_end_counts_distinct_gate_names_after_the_search() {
@@ -57,19 +77,7 @@ fn mazes_end_counts_distinct_gate_names_after_the_search() {
         }
         resolve_top(&mut s);
         if find {
-            let selected = s
-                .action_space()
-                .actions
-                .iter()
-                .find_map(|action| match action {
-                    Action::SelectCard { object, .. }
-                        if s.game().state[*object].name == gates[9] =>
-                    {
-                        Some(*object)
-                    }
-                    _ => None,
-                })
-                .unwrap();
+            let selected = library_card(&s, 0, gates[9]);
             command(
                 &mut s,
                 |action| matches!(action, Action::SelectCard { object, .. } if *object == selected),

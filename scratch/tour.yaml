@@ -1,15 +1,19 @@
-at: b75a567051e4dc6b916c6ef76c8c5639f90a1b24
+at: 650f8791159238842c7893ac5af0dd8f42fdef05
 first:
+  - path: docs/engine.md
+    why: Read the game procedure from reset to outcome
+  - path: managym/src/flow/game.rs
+    why: Lifecycle and committed outcome data
+  - path: managym/src/flow/opening.rs
+    why: Follow mulligans and private bottom choices
+  - path: managym/src/flow/resolution.rs
+    why: Follow turn ending and explicit wins
+  - path: managym/src/flow/sba.rs
+    why: Apply simultaneous losses and Herald protection
   - path: managym/src/agent/env.rs
-    why: Both step APIs project one committed outcome
+    why: Both step APIs project the committed outcome
   - path: tests/env/test_game_snapshot.py
-    why: Compare Pact results across four restored branches
-  - path: managym/cards/src/eoe.rs
-    why: Silencer uses ordinary combat triggers and poison
-  - path: managym/cards/tests/cards/eoe.rs
-    why: Distinguish qualifying hits and committed poison
-  - path: managym/cards/tests/cards/ori.rs
-    why: Follow Pact choices across controller and appearance changes
+    why: Compare Pact results across restored branches
   - path: managym/cards/tests/cards/dgm.rs
-    why: Flash Herald in the activation response window
+    why: Exercise Maze from land entry through victory
 hide: []
