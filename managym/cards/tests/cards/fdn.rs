@@ -840,20 +840,35 @@ fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
     }
 }
 
+/// Cast a constructed one-mana instant targeting the top pending ability.
+fn counter_top_ability(s: &mut crate::support::game::Scenario) {
+    use crate::support::{game::force_new_card_in_hand, play::cast_card};
+    use managym::state::{
+        ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+        game_object::Target,
+    };
+
+    let target = s.game().state.stack_objects.last().unwrap().id();
+    let instant = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    s.game_mut().state[instant].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
+    s.game_mut().state[instant].spell_effects = vec![Effect::CounterAbility {
+        what: ObjectSelector::Target(TargetSpec::Ability),
+    }];
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(s, instant);
+    assert!(s.choose_target(Target::StackAbility(target)));
+}
+
 #[test]
 fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
     use crate::support::{
-        game::{force_new_card_in_hand, set_counters},
+        game::set_counters,
         inspect::{counters_of, has_action},
-        play::cast_card,
     };
     use managym::{
         agent::action::{Action, ActionSpaceKind},
-        state::{
-            ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
-            game_object::Target,
-            permanent::CounterKind::{Incubation, PlusOnePlusOne},
-        },
+        state::permanent::CounterKind::{Incubation, PlusOnePlusOne},
     };
 
     let mut s = five_color_setup(&["Drake Hatcher", "Lightning Bolt"]);
@@ -923,7 +938,6 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
     assert_eq!(counters_of(&s, second, Incubation), 0);
     assert!(s.battlefield_permanents_named(0, "Drake").is_empty());
     let paid = s.game().clone();
-    let activation = paid.state.stack_objects.last().unwrap().id();
     settle(&mut s);
     let drakes = s.battlefield_permanents_named(0, "Drake");
     assert_eq!(drakes.len(), 1);
@@ -933,16 +947,7 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
     assert_eq!(counters_of(&s, second, Incubation), 0);
 
     *s.game_mut() = paid;
-    // A constructed instant uses the ordinary counter-ability instruction.
-    let counter = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-    s.set_player_mana_pool(0, "R");
-    s.game_mut().state[counter].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
-    s.game_mut().state[counter].spell_effects = vec![Effect::CounterAbility {
-        what: ObjectSelector::Target(TargetSpec::Ability),
-    }];
-    s.game_mut().scenario_refresh_priority().unwrap();
-    cast_card(&mut s, counter);
-    assert!(s.choose_target(Target::StackAbility(activation)));
+    counter_top_ability(&mut s);
     settle(&mut s);
     assert!(s.battlefield_permanents_named(0, "Drake").is_empty());
     assert_eq!(counters_of(&s, second, Incubation), 0);
@@ -990,19 +995,8 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
 
 #[test]
 fn high_society_hunter_draws_for_simultaneous_nontoken_deaths() {
-    use crate::support::{
-        game::force_new_card_in_hand,
-        inspect::hand,
-        play::{cast, cast_card},
-    };
-    use managym::{
-        agent::observation::Observation,
-        state::{
-            ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
-            game_object::Target,
-            player::ManaPayment,
-        },
-    };
+    use crate::support::{inspect::hand, play::cast};
+    use managym::{agent::observation::Observation, state::player::ManaPayment};
     let mut s = five_color_setup(&[
         "High-Society Hunter",
         "Gray Ogre",
@@ -1033,14 +1027,7 @@ fn high_society_hunter_draws_for_simultaneous_nontoken_deaths() {
     for counter in [false, true] {
         *s.game_mut() = pending.clone();
         if counter {
-            let trigger = s.game().state.stack_objects.last().unwrap().id();
-            let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-            s.game_mut().state[bolt].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
-            s.game_mut().state[bolt].spell_effects = vec![Effect::CounterAbility {
-                what: ObjectSelector::Target(TargetSpec::Ability),
-            }];
-            cast_card(&mut s, bolt);
-            assert!(s.choose_target(Target::StackAbility(trigger)));
+            counter_top_ability(&mut s);
         }
         let before = hand(&s, 0);
         settle(&mut s);

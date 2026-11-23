@@ -1,10 +1,10 @@
-at: db2d5a535e4c20992a90a85a60ca58e8b8777112
+at: c392dcfa04a37369fbe5ab87c80967870c6bc3f4
 first:
   - path: managym/cards/src/fdn.rs
     why: Defines Hunter’s attack choice and death trigger
-  - path: managym/src/flow/triggers.rs
-    why: Matches each victim at departure
   - path: managym/state/src/predicate.rs
-    why: Evaluates type clauses against event-time creature status
+    why: Accepts event-time creature status for type checks
+  - path: managym/src/flow/triggers.rs
+    why: Applies departure characteristics to each victim
   - path: managym/cards/tests/cards/fdn.rs
-    why: Exercises both choices, simultaneous deaths and draw privacy
+    why: Forks pending abilities and checks both viewers
