@@ -2949,7 +2949,17 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
             },
         );
         assert_eq!(game.state.players[defender.0].life, life);
-        assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CombatDamageToPlayers { hits } if hits.iter().map(|hit| (game.state.permanent_of(hit.source), hit.recipient, hit.amount)).eq([first, second].map(|id| (Some(id), defender, (20 - life) / 2))))).count(), 1);
+        let mut batches = game.state.events.iter().filter_map(|event| match event {
+            GameEvent::CombatDamageToPlayers { hits } => Some(hits),
+            _ => None,
+        });
+        let expected = [first, second].map(|id| crate::flow::event::CombatPlayerHit {
+            source: game.permanent_object(id).unwrap(),
+            recipient: defender,
+            amount: (20 - life) / 2,
+        });
+        assert_eq!(batches.next().unwrap().as_slice(), expected);
+        assert!(batches.next().is_none());
     }
 }
 

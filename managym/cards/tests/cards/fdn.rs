@@ -883,7 +883,7 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
             };
             let observation = Observation::for_player(s.game(), viewer);
             let encoding = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
-            let mut amounts = Vec::new();
+            let mut hits = Vec::new();
             for (index, frame) in observation
                 .continuation
                 .iter()
@@ -891,13 +891,6 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
                 .filter(|(_, frame)| frame.kind == 3)
             {
                 let source = frame.source.object.unwrap();
-                let amount =
-                    if source == s.game().state.permanents[first].as_ref().unwrap().id.0 as i32 {
-                        1
-                    } else {
-                        3
-                    };
-                assert_eq!(frame.triggering_damage, amount);
                 let row = encoding
                     .facts
                     .chunks_exact(fact::WIDTH)
@@ -906,11 +899,16 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
                             && row[fact::ID_LOW] == (index + 1) as f32
                     })
                     .unwrap();
-                assert_eq!(row[fact::VALUE], amount as f32);
-                amounts.push(amount);
+                assert_eq!(row[fact::VALUE], frame.triggering_damage as f32);
+                hits.push((source, frame.triggering_damage));
             }
-            amounts.sort();
-            assert_eq!(amounts, [1, 3]);
+            let mut expected = [(first, 1), (second, 3)].map(|(id, amount)| {
+                let permanent = s.game().state.permanents[id].as_ref().unwrap();
+                (permanent.id.0 as i32, amount)
+            });
+            hits.sort_unstable();
+            expected.sort_unstable();
+            assert_eq!(hits, expected);
         }
         settle(&mut s);
         assert_eq!(counters_of(&s, first, Incubation), 1);

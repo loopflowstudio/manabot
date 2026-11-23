@@ -1,9 +1,11 @@
-at: ef9a8011b9238a11aab11994c01e4b9b492f9a0a
+at: 487079a5868933c6c2faefc64c1f5732aebf5081
 first:
   - path: managym/README.md
     why: Explains damage binding and counter payment
   - path: managym/cards/src/fdn.rs
     why: Defines Drake Hatcher using both rules
+  - path: managym/src/flow/event.rs
+    why: Defines the source, recipient and amount of a hit
   - path: managym/src/flow/damage.rs
     why: Captures each committed player hit
   - path: managym/src/flow/triggers.rs

@@ -4,9 +4,9 @@
 use crate::state::card::Keyword;
 use crate::{
     flow::{
-        event::{DamageTarget, EventSubject, GameEvent},
+        event::{CombatPlayerHit, DamageTarget, EventSubject, GameEvent},
         game::Game,
-        proposed_event::{ProposedDamageTarget, ProposedEvent},
+        proposed_event::{EventResult, ProposedDamageTarget, ProposedEvent},
     },
     state::{
         ability::DelayedExpiry,
@@ -51,8 +51,8 @@ impl Game {
         target: ProposedDamageTarget,
         amount: i32,
         combat: bool,
-    ) -> super::proposed_event::EventResult {
-        let mut result = super::proposed_event::EventResult::default();
+    ) -> EventResult {
+        let mut result = EventResult::default();
         if amount <= 0 {
             return result;
         }
@@ -88,7 +88,7 @@ impl Game {
                 }
                 let new_life = *life;
                 if let Some(source) = source.filter(|_| combat) {
-                    result.combat_hit = Some(super::event::CombatPlayerHit {
+                    result.combat_hit = Some(CombatPlayerHit {
                         source,
                         recipient: player,
                         amount,
@@ -121,17 +121,11 @@ impl Game {
                 }
             }
             ProposedDamageTarget::Object(object_ref) => {
-                result.excess_damage = self
-                    .state
-                    .permanent_of(object_ref)
-                    .map(|id| self.excess_for_damage(source, id, amount));
-                let event_target = self.object_event_ref(object_ref);
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return result;
                 };
-                if self.state.permanents[permanent_id].is_none() {
-                    return result;
-                }
+                result.excess_damage = Some(self.excess_for_damage(source, permanent_id, amount));
+                let event_target = self.object_event_ref(object_ref);
                 if let Some(source) = source {
                     self.state.turn.damage_pairs.record(source, object_ref);
                 }
