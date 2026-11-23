@@ -16420,3 +16420,72 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
         );
     }
 }
+
+#[test]
+fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink() {
+    use managym::flow::event::DamageTarget;
+    use managym::state::card::ReplacementEffect;
+
+    for prohibit_gain in [false, true] {
+        let mut s = five_color_setup(&[
+            "Foggy Swamp Spirit Keeper",
+            "Ajani's Pridemate",
+            "Giant Cindermaw",
+        ]);
+        let attacker = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+        let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+        if prohibit_gain {
+            s.force_permanent_on_battlefield(0, "Giant Cindermaw");
+        }
+        let shield = s.force_permanent_on_battlefield(1, "Island");
+        let object = card_of(&s, shield);
+        s.game_mut().state[object].replacement_effects = vec![
+            ReplacementEffect::PreventDamageToController { amount: 2 },
+            ReplacementEffect::DoubleDamageToController,
+        ];
+        clear_summoning_sickness(&mut s, attacker);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        let combat_start = s.game().state.events.len();
+        attack_with(&mut s, attacker);
+        pass_until(&mut s, ActionSpaceKind::Modal);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert_eq!(s.action_space().actions.len(), 2);
+        assert_eq!(s.life(1), 20);
+        let root = s.game().clone();
+        let before = witness(&root);
+        // Preventing first absorbs the hit. Doubling first leaves two damage.
+        let mode = if prohibit_gain { 1 } else { 0 };
+        let mut replay = crate::support::play::command(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode { mode: choice, .. } if *choice == mode),
+        );
+        for branch in [&mut s, &mut replay] {
+            branch.advance_to_active_step(0, StepKind::EndOfCombat);
+            let hits: Vec<_> = branch
+                .game()
+                .state
+                .events
+                .iter()
+                .skip(combat_start)
+                .filter_map(|event| match event {
+                    GameEvent::DamageDealt {
+                        target: DamageTarget::Player(PlayerId(1)),
+                        amount,
+                        ..
+                    } => Some(*amount),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(hits.as_slice(), if prohibit_gain { &[2][..] } else { &[] });
+            assert_eq!(branch.life(1), if prohibit_gain { 18 } else { 20 });
+            assert_eq!(branch.life(0), 20);
+            assert!(attacker_life_gains(branch, combat_start).is_empty());
+            assert_eq!(
+                counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
+                0
+            );
+        }
+        assert_eq!(witness(s.game()), witness(replay.game()));
+        assert_eq!(witness(&root), before);
+    }
+}
