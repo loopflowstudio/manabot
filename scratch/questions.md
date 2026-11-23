@@ -11,3 +11,5 @@ Exact-object grants receive local keys when granted. Cleanup can reorder the sur
 Singleton grants keep their existing wire shape for retained captures. The public Python list covers any number of grants. The cold-payment fixture uses a normally played Gray Ogre because a replay file needs a recoverable action history.
 
 The next slice starts Smaug // Spew Flame in hand to exercise a second printed program before adding Bilbo’s competing exile replacement.
+
+Concept review moves the Bilbo replacement fork ahead of batch authoring. Two successful casts ending in exile give a stronger test of grant ownership than comparing resolution with a counter alone.
