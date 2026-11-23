@@ -2636,6 +2636,22 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
 }
 
 #[test]
+fn adventure_learning_tokens_encode_damage_without_printed_identity() {
+    let pack = default_content_pack();
+    let mut card = card_definition("Smaug, the Great Calamity");
+    let original = definition_tokens(&card, pack).unwrap();
+    let printed = std::sync::Arc::make_mut(&mut card.printed);
+    let spell = std::sync::Arc::make_mut(printed.adventure.as_mut().unwrap());
+    spell.name = "Different name".into();
+    spell.text_box = "Different wording".into();
+    assert_eq!(original, definition_tokens(&card, pack).unwrap());
+    let printed = std::sync::Arc::make_mut(&mut card.printed);
+    let spell = std::sync::Arc::make_mut(printed.adventure.as_mut().unwrap());
+    spell.spell_effects[0] = Effect::deal_damage(4, ObjectSelector::Target(TargetSpec::Creature));
+    assert_ne!(original, definition_tokens(&card, pack).unwrap());
+}
+
+#[test]
 fn learning_tokens_never_carry_names_or_printed_text() {
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {

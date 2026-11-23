@@ -559,7 +559,9 @@ impl<'a, 'p> Compound<'a, 'p> {
         key: &'static str,
         value: &T,
     ) -> Result<(), ContentError> {
-        if self.definition && (IDENTITY_FIELDS.contains(&key) || PROGRAM_FIELDS.contains(&key)) {
+        if (self.name == "CardDefinition" && IDENTITY_FIELDS.contains(&key))
+            || (self.definition && PROGRAM_FIELDS.contains(&key))
+        {
             return Ok(());
         }
         self.writer.push(TokenKind::Field, name_value(key));
