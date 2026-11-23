@@ -1,4 +1,4 @@
-at: 31022db6444ef469b234af0d90b0bf9cddfd739b
+at: c56f72fbc0d6e2adc9b933038fb09486c740a0b4
 first:
   - path: scratch/plan.md
     why: Read the library and exile departure witnesses.
@@ -13,7 +13,7 @@ first:
   - path: managym/src/flow/decision.rs
     why: Carry the resolving controller through the pending move.
   - path: managym/cards/tests/cards/fin.rs
-    why: Restore both exile orders and reject spent Commands.
+    why: Compare token departures and restore both exile orders.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
