@@ -382,16 +382,6 @@ def arm_evaluations(
     final = [c for c in extended if c.at.get("updates") == FINAL_UPDATE]
     if final and arm in EXTENSION_ARMS:
         template = benchmark.seatings[0]
-        jobs.append(
-            against(
-                f"{FINAL}-{arm}",
-                final,
-                one_seed=True,
-                base=final_seatings(template, "heuristic"),
-                cards=True,
-                environment_=final_environment(),
-            )
-        )
         jobs += [
             against(
                 f"{FINAL}-{arm}-vs-{opponent}",
