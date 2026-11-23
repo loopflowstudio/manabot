@@ -10,3 +10,5 @@
 - Use OpeningHands, Playing and Finished as lifecycle positions. Keep the end-turn return point in its existing frame. For ordered bottoming choose deepest first and name that direction in the offer.
 
 - Use turn zero for pregame entries. Store the turn a permanent entered so power-up keeps its discount through any priority during repeated cleanup.
+
+- Retain every simultaneous loss cause per seat. Preserve the historical empty-draw precedence in the single-reason Env field so one consumer's projection does not erase facts from the committed result.
