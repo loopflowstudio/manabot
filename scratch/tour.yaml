@@ -1,9 +1,17 @@
-at: f62b935e4214f3263c6910efa4ccc2937bcb1e7f
+at: a89c2be86f0936cc9fe2552325e2d651e60b8d97
 first:
-  - path: managym/src/agent/observation_encoder.rs
-    why: Join each grant to its public source
-  - path: tests/semantic/test_text_observation.py
-    why: Swap sources and compare singleton card columns
-  - path: scratch/test_smaug_profile.py
-    why: Exercise Adventure resolution and counter from one cast
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/hob.jsonl
+    why: Find the card definitions and verified outcomes
+  - path: docs/engine.md
+    why: Follow permission across a zone change
+  - path: managym/cards/src/hob.rs
+    why: Read both cards and both printed programs
+  - path: managym/src/flow/play.rs
+    why: Price and announce the selected spell
+  - path: managym/src/flow/proposed_event.rs
+    why: See which replacement grants exile access
+  - path: managym/cards/tests/cards/hob.rs
+    why: Follow all four Bilbo outcomes
+  - path: tests/env/test_game_snapshot.py
+    why: Restore the pending target Command
 hide: []
