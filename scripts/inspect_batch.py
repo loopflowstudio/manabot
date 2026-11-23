@@ -13,7 +13,6 @@ games on one CPU thread and finishes in seconds.
 
 import argparse
 
-import numpy as np
 import torch
 
 import manabot.backends.torch as torch_backend
@@ -34,10 +33,8 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from manabot.training.updates.damped_policy import (
-    compute_targets,
-    update_damped_iteration,
-)
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.targets import compute_batch_targets
 
 STREAMS = 2
 
@@ -56,39 +53,37 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _trajectories(ends: np.ndarray) -> list[range]:
-    """Split packed rows into one range per seat trajectory, using end flags."""
-    stops = (np.flatnonzero(ends) + 1).tolist()
-    return [range(a, b) for a, b in zip([0, *stops[:-1]], stops, strict=True)]
-
-
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
     )
     advantages = targets.advantages.flatten().numpy()
-    value_targets = targets.values.flatten().numpy()
+    value_targets = targets.expected_targets.flatten().numpy()
     kept = targets.selected.flatten().numpy()
     values = batch.values.flatten()
     rewards = batch.rewards.flatten()
     ends = batch.dones.flatten()
-    spans = _trajectories(ends)
+    spans = list(batch.trajectory_rows())
 
     print(f"batch: {len(values)} rows, {len(spans)} seat trajectories")
     print(f"lengths: {[len(span) for span in spans]}")
     print(f"filter kept {int(kept.sum())} of {len(kept)} rows ({kept.mean():.0%})")
-    print(f"bootstrapped tail fraction: {float((~batch.dones[-1]).mean()):.0f}")
+    print(f"bootstrapped tail fraction: {batch.bootstrapped_tail_fraction():.0%}")
 
     span = spans[0]
-    outcome = {1.0: "won", -1.0: "lost", 0.0: "drew"}[float(rewards[span[-1]])]
-    shown = list(span)[-rows:]
+    outcome = (
+        {1.0: "won", -1.0: "lost", 0.0: "drew"}[float(rewards[span[-1]])]
+        if ends[span[-1]]
+        else "was censored"
+    )
+    shown = span[-rows:]
     print(f"\nlast {len(shown)} decisions of the first trajectory, which {outcome}:")
     print(f"{'to end':>6} {'V':>7} {'reward':>7} {'advantage':>10} {'target':>7}  kept")
     for row in shown:
         print(
-            f"{span[-1] - row:>6} {values[row]:>7.3f} {rewards[row]:>7.1f} "
+            f"{(span[-1] - row) // span.step:>6} {values[row]:>7.3f} {rewards[row]:>7.1f} "
             f"{advantages[row]:>10.3f} {value_targets[row]:>7.3f}  "
             f"{'yes' if kept[row] else ''}"
         )

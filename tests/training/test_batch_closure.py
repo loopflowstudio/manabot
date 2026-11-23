@@ -70,6 +70,19 @@ def test_exact_quota_pauses_mid_game_at_the_quota() -> None:
     assert not batch.next_done.all()
 
 
+def test_exact_quota_counts_trajectories_within_each_column() -> None:
+    batch = collect(_one_seat("exact-quota"), _agent(), 4)
+    # One three-choice game and an unfinished tail in stream 0, two whole
+    # two-choice games in stream 1. Rows are interleaved in flat batch order.
+    assert [list(rows) for rows in batch.trajectory_rows()] == [
+        [0, 2, 4],
+        [6],
+        [1, 3],
+        [5, 7],
+    ]
+    assert batch.bootstrapped_tail_fraction() == 0.25
+
+
 def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     agent = _agent()
     collector = _one_seat("complete-games")

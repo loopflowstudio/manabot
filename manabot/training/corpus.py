@@ -68,7 +68,7 @@ def log_corpus_setup(
 def log_corpus_outcomes(
     run: TrainingRun, collector: Collector, **clocks: float
 ) -> None:
-    """Log one update's completed games: their outcomes and their settings."""
+    """Log outcomes and settings for the fresh games completed in this update."""
     if collector.opponent_mode in ("self", "learning"):
         games = collector.stats.self_play.drain()
         run.log_table(OUTCOME_TABLE, games.outcomes, **clocks)
