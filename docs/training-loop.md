@@ -292,9 +292,9 @@ probability for the actor. Descendants and singletons use the ordinary lambda
 targets. `root_actor_weight` on either learning rule scales the actor's root
 contribution (default 1). Each head scales its weights to mean one over the
 rows it trains in the whole batch. A minibatch containing only fresh rows
-therefore still reflects their weight relative to snapshot rows. Collection
-and reference KL diagnostics average over the trained rows of the reported
-minibatch.
+therefore still reflects their weight relative to snapshot rows. The damped
+policy update reports collection and reference KL as unweighted means over
+the trained rows of its last minibatch.
 
 The advantage filter selects eligible rows independently within each
 `episode_source`. Diagnostics in `source_selection` report eligible and
