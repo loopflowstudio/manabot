@@ -19,6 +19,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         cat_collector(),
         claws_out(),
+        felling_blow(),
         fiendish_panda(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
@@ -167,6 +168,29 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                 },
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn felling_blow() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.felling_blow",
+        scryfall_id: "96948ae3-b15d-4d6d-aa73-9f52084cd903",
+        printed: PrintedCharacteristics {
+            name: "Felling Blow".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::CreatureYouControl),
+                TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+            ],
+            spell_effects: vec![
+                Effect::put_counters(ObjectSelector::Target(TargetSpec::CreatureYouControl), CounterKind::PlusOnePlusOne, 1),
+                Effect::TargetCreaturesDealPowerDamageToLastTarget,
+            ],
+            text_box: "Put a +1/+1 counter on target creature you control. Then that creature deals damage equal to its power to target creature an opponent controls.".into(),
             ..Default::default()
         },
         ..Default::default()

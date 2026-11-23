@@ -130,7 +130,11 @@ Working review at `998e139b` reran both debug cards tests matching `lunar_insigh
 
 The broader query work can proceed one instruction at a time. In `managym/src/flow/resolution.rs`, `DistinctManaValues` reuses permanent selection and the existing mana-value reader. Its set lives only while evaluating the draw count. This card needs no announcement snapshot of the board or persistent turn fact.
 
-**Next slice — Felling Blow.** Cast it with two legal targets, place the counter on the controlled creature, then check that it deals its increased power to the opposing creature. Exercise the existing `TargetCreaturesDealPowerDamageToLastTarget` instruction after counter placement before introducing another power expression. Bind the controlled creature to the first slot and the opposing creature to the last. Restore the same pending spell across branches. With a 2-power source and 5-toughness victim, expect one counter and three noncombat damage from the creature. Blink only the victim and expect the counter with zero damage. Blink only the source and expect neither effect. Replay the original branch to check both target identities and instruction order. Check the catalog tokens for both instructions and record the native fixture in the FDN ledger. The power read is local to damage execution. Existing target bindings, counters and damage events supply persistence and viewer projection.
+## Implemented slice · Felling Blow
+
+The FDN ledger records the native fixture for `fdn.felling_blow`. From one pending spell, Gray Ogre gained a +1/+1 counter and dealt three noncombat damage to Steel Hellkite. Returning the Hellkite from exile preserved the Ogre's counter and prevented damage. Returning the Ogre prevented both effects. Restoring the intact spell reproduced the counter and the attributed hit. Both focused cards tests passed, including the catalog tokens for counter placement and power damage. Ordered target requirements and the existing damage instruction handled all four resolutions.
+
+**Next slice — Drake Hatcher.** Exercise incubation counters from actual combat damage to a player, then remove three counters to create the Drake.
 
 ## Evidence to carry forward
 

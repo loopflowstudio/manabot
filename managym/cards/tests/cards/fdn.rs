@@ -765,3 +765,81 @@ fn lunar_insight_counts_distinct_controlled_nonland_values_at_resolution() {
         assert_eq!(hand(&s, 0).len() - before, expected);
     }
 }
+
+#[test]
+fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{permanent, top_spell},
+        play::cast_card,
+    };
+    use managym::{
+        flow::event::{DamageTarget, GameEvent},
+        state::{game_object::Target, permanent::CounterKind, player::ManaPayment},
+    };
+
+    let mut s = five_color_setup(&["Felling Blow", "Gray Ogre", "Steel Hellkite"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let victim = s.force_permanent_on_battlefield(1, "Steel Hellkite");
+    let object = card_of(&s, source);
+    let spell = force_new_card_in_hand(&mut s, 0, "Felling Blow");
+    cast_card(&mut s, spell);
+    s.choose_target_named("Gray Ogre");
+    s.choose_target_named("Steel Hellkite");
+    assert_eq!(
+        top_spell(&s).targets,
+        vec![Target::Permanent(source), Target::Permanent(victim)]
+    );
+    let pending = s.game().clone();
+    for (blink, counters, damage) in [
+        (None, 1, 3),
+        (Some(victim), 1, 0),
+        (Some(source), 0, 0),
+        (None, 1, 3),
+    ] {
+        *s.game_mut() = pending.clone();
+        if let Some(id) = blink {
+            let card = card_of(&s, id);
+            let exiled = move_card(&mut s, card, ZoneType::Exile);
+            move_card(&mut s, exiled, ZoneType::Battlefield);
+        }
+        settle(&mut s);
+        let ogre = permanent(&s, permanent_named(&s, "Gray Ogre"));
+        let hellkite = permanent(&s, s.battlefield_permanents_named(1, "Steel Hellkite")[0]);
+        assert_eq!(ogre.counters.get(CounterKind::PlusOnePlusOne), counters);
+        assert_eq!(hellkite.counters.get(CounterKind::PlusOnePlusOne), 0);
+        assert_eq!(hellkite.damage, damage);
+        assert!(!s
+            .game()
+            .state
+            .observation_events
+            .iter()
+            .any(|event| matches!(event, GameEvent::CombatDamageDealt { .. })));
+        let mut hits = Vec::new();
+        for event in s
+            .game()
+            .state
+            .events
+            .iter()
+            .skip(pending.state.events.len())
+        {
+            if let GameEvent::DamageDealt {
+                source,
+                target,
+                amount,
+            } = event
+            {
+                hits.push((*source, target, *amount));
+            }
+        }
+        if damage > 0 {
+            assert_eq!(
+                hits,
+                vec![(Some(object), &DamageTarget::Permanent(victim), 3)]
+            );
+        } else {
+            assert!(hits.is_empty());
+        }
+    }
+}

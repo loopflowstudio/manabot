@@ -5956,3 +5956,21 @@ fn lunar_insight_catalog_tokens_describe_its_draw_amount() {
     }
     assert!(tokens.contains(&(TokenKind::Field, name_value("not_card_types"))));
 }
+
+#[test]
+fn felling_blow_catalog_tokens_describe_both_instructions() {
+    let pack = default_content_pack();
+    let definition = pack
+        .definition(pack.definition_id("Felling Blow").unwrap())
+        .unwrap();
+    let tokens = tokens_of(definition);
+    for variant in [
+        "Effect::PutCounters",
+        "Effect::TargetCreaturesDealPowerDamageToLastTarget",
+    ] {
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
+}
