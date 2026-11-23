@@ -4,7 +4,7 @@
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
 </style>
-<main><small>Managym · MTG-422 · reviewed at 19671178</small>
+<main><small>Managym · MTG-422 · reviewed at 9ae823a4</small>
 <h1>Do the caller’s decisions and results have one native owner?</h1>
 <p>From reset, a policy needs the current chooser and every legal action. Search must be able to fork there. Once the game finishes, evaluation needs a stable result for either seat.</p>
 <aside><h2>Maze’s End returns to hand. What decides whether you win?</h2>
@@ -34,7 +34,7 @@
 <li><b>Recovery.</b> Fork the payment choice. Replay the bound choice and compare the receipt, stack, remaining mana and next chooser. Take a different legal contribution on another fork and verify the root’s offers and mana are intact.</li></ol>
 <p><b>Counterexample.</b> Two Bracelets can grant identical text to one creature. Selecting one must exile that object, preserve the other grant and charge the amount locked before either leaves. This distinguishes grants by identity even when their displayed costs match.</p>
 <h2>Where the lifecycle already holds</h2>
-<p>At seed 213 a restored private bottom choice reproduced its successor. Another selection changed only the owner’s library knowledge. Time Stop used the retained end-turn frame to resume after a legend choice. Combat-only control expired before cleanup while turn-long control lasted through repeated cleanup.</p>
+<p>At seed 213 a restored private bottom choice reproduced its successor. Another selection changed only the owner’s library knowledge. At seed 725, constructing the stack during opening hands had prevented the fixture from reaching Time Stop. The corrected fixture submits both keep choices and checks Playing before placing the spell. At the legend choice the caller sees “turn is ending”. Keeping either legend on an independent fork reaches cleanup, resolves the surviving trigger for three life and preserves the original game hash. Combat-only control expired before cleanup while turn-long control lasted through repeated cleanup.</p>
 <p>At seed 23 the indexed Pact choice and bound Command agreed across live and replay-restored snapshots, down to winner 1 (Opponent) and seat 0’s instructed loss. Herald consumed the loss instruction on a protected branch. Poison counters survive protection and can cause a later loss. A single pending-loss flag would conflate those branches.</p>
 <p>Cube exercises a different boundary. Doubling Season took six plan counters to eight. Removing the Plan before sacrifice preserved the opponent’s turn. Countering the subsequent targeted trigger also preserved it. On the successful branch, seat zero chose a Mountain belonging to seat one. Replaying that Command reproduced the successor and left the root intact.</p>
 <h2>What verifies the choice?</h2>
