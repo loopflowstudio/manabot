@@ -4,30 +4,32 @@
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
 </style>
-<main><small>Managym · MTG-422 · reviewed at 00f147c6</small>
+<main><small>Managym · MTG-422 · reviewed at 98fb39ca</small>
 <h1>Do the caller’s decisions and results have one native owner?</h1>
 <p>From reset, a policy needs the current chooser and every legal action. Search must be able to fork there. Once the game finishes, evaluation needs a stable result for either seat.</p>
-<aside><h2>Biggest mismatch · paying with the object that grants the ability</h2>
-<p><b>Existing.</b> Managym can identify an attachment through <code>AbilityGrant</code>, retain an activation’s chosen effects on the stack, and record its payment. The Dominion Bracelet has no catalog definition. A caller cannot yet use those pieces together to exile the Bracelet and take the opponent’s next turn.</p>
-<p><b>Proposed.</b> Offer the equipped creature’s activation at sorcery timing. Lock the cost while the Bracelet still boosts power. Pay with that exact Equipment and the creature controller’s mana. After responses, resolve the captured control effect. The first delegated offer identifies the chooser and the controlled seat still supplies the resources.</p></aside>
+<aside><h2>Biggest mismatch · identifying which object the activation spends</h2>
+<p><b>Existing · two legal actions on one Gray Ogre.</b> Both activate the Ogre. Each exiles a different attached Bracelet. Native action focus carries the Ogre first and the selected Equipment second. The policy encoder joins both references to rows. The semantic text formatter joins their names with a comma after “Activate ability of”. That list exposes two objects but gives the second one no role.</p>
+<p><b>Proposed offer wording.</b> “Activate Gray Ogre’s ability. Exile Bracelet A as a cost.” The other offer names Bracelet B. A and B stand for the viewer’s existing object references. Keep the creature as the activation source and make the Equipment being spent explicit before submission. The same bound Command still executes the choice.</p></aside>
 <h2>From reset to evaluation</h2>
 <table><thead><tr><th>Caller interaction<th>Code owner<th>Fit<tbody>
 <tr><td>Keep, redraw and choose private bottom order<td>OpeningHands publishes exact objects deepest first.<td>Yes. A fork can vary one commitment without exposing it to the opponent.
 <tr><td>Place an eligible permanent before turn one<td>BeginOnBattlefield and the Enter stage offer placement and finish.<td>Yes. Both opening cards use the same action.
 <tr><td>Resume interrupted combat into cleanup<td>FrameCompletion::EndTurn retains the return point across a mandatory choice.<td>Yes. Cleanup can grant priority and repeat.
-<tr><td>Choose for another seat<td>ActionSpace.player owns choice. Action.player() identifies whose resources apply.<td>Yes. Bloodbending exercises the distinction. Cube’s nested payment still needs a witness.
+<tr><td>Choose for another seat<td>ActionSpace.player owns choice. Action.player() identifies whose resources apply.<td>Yes. Bloodbending exercises the distinction. Cube’s seed-161 nested payment spends the controlled seat’s mana.
 <tr><td>Distinguish victory, one seat losing and simultaneous losses<td>GameProcedure::Finished holds GameOutcome. Losses retain multiple causes per seat. Victory names the winner and cause.<td>Yes. Maze can win after a failed search with ten distinct Gate names already in play.
 <tr><td>Read the reason after either Env step<td>game_step_outcome reads the committed result for the chooser captured before stepping.<td>Yes. Seed 23 produced the same reward, winner and loss reason on both paths.
-<tr><td>Exile this particular Bracelet to pay for the creature’s activation<td>AbilityGrant, PaymentReceipt and ActivatedAbilityOnStack cover different moments in the activation.<td>No. The card does not yet connect those moments in a playable action.
+<tr><td>Exile this particular Bracelet to pay for the creature’s activation<td>AbilityGrant, PaymentReceipt and ActivatedAbilityOnStack cover different moments in the activation.<td>No at the text boundary. The generic activation label lists both objects as though both supplied the activation.
 </table>
 <h2>Follow one activation across a fork</h2>
-<ol><li><b>Normal path, proposed.</b> Equip a creature and open its granted activation. Bind the target and choose legal mana contributions. Once paid, the Bracelet is in exile before anyone can respond. Removing its power bonus then cannot increase the amount owed.</li>
+<ol><li><b>Normal path, exercised at seed 161.</b> Equip a creature and open its granted activation. Bind the target and choose legal mana contributions. Once paid, the Bracelet is in exile before anyone can respond. Removing its power bonus then cannot increase the amount owed.</li>
 <li><b>Failure.</b> Counter the paid ability. The Bracelet stays exiled and the mana stays spent. The opponent chooses on their own turn. A payment receipt proves a cost was paid; it cannot prove control was acquired.</li>
-<li><b>Recovery.</b> Restore the pending payment on an exact fork. Replay the bound choice and compare the receipt, stack, remaining mana and next chooser. Take a different legal contribution on another fork and verify the root’s offers and mana are intact.</li></ol>
+<li><b>Recovery.</b> Fork the payment choice. Replay the bound choice and compare the receipt, stack, remaining mana and next chooser. Take a different legal contribution on another fork and verify the root’s offers and mana are intact.</li></ol>
 <p><b>Counterexample.</b> Two Bracelets can grant identical text to one creature. Selecting one must exile that object, preserve the other grant and charge the amount locked before either leaves. This distinguishes grants by identity even when their displayed costs match.</p>
 <h2>Where the lifecycle already holds</h2>
 <p>At seed 213 a restored private bottom choice reproduced its successor. Another selection changed only the owner’s library knowledge. Time Stop used the retained end-turn frame to resume after a legend choice. Combat-only control expired before cleanup while turn-long control lasted through repeated cleanup.</p>
 <p>At seed 23 the indexed Pact choice and bound Command agreed across live and replay-restored snapshots, down to winner 1 (Opponent) and seat 0’s instructed loss. Herald consumed the loss instruction on a protected branch. Poison counters survive protection and can cause a later loss. A single pending-loss flag would conflate those branches.</p>
-<p><b>Next witness.</b> Cube should use the same turn-control effect after its separately counterable reflexive trigger resolves. Fork inside the controlled player’s payment. Full-suite and paired Engine Budget results remain open.</p>
-<h2>Questions for review</h2><ol><li>When is Bracelet’s price determined? <b>1a · selected</b> Lock it before paying. <b>1b</b> Recompute after exile, when the power bonus has gone.</li>
-<li>What survives payment? <b>2a · selected</b> The stack ability’s chosen effects and receipt. <b>2b</b> A link requiring a live Equipment to recover the effect.</li></ol></main></html>
+<p>Cube exercises a different boundary. Doubling Season took six plan counters to eight. Removing the Plan before sacrifice preserved the opponent’s turn. Countering the subsequent targeted trigger also preserved it. On the successful branch, seat zero chose a Mountain belonging to seat one. Replaying that Command reproduced the successor and left the root intact.</p>
+<h2>First slice for implementation</h2>
+<p>Compare the two offers side by side before payment. Change the wording at the shared native description if needed, then check the text rendering and Academy’s accessible offer labels against the same two object references. Keep policy row order and Command bindings stable. Gate still owns full-suite and paired Engine Budget results.</p>
+<h2>Questions for review</h2><ol><li>How should a caller identify the cost? <b>1a · selected</b> Name the visible Equipment to exile. <b>1b</b> Ask the caller to infer it from the ability index and focus order.</li>
+<li>How many decisions does choosing the grant require? <b>2a · selected</b> Keep one bound offer per grant. <b>2b</b> Add a separate Equipment picker after activation.</li></ol></main></html>
