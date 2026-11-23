@@ -85,6 +85,7 @@ class RL(Protocol):
         next_value: Array,
         gamma: float,
         lam: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> tuple[Array, Array]: ...
 
     def clipped_surrogate(
@@ -138,6 +139,7 @@ class CategoricalRL(RL, Protocol):
         ends: Array,
         bootstrap: Array,
         trace_lambda: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> Array: ...
 
     def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
@@ -218,7 +220,7 @@ class AdmittedRollout(Protocol):
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None: ...
 
-    def next_observation(self, device: Device) -> Observations: ...
+    def next_observation(self, device: Device) -> Observations | None: ...
     def next_observations(
         self, device: Device, size: int
     ) -> Iterator[Observations]: ...

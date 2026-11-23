@@ -10,7 +10,8 @@ targets walk `reverse_waves` over host tensors, and its device-side advantage
 selection (`torch.quantile`) matches `quantile` bit for bit.
 
 Rows are [T,E]: T same-viewer transitions of E packed columns. An end flag
-belongs to its own row's reward and cuts both bootstrap and trace.
+belongs to its own row's reward. A terminal ends both bootstrap and trace.
+A horizon cut ends the trace with a frozen value from that viewer.
 """
 
 from collections.abc import Iterator
@@ -21,13 +22,21 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def terminal_distances(ends: NDArray[np.bool_]) -> NDArray[np.int64]:
+def terminal_distances(
+    ends: NDArray[np.bool_], segment_ends: NDArray[np.bool_] | None = None
+) -> NDArray[np.int64]:
     """[T,E] distances to the next end (terminal=0, censored=-1), reset at each end."""
     count = len(ends)
     steps = np.arange(count)[:, None]
     # The nearest end at or after each row, by a running minimum toward the start.
-    following = np.minimum.accumulate(np.where(ends, steps, count)[::-1], axis=0)[::-1]
-    return np.where(following < count, following - steps, -1)
+    boundaries = ends if segment_ends is None else ends | segment_ends
+    following = np.minimum.accumulate(np.where(boundaries, steps, count)[::-1], axis=0)[
+        ::-1
+    ]
+    observed = following < count
+    if segment_ends is not None:
+        observed &= np.take_along_axis(ends, following.clip(max=count - 1), axis=0)
+    return np.where(observed, following - steps, -1)
 
 
 def reverse_waves(
@@ -46,6 +55,22 @@ def reverse_waves(
     return zip(np.split(steps, bounds), np.split(columns, bounds), strict=True)
 
 
+def bootstrap_cuts(
+    ends: NDArray[np.bool_], indexes: NDArray[np.intp], count: int
+) -> NDArray[np.bool_]:
+    """Validate explicit cut coordinates and return their [T,E] mask."""
+    if indexes.shape != ends.shape or not np.issubdtype(
+        indexes.dtype, np.signedinteger
+    ):
+        raise ValueError("bootstrap indexes must be signed integers shaped like ends")
+    cuts = indexes >= 0
+    if np.any(indexes < -1) or np.any(indexes >= count):
+        raise ValueError("bootstrap index outside frozen observations")
+    if (ends & cuts).any() or not (ends[-1] | cuts[-1]).all():
+        raise ValueError("each trajectory must finish at a terminal or a bootstrap cut")
+    return cuts
+
+
 def transition_gae(
     rewards: NDArray[np.floating],
     values: NDArray[np.floating],
@@ -53,18 +78,22 @@ def transition_gae(
     next_value: NDArray[np.floating],
     gamma: float,
     lam: float,
+    bootstrap_indexes: NDArray[np.intp] | None = None,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
 
     `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
     episode. `next_value` [E] is read only where a column's last row is not an
-    end. Mismatched shapes raise `ValueError` rather than broadcast.
+    end. With explicit cuts, nonnegative entries of `bootstrap_indexes` [T,E]
+    address the corresponding frozen viewer values in `next_value` [M].
     """
     if (
         rewards.ndim != 2
         or values.shape != rewards.shape
         or ends.shape != rewards.shape
-        or next_value.size != rewards.shape[1]
+        or not len(rewards)
+        or (bootstrap_indexes is not None and next_value.ndim != 1)
+        or (bootstrap_indexes is None and next_value.size != rewards.shape[1])
     ):
         raise ValueError(
             "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
@@ -72,12 +101,19 @@ def transition_gae(
         )
     ends = ends.astype(bool)
     live = (~ends).astype(rewards.dtype)
-    following = np.concatenate([values[1:], next_value.reshape(1, -1)])
+    if bootstrap_indexes is None:
+        boundaries = ends
+        following = np.concatenate([values[1:], next_value.reshape(1, -1)])
+    else:
+        cuts = bootstrap_cuts(ends, bootstrap_indexes, len(next_value))
+        boundaries = ends | cuts
+        following = np.concatenate([values[1:], np.zeros_like(values[:1])])
+        following[cuts] = next_value[bootstrap_indexes[cuts]]
     deltas = rewards + gamma * live * following - values
-    carried = gamma * lam * live
+    carried = gamma * lam * (~boundaries).astype(rewards.dtype)
     # The extra zero row is the empty tail past each column's last row.
     advantages = np.zeros((len(rewards) + 1, rewards.shape[1]), rewards.dtype)
-    for steps, columns in reverse_waves(ends):
+    for steps, columns in reverse_waves(boundaries):
         advantages[steps, columns] = (
             deltas[steps, columns]
             + carried[steps, columns] * advantages[steps + 1, columns]

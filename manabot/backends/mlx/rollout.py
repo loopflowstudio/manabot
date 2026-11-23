@@ -34,7 +34,7 @@ class AdmittedRollout:
         self.agent = agent
         self.batch = batch
         self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        self._next = agent.prepare(batch.next_obs)
+        self._next = agent.prepare(batch.next_obs) if len(batch.next_done) else None
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
         """Validate learner rows in bounded chunks, once across all epochs."""
@@ -44,13 +44,14 @@ class AdmittedRollout:
             self.agent.check_observation(self.batch.observations(chunk).observation)
             self._admitted[chunk] = True
 
-    def next_observation(self, device: object) -> Prepared:
+    def next_observation(self, device: object) -> Prepared | None:
         """Bootstrap observations [trajectory, ...]."""
         return self._next
 
     def next_observations(self, device: object, size: int) -> Iterator[Prepared]:
         # Explicit limits are refused by the MLX learner before this path.
-        yield self._next
+        if self._next is not None:
+            yield self._next
 
     def rows(
         self, indexes: NDArray[np.int64], device: object

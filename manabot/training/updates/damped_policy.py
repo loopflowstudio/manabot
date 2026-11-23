@@ -126,6 +126,7 @@ def compute_targets(
     """Build detached learning targets and selection from an admitted rollout."""
     rl, device = backend.rl, learner.device
     batch = admitted.batch
+    cuts = batch.bootstrap_indexes()
     with backend.learner.no_grad():
         rewards = backend.arrays.from_numpy(batch.rewards, device)
         ends = backend.arrays.from_numpy(batch.dones, device)
@@ -152,16 +153,16 @@ def compute_targets(
             wdl = categorical_rl(rl)
             bootstrap = wdl.outcome_probabilities(next_raw)
             value_targets = wdl.categorical_lambda_returns(
-                probabilities, rewards, ends, bootstrap, learning.value_lambda
+                probabilities, rewards, ends, bootstrap, learning.value_lambda, cuts
             )
             next_value = wdl.expected_outcome(bootstrap)
         else:
             next_value = next_raw.squeeze(-1)
             _, value_targets = rl.transition_gae(
-                rewards, values, ends, next_value, 1.0, learning.value_lambda
+                rewards, values, ends, next_value, 1.0, learning.value_lambda, cuts
             )
         advantages, _ = rl.transition_gae(
-            rewards, values, ends, next_value, 1.0, learning.policy_lambda
+            rewards, values, ends, next_value, 1.0, learning.policy_lambda, cuts
         )
         rl.require_finite("nonfinite_advantages", advantages=advantages)
         rl.require_finite("nonfinite_value_targets", targets=value_targets)
@@ -233,9 +234,7 @@ def update_damped_iteration(
         ),
         "reference": learning.reference,
         "advantage_abs_mean": advantage_abs_mean,
-        "bootstrapped_tail_fraction": float(
-            np.mean(~batch.dones[-1], dtype=np.float32)
-        ),
+        "bootstrapped_tail_fraction": batch.bootstrapped_tail_fraction(),
     }
     if learning.decision_schedule is not None:
         assert learner_transitions is not None
@@ -268,6 +267,7 @@ def update_damped_iteration(
             actor_rows,
             batch.dones,
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
+            batch.segment_ends(),
         )
         diagnostics["value_scale"] = value_scale(
             batch.values,

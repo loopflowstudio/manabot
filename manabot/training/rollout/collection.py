@@ -246,6 +246,19 @@ class RecordedObservations:
         }
 
 
+@dataclass(frozen=True)
+class TrajectorySpan:
+    """One seat's contiguous rows [start, stop) in a packed column.
+
+    An unfinished span indexes its viewer's frozen observation in next_obs.
+    """
+
+    start: int
+    stop: int
+    seat: int
+    bootstrap_index: int | None = None
+
+
 @dataclass
 class RolloutBatch:
     """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
@@ -268,6 +281,54 @@ class RolloutBatch:
     outcome_probabilities: np.ndarray | None = None
     assignments: np.ndarray | None = None
     target_residuals: np.ndarray | None = None
+    trajectories: tuple[TrajectorySpan, ...] | None = None
+
+    def __post_init__(self) -> None:
+        validate_rollout_metadata(self)
+
+    def bootstrap_indexes(self) -> np.ndarray | None:
+        """Frozen observation index at each explicit cut, -1 on every other row."""
+        if self.trajectories is None:
+            return None
+        indexes = np.full(self.actions.shape, -1, dtype=np.intp)
+        for span in self.trajectories:
+            if span.bootstrap_index is not None:
+                indexes[span.stop - 1, 0] = span.bootstrap_index
+        return indexes
+
+    def segment_ends(self) -> np.ndarray | None:
+        """Explicit trace boundaries, or None for ordinary column trajectories."""
+        if self.trajectories is None:
+            return None
+        ends = np.zeros_like(self.dones)
+        for span in self.trajectories:
+            ends[span.stop - 1, 0] = True
+        return ends
+
+    def trajectory_rows(self) -> Iterator[range]:
+        """Flat time-major indexes per trajectory, including censored column tails."""
+        if self.trajectories is not None:
+            for span in self.trajectories:
+                yield range(span.start, span.stop)
+            return
+        steps, columns = self.actions.shape
+        for column in range(columns):
+            start = 0
+            for terminal in np.flatnonzero(self.dones[:, column]):
+                stop = int(terminal) + 1
+                yield range(start * columns + column, stop * columns + column, columns)
+                start = stop
+            if start < steps:
+                yield range(start * columns + column, steps * columns + column, columns)
+
+    def bootstrapped_tail_fraction(self) -> float:
+        """Share of seat trajectories whose outcomes are still unknown."""
+        cuts = (
+            np.count_nonzero(~self.dones[-1])
+            if self.trajectories is None
+            else sum(span.bootstrap_index is not None for span in self.trajectories)
+        )
+        return float(cuts / (cuts + np.count_nonzero(self.dones)))
 
     def observations(self, indexes: np.ndarray | None = None) -> ActionRows:
         """Materialize only requested flat rollout rows on CPU.
@@ -303,6 +364,50 @@ class RolloutBatch:
     def ordered_obs(self) -> ObservationBuffers:
         """Ordinary non-action fields in [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
+
+
+def validate_rollout_metadata(batch: RolloutBatch) -> None:
+    """Verify the packed rows and frozen observations describe the same trajectories."""
+    if batch.trajectories is None:
+        return
+    if (
+        batch.actions.ndim != 2
+        or batch.actions.shape[1] != 1
+        or not batch.actions.size
+        or batch.dones.shape != batch.actions.shape
+    ):
+        raise ValueError("explicit trajectories require packed [N,1] actions and dones")
+    if batch.dones.dtype != np.bool_ or batch.next_done.dtype != np.bool_:
+        raise ValueError("packed terminal flags must be boolean")
+    if batch.next_done.ndim != 1 or batch.next_done.any():
+        raise ValueError("packed bootstrap observations must all be nonterminal")
+    count = len(batch.next_done)
+    if (count and not batch.next_obs) or any(
+        len(field) != count for field in batch.next_obs.values()
+    ):
+        raise ValueError("packed bootstrap observation count differs from next_done")
+    previous = 0
+    used: set[int] = set()
+    for span in batch.trajectories:
+        if span.start != previous or not span.start < span.stop <= len(batch.actions):
+            raise ValueError("trajectory spans must partition all packed rows in order")
+        if span.seat not in (0, 1) or batch.dones[span.start : span.stop - 1].any():
+            raise ValueError(
+                "trajectory spans require one seat and cannot cross terminals"
+            )
+        terminal = batch.dones[span.stop - 1, 0]
+        index = span.bootstrap_index
+        if terminal != (index is None):
+            raise ValueError("only nonterminal spans require a bootstrap index")
+        if index is not None:
+            if not isinstance(index, (int, np.integer)) or not 0 <= index < count:
+                raise ValueError("trajectory bootstrap index outside next_obs")
+            used.add(index)
+        previous = span.stop
+    if previous != len(batch.actions) or len(used) != count:
+        raise ValueError(
+            "trajectory spans must cover every action and bootstrap observation"
+        )
 
 
 ExposureKind = Literal[

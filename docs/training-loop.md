@@ -83,7 +83,7 @@ of rows and `A` for padded legal offers.
 | --- | --- |
 | `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`; the required `numerics` session (`backend.collection.CollectionSession(device=..., seed=..., precision=...)`) owns the device, precision and private sampling RNG. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or one per horizon-cut span (empty when none) when `trajectories` is set — independently of autograd mode. The batch must not change afterwards. |
+| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -330,6 +330,16 @@ uninterrupted hot-cached bank.
   `scripts/inspect_batch.py` cut on `TrajectorySpan` boundaries (`segment_ends`)
   rather than `dones`, so horizon-cut spans report `"censored"` and never leak
   credit across cuts or seats.
+
+For a custom collector, pass `trajectories` when constructing the packed
+`RolloutBatch`. For example, three decisions by seats 0, 0, 1 can be stored
+as `(TrajectorySpan(0, 2, seat=0, bootstrap_index=1), TrajectorySpan(2, 3,
+seat=1, bootstrap_index=0))` when `next_obs` contains seat 1 then seat 0.
+Both observations must come from the revision after the third choice. For a
+terminal span, omit its bootstrap index and set its last row in `dones`. When
+every span is terminal, `next_done` is empty and the update skips the bootstrap
+forward. `batch.trajectory_rows()` yields the flat row indexes of each
+trajectory, including strided ranges for ordinary multi-column batches.
 
 ### RLOO baselines, stratified filtering and `PLR⊥`
 

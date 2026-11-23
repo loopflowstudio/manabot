@@ -38,6 +38,7 @@ def selection_diagnostics(
     selected: ArrayLike,
     ends: ArrayLike,
     action_types: ArrayLike,
+    segment_ends: np.ndarray | None = None,
 ) -> list[SelectionGroup]:
     """Raw/retained signed quartiles and residual magnitudes per type/distance.
 
@@ -50,7 +51,7 @@ def selection_diagnostics(
     residuals = np.asarray(residuals, np.float32)
     selected = np.asarray(selected, bool)
     action_types = np.asarray(action_types)
-    distances = terminal_distances(np.asarray(ends, bool))
+    distances = terminal_distances(np.asarray(ends, bool), segment_ends)
     result: list[SelectionGroup] = []
     bins = {
         "terminal": distances == 0,

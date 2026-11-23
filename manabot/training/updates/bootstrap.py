@@ -19,6 +19,11 @@ def bootstrap_predictions(
     backend: UpdateBackend, learner: Learner, admitted: AdmittedRollout, policy: Policy
 ) -> Array:
     """Preserve trajectory order; only raw critic predictions survive each chunk."""
+    if not len(admitted.batch.next_done):
+        width = 3 if policy.config.value_kind == "categorical_wdl" else 1
+        return backend.arrays.from_numpy(
+            np.empty((0, width), np.float32), learner.device
+        )
     outputs: list[np.ndarray] = []
     size = learner.bootstrap_rows or len(admitted.batch.next_done)
     for obs in admitted.next_observations(learner.device, size):

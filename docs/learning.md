@@ -416,7 +416,7 @@ so a result can't be picked by looking at the test.
 | Question | Metric | Reading it |
 | --- | --- | --- |
 | Is the agent improving? | Evaluation scores | The only strength signal. Self-play results can't show it, because both seats are the same agent. |
-| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of trajectory columns paused mid-game. Always 0 for complete games. |
+| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of seat trajectories that end with a critic bootstrap. A column containing two completed games and one paused game contributes three trajectories. |
 | Is the filter working as designed? | `retained` / `rows` | Should sit near a quarter. |
 | Is the policy moving too fast? | `collection_kl`, `numerical/clip_fraction` | Rising values mean updates are pushing against their limits. |
 | Is exploration collapsing? | `entropy` | A fast fall means the policy is committing early. |

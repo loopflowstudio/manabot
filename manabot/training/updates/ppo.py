@@ -63,6 +63,7 @@ def update_iteration(
         values = to_device(batch.values, dev)
         rewards = to_device(batch.rewards, dev)
         ends = to_device(batch.dones, dev)
+        cuts = batch.bootstrap_indexes()
         with backend.learner.no_grad():
             next_raw = bootstrap_predictions(
                 backend, learner, admitted, bootstrap_agent or learner.agent
@@ -75,9 +76,16 @@ def update_iteration(
                 next_value,
                 learning.gamma,
                 learning.policy_lambda,
+                cuts,
             )
             _, returns = rl.transition_gae(
-                rewards, values, ends, next_value, learning.gamma, learning.value_lambda
+                rewards,
+                values,
+                ends,
+                next_value,
+                learning.gamma,
+                learning.value_lambda,
+                cuts,
             )
         if batch.assignments is not None:
             batch.target_residuals = backend.arrays.to_numpy(returns - values)
@@ -112,9 +120,7 @@ def update_iteration(
             "actor_exposures": 0,
             "critic_exposures": 0,
             "advantage_abs_mean": float(advantages.abs().mean()),
-            "bootstrapped_tail_fraction": float(
-                np.mean(~batch.dones[-1], dtype=np.float32)
-            ),
+            "bootstrapped_tail_fraction": batch.bootstrapped_tail_fraction(),
             "learning_rate": learning.learning_rate.at(progress),
             "tau": learning.tau.at(progress),
             "schedule_progress": progress,
@@ -140,6 +146,7 @@ def update_iteration(
             actor_rows.reshape(types.shape),
             batch.dones,
             types,
+            batch.segment_ends(),
         )
         health = batch_health(
             batch.action_data,

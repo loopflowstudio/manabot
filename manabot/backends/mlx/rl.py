@@ -163,6 +163,7 @@ def transition_gae(
     next_value: mx.array,
     gamma: float,
     lam: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> tuple[mx.array, mx.array]:
     """GAE for transition-end flags [T,E], on the host
     (`manabot.policy.returns.transition_gae`)."""
@@ -173,6 +174,7 @@ def transition_gae(
         np.array(next_value),
         gamma,
         lam,
+        bootstrap_indexes,
     )
     return mx.array(advantages), mx.array(value_targets)
 

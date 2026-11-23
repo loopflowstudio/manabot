@@ -17,6 +17,7 @@ from collections.abc import Mapping
 import math
 from typing import Literal
 
+import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import functional as F
@@ -224,6 +225,7 @@ def transition_gae(
     next_value: torch.Tensor,
     gamma: float,
     lam: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """GAE for transition-end flags [T,E], on the host
     (`manabot.policy.returns.transition_gae`), back on the rewards' device."""
@@ -234,6 +236,7 @@ def transition_gae(
         to_numpy(next_value),
         gamma,
         lam,
+        bootstrap_indexes,
     )
     return (
         from_numpy(advantages, rewards.device),
@@ -271,6 +274,7 @@ def categorical_lambda_returns(
     ends: Tensor,
     bootstrap: Tensor,
     trace_lambda: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> Tensor:
     """Undiscounted outcome mixtures [T,E,3], ordered loss/draw/win.
 
@@ -285,7 +289,9 @@ def categorical_lambda_returns(
     if (
         rewards.shape != probabilities.shape[:2]
         or ends.shape != rewards.shape
-        or bootstrap.shape != probabilities.shape[1:]
+        or bootstrap.ndim != 2
+        or bootstrap.shape[-1] != 3
+        or (bootstrap_indexes is None and bootstrap.shape != probabilities.shape[1:])
         or not len(rewards)
         or not 0 <= trace_lambda <= 1
     ):
@@ -316,20 +322,31 @@ def categorical_lambda_returns(
     # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
     host_probabilities = probabilities.cpu()
     host_ends = ends.cpu()
-    last_row = bootstrap.cpu()[None]
-    following = torch.cat([host_probabilities[1:], last_row])
-    terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
-    # The extra row is the trace past each column's last row.
-    targets = torch.cat([torch.empty_like(host_probabilities), last_row])
-    for wave_steps, wave_columns in returns.reverse_waves(host_ends.numpy()):
+    targets = torch.empty_like(
+        host_probabilities,
+        dtype=torch.promote_types(probabilities.dtype, bootstrap.dtype),
+    )
+    targets[host_ends] = F.one_hot((rewards.cpu()[host_ends] + 1).long(), 3).to(
+        targets.dtype
+    )
+    boundaries = host_ends.numpy()
+    if bootstrap_indexes is None:
+        tail = ~host_ends[-1]
+        prediction = bootstrap.cpu()[tail].to(targets.dtype)
+        # Preserve the rectangular estimator's floating-point interpolation.
+        targets[-1, tail] = (1 - trace_lambda) * prediction + trace_lambda * prediction
+    else:
+        cuts = returns.bootstrap_cuts(boundaries, bootstrap_indexes, len(bootstrap))
+        targets[cuts] = bootstrap.cpu()[bootstrap_indexes[cuts]].to(targets.dtype)
+        boundaries = boundaries | cuts
+    waves = returns.reverse_waves(boundaries)
+    next(waves)  # Every endpoint already has its outcome or frozen viewer prediction.
+    for wave_steps, wave_columns in waves:
         steps, columns = torch.from_numpy(wave_steps), torch.from_numpy(wave_columns)
-        continuation = (1 - trace_lambda) * following[
-            steps, columns
-        ] + trace_lambda * targets[steps + 1, columns]
-        targets[steps, columns] = torch.where(
-            host_ends[steps, columns, None], terminal[steps, columns], continuation
-        )
-    return targets[:-1].to(probabilities.device)
+        targets[steps, columns] = (1 - trace_lambda) * host_probabilities[
+            steps + 1, columns
+        ].to(targets.dtype) + trace_lambda * targets[steps + 1, columns]
+    return targets.to(probabilities.device)
 
 
 # -- Losses --------------------------------------------------------------------
