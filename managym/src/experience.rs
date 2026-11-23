@@ -316,6 +316,8 @@ pub struct LegacyCardView {
     /// The permission to play this card from its current zone, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cast_permission: Option<LegacyCastPermissionView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cast_permissions: Vec<LegacyCastPermissionView>,
     /// The value of X announced for this spell on the stack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
@@ -515,6 +517,8 @@ pub struct LegacyPlayerView {
     /// `lesson_mana` split by restriction class.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<LegacyRestrictedManaView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spent_graveyard_types: Vec<(u32, String)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<u32>,

@@ -757,7 +757,7 @@ fn zul_ashur_grants_one_exact_zombie_for_the_turn() {
             .agent_cards
             .iter()
             .chain(&obs.opponent_cards)
-            .filter_map(|card| Some((card, card.cast_permission.as_ref()?)))
+            .filter_map(|card| Some((card, card.cast_permissions.first()?)))
             .collect();
         let [(card, grant)] = permitted.as_slice() else {
             panic!("expected exactly one public grant")
@@ -859,6 +859,43 @@ fn overlapping_grants_price_each_cast_in_both_orders() {
             s.game_mut().state.cast_permissions.grant(terms);
         }
         s.game_mut().state.cast_permissions.grants.reverse();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+            let listed = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|c| c.id == s.game().state[card].id.0 as i32)
+                .unwrap();
+            let mut costs: Vec<_> = listed
+                .cast_permissions
+                .iter()
+                .map(|g| (g.player_id, g.cost.as_ref().unwrap().mana_value))
+                .collect();
+            costs.sort();
+            let caster = s.game().state.players[0].id.0 as i32;
+            assert_eq!(costs, [(caster, 0), (caster, 2)]);
+            use managym::agent::{
+                observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM, PLAY_GRANT},
+                observation_layout::fact,
+            };
+            let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            let programs: Vec<_> = input
+                .facts
+                .chunks_exact(FACT_DIM)
+                .filter(|row| {
+                    let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
+                    id == managym::cards::tokens::name_value(PLAY_GRANT) as u32
+                        && row[fact::VALUE_2] == 0.
+                })
+                .collect();
+            assert_eq!(programs.len(), 2);
+            assert!(programs[0][fact::OBJECT] > 0.);
+            assert_eq!(programs[0][fact::OBJECT], programs[1][fact::OBJECT]);
+            let restored: managym::agent::observation::Observation =
+                serde_json::from_str(&obs.to_json()).unwrap();
+            assert_eq!(restored.to_json(), obs.to_json());
+        }
         for funded in [false, true] {
             if funded {
                 s.set_player_mana_pool(0, "1B");
@@ -908,7 +945,8 @@ fn muldrotha_and_zul_offer_independent_casts() {
         "Hungry Ghoul",
         "Counterspell",
     ]);
-    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let source_id = s.game().state.permanents[muldrotha].as_ref().unwrap().id.0;
     let zul = s
         .game_mut()
         .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
@@ -966,7 +1004,78 @@ fn muldrotha_and_zul_offer_independent_casts() {
         branch.game_mut().scenario_refresh_priority().unwrap();
         assert_eq!(can_cast(&branch, other), !use_quota);
         assert_eq!(can_cast(&branch, zombie), !use_quota);
+        for card in [zombie, other] {
+            crate::support::game::move_card(&mut branch, card, ZoneType::Exile);
+        }
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(branch.game(), viewer);
+            let owner = if viewer == PlayerId(0) {
+                &obs.agent
+            } else {
+                &obs.opponent
+            };
+            assert!(obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .all(|card| card.owner_id != owner.id || card.zone != ZoneType::Graveyard));
+            assert_eq!(owner.spent_graveyard_types.len(), usize::from(use_quota));
+            if use_quota {
+                assert_eq!(
+                    owner.spent_graveyard_types[0],
+                    (source_id, managym::state::card::CardType::Creature)
+                );
+            }
+        }
     }
+}
+
+#[test]
+fn stale_ghoul_precondition_preserves_mana_and_muldrotha_allowance() {
+    use crate::support::game::{five_color_unfunded_setup, move_from_library};
+    use managym::{
+        agent::action::Action,
+        decision::{Command, SemanticError},
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Hungry Ghoul", "Lightning Bolt", "Muldrotha, the Gravetide"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Hand);
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let [address] = frame.object_candidates.as_slice() else {
+        panic!("only the Ghoul can be targeted as a permanent")
+    };
+    let card = card_of(&s, ghoul);
+    move_card(&mut s, card, ZoneType::Exile);
+    let card = move_card(&mut s, card, ZoneType::Graveyard);
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::CastSpell { object, .. } if *object == card))
+        .unwrap();
+    let command = Command {
+        command_id: "stale-ghoul".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![address.clone()],
+    };
+    let before = managym::search_state::witness(s.game());
+    assert!(matches!(
+        s.game_mut().execute_semantic_command(&command),
+        Err(SemanticError::StaleObject)
+    ));
+    assert_eq!(before, managym::search_state::witness(s.game()));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+    assert!(s.game().state.cast_permissions.spent_types.is_empty());
 }
 
 #[test]

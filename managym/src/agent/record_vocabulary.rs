@@ -21,7 +21,7 @@ use crate::{
         ability_description::predicate_description,
         effect_execution::EXECUTION_TEXT,
         observation::MODIFICATION_NAMES,
-        observation_encoder::{POOLED_MANA, WARD},
+        observation_encoder::{PLAY_GRANT, POOLED_MANA, SPENT_TYPE, WARD},
     },
     cards::{
         content_pack::default_content_pack,
@@ -120,6 +120,8 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
     out.push(record(Token, WARD, None));
+    out.push(record(Token, PLAY_GRANT, None));
+    out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));

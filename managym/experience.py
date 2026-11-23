@@ -353,6 +353,9 @@ class LegacyCardView(ProtocolModel):
     mana_value: Int32
     types: LegacyCardTypesView
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    cast_permissions: list[LegacyCastPermissionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     cast_permission: LegacyCastPermissionView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -477,6 +480,9 @@ class LegacyPlayerView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     restricted_mana: list[LegacyRestrictedManaView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    spent_graveyard_types: list[tuple[UInt32, str]] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     hand_only_until: UInt32 | None = Field(

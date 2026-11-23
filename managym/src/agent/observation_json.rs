@@ -182,8 +182,17 @@ impl Serialize for CardJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("card_types", &sorted_record(&value.card_types))?;
-        if let Some(permission) = &value.cast_permission {
+        if let [permission] = value.cast_permissions.as_slice() {
             map.serialize_entry("cast_permission", &CastPermissionJson(permission))?;
+        } else if !value.cast_permissions.is_empty() {
+            map.serialize_entry(
+                "cast_permissions",
+                &value
+                    .cast_permissions
+                    .iter()
+                    .map(CastPermissionJson)
+                    .collect::<Vec<_>>(),
+            )?;
         }
         if value.face_down {
             map.serialize_entry("face_down", &true)?;
@@ -695,6 +704,8 @@ pub(super) struct WireCardData {
     /// The permission to play this card from its current zone, when it has one.
     #[serde(default)]
     pub cast_permission: Option<CastPermissionData>,
+    #[serde(default)]
+    pub cast_permissions: Vec<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
     #[serde(default)]
@@ -849,7 +860,11 @@ impl From<WireCardData> for CardData {
             registry_key: w.registry_key,
             is_token: w.is_token,
             face_down: w.face_down,
-            cast_permission: w.cast_permission,
+            cast_permissions: w
+                .cast_permission
+                .into_iter()
+                .chain(w.cast_permissions)
+                .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
             characteristics: CharacteristicsData {
@@ -932,7 +947,7 @@ impl PermanentData {
             registry_key: self.registry_key,
             is_token: self.is_token,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
             characteristics: self.characteristics.clone(),
@@ -1024,7 +1039,7 @@ impl SpellData {
             registry_key: self.registry_key,
             is_token: self.is_copy,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
             characteristics: self.characteristics.clone(),

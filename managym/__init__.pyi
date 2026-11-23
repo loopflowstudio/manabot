@@ -878,6 +878,7 @@ class Player:
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     pooled_mana_classes: list[PooledManaClass]
+    spent_graveyard_types: list[tuple[int, str]]
     hand_only_until: Optional[int]
     # Continuous effects on this player, in timestamp order.
     effects: list[ContinuousEffect]
@@ -971,6 +972,7 @@ class Card:
     keywords: Keywords
     mana_cost: ManaCost
     face_down: bool
+    cast_permissions: list[CastPermission]
     cast_permission: Optional[CastPermission]
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).

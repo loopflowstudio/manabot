@@ -39,6 +39,9 @@ pub enum PlayRoute {
     GraveyardType {
         #[serde(serialize_with = "crate::state::game_object::exact")]
         source: ObjectId,
+        /// Public join retained if paying the cost removes the source.
+        #[serde(skip)]
+        permanent_id: crate::state::game_object::PublicId,
         kind: crate::state::card::CardType,
     },
 }
@@ -460,8 +463,8 @@ impl Game {
     /// The permission naming this exact card, whatever its timing,
     /// for viewers to inspect. A grant tied to a source that has left the
     /// battlefield can never be used again and is not shown.
-    pub(crate) fn play_grant_on(&self, object: ObjectId) -> Option<&PlayGrant> {
-        self.grants_naming(object).find(|grant| {
+    pub(crate) fn play_grants_on(&self, object: ObjectId) -> impl Iterator<Item = &PlayGrant> {
+        self.grants_naming(object).filter(|grant| {
             grant
                 .source
                 .is_none_or(|source| self.lookup_current_permanent(source).is_ok())

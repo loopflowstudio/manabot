@@ -67,6 +67,9 @@ pub struct PlayerData {
     /// card's `cast_permission`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<i32>,
+    /// Public permanent incarnation and permanent type already played this turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spent_graveyard_types: Vec<(u32, crate::state::card::CardType)>,
     /// No maximum hand size for the rest of the game (Spirit Water Revival).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
@@ -326,7 +329,7 @@ pub struct CardData {
     /// Foretold and face down in exile; listed only for its owner.
     pub face_down: bool,
     /// The permission to play this card from its current zone, when it has one.
-    pub cast_permission: Option<CastPermissionData>,
+    pub cast_permissions: Vec<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
     pub x: Option<i32>,
@@ -1292,6 +1295,20 @@ impl Observation {
                     })
                 })
                 .collect(),
+            spent_graveyard_types: game
+                .state
+                .cast_permissions
+                .spent_types
+                .iter()
+                .filter_map(|(owner, route)| match route {
+                    crate::flow::cast_permission::PlayRoute::GraveyardType {
+                        permanent_id,
+                        kind,
+                        ..
+                    } if *owner == player => Some((permanent_id.0, *kind)),
+                    _ => None,
+                })
+                .collect(),
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
@@ -1645,8 +1662,8 @@ impl Observation {
             is_token: !object.is_card(),
             characteristics: Self::printed_characteristics_data(game, object_id),
             face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
-            cast_permission: game
-                .play_grant_on(object_id)
+            cast_permissions: game
+                .play_grants_on(object_id)
                 .map(|grant| CastPermissionData {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
                     cost: game.grant_cast_cost(grant),
@@ -1657,13 +1674,15 @@ impl Observation {
                     source_permanent_id: grant.source.and_then(|source| {
                         game.lookup_current_permanent(source)
                             .ok()
-                            .map(|id| id.0 as i32)
+                            .and_then(|id| game.state.permanents[id].as_ref())
+                            .map(|permanent| permanent.id.0 as i32)
                     }),
                     flash: grant.flash,
                     any_mana: grant.any_mana,
                     waterbend: grant.waterbend,
                     foretold: grant.foretold,
-                }),
+                })
+                .collect(),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
                 && game.state.live(object_id).is_some_and(|object| {

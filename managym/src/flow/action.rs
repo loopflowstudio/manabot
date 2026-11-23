@@ -60,7 +60,7 @@ impl Game {
                 use crate::flow::cast_permission::PlayRoute;
                 let card = &self.state[*object];
                 let terms = match route {
-                    PlayRoute::GraveyardType { source, kind } => format!(
+                    PlayRoute::GraveyardType { source, kind, .. } => format!(
                         "using {} (object {}, {kind:?} for this turn)",
                         self.state[*source].name, self.state[*source].id.0
                     ),

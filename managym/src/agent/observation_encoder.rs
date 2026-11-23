@@ -1147,7 +1147,7 @@ fn encode_into_memory(
     {
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
-    encode_facts(obs, &object_to_index, &ranks, out.facts)?;
+    encode_facts(obs, config.layout, &object_to_index, &ranks, out.facts)?;
     super::shared_effects::encode(
         obs,
         &object_to_index,
@@ -1551,7 +1551,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
     out[card::HEXPROOF] = bool_to_f32(card.keywords.hexproof);
     out[card::INDESTRUCTIBLE] = bool_to_f32(card.keywords.indestructible);
     out[card::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
-    if let Some(permission) = &card.cast_permission {
+    if let Some(permission) = card.cast_permissions.first() {
         out[card::PERMISSION] = 1.0;
         out[card::PERMISSION_IS_MINE] = bool_to_f32(permission.player_id == context.viewer_id);
         if let Some(cost) = &permission.cost {
@@ -1757,6 +1757,10 @@ pub const POOLED_MANA: &str = "PooledMana";
 /// the `ward_cost` column cannot ("Ward—Pay 7 life.").
 pub const WARD: &str = "Ward";
 
+/// Effect program labels for overlapping grants and consumed type allowances.
+pub const PLAY_GRANT: &str = "CastPermission::Grant";
+pub const SPENT_TYPE: &str = "CastPermission::SpentType";
+
 /// One fact row before its object join and timestamp rank are known.
 struct Fact {
     object: i32,
@@ -1769,7 +1773,7 @@ struct Fact {
 
 /// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
 /// object order (agent, opponent, agent permanents, opponent permanents).
-fn facts(obs: &Observation) -> Vec<Fact> {
+fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
         out.push(Fact {
@@ -1928,6 +1932,9 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             });
         }
     }
+    if layout == InputLayout::OneToken {
+        permission_facts(obs, &mut out);
+    }
     // Spend effects and combat expiry: one program per pooled class on its player.
     for player in [&obs.agent, &obs.opponent] {
         for class in &player.pooled_mana_classes {
@@ -1944,6 +1951,59 @@ fn facts(obs: &Observation) -> Vec<Fact> {
         }
     }
     out
+}
+
+fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
+    // Each occurrence starts at ordinal zero. The owner join identifies the
+    // card or granting permanent; player terms are relative to this viewer.
+    let mut program = |object, label, tokens: Vec<(u16, i32)>| {
+        for (ordinal, (kind, value)) in tokens.into_iter().enumerate() {
+            out.push(Fact {
+                object,
+                kind: FactKind::EffectProgram,
+                id: name_value(label),
+                detail: value,
+                values: [f32::from(kind), ordinal as f32],
+                effect: None,
+            });
+        }
+    };
+    let pack = crate::cards::content_pack::default_content_pack;
+    for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+        if card.cast_permissions.len() > 1 {
+            for grant in &card.cast_permissions {
+                let terms = (
+                    grant.player_id == obs.agent.id,
+                    &grant.cost,
+                    grant.this_turn,
+                    grant.through_next_turn,
+                    grant.own_turn_only,
+                    grant.after_turn,
+                    grant.source_permanent_id.is_some(),
+                    grant.flash,
+                    grant.any_mana,
+                    grant.waterbend,
+                    grant.foretold,
+                );
+                program(
+                    card.id,
+                    PLAY_GRANT,
+                    crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms"),
+                );
+            }
+        }
+    }
+    for player in [&obs.agent, &obs.opponent] {
+        for &(source, kind) in &player.spent_graveyard_types {
+            let terms = (player.id == obs.agent.id, kind);
+            program(
+                source as i32,
+                SPENT_TYPE,
+                crate::cards::tokens::rules_tokens(&terms, pack())
+                    .expect("public graveyard allowance"),
+            );
+        }
+    }
 }
 
 /// The rows of one copy exception; effect records themselves are
@@ -2023,11 +2083,12 @@ pub(super) fn split_id(id: i32) -> [f32; 2] {
 
 fn encode_facts(
     obs: &Observation,
+    layout: InputLayout,
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs);
+    let facts = facts(obs, layout);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
@@ -2366,6 +2427,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                spent_graveyard_types: vec![],
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2404,6 +2466,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                spent_graveyard_types: vec![],
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2545,7 +2608,7 @@ mod tests {
             registry_key: id,
             is_token: false,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
         }

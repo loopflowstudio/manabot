@@ -22,6 +22,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.managym.experience_projection import (
     decision_surface_view,
     describe_actions,
+    serialize_observation,
 )
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
@@ -542,6 +543,12 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         [cast] = [a for a in casts if "using Zul Ashur" in a.description]
         branch = env.clone_env()
         submit_response(branch, capture_text_decision(branch), muldrotha.reference)
+        assert "Creature graveyard play this turn" in capture_text_decision(branch).text
+        for viewer in (0, 1):
+            board = decision_surface_view(branch, viewer)
+            seat = "agent" if viewer == env.current_agent_index() else "opponent"
+            [(_, kind)] = board[seat]["spent_graveyard_types"]
+            assert kind == "Creature"
     else:
         [cast] = casts
     assert "Hungry Ghoul" in cast.description
@@ -575,6 +582,26 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         [ghoul] = [c for c in board[seat]["graveyard"] if c["name"] == "Hungry Ghoul"]
         assert ghoul["cast_permission"]["cost"] == "{1}{B}"
         assert ghoul["cast_permission"]["this_turn"]
+    # Exercise both wire orders through text and Academy's capture reader.
+    for free_first in (False, True):
+        payload = json.loads(decision.capture_json)
+        state = payload["observation"]["viewer_state"]
+        card = next(card for card in state["agent_cards"] if "cast_permission" in card)
+        paid = card.pop("cast_permission")
+        free = paid | {"cost": {"cost": [0] * 6, "mana_value": 0}}
+        card["cast_permissions"] = [free, paid] if free_first else [paid, free]
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert "cast for {1}{B}" in line and "cast for {0}" in line
+        restored = managym.Observation.from_json(json.dumps(state))
+        ghoul = next(
+            c
+            for c in serialize_observation(restored)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert {grant["cost"] for grant in ghoul["cast_permissions"]} == {
+            "{1}{B}",
+            "{0}",
+        }
     submit_response(env, decision, cast.reference)
 
 
@@ -715,6 +742,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "ward_cost": "ward mana value",
         "kicker_cost": "kicker mana value",
         "face_down": "face down",
+        "cast_permissions": "all visible play permissions",
         "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
@@ -772,6 +800,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
         "pooled_mana_classes": "Of the mana above",
+        "spent_graveyard_types": "graveyard play this turn",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
     },

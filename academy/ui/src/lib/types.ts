@@ -30,6 +30,7 @@ export interface CardState {
   face_down?: boolean;
   /** The permission to play this card from its current zone, when it has one. */
   cast_permission?: CastPermission;
+  cast_permissions?: CastPermission[];
   /** The value of X announced for this spell on the stack. */
   x?: number;
 }
@@ -162,6 +163,7 @@ export interface PlayerState {
   /** `lesson_mana` split by restriction class. */
   restricted_mana?: RestrictedMana[];
   /** Player id whose next turn ends this player's hand-only casting. */
+  spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
   no_maximum_hand_size?: boolean;
   combat_mana?: number;

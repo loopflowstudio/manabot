@@ -627,3 +627,47 @@ def test_standalone_snapshot_replay_and_unterminated_journal_row(
     journal.write_text(json.dumps(saved))
     with pytest.warns(RuntimeWarning, match="Incomplete final game record"):
         assert records_from_source(journal) == []
+
+
+def test_pending_cast_payment_command_survives_save_and_reload() -> None:
+    env = managym.Env(seed=42)
+    deck = {"Mountain": 16, "Forest": 16, "Gray Ogre": 16}
+    env.reset(
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    )
+    for _ in range(32):
+        actor = env.current_agent_index()
+        assert actor is not None
+        actions = env.observation_for_player(actor).action_space.actions
+        taps = [
+            i
+            for i, action in enumerate(actions)
+            if action.action_type == managym.ActionEnum.TAP_FOR_COST
+        ]
+        if taps:
+            break
+        index = next(
+            (
+                i
+                for kind in (
+                    managym.ActionEnum.PRIORITY_PLAY_LAND,
+                    managym.ActionEnum.PRIORITY_CAST_SPELL,
+                )
+                for i, action in enumerate(actions)
+                if action.action_type == kind
+            ),
+            0,
+        )
+        env.step(index)
+    else:
+        pytest.fail("Gray Ogre never reached manual mana payment")
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    command = Command(
+        "tap-source", frame.revision, frame.offers[taps[0]]["id"]
+    ).to_json()
+    restored = managym.GameSnapshot.from_replay_json(
+        env.snapshot().to_replay_json()
+    ).restore()
+    for branch in (env, restored):
+        branch.execute_semantic_command_json(command)
+    assert restored.search_witness_json() == env.search_witness_json()

@@ -2306,6 +2306,12 @@
           ],
           "default": null
         },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
         "face_down": {
           "default": false,
           "title": "Face Down",
@@ -3186,6 +3192,24 @@
           "minimum": 0,
           "title": "Spells Cast",
           "type": "integer"
+        },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "stack": {
           "items": {

@@ -130,10 +130,12 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
         announced_x = card.x
         if card.face_down:
             details["face_down"] = True
-        if card.cast_permission is not None:
-            details["cast_permission"] = _serialize_cast_permission(
-                card.cast_permission
-            )
+        if len(permissions := card.cast_permissions) > 1:
+            details["cast_permissions"] = [
+                _serialize_cast_permission(p) for p in permissions
+            ]
+        elif permissions:
+            details["cast_permission"] = _serialize_cast_permission(permissions[0])
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -378,7 +380,6 @@ def _serialize_player(
             if player.hand_only_until is not None
             else {}
         ),
-        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         "zone_counts": zone_counts,
         "library_count": zone_counts.get("LIBRARY", 0),
         "known_hand": {
@@ -415,6 +416,11 @@ def _serialize_player(
         **(
             {"turn_history": turn_history}
             if (turn_history := _turn_history(player.turn_history))
+            else {}
+        ),
+        **(
+            {"spent_graveyard_types": player.spent_graveyard_types}
+            if player.spent_graveyard_types
             else {}
         ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
@@ -463,7 +469,7 @@ def serialize_observation(
         _serialize_object(card)
         for card in obs.opponent_cards
         if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
-        or (card.cast_permission is not None and card.cast_permission.foretold)
+        or any(permission.foretold for permission in card.cast_permissions)
     ]
     if inspected:
         data["agent"].setdefault("inspected", []).extend(inspected)

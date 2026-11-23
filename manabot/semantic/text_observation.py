@@ -837,6 +837,9 @@ class _Renderer:
                         else "; expires at step end."
                     )
                 )
+            for source, kind in player.spent_graveyard_types:
+                grantor = self.names.get(source, f"departed permanent {source}")
+                lines.append(f"Used {grantor}'s {kind} graveyard play this turn.")
             if player.hand_only_until is not None:
                 lines.append(
                     "Can cast spells only from hand, overriding permissions to cast "
@@ -908,10 +911,8 @@ class _Renderer:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
-            if card.cast_permission is not None:
-                optional += "; " + self._cast_permission(
-                    card.cast_permission, int(card.zone)
-                )
+            for permission in card.cast_permissions:
+                optional += "; " + self._cast_permission(permission, int(card.zone))
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )

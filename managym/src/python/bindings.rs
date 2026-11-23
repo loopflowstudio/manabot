@@ -1148,12 +1148,25 @@ pub struct PyPlayer {
     /// Pooled mana with a spend effect or combat expiry, by class.
     #[pyo3(get)]
     pub pooled_mana_classes: Vec<PyPooledManaClass>,
+    spent_graveyard_types: Vec<(u32, crate::state::card::CardType)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
     /// Continuous effects on this player, in timestamp order.
     #[pyo3(get, set)]
     pub effects: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayer {
+    #[getter]
+    fn spent_graveyard_types(&self) -> Vec<(u32, String)> {
+        self.spent_graveyard_types
+            .iter()
+            .map(|(source, kind)| (*source, format!("{kind:?}")))
+            .collect()
+    }
 }
 
 /// One continuous-effect record on a player or permanent.
@@ -1459,6 +1472,7 @@ impl From<PlayerData> for PyPlayer {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1502,6 +1516,7 @@ impl From<PyPlayer> for PlayerData {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -2011,13 +2026,23 @@ impl PyCard {
     fn set_face_down(&mut self, value: bool) {
         self.data.face_down = value;
     }
+    /// First listed grant. Use cast_permissions for inspection (singular removed in 0.4.0).
     #[getter]
     fn cast_permission(&self) -> Option<PyCastPermission> {
-        self.data.cast_permission.clone().map(Into::into)
+        self.data.cast_permissions.first().cloned().map(Into::into)
     }
     #[setter]
     fn set_cast_permission(&mut self, value: Option<PyCastPermission>) {
-        self.data.cast_permission = value.map(Into::into);
+        self.data.cast_permissions = value.into_iter().map(Into::into).collect();
+    }
+    #[getter]
+    fn cast_permissions(&self) -> Vec<PyCastPermission> {
+        self.data
+            .cast_permissions
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect()
     }
     #[getter]
     fn x(&self) -> Option<i32> {

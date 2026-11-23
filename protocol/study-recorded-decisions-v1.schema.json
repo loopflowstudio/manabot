@@ -1048,6 +1048,12 @@
             }
           ]
         },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
         "face_down": {
           "description": "Foretold and face down in exile; only its owner's views list it.",
           "type": "boolean"
@@ -1652,6 +1658,24 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "stack": {
           "type": "array",

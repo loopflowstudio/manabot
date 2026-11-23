@@ -496,6 +496,7 @@ impl<'a> Projection<'a> {
                 if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
                     source,
                     kind,
+                    ..
                 }) = cast.route
                 {
                     self.object("grantor", source);

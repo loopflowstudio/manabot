@@ -3119,6 +3119,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
         pooled_mana_classes => [Rows("pooled mana classes below")],
+        spent_graveyard_types => [FactOccurrence(FactKind::EffectProgram)],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         known_library => [Rows("known_library")],
@@ -3184,7 +3185,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             column(Stack, stack::IS_COPY),
         ],
         face_down => [column(Card, card::PERMISSION_FORETOLD)],
-        cast_permission => [Rows("cast permission below")],
+        cast_permissions => [Rows("cast permission below"), FactOccurrence(FactKind::EffectProgram)],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
         from_battlefield_this_turn => [column(CardTurnState, 0)],
     }));
@@ -4609,7 +4610,7 @@ fn airbend_permission_reaches_both_viewers_tensors() {
         .iter()
         .find(|c| c.id == id)
         .expect("the exiled Ogre is public");
-    let permission = listed.cast_permission.as_ref().expect("a permission");
+    let permission = listed.cast_permissions.first().expect("a permission");
     assert_eq!(permission.player_id, airbender.opponent.id);
     assert_eq!(permission.cost.as_ref().map(|c| c.mana_value), Some(2));
     assert!(airbender.to_json().contains("\"cast_permission\""));

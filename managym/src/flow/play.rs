@@ -207,13 +207,18 @@ impl Game {
                     {
                         continue;
                     }
-                    let source = self.state.permanents[id].as_ref().unwrap().object;
+                    let grantor = self.state.permanents[id].as_ref().unwrap();
+                    let source = grantor.object;
                     for &kind in &self.state[object].types.types {
                         use crate::state::card::CardType::*;
                         if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
                             continue;
                         }
-                        let route = PlayRoute::GraveyardType { source, kind };
+                        let route = PlayRoute::GraveyardType {
+                            source,
+                            kind,
+                            permanent_id: grantor.id,
+                        };
                         if !self
                             .state
                             .cast_permissions
