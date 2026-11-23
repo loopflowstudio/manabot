@@ -90,7 +90,11 @@ Behavior review at `64eaa87c` reproduced both M21 damage outcomes after reentry 
 
 The two directed BLB fixtures gained life from Cat Collector’s Food before casting Convocation. From the same saved decision, paying before the end step offered two trigger orders. Both left one Bat and the opponent at 19. Paying after the gain-only trigger was on the stack drew a card and left the opponent at 19 with no Bat. Both restored decision frames and search witnesses matched the root. Three payments after two Foods returned the controller to 20 and still created a Bat. Three payments without a gain triggered neither ability. Neither subsequent end step carried over the history.
 
-Next, take Predator Ooze’s damage-then-death interaction and use the blinked successor as the negative control. Lunar Convocation is a BLB witness, so the FDN count stays at 77 remaining.
+The timing fixtures in `managym/cards/tests/cards/blb.rs` establish that existing controller history suffices even when the gain predates the enchantment. Keep the two printed triggers independently orderable. The shared condition reader in `managym/src/flow/statics.rs` tests each counter directly, so Convocation needs no history of its own. The mid-game training snapshot merge at `628fb536` left the BLB definition and fixtures intact.
+
+## Next slice · Predator Ooze
+
+The FDN ledger gives the obligation as “Damage-source history relates later death to exact damaged incarnation.” Damage a creature with Ooze and let it survive. From that position, compare its death later that turn with the death of the same card after it leaves and returns. Only the original recipient’s death should put Ooze’s death trigger on the stack and add a counter on resolution. Distinguish that counter from its attack trigger. Use the resulting indestructible Ooze in the outstanding Fumigate interaction. Convocation is a BLB witness, so 77 of 81 primary FDN rows remain.
 
 ## Evidence to carry forward
 
