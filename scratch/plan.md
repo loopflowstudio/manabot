@@ -14,6 +14,8 @@ Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, th
 
 **Drakuseth audit complete.** Its ledger row remains pending. Target selection permits reuse across clauses and resolution cannot assign 4 and 3 damage to their respective recipients in one batch. The choice-continuations obligation below covers both gaps.
 
+At `3a54967f`, both directed debug fixtures passed again. The target-submission fixture rejected the first permanent twice in one clause and accepted it again in the next clause. This reproduces the selection gap independently of the damage-batching finding from code inspection. Parent and Anthem satisfy their working obligation. Per-source life gain remains the next working slice. Full consumer and conformance suites remain with gate.
+
 ### Behavior after the shared repair at `12096ae8`
 
 **Surveil knowledge after resolution.** Milling either inspected card shifts the other to known position 0 for the chooser. Keeping both and reversing their order changes only positions 0 and 1. Hill Giant and Forest, previously placed by Accumulate Wisdom, remain known at positions 3 and 4. Four Lightshell cases passed on the release extension rebuilt from merged snapshot `8aef2be7`, covering native observations, v11, text, closed-opponent privacy and replay on independent forks.
