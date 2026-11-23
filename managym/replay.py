@@ -8,7 +8,7 @@ prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
-from collections import defaultdict, deque
+from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 import hashlib
@@ -82,34 +82,23 @@ def _build_name(identities: Mapping[str, object]) -> str:
     )
 
 
-type BoundaryOperation = Intervention | Literal["issue_frame"]
-
-
-def replay_boundaries(game: GameInputs) -> dict[int, list[BoundaryOperation]]:
-    """Group native operations and frame reads by the next external action."""
-    boundaries: dict[int, list[BoundaryOperation]] = defaultdict(list)
-    frames = deque(sorted(set(game.issued_frame_boundaries)))
-    for applied, op in enumerate(game.interventions):
-        # A frame ordinal counts both actions and intervening operations.
-        # Reads at this operation's ordinal precede the operation itself.
-        while frames and frames[0] <= op.at_action + applied:
-            boundaries[frames.popleft() - applied].append("issue_frame")
+def interventions_by_offset(game: GameInputs) -> dict[int, list[Intervention]]:
+    boundaries: dict[int, list[Intervention]] = defaultdict(list)
+    for op in game.interventions:
         boundaries[op.at_action].append(op)
-    for ordinal in frames:
-        boundaries[ordinal - len(game.interventions)].append("issue_frame")
     return boundaries
 
 
-def apply_boundary(env: managym.Env, operations: Sequence[BoundaryOperation]) -> bool:
-    """Reissue bindings and apply interventions. Only an intervention changes the view."""
-    changed = False
+def apply_boundary(
+    env: managym.Env, operations: Sequence[Intervention], remaining_frames: set[str]
+) -> None:
+    """Consume issued fingerprints on both sides of each live intervention."""
     for op in operations:
-        if op == "issue_frame":
-            env.semantic_decision_frame_json()
-        else:
-            env.apply_intervention_json(op.model_dump_json(exclude={"at_action"}))
-            changed = True
-    return changed
+        if remaining_frames:
+            env._restore_frame_candidates(remaining_frames)
+        env._apply_intervention_json(op.model_dump_json(exclude={"at_action"}))
+    if remaining_frames:
+        env._restore_frame_candidates(remaining_frames)
 
 
 class RecordWalker:
@@ -200,10 +189,13 @@ class RecordWalker:
             and self.record.execution_outcome != "last_command_succeeded"
         ):
             count = max(0, count - 1)
-        boundaries = replay_boundaries(game)
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
 
         def enter(index: int) -> None:
-            if apply_boundary(self.env, boundaries.get(index, ())):
+            operations = boundaries.get(index, ())
+            apply_boundary(self.env, operations, remaining_frames)
+            if operations:
                 self.observation = self.env.observation_for_player(
                     self.env.current_agent_index() or 0
                 )
@@ -267,7 +259,10 @@ class RecordWalker:
                 # next digest includes any interventions before the next decision.
                 expected = target.state_digest() if apply is not None else None
                 if after is not None:
-                    apply_boundary(target, boundaries.get(index + 1, ()))
+                    # Only rules interventions affect the digest. Bind issued
+                    # frames on the live timeline when it reaches that boundary.
+                    if operations := boundaries.get(index + 1):
+                        apply_boundary(target, operations, set())
                     if target.state_digest() != after:
                         raise ValueError("transition digest differs")
                 if apply is None:
@@ -284,6 +279,8 @@ class RecordWalker:
                 yield decision
             index = count
             enter(count)
+            if count == len(game.actions) and remaining_frames:
+                raise ValueError("snapshot object candidate frame missing")
             end = game.end
             if (
                 end is not None
@@ -567,16 +564,21 @@ def _replay_game_inputs(
         else:
             reached = env.reset(setup)[0]
         phase = "prefix"
-        boundaries = replay_boundaries(game)
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
         for offset in range(len(game.actions) + 1):
-            if operations := boundaries.get(offset):
+            operations = boundaries.get(offset, ())
+            if operations or remaining_frames:
                 index, phase = offset, "intervention"
                 agreement.at_retained_failure = False
                 if not isinstance(env, managym.Env):
                     raise ValueError("branch interventions require a scalar replay")
-                if apply_boundary(env, operations):
+                apply_boundary(env, operations, remaining_frames)
+                if operations:
                     reached = env.observation_for_player(env.current_agent_index() or 0)
             if offset == len(game.actions):
+                if remaining_frames:
+                    raise ValueError("snapshot object candidate frame missing")
                 break
             index, phase = offset, "prefix"
             action = game.actions[index]

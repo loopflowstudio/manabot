@@ -538,8 +538,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 "name": "Recorded game",
                 **(
                     {"source_kind": record.context["source_kind"]}
-                    if record.context.get("source_kind")
-                    in ("training", "evaluation", "snapshot")
+                    if record.context.get("source_kind") in ("training", "evaluation")
                     else {}
                 ),
             },

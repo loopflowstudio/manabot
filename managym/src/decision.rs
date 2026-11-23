@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     agent::{
+        action::AgentError,
         observation::{EventData, Observation as AgentObservation},
         structured_offer::{
             ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission, PublicCommitment,
@@ -291,25 +292,24 @@ impl Game {
 
     /// Cold replay retains fingerprints of issued object-bearing frames. Only
     /// rebind those frames; projecting every decision would authorize addresses
-    /// the source never issued. Returns whether this boundary issued bindings.
+    /// the source never issued. The caller consumes each retained fingerprint once.
     pub(crate) fn restore_frame_candidates(
         &self,
-        remaining: &mut std::collections::BTreeSet<String>,
-    ) -> Result<bool, SemanticError> {
-        if remaining.is_empty() || self.is_game_over() {
-            return Ok(false);
+        take: impl FnOnce(&str) -> Result<bool, AgentError>,
+    ) -> Result<(), AgentError> {
+        if self.is_game_over() {
+            return Ok(());
         }
         let offers = self
             .structured_search_offers()
-            .map_err(|e| SemanticError::IllegalCommand(e.to_string()))?;
+            .map_err(|e| AgentError(e.to_string()))?;
         let fingerprint = decision_fingerprint(self.decision_epoch, offers.projection());
-        if !remaining.remove(&fingerprint) {
-            return Ok(false);
+        if take(&fingerprint)? && self.bind_frame_candidates(&fingerprint).is_empty() {
+            return Err(AgentError(
+                SemanticError::UnknownObjectCandidate.to_string(),
+            ));
         }
-        if self.bind_frame_candidates(&fingerprint).is_empty() {
-            return Err(SemanticError::UnknownObjectCandidate);
-        }
-        Ok(true)
+        Ok(())
     }
 
     /// Project the composite viewer-safe Observation at the current revision.

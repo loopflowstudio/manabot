@@ -19,7 +19,7 @@ use pyo3::{
     buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyDict, PyList, PyModule},
+    types::{PyDict, PyList, PyModule, PySet},
 };
 #[cfg(feature = "python")]
 use serde::{Deserialize, Serialize};
@@ -4239,12 +4239,26 @@ impl PyEnv {
     }
 
     /// Apply one recorded operation at the current live boundary.
-    fn apply_intervention_json(&self, raw: &str) -> PyResult<()> {
-        self.reject_guarded_mutation("Env.apply_intervention_json")?;
+    fn _apply_intervention_json(&self, raw: &str) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._apply_intervention_json")?;
         self.inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
             .apply_intervention_json(raw)
+            .map_err(map_agent_err)
+    }
+
+    /// Remove and bind the current fingerprint if the recording issued it.
+    fn _restore_frame_candidates(&self, remaining: &Bound<'_, PySet>) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._restore_frame_candidates")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .restore_frame_candidates(|key| {
+                remaining
+                    .discard(key)
+                    .map_err(|e| AgentError(e.to_string()))
+            })
             .map_err(map_agent_err)
     }
 

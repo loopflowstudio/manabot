@@ -423,7 +423,7 @@ snapshot unchanged on failure. Choose the continuation mode with
 |---|---|
 | `RestoreOptions()` / `RestoreOptions.exact(*, reseed=None, ...)` | Preserves full game authority state. Supply `reseed` to replace only future rules RNG. |
 | `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
-| `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with everything `viewer` (`0` or `1`) can see. Requires an open opponent decklist; closed decks are refused. |
+| `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
 
 Every constructor accepts two optional keyword arguments:
 
@@ -461,7 +461,10 @@ replays every action and intervention natively, and checks `state_digest`.
 The recipe also carries a checksum over its inputs, including the chooser and
 decision-memory settings that the rules digest omits. If the source issued
 object-bearing semantic frames, the recipe retains their fingerprints so a
-reopened Command can use the same object bindings.
+reopened Command can use the same object bindings. `read_record(path)` checks the
+recipe checksum, catalog, and intervention offsets without playing the game.
+`walk(record)` plays the recorded inputs and reports the first detected
+divergence, so earlier decisions remain available if the rules have changed.
 
 An `Env` modified by unjournaled test or search helpers (`scenario_*`,
 `materialize_possible_world`, `materialize_sampled_hand`, `step_structured`,
@@ -469,10 +472,10 @@ An `Env` modified by unjournaled test or search helpers (`scenario_*`,
 still supports in-memory `snapshot()` and `restore()`, but `to_recipe_json()`
 fails closed instead of emitting an inaccurate replay prefix.
 
-A snapshot recipe holds the deal seed, both decks, and branch RNG seeds, so it
-holds both hands. Store and share it as private data (like a game record). When
-opened in Academy Watch, each viewer still sees only what that seat could see,
-and opponent hands and branch seeds never leave the server; Academy's usual
+A snapshot recipe holds the deal seed, both decks, and branch RNG seeds. Keep
+it private like any other game record. Academy Watch opens it as a **Recorded
+game**. The acting view hides the opponent's hand. Turning on spectator reveal
+shows both hands. Branch seeds stay on the server in both views. The usual Watch
 admission rules (`skip_trivial=True`, `player_policies=("agent", "agent")`, and
 matching decklist disclosure) still apply.
 

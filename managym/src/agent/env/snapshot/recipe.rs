@@ -34,30 +34,8 @@ impl GameSnapshot {
 
     /// Rebuild the position from private inputs and verify its rules digest.
     pub fn from_recipe_json(raw: &str) -> Result<Self, AgentError> {
-        Self::replay_recipe(raw)?.0.snapshot()
-    }
-
-    /// A boundary ordinal counts actions and interventions already applied.
-    /// Recording readers use these locations to reissue historical object addresses.
-    pub(crate) fn replay_recipe(raw: &str) -> Result<(Env, Vec<usize>), AgentError> {
         let recipe = Recipe::from_json(raw)?;
         let provenance = recipe.provenance;
-        if provenance.decision_memory_include_own && !provenance.decision_memory {
-            return Err(AgentError(
-                "invalid initial decision memory settings".into(),
-            ));
-        }
-        if provenance
-            .interventions
-            .last()
-            .is_some_and(|item| item.at_action > provenance.actions.len())
-            || provenance
-                .interventions
-                .windows(2)
-                .any(|pair| pair[0].at_action > pair[1].at_action)
-        {
-            return Err(AgentError("invalid snapshot intervention offset".into()));
-        }
         let mut remaining_frames = recipe.object_candidate_frames;
 
         let mut env = Env::new(recipe.seed, provenance.skip_trivial, false, false)
@@ -66,27 +44,25 @@ impl GameSnapshot {
             .with_decision_memory_include_own(provenance.decision_memory_include_own);
         env.reset((*provenance.setup).clone())?;
         let mut interventions = provenance.interventions.iter().peekable();
-        let mut issued_frames = Vec::new();
-        let mut action_index = 0;
-        for ordinal in 0..=provenance.actions.len() + provenance.interventions.len() {
-            if env
-                .game
-                .as_ref()
-                .expect("reset game")
-                .restore_frame_candidates(&mut remaining_frames)
-                .map_err(|error| {
-                    AgentError(format!("snapshot frame at action {action_index}: {error}"))
-                })?
-            {
-                issued_frames.push(ordinal);
-            }
-            if let Some(item) = interventions.next_if(|item| item.at_action == action_index) {
+        for action_index in 0..=provenance.actions.len() {
+            loop {
+                if !remaining_frames.is_empty() {
+                    env.restore_frame_candidates(|key| Ok(remaining_frames.remove(key)))
+                        .map_err(|e| {
+                            AgentError(format!("snapshot frame at action {action_index}: {e}"))
+                        })?;
+                }
+                let Some(item) = interventions.next_if(|item| item.at_action == action_index)
+                else {
+                    break;
+                };
                 env.apply_intervention(item.op).map_err(|error| {
                     AgentError(format!(
                         "snapshot intervention at action {action_index}: {error}"
                     ))
                 })?;
-            } else if let Some(action) = provenance.actions.get(action_index) {
+            }
+            if let Some(action) = provenance.actions.get(action_index) {
                 let result = match action {
                     RecordedAction::Index(i) => env.step(*i).map(|_| ()),
                     RecordedAction::Command(raw) => serde_json::from_str(raw)
@@ -94,7 +70,6 @@ impl GameSnapshot {
                         .and_then(|c| env.execute_semantic_command(&c).map(|_| ())),
                 };
                 result.map_err(|e| AgentError(format!("snapshot action {action_index}: {e}")))?;
-                action_index += 1;
             }
         }
         if !remaining_frames.is_empty() {
@@ -106,7 +81,12 @@ impl GameSnapshot {
         if env.state_digest()? != recipe.state_digest {
             return Err(AgentError("snapshot state_digest mismatch".into()));
         }
-        Ok((env, issued_frames))
+        env.snapshot()
+    }
+
+    #[cfg(feature = "python")]
+    pub(crate) fn check_recipe(raw: &str) -> Result<(), AgentError> {
+        Recipe::from_json(raw).map(|_| ())
     }
 }
 
@@ -150,6 +130,23 @@ impl Recipe {
         }
         if recipe.digest()? != recipe.recipe_digest {
             return Err(AgentError("snapshot recipe_digest mismatch".into()));
+        }
+        let provenance = &recipe.provenance;
+        if provenance.decision_memory_include_own && !provenance.decision_memory {
+            return Err(AgentError(
+                "invalid initial decision memory settings".into(),
+            ));
+        }
+        if provenance
+            .interventions
+            .last()
+            .is_some_and(|item| item.at_action > provenance.actions.len())
+            || provenance
+                .interventions
+                .windows(2)
+                .any(|pair| pair[0].at_action > pair[1].at_action)
+        {
+            return Err(AgentError("invalid snapshot intervention offset".into()));
         }
         Ok(recipe)
     }

@@ -181,9 +181,8 @@ class GameInputs(BaseModel):
     interventions: list[Intervention] = Field(
         default_factory=list, exclude_if=lambda v: not v
     )
-    # Ordinals count actions plus interventions. A retained Command may refer
-    # to a frame issued before either kind of transition.
-    issued_frame_boundaries: list[int] = Field(
+    # Fingerprints of issued frames that supplied object addresses to Commands.
+    object_candidate_frames: list[str] = Field(
         default_factory=list, exclude_if=lambda v: not v
     )
     committed: int | None = Field(default=None, ge=0)
@@ -204,11 +203,6 @@ class GameInputs(BaseModel):
             if not previous <= item.at_action <= len(self.actions):
                 raise ValueError("invalid intervention offset")
             previous = item.at_action
-        if any(
-            not 0 <= k <= len(self.actions) + len(self.interventions)
-            for k in self.issued_frame_boundaries
-        ):
-            raise ValueError("invalid issued frame boundary")
         return self
 
     def setup(self) -> managym.GameSetup:
@@ -238,7 +232,7 @@ class GameInputs(BaseModel):
         self.seed = seed
         self.actions = []
         self.interventions = []
-        self.issued_frame_boundaries = []
+        self.object_candidate_frames = []
         self.committed = 0
         self.digests = []
         self.annotations = []
@@ -1960,7 +1954,7 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
     schema = row.get("schema")
     if schema == "managym-snapshot-v1":
         try:
-            issued = managym.GameSnapshot._validate_recipe(json.dumps(row))
+            managym.GameSnapshot._check_recipe(json.dumps(row))
         except managym.AgentError as error:
             raise ValueError(str(error)) from error
         trace = row
@@ -1971,14 +1965,14 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
         terminal = row.get("terminal", False)
         digest = row["state_digest"]
         identities = {key: row[key] for key in ("managym_version", "card_digest")}
-        stream, context, seconds = 0, {"source_kind": "snapshot"}, 0.0
+        stream, context, seconds = 0, {}, 0.0
     elif schema == "training-exposure-v1":
         game = row["game"]
         trace = game["trace"]
         players = trace["player_configs"]
         skip_trivial = row["skip_trivial"]
         seed, terminal = game["seed"], game["terminal"]
-        digest, issued = None, []
+        digest = None
         identities = row["identities"]
         stream, context, seconds = row["stream"], row["context"], row["seconds"]
     else:
@@ -1998,7 +1992,7 @@ def record_from_row(row: dict[str, Any]) -> GameRecord:
                 players=players,
                 actions=trace["actions"],
                 interventions=trace.get("interventions", []),
-                issued_frame_boundaries=issued,
+                object_candidate_frames=trace.get("object_candidate_frames", []),
                 decision_memory=trace.get("decision_memory", True),
                 decision_memory_include_own=trace.get(
                     "decision_memory_include_own", False

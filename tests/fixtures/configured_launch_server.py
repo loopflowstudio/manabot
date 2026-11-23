@@ -11,6 +11,7 @@ from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra.config import ModelConfig
 from manabot.infra.run_settings import RunSettings
 from manabot.training.loops.minimal import MinimalConfig, train
+import managym
 from managym.academy.card_art import printings
 from managym.academy.launch import serve
 from scripts.release.academy_replay_smoke import write_example_trace
@@ -88,6 +89,16 @@ def main() -> None:
         )
         replay = academy.replay(source)
         training_replay = academy.replay(training_source, game=0)
+        env = managym.Env(seed=42)
+        env.reset(
+            [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
+        )
+        branch = env.snapshot().restore(
+            managym.RestoreOptions.shuffle_libraries(101, forced_first_action=0)
+        )
+        recipe = output.parent / "branch.json"
+        recipe.write_text(branch.snapshot().to_recipe_json())
+        snapshot_replay = academy.replay(recipe)
         output.write_text(
             json.dumps(
                 {
@@ -95,6 +106,7 @@ def main() -> None:
                     "imported_game": imported_game.url,
                     "replay": replay.url,
                     "training_replay": training_replay.url,
+                    "snapshot_replay": snapshot_replay.url,
                 }
             )
         )

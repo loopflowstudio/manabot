@@ -1339,6 +1339,16 @@ impl Env {
         self.apply_intervention(Intervention::Reseed { seed })
     }
 
+    pub(crate) fn restore_frame_candidates(
+        &self,
+        take: impl FnOnce(&str) -> Result<bool, AgentError>,
+    ) -> Result<(), AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("cannot restore frame candidates before reset".into()))?
+            .restore_frame_candidates(take)
+    }
+
     /// Replay the operation payload of a retained boundary intervention.
     #[cfg(feature = "python")]
     pub(crate) fn apply_intervention_json(&mut self, raw: &str) -> Result<(), AgentError> {

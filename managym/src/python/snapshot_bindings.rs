@@ -28,9 +28,8 @@ impl PyGameSnapshot {
     }
 
     #[staticmethod]
-    fn _validate_recipe(py: Python<'_>, raw: &str) -> PyResult<Vec<usize>> {
-        py.allow_threads(|| GameSnapshot::replay_recipe(raw))
-            .map(|(_, boundaries)| boundaries)
+    fn _check_recipe(py: Python<'_>, raw: &str) -> PyResult<()> {
+        py.allow_threads(|| GameSnapshot::check_recipe(raw))
             .map_err(map_agent_err)
     }
 
@@ -79,16 +78,24 @@ impl PyRestoreOptions {
     #[staticmethod]
     #[pyo3(signature = (viewer, seed, *, enable_decision_memory=None, forced_first_action=None))]
     fn determinize(
-        viewer: usize,
+        viewer: isize,
         seed: u64,
         enable_decision_memory: Option<bool>,
         forced_first_action: Option<usize>,
-    ) -> Self {
-        Self(RestoreOptions {
-            mode: BranchMode::Determinize { viewer, seed },
+    ) -> PyResult<Self> {
+        if !(0..=1).contains(&viewer) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "viewer must be 0 or 1",
+            ));
+        }
+        Ok(Self(RestoreOptions {
+            mode: BranchMode::Determinize {
+                viewer: viewer as usize,
+                seed,
+            },
             enable_decision_memory,
             forced_first_action,
-        })
+        }))
     }
 }
 

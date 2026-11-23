@@ -6,11 +6,17 @@ import subprocess
 import sys
 from typing import Literal
 
+from blake3 import blake3
 import pytest
 
 import managym
 from managym.decision import Command, DecisionFrame
-from managym.recording import ScalarCapture, record_from_row, records_from_source
+from managym.recording import (
+    ScalarCapture,
+    read_record,
+    record_from_row,
+    records_from_source,
+)
 from managym.replay import replay_failure_inputs, walk
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
@@ -319,8 +325,9 @@ def test_restore_rejects_illegal_or_rebound_actions_without_changing_the_source(
     position = source.snapshot()
     with pytest.raises(managym.AgentError, match="decklist closed"):
         position.restore(managym.RestoreOptions.determinize(0, 42))
-    with pytest.raises(managym.AgentError, match="out of range"):
-        position.restore(managym.RestoreOptions.determinize(2, 42))
+    for viewer in (-1, 2):
+        with pytest.raises(ValueError, match="viewer must be 0 or 1"):
+            managym.RestoreOptions.determinize(viewer, 42)
     with pytest.raises(managym.AgentError, match="out of bounds"):
         position.restore(
             managym.RestoreOptions.exact(
@@ -357,11 +364,16 @@ def test_recipe_walk_reissues_historical_command_precondition() -> None:
             object_preconditions=(previous.object_candidates[0],),
         ).to_json()
     )
-    record = record_from_row(json.loads(env.snapshot().to_recipe_json()))
+    recipe = json.loads(env.snapshot().to_recipe_json())
+    record = record_from_row(recipe)
+    assert record.games[0].object_candidate_frames == recipe["object_candidate_frames"]
     replay = walk(record)
     assert len(list(replay)) == len(record.games[0].actions)
     assert replay.stop is not None and replay.stop.status == "interrupted"
     assert replay.env.search_witness_json() == env.search_witness_json()
+    (result,) = replay_failure_inputs(record)
+    assert result["status"] == "advanced"
+    assert result["actions"] == len(record.games[0].actions)
 
 
 def position_evidence(env: managym.Env) -> dict[str, str | list[str]]:
@@ -449,6 +461,7 @@ print(json.dumps([before, position_evidence(env)]))
     records = records_from_source(path)
     assert records is not None
     (record,) = records
+    assert record.context == {}
     replay = walk(record)
     assert [decision.chosen for decision in replay] == [0, 0, 0]
     assert replay.stop is not None and replay.stop.status == "interrupted"
@@ -459,10 +472,15 @@ print(json.dumps([before, position_evidence(env)]))
     for ordinal in range(3):
         shown = inspect_watch(imported["id"], ordinal, imported["token"])
         assert shown["observation"]["opponent"]["hand"] == []
-        assert str(shuffle_seed) not in json.dumps(shown)
-        assert "987654321123" not in json.dumps(shown)
-    with pytest.raises(ValueError, match="spectator_view_unavailable"):
-        inspect_watch(imported["id"], 0, imported["token"], reveal=True)
+        revealed = inspect_watch(
+            imported["id"], ordinal, imported["token"], reveal=True
+        )
+        assert revealed["observation"]["opponent"]["hand"]
+        assert revealed["decision"] == shown["decision"]
+        for view in (shown, revealed):
+            assert view["source_kind"] is None
+            assert str(shuffle_seed) not in json.dumps(view)
+            assert "987654321123" not in json.dumps(view)
 
     record.games[0].committed = 3
     record.games[0].actions.append(999)
@@ -480,6 +498,78 @@ print(json.dumps([before, position_evidence(env)]))
     )
     record.games[0].interventions.clear()
     assert replay_failure_inputs(record)[0]["status"] == "binding_mismatch"
+
+
+def checksummed_recipe(env: managym.Env, **fields: object) -> str:
+    """Simulate a writer with different rules while retaining a valid recipe checksum."""
+    recipe = json.loads(env.snapshot().to_recipe_json()) | fields
+    del recipe["recipe_digest"]
+    canonical = json.dumps(
+        recipe, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    return json.dumps(recipe | {"recipe_digest": blake3(canonical).hexdigest()})
+
+
+@pytest.mark.parametrize(
+    ("fields", "reason"),
+    [
+        ({"state_digest": "old rules digest"}, "state_digest"),
+        ({"actions": [0, 999, 0]}, "action 1"),
+    ],
+)
+def test_valid_recipe_from_changed_rules_keeps_verified_decisions(
+    tmp_path: Path, fields: dict[str, object], reason: str
+) -> None:
+    env = managym.Env(seed=42)
+    env.reset(setup())
+    env.step(0)
+    env.step(0)
+    raw = checksummed_recipe(env, **fields)
+    with pytest.raises(managym.AgentError, match=reason):
+        managym.GameSnapshot.from_recipe_json(raw)
+    path = tmp_path / "branch.json"
+    path.write_text(raw)
+    record = read_record(path)
+    replay = walk(record)
+    assert [decision.index for decision in replay] == [0]
+    assert replay.stop is not None
+    assert (replay.stop.status, replay.stop.index) == ("diverged", 1)
+
+
+@pytest.mark.parametrize(
+    ("fields", "reason"),
+    [
+        ({"decision_memory_include_own": True}, "invalid initial decision memory"),
+        ({"interventions": [{"at_action": 2, "op": "reseed", "seed": 1}]}, "offset"),
+        (
+            {
+                "interventions": [
+                    {"at_action": 1, "op": "reseed", "seed": 1},
+                    {"at_action": 0, "op": "reseed", "seed": 2},
+                ]
+            },
+            "offset",
+        ),
+    ],
+)
+def test_record_reader_checks_signed_recipe_structure(
+    fields: dict[str, object], reason: str
+) -> None:
+    env = managym.Env(seed=42)
+    env.reset(setup())
+    env.step(0)
+    with pytest.raises(ValueError, match=reason):
+        record_from_row(json.loads(checksummed_recipe(env, **fields)))
+
+
+def test_complete_walk_requires_every_issued_frame() -> None:
+    env = managym.Env(seed=42)
+    env.reset(setup())
+    raw = checksummed_recipe(env, object_candidate_frames=["missing frame"])
+    replay = walk(record_from_row(json.loads(raw)))
+    assert list(replay) == []
+    assert replay.stop is not None and replay.stop.status == "diverged"
+    assert replay.stop.reason and "candidate frame missing" in replay.stop.reason
 
 
 @pytest.mark.parametrize("field", ["card_digest", "state_digest"])
