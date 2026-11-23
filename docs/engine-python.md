@@ -454,8 +454,9 @@ allow in-memory restore. Export raises when it cannot reconstruct the prefix.
 
 Keep snapshot replays private. Academy opens one as a **Recorded game** when
 forced-decision skipping is enabled, both seats use `agent`, and decklist
-disclosure agrees. The acting view hides the opponent’s hand, spectator
-reveal shows both hands, and branch seeds stay on the server.
+disclosure agrees. The acting view hides the opponent’s hand. The spectator
+response includes both hands. The board draws the bottom seat’s cards and
+shows the top seat’s hand count. Branch seeds stay on the server.
 
 ## Ask questions of recorded games
 

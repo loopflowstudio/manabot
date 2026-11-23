@@ -237,8 +237,10 @@ interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
 digests wherever the source retained them, and saves what it verified to this traces
 directory as a finished recording. A snapshot replay carries its final digest.
-It opens as a **Recorded game**. The acting view shows the chooser’s hand,
-and spectator reveal shows both hands. Branch seeds stay private in either view.
+It opens as a **Recorded game**. The acting view hides the opponent’s hand.
+**Show both hands** includes both hands in the spectator response. The board
+draws the bottom seat’s cards and shows the top seat’s hand count. Branch
+seeds stay private in either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the
