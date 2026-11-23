@@ -3058,6 +3058,7 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
+        FactKind::TriggeringDamage => "ContinuationFrame.triggering_damage",
         FactKind::LifeGains => "PlayerTurnHistory.life_gains",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
@@ -3431,6 +3432,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         waterbend => [column(Relation, relation::WATERBEND)],
         can_decline => [column(Relation, relation::CAN_DECLINE)],
         mana_outputs => [column(Relation, relation::MODE), Columns(Relation, relation::MANA_WHITE, 6), column(Relation, relation::RESTRICTED)],
+        triggering_damage => [Fact(FactKind::TriggeringDamage)],
         resolutions_this_turn => [column(Relation, relation::RESOLUTIONS_THIS_TURN)],
         x => [column(Relation, relation::X)],
         granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
@@ -5965,4 +5967,20 @@ fn felling_blow_catalog_tokens_describe_both_instructions() {
             "{variant}"
         );
     }
+}
+
+#[test]
+fn drake_hatcher_catalog_tokens_bind_damage_and_price_the_drake() {
+    let tokens = tokens_of(&card_definition("Drake Hatcher"));
+    for variant in [
+        "EffectValue::TriggeringDamage",
+        "Effect::PutCounters",
+        "Effect::CreateToken",
+    ] {
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
+    assert!(tokens.contains(&(TokenKind::Field, name_value("remove_counters"))));
 }

@@ -301,15 +301,30 @@ impl Game {
             announcing: None,
             paid: Vec::new(),
         };
+        for frame in frames.iter().filter(|frame| frame.triggering_damage > 0) {
+            let name = frame
+                .source
+                .definition
+                .and_then(|id| {
+                    crate::cards::content_pack::default_content_pack()
+                        .definition(crate::state::card::CardDefId(id))
+                })
+                .map_or("This ability", |card| card.name.as_str());
+            view.pending.push(format!(
+                "{name} triggered on {} combat damage to a player.",
+                frame.triggering_damage
+            ));
+        }
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
-        view.pending = frames
-            .iter()
-            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
-            .collect();
+        view.pending.extend(
+            frames
+                .iter()
+                .flat_map(|frame| frame.effect_execution_summary.iter().cloned()),
+        );
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
@@ -428,7 +443,7 @@ impl Game {
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
                 CostComponent::TapPays { .. } =>
                     ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
-                CostComponent::Life(_) | CostComponent::Source(_) =>
+                CostComponent::Life(_) | CostComponent::RemoveCounters(..) | CostComponent::Source(_) =>
                     unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { toward: Toward::Saddle, .. } =>
                     ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),

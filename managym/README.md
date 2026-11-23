@@ -274,6 +274,13 @@ carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
+For a per-creature combat damage trigger, `EffectValue::TriggeringDamage`
+reads the amount dealt by the hit that fired it. Both players can inspect
+that amount on the stacked ability. Drake Hatcher puts that many incubation
+counters on its source even if its power has since changed. Its activation
+spends three incubation counters during payment. Countering the ability
+leaves them spent, and resolving it creates the flying Drake.
+
 Delayed abilities compose event matching, frequency, expiry, captured subjects
 and effects. `CreateDelayedTrigger.event` only matches the event;
 `DelayedFrequency::Once` consumes its watcher on the first match, even if the

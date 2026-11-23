@@ -67,10 +67,11 @@ pub enum FactKind {
     ContinuationProgram = 14,
     AbilityResolution = 15,
     LifeGains = 16,
+    TriggeringDamage = 17,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 15] = [
+    pub const ALL: [FactKind; 16] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -86,6 +87,7 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::LifeGains,
+        FactKind::TriggeringDamage,
     ];
 }
 
@@ -1916,6 +1918,19 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
+        if layout == InputLayout::OneToken && frame.triggering_damage > 0 {
+            let controller = if frame.controller == obs.agent.player_index as usize {
+                obs.agent.id
+            } else {
+                obs.opponent.id
+            };
+            push(
+                controller,
+                FactKind::TriggeringDamage,
+                (index + 1) as i32,
+                frame.triggering_damage as f32,
+            );
+        }
         if frame.source_transforms > 0 {
             push(
                 frame.source.object.unwrap_or(

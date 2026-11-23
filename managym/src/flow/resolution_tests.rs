@@ -117,6 +117,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            triggering_damage: 0,
             program: false,
             remembered: Vec::new(),
             source_transforms: 0,
@@ -694,6 +695,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        triggering_damage: 0,
         program: false,
         remembered: Vec::new(),
         source_transforms: 0,
@@ -2947,7 +2949,7 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
             },
         );
         assert_eq!(game.state.players[defender.0].life, life);
-        assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CombatDamageToPlayers { creatures } if creatures == &[first, second])).count(), 1);
+        assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CombatDamageToPlayers { hits } if hits.iter().map(|hit| (game.state.permanent_of(hit.source), hit.recipient, hit.amount)).eq([first, second].map(|id| (Some(id), defender, (20 - life) / 2))))).count(), 1);
     }
 }
 

@@ -33,6 +33,15 @@ pub enum EventEntity {
     Player(PlayerId),
 }
 
+/// One committed hit within a simultaneous combat damage step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CombatPlayerHit {
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: ObjectId,
+    pub recipient: PlayerId,
+    pub amount: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
     PermanentSacrificed {
@@ -177,7 +186,7 @@ pub enum GameEvent {
     /// The creatures that dealt combat damage to a player in one combat
     /// damage step (CR 510.2).
     CombatDamageToPlayers {
-        creatures: Vec<PermanentId>,
+        hits: Vec<CombatPlayerHit>,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {

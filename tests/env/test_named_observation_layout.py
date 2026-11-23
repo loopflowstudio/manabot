@@ -58,7 +58,8 @@ def test_fact_kinds_are_named_native_row_kinds() -> None:
     assert observation.FACT_COUNTER == names["counter"] == 1
     assert observation.FACT_CONTINUATION_PROGRAM == names["continuation_program"]
     # The model's kind embedding is sized by the largest kind.
-    assert observation.FACT_KINDS == max(names.values()) == 14
+    assert observation.FACT_TRIGGERING_DAMAGE == names["triggering_damage"] == 17
+    assert observation.FACT_KINDS == max(names.values())
     assert observation.FACT_EFFECT not in names.values(), "reserved: shared-effect rows"
 
 

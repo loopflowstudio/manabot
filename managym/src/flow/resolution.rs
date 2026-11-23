@@ -95,6 +95,7 @@ impl Game {
                 _ => 0,
             },
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
+            EffectValue::TriggeringDamage => frame.triggering_damage,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::LifeLostThisWay => frame.life_lost,
             EffectValue::PowerTappedToPay => frame
@@ -134,6 +135,7 @@ impl Game {
             EffectValue::Objects { .. }
             | EffectValue::DistinctManaValues { .. }
             | EffectValue::X
+            | EffectValue::TriggeringDamage
             | EffectValue::ExcessDamage
             | EffectValue::LifeLostThisWay
             | EffectValue::ManaSpentToCast
@@ -445,6 +447,7 @@ impl Game {
         let frame = EffectFrame {
             program,
             remembered: triggered.remembered,
+            triggering_damage: triggered.triggering_damage,
             source_identity: crate::state::game_object::AbilitySource::optional(
                 Some(source_object),
                 triggered.source_identity.reference(),

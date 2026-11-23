@@ -805,6 +805,7 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
+        FactKind::TriggeringDamage => ("triggering_damage", "object: controller; id: frame index + 1; value: combat damage dealt to the player"),
         FactKind::LifeGains => ("life_gains","value: times this player gained life this turn"),
         FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
         FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
@@ -1029,12 +1030,24 @@ pub fn observation_layout(
     let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
     let kinds = FactKind::ALL.into_iter().filter(|kind| {
         layout_kind == InputLayout::OneToken
-            || !matches!(kind, FactKind::LifeGains | FactKind::AbilityResolution)
+            || !matches!(
+                kind,
+                FactKind::LifeGains | FactKind::AbilityResolution | FactKind::TriggeringDamage
+            )
     });
     facts.row_kinds = kinds
         .clone()
         .map(|kind| (kind as u8, fact_row_kind(kind).1))
         .collect();
+    if layout_kind == InputLayout::OneToken {
+        facts.columns[fact::KIND].value = ValueLayout::new(
+            ValueKind::Category {
+                size: u16::from(*facts.row_kinds.last_key_value().unwrap().0),
+            },
+            "FactKind; see row_kinds",
+            "registered row kinds; 0 padding",
+        );
+    }
     facts.row_kind_names = kinds
         .map(|kind| (fact_row_kind(kind).0, kind as u8))
         .collect();

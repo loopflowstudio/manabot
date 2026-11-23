@@ -839,3 +839,113 @@ fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
         assert_eq!(hits.next(), None);
     }
 }
+
+#[test]
+fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::{counters_of, has_action},
+        play::cast_card,
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{
+            ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+            game_object::Target,
+            permanent::CounterKind::{Incubation, PlusOnePlusOne},
+        },
+    };
+
+    let mut s = five_color_setup(&["Drake Hatcher", "Lightning Bolt"]);
+    let first = enter_and_settle(&mut s, "Drake Hatcher");
+    let second = enter_and_settle(&mut s, "Drake Hatcher");
+    let first = permanent_of(&s, first).unwrap();
+    let second = permanent_of(&s, second).unwrap();
+    set_counters(&mut s, second, PlusOnePlusOne, 2);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        s.declare_attack();
+    }
+    s.advance_until(
+        |s| s.game().state.stack_objects.len() == 2,
+        "two combat damage triggers".into(),
+    );
+    set_counters(&mut s, second, PlusOnePlusOne, 0);
+    let pending = s.game().clone();
+    for _ in 0..2 {
+        *s.game_mut() = pending.clone();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            use managym::agent::{
+                observation::Observation,
+                observation_encoder::{encode, FactKind, ObservationEncoderConfig},
+                observation_layout::fact,
+            };
+            let observation = Observation::for_player(s.game(), viewer);
+            let encoding = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+            let mut amounts = Vec::new();
+            for (index, frame) in observation
+                .continuation
+                .iter()
+                .enumerate()
+                .filter(|(_, frame)| frame.kind == 3)
+            {
+                let source = frame.source.object.unwrap();
+                let amount =
+                    if source == s.game().state.permanents[first].as_ref().unwrap().id.0 as i32 {
+                        1
+                    } else {
+                        3
+                    };
+                assert_eq!(frame.triggering_damage, amount);
+                let row = encoding
+                    .facts
+                    .chunks_exact(fact::WIDTH)
+                    .find(|row| {
+                        row[fact::KIND] == FactKind::TriggeringDamage as u8 as f32
+                            && row[fact::ID_LOW] == (index + 1) as f32
+                    })
+                    .unwrap();
+                assert_eq!(row[fact::VALUE], amount as f32);
+                amounts.push(amount);
+            }
+            amounts.sort();
+            assert_eq!(amounts, [1, 3]);
+        }
+        settle(&mut s);
+        assert_eq!(counters_of(&s, first, Incubation), 1);
+        assert_eq!(counters_of(&s, second, Incubation), 3);
+    }
+    let offered = |id| move |action: &Action| matches!(action, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == id);
+    set_counters(&mut s, first, Incubation, 2);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!has_action(&s, offered(first)));
+    assert!(has_action(&s, offered(second)));
+    activate(&mut s, second, 0);
+    assert_eq!(counters_of(&s, second, Incubation), 0);
+    assert!(s.battlefield_permanents_named(0, "Drake").is_empty());
+    let paid = s.game().clone();
+    let activation = paid.state.stack_objects.last().unwrap().id();
+    settle(&mut s);
+    let drakes = s.battlefield_permanents_named(0, "Drake");
+    assert_eq!(drakes.len(), 1);
+    let token = s.game().characteristics(drakes[0]);
+    assert_eq!(token.pt(), (2, 2));
+    assert!(token.keywords.has(Keyword::Flying));
+    assert_eq!(counters_of(&s, second, Incubation), 0);
+
+    *s.game_mut() = paid;
+    // A constructed instant uses the ordinary counter-ability instruction.
+    let counter = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().state[counter].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
+    s.game_mut().state[counter].spell_effects = vec![Effect::CounterAbility {
+        what: ObjectSelector::Target(TargetSpec::Ability),
+    }];
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, counter);
+    assert!(s.choose_target(Target::StackAbility(activation)));
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Drake").is_empty());
+    assert_eq!(counters_of(&s, second, Incubation), 0);
+}

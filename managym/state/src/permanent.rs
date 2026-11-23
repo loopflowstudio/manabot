@@ -39,6 +39,7 @@ pub enum CounterKind {
     /// No rules meaning of its own; station puts them on and a Spacecraft's
     /// or Planet's "N+" abilities count them (CR 702.184).
     Charge,
+    Incubation,
 }
 
 impl CounterKind {
@@ -59,6 +60,7 @@ impl CounterKind {
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
+            CounterKind::Incubation => "incubation",
             CounterKind::Charge => "charge",
         }
     }
@@ -71,7 +73,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 15] = [
+    pub const ALL: [CounterKind; 16] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -87,6 +89,7 @@ impl CounterKind {
         CounterKind::Age,
         CounterKind::Ice,
         CounterKind::Charge,
+        CounterKind::Incubation,
     ];
 }
 
@@ -200,6 +203,12 @@ pub struct Permanent {
 }
 
 impl Permanent {
+    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        ability
+            .remove_counters
+            .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
+    }
+
     /// Whether this object has used up the ability: exhaust once ever
     /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {

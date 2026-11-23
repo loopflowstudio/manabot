@@ -256,6 +256,7 @@ impl Game {
                     | CostComponent::Mana { .. }
                     | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
+                    | CostComponent::RemoveCounters(..)
                     | CostComponent::Source(_) => None,
                 });
                 if paying.is_some() {
@@ -438,6 +439,7 @@ impl Game {
                     continue;
                 }
                 if self.check_activation_terms(player, ability).is_err()
+                    || !permanent.can_pay_counters(ability)
                     || permanent.activation_used(ability_index, ability)
                     || (ability.discard_card
                         && self
@@ -938,7 +940,9 @@ impl Game {
                     .collect(),
                 vec![self.state[*tapped].id],
             ),
-            CostComponent::Life(_) | CostComponent::Source(_) => {
+            CostComponent::Life(_)
+            | CostComponent::RemoveCounters(..)
+            | CostComponent::Source(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         };

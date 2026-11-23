@@ -72,6 +72,7 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
 
 fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        triggering_damage: 0,
         program: false,
         remembered: Vec::new(),
         source_identity: crate::state::game_object::AbilitySource::new(source, None),
@@ -720,12 +721,12 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
                 batch.push(t);
             }
         }
-        game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+        game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
             remaining: batch,
             active,
             group: 0,
             placing: None,
-        });
+        }));
         game.state
             .pending_triggers
             .push(trigger(source, vec![Effect::gain_life(9)], 99));
@@ -1048,12 +1049,12 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     game.state[current].become_copy_of(&template, &[]);
     assert_eq!(game.unchosen_trigger_modes(&pending).unwrap().len(), 1);
     assert!(game.trigger_requirements(&pending).is_some());
-    game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+    game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
         remaining: vec![pending.clone()],
         active: PlayerId(0),
         group: 0,
         placing: None,
-    });
+    }));
     let label = game
         .action_description(&crate::agent::action::Action::ChooseTrigger {
             player: PlayerId(0),

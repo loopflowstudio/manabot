@@ -19,6 +19,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         cat_collector(),
         claws_out(),
+        drake_hatcher(),
         felling_blow(),
         fiendish_panda(),
         hungry_ghoul(),
@@ -167,6 +168,60 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                     ..Default::default()
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn drake_hatcher() -> CardDefinition {
+    let text_box = "Vigilance, prowess\nWhenever this creature deals combat damage to a player, put that many incubation counters on it.\nRemove three incubation counters from this creature: Create a 2/2 blue Drake creature token with flying.";
+    CardDefinition {
+        key: "fdn.drake_hatcher",
+        scryfall_id: "bcaf4196-6bf3-47fa-b5c7-0e77f45cf820",
+        printed: PrintedCharacteristics {
+            name: "Drake Hatcher".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Creature],
+                            ..Default::default()
+                        },
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::pump(1, 1),
+                    )],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::DealsCombatDamage {
+                        subject: TriggerSubject::This,
+                        to: Actor::AnyPlayer,
+                        per: Per::Object,
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::Incubation,
+                        EffectValue::TriggeringDamage,
+                    )],
+                },
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                remove_counters: Some((CounterKind::Incubation, 3)),
+                effects: vec![Effect::create_tokens("token.drake", 1)],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

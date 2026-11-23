@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 21;
+pub const MATCH_STATE_HASH_VERSION: u32 = 22;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -181,7 +181,7 @@ struct CanonicalMatchState<'a> {
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],
-    trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
+    trigger_placement: &'a Option<Box<crate::flow::trigger::TriggerPlacement>>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
     effects: &'a [crate::state::effect::ContinuousEffect],

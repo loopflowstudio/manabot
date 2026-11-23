@@ -352,6 +352,64 @@ mod card_history_tests {
     };
 
     #[test]
+    fn drake_hatcher_snapshot_binds_the_amount_dealt_by_the_same_source() {
+        use crate::{flow::combat::CombatState, state::permanent::CounterKind};
+        let mut env = Env::new(418, true, false, false);
+        let deck = [
+            ("Drake Hatcher".to_string(), 12),
+            ("Island".to_string(), 28),
+        ]
+        .into();
+        env.reset(vec![
+            PlayerConfig::new("Hatcher", deck),
+            PlayerConfig::new("Opponent", [("Forest".into(), 40)].into()),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        let actor = game.active_player();
+        let source = game
+            .scenario_force_battlefield(actor, "Drake Hatcher", true)
+            .unwrap();
+        game.state.combat = Some(CombatState {
+            attackers: vec![source],
+            ..Default::default()
+        });
+        let combat = env.snapshot().unwrap();
+        for amount in [1, 3] {
+            let mut branch = combat.restore(Default::default()).unwrap();
+            let game = branch.game.as_mut().unwrap();
+            game.state.permanents[source]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::PlusOnePlusOne, amount - 1);
+            game.resolve_combat_damage();
+            let [trigger] = game.state.pending_triggers.as_slice() else {
+                panic!("one Hatcher trigger")
+            };
+            assert_eq!(trigger.triggering_damage, amount);
+            assert_eq!(trigger.player, Some(PlayerId(1 - actor.0)));
+            game.state.permanents[source]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::PlusOnePlusOne, 1 - amount);
+            let witness = branch.selected_witness().unwrap();
+            let pending = branch.snapshot().unwrap();
+            let mut restored = pending.restore(Default::default()).unwrap();
+            assert_eq!(restored.selected_witness().unwrap(), witness);
+            let game = restored.game.as_mut().unwrap();
+            assert!(game.flush_triggers().is_none());
+            game.resolve_top_of_stack();
+            assert_eq!(
+                game.state.permanents[source]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::Incubation),
+                amount
+            );
+        }
+    }
+
+    #[test]
     fn steel_hellkite_pending_snapshot_retains_combat_seat_after_source_departure() {
         use crate::agent::{
             observation::Observation,
@@ -380,12 +438,15 @@ mod card_history_tests {
         let source = game.permanent_object(hit).unwrap();
         let token = game.create_token("token.food", actor, false).unwrap();
         for (permanent, combat) in [(other, false), (hit, true)] {
-            assert!(game.commit_damage(
-                game.permanent_object(permanent),
-                ProposedDamageTarget::Player(victim),
-                1,
-                combat
-            ));
+            assert!(
+                game.commit_damage(
+                    game.permanent_object(permanent),
+                    ProposedDamageTarget::Player(victim),
+                    1,
+                    combat
+                )
+                .committed
+            );
         }
         game.state.players[actor.0].mana_pool = crate::state::mana::Mana::parse("2").into();
         game.publish_action_space(game.priority_action_space(actor));
@@ -497,12 +558,15 @@ mod card_history_tests {
         let recipient = game.permanent_object(victim).unwrap();
         let ooze = game.permanent_object(source).unwrap();
         let hit = |g: &mut Game, source| {
-            assert!(g.commit_damage(
-                Some(source),
-                ProposedDamageTarget::Object(recipient),
-                1,
-                false
-            ))
+            assert!(
+                g.commit_damage(
+                    Some(source),
+                    ProposedDamageTarget::Object(recipient),
+                    1,
+                    false
+                )
+                .committed
+            )
         };
         let other = game
             .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)

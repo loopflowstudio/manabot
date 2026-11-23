@@ -39,6 +39,7 @@ from manabot.env.observation import (
     FACT_EFFECT_PROGRAM,
     FACT_LIFE_GAINS,
     FACT_TRANSFORMS,
+    FACT_TRIGGERING_DAMAGE,
 )
 
 if TYPE_CHECKING:
@@ -137,7 +138,12 @@ NUMERIC = frozenset(
 # Fact kinds whose payload `fact_value` reads as zero (their content is a
 # looked-up program), and as a count.
 PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
-FACT_COUNT_KINDS = (FACT_TRANSFORMS, FACT_ABILITY_RESOLUTION, FACT_LIFE_GAINS)
+FACT_COUNT_KINDS = (
+    FACT_TRANSFORMS,
+    FACT_ABILITY_RESOLUTION,
+    FACT_LIFE_GAINS,
+    FACT_TRIGGERING_DAMAGE,
+)
 
 # Fresh readings determined by a column's role in its row.
 PLACED_READINGS: Mapping[tuple[str, str], Reading] = {

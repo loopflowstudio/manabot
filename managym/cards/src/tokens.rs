@@ -25,6 +25,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         cat(),
         clue(),
         dragon(),
+        drake(),
         elf_warrior(),
         food(),
         human(),
@@ -159,6 +160,18 @@ fn clue() -> TokenDefinition {
                 &["Clue"],
                 "{2}, Sacrifice this token: Draw a card.",
             )
+        },
+    )
+}
+
+fn drake() -> TokenDefinition {
+    let base = face("Drake", [CardType::Creature], &["Drake"], "Flying");
+    token(
+        "token.drake",
+        "f4a73034-e20f-4e7e-ac15-3460b1e9c69b",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 2, 2, [Color::Blue])
         },
     )
 }

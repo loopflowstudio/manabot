@@ -137,6 +137,8 @@ pub struct EffectFrame {
     /// this turn, counting this resolution. Zero for spells and activated
     /// abilities.
     pub resolutions_this_turn: u32,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub triggering_damage: i32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
@@ -247,6 +249,7 @@ impl EffectFrame {
             source_identity: None,
             controller,
             resolutions_this_turn: 0,
+            triggering_damage: 0,
             kicked: false,
             x: 0,
             spent: Default::default(),
@@ -279,6 +282,7 @@ impl EffectFrame {
             source_transforms: self.source_transforms,
             source_identity: self.source_identity,
             resolutions_this_turn: self.resolutions_this_turn,
+            triggering_damage: self.triggering_damage,
             kicked: self.kicked,
             x: self.x,
             spent: self.spent.clone(),

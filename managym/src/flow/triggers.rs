@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
-        event::{EventKind, GameEvent},
+        event::{CombatPlayerHit, EventKind, GameEvent},
         game::Game,
         trigger::{
             DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
+            Ability, Actor, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
@@ -33,6 +33,7 @@ use crate::{
 /// placed: a printed ability by index, or a granted one's effects.
 #[derive(Clone)]
 struct FiredTrigger {
+    hit: Option<CombatPlayerHit>,
     source: TriggerSourceSnapshot,
     ability_index: usize,
     granted: Option<Vec<Effect>>,
@@ -332,12 +333,12 @@ impl Game {
             if self.state.pending_triggers.is_empty() {
                 return None;
             }
-            *self.state.trigger_placement_mut() = Some(TriggerPlacement {
+            *self.state.trigger_placement_mut() = Some(Box::new(TriggerPlacement {
                 remaining: std::mem::take(self.state.pending_triggers_mut()),
                 active: self.active_player(),
                 group: 0,
                 placing: None,
-            });
+            }));
         }
         loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();
@@ -715,6 +716,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            triggering_damage: trigger.triggering_damage,
             program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
@@ -932,16 +934,18 @@ impl Game {
                         .ability_triggers_this_turn
                         .contains_key(&(source.lki.object, ability_index)))
                 {
-                    let times = self.trigger_occurrences(condition, source, event);
-                    fired.extend(std::iter::repeat_n(
+                    self.collect_occurrences(
+                        condition,
+                        event,
                         FiredTrigger {
+                            hit: None,
                             source: source.clone(),
                             ability_index,
                             granted: None,
                             program: false,
                         },
-                        times,
-                    ));
+                        &mut fired,
+                    );
                 }
             }
             // Departure triggers use the grants captured at the event boundary.
@@ -972,16 +976,18 @@ impl Game {
                 } else {
                     effects.clone()
                 };
-                let times = self.trigger_occurrences(condition, source, event);
-                fired.extend(std::iter::repeat_n(
+                self.collect_occurrences(
+                    condition,
+                    event,
                     FiredTrigger {
+                        hit: None,
                         source: source.clone(),
                         ability_index: 0,
                         granted: Some(effects),
                         program: effective.program,
                     },
-                    times,
-                ));
+                    &mut fired,
+                );
             }
         }
 
@@ -1000,6 +1006,7 @@ impl Game {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
+            hit,
             source,
             ability_index,
             granted,
@@ -1049,6 +1056,7 @@ impl Game {
                 self.trigger_context_for_event(event)
             };
             let player = match event {
+                GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
                 GameEvent::SpellCast {
                     object_id: object, ..
                 } => Some(self.spell_caster(*object)),
@@ -1093,6 +1101,7 @@ impl Game {
             };
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                triggering_damage: hit.map_or(0, |hit| hit.amount),
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1118,15 +1127,40 @@ impl Game {
         }
     }
 
-    /// How many times one of `source`'s triggered abilities triggers on
-    /// `event`: zero unless its condition fires, else its own multiplicity
-    /// plus the "triggers an additional time" statics that cover it.
-    fn trigger_occurrences(
+    fn collect_occurrences(
         &self,
         condition: &TriggerCondition,
-        source: &TriggerSourceSnapshot,
         event: &GameEvent,
-    ) -> usize {
+        occurrence: FiredTrigger,
+        fired: &mut Vec<FiredTrigger>,
+    ) {
+        let source = &occurrence.source;
+        if let (
+            TriggerCondition::DealsCombatDamage { subject, to, per },
+            GameEvent::CombatDamageToPlayers { hits },
+        ) = (condition, event)
+        {
+            let mut matching = hits.iter().filter(|hit| {
+                self.hit_matches(hit, subject, *to, source.lki.object, source.controller)
+            });
+            let Some(first) = matching.next() else { return };
+            let copies = 1 + self.additional_trigger_times(source);
+            match per {
+                Per::Object => {
+                    for hit in std::iter::once(first).chain(matching) {
+                        fired.extend(std::iter::repeat_n(
+                            FiredTrigger {
+                                hit: Some(*hit),
+                                ..occurrence.clone()
+                            },
+                            copies,
+                        ));
+                    }
+                }
+                Per::Batch => fired.extend(std::iter::repeat_n(occurrence, copies)),
+            }
+            return;
+        }
         if !self.trigger_condition_fires(
             condition,
             source.lki.object,
@@ -1134,14 +1168,16 @@ impl Game {
             true,
             event,
         ) {
-            return 0;
+            return;
         }
         debug_assert!(
             condition_event_kinds(condition).contains(event.kind()),
             "{condition:?} fired on an event kind it is not indexed by: {event:?}"
         );
-        self.trigger_multiplicity(condition, source.lki.object, source.controller, event)
-            + self.additional_trigger_times(source)
+        let count =
+            self.trigger_multiplicity(condition, source.lki.object, source.controller, event)
+                + self.additional_trigger_times(source);
+        fired.extend(std::iter::repeat_n(occurrence, count));
     }
 
     /// The permanent whose event fired a trigger: an entering one, a
@@ -1358,6 +1394,7 @@ impl Game {
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
+            triggering_damage: 0,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -1424,6 +1461,7 @@ impl Game {
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                triggering_damage: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1543,6 +1581,7 @@ impl Game {
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                triggering_damage: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -2042,19 +2081,18 @@ impl Game {
         source_controller: PlayerId,
         event: &GameEvent,
     ) -> usize {
-        let (subject, per, creatures) = match (condition, event) {
+        let (per, matching) = match (condition, event) {
             (
                 TriggerCondition::DealsCombatDamage { subject, to, per },
-                GameEvent::CombatDamageToPlayers { creatures },
-            ) => {
-                // In the two-seat combat model only the defending player, the
-                // active player's opponent, receives combat damage.
-                let defender = PlayerId(1 - self.active_player().0);
-                if !to.includes(source_controller, defender) {
-                    return 0;
-                }
-                (subject, per, creatures)
-            }
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => (
+                per,
+                hits.iter()
+                    .filter(|hit| {
+                        self.hit_matches(hit, subject, *to, source_object, source_controller)
+                    })
+                    .count(),
+            ),
             (
                 TriggerCondition::Attacks {
                     subject,
@@ -2071,25 +2109,42 @@ impl Game {
                 if !size_holds {
                     return 0;
                 }
-                (subject, per, attackers)
+                (
+                    per,
+                    attackers
+                        .iter()
+                        .filter(|id| {
+                            self.subject_matches_permanent(
+                                subject,
+                                source_object,
+                                source_controller,
+                                **id,
+                            )
+                        })
+                        .count(),
+                )
             }
             _ => return 1,
         };
-        let matching = creatures
-            .iter()
-            .filter(|creature| {
-                self.subject_matches_permanent(
-                    subject,
-                    source_object,
-                    source_controller,
-                    **creature,
-                )
-            })
-            .count();
         match per {
             Per::Object => matching,
             Per::Batch => usize::from(matching > 0),
         }
+    }
+
+    fn hit_matches(
+        &self,
+        hit: &CombatPlayerHit,
+        subject: &TriggerSubject,
+        to: Actor,
+        source: ObjectId,
+        controller: PlayerId,
+    ) -> bool {
+        to.includes(controller, hit.recipient)
+            && self
+                .state
+                .permanent_of(hit.source)
+                .is_some_and(|id| self.subject_matches_permanent(subject, source, controller, id))
     }
 
     fn subject_matches_moved_object(

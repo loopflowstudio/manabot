@@ -608,6 +608,8 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
+    /// Amount dealt by the combat hit that triggered this ability.
+    TriggeringDamage,
     /// Total life actually lost to this scope's latest LoseLife instruction.
     LifeLostThisWay,
     /// The source permanent's current power ("where X is this creature's

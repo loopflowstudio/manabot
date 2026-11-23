@@ -51,9 +51,10 @@ impl Game {
         target: ProposedDamageTarget,
         amount: i32,
         combat: bool,
-    ) -> bool {
+    ) -> super::proposed_event::EventResult {
+        let mut result = super::proposed_event::EventResult::default();
         if amount <= 0 {
-            return false;
+            return result;
         }
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
@@ -73,13 +74,13 @@ impl Game {
             ProposedDamageTarget::Player(player) => {
                 // Protection from everything prevents all damage (CR 702.16e).
                 if self.has_protection_from_everything(player) {
-                    return false;
+                    return result;
                 }
                 // Damage is still dealt to a player whose life total can't
                 // change; only the life loss doesn't happen (CR 119.7).
                 let locked = self.life_total_cant_change(player);
                 let Some(life) = self.state.life_mut(player) else {
-                    return false;
+                    return result;
                 };
                 let old_life = *life;
                 if !locked {
@@ -87,6 +88,11 @@ impl Game {
                 }
                 let new_life = *life;
                 if let Some(source) = source.filter(|_| combat) {
+                    result.combat_hit = Some(super::event::CombatPlayerHit {
+                        source,
+                        recipient: player,
+                        amount,
+                    });
                     self.state
                         .turn
                         .damage_pairs
@@ -115,12 +121,16 @@ impl Game {
                 }
             }
             ProposedDamageTarget::Object(object_ref) => {
+                result.excess_damage = self
+                    .state
+                    .permanent_of(object_ref)
+                    .map(|id| self.excess_for_damage(source, id, amount));
                 let event_target = self.object_event_ref(object_ref);
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
-                    return false;
+                    return result;
                 };
                 if self.state.permanents[permanent_id].is_none() {
-                    return false;
+                    return result;
                 }
                 if let Some(source) = source {
                     self.state.turn.damage_pairs.record(source, object_ref);
@@ -158,7 +168,8 @@ impl Game {
         if let Some(controller) = lifelink_controller {
             self.commit_life_change(controller, amount);
         }
-        true
+        result.committed = true;
+        result
     }
 
     pub(crate) fn change_life(&mut self, player: PlayerId, delta: i32) -> bool {

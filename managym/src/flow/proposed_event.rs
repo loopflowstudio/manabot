@@ -78,9 +78,6 @@ pub(crate) enum ProposedDamageTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum EventCause {
     Effect,
-    // The causal domain includes costs even before a registered ability pays
-    // positive counters. Directed CR 614.16 witnesses exercise this boundary.
-    #[allow(dead_code)]
     Cost,
     TurnAction,
 }
@@ -399,6 +396,7 @@ pub(crate) struct EventResult {
     pub life_delta: i32,
     pub moved: Option<ObjectId>,
     pub excess_damage: Option<i32>,
+    pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
 }
 
 pub(crate) enum BatchProgress {
@@ -646,17 +644,6 @@ impl Game {
                 ) => self.object_event_ref(*object_id),
                 _ => None,
             };
-            let hit = match (&batch.binding, event) {
-                (
-                    EventBinding::Combat,
-                    ProposedEvent::Damage {
-                        source: Some(source),
-                        target: ProposedDamageTarget::Player(_),
-                        ..
-                    },
-                ) => self.lookup_current_permanent(*source).ok(),
-                _ => None,
-            };
             let reveal = match (&batch.binding, event) {
                 (
                     EventBinding::Moved { reveal: true, .. },
@@ -698,7 +685,9 @@ impl Game {
                     self.set_known_hand_count(owner, definition, known + 1);
                 }
                 died.extend(death);
-                hits.extend(hit);
+                if matches!(batch.binding, EventBinding::Combat) {
+                    hits.extend(result.combat_hit);
+                }
             }
             results.push(result);
         }
@@ -732,7 +721,7 @@ impl Game {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
         if !hits.is_empty() {
-            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
+            self.emit(GameEvent::CombatDamageToPlayers { hits });
         }
         self.process_event_batch(&sources);
         BatchProgress::Complete { results, followups }
@@ -1404,13 +1393,7 @@ impl Game {
                 amount,
                 combat,
             } => {
-                if let ProposedDamageTarget::Object(object) = target {
-                    result.excess_damage = self
-                        .state
-                        .permanent_of(object)
-                        .map(|id| self.excess_for_damage(source, id, amount));
-                }
-                self.commit_damage(source, target, amount, combat)
+                return self.commit_damage(source, target, amount, combat);
             }
             ProposedEvent::LifeChange { player, delta } => {
                 result.life_delta = self.commit_life_change(player, delta);

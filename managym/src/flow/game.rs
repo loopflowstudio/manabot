@@ -66,7 +66,7 @@ pub struct GameState {
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
-    pub trigger_placement: Option<TriggerPlacement>,
+    pub trigger_placement: Option<Box<TriggerPlacement>>,
     /// Delayed triggered abilities (CR 603.7) waiting for their events, in
     /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
@@ -450,7 +450,7 @@ impl TrackedState {
         &mut self.state.pending_triggers
     }
 
-    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<TriggerPlacement> {
+    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<Box<TriggerPlacement>> {
         &mut self.state.trigger_placement
     }
 

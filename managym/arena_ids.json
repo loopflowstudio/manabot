@@ -2063,6 +2063,12 @@
     "name": "Fire Lord Azula",
     "set": "tla"
   },
+  "bcaf4196-6bf3-47fa-b5c7-0e77f45cf820": {
+    "arena_id": 93748,
+    "collector_number": "35",
+    "name": "Drake Hatcher",
+    "set": "fdn"
+  },
   "bcf7b9da-d35d-4338-b4d9-83e47dc058ee": {
     "arena_id": 97555,
     "collector_number": "274",
@@ -2656,6 +2662,12 @@
     "collector_number": "91",
     "name": "Kellan, Planar Trailblazer",
     "set": "fdn"
+  },
+  "f4a73034-e20f-4e7e-ac15-3460b1e9c69b": {
+    "arena_id": null,
+    "collector_number": "8",
+    "name": "Drake",
+    "set": "tfdn"
   },
   "f59eba51-458a-40e0-b754-999f91d5d839": {
     "arena_id": null,

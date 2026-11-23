@@ -823,6 +823,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
+        EffectValue::TriggeringDamage => "the combat damage dealt to that player".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::LifeLostThisWay => "the life lost this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),

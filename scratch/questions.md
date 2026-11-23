@@ -30,3 +30,5 @@ For Lunar Insight the fixture restores a cloned pending game, following the Stee
 The Felling Blow fixture uses Gray Ogre and Steel Hellkite for the requested 2-power source and 5-toughness victim.
 
 For Drake Hatcher, carry the amount through combat batch matching into its pending trigger. Use a restored paid activation to distinguish spending counters from creating the token.
+
+The pending damage binding exceeded the 4096-byte GameState ceiling with trigger placement stored inline. Boxing the placement round preserves the ceiling. The countered-activation fork uses a constructed instant with the engine’s counter-ability instruction.

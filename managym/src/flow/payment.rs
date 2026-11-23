@@ -11,7 +11,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        proposed_event::{EventBinding, ProposedEvent},
+        proposed_event::{CounterProvenance, EventBinding, EventCause, ProposedEvent},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -20,6 +20,7 @@ use crate::{
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, ManaCost},
         payment::{How, PaymentReceipt, Toward},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -64,7 +65,10 @@ impl Operation {
 pub enum CostComponent {
     /// Tap other untapped creatures until their total power reaches `power`
     /// (crew, CR 702.122a). `power` is what is still owed.
-    TapPower { power: i32, toward: Toward },
+    TapPower {
+        power: i32,
+        toward: Toward,
+    },
     /// "Tap N untapped [predicate] you control"; `count` is what is still
     /// owed, and the second value is the part of the cost the taps pay. A
     /// station tap is another creature than the source (CR 702.184a).
@@ -80,10 +84,16 @@ pub enum CostComponent {
     /// Forage (CR 701.61a) or pay `or_mana`: sacrifice a Food, or exile
     /// three cards from the payer's graveyard, `exiled` of them so far. The
     /// first card exiled commits to that branch.
-    Forage { or_mana: ManaCost, exiled: u8 },
+    Forage {
+        or_mana: ManaCost,
+        exiled: u8,
+    },
     /// The mana still owed, and how its payer may pay part of it without
     /// mana. Each such payment is a contribution and reduces `cost`.
-    Mana { cost: ManaCost, help: Help },
+    Mana {
+        cost: ManaCost,
+        help: Help,
+    },
     /// The artifact or creature just tapped could pay more than one thing
     /// of the mana owed (`Game::help_taps`): choose which, such as a color
     /// or {1} by convoke (CR 702.51a), or {1} by convoke or by waterbending.
@@ -94,6 +104,7 @@ pub enum CostComponent {
     /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
     /// paid rather than its other cost.
     Life(u32),
+    RemoveCounters(CounterKind, u16),
     /// What the source itself pays: its own {T} (`Tapped`), "sacrifice this"
     /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
     /// functions from hand, "discard this card" (`Discarded`).
@@ -532,6 +543,9 @@ impl Game {
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
+                if let Some((kind, count)) = ability.remove_counters {
+                    owed.push(CostComponent::RemoveCounters(kind, count));
+                }
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
@@ -881,7 +895,9 @@ impl Game {
             CostComponent::TapPays { .. } => {
                 return Err(AgentError("choose what the tapped permanent pays".into()));
             }
-            CostComponent::Life(_) | CostComponent::Source(_) => {
+            CostComponent::Life(_)
+            | CostComponent::RemoveCounters(..)
+            | CostComponent::Source(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -1006,7 +1022,7 @@ impl Game {
         let life = payment.life();
         self.pay_life_cost(player, life, &mut payment.receipt);
         // The source's own discard or exile; its sacrifice is on the receipt.
-        let mut leaves = Vec::new();
+        let mut source_costs = Vec::new();
         let activated = match &payment.operation {
             Operation::Spell { .. } => None,
             Operation::Activation {
@@ -1033,6 +1049,24 @@ impl Game {
                 };
                 let source_object = ability.source_object;
                 for component in &payment.owed {
+                    if let CostComponent::RemoveCounters(kind, count) = *component {
+                        let available = self
+                            .state
+                            .permanent_of(source_object)
+                            .and_then(|id| self.state.permanents[id].as_ref())
+                            .map_or(0, |permanent| permanent.counter_count(kind));
+                        if available < i32::from(count) {
+                            return Err(AgentError("cannot pay counter cost".into()));
+                        }
+                        source_costs.push(ProposedEvent::CounterChange {
+                            provenance: CounterProvenance::new(EventCause::Cost),
+                            target: source_object,
+                            kind,
+                            delta: -i32::from(count),
+                            by: Some(player),
+                        });
+                        continue;
+                    }
                     let CostComponent::Source(how) = *component else {
                         continue;
                     };
@@ -1044,7 +1078,11 @@ impl Game {
                         How::Discarded => ZoneType::Graveyard,
                         How::Exiled => ZoneType::Exile,
                     };
-                    leaves.push(self.zone_move_proposal(source_object, to, Default::default()));
+                    source_costs.push(self.zone_move_proposal(
+                        source_object,
+                        to,
+                        Default::default(),
+                    ));
                 }
                 Some((ability, *source))
             }
@@ -1054,7 +1092,7 @@ impl Game {
             .sacrificed()
             .filter(|object| self.state.permanent_of(*object).is_some())
             .map(|target| ProposedEvent::Sacrifice { target })
-            .chain(leaves);
+            .chain(source_costs);
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(EventBinding::None, events));
         frame.completion = match activated {

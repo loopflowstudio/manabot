@@ -1161,6 +1161,9 @@ impl Game {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
         self.check_activation_terms(player, &ability)?;
+        if !permanent.can_pay_counters(&ability) {
+            return Err(AgentError("cannot pay counter cost".into()));
+        }
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }

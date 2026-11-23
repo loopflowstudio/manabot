@@ -134,6 +134,8 @@ pub struct ContinuationFrame {
     pub can_decline: bool,
     pub mana_outputs: Vec<ManaOutput>,
     pub resolutions_this_turn: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub triggering_damage: i32,
     /// The announced value of X (CR 107.3) of the spell or ability this frame
     /// casts, activates or resolves; zero when it has none.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -559,6 +561,7 @@ impl Game {
                     },
                     ability: Some(trigger.ability_index),
                     x: trigger.x,
+                    triggering_damage: trigger.triggering_damage,
                     source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
                     active_clause: Some(trigger.requirement_index),
                     targets: self.clause_targets(
@@ -635,6 +638,7 @@ impl Game {
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                frame.triggering_damage = ability.triggering_damage;
                 if ability.program {
                     frame.program(ability.inline_effects.as_deref().unwrap_or_default());
                 }
@@ -818,6 +822,7 @@ impl Game {
             x: effect.x,
             source_transforms: effect.source_transforms,
             resolutions_this_turn: effect.resolutions_this_turn,
+            triggering_damage: effect.triggering_damage,
             active_clause: Some(effect.active_requirement),
             targets: effect
                 .targets

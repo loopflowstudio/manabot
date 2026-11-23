@@ -1890,3 +1890,29 @@ def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
     with pytest.raises(SemanticContractError):
         submit_response(env, payment, source.reference)
     assert env.state_digest() == before
+
+
+def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
+    env = priority_root((), ("Drake Hatcher",))
+    for _ in range(32):
+        decision = capture_text_decision(env)
+        capture = DecisionInput.model_validate_json(decision.capture_json)
+        if any(frame.triggering_damage for frame in capture.frames):
+            assert "triggering combat damage 1" in decision.text
+            for viewer in (0, 1):
+                pending = json.loads(env.decision_context_json(viewer))["pending"]
+                assert (
+                    "Drake Hatcher triggered on 1 combat damage to a player." in pending
+                )
+            return
+        assert capture.observation.decision is not None
+        action = next(
+            text_action
+            for offer, text_action in zip(
+                capture.observation.decision.offers, decision.actions, strict=True
+            )
+            if offer["verb"] == "pass_priority"
+            or text_action.description.startswith("Attack with ")
+        )
+        submit_response(env, decision, action.reference)
+    pytest.fail("Drake Hatcher did not deal combat damage")
