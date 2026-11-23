@@ -1980,7 +1980,14 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
         managym.GameSetup(
             [
                 managym.PlayerConfig(
-                    "a", {"Plains": 6, "Gray Ogre": 8, hunter: 1, arahbo: 1}
+                    "a",
+                    {
+                        "Plains": 7,
+                        "Scout's Warning": 1,
+                        "Gray Ogre": 8,
+                        hunter: 1,
+                        arahbo: 1,
+                    },
                 ),
                 managym.PlayerConfig("b", {"Mountain": 20}),
             ],
@@ -1989,22 +1996,35 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
         )
     )
     env.scenario_clear_hand(0)
-    for _ in range(5):
+    for _ in range(6):
         env.scenario_force_battlefield(0, "Plains", ready=True)
-    for name in (hunter, arahbo, "Plains"):
+    for name in (hunter, arahbo, "Plains", "Scout's Warning"):
         env.scenario_force_card_in_hand(0, name)
     env.scenario_refresh()
     _choose(env, arahbo)
+    # Keeping an instant available exposes priority between trigger resolutions.
+    _choose(env, "Pass priority")
+    _choose(env, "Pass priority")
     _choose(env, hunter)
+    _choose(env, "Pass priority")
     decision = capture_text_decision(env)
     _assert_policy_input_holds_the_decision(env, decision)
     assert len(decision.actions) == 2
-    for source in (arahbo, hunter):
+    for source, top in ((arahbo, hunter), (hunter, arahbo)):
         [action] = [a for a in decision.actions if f"({source})" in a.description]
         branch = _replay_text_choice(env, action.reference)
+        stack, _ = _stack_and_continuation(branch)
+        assert f"({top})" in stack
+        _choose(branch, "Pass priority")
+        stack, _ = _stack_and_continuation(branch)
+        assert f"({source})" in stack
+        _choose(branch, "Pass priority")
         assert [
             card.characteristics.name
             for card in branch.observation_for_player(0).agent_cards
             if card.zone == managym.ZoneEnum.HAND
         ].count("Gray Ogre") == 1
         assert "Gray Ogre" not in branch.semantic_observation_json(1)
+        opponent = decision_surface_view(branch, 1)
+        assert not opponent["opponent"]["hand"]
+        assert "Gray Ogre" not in opponent["definition_names"].values()
