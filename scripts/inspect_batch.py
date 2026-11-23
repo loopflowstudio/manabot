@@ -60,7 +60,7 @@ def _report(
         torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
     )
     advantages = targets.advantages.flatten().numpy()
-    value_targets = targets.value_targets.flatten().numpy()
+    value_targets = targets.expected_targets.flatten().numpy()
     kept = targets.selected.flatten().numpy()
     values = batch.values.flatten()
     rewards = batch.rewards.flatten()
@@ -78,7 +78,7 @@ def _report(
         if ends[span[-1]]
         else "was censored"
     )
-    shown = list(span)[-rows:]
+    shown = span[-rows:]
     print(f"\nlast {len(shown)} decisions of the first trajectory, which {outcome}:")
     print(f"{'to end':>6} {'V':>7} {'reward':>7} {'advantage':>10} {'target':>7}  kept")
     for row in shown:

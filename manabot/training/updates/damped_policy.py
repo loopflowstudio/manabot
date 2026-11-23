@@ -256,19 +256,10 @@ def update_damped_iteration(
     value_targets = targets.value_targets.flatten(0, 1)
     actor_rows = actor_rows.reshape(-1)
     actor_critic = learning.filter_scope == "actor_critic"
-    positive = (
-        np.ones_like(actor_rows)
-        if batch.sample_weight is None
-        else batch.sample_weight.ravel() > 0
-    )
-    trained = actor_rows if actor_critic else positive
+    trained = actor_rows if actor_critic else targets.positive_weight.ravel()
     health["critic_rows"] = int(trained.sum())
     if not trained.any():
-        diagnostics["skipped"] = (
-            "empty advantage filter"
-            if any(s.eligible for s in targets.source_selection)
-            else "zero sample weight"
-        )
+        diagnostics["skipped"] = targets.empty_filter_reason
         if diagnostics["skipped"] == "empty advantage filter":
             learner.set_learning_rate(rate)
         health["skipped_steps"] = (len(actor_rows) + width - 1) // width

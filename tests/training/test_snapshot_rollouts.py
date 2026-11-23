@@ -104,6 +104,17 @@ def bounded_torch() -> Iterator[None]:
         torch.set_num_threads(previous)
 
 
+def small_agent(
+    space: ObservationSpace | None = None,
+    *,
+    kind: Literal["scalar", "categorical_wdl"] = "scalar",
+) -> ActorCritic:
+    return ActorCritic(
+        space if space is not None else ObservationSpace(),
+        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
+    )
+
+
 def replay_root(
     space: ObservationSpace, terminal: bool = False
 ) -> tuple[SnapshotRecipe, managym.Env]:
@@ -241,10 +252,7 @@ def three_choices(
 def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
     kind: Literal["scalar", "categorical_wdl"],
 ) -> None:
-    agent = ActorCritic(
-        ObservationSpace(),
-        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
-    )
+    agent = small_agent(kind=kind)
     batch, raw = three_choices(agent)
     learner = Learner(agent, "cpu", minibatch_rows=3)
     learning = DampedPolicyLearning(
@@ -318,9 +326,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
 
 
 def test_mixed_ppo_discounts_each_cut_and_censors_only_its_own_span() -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     batch, raw = three_choices(agent)
     batch = replace(
         batch,
@@ -357,10 +363,7 @@ def test_mixed_ppo_discounts_each_cut_and_censors_only_its_own_span() -> None:
 def test_packed_terminal_spans_need_no_bootstrap_input(
     kind: Literal["scalar", "categorical_wdl"],
 ) -> None:
-    agent = ActorCritic(
-        ObservationSpace(),
-        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
-    )
+    agent = small_agent(kind=kind)
     batch, _ = three_choices(agent, terminal=True)
     admitted = AdmittedRollout(agent, batch)
     assert admitted.next_observation(torch.device("cpu")) is None
@@ -425,9 +428,7 @@ def test_mlx_scalar_cut_and_terminal_targets() -> None:
 
 
 def test_invalid_packed_boundaries_are_rejected_at_construction() -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     batch, _ = three_choices(agent)
     for spans in (
         (TrajectorySpan(0, 1, 0, 1), TrajectorySpan(2, 3, 1, 0)),  # missing row
@@ -441,9 +442,7 @@ def test_invalid_packed_boundaries_are_rejected_at_construction() -> None:
 
 
 def test_single_choice_cut_freezes_only_its_contributing_seat() -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     batch, _ = three_choices(agent, horizon=1)
     assert batch.next_done.tolist() == [False]
     assert batch.dones.tolist() == [[False]]
@@ -458,9 +457,7 @@ def test_snapshot_bootstraps_retain_both_viewers_memory_at_the_cut() -> None:
             max_decision_members=4096,
         )
     )
-    batch, _ = three_choices(
-        ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
-    )
+    batch, _ = three_choices(small_agent(space))
     assert isinstance(batch.next_obs, PrefixObservation)
     assert [p.identity.viewer for p in batch.next_obs.prefixes] == [0, 1]
 
@@ -497,7 +494,7 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
 
 def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() -> None:
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    agent = small_agent(space)
     recipe, _ = replay_root(space)
     branch = SnapshotBranch(3, recipe, horizon=1, branch_group_id=8)
     with replay_collector(space, recipe) as collector:
@@ -528,9 +525,7 @@ def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() ->
 
 
 def test_provenance_rejects_misaligned_arrays_invalid_values_and_mixed_spans() -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     batch, _ = three_choices(agent)
     for changes in (
         {"episode_source": np.full((3, 1), 2, np.int8)},
@@ -549,7 +544,7 @@ def test_provenance_rejects_misaligned_arrays_invalid_values_and_mixed_spans() -
 
 def test_failed_snapshot_discards_only_its_rows_and_retains_the_replay_prefix() -> None:
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    agent = small_agent(space)
     recipe, _ = replay_root(space)
     policy = GameErrorPolicy(max_game_actions=2, window=1, warmup=1)
     attempts: list[GameAttempt] = []
@@ -584,7 +579,7 @@ def test_failed_snapshot_discards_only_its_rows_and_retains_the_replay_prefix() 
 
 def test_install_rejects_the_wrong_root_before_sampling() -> None:
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    agent = small_agent(space)
     recipe, _ = replay_root(space)
     branch = SnapshotBranch(17, replace(recipe, root_digest="another game"), horizon=1)
     with replay_collector(space, recipe) as collector:
@@ -623,10 +618,7 @@ def terminal_siblings(agent: ActorCritic) -> RolloutBatch:
 def test_sibling_roots_use_empirical_returns_and_leave_descendants_unchanged(
     kind: Literal["scalar", "categorical_wdl"],
 ) -> None:
-    agent = ActorCritic(
-        ObservationSpace(),
-        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
-    )
+    agent = small_agent(kind=kind)
     batch = terminal_siblings(agent)
     learner = Learner(agent, "cpu", minibatch_rows=12)
     learning = DampedPolicyLearning(
@@ -702,9 +694,7 @@ def cut_siblings(agent: ActorCritic) -> RolloutBatch:
 
 
 def test_grouped_ppo_discounts_root_viewer_cuts_and_validates_identity() -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     _, long_tail = three_choices(agent)
     _, short_tail = three_choices(agent, horizon=1)
     batch = cut_siblings(agent)
@@ -774,9 +764,7 @@ def test_wdl_group_at_a_cut_averages_frozen_root_viewer_distributions() -> None:
 def test_mixed_sources_filter_eligible_rows_independently(
     kind: Literal["top_count", "quantile"],
 ) -> None:
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     batch = terminal_siblings(agent)
     shape = batch.actions.shape
     weights = np.ones(shape, np.float32)
@@ -939,9 +927,7 @@ def test_zero_weight_discovery_preserves_live_adam_and_ema(rule: str) -> None:
         )
     )
     settings = gray_ogre_self_play(horizon=2).model_copy(update={"learning": learning})
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
-    )
+    agent = small_agent()
     learner = Learner(agent, "cpu", minibatch_rows=3)
     ema = deepcopy(agent)
     batch, _ = three_choices(agent, terminal=True)
@@ -989,6 +975,25 @@ def test_zero_weight_discovery_preserves_live_adam_and_ema(rule: str) -> None:
     for key, value in learner.parameters().items():
         np.testing.assert_array_equal(value, after[key])
     torch.testing.assert_close(ema.state_dict(), ema_before, rtol=0, atol=0)
+
+    # The same positive-weight root can empty the joint actor/critic filter.
+    # This is an ordinary filtered update, so EMA still follows the learner.
+    joint = settings.model_copy(
+        update={
+            "learning": learning.model_copy(update={"filter_scope": "actor_critic"})
+        }
+    )
+    result = learn(
+        joint, learner, ema, Counts(updates=1), weighted, np.random.default_rng(0)
+    )
+    assert (
+        result["skipped"] == "empty advantage filter"
+        and result["optimizer_exposures"] == 0
+    )
+    assert any(
+        not torch.equal(after_ema, ema_before[name])
+        for name, after_ema in ema.state_dict().items()
+    )
 
 
 def test_mlx_scalar_critic_only_step_and_zero_weight_adam_state() -> None:
@@ -1214,7 +1219,10 @@ def test_failed_episodes_discard_captures_siblings_and_frozen_views() -> None:
                             "engine_error",
                             "engine_error",
                         ]
-                        assert plan.failed_branches == 2 and plan.discarded == {0}
+                        assert (
+                            collector.stats.snapshot.failed_branches == 2
+                            and plan.discarded == {0}
+                        )
                         [visit] = receipt.visited_groups
                         assert visit.group_id == 1
                         assert batch.branch_group_id.ravel().tolist() == [1, 1]
@@ -1459,7 +1467,7 @@ def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
             [group] = receipt.visited_groups
             assert len(group.roots) == 3 and len(group.rows) == 3
             assert last_sibling == [(group.snapshot_id, group.group_id)] * 2
-            assert plan.failed_branches == 1 and not plan.discarded
+            assert collector.stats.snapshot.failed_branches == 1 and not plan.discarded
             assert np.count_nonzero(batch.episode_source == 0) > 3
             assert np.count_nonzero(batch.episode_source == 1) == 3
             assert receipt.next_scheduler_state.starts == 2 + 5
@@ -1692,11 +1700,12 @@ def test_snapshot_settings_require_both_seats_and_a_vector() -> None:
         self_play_collector(SelfPlay.model_validate(settings), seed=0, start=0)
 
 
+@pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
 def test_inspector_labels_a_cut_seat_trajectory_as_censored(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], kind: Literal["scalar", "categorical_wdl"]
 ) -> None:
-    agent = scalar_backend_agent()
-    batch, _ = three_choices(agent)
+    agent = small_agent(kind=kind)
+    batch, raw = three_choices(agent)
     _report(
         batch,
         Learner(agent, "cpu", minibatch_rows=3),
@@ -1706,3 +1715,11 @@ def test_inspector_labels_a_cut_seat_trajectory_as_censored(
     report = capsys.readouterr().out
     assert "2 seat trajectories" in report
     assert "first trajectory, which was censored" in report
+    expected = (
+        backend.rl.expected_outcome(raw.softmax(-1))
+        if kind == "categorical_wdl"
+        else raw
+    )
+    assert float(report.splitlines()[-1].split()[4]) == pytest.approx(
+        expected[0].item(), abs=0.0005
+    )

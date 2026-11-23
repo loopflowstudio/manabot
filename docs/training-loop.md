@@ -197,29 +197,22 @@ plus reverse KL to the generating policy. Against that design:
 
 ## Snapshot-aware self-play
 
-A recipe can capture mid-game decisions during fresh self-play, score and keep
-them in a bounded `SnapshotBank`, and mix fresh games with independent
-horizon-bounded continuations from those stored roots inside the ordinary
-`SelfPlay` loop.
+A `SnapshotBank` stores decisions that self-play can revisit. Use both learning
+seats, complete-game closure and a self-play behavior policy. Snapshot collection
+and adaptive matchup sampling each own the episode schedule.
 
-Native `VectorEnv` does not yet implement snapshot capture and injection
-(native Rust support is separate work), so a snapshot-aware recipe supplies a
-`SnapshotVector` implementation — such as `InMemorySnapshotVector` for
-single-process Python runs — through `snapshot_vector` (accepting either a
-`SnapshotVector` instance or a factory `(observation_space, match, num_envs, seed) -> SnapshotVector`
-so resumed attempts receive their collection seed). Requesting snapshot
-collection on a vector that does not implement `SnapshotVector` fails at setup.
+Save this recipe as `snapshot_recipe.py`. It runs the single-process Python
+vector. A recipe may also supply its own buffered `SnapshotVector` instance or
+a factory taking `(observation_space, match, num_envs, seed)`.
 
 ```python
-"""Snapshot-aware damped-policy self-play with K-sibling horizon rollouts."""
-
 from typing import Literal
 
 from etude.train.tracking import track
 from pydantic import Field
 
 from manabot.recipes.baseline import BaselineConfig, settings
-from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.rollout.snapshot_vector import InMemorySnapshotVector
 from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
 
@@ -227,57 +220,27 @@ from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
 class SnapshotRecipeConfig(BaselineConfig):
     updates: int = Field(default=8, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
-    replay_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
-    fresh_floor: float = Field(default=0.25, ge=0.0, le=1.0)
+    replay_fraction: float = Field(default=0.5, ge=0, le=1)
+    fresh_floor: float = Field(default=0.25, ge=0, le=1)
     group_size: int = Field(default=4, ge=1)
     horizon: int | None = Field(default=8, ge=1)
-    plr_perp: bool = False  # True sets fresh_weight=0.0 (discovery-only fresh games)
-
-
-def snapshot_settings(config: SnapshotRecipeConfig) -> SelfPlay:
-    base = settings(config)
-    return base.model_copy(
-        update={
-            "streams": 4,
-            "transitions": 64,
-            "learning": base.learning.model_copy(
-                update={"root_actor_weight": 1.0}
-            ),
-            "snapshot": SnapshotConfig(
-                capacity=256,
-                replay_fraction=config.replay_fraction,
-                fresh_floor=config.fresh_floor,
-                group_size=config.group_size,
-                horizon=config.horizon,
-                score_half_life=8.0,
-                fresh_weight=0.0 if config.plr_perp else 1.0,
-                snapshot_weight=1.0,
-                signal="critic_residual",
-                signal_scope="episode",
-                capture=CapturePolicy(
-                    every_n_decisions=8,
-                    min_legal_actions=2,
-                    max_captures_per_batch=16,
-                    fresh_only=True,
-                ),
-                seed=0,
-            ),
-        }
-    )
+    plr_perp: bool = False
 
 
 def train(config: SnapshotRecipeConfig) -> None:
-    inputs = snapshot_settings(config)
+    snapshot = SnapshotConfig(
+        capacity=256,
+        replay_fraction=config.replay_fraction,
+        fresh_floor=config.fresh_floor,
+        group_size=config.group_size,
+        horizon=config.horizon,
+        fresh_weight=0.0 if config.plr_perp else 1.0,
+        capture=CapturePolicy(every_n_decisions=8, max_captures_per_batch=16),
+    )
+    inputs = settings(config).model_copy(update={"snapshot": snapshot})
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(
-            inputs,
-            run,
-            updates=config.updates,
-            snapshot_vector=InMemorySnapshotVector.factory,
-        )
+        self_play(inputs, run, updates=config.updates, snapshot_vector=InMemorySnapshotVector.factory)
 ```
-
-Run and resume it through Etude like any other recipe:
 
 ```bash
 uv run etude train snapshot_recipe.py --experiment snap-demo --until updates=4
@@ -285,208 +248,114 @@ uv run etude train snapshot_recipe.py --experiment snap-demo --resume --until up
 uv run etude train snapshot_recipe.py --experiment snap-plr --config '{"plr_perp": true}'
 ```
 
-Each update logs fresh-game rates (`decisions_per_game`, `skipped_share`,
-`games_per_hour`) and `self_play_outcomes` strictly from turn-1 fresh games,
-alongside separate `snapshot/*` counters (`snapshot/starts`, `snapshot/choices`,
-`snapshot/rows`, `snapshot/terminals`, `snapshot/horizon_cuts`,
-`snapshot/captures`, `snapshot/groups_completed`, `snapshot/groups_discarded`,
-`snapshot/failed_branches`) and per-source advantage-filtering diagnostics.
-Starts and choices include retries. Rows and captures count only those retained
-in the assembled batch. Terminals and horizon cuts count branch endings across
-both seats, once per continuation. An update consisting entirely of replay
-still logs throughput and writes empty outcome and game-setting tables.
-
-`run.save()` persists the bank's cold state inside `Counts.snapshot_bank` under
-`out/state/save-*/state.json`; `--resume` restores the bank with an empty hot
-cache. Given the same sequence of episode starts and scoring signals, the cold
-bank makes the same draws and evictions as the hot bank. The resumed attempt
-uses the loop's ordinary new seeds for fresh games and policy sampling.
-
 ### Capture, horizon cuts and `K`-branch scheduling
 
-- **Capture (`CapturePolicy`):** `every_n_decisions` and `probability` trigger
-  captures on decisions with at least `min_legal_actions` (default `2`),
-  capped by `max_captures_per_batch` and restricted to fresh games when
-  `fresh_only=True` (the default). Pass an optional Python `capture_predicate`
-  to `self_play` or `open_collector` for runtime filtering. It receives a
-  `CaptureDecision` with the slot, chooser, one-based episode decision number,
-  legal action count and optional branch. Captures are taken
-  before stepping the chosen action and staged per live episode; if an episode
-  fails under `GameErrorPolicy` ([game failures](training.md#game-failures)),
-  its staged captures are discarded with its rows.
-- **Allocation (`replay_fraction`, `fresh_floor`, `group_size`):** Both
-  `replay_fraction` and `fresh_floor` count actual episode starts, including
-  each sibling of a `K`-branch group (`group_size=K`), at an effective replay
-  rate of `min(replay_fraction, 1 - fresh_floor)`. The scheduler runs a fresh
-  game whenever the bank is empty or the next whole `K`-sibling group would
-  exceed its remaining replay allowance; unused empty-bank allowance expires so
-  warmup never causes a replay burst. With isolated game-error recovery, the
-  scheduler keeps replay allowance for up to `max_group_retries` extra starts
-  per concurrent group so it can retry after the row floor is met.
-- **Group draining:** Drawing a snapshot group enqueues all `K` siblings
-  `(group_id, branch_index=0..K-1)`. Free streams pull pending siblings before
-  starting new work. Once the batch meets its row floor, no new episodes or
-  groups start, while free streams keep draining already-started sibling queues
-  in parallel. If a branch fails beyond `max_group_retries` (default `1`), the
-  incomplete group's rows are discarded before batch assembly.
-- **Horizon cuts (`horizon=H`):** `H` counts surfaced decisions across both
-  seats of a snapshot continuation. If the game ends on or before decision `H`,
-  both seats settle with true terminals (`done=True`, no bootstrap). Otherwise,
-  at decision `H`, each seat that acted reads its viewer-safe observation at
-  that revision into `next_obs` and closes its `TrajectorySpan` with
-  `done=False` pointing to that frozen bootstrap row. Seats that never acted
-  produce no span and no bootstrap read. Credit traces, WDL recursion,
-  `terminal_distances`, `bootstrapped_tail_fraction` and
-  `scripts/inspect_batch.py` cut on `TrajectorySpan` boundaries (`segment_ends`)
-  rather than `dones`, so horizon-cut spans report `"censored"` and never leak
-  credit across cuts or seats.
+`CapturePolicy` captures a root before the chosen action. Set
+`every_n_decisions`, `probability`, or both. By default only fresh decisions
+with at least two legal actions qualify. Use `fresh_only`, `min_legal_actions`
+and `max_captures_per_batch` to change eligibility. An optional
+`capture_predicate` on `self_play` or `open_collector` receives a
+`CaptureDecision` with the slot, chooser, one-based decision number, native
+legal action count and current branch.
 
-To collect from an existing root, open a both-seat self-play collector with
-`snapshot_vector=vector`. Build a `SnapshotRecipe` from the retained
-`GameInputs`, root digest and chooser with `SnapshotRecipe.from_inputs`.
-Pass `snapshot_starts=[SnapshotBranch(snapshot_id, recipe, horizon=3)]` to
-`collect`. The collector consumes starts in slot order as streams become
-available. A `None` entry or the end of the iterable selects a fresh game.
-The returned batch records the source, snapshot and group IDs, root marker
-and sample weight for each decision.
+The replay allowance is `min(replay_fraction, 1 - fresh_floor)` of episode
+starts. An empty bank starts fresh games and accrues no credit. Once the
+allowance funds a whole group, free streams draw its `group_size` siblings.
+At the batch floor they finish outstanding siblings and retries. Isolated
+game recovery reserves allowance for `max_group_retries` per concurrent group
+(default one). Failed episodes lose their rows and captures. Exhausting a
+group's retries discards every sibling. [Game failures](training.md#game-failures)
 
-For a custom collector, pass `trajectories` when constructing the packed
-`RolloutBatch`. For example, three decisions by seats 0, 0, 1 can be stored
-as `(TrajectorySpan(0, 2, seat=0, bootstrap_index=1), TrajectorySpan(2, 3,
-seat=1, bootstrap_index=0))` when `next_obs` contains seat 1 then seat 0.
-Both observations must come from the revision after the third choice. For a
-terminal span, omit its bootstrap index and set its last row in `dones`. When
-every span is terminal, `next_done` is empty and the update skips the bootstrap
-forward. `batch.trajectory_rows()` yields the flat row indexes of each
-trajectory, including strided ranges for ordinary multi-column batches.
+`horizon=H` counts surfaced decisions across both seats of each continuation.
+At a terminal, each seat that acted receives its own result. At a horizon cut,
+each contributing seat receives a frozen viewer observation at the same game
+revision. For example, choosers 0, 0, 1 yield two spans of lengths two and one.
+Each span indexes its viewer in `next_obs`. Real terminals alone set `dones`.
+Credit and the batch inspector follow these spans. `batch.trajectory_rows()`
+also handles strided rows in rectangular batches.
+
+To replay an existing root directly, construct a `SnapshotRecipe.from_inputs`
+from its retained `GameInputs`, digest and chooser. Open a collector with
+`snapshot_vector=vector` and pass `snapshot_starts=[SnapshotBranch(snapshot_id,
+recipe, horizon=3)]` to `collect`. Starts are consumed in slot order. A
+`None` entry or the end of the sequence starts a fresh game.
 
 ### RLOO baselines, stratified filtering and `PLR⊥`
 
-- **Grouped root baselines (`group_size >= 2`):** When a `branch_group_id` has
-  `K >= 2` root spans sharing one `snapshot_id` and `seat`, each branch computes
-  its realized empirical return `G_k` along the root viewer's span (`lambda=1`
-  with the rule's `gamma`; undiscounted one-hot terminal outcomes or cut WDL
-  probabilities for categorical critics). Only those `K` root rows replace
-  their actor advantage with the leave-one-out baseline
-  `G_k - (sum(G) - G_k) / (K - 1)` and their critic target with the group mean
-  (scalar mean, or arithmetic mean of the `K` WDL distributions). Descendant
-  rows and ungrouped or `K=1` trajectories keep ordinary single-path targets.
-- **Root actor weight:** Set `root_actor_weight` on `DampedPolicyLearning` or
-  `Learning` (default `1.0`, omitted from JSON when default) to scale actor
-  loss on `is_root_decision` rows without changing critic weight.
-- **Stratified advantage filtering:** Whenever a batch contains multiple
-  eligible `episode_source` strata (fresh and snapshot), advantage filtering
-  runs independently within each stratum using the configured `filter_kind`,
-  `retained_fraction` / `advantage_quantile` and `min_advantage`, preventing
-  high-magnitude snapshot advantages from crowding out fresh rows. Single-source
-  unit-weight batches take the unchanged global filter bit-for-bit.
-  `UpdateDiagnostics["source_selection"]` reports `eligible`, `retained`,
-  `retention_rate` and `threshold` under each source name. A source with zero
-  eligible rows reports only the two counts.
-- **`PLR⊥` zero-weight discovery (`fresh_weight=0.0`):** Setting
-  `fresh_weight=0.0` marks fresh rows with `sample_weight=0.0` while snapshot
-  rows keep `snapshot_weight`. Zero-weight rows still compute detached targets
-  and `BatchSignals` so fresh games discover, score and admit snapshots, while
-  being excluded from advantage selection, PPO advantage standardization and
-  optimizer denominators. When every row in a batch has zero effective weight
-  (for example, warmup before the bank contains any snapshots), the update
-  returns `optimizer_exposures=0` (`skipped="zero sample weight"`), skips Adam
-  and EMA, and still commits the discovered snapshots to the bank.
+For `K >= 2` siblings of one snapshot and chooser, each root's actor advantage
+is its own return minus the mean of the other siblings' returns. The root
+critic target is the mean across all siblings. Scalar returns use the rule's
+`gamma`, with a frozen value at a cut. Categorical returns use the terminal
+outcome or the frozen WDL distribution, with win probability minus loss
+probability for the actor. Descendants and singletons use the ordinary lambda
+targets. `root_actor_weight` on either learning rule scales the actor's root
+contribution (default 1).
+
+The advantage filter selects eligible rows independently within each
+`episode_source`. Diagnostics in `source_selection` report eligible and
+retained counts per source, plus the threshold and retention rate for nonempty
+sources. `fresh_weight=0` enables discovery-only fresh games. Zero-weight rows
+still yield scoring signals. Only positive-weight rows participate in filtering,
+PPO standardization and optimizer denominators. An all-zero batch skips Adam
+and EMA and can still commit discoveries.
 
 ### Scoring signals and custom scorers
 
-`SnapshotConfig.signal` selects how `SnapshotBank.commit` scores each visited
-or captured entry from detached `BatchSignals` (aggregated over either the root
-row or the whole episode via `signal_scope`):
+`SnapshotConfig.signal` sets the priority. `signal_scope` selects root rows
+or whole episodes (default).
 
-| `signal` | What it measures | Availability |
-| --- | --- | --- |
-| `"critic_residual"` | Absolute value-target residual `|target - V|` (default) | Scalar and categorical critics |
-| `"positive_value_loss"` | Positive critic error `max(target - V, 0)` | Scalar and categorical critics |
-| `"wdl_entropy"` | Entropy of the categorical win/draw/loss distribution | Categorical critics only; rejected on scalar critics |
-| `"policy_entropy"` | Entropy of the behavior policy over legal offers | Scalar and categorical critics |
-| `"action_value_spread"` | Spread across caller-supplied per-action values | Custom loops supplying action values; rejected when absent (policy logits are never action values) |
-| `"staleness"` | Draw-time age `generation - last_visit_generation` | Scalar and categorical critics |
+| Signal | Measurement |
+| --- | --- |
+| `critic_residual` (default) | Absolute difference between target and collection value |
+| `positive_value_loss` | Positive part of that difference |
+| `wdl_entropy` | Entropy of the collection critic's categorical outcome distribution |
+| `policy_entropy` | Entropy of the behavior policy over legal offers |
+| `action_value_spread` | Maximum minus minimum caller-supplied legal action value |
+| `staleness` | Generations since the last visit, evaluated at draw time |
 
-Stored nonnegative scores decay exponentially with `score_half_life` as
-`score * 2 ** (-(generation - score_generation) / score_half_life)`. Replay
-draws visit unvisited entries first; thereafter every 5th draw is a coverage
-draw and remaining draws split 1:3 between oldest visit (draw-time staleness)
-and ranked priority, breaking ties by oldest visit then `snapshot_id`. Eviction
-at `capacity` drops the lowest decayed priority, then least recently visited,
-then smallest `snapshot_id`.
+Stored scores halve every `score_half_life` generations. Draws visit new entries
+first. Then every fifth group advances a coverage queue. Other draws choose
+the oldest visit with probability 0.25 and sample by score rank otherwise.
+Eviction orders entries by priority, then oldest visit, then snapshot ID.
 
-For custom scoring logic that stays out of the JSON config, pass a Python
-`scorer` callable to `self_play(..., scorer=fn)` or
-`SnapshotBank(config, scorer=fn)`. It receives detached
-`EntrySignals(root_signals, episode_signals, age_since_visit)`, where each
-signal slice holds 1D host NumPy arrays across the entry's root rows or episode
-rows, and returns a nonnegative float score:
+Pass a runtime `scorer` to `self_play` or `SnapshotBank` for a custom priority.
+It receives `EntrySignals(root_signals, episode_signals, age_since_visit)`
+and returns a finite nonnegative number. Both slices contain read-only NumPy
+arrays in packed row order.
 
 ```python
-import numpy as np
-
-from manabot.training.rollout.snapshots import EntrySignals
-
-def root_surprise_scorer(entry: EntrySignals) -> float:
-    return float(
-        np.mean(entry.root_signals.policy_entropy)
-        + 0.5 * np.mean(entry.root_signals.critic_residual)
-    )
-```
-
-In a custom loop, compute targets before updating the learner. Pass the same
-batch and learning rule into the update. Supply the collection policy as
-`bootstrap_agent` when it differs from the learner.
-
-```python
-from manabot.training.updates.targets import compute_batch_targets
-
 with bank.begin_batch() as plan:
     batch = collect(collector, behavior_agent, num_steps, snapshot_plan=plan)
     admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
     targets = compute_batch_targets(backend, learner, admitted, learning, behavior_agent)
-    metrics = update_damped_iteration(
-        backend, learner, batch, learning, iteration, targets=targets
-    )
+    update_damped_iteration(backend, learner, batch, learning, iteration, targets=targets)
     assert plan.receipt is not None
     bank.commit(plan.receipt, targets.signals)
 ```
 
-PPO accepts the same `targets=` argument. Each available array in
-`targets.signals` is read-only and follows flat batch row order, including
-zero-weight rows. To score action-value spread, supply `action_values=` to
-`compute_batch_targets` with one value per legal offer in
-`batch.action_data.slots` order. A bank commits its receipt and these signals
-after the update succeeds. Exiting the plan releases uncommitted captures.
-Call `bank.close()` before closing the vector to release cached handles.
-The Python vector caches the resolved native setup and replays the saved
-actions on each install. Both hot and cold installs verify the resulting digest.
+Import `compute_batch_targets` from `manabot.training.updates.targets`. PPO
+also accepts `targets=`. For action-value spread, supply `action_values=` to
+the target computation in `batch.action_data.slots` order. An unavailable
+signal raises an error. Exiting the plan releases uncommitted captures. Close
+the bank before its vector to release cached handles.
 
 ### Requirements, accounting and recovery
 
-- **Supported self-play configuration:** Snapshot collection requires
-  `behavior != "random"` (`opponent_mode="self"`), `learning_seats="both"`, and
-  `batch_closure="complete-games"`, and is mutually exclusive with
-  `AdaptiveSampler`. Standalone `RolloutBatch` updates remain seat-agnostic.
-- **Honest fresh accounting:** `SelfPlayCounter`, `stats.games`,
-  `stats.skipped_decisions`, `decisions_per_game`, `skipped_share` and
-  `games_per_hour` count only episodes started from turn 1. Capturing a
-  snapshot during a fresh game keeps that game fresh. If an update completes
-  zero fresh games, fresh-game rates are omitted rather than dividing total
-  rows by zero or by snapshot work. Total work clocks (`rows_per_second`,
-  `updates_per_hour`, `learner_transitions`, `training_seconds`) count all
-  collected work.
-- **Transactional commits and Etude resume:** `SnapshotBank.begin_batch()`
-  copies scheduler cursors, RNG and fractional replay allowance into an
-  isolated `BatchPlan` for `collect()`. Committed bank state mutates only
-  inside `SnapshotBank.commit(receipt, signals)` after `learn()` succeeds,
-  guarded by `receipt.base_generation == bank.generation`. An aborted update
-  preserves the previous generation. A recovered game failure consumes its
-  episode start and contributes no captures or scoring rows to the eventual
-  commit. `self_play` saves `Counts.snapshot_bank` (schema v1 JSON with cold
-  `SnapshotRecipe` entries) on `run.save()` and restores it
-  before opening streams on `--resume` ([recovery](training.md#recovery)).
+Fresh games supply the outcome and game-setting tables and the rates
+`decisions_per_game`, `skipped_share` and `games_per_hour`. A replay-only
+update writes empty tables and omits those rates. Total throughput includes
+both sources. Under `snapshot/`, `starts` and `choices` include retries,
+`rows` and `captures` count retained work, and `terminals` and `horizon_cuts`
+count each branch ending once. `groups_completed`, `groups_discarded` and
+`failed_branches` report group and retry outcomes.
+
+Each successful update commits its scores, allocation counters and RNG together.
+A stale or reused receipt is rejected. Etude saves the generation and cold
+recipes in `Counts.snapshot_bank` alongside the learner under
+`out/state/save-*/state.json`. Resume restores them with an empty hot cache
+and new fresh-game and policy sampling seeds. Supply runtime predicates and
+scorers again. The Python vector replays the committed prefix and verifies the
+root digest on both hot and cold installs. [Recovery](training.md#recovery)
 
 ## Write your own loop
 

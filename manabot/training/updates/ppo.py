@@ -81,13 +81,10 @@ def update_iteration(
         retained = targets.retained
         mask = targets.selected.flatten()
         actor_rows = backend.arrays.to_numpy(mask)
-        positive = (
-            np.arange(len(advantages))
-            if batch.sample_weight is None
-            else np.flatnonzero(batch.sample_weight)
-        )
         training_rows = (
-            retained if learning.filter_scope == "actor_critic" else positive
+            retained
+            if learning.filter_scope == "actor_critic"
+            else np.flatnonzero(targets.positive_weight)
         )
         diagnostics: UpdateDiagnostics = {
             "rows": len(advantages),
@@ -137,11 +134,7 @@ def update_iteration(
         diagnostics["numerical"] = health
     observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
     if not len(training_rows):
-        diagnostics["skipped"] = (
-            "empty advantage filter"
-            if any(s.eligible for s in targets.source_selection)
-            else "zero sample weight"
-        )
+        diagnostics["skipped"] = targets.empty_filter_reason
         health["skipped_steps"] = learning.epochs * learning.minibatches
         return diagnostics
     if len(retained):

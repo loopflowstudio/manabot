@@ -8,7 +8,7 @@ an update steps and runs forward. `manabot.policy.protocol.Backend` also
 provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
 
 Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
-standardization, top-count selection and a policy `__call__`/`get_value`; only
+standardization and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
 `categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
 likewise refuses an unsupported PPO update before reading rollout or learner state.
@@ -121,10 +121,6 @@ class RL(Protocol):
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
     ) -> tuple[Array, float | None]: ...
 
-    def selection_mask(
-        self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
-    ) -> Array: ...
-
     def weighted_sum(self, values: Array, weights: Array) -> Array: ...
 
     def selected_mean(self, values: Array, selected: Array) -> Array: ...
@@ -165,15 +161,6 @@ class PPORL(CategoricalRL, Protocol):
 
     def standardized_advantages(
         self, advantages: Array, over: Array | None = None
-    ) -> Array: ...
-
-    def selected_rows(
-        self,
-        advantages: Array,
-        fraction: float,
-        minimum: float,
-        *,
-        kind: FilterKind = "top_count",
     ) -> Array: ...
 
 

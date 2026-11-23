@@ -216,7 +216,6 @@ class BatchPlan:
         self.successes: dict[int, int] = defaultdict(int)
         self.retry_counts: dict[int, int] = defaultdict(int)
         self.discarded: set[int] = set()
-        self.failed_branches = 0
         self.vector: SnapshotVector | None = None
         self.candidates: dict[
             int, list[tuple[int, CapturedSnapshot, tuple[str, ...]]]
@@ -318,7 +317,6 @@ class BatchPlan:
         return None
 
     def fail(self, branch: SnapshotBranch) -> None:
-        self.failed_branches += 1
         group = branch.branch_group_id
         if group in self.discarded:
             return
@@ -394,29 +392,26 @@ class BatchPlan:
     def finish(self, decisions: Iterable[PackedDecision]) -> BatchReceipt:
         """Resolve surviving observation references after both seats are packed."""
         by_episode: dict[int, list[int]] = defaultdict(list)
-        by_group: dict[int, list[int]] = defaultdict(list)
-        roots: dict[int, list[int]] = defaultdict(list)
-        sources: dict[int, int] = {}
+        by_group: dict[tuple[int, int], list[int]] = defaultdict(list)
+        roots: dict[tuple[int, int], list[int]] = defaultdict(list)
         flat: dict[int, int] = {}
-        count = 0
+        row_count = 0
         for i, decision in enumerate(decisions):
-            count += 1
+            row_count += 1
             if decision.episode_ordinal in self.candidates:
                 by_episode[decision.episode_ordinal].append(i)
                 flat[decision.obs_row] = i
             if (branch := decision.branch) is not None:
-                group = branch.branch_group_id
+                group = (branch.branch_group_id, branch.snapshot_id)
                 by_group[group].append(i)
-                sources[group] = branch.snapshot_id
                 if decision.is_root:
                     roots[group].append(i)
         visits = []
-        for group, rows in sorted(by_group.items()):
-            if group in self.discarded or len(roots[group]) != self.config.group_size:
+        for (group, snapshot_id), rows in sorted(by_group.items()):
+            root_rows = tuple(roots[group, snapshot_id])
+            if group in self.discarded or len(root_rows) != self.config.group_size:
                 raise ValueError(f"incomplete snapshot group {group}")
-            visits.append(
-                VisitedGroup(group, sources[group], tuple(roots[group]), tuple(rows))
-            )
+            visits.append(VisitedGroup(group, snapshot_id, root_rows, tuple(rows)))
         captures = []
         for episode in sorted(self.candidates):
             if episode not in by_episode:
@@ -435,7 +430,12 @@ class BatchPlan:
             )
         )
         self.receipt = BatchReceipt(
-            self.base_generation, scheduler, tuple(visits), tuple(captures), count, self
+            self.base_generation,
+            scheduler,
+            tuple(visits),
+            tuple(captures),
+            row_count,
+            self,
         )
         return self.receipt
 

@@ -37,10 +37,20 @@ class BatchTargets:
     value_targets: Array
     expected_targets: Array
     residuals: Array
+    positive_weight: np.ndarray
     selected: Array
     retained: np.ndarray
     source_selection: tuple[SourceSelection, ...]
     signals: BatchSignals
+
+    @property
+    def empty_filter_reason(self) -> str:
+        """Discovery skips EMA too. An ordinary empty actor filter still advances it."""
+        return (
+            "empty advantage filter"
+            if self.positive_weight.any()
+            else "zero sample weight"
+        )
 
     def check(
         self, batch: RolloutBatch, learning: Learning | DampedPolicyLearning
@@ -238,13 +248,14 @@ def compute_batch_targets(
             else value_targets
         )
         residuals = expected - values
-        eligible = (
+        positive = (
             np.ones(batch.actions.shape, bool)
             if batch.sample_weight is None
             else batch.sample_weight > 0
         )
+        eligible = positive
         if learning.root_actor_weight == 0 and batch.is_root_decision is not None:
-            eligible &= ~batch.is_root_decision
+            eligible = positive & ~batch.is_root_decision
         retained, sources = select_sources(
             backend,
             device,
@@ -264,6 +275,7 @@ def compute_batch_targets(
             value_targets=value_targets,
             expected_targets=expected,
             residuals=residuals,
+            positive_weight=positive,
             selected=to_device(selected, device),
             retained=retained,
             source_selection=sources,
