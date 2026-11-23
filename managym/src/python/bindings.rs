@@ -2402,6 +2402,10 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn damaged_permanents(&self) -> Vec<i32> {
+        self.data.damaged_permanents.clone()
+    }
+    #[getter]
     fn ability_resolutions(&self) -> Vec<(usize, u32)> {
         self.data.ability_resolutions.clone()
     }

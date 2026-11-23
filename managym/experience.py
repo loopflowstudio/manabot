@@ -437,6 +437,9 @@ class LegacyPermanentView(ProtocolModel):
     keywords: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    damaged_permanents: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     ability_resolutions: list[tuple[UInt32, UInt32]] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )

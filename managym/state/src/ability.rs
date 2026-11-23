@@ -501,6 +501,8 @@ pub enum TriggerSubject {
     This,
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// A creature dealt damage by this exact source this turn.
+    CreatureDamagedByThis,
     /// "a/another [predicate] [controlled_by controls]": an object whose
     /// controller is `controlled_by`, relative to the ability's controller.
     /// `another` excludes the source itself (CR 109.4).

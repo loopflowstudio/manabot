@@ -1,6 +1,6 @@
 use super::observation_layout::{
     action, action_columns, card, decklist, event, fact, known_hand, name, permanent, player,
-    stack, turn_state,
+    relation, stack, turn_state,
 };
 
 use std::{
@@ -1163,12 +1163,40 @@ fn encode_into_memory(
         out.effect_members,
     )?;
 
-    super::continuation::encode_into(
+    let continuation_rows = super::continuation::encode_into(
         &obs.continuation,
         obs.agent.player_index as usize,
         &object_to_index,
         out.relations,
     )?;
+
+    if config.layout == InputLayout::OneToken {
+        let mut next = continuation_rows;
+        for source in obs.agent_permanents.iter().chain(&obs.opponent_permanents) {
+            for &target in &source.damaged_permanents {
+                let Some(row) = out
+                    .relations
+                    .as_chunks_mut::<{ relation::WIDTH }>()
+                    .0
+                    .get_mut(next)
+                else {
+                    return Err(ObservationEncodeError::Capacity {
+                        field: "damage relations",
+                        capacity: super::continuation::RELATION_ROWS,
+                        actual: next + 1,
+                    });
+                };
+                // A standalone pair owns its pooling group, separate from pending work.
+                row[relation::FRAME] =
+                    (obs.continuation.len() + next - continuation_rows + 1) as f32;
+                row[relation::KIND] = 11.0;
+                row[relation::SOURCE] = link(Some(source.id));
+                row[relation::REFERENCE] = link(Some(target));
+                row[relation::VALID] = 1.0;
+                next += 1;
+            }
+        }
+    }
 
     encode_actions(
         obs,

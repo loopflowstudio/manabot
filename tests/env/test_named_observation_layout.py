@@ -162,9 +162,9 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     history = managym.observation_layout(policy_history=True)
     assert raw["agent_cards"]["columns"]["valid"]["index"] == 55
     assert raw["facts"]["shape"] == [None, 12]
-    assert set(raw["facts"]["row_kinds"]) == set(range(1, 15)) - {6}
+    assert set(raw["facts"]["row_kinds"]) == set(range(1, 17)) - {6}
     assert raw["effect_details"]["shape"] == [4096, 3]
-    assert set(raw["relations"]["row_kinds"]) == set(range(1, 11))
+    assert set(raw["relations"]["row_kinds"]) == set(range(1, 12))
     assert raw["name_candidates"]["columns"]["group_last"]["index"] == 3
     assert raw["events"]["columns"]["source_id"]["kind"] == "id"
     assert history["events"]["columns"]["source_context"]["kind"] == "reference"
@@ -172,6 +172,7 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     assert raw["agent_permanents"]["columns"]["valid"]["index"] == 50
     assert raw["stack"]["columns"]["source"]["kind"] == "reference"
     legacy = managym.observation_layout(legacy=True)
+    assert 11 not in legacy["relations"]["row_kinds"]
     assert legacy["agent_permanents"]["columns"]["valid"]["index"] == 37
     assert raw.keys() - legacy.keys() == {"stack", "stack_valid", "known_library"}
     assert not raw["action_focus"]["columns"]

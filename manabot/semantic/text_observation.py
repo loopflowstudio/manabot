@@ -1014,6 +1014,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        for target in permanent.damaged_permanents:
+            parts.append(f"dealt damage to {self.name(target)} this turn")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
         if permanent.copy is not None:

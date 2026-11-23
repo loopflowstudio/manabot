@@ -37,11 +37,8 @@ fn fumigate_counts_destroyed_creatures_even_when_their_destination_changes() {
         state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
     };
 
-    let mut s = five_color_setup(&["Fumigate", "Gray Ogre"]);
-    let survivor = s
-        .game_mut()
-        .create_token("token.marit_lage", PlayerId(1), false)
-        .unwrap();
+    let mut s = five_color_setup(&["Fumigate", "Gray Ogre", "Predator Ooze"]);
+    let survivor = s.force_permanent_on_battlefield(1, "Predator Ooze");
     let own = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
     set_counters(&mut s, foe, CounterKind::Finality, 1);

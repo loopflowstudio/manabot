@@ -339,7 +339,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod panda_tests {
+mod card_history_tests {
     use super::{Env, RestoreOptions};
     use crate::{
         agent::action::Action,
@@ -350,6 +350,124 @@ mod panda_tests {
             zone::ZoneType,
         },
     };
+
+    #[test]
+    fn predator_ooze_remembers_only_the_exact_damage_pair_this_turn() {
+        use crate::agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::relation,
+        };
+        use crate::flow::game::Game;
+        use crate::flow::proposed_event::ProposedDamageTarget;
+        let mut env = Env::new(418, true, false, false);
+        let deck = [("Predator Ooze".to_owned(), 12), ("Forest".to_owned(), 28)].into();
+        env.reset(vec![
+            PlayerConfig::new("p0", deck),
+            PlayerConfig::new(
+                "p1",
+                [("Hill Giant".into(), 12), ("Forest".into(), 28)].into(),
+            ),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        let source = game
+            .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)
+            .unwrap();
+        let victim = game
+            .scenario_force_battlefield(PlayerId(1), "Hill Giant", true)
+            .unwrap();
+        let recipient = game.permanent_object(victim).unwrap();
+        let ooze = game.permanent_object(source).unwrap();
+        let hit = |g: &mut Game| {
+            assert!(g.commit_damage(
+                Some(ooze),
+                ProposedDamageTarget::Object(recipient),
+                1,
+                false
+            ))
+        };
+        let other = game
+            .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)
+            .unwrap();
+        let other_ooze = game.permanent_object(other).unwrap();
+        let mut alternate = game.clone();
+        alternate.commit_damage(
+            Some(other_ooze),
+            ProposedDamageTarget::Object(recipient),
+            1,
+            false,
+        );
+        hit(game);
+        let config = ObservationEncoderConfig::default();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let encoded_pair = |g: &Game| {
+                let obs = Observation::for_player(g, viewer);
+                let encoded = encode(&obs, &config).unwrap();
+                let rows: Vec<_> = encoded
+                    .relations
+                    .chunks(relation::WIDTH)
+                    .filter(|r| r[relation::KIND] == 11.)
+                    .collect();
+                assert_eq!(rows.len(), 1);
+                (rows[0][relation::SOURCE], rows[0][relation::REFERENCE])
+            };
+            let pair = encoded_pair(game);
+            let other_pair = encoded_pair(&alternate);
+            assert_ne!(pair.0, other_pair.0);
+            assert_eq!(pair.1, other_pair.1);
+            assert!(pair.0 > 0. && pair.1 > 0.);
+        }
+        let witness = env.selected_witness().unwrap();
+        let snapshot = env.snapshot().unwrap();
+        let fork = || snapshot.restore(RestoreOptions::default()).unwrap();
+        let blink = |g: &mut Game, object| {
+            let exiled = g.move_object(object, ZoneType::Exile);
+            g.move_object(exiled, ZoneType::Battlefield)
+        };
+        let die = |g: &mut Game, object| {
+            g.move_object(object, ZoneType::Graveyard);
+            g.process_game_events();
+            g.state.pending_triggers.len()
+        };
+        let mut branch_env = fork();
+        assert_eq!(branch_env.selected_witness().unwrap(), witness);
+        let repeated = branch_env.game.as_mut().unwrap();
+        hit(repeated);
+        assert_eq!(die(repeated, recipient), 1);
+        assert!(repeated.flush_triggers().is_none());
+        let pending = branch_env.snapshot().unwrap();
+        let mut restored = pending.restore(RestoreOptions::default()).unwrap();
+        let countered = restored.game.as_mut().unwrap();
+        let repeated = branch_env.game.as_mut().unwrap();
+        let id = countered.state.stack_objects.last().unwrap().id();
+        countered.counter_ability(id, None);
+        repeated.resolve_top_of_stack();
+        assert_eq!(repeated.characteristics(source).power, 2);
+        assert_eq!(countered.characteristics(source).power, 1);
+
+        let mut branch = fork().game.take().unwrap();
+        let returned = blink(&mut branch, recipient);
+        assert_eq!(die(&mut branch, returned), 0);
+        let mut branch = fork().game.take().unwrap();
+        blink(&mut branch, ooze);
+        assert_eq!(die(&mut branch, recipient), 0);
+        let mut both = fork().game.take().unwrap();
+        both.commit_damage(
+            Some(other_ooze),
+            ProposedDamageTarget::Object(recipient),
+            1,
+            false,
+        );
+        assert_eq!(die(&mut both, recipient), 2);
+        assert_eq!(env.selected_witness().unwrap(), witness);
+        let game = env.game.as_mut().unwrap();
+        let initial_turn = game.state.turn.turn_number;
+        while game.state.turn.turn_number == initial_turn {
+            game.state.turn.advance_step();
+        }
+        assert_eq!(die(game, recipient), 0);
+    }
 
     #[test]
     fn panda_snapshot_replays_source_and_target_reentry() {

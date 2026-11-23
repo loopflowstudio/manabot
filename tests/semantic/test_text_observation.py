@@ -23,7 +23,6 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
-from manabot.managym.experience_projection import decision_surface_view
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -39,6 +38,7 @@ import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
+from managym.experience_projection import decision_surface_view, serialize_observation
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -630,6 +630,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
         "ability_resolutions": "ability N resolved",
+        "damaged_permanents": "dealt damage to each named permanent this turn",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
@@ -789,7 +790,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "used_abilities": [0],
         "dealt_damage_this_turn": True,
     }
-    mountain |= {"blocking": ogre["id"]}
+    mountain |= {"blocking": ogre["id"], "damaged_permanents": [ogre["id"]]}
     state["agent"] |= {
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
@@ -808,9 +809,12 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         ],
     }
     decision = render_decision(_redigest(payload))
-    facts = encode_observation(
-        ObservationSpace(ObservationConfig()), _viewer_observation(decision)
-    )["facts"]
+    observation = _viewer_observation(decision)
+    battlefield = serialize_observation(observation)["agent"]["battlefield"]
+    assert battlefield[0]["damaged_permanents"] == [ogre["id"]]
+    facts = encode_observation(ObservationSpace(ObservationConfig()), observation)[
+        "facts"
+    ]
     counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
     assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
     assert facts[
@@ -818,6 +822,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     ].tolist() == [2]
     text = decision.text
     assert "; blocking P2 (Gray Ogre);" in text
+    assert "dealt damage to P2 (Gray Ogre) this turn" in text
     assert "; attacking;" in text
     assert (
         "; has lost all abilities; ability 2 resolved 2 times this turn; used-up abilities 1; dealt damage this turn"

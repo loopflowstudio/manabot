@@ -112,6 +112,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "kept creature",
     "kept on top",
     "last known characteristics",
+    "last known creature",
     "last known definition",
     "legend group",
     "legends kept",
@@ -623,6 +624,7 @@ impl<'a> Projection<'a> {
             creature_types,
             permanent: _,
             animated_creature,
+            was_creature,
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -635,6 +637,9 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if *was_creature {
+            self.field("last known creature", &true);
+        }
         self.field("last known definition", definition_id);
         let counter_values: Vec<_> = counters.iter().collect();
         self.field(

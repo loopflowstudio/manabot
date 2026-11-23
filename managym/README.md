@@ -705,6 +705,12 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+A permanent's `damaged_permanents` lists the live permanents it dealt damage
+to this turn. Multiple hits on one recipient give one entry. Either permanent
+leaving and returning breaks the relation. Both viewers get the public
+permanent IDs in the observation and Academy frame. Policy input v11 joins
+their permanent rows in relation kind 11, including with policy history off.
+
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard

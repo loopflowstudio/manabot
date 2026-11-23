@@ -94,15 +94,23 @@ The timing fixtures in `managym/cards/tests/cards/blb.rs` establish that existin
 
 Behavior review at `5717184a` reran both BLB fixtures and seven shared trigger-order debug cases. Same-source triggers retain distinct ability joins, renumbering trigger occurrences preserves the encoded observation, and the opposing viewer omits the chooser’s ordering frames. The nested-fork, exact-description, stale-Command rejection and runtime catalog-token checks passed. Source tracing found that v11 emits the gain count as a player fact and life lost in the turn-state buffer, and LLM text reads both from native turn history. Academy declares both native fields. A Convocation-specific Academy frame comparison and the integrated hidden-card permutation remain unverified. No payment algorithm changed. The Convocation timing obligation is satisfied. Keep the working phase open for Predator Ooze and the remaining cohort.
 
-## Next slice · Predator Ooze
+## Implemented slice · Predator Ooze
 
-The FDN ledger gives the obligation as “Damage-source history relates later death to exact damaged incarnation.” Damage a creature with Ooze and let it survive. From that position, compare its death later that turn with the death of the same card after it leaves and returns. Only the original recipient’s death should put Ooze’s death trigger on the stack and add a counter on resolution. Distinguish that counter from its attack trigger. Use the resulting indestructible Ooze in the outstanding Fumigate interaction. Convocation is a BLB witness, so 77 of 81 primary FDN rows remain.
+The Dark Ascension definition uses the ordinary attack trigger and a death subject that checks exact source–recipient membership. The turn records positive damage once per pair and drops all pairs at the next turn. Death checks the effective creature type captured at departure. Hash v20 records both incarnations. Native observations expose the live recipients of each live permanent, using public permanent IDs. V11 relation kind 11 joins both rows without policy history.
 
-Record each distinct exact source and recipient at the positive damage commit in `flow/damage.rs`, while the object reference is available. Read that turn relation at death using the departing incarnation. Choose membership over an event transcript scan: repeated hits from one Ooze qualify once, while two different Oozes can both qualify. Start with a snapshot after a surviving hit and branch on recipient reentry and source reentry separately. Restore again with the death trigger pending, then resolve or counter it. Verify snapshot witnesses, independent forks and turn reset. Project visible pairs from that same authority through native observations, v11, text and Academy with optional history off. Compare equally wounded boards with different damage sources.
+The native snapshot fixture restored after a surviving hit. Hitting Hill Giant again and then killing it put one trigger on the stack. Resolving grew the original Ooze to 2/2, while countering in a sibling left it 1/1. Reentering either permanent or advancing the turn before death produced zero triggers. Two Oozes hitting the same creature produced two triggers. Restoring and playing the siblings preserved the parent witness. With two Oozes and equally marked Giants in sibling games, both viewers’ encoded relations identified the different sources and the same recipient.
+
+In the Dark Ascension combat fixture, attacking grew Ooze to 2/2. Hill Giant blocked and survived two damage. Fumigate then killed the Giant, gained one life and left a 3/3 Ooze. The Kaladesh fixture separately verified gains of two and zero with Ooze surviving both casts. The Clone suspended-entry hash witness was refreshed for the catalog and hash contract.
+
+The CPython 3.13 release wheel was rebuilt and installed. Four focused Python checks passed for LLM text, Academy projection, field coverage, named layout and protocol parity. The native experience schema matched its checked-in bytes. Both bundled pinned pilot replays passed; the optional frontier checkpoint was unavailable.
+
+## Next slice · Steel Hellkite
+
+Extend the turn history to distinguish players dealt combat damage by the activating Hellkite. Verify a second Hellkite, noncombat damage and the chosen X against matched and unmatched permanents.
 
 ## Evidence to carry forward
 
-The 77 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+The 76 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 

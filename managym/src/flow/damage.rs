@@ -116,6 +116,9 @@ impl Game {
                 if self.state.permanents[permanent_id].is_none() {
                     return false;
                 }
+                if let Some(source) = source {
+                    self.state.turn.damage_pairs.record(source, object_ref);
+                }
                 // CR 120.3: a permanent with several of these types receives
                 // every applicable result, but this remains one damage event.
                 let view = self.characteristics(permanent_id);

@@ -461,6 +461,8 @@ pub struct LegacyPermanentView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damaged_permanents: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ability_resolutions: Vec<(u32, u32)>,
     /// It was dealt damage this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

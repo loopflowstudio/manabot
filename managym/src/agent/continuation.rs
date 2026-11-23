@@ -1090,7 +1090,7 @@ pub fn encode_into(
     viewer: usize,
     objects: &std::collections::HashMap<i32, i32>,
     out: &mut [f32],
-) -> Result<(), super::observation_encoder::ObservationEncodeError> {
+) -> Result<usize, super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::ObservationEncodeError;
     if out.len() != RELATION_ROWS * RELATION_DIM {
         return Err(ObservationEncodeError::InvalidLength {
@@ -1233,7 +1233,7 @@ pub fn encode_into(
             }
         }
     }
-    Ok(())
+    Ok(count)
 }
 
 #[cfg(test)]

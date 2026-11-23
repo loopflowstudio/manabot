@@ -129,6 +129,45 @@ impl Bending {
     pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
 }
 
+/// Damage follows both exact objects through the turn (CR 400.7).
+#[derive(Clone, Debug, Default)]
+pub struct DamageHistory(BTreeMap<ObjectId, std::collections::BTreeSet<ObjectId>>);
+
+impl DamageHistory {
+    pub fn record(&mut self, source: ObjectId, recipient: ObjectId) {
+        self.0.entry(source).or_default().insert(recipient);
+    }
+
+    pub fn contains(&self, source: ObjectId, recipient: ObjectId) -> bool {
+        self.0
+            .get(&source)
+            .is_some_and(|targets| targets.contains(&recipient))
+    }
+
+    pub fn recipients(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        self.0.get(&source).into_iter().flatten().copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl serde::Serialize for DamageHistory {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct Pair(
+            #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+            #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+        );
+        serializer.collect_seq(
+            self.0.iter().flat_map(|(&source, targets)| {
+                targets.iter().map(move |&target| Pair(source, target))
+            }),
+        )
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -145,6 +184,9 @@ pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub graveyard_from_battlefield: Vec<ObjectId>,
+    /// Exact source and recipient of positive damage to a permanent this turn.
+    #[serde(skip_serializing_if = "DamageHistory::is_empty")]
+    pub damage_pairs: DamageHistory,
     /// Once-each-turn uses by exact source object and ability index: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
@@ -186,6 +228,7 @@ impl TurnState {
             turn_number: 1,
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
+            damage_pairs: Default::default(),
             history: Default::default(),
             graveyard_from_battlefield: Vec::new(),
             ability_resolutions_this_turn: BTreeMap::new(),
@@ -313,6 +356,7 @@ impl TurnState {
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
+        self.damage_pairs.0.clear();
         self.history = Default::default();
         self.graveyard_from_battlefield.clear();
         self.spells_cast = [Vec::new(), Vec::new()];

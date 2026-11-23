@@ -2707,6 +2707,15 @@
           "title": "Damage",
           "type": "integer"
         },
+        "damaged_permanents": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Damaged Permanents",
+          "type": "array"
+        },
         "dealt_damage_this_turn": {
           "default": false,
           "title": "Dealt Damage This Turn",

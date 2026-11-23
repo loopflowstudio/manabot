@@ -210,6 +210,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
+        "damaged_permanents": list(permanent.damaged_permanents) or None,
         "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,

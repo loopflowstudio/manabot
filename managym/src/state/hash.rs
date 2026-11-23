@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 19;
+pub const MATCH_STATE_HASH_VERSION: u32 = 20;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,13 +69,15 @@ struct CanonicalCard {
 }
 
 #[derive(Serialize)]
-struct CanonicalTurn {
+struct CanonicalTurn<'a> {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     player_controls: Vec<crate::flow::turn::PlayerControl>,
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
     spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
+    #[serde(skip_serializing_if = "crate::flow::turn::DamageHistory::is_empty")]
+    damage_pairs: &'a crate::flow::turn::DamageHistory,
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -97,14 +99,15 @@ struct CanonicalTurn {
     cleanup_priority: bool,
 }
 
-impl From<&TurnState> for CanonicalTurn {
-    fn from(turn: &TurnState) -> Self {
+impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
+    fn from(turn: &'a TurnState) -> Self {
         Self {
             player_controls: turn.player_controls.clone(),
             active_player: turn.active_player,
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
+            damage_pairs: &turn.damage_pairs,
             history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
@@ -169,7 +172,7 @@ struct CanonicalMatchState<'a> {
     object_lki: Vec<(ObjectId, ObjectLki)>,
     players: &'a [crate::state::player::Player; 2],
     zones: &'a crate::state::zone::ZoneManager,
-    turn: CanonicalTurn,
+    turn: CanonicalTurn<'a>,
     priority: &'a crate::flow::priority::PriorityState,
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,

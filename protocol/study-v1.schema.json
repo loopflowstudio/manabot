@@ -1502,6 +1502,14 @@
           "type": "integer",
           "format": "int32"
         },
+        "damaged_permanents": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "dealt_damage_this_turn": {
           "description": "It was dealt damage this turn.",
           "type": "boolean"

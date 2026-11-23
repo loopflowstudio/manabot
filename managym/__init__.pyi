@@ -1070,6 +1070,7 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    damaged_permanents: list[int]
     ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
     dealt_damage_this_turn: bool

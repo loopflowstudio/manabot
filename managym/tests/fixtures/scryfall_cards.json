@@ -2738,6 +2738,20 @@
       "B"
     ]
   },
+  "Predator Ooze": {
+    "name": "Predator Ooze",
+    "mana_cost": "{G}{G}{G}",
+    "type_line": "Creature — Ooze",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Indestructible"
+    ],
+    "oracle_text": "Indestructible (Damage and effects that say \"destroy\" don't destroy this creature.)\nWhenever this creature attacks, put a +1/+1 counter on it.\nWhenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
   "Pretending Poxbearers": {
     "name": "Pretending Poxbearers",
     "mana_cost": "{1}{W/B}",

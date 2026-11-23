@@ -565,7 +565,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 25] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 26] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -575,6 +575,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 25] {
         history,
         graveyard_from_battlefield: _,
         ability_triggers_this_turn: _,
+        damage_pairs: _,
         ability_resolutions_this_turn: _,
         extra_turns: _,
         resume_with: _,
@@ -668,6 +669,9 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 25] {
         (
             "ability_triggers_this_turn",
             Seen::Via("used once-each-turn limits on permanent rows"),
+        ),
+        (
+            "damage_pairs", Seen::Via("damage source and recipient relation"),
         ),
         (
             "ability_resolutions_this_turn",
@@ -3312,6 +3316,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
+        damaged_permanents => [Rows("Damage source and recipient relation")],
         ability_resolutions => [Fact(FactKind::AbilityResolution)],
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],

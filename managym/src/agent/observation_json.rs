@@ -784,6 +784,8 @@ pub(super) struct WirePermanentData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damaged_permanents: Vec<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
@@ -907,6 +909,7 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            damaged_permanents: w.damaged_permanents,
             ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
@@ -975,6 +978,7 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            damaged_permanents: self.damaged_permanents.clone(),
             ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
             dealt_damage_this_turn: self.dealt_damage_this_turn,

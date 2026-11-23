@@ -2133,6 +2133,18 @@ impl Game {
         // it left (CR 603.10a looks back to the departed object).
         let is_source = moved_object == source_object || departed == Some(source_object);
         match subject {
+            TriggerSubject::CreatureDamagedByThis => {
+                let object = departed.unwrap_or(moved_object);
+                source_was_on_battlefield
+                    && self.state.turn.damage_pairs.contains(source_object, object)
+                    && self.object_lki(object).map_or_else(
+                        || {
+                            self.lookup_current_permanent(object)
+                                .is_ok_and(|id| self.characteristics(id).is_creature())
+                        },
+                        |lki| lki.was_creature,
+                    )
+            }
             TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2168,6 +2180,13 @@ impl Game {
             return false;
         };
         match subject {
+            TriggerSubject::CreatureDamagedByThis => {
+                self.state
+                    .turn
+                    .damage_pairs
+                    .contains(source_object, permanent.object)
+                    && self.characteristics(permanent_id).is_creature()
+            }
             TriggerSubject::This => permanent.object == source_object,
             TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
             TriggerSubject::Matching {

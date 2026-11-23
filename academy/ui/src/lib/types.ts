@@ -122,6 +122,7 @@ export interface PermanentState {
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  damaged_permanents?: number[];
   ability_resolutions?: [number, number][];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;

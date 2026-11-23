@@ -814,6 +814,7 @@ pub struct PermanentData {
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
+    pub damaged_permanents: Vec<i32>,
     pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
@@ -1569,6 +1570,19 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            damaged_permanents: {
+                let mut targets: Vec<_> = game
+                    .state
+                    .turn
+                    .damage_pairs
+                    .recipients(permanent.object)
+                    .filter_map(|target| game.lookup_current_permanent(target).ok())
+                    .filter_map(|id| game.state.permanents[id].as_ref())
+                    .map(|target| target.id.0 as i32)
+                    .collect();
+                targets.sort_unstable();
+                targets
+            },
             ability_resolutions: {
                 let object = permanent.object;
                 let face = game.state.source_base(object).0;

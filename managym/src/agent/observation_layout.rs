@@ -1005,6 +1005,14 @@ pub fn observation_layout(
         (9, "Delayed frequency: decision is 1 once or 2 each match; this_turn is expiry"),
         (10, "Effect execution reference: ordinal is the one-based slot in the continuation program; reference_definition/reference/reference_player identify its visible subject"),
     ]);
+    if layout_kind == InputLayout::OneToken {
+        relations.row_kinds.insert(
+            11,
+            "Damage this turn: source and reference are the two permanent rows",
+        );
+        relations.columns[relation::KIND].value.kind = ValueKind::Category { size: 11 };
+        relations.columns[relation::KIND].value.range = "1..11; 0 padding";
+    }
     layout.insert("relations".into(), relations);
     layout.insert(
         "decklists".into(),

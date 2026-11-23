@@ -233,6 +233,9 @@ fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
 fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) -> String {
     match subject {
         TriggerSubject::This => "this".into(),
+        TriggerSubject::CreatureDamagedByThis => {
+            "a creature dealt damage by this creature this turn".into()
+        }
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
         TriggerSubject::Matching {
             controlled_by,
