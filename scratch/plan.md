@@ -91,7 +91,7 @@ Leave pending in `fdn.jsonl` with exact missing authority and owning track:
 
 - **Different controllers:** Run Away Together needs one two-creature targeting clause. In `flow/play.rs`, `remaining_legal_targets` excludes previously chosen objects but accepts another creature with the same controller. In `flow/resolution.rs`, `resolution_targets` rechecks each slot and has a group check only for shared creature type. Separate caster-relative clauses would wrongly reject a pair whose creatures exchanged controllers before resolution. Defer to choice continuations.
 
-- **Drakuseth, Maw of Flames (choice continuations).** The native test `trigger_target_distinctness_is_enforced_per_clause_at_submission` rejects duplicates within a clause and accepts the same object again in the next clause. Retargeting also checks distinctness only within the clause. The requirement’s `another` excludes the source, which is itself a legal target here. At resolution, `DealDamage` assigns one amount to every legal recipient of its active clause. Separate clauses could assign 4 and 3, but would commit separate damage batches for one simultaneous instruction. Pending support for excluding targets chosen in an earlier clause and applying both amounts in one batch.
+- **Drakuseth, Maw of Flames (choice continuations).** The native test `trigger_target_distinctness_is_enforced_per_clause_at_submission` rejects duplicates within a clause and accepts the same object again in the next clause. Retargeting also checks distinctness only within the clause. The requirement’s `another` excludes the source, which is itself a legal target here. At resolution, `DealDamage` assigns one amount to every legal recipient of its active clause. Separate clauses could assign 4 and 3, but would commit separate damage batches for one simultaneous instruction. Pending support for excluding targets chosen in an earlier clause and applying both amounts in one batch. Fork with three targets bound and remove the primary in one branch. The two surviving secondary targets must each receive 3 in the same batch.
 
 Candidates still to verify:
 - **Reveal-until-matching with random bottom:** `Spinner of Souls`.
@@ -104,7 +104,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 ### Slice 2 — Per-source life gain
 
 **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
-   - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.
+   - First compare equal totals: one source deals 2 to a blocker and 3 to a player; two sources deal 2 and 3. Both gain 5. Require one positive life-change event versus two before wiring Pridemate, then require one trigger versus two. This pair distinguishes event ownership even when the life totals match. If a replacement choice suspends the batch, exact forks at that choice must resume without losing or duplicating a gain. Keep any partial accounting with the pending batch.
    - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).
    - Double-strike lifelinker (`Drogskol Reaver`) → 1 trigger in first-strike damage + 1 in normal combat damage.
    - Prevented damage or `PlayersCantGainLife` → 0 triggers.

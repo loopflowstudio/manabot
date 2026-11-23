@@ -11,7 +11,7 @@
 <h2>Largest remaining mismatch · readiness</h2>
 <p>An empty ledger dependency list describes the planning scan. Treating it as permission to author Curator would let the engine choose how to split the cards or reveal the hidden pile. Either would change the game.</p>
 <p><strong>Proposed.</strong> Judge each row by a complete native interaction. For Curator, the controller partitions the cards, the opponent sees one pile face up and chooses a pile, then that choice determines hand and graveyard. Both pile memberships must survive a fork between decisions. Defer the card to choice continuations until that authority exists.</p>
-<p>Of 222 selected names, four are newly authored, three already had definitions, eleven have documented blockers and 204 await audit. Audit Drakuseth next among targeting cards. For token, static, lifegain and damage batches, keep the interaction witnesses in the plan as the readiness test for each shared primitive.</p>
+<p>Of 222 selected names, six are newly authored, three already had definitions, twelve have documented blockers and 201 await audit. For token, static, lifegain and damage batches, keep the interaction witnesses in the plan as the readiness test for each shared primitive.</p>
 <h2>Run Away Together · existing gap</h2>
 <table><caption>Two distinct creatures on the battlefield</caption><tr><th>Caller interaction</th><th>Native representation</th><th>Aligned?</th></tr>
 <tr><td>Pick one creature, then a creature controlled by a different player.</td><td><code>remaining_legal_targets</code> excludes the first object. Another creature under the same controller still passes the ordinary creature requirement.</td><td>No</td></tr>
@@ -32,6 +32,16 @@
 <tr><td>Ordinary friendly Cat token</td><td>2/2 lifelink</td><td>1/1</td><td>Yes · both bonuses come from the continuous effect</td></tr>
 <tr><td>Each of Caracal’s two tokens</td><td>2/2 lifelink</td><td>1/1 lifelink</td><td>Yes · the token face supplies intrinsic lifelink</td></tr></table>
 <p>Caracal and the opposing Cat receive neither grant. Storing the visible keywords as the token face would leave the ordinary Cat with lifelink after Caracal leaves. The Amonkhet fixture distinguishes these cases.</p>
-<h2>Next interaction · proposed</h2>
-<p>Resolve Prideful Parent under Anthem of Champions. Compare Parent, its ordinary Cat and an opposing creature before and after removing Anthem. The token should use the same face as Arahbo’s Cat, and Parent should keep its printed vigilance. This tests reuse across two producers without adding a new token identity.</p>
-<h2>Questions for review</h2><ol><li>What qualifies a row for authoring? <strong>1a · A complete native interaction (selected).</strong> 1b · An empty planning dependency list.</li><li>Which interaction comes next? <strong>2a · Parent under Anthem to test token reuse (selected).</strong> 2b · Audit Drakuseth’s targeting first.</li></ol></main></html>
+<h2>Prideful Parent and Anthem · existing</h2>
+<table><caption>Effective power and toughness at three points in the FDN fixture</caption><tr><th>Creature</th><th>Before Anthem</th><th>Anthem present</th><th>After removal</th></tr>
+<tr><td>Parent, with printed vigilance throughout</td><td>2/2</td><td>3/3</td><td>2/2</td></tr>
+<tr><td>Parent’s ordinary Cat</td><td>1/1</td><td>2/2</td><td>1/1</td></tr>
+<tr><td>Opposing Cat</td><td>1/1</td><td>1/1</td><td>1/1</td></tr></table>
+<p><strong>Yes.</strong> The permanent owns its token face or printed definition. Anthem supplies a controller-scoped modification. A caller reading the effective characteristics after removal needs no record of a bonus to undo.</p>
+<h2>Drakuseth · existing gap</h2>
+<p><strong>No.</strong> Choose A for 4 damage and optionally B and C for 3 each. The target-submission test allows A again in a second clause. The resolution arm for <code>Effect::DealDamage</code> computes one amount for its entire batch. Splitting the instruction gives each amount its own batch. Either representation loses a rule. The row stays pending.</p>
+<p><strong>Proposed acceptance position.</strong> Fork after A, B and C are bound. In one branch all receive their assigned damage. In the other, remove A before resolution. B and C must still take 3 simultaneously. Keep the identities and amounts bound across replay and retargeting.</p>
+<h2>Life gain · next implementation decision</h2>
+<p><strong>No.</strong> A trampling lifelinker deals 2 to a blocker and 3 to a player. Today <code>commit_damage</code> calls <code>commit_life_change</code> per recipient. A policy seeing the final life total cannot tell whether one source gained 5 or two sources gained 2 and 3. Pridemate makes the difference observable in its trigger count.</p>
+<p><strong>Proposed.</strong> Derive gains inside the resolving damage batch from damage actually dealt by each lifelinking source. Keep each source separate even when its controller is the same. First prove one source versus two at equal total damage. Then bind the gain trigger and prove prevention produces none. A replacement choice can suspend a batch; an exact fork there must resume to the same gains without duplicating a trigger.</p>
+<h2>Questions for review</h2><ol><li>What qualifies a row for authoring? <strong>1a · Complete native interaction (selected).</strong> 1b · Empty planning dependency list.</li><li>Which position should establish life-gain semantics first? <strong>2a · Equal damage totals from one and two sources (selected).</strong> 2b · A single unblocked lifelinker.</li></ol></main></html>
