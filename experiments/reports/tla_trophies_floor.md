@@ -23,7 +23,7 @@ updates, but on fresh runs it over-regularizes: it learned more slowly and
 trails the control head to head.
 
 Longer training separates the two tau-based mechanisms. By update 1,000 tau
-alone re-locks part of combat (tau ×2: 35% of probe attacks and 17% of
+alone re-locks part of combat (tau ×2: 35–40% of probe attacks and 17% of
 blocks saturated; tau ×4: 27% and 12%), while tau ×2 + forward KL 0.002
 stays open (no saturated attacks, 3% of blocks). But the open policy is
 slightly weaker: in the final round it scores 0.466 against tau ×2
