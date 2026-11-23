@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -17,17 +17,31 @@ from manabot.belief.encoding import (
     belief_schema_from_engine,
     encode_belief,
 )
+from manabot.belief.protocol import BeliefPolicy
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.policy.protocol import BackendPolicy
+from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.flat_mc import make_player
-from manabot.training.state.backend import TrainingBackend
+from manabot.training.state.backend import FreshPolicies
 from manabot.verify.games import INTERACTIVE_DECK
+from managym import GameSetup
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+
+
+class BeliefDemoBackend(FreshPolicies, PolicyLoader, Protocol):
+    def save_policy(
+        self,
+        agent: BeliefPolicy,
+        obs_space: ObservationSpace,
+        path: Path,
+        *,
+        player_configs: GameSetup,
+        belief_schema: BeliefEncodingSchema,
+    ) -> None: ...
 
 
 def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
@@ -53,8 +67,8 @@ def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
 
 
 def _schema_and_agent(
-    engine: Any, viewer: int, *, backend: TrainingBackend
-) -> tuple[BeliefEncodingSchema, BackendPolicy]:
+    engine: Any, viewer: int, *, backend: FreshPolicies
+) -> tuple[BeliefEncodingSchema, BeliefPolicy]:
     space = PossibleWorldSpace.from_engine(engine, viewer)
     count_buckets = max(2, max(count for _, count in space.pool) + 1)
     schema = belief_schema_from_engine(
@@ -73,6 +87,8 @@ def _schema_and_agent(
             belief_card_vocab_size=card_vocab_size,
         ),
     )
+    if not isinstance(policy_value, BeliefPolicy):
+        raise ValueError("the belief demo requires a belief-enabled policy")
     return schema, policy_value
 
 
@@ -80,7 +96,7 @@ def _run_swapped_world(
     engine: Any,
     observation: ObservationBuffers,
     viewer: int,
-    policy_value: BackendPolicy,
+    policy_value: BeliefPolicy,
     schema: BeliefEncodingSchema,
 ) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)
@@ -91,7 +107,7 @@ def _run_swapped_world(
     return player.last_step
 
 
-def run_demo(*, backend: TrainingBackend) -> dict[str, Any]:
+def run_demo(*, backend: BeliefDemoBackend) -> dict[str, Any]:
     """Run the keystone checks through one real managym decision."""
 
     env, observation = runtime_env()

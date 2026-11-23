@@ -8,10 +8,11 @@ legality and resolution regression.
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
 import torch
 
 from manabot.env import observation as observation_schema
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.verify import choice_inputs
 import managym
 
 
@@ -60,8 +61,9 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
 
 
 def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
-    encoded = encode_observation(ObservationSpace(), raw)
-    return {key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()}
+    return {
+        key: torch.from_numpy(value) for key, value in choice_inputs.encode(raw).items()
+    }
 
 
 Family = Literal["attack", "target", "mode", "ability", "land", "learn"]
@@ -284,67 +286,24 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
 
 
 def reorder_offers(
-    obs: dict[str, torch.Tensor], order: torch.Tensor
+    obs: dict[str, torch.Tensor], order: torch.Tensor | list[int]
 ) -> dict[str, torch.Tensor]:
-    """Permute legal offers together with their masks and object references."""
-    result = {k: v.clone() for k, v in obs.items()}
-    for key in ("actions", "actions_valid", "action_focus"):
-        result[key][:, : len(order)] = obs[key][:, order]
-    return result
+    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
+    indices = order.cpu().numpy() if isinstance(order, torch.Tensor) else order
+    return tensors_like(choice_inputs.reorder_offers(host, indices), obs)
 
 
-# These tables keep their row order when object slots move. Their joins
-# store the object index plus one, with zero for absence.
-_OBJECT_JOINS = {
-    "relations": observation_schema.columns("relations", "source", "reference"),
-    "facts": [observation_schema.FACT_OBJECT_INDEX],
-    "effects": observation_schema.columns("effects", "controller", "source"),
-    "effect_members": observation_schema.columns("effect_members", "object"),
-}
+def tensors_like(
+    host: dict[str, np.ndarray], obs: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor]:
+    return {
+        key: torch.from_numpy(value).to(obs[key].device) for key, value in host.items()
+    }
 
 
 def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Reverse object slots with their identity joins, masks and focus references."""
-    result = {k: v.clone() for k, v in obs.items()}
-    keys = ("agent_cards", "opponent_cards", "agent_permanents", "opponent_permanents")
-    # Permanent links use one-based object references; zero and players stay fixed.
-    references = torch.arange(
-        3 + sum(obs[key].shape[1] for key in keys), device=obs[keys[0]].device
-    )
-    offset = 2  # The two player rows precede cards and permanents.
-    for index, key in enumerate(keys):
-        count = obs[key].shape[1]
-        order = torch.arange(count - 1, -1, -1)
-        references[offset + 1 : offset + count + 1] = offset + 1 + order
-        result[key] = obs[key][:, order]
-        result[key + "_valid"] = obs[key + "_valid"][:, order]
-        if index < 2:
-            result["semantic_cards"][:, index] = obs["semantic_cards"][:, index, order]
-            if "card_turn_state" in obs:
-                result["card_turn_state"][:, index] = obs["card_turn_state"][
-                    :, index, order
-                ]
-        focus = obs["action_focus"]
-        mask = (focus >= offset) & (focus < offset + count)
-        result["action_focus"][mask] = offset + count - 1 - (focus[mask] - offset)
-        for block, columns in _OBJECT_JOINS.items():
-            if block in obs:
-                for col in columns:
-                    refs = obs[block][..., col]
-                    mask = (refs > offset) & (refs <= offset + count)
-                    result[block][..., col][mask] = 2 * offset + count + 1 - refs[mask]
-        offset += count
-    # Remap after moving all source rows: links can cross either owner's slots.
-    for key in ("agent_permanents", "opponent_permanents"):
-        for column in observation_schema.PERMANENT_LINK_INDEXES:
-            result[key][..., column] = references[result[key][..., column].long()]
-    # Input v11 stack rows stay in stack order; their source links name permanents.
-    if "stack" in obs:
-        column = observation_schema.STACK_SOURCE_INDEX
-        result["stack"][..., column] = references[obs["stack"][..., column].long()].to(
-            obs["stack"].dtype
-        )
-    return result
+    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
+    return tensors_like(choice_inputs.reorder_objects(host), obs)
 
 
 # Version of the case set `curriculum()` builds; bump it when its digest changes.

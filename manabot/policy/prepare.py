@@ -592,6 +592,11 @@ def object_slots(values: Array, remap: Array | None, *, base: int = 1) -> Array:
     return slots if remap is None else remap[slots]
 
 
+def object_ownership(cards: int, permanents: int) -> np.ndarray:
+    """Ownership of the two players and their card and permanent slots."""
+    return np.repeat([True, False] * 3, [1, 1, cards, cards, permanents, permanents])
+
+
 def prepare(
     obs: ObservationBuffers | BucketedObservation,
     tables: Tables,
@@ -733,7 +738,7 @@ def prepare(
             for seat, row in enumerate(cards)
         ]
     c, p = cards[0].shape[1], permanents.shape[2]
-    seat_ownership = np.repeat([True, False] * 3, [1, 1, c, c, p, p])
+    seat_ownership = object_ownership(c, p)
     ownership = [np.broadcast_to(seat_ownership, (batch, len(seat_ownership)))]
     if stack is not None:
         ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)

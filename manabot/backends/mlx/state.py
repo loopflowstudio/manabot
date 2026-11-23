@@ -1,0 +1,250 @@
+"""MLX continuation and numerical evidence for tracked self-play.
+
+Etude commits the callback's safetensors and its own state.json together. The
+latter owns the counts, model settings and column readings. Restore checks the
+complete array layout before changing either policy or Adam.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+import hashlib
+import json
+from pathlib import Path
+import random
+from typing import TYPE_CHECKING, BinaryIO
+
+from etude.train.state import read_state
+import mlx.core as mx
+from mlx.utils import tree_flatten, tree_unflatten
+import numpy as np
+
+from manabot.backends.mlx.arrays import all_finite
+from manabot.backends.mlx.learner import Learner
+from manabot.backends.mlx.policy import MLXActorCritic
+from manabot.infra.identity import canonical_sha256
+from manabot.training.state.backend import IncidentCapture, NumericalIncident
+
+if TYPE_CHECKING:
+    from etude.train.tracking import TrainingRun
+
+    from manabot.training.loops.self_play import Counts
+    from manabot.training.rollout.collection import Collector, RolloutBatch
+
+
+def framework() -> dict[str, str | None]:
+    return {"mlx": mx.__version__}
+
+
+def training_arrays(
+    learner: Learner, ema: MLXActorCritic | None
+) -> dict[str, mx.array]:
+    trees = {"learner": learner.agent.parameters(), "adam": learner.optimizer.state}
+    if ema is not None:
+        trees["ema"] = ema.parameters()
+    return dict(tree_flatten(trees))
+
+
+def restore(
+    run: TrainingRun, learner: Learner, ema: MLXActorCritic | None, counts: Counts
+) -> Callable[[Path], None]:
+    """Admit the committed snapshot and supply the writer for Etude's staged folder."""
+    filename = "training.safetensors"
+    agent = learner.agent
+    # These lookup tables are reconstructed by policy creation. A table with the
+    # same shape but a changed vocabulary would silently reinterpret the weights.
+    binding = canonical_sha256(
+        {
+            "observation": agent.observation_space.config.model_dump(mode="json"),
+            "precision": agent.precision,
+            "buffers": {
+                name: [
+                    str(value.dtype),
+                    value.shape,
+                    hashlib.sha256(value.tobytes()).hexdigest(),
+                ]
+                for name, value in agent.buffers().items()
+            },
+        }
+    )
+
+    def metadata() -> dict[str, str]:
+        return {
+            "backend": "mlx",
+            "schema": "1",
+            "binding": binding,
+            "counts": canonical_sha256(counts.model_dump(mode="json")),
+        }
+
+    found = read_state(run.out / "state")
+    if found is not None:
+        path = found.path / filename
+        if found.record.files or not path.is_file():
+            raise ValueError("expected an MLX callback save for tracked self-play")
+        if (
+            counts.updates != found.record.at["updates"]
+            or counts.model is None
+            or counts.readings is None
+        ):
+            raise ValueError("incompatible MLX saved counts or input contract")
+        arrays, saved = mx.load(path, return_metadata=True)
+        if saved != metadata():
+            raise ValueError(
+                "incompatible MLX snapshot backend, schema, input binding or counts"
+            )
+        expected = training_arrays(learner, ema)
+        # Adam creates its two moments lazily on the first accepted step.
+        if counts.optimizer_updates:
+            for name, value in tree_flatten(agent.trainable_parameters()):
+                expected[f"adam.{name}.m"] = value
+                expected[f"adam.{name}.v"] = value
+        if arrays.keys() != expected.keys():
+            raise ValueError("incompatible MLX snapshot parameter or Adam keys")
+        for name, value in arrays.items():
+            if (
+                value.shape != expected[name].shape
+                or value.dtype != expected[name].dtype
+            ):
+                raise ValueError(f"incompatible MLX snapshot shape or dtype for {name}")
+        if int(arrays["adam.step"]) != counts.optimizer_updates:
+            raise ValueError("MLX Adam step differs from the saved optimizer count")
+        if not all_finite(arrays.values()):
+            raise ValueError("nonfinite MLX training snapshot")
+        trees = tree_unflatten(arrays)
+        agent.update(trees["learner"])
+        agent.clear_cache()
+        if ema is not None:
+            ema.update(trees["ema"])
+            ema.clear_cache()
+        learner.optimizer.state = trees["adam"]
+
+    def export(folder: Path) -> None:
+        mx.save_safetensors(
+            folder / filename, training_arrays(learner, ema), metadata()
+        )
+
+    return export
+
+
+@dataclass
+class IncidentTensors:
+    arrays: dict[str, mx.array] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+def save(value: object, stream: BinaryIO) -> None:
+    if not isinstance(value, IncidentTensors):
+        raise TypeError("expected MLX incident tensors")
+    mx.save_safetensors(stream, value.arrays, value.metadata)
+
+
+def capture_incident(
+    error: NumericalIncident,
+    learner: Learner,
+    collector: Collector,
+    batch: RolloutBatch | None,
+    ema: MLXActorCritic | None,
+    rng: np.random.Generator,
+    *,
+    evidence_bytes: int,
+    max_rows: int,
+) -> IncidentCapture:
+    """Retain bounded failure samples, their rollout coordinates, and failure-time state."""
+    evidence = IncidentTensors()
+    shapes: dict[str, object] = {}
+    remaining = evidence_bytes
+
+    def retain(
+        name: str, value: mx.array | np.ndarray, sample: mx.array | np.ndarray
+    ) -> None:
+        nonlocal remaining
+        detail = {"shape": list(value.shape), "dtype": str(value.dtype)}
+        if sample.nbytes <= remaining:
+            evidence.arrays[name] = mx.array(sample)
+            remaining -= sample.nbytes
+        else:
+            detail["omitted"] = "evidence byte budget"
+        shapes[name] = detail
+
+    # The gradient error can carry the whole model. Only sample a bounded
+    # prefix of each gradient. Action masks instead locate the offending rows.
+    failed = error.tensors.get("failed")
+    valid = error.tensors.get("valid")
+    positions = None
+    row_shape: tuple[int, ...] = ()
+    if failed is not None:
+        if valid is not None and failed.shape == valid.shape:
+            failed = failed.any(axis=-1)
+        row_shape = failed.shape
+        if row_shape:
+            positions = np.flatnonzero(np.asarray(failed))[:max_rows]
+    for name, value in error.tensors.items():
+        if positions is not None and value.shape[: len(row_shape)] == row_shape:
+            sample = value.reshape(-1, *value.shape[len(row_shape) :])[
+                mx.array(positions)
+            ]
+        else:
+            sample = value.reshape(-1)[:2048]
+        retain(name, value, sample)
+
+    if batch is not None:
+        indexes = error.tensors.get("minibatch_indexes")
+        rows = np.arange(min(batch.actions.size, max_rows))
+        if indexes is not None:
+            mapped = np.asarray(indexes).reshape(-1)
+            if np.any((mapped < 0) | (mapped >= batch.actions.size)):
+                raise ValueError("invalid incident rollout indexes")
+            rows = (
+                mapped[positions]
+                if positions is not None and failed.size == mapped.size
+                else mapped[:max_rows]
+            )
+        elif positions is not None and failed.size == batch.actions.size:
+            rows = positions
+        shapes["batch_layout"] = {
+            "trajectory_shape": list(batch.actions.shape),
+            "selected_flat_indexes": rows.tolist(),
+        }
+        for name in ("actions", "logprobs", "values", "rewards", "dones"):
+            selected = getattr(batch, name).reshape(-1)[rows]
+            retain(f"batch/{name}", selected, selected)
+        if len(rows):
+            packed = type(batch.action_data).concatenate(
+                [batch.action_data.row(int(row)) for row in rows]
+            )
+            for name, value in {
+                "offsets": packed.offsets,
+                "slots": packed.slots,
+                "capacity": np.array(packed.capacity),
+                "log_probabilities": packed.log_probabilities,
+                **packed.fields,
+            }.items():
+                retain(f"packed_actions/{name}", value, value)
+        observed = batch.recorded.index[rows]
+        for name, values in batch.recorded.rows.items():
+            # Check size before gathering potentially wide observation rows.
+            required = len(rows) * values[0].nbytes
+            if required > remaining:
+                shapes[f"observation/{name}"] = {"omitted": "evidence byte budget"}
+                continue
+            sample = values[observed]
+            retain(f"observation/{name}", sample, sample)
+
+    state = IncidentTensors(
+        training_arrays(learner, ema),
+        {
+            "numpy_rng": json.dumps(rng.bit_generator.state),
+            "python_rng": json.dumps(random.getstate()),
+        },
+    )
+    state.arrays["rng.collector"] = mx.array(collector.numerics.snapshot_rng())
+    state.arrays["rng.mlx"] = mx.random.state[0]
+    return IncidentCapture(
+        evidence,
+        state,
+        shapes,
+        sum(v.nbytes for v in state.arrays.values()),
+        False,
+        ".safetensors",
+    )

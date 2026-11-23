@@ -13,51 +13,33 @@ name table, so every member receives gradient and distinct spans stay distinct
 without encoding member programs on each step.
 """
 
-from collections.abc import Sequence
-
+import numpy as np
 import torch
 from torch import nn
 
 from manabot.policy.prepare import Prepared
-import managym
 
 
 class NameCandidateEncoder(nn.Module):
     def __init__(
         self,
-        candidates: Sequence[managym.NameCandidate],
+        definitions: np.ndarray,
         hidden_dim: int,
-        definition_rows: torch.Tensor | None = None,
+        program_rows: np.ndarray | None,
         *,
         onto_definitions: bool = False,
     ) -> None:
         super().__init__()
         self.onto_definitions = onto_definitions
-        if not candidates or len({candidate.name for candidate in candidates}) != len(
-            candidates
-        ):
-            raise ValueError("naming vocabulary must be nonempty and unique")
-        # Row identity is the name, not an executable-definition surrogate.
-        # Definition-free validated names therefore never enter the card catalog.
-        self.register_buffer(
-            "definitions",
-            torch.tensor(
-                [0]
-                + [
-                    candidate.definition + 1 if candidate.definition is not None else 0
-                    for candidate in candidates
-                ],
-                dtype=torch.long,
-            ),
-        )
-        self.embedding = nn.Embedding(len(candidates) + 1, hidden_dim, padding_idx=0)
+        self.register_buffer("definitions", torch.from_numpy(definitions))
+        self.embedding = nn.Embedding(len(definitions), hidden_dim, padding_idx=0)
         # Bucketed shapes join names without a data-dependent selection.
         self.bucketed = False
         # Optional definition joins are already bound by checkpoint admission.
         # Several validated names may refer to one definition; retain all edges.
         self.register_buffer(
             "program_rows",
-            definition_rows[self.definitions] if definition_rows is not None else None,
+            torch.from_numpy(program_rows) if program_rows is not None else None,
         )
 
         # Static catalog routes are prepared once on the host; neither the

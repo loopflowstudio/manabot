@@ -1,11 +1,20 @@
 """Host lookup tables for encoding the running catalog and binding stored policies."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.env.observation import ObservationSpace
 from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
-from manabot.policy.prepare import RecordNamespace, record_key
+from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import (
+    Layout,
+    RecordNamespace,
+    Tables,
+    object_ownership,
+    record_key,
+)
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -137,4 +146,73 @@ def catalog_tables(
         buffers,
         tuple(sorted(vocabulary)),
         tables.size if tables else len(vocabulary) + 1,
+    )
+
+
+def name_definitions(candidates: Sequence[managym.NameCandidate]) -> np.ndarray:
+    """One-based definition joins for the unique public names. Zero denotes absence."""
+    if not candidates or len({candidate.name for candidate in candidates}) != len(
+        candidates
+    ):
+        raise ValueError("naming vocabulary must be nonempty and unique")
+    return np.asarray(
+        [0]
+        + [
+            candidate.definition + 1 if candidate.definition is not None else 0
+            for candidate in candidates
+        ],
+        dtype=np.int64,
+    )
+
+
+@dataclass(frozen=True)
+class PolicyBuffers:
+    """Fresh lookup arrays before a backend registers them as model buffers."""
+
+    catalog: CatalogTables | None
+    definitions: np.ndarray
+    program_rows: np.ndarray | None
+    ownership: np.ndarray
+
+    @property
+    def token_rows(self) -> int:
+        return self.catalog.embedding_rows if self.catalog is not None else 0
+
+    def preparation_tables(self, layout: Layout) -> Tables:
+        buffers = {
+            "_is_agent_template": self.ownership,
+            "name_candidates.definitions": self.definitions,
+        }
+        if self.catalog is not None:
+            buffers.update(
+                {
+                    f"semantic_cards.{name}": value
+                    for name, value in self.catalog.buffers.items()
+                }
+            )
+        if self.program_rows is not None:
+            buffers["name_candidates.program_rows"] = self.program_rows
+        return Tables.from_buffers(buffers, layout)
+
+
+def fresh_policy_tables(space: ObservationSpace, model: ModelConfig) -> PolicyBuffers:
+    catalog = (
+        catalog_tables(
+            model.world,
+            records=model.catalog_records(),
+            decision_memory=bool(space.config.max_decision_records),
+        )
+        if model.world is not None
+        else None
+    )
+    definitions = name_definitions(managym.naming_catalog())
+    return PolicyBuffers(
+        catalog,
+        definitions,
+        catalog.buffers["definition_rows"][definitions]
+        if catalog is not None
+        else None,
+        object_ownership(
+            space.config.max_cards_per_player, space.config.max_permanents_per_player
+        )[None],
     )

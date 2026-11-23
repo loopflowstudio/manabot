@@ -13,7 +13,6 @@ nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
 `gradients` returns them without stepping. The learner runs in its policy's
 precision (bfloat16 for wide models, float32 otherwise, or an explicit choice);
 bfloat16 forwards keep float32 master weights, loss, clipping and Adam.
-Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
 counts steps and rejections; the sampled gradient and parameter detail it
 reads from torch modules stays absent here.
@@ -23,14 +22,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 from mlx.utils import tree_flatten, tree_map
 
-from manabot.backends.mlx.arrays import flat_numpy
+from manabot.backends.mlx.arrays import all_finite, flat_numpy
 from manabot.backends.mlx.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
 
@@ -48,7 +47,7 @@ class StepRecorder(Protocol):
 
     def rejecting(self) -> AbstractContextManager[object]: ...
 
-    def record_step(self, parameters: list[object], before: list[object]) -> None: ...
+    def record_step(self) -> None: ...
 
 
 def check_objective(loss: mx.array) -> None:
@@ -60,6 +59,20 @@ def no_grad() -> AbstractContextManager[object]:
     """Compute constants. MLX records no graph outside a differentiated
     function, so there is nothing to switch off."""
     return nullcontext()
+
+
+def update_ema(ema: "MLXActorCritic", agent: "MLXActorCritic", decay: float) -> None:
+    """Update `ema` weights in place toward `agent`."""
+    if not 0 <= decay < 1:
+        raise ValueError(f"EMA decay must be in [0, 1), got {decay}")
+    updated = tree_map(
+        lambda target, source: target * decay + source * (1.0 - decay),
+        ema.parameters(),
+        agent.parameters(),
+    )
+    ema.update(updated)
+    ema.clear_cache()
+    mx.eval(ema.parameters())
 
 
 class Learner:
@@ -75,9 +88,10 @@ class Learner:
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
     ) -> None:
-        if execution_rows is not None or bootstrap_rows is not None:
-            raise NotImplementedError("execution row limits currently require Torch")
-        self.execution_rows = self.bootstrap_rows = None
+        if any(v is not None and v < 1 for v in (execution_rows, bootstrap_rows)):
+            raise ValueError("execution row limits must be positive")
+        self.execution_rows = execution_rows
+        self.bootstrap_rows = bootstrap_rows
         if minibatch_rows < 1:
             raise ValueError("minibatch_rows must be positive")
         if precision is not None:
@@ -94,6 +108,8 @@ class Learner:
         self.profiler = Profiler()
         # The loss `loss` last returned and its parameter gradients.
         self._pending: tuple[mx.array, dict[str, object]] | None = None
+        # Summed chunk gradients across execution chunks of one logical minibatch.
+        self._accumulated: dict[str, object] | None = None
 
     def _require_masters(self, message: str) -> None:
         """Gradients and Adam apply to float32 masters; inside
@@ -134,7 +150,17 @@ class Learner:
         return outputs
 
     def accumulate(self, loss: mx.array, *, first: bool) -> None:
-        raise NotImplementedError("gradient accumulation currently requires Torch")
+        """Accumulate chunk gradients without stepping; clip and Adam stay at the logical boundary."""
+        check_objective(loss)
+        gradients = self._gradients(loss)
+        self._pending = None
+        if first:
+            self._accumulated = gradients
+        else:
+            if self._accumulated is None:
+                raise ValueError("accumulate(first=False) requires an active batch")
+            self._accumulated = tree_map(mx.add, self._accumulated, gradients)
+            mx.eval(self._accumulated)
 
     def _gradients(self, loss: mx.array) -> dict[str, object]:
         if self._pending is None or self._pending[0] is not loss:
@@ -156,11 +182,17 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
-        if accumulated:
-            raise NotImplementedError("gradient accumulation currently requires Torch")
         self._require_masters("close the inference precision scope before stepping")
-        gradients = self._gradients(loss)
-        self._pending = None
+        if accumulated:
+            if self._accumulated is None:
+                raise ValueError(
+                    "step(accumulated=True) requires accumulated gradients"
+                )
+            gradients = self._accumulated
+            self._accumulated = None
+        else:
+            gradients = self._gradients(loss)
+            self._pending = None
         track = recorder.track if recorder is not None else _untracked
         with recorder.rejecting() if recorder is not None else nullcontext():
             check_objective(loss)
@@ -175,9 +207,7 @@ class Learner:
                 self.optimizer.update(self.agent, clipped)
                 self.agent.clear_cache()
                 parameters = tree_flatten(self.agent.parameters())
-                finite = mx.all(
-                    mx.isfinite(mx.concatenate([p.flatten() for _, p in parameters]))
-                )
+                finite = all_finite(p for _, p in parameters)
                 mx.eval(finite, self.agent.parameters(), self.optimizer.state)
                 if not bool(finite):
                     raise NumericalError(
@@ -185,7 +215,7 @@ class Learner:
                         {f"parameter/{name}": p for name, p in parameters},
                     )
                 if recorder is not None:
-                    recorder.record_step([], [])
+                    recorder.record_step()
         return norm
 
     def gradients(self, loss: mx.array) -> ParameterArrays:
@@ -199,17 +229,3 @@ class Learner:
 
 def _untracked(section: str) -> AbstractContextManager[object]:
     return nullcontext()
-
-
-def critic_gradient_norms(model: Any) -> tuple[float, float | None]:
-    raise NotImplementedError("MLX does not expose sampled gradient health")
-
-
-def gradient_health(
-    model: Any, norm_before: Any, critic_norms: tuple[float, float | None]
-) -> dict[str, float | int]:
-    raise NotImplementedError("MLX does not expose sampled gradient health")
-
-
-def parameter_health(parameters: list[Any], before: list[Any]) -> dict[str, float]:
-    raise NotImplementedError("MLX does not expose sampled parameter health")

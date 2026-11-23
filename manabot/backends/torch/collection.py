@@ -6,12 +6,12 @@ Scopes retain the established inference preparation and forward modes.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Literal, cast
+from typing import cast
 
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import array_fields, device_of, on_device
+from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
@@ -19,11 +19,11 @@ from manabot.backends.torch.rollout import check_packed, packing_mask
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
-from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.learning import Precision
 from manabot.training.rollout.numerics import SampledRows
-from manabot.training.rollout.selection_data import SelectionPrediction
+from manabot.training.rollout.selection_data import SelectionDraw
 
 
 class CollectionSession:
@@ -151,11 +151,7 @@ class SelectionPredictor:
         self.generator = torch.Generator().manual_seed(seed)
 
     @torch.inference_mode()
-    def predict(
-        self,
-        encoded: dict[str, np.ndarray],
-        reference: Literal["uniform", "action_type_uniform"],
-    ) -> SelectionPrediction:
+    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
         agent, generator = self.agent, self.generator
         tensors = on_device(
             agent.prepare(
@@ -167,18 +163,4 @@ class SelectionPredictor:
         logits, value = agent(tensors)
         probabilities = logits.softmax(-1)
         action = int(torch.multinomial(probabilities[0], 1, generator=generator))
-        logs = probabilities.clamp_min(1e-12).log()
-        ref = torch.from_numpy(
-            reference_distribution(
-                {k: encoded[k][None] for k in ("actions_valid", "actions")},
-                reference,
-            )
-        )
-
-        return SelectionPrediction(
-            action,
-            float(value.item()),
-            float(probabilities[0, action]),
-            float(-(probabilities * logs).sum()),
-            float((probabilities * (logs - ref.clamp_min(1e-12).log())).sum()),
-        )
+        return SelectionDraw(action, float(value.item()), to_numpy(probabilities[0]))

@@ -15,20 +15,19 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.backends.torch.arrays import array_fields, on_device
-from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
     legal_mask,
     require,
 )
-from manabot.env.memory_store import PrefixObservation, select_rows
+from manabot.env.memory_store import PrefixObservation
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.rollout.admission import AdmittedRows
 
 
-class AdmittedRollout:
+class AdmittedRollout(AdmittedRows):
     """A rollout batch whose observations are admitted once for one policy.
 
     Bootstrap reads admit one execution chunk at a time. `admit_rows` admits the learner
@@ -40,35 +39,6 @@ class AdmittedRollout:
     must not change afterwards.
     """
 
-    def __init__(self, agent: ActorCritic, batch: RolloutBatch) -> None:
-        self.agent = agent
-        self.batch = batch
-        self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        # Each epoch regroups the extents measured at learner admission.
-        self._needs: np.ndarray | None = None
-        self._measured = np.zeros(batch.actions.size, dtype=bool)
-
-    def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
-        """Admit flat rollout `indexes` not yet admitted."""
-        pending = np.unique(indexes[~self._admitted[indexes]])
-        for start in range(0, len(pending), chunk_rows):
-            chunk = pending[start : start + chunk_rows]
-            needs = self.agent.check_observation(
-                self.batch.observations(chunk).observation
-            )
-            self._admitted[chunk] = True
-            if needs is None:
-                continue
-            # Packing drops illegal offers. Keep their collection-time shape floor
-            # while validating the current rollout, whose arrays are writable.
-            recorded = self.batch.recorded.gather_needs(chunk)
-            if recorded is not None:
-                needs = np.maximum(needs, recorded)
-            if self._needs is None:
-                self._needs = np.zeros((len(self._admitted), needs.shape[1]), np.int64)
-            self._needs[chunk] = needs
-            self._measured[chunk] = True
-
     def next_observation(self, device: torch.device) -> Prepared[torch.Tensor] | None:
         """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
         return next(
@@ -79,12 +49,7 @@ class AdmittedRollout:
         self, device: torch.device, size: int
     ) -> Iterator[Prepared[torch.Tensor]]:
         """Admit, prepare and transfer one bootstrap chunk at a time."""
-        if size < 1:
-            raise ValueError("bootstrap rows must be positive")
-        for start in range(0, len(self.batch.next_done), size):
-            raw = select_rows(self.batch.next_obs, slice(start, start + size))
-            prepared = self.agent.prepare(raw, inference=True)
-            del raw
+        for prepared in self.bootstrap_inputs(size):
             yield on_device(prepared, device)
             del prepared
 
@@ -93,23 +58,13 @@ class AdmittedRollout:
     ) -> tuple[Prepared[torch.Tensor], ActionRows]:
         """Learner-prepared observations of flat rollout `indexes` on `device`,
         with their behavior distributions, independent of autograd mode."""
-        prepared, rows = self._prepare_rows(indexes)
+        prepared, rows = self.prepare_rows(indexes)
         return on_device(prepared, device), rows
 
-    def _prepare_rows(
+    def prepare_rows(
         self, indexes: NDArray[np.int64]
     ) -> tuple[Prepared[np.ndarray], ActionRows]:
-        if not self._admitted[indexes].all():
-            raise ValueError("rollout rows were not admitted")
-        rows = self.batch.observations(indexes)
-        needs = (
-            self._needs[indexes]
-            if self._needs is not None and self._measured[indexes].all()
-            else None
-        )
-        prepared = self.agent.prepare_admitted(
-            rows.observation, needs=needs, inference=False
-        )
+        prepared, rows = super().prepare_rows(indexes)
         # Behavior/reference calculations need ordinary action fields, not a
         # second raw memory owner beside Prepared (including in the prefetch).
         if isinstance(rows.observation, PrefixObservation):
@@ -144,7 +99,7 @@ class AdmittedRollout:
                 # Lazy submission: the worker holds the batch being awaited
                 # and at most the one after it.
                 submitted = (
-                    worker.submit(self._prepare_rows, chunk) for chunk in chunks
+                    worker.submit(self.prepare_rows, chunk) for chunk in chunks
                 )
                 pending = next(submitted, None)
                 for chunk in chunks:

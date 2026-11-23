@@ -205,6 +205,22 @@ def bucket_sizes(
     return None if needs is None else sizes_of(needs, space, objects=objects)
 
 
+def bucket_observation(
+    obs: ObservationBuffers,
+    space: ObservationSpace,
+    needs: np.ndarray | None,
+    *,
+    objects: bool,
+) -> BucketedObservation | None:
+    """Select views in original coordinates using measured or supplied row extents."""
+    if needs is None:
+        needs = row_needs(obs, space)
+    if needs is None:
+        return None
+    sizes = sizes_of(needs, space, objects=objects)
+    return BucketedObservation(bucket_views(obs, sizes), sizes, needs)
+
+
 def object_columns(buckets: BucketSizes) -> list[slice]:
     """Full-coordinate object slices kept by `buckets`, in object order."""
     return [slice(0, 2)] + [
