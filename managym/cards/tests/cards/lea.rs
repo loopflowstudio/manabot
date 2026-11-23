@@ -1,10 +1,8 @@
 //! Tests for cards filed in `src/lea.rs`, in card order.
 
-use crate::support::game::move_card;
-use crate::support::inspect::{current_object, now, permanent_of, zone_of};
 use crate::support::{
-    game::{deck, deck_of, five_color_setup, ready, Scenario},
-    inspect::{library_card, permanent_named},
+    game::{deck, deck_of, five_color_setup, move_card, ready, Scenario},
+    inspect::{card_of, current_object, library_card, now, permanent_named, permanent_of, zone_of},
     play::{
         activate_named, cast, cast_card, choose, enter_and_settle, resolve_top, settle,
         spend_colorless,
@@ -17,7 +15,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        game_object::{PlayerId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -194,6 +192,15 @@ fn sol_ring_taps_for_two_colorless() {
     );
 }
 
+fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
+    let clone = cast(s, "Clone");
+    spend_colorless(s);
+    resolve_top(s);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+    clone
+}
+
 /// Clone offers every creature on the battlefield, enters as the chosen one
 /// (a card, not a token, still its caster's), and is Clone again once it
 /// leaves the battlefield.
@@ -259,11 +266,7 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
 fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
     let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
-    let clone = cast(&mut s, "Clone");
-    spend_colorless(&mut s);
-    resolve_top(&mut s);
-    assert!(s.choose_target(Target::Permanent(villager)));
-    settle(&mut s);
+    let clone = cast_clone_as(&mut s, villager);
     let copy = permanent_of(&s, clone).expect("entered");
     assert!(s.game().state.permanents[copy].as_ref().unwrap().tapped);
 
@@ -345,18 +348,13 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
 fn departed_clone_creates_joo_dee_before_the_sacrifice_choice() {
     use crate::support::{
         game::clear_summoning_sickness,
-        inspect::{card_of, offered_cards},
-        play::{activate, pass_until},
+        play::{activate, pass_until, select_card},
     };
 
     let name = "Joo Dee, One of Many";
     let mut s = five_color_setup(&["Clone", name]);
     let source = s.force_permanent_on_battlefield(1, name);
-    let clone = cast(&mut s, "Clone");
-    spend_colorless(&mut s);
-    resolve_top(&mut s);
-    assert!(s.choose_target(Target::Permanent(source)));
-    settle(&mut s);
+    let clone = cast_clone_as(&mut s, source);
     let permanent = permanent_of(&s, clone).unwrap();
     clear_summoning_sickness(&mut s, permanent);
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -368,7 +366,9 @@ fn departed_clone_creates_joo_dee_before_the_sacrifice_choice() {
     assert_eq!(tokens.len(), 1);
     let token = card_of(&s, tokens[0]);
     assert!(!s.game().state[token].is_card());
-    assert!(offered_cards(&s).contains(&token));
+    select_card(&mut s, token);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, name).is_empty());
 }
 
 #[test]
@@ -378,11 +378,7 @@ fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
     let mut s = five_color_setup(&["Clone", horde, "Gray Ogre", "Scout's Warning"]);
     let original = s.force_permanent_on_battlefield(1, horde);
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let clone = cast(&mut s, "Clone");
-    spend_colorless(&mut s);
-    resolve_top(&mut s);
-    assert!(s.choose_target(Target::Permanent(original)));
-    settle(&mut s);
+    let clone = cast_clone_as(&mut s, original);
     s.game_mut().state.turn.history[0].cards_drawn = 1;
     cast(&mut s, "Scout's Warning");
     resolve_top(&mut s);
@@ -412,8 +408,9 @@ fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
     *s.game_mut() = restored.benchmark_game_mut().clone();
     resolve_top(&mut s);
     assert_eq!(current_object(&s, clone).name, "Gray Ogre");
-    assert_eq!(s.battlefield_permanents_named(0, horde).len(), 1);
-    let token = crate::support::inspect::card_of(&s, s.battlefield_permanents_named(0, horde)[0]);
+    let copies = s.battlefield_permanents_named(0, horde);
+    assert_eq!(copies.len(), 1);
+    let token = card_of(&s, copies[0]);
     assert!(!s.game().state[token].is_card());
     let values = s.game().state[token].copiable_definition();
     assert!(s.game().object_lki(departed).unwrap().copiable.is_none());
@@ -426,7 +423,7 @@ fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
     assert_eq!(copies.len(), 2);
     let live_token = copies
         .into_iter()
-        .map(|id| crate::support::inspect::card_of(&s, id))
+        .map(|id| card_of(&s, id))
         .find(|id| !s.game().state[*id].is_card())
         .unwrap();
     assert_eq!(s.game().state[live_token].copiable_definition(), values);
@@ -451,8 +448,7 @@ fn clone_legion_offers_the_entering_clone_token_as_focus() {
     settle(&mut s);
     let copies = s.battlefield_permanents_named(0, "Gray Ogre");
     assert_eq!(copies.len(), 2);
-    let token =
-        crate::support::inspect::card_of(&s, *copies.iter().find(|id| **id != ogre).unwrap());
+    let token = card_of(&s, *copies.iter().find(|id| **id != ogre).unwrap());
     assert!(!s.game().state[token].is_card());
     assert_eq!(focus, [s.game().state[token].id]);
 }
