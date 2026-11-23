@@ -1,4 +1,4 @@
-at: 59f696829e190e30fa0076e4a7311219601eeb90
+at: 72b65b3246d3b8a27aead6d82c88fe16bfcecacb
 first:
   - path: managym/README.md
     why: Public meaning of the two combat flags
@@ -6,8 +6,8 @@ first:
     why: Both viewers read the same combat history
   - path: managym/src/agent/observation_layout.rs
     why: Append combat flags to v11 columns
-  - path: tests/semantic/test_text_observation.py
-    why: Compare both windows with ordinary combat
+  - path: academy/ui/src/lib/board/prompt.ts
+    why: Label the pass leading to regular damage
   - path: managym/cards/src/dka.rs
     why: Reaver draws for each committed gain
   - path: managym/cards/tests/cards/dka.rs
@@ -55,5 +55,5 @@ first:
   - path: managym/src/flow/zones.rs
     why: Committed departures shift retained knowledge
   - path: tests/semantic/test_text_observation.py
-    why: Replay each choice and compare both viewers
+    why: Compare combat windows and replay private surveil choices
 hide: []

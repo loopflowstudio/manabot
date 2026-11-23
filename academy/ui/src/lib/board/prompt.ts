@@ -130,9 +130,13 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
   // A card name is never cut: when it does not fit beside the verb, the
   // button says the verb and the prompt line above names what resolves.
   if (top) return { text: `Resolve ${top}`.length <= PRIMARY_CHARS ? `Resolve ${top}` : 'Resolve', description: `${offer}: let ${top} resolve` };
-  const { turn } = frame.projection;
-  const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
-  const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';
-  const next = turn.another_damage_step ? 'To regular damage' : declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
+  const { turn, agent, opponent } = frame.projection;
+  let next = NEXT_STEP[turn.step];
+  if (turn.another_damage_step) {
+    next = 'To regular damage';
+  } else if (turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP') {
+    const attacking = [agent, opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
+    if (!attacking) next = 'To end of combat';
+  }
   return next ? { text: next, description: `${offer}: ${next.toLowerCase()}` } : { text: offer, description: offer };
 }
