@@ -674,7 +674,7 @@ impl Game {
                     && (self.can_cast_sorceries(player)
                         || self.has_instant_timing(player, object, cast))
                 {
-                    if let Some(value) = self.castable_mana_value(player, card, cast) {
+                    if let Some(value) = self.castable_mana_value(player, object, cast) {
                         offer(
                             Action::CastSpell {
                                 adventure,
@@ -696,22 +696,22 @@ impl Game {
     pub(crate) fn castable_mana_value(
         &self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         cast: CastChoices,
     ) -> Option<u8> {
-        let object = cast.spell(&self.state[self.state.object_of(card)]);
-        if object.spell_modes().is_some()
+        let spell = cast.spell(&self.state[object]);
+        if spell.spell_modes().is_some()
             && self
-                .legal_spell_modes(player, self.state.object_of(card), cast)
+                .legal_spell_modes(player, object, cast)
                 .is_empty()
         {
             return None;
         }
         // Every mandatory targeting requirement needs a legal target.
-        for requirement in object.target_requirements() {
+        for requirement in spell.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
+                    .legal_targets_for_requirement(player, object, &requirement)
                     .is_empty()
             {
                 return None;
@@ -719,17 +719,17 @@ impl Game {
         }
 
         // Permission opens the zone. An absent payable cost is distinct from {0}.
-        let cost = self.effective_spell_cost(player, self.state.object_of(card), cast, None)?;
+        let cost = self.effective_spell_cost(player, object, cast, None)?;
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
-        let Some(additional) = object.sacrifice_cost() else {
-            if self.can_pay_cast(player, self.state.object_of(card), cast) {
+        let Some(additional) = spell.sacrifice_cost() else {
+            if self.can_pay_cast(player, object, cast) {
                 return Some(cost.mana_value);
             }
-            return (self.alternative_cost_available(player, self.state.object_of(card), cast)
+            return (self.alternative_cost_available(player, object, cast)
                 && self.can_pay_cast(
                     player,
-                    self.state.object_of(card),
+                    object,
                     CastChoices {
                         kicked: true,
                         ..cast
@@ -738,7 +738,7 @@ impl Game {
             .then_some(0);
         };
         let operation = Operation::Spell {
-            object: self.state.object_of(card),
+            object,
             cast,
             mode: None,
             targets: Vec::new(),

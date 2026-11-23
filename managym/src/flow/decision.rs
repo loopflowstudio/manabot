@@ -3308,24 +3308,25 @@ impl Game {
         });
         let mut candidates = Vec::new();
         for card in cards {
-            let object = &self.state[self.state.object_of(card)];
+            let object = self.state.object_of(card);
+            let definition = &self.state[object];
             for adventure in [false, true] {
                 if adventure
-                    && (object.adventure.is_none()
+                    && (definition.adventure.is_none()
                         || !matches!(offer, ResolutionCastOffer::Graveyard { .. }))
                 {
                     break;
                 }
                 let cast = CastChoices { adventure, ..free };
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
-                    let spell = cast.spell(object);
+                    let spell = cast.spell(definition);
                     if !spell.types.is_castable()
                         || !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0))
                     {
                         continue;
                     }
                 }
-                if self.castable_mana_value(*player, card, cast).is_some() {
+                if self.castable_mana_value(*player, object, cast).is_some() {
                     candidates.push((card, adventure));
                 }
             }
