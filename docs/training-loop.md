@@ -291,10 +291,16 @@ alongside separate `snapshot/*` counters (`snapshot/starts`, `snapshot/choices`,
 `snapshot/rows`, `snapshot/terminals`, `snapshot/horizon_cuts`,
 `snapshot/captures`, `snapshot/groups_completed`, `snapshot/groups_discarded`,
 `snapshot/failed_branches`) and per-source advantage-filtering diagnostics.
+Starts and choices include retries. Rows and captures count only those retained
+in the assembled batch. Terminals and horizon cuts count branch endings across
+both seats, once per continuation. An update consisting entirely of replay
+still logs throughput and writes empty outcome and game-setting tables.
+
 `run.save()` persists the bank's cold state inside `Counts.snapshot_bank` under
 `out/state/save-*/state.json`; `--resume` restores the bank with an empty hot
-cache and reproduces the same scheduling sequence, scores and evictions as an
-uninterrupted hot-cached bank.
+cache. Given the same sequence of episode starts and scoring signals, the cold
+bank makes the same draws and evictions as the hot bank. The resumed attempt
+uses the loop's ordinary new seeds for fresh games and policy sampling.
 
 ### Capture, horizon cuts and `K`-branch scheduling
 

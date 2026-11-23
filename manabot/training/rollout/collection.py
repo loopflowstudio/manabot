@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 import time
 from typing import Any, Literal, Protocol, TypedDict
@@ -85,11 +85,13 @@ from manabot.training.rollout.snapshot_vector import (
     SlotInstall,
     SnapshotBranch,
     SnapshotVector,
+    SnapshotVectorFactory,
 )
 from manabot.training.rollout.snapshots import (
     BatchPlan,
     CaptureDecision,
     CapturePredicate,
+    SnapshotBank,
 )
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -535,6 +537,21 @@ def no_operation(
 
 
 @dataclass
+class SnapshotStats:
+    """Work on continuations. Rows and captures count what survived collection."""
+
+    starts: int = 0
+    choices: int = 0
+    rows: int = 0
+    terminals: int = 0
+    horizon_cuts: int = 0
+    captures: int = 0
+    groups_completed: int = 0
+    groups_discarded: int = 0
+    failed_branches: int = 0
+
+
+@dataclass
 class CollectorStats:
     """Cumulative accounting, including the opponent fingerprint."""
 
@@ -558,9 +575,22 @@ class CollectorStats:
     # Per slot, rows of the game in progress that earlier updates already learned
     # from. Only exact-quota games span updates.
     learned_game_rows: dict[int, int] = field(default_factory=dict)
+    snapshot: SnapshotStats | None = None
+
+    @property
+    def fresh_learner_transitions(self) -> int:
+        return self.learner_transitions - (self.snapshot.rows if self.snapshot else 0)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            **(
+                {
+                    "snapshot": asdict(self.snapshot),
+                    "fresh_learner_transitions": self.fresh_learner_transitions,
+                }
+                if self.snapshot is not None
+                else {}
+            ),
             "micro_steps": self.micro_steps,
             "environment_decisions": self.micro_steps,
             "idle_stream_steps": self.idle_stream_steps,
@@ -658,6 +688,7 @@ class Collector:
     _episodes: list[_EpisodeAssignment] = field(default_factory=list)
     _episode_choices: list[int] = field(default_factory=list)
     capture_predicate: CapturePredicate | None = None
+    snapshot_bank: SnapshotBank | None = None
 
 
 def _cell_identity(config: MatchConfig) -> tuple[object, ...]:
@@ -703,7 +734,8 @@ def open_collector(
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
     adaptive: AdaptiveConfig | None = None,
-    snapshot_vector: SnapshotVector | None = None,
+    snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
+    snapshot_bank: SnapshotBank | None = None,
     capture_predicate: CapturePredicate | None = None,
     operation: OperationScope = no_operation,
     games_path: Path | None = None,
@@ -721,9 +753,10 @@ def open_collector(
     RNG for learner rows and current-self opponents. The caller closes the
     collector with `close_collector`.
     """
+    if snapshot_bank is not None and snapshot_vector is None:
+        raise ValueError("snapshot bank requires a snapshot vector")
     if snapshot_vector is not None and (
-        not isinstance(snapshot_vector, SnapshotVector)
-        or opponent_mode != "self"
+        opponent_mode != "self"
         or learning_seats == "one"
         or adaptive is not None
         or root is not None
@@ -812,11 +845,12 @@ def open_collector(
         raise ValueError("execution_rows must be positive")
     env: Any
     if snapshot_vector is not None:
-        env = snapshot_vector
-        if not env.skip_trivial:
-            raise ValueError(
-                "snapshot self-play requires native trivial-decision skipping"
-            )
+        env = (
+            snapshot_vector(observation_space, match, num_envs, seed)
+            if callable(snapshot_vector)
+            and not isinstance(snapshot_vector, SnapshotVector)
+            else snapshot_vector
+        )
     elif root is None:
         # Native decision capture is opt-in from the observation's capacity.
         memory = observation_space.config
@@ -853,6 +887,13 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
+        if snapshot_vector is not None:
+            if not isinstance(env, SnapshotVector):
+                raise ValueError("snapshot collection requires a snapshot vector")
+            if not env.skip_trivial:
+                raise ValueError(
+                    "snapshot self-play requires native trivial-decision skipping"
+                )
         buffers = allocate_vector_buffers(observation_space, num_envs)
         slots = num_envs * (2 if learning_seats == "both" else 1)
         observation_keys = [
@@ -874,7 +915,10 @@ def open_collector(
             game_errors=game_errors,
             learner_seat=np.arange(num_envs, dtype=np.int64) % 2,
             stream_matches=[match] * num_envs,
-            stats=CollectorStats(),
+            stats=CollectorStats(
+                snapshot=SnapshotStats() if snapshot_vector is not None else None
+            ),
+            snapshot_bank=snapshot_bank,
             game_error_state=GameErrorState(),
             profiler=Profiler(enabled=False),
             _env=env,
@@ -969,7 +1013,9 @@ def _close_env(env: Any) -> None:
 
 
 def close_collector(collector: Collector) -> None:
-    """Join owned CPU producers; ordinary single-vector collectors own no pool."""
+    """Release cached snapshot handles before joining the owned vector producers."""
+    if collector.snapshot_bank is not None:
+        collector.snapshot_bank.close()
     _close_env(collector._env)
 
 
@@ -1420,6 +1466,12 @@ def _collect(
                 )
         else:
             batch = _build_batch(collector, num_steps)
+    if snapshot_plan is not None:
+        stats, receipt = collector.stats.snapshot, snapshot_plan.receipt
+        assert stats is not None and receipt is not None
+        stats.captures += len(receipt.captures)
+        stats.groups_completed += len(receipt.visited_groups)
+        stats.groups_discarded += len(snapshot_plan.discarded)
     collector.stats.seconds += time.perf_counter() - start
     collector._game_start_rows = [0] * len(collector._streams)
     if collector._sampler is not None:
@@ -1650,6 +1702,7 @@ def _capture_decisions(
 
 def _discard_group_rows(collector: Collector, groups: set[int]) -> None:
     """Discard closed siblings. A live sibling keeps its failure evidence until it ends."""
+    assert collector.stats.snapshot is not None
     for slot, stream in enumerate(collector._streams):
         boundary = collector._game_start_rows[slot]
         kept = [
@@ -1660,7 +1713,9 @@ def _discard_group_rows(collector: Collector, groups: set[int]) -> None:
         ]
         stream[:boundary] = kept
         collector._game_start_rows[slot] = len(kept)
-        collector.stats.learner_transitions -= boundary - len(kept)
+        discarded = boundary - len(kept)
+        collector.stats.learner_transitions -= discarded
+        collector.stats.snapshot.rows -= discarded
 
 
 def _start_episodes(
@@ -1705,6 +1760,10 @@ def _start_episodes(
         elif collector._episodes[slot].branch is not None:
             installs.append(SlotInstall(slot, -1, None))
     generations = _install_roots(collector, installs, plan)
+    assert collector.stats.snapshot is not None
+    collector.stats.snapshot.starts += sum(
+        branch is not None for branch in branches.values()
+    )
     for slot, branch in branches.items():
         collector._episodes[slot] = _EpisodeAssignment(
             branch, generations.get(slot), ordinals.get(slot, -1)
@@ -1892,28 +1951,38 @@ def _settle_step(
             _settle_attempt(
                 collector, int(row), seeds[row], int(acting[row]), "completed"
             )
-    # A fixed-seat read covers the whole vector. Restore poisoned peers before
-    # reading healthy horizon cuts, leaving the cut slots at their post-step revision.
-    if collector.game_error_state.stop_reason:
-        raise GameErrorLimit(collector.game_error_state.stop_reason)
-    if replace.any():
-        env.replace_failed_into_buffers(replace.tolist())
-    closed = done
+    cuts: list[int] = []
     if snapshots is not None:
-        cuts: list[int] = []
-        for row in np.flatnonzero(active & ~failed):
-            collector._episode_choices[row] += 1
+        stats = collector.stats.snapshot
+        assert stats is not None
+        for row in np.flatnonzero(active):
             branch = collector._episodes[row].branch
+            if branch is not None:
+                stats.choices += 1
+                stats.failed_branches += int(failed[row])
+                stats.terminals += int(done[row])
+            if failed[row]:
+                continue
+            collector._episode_choices[row] += 1
             if (
                 branch
                 and not done[row]
                 and branch.horizon == collector._episode_choices[row]
             ):
                 cuts.append(int(row))
-        if cuts:
-            _close_horizons(collector, snapshots, cuts)
-            closed = done.copy()
-            closed[cuts] = True
+    # Settle the attempted choices before checking the error limit. Restore
+    # poisoned peers before reading healthy horizon cuts through the vector.
+    if collector.game_error_state.stop_reason:
+        raise GameErrorLimit(collector.game_error_state.stop_reason)
+    if replace.any():
+        env.replace_failed_into_buffers(replace.tolist())
+    closed = done
+    if cuts:
+        assert snapshots is not None and collector.stats.snapshot is not None
+        _close_horizons(collector, snapshots, cuts)
+        collector.stats.snapshot.horizon_cuts += len(cuts)
+        closed = done.copy()
+        closed[cuts] = True
     if complete_games:
         for row in np.flatnonzero(closed):
             games[row] += 1
@@ -2002,6 +2071,7 @@ def _settle_attempt(
     """
     assert collector._record_attempt is not None
     completed = outcome == "completed"
+    branch = collector._episodes[row].branch if collector._episodes else None
     valid = 0
     discarded = 0
     learned = 0
@@ -2014,11 +2084,13 @@ def _settle_attempt(
             learned += earlier
             discarded += count + int(collector._pending[slot] is not None)
             collector.stats.learner_transitions -= count
+            if branch is not None:
+                assert collector.stats.snapshot is not None
+                collector.stats.snapshot.rows -= count
             _expose(collector, row, "learner_transitions", -count)
             del collector._streams[slot][collector._game_start_rows[slot] :]
             collector._pending[slot] = None
         collector._game_start_rows[slot] = len(collector._streams[slot])
-    branch = collector._episodes[row].branch if collector._episodes else None
     actions = [] if completed else list(collector._game_actions[row])
     if branch is not None and not completed:
         actions = [*branch.recipe.actions, *actions]
@@ -2143,6 +2215,9 @@ def _finalize(
     collector._streams[row].append(_Transition(pending, reward, done, bootstrap_index))
     collector._pending[row] = None
     collector.stats.learner_transitions += 1
+    if pending.branch is not None:
+        assert collector.stats.snapshot is not None
+        collector.stats.snapshot.rows += 1
     stream = row // 2 if collector.learning_seats == "both" else row
     _expose(collector, stream, "learner_transitions")
 

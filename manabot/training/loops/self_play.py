@@ -3,7 +3,7 @@
 `SelfPlay` describes the learning problem; `Counts` is the cumulative work
 registered with the run. `step` collects and learns in place. `self_play`
 registers raw weights, Adam, EMA and counts, then publishes immutable
-policies for evaluation. No native game or RNG is persisted.
+policies for evaluation. Snapshot runs also save root recipes and scheduler RNG.
 
 Model initialization uses the run seed s. At starting update u, native streams
 use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
@@ -11,8 +11,9 @@ run preserves the retired executor's offsets; resume starts fresh streams.
 """
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
+from dataclasses import asdict
 from itertools import zip_longest
 import os
 from pathlib import Path
@@ -86,6 +87,17 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.snapshot_vector import (
+    SnapshotVector,
+    SnapshotVectorFactory,
+)
+from manabot.training.rollout.snapshots import (
+    CapturePredicate,
+    ScorerFn,
+    SnapshotBank,
+    SnapshotBankState,
+    SnapshotConfig,
+)
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -98,6 +110,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.state.incidents import save_incident
 from manabot.training.update_metrics import (
+    complete_game_rates,
     metric_row,
     phase_seconds,
     time_since,
@@ -105,7 +118,7 @@ from manabot.training.update_metrics import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
-from manabot.training.updates.targets import BatchTargets
+from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
 
 # Offsets that separate a run seed's random streams (see the module docstring).
@@ -149,6 +162,9 @@ class SelfPlay(BaseModel):
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = "fixed"
+    snapshot: SnapshotConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     game_errors: GameErrorPolicy | None = None
     # Recording, diagnostics and statistics; excluded from the learner identity.
     run_settings: RunSettings = Field(
@@ -209,6 +225,8 @@ class SelfPlay(BaseModel):
             raise ValueError(error)
         if self.workers > self.streams:
             raise ValueError("producer count cannot exceed streams")
+        if self.snapshot is not None and self.learning_seats != "both":
+            raise ValueError("snapshot collection requires both learning seats")
         if self.learning_seats == "both" and (
             self.behavior == "random" or self.batch_closure == "exact-quota"
         ):
@@ -319,12 +337,31 @@ def self_play_collector(
     start: int,
     record_attempt: RecordAttempt | None = None,
     operation: OperationScope = no_operation,
+    snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
+    snapshot_bank: SnapshotBank | None = None,
+    snapshot_state: SnapshotBankState | None = None,
+    scorer: ScorerFn | None = None,
+    capture_predicate: CapturePredicate | None = None,
 ) -> Collector:
     """Native streams seeded from the run seed and the update they start at.
 
     The caller closes it with `close_collector`. `record_attempt` persists
     each settled game when `game_errors` is set.
     """
+    if snapshot_bank is not None:
+        if snapshot_bank.config != settings.snapshot:
+            raise ValueError("snapshot bank differs from self-play settings")
+        if scorer is not None and scorer is not snapshot_bank.scorer:
+            raise ValueError("supplied snapshot bank already defines its scorer")
+        scorer = snapshot_bank.scorer
+    if snapshot_state is not None:
+        if settings.snapshot is None:
+            raise ValueError("resuming a snapshot bank requires its snapshot settings")
+        snapshot_bank = SnapshotBank.from_state(
+            settings.snapshot, snapshot_state, scorer=scorer
+        )
+    elif settings.snapshot is not None and snapshot_bank is None:
+        snapshot_bank = SnapshotBank(settings.snapshot, scorer=scorer)
     collector = open_collector(
         ObservationSpace(settings.observation),
         Match(root_match(settings)),
@@ -341,6 +378,9 @@ def self_play_collector(
         operation=operation,
         matchup_curriculum=settings.matchup_curriculum,
         deck_source=settings.deck_source,
+        snapshot_vector=snapshot_vector,
+        snapshot_bank=snapshot_bank,
+        capture_predicate=capture_predicate,
         workers=settings.workers,
         numerics=torch_backend.collection.CollectionSession(
             device=settings.device,
@@ -373,10 +413,13 @@ class Counts(BaseModel):
     optimizer_exposures: int = 0
     readings: dict[str, list[str]] | None = None
     model: dict[str, Any] | None = None
+    snapshot_bank: SnapshotBankState | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     def coordinates(self) -> dict[str, int | float]:
         """Cumulative work published in policy files and update metrics."""
-        return self.model_dump(exclude={"readings", "model"})
+        return self.model_dump(exclude={"readings", "model", "snapshot_bank"})
 
 
 def clocks(counts: Counts) -> dict[str, float]:
@@ -708,6 +751,9 @@ def step(
     device = settings.device
     stats = collector.stats
     skipped, taps = stats.skipped_decisions, stats.priority_taps
+    fresh_rows = stats.fresh_learner_transitions
+    snapshot_before = asdict(stats.snapshot) if stats.snapshot is not None else {}
+    bank = collector.snapshot_bank
     games, decisions, transitions, idle = (
         stats.games,
         stats.micro_steps,
@@ -717,17 +763,35 @@ def step(
     before = phase_seconds(collector.profiler, learner.profiler)
     batch: RolloutBatch | None = None
     try:
-        with collector.operation("collection") as collection:
-            batch = collect(
-                collector, behavior(settings, learner, ema), settings.transitions
-            )
-            collection.progress(stats.micro_steps - decisions)
-        synchronize(device)
-        with collector.operation("learning"), learner.profiler.track("Learning"):
-            metrics = learn(settings, learner, ema, counts, batch, rng)
-            if settings.model.decision_memory != "none":
-                metrics["decision_memory"] = learner.agent.memory_gates()
+        policy = behavior(settings, learner, ema)
+        with bank.begin_batch() if bank is not None else nullcontext() as plan:
+            with collector.operation("collection") as collection:
+                batch = collect(
+                    collector, policy, settings.transitions, snapshot_plan=plan
+                )
+                collection.progress(stats.micro_steps - decisions)
             synchronize(device)
+            with collector.operation("learning"), learner.profiler.track("Learning"):
+                if plan is None:
+                    metrics = learn(settings, learner, ema, counts, batch, rng)
+                else:
+                    targets = compute_batch_targets(
+                        torch_backend,
+                        learner,
+                        torch_backend.rollout.AdmittedRollout(learner.agent, batch),
+                        settings.learning,
+                        policy,
+                    )
+                    metrics = learn(
+                        settings, learner, ema, counts, batch, rng, targets=targets
+                    )
+                if settings.model.decision_memory != "none":
+                    metrics["decision_memory"] = learner.agent.memory_gates()
+                synchronize(device)
+                if plan is not None:
+                    assert plan.receipt is not None
+                    plan.bank.commit(plan.receipt, targets.signals)
+                    counts.snapshot_bank = plan.bank.state()
     except NumericalError as error:
         try:
             save_incident(
@@ -772,21 +836,23 @@ def step(
             synchronize(device)
             probe["time/combat_probe"] = perf_counter() - started
     rates: dict[str, float] = {}
-    # With both seats learning complete games, retained rows count exactly
-    # the surfaced choices of the games that contributed terminal targets.
     if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
-        completed = stats.games - games
-        rows = batch.actions.size
-        skips = stats.skipped_decisions - skipped
-        rates = {
-            "decisions_per_game": rows / completed,
-            "skipped_share": skips / (skips + rows),
-            "priority_tap_rate": (stats.priority_taps - taps)
-            / (stats.micro_steps - decisions),
-            "rows_per_second": rows / seconds,
-            "updates_per_hour": 3600 / seconds,
-            "games_per_hour": completed * 3600 / seconds,
-        }
+        rates = complete_game_rates(
+            games=stats.games - games,
+            fresh_rows=stats.fresh_learner_transitions - fresh_rows,
+            skips=stats.skipped_decisions - skipped,
+            rows=batch.actions.size,
+            taps=stats.priority_taps - taps,
+            decisions=stats.micro_steps - decisions,
+            seconds=seconds,
+        )
+    if stats.snapshot is not None:
+        rates.update(
+            {
+                f"snapshot/{key}": value - snapshot_before[key]
+                for key, value in asdict(stats.snapshot).items()
+            }
+        )
     return (
         metric_row(metrics)
         | rates
@@ -874,7 +940,14 @@ def game_ledger(
 
 @contextmanager
 def self_play_games(
-    settings: SelfPlay, run: TrainingRun, counts: Counts
+    settings: SelfPlay,
+    run: TrainingRun,
+    counts: Counts,
+    *,
+    snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
+    snapshot_bank: SnapshotBank | None = None,
+    scorer: ScorerFn | None = None,
+    capture_predicate: CapturePredicate | None = None,
 ) -> Iterator[Collector]:
     """Scope fresh native streams, append-only game ledgers and failure capture."""
     failures = CaptureScope(
@@ -899,6 +972,11 @@ def self_play_games(
             start=counts.updates,
             record_attempt=record_attempt,
             operation=failures.operation,
+            snapshot_state=counts.snapshot_bank,
+            scorer=scorer,
+            snapshot_vector=snapshot_vector,
+            snapshot_bank=snapshot_bank,
+            capture_predicate=capture_predicate,
         )
         collector.game_error_state = errors
         seed_random(run.seed + counts.updates)
@@ -915,8 +993,16 @@ def self_play(
     updates: int,
     kind: str | None = None,
     recipe: str | None = None,
+    snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
+    snapshot_bank: SnapshotBank | None = None,
+    scorer: ScorerFn | None = None,
+    capture_predicate: CapturePredicate | None = None,
 ) -> Path:
-    """Train to the target; log report labels only when the recipe supplies them."""
+    """Train to the target. A supplied bank seeds a fresh run.
+
+    Resume uses the saved roots and scheduler with the supplied runtime scorer.
+    The collector releases cached handles before closing its vector.
+    """
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
@@ -941,14 +1027,22 @@ def self_play(
             learner.agent.readings,
             learner.agent.observation_space,
         )
-        counts = run.resume(**objects, extra=Counts())
+        counts = run.resume(**objects, extra=saved_counts)
         counts.model = model
         counts.readings = readings
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
             publish(settings, run, learner, ema, counts)
-        with self_play_games(settings, run, counts) as collector:
+        with self_play_games(
+            settings,
+            run,
+            counts,
+            snapshot_vector=snapshot_vector,
+            snapshot_bank=snapshot_bank,
+            scorer=scorer,
+            capture_predicate=capture_predicate,
+        ) as collector:
             if counts.updates == 0:
                 log_corpus_setup(
                     run,

@@ -5,7 +5,7 @@ checks the resulting game digest, and publishes the chooser into its execution
 buffers. Every installation must start a new native game generation.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, Self, runtime_checkable
 
@@ -125,6 +125,9 @@ class SnapshotVector(Protocol):
         *,
         layout: managym.ObservationLayout,
     ) -> Sequence[ObservationRead | managym.ObservationRead]: ...
+
+
+SnapshotVectorFactory = Callable[[ObservationSpace, Match, int, int], SnapshotVector]
 
 
 class InMemorySnapshotVector(BufferedStreams):

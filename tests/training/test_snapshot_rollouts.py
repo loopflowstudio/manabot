@@ -4,9 +4,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import replace
+import json
+from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import patch
 
+from etude.train.read import read
 import numpy as np
 import pytest
 import torch
@@ -37,8 +40,17 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.prepare import reference_distribution
 from manabot.recipes.builders import gray_ogre_self_play
+from manabot.training.decks import UniformDecks
 from manabot.training.learning import DampedPolicyLearning, Learning
-from manabot.training.loops.self_play import Counts, learn
+from manabot.training.loops.self_play import (
+    CLOCKS,
+    Counts,
+    SelfPlay,
+    create,
+    learn,
+    self_play,
+    self_play_collector,
+)
 from manabot.training.rollout.collection import (
     Collector,
     RolloutBatch,
@@ -54,6 +66,7 @@ from manabot.training.rollout.snapshot_vector import (
     SnapshotRecipe,
 )
 from manabot.training.rollout.snapshots import (
+    CaptureDecision,
     CapturePolicy,
     EntrySignals,
     SnapshotBank,
@@ -74,6 +87,8 @@ from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import compute_batch_targets
 import managym
 from managym.recording import GameInputs, PlayerSetup
+from scripts.inspect_batch import _report
+from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
 
 
@@ -1453,3 +1468,241 @@ def test_mixed_batch_retries_the_same_sibling_after_the_row_floor() -> None:
             )
             bank.commit(receipt, targets.signals)
         bank.close()
+
+
+@pytest.mark.parametrize(("replay_fraction", "horizon"), [(1.0, 3), (0.75, None)])
+def test_self_play_resumes_discovery_and_logs_only_fresh_outcomes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replay_fraction: float,
+    horizon: int | None,
+) -> None:
+    """Resume the saved warmup and exercise replay-only cuts or mixed complete games."""
+    base = gray_ogre_self_play(horizon=2)
+    assert (
+        "snapshot" not in base.model_dump()
+        and "snapshot_bank" not in Counts().model_dump()
+    )
+    settings = SelfPlay.model_validate(
+        base.model_dump()
+        | {
+            "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=0.9)
+            if horizon is None
+            else DampedPolicyLearning(gradient="damped_policy", filter_scope="actor"),
+            "behavior": "ema-self",
+            "transitions": 1,
+            "games_per_stream": 1,
+            "snapshot": SnapshotConfig(
+                capacity=2,
+                group_size=2,
+                horizon=horizon,
+                replay_fraction=replay_fraction,
+                fresh_floor=0,
+                fresh_weight=0,
+                capture=CapturePolicy(every_n_decisions=1, max_captures_per_batch=2),
+            ),
+        }
+    )
+    track = tmp_path / "track"
+    out = tmp_path / "out"
+    monkeypatch.setenv("ETUDE_OUT", str(out))
+
+    def capture(decision: CaptureDecision) -> bool:
+        return decision.decision == 2
+
+    def score(entry: EntrySignals) -> float:
+        return float(entry.root_signals.critic_residual.mean()) + 1
+
+    counts = []
+    for update in (1, 2):
+        with recording(
+            experiment="snapshot",
+            run="resume",
+            clocks=CLOCKS,
+            directory=track,
+            seed=42,
+            resume=update == 2,
+            strict=True,
+        ) as run:
+            self_play(
+                settings,
+                run,
+                updates=update,
+                snapshot_vector=InMemorySnapshotVector.factory,
+                scorer=score,
+                capture_predicate=capture,
+            )
+            pointer = json.loads((out / "state/current.json").read_bytes())
+            saved = json.loads(
+                (out / "state" / pointer["save"] / "state.json").read_bytes()
+            )
+            current = Counts.model_validate(saved["extra"])
+            bank = current.snapshot_bank
+            assert bank is not None and bank.generation == update
+            assert all(
+                e.score >= 1 and len(e.recipe.actions) == 1 for e in bank.entries
+            )
+            assert "snapshot_bank" not in current.coordinates()
+            counts.append(current)
+            if update == 1:
+                assert current.optimizer_exposures == current.optimizer_updates == 0
+                assert len(bank.entries) == 2 and all(
+                    e.visits == 0 for e in bank.entries
+                )
+                initial, _ = create(settings, seed=run.seed)
+                restored, averaged = create(settings, seed=run.seed + 1)
+                assert averaged is not None
+                run.resume(
+                    learner=restored.agent,
+                    optimizer=restored.optimizer,
+                    ema=averaged,
+                    extra=Counts(),
+                )
+                assert not restored.optimizer.state
+                for policy in (restored.agent, averaged):
+                    for name, value in policy.state_dict().items():
+                        torch.testing.assert_close(
+                            value, initial.agent.state_dict()[name], atol=0, rtol=0
+                        )
+            else:
+                assert current.optimizer_exposures > 0 and current.optimizer_updates > 0
+                assert any(e.visits for e in bank.entries)
+
+    warm, resumed = counts
+    data = read(track, "snapshot", "resume")
+
+    def latest(metric: str) -> float:
+        points = data.points(metric, "updates")
+        assert points.x[-1] == 2
+        return float(points.y[-1])
+
+    assert latest("snapshot/starts") == latest("snapshot/groups_completed") * 2 > 0
+    assert latest("snapshot/choices") == latest("snapshot/rows")
+    assert (
+        latest("snapshot/groups_discarded") == latest("snapshot/failed_branches") == 0
+    )
+    assert list(data.points("snapshot/captures", "updates").y)[0] == 2
+    rows = resumed.learner_transitions - warm.learner_transitions
+    games = resumed.games - warm.games
+    outcomes = data.read_table("self_play_outcomes", "updates")
+    for update_outcomes, fresh_games in zip(outcomes, (warm.games, games), strict=True):
+        assert (
+            sum(r["wins"] + r["losses"] + r["draws"] for r in update_outcomes.rows)
+            == 2 * fresh_games
+        )
+    _, game_settings = data.read_table("training_game_settings", "updates")
+    assert (
+        sum(r["games"] for r in game_settings.rows if r["setting"] == "decklists")
+        == games
+    )
+    assert latest("rows_per_second") > 0 and latest("updates_per_hour") > 0
+    if horizon is None:
+        assert games > 0 and latest("snapshot/terminals") == latest("snapshot/starts")
+        assert latest("snapshot/horizon_cuts") == 0
+        assert latest("decisions_per_game") == (rows - latest("snapshot/rows")) / games
+    else:
+        assert games == 0 and latest("snapshot/terminals") == 0
+        assert latest("snapshot/horizon_cuts") == latest("snapshot/starts")
+        assert rows == horizon * latest("snapshot/starts")
+        for metric in ("decisions_per_game", "skipped_share", "games_per_hour"):
+            assert list(data.points(metric, "updates").x) == [1]
+
+
+def test_snapshot_terminal_leaves_fresh_deck_exposure_and_skip_counts_intact() -> None:
+    """Play the same sampled fresh deal with and without a preceding snapshot."""
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space,
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),
+    )
+    terminal, _ = replay_root(space, terminal=True)
+    decks = UniformDecks(
+        decks=tuple(
+            managym.Deck({land: 10}) for land in ("Forest", "Mountain", "Island")
+        )
+    )
+    fresh_stats = []
+    for with_replay in (False, True):
+        collector = open_collector(
+            space,
+            Match(decks.match_config()),
+            Reward(RewardConfig()),
+            num_envs=1,
+            seed=42,
+            deck_source=decks,
+            opponent_mode="self",
+            games_per_stream=2 if with_replay else 1,
+            snapshot_vector=InMemorySnapshotVector.factory,
+            numerics=CollectionSession(device="cpu", seed=0),
+        )
+        try:
+            with patch.object(
+                torch,
+                "multinomial",
+                side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                    (len(probs), 1), dtype=torch.long
+                ),
+            ):
+                batch = collect(
+                    collector,
+                    agent,
+                    1,
+                    snapshot_starts=[SnapshotBranch(8, terminal, horizon=3)]
+                    if with_replay
+                    else [],
+                )
+            stats = collector.stats
+            observed = stats.to_dict()
+            assert stats.games == 1
+            assert observed["fresh_learner_transitions"] == np.count_nonzero(
+                batch.episode_source == 0
+            )
+            assert observed["snapshot"]["terminals"] == int(with_replay)
+            assert observed["snapshot"]["rows"] == (3 if with_replay else 0)
+            assert sum(c["game_roots"] for c in stats.exposure.values()) == 1
+            assert (
+                sum(c["learner_transitions"] for c in stats.exposure.values())
+                == stats.fresh_learner_transitions
+            )
+            fresh_stats.append(
+                (
+                    stats.exposure,
+                    stats.self_play.drain(),
+                    stats.skipped_decisions,
+                    stats.games_by_stream,
+                )
+            )
+        finally:
+            close_collector(collector)
+    assert fresh_stats[0] == fresh_stats[1]
+
+
+def test_snapshot_settings_require_both_seats_and_a_vector() -> None:
+    settings = gray_ogre_self_play(horizon=2).model_dump() | {
+        "snapshot": SnapshotConfig(capacity=1, replay_fraction=0.5, fresh_floor=0.5)
+    }
+    for changes in (
+        {"learning_seats": "one"},
+        {"behavior": "random"},
+        {"batch_closure": "exact-quota"},
+    ):
+        with pytest.raises(ValueError, match="both learning seats"):
+            SelfPlay.model_validate(settings | changes)
+    with pytest.raises(ValueError, match="snapshot vector"):
+        self_play_collector(SelfPlay.model_validate(settings), seed=0, start=0)
+
+
+def test_inspector_labels_a_cut_seat_trajectory_as_censored(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    agent = scalar_backend_agent()
+    batch, _ = three_choices(agent)
+    _report(
+        batch,
+        Learner(agent, "cpu", minibatch_rows=3),
+        DampedPolicyLearning(gradient="damped_policy"),
+        rows=2,
+    )
+    report = capsys.readouterr().out
+    assert "2 seat trajectories" in report
+    assert "first trajectory, which was censored" in report
