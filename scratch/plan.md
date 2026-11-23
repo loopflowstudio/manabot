@@ -104,6 +104,8 @@ In the Dark Ascension combat fixture, attacking grew Ooze to 2/2. Hill Giant blo
 
 The CPython 3.13 release wheel was rebuilt and installed. Four focused Python checks passed for LLM text, Academy projection, field coverage, named layout and protocol parity. The native experience schema matched its checked-in bytes. Both bundled pinned pilot replays passed; the optional frontier checkpoint was unavailable.
 
+Behavior review at `31316346` reran the exact-pair snapshot and Dark Ascension combat fixtures after the sorted-vector change. Both passed, including the two-viewer tensor comparison, repeated hit, two sources, both reentries and turn reset. The death trigger has no target or optional choice. V11 raises a capacity error if the relations cannot fit. The text and Academy projection test passed with a constructed viewer payload. All six search-state contract cases, the stale-Command rejection case and the runtime catalog-token control passed. These are shared controls; the integrated hidden-card permutation and replay through every consumer remain open. Predator Ooze meets its working obligation. The full cohort remains in the working phase with 76 of 81 primary FDN rows open.
+
 ## Next slice · Steel Hellkite
 
 Predator Ooze closes the fifth primary FDN row. At `21c29128`, `flow/turn.rs::DamageHistory` stores the distinct exact pairs directly in witness order. Its recipient is a permanent incarnation. Hellkite asks a different question about a player and specifically combat damage. Keep Ooze’s any-positive-damage membership intact when adding that fact.
