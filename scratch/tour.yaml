@@ -1,12 +1,10 @@
-at: 9ecb5842e536705a473de8ed8ba0df368c8f6db0
+at: 8d35046a0bcb07cc69101588b6c433e97ab59baf
 first:
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Records the Felling Blow obligation and its fixture
   - path: managym/cards/src/fdn.rs
-    why: Defines the draw over controlled nonlands
-  - path: managym/state/src/ability.rs
-    why: Names the quantity that the spell reads
-  - path: managym/src/flow/resolution.rs
-    why: Counts current mana values when the draw begins
+    why: Binds the two targets and orders the instructions
   - path: managym/cards/tests/cards/fdn.rs
-    why: Lists each battlefield and its expected draw count
+    why: Resolves the same spell across both target reentries
   - path: managym/cards/tests/cards/observability.rs
-    why: Checks the authored expression reaches catalog tokens
+    why: Checks both instructions reach the catalog tokens
