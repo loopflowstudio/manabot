@@ -1,8 +1,8 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
+        PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -23,6 +23,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
+        lunar_insight(),
         sire_of_seven_deaths(),
     ]
 }
@@ -166,6 +167,34 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                 },
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn lunar_insight() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.lunar_insight",
+        scryfall_id: "a9a159f6-fecf-4bdd-b2f8-a9665a5cc32d",
+        printed: PrintedCharacteristics {
+            name: "Lunar Insight".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::DrawCards {
+                count: EffectValue::DistinctManaValues {
+                    of: Box::new(ObjectSelector::each(
+                        Scope::YouControl,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    )),
+                },
+            }],
+            text_box:
+                "Draw a card for each different mana value among nonland permanents you control."
+                    .into(),
             ..Default::default()
         },
         ..Default::default()

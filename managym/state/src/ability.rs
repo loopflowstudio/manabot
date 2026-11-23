@@ -601,6 +601,10 @@ pub enum EffectValue {
     /// The greatest number of creatures you control that share a creature
     /// type (CR 205.3m).
     GreatestSharedCreatureType,
+    /// Number of different mana values among the selected battlefield permanents.
+    DistinctManaValues {
+        of: Box<ObjectSelector>,
+    },
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,

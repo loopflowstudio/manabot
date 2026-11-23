@@ -24,3 +24,5 @@ For Hellkite, use a pending activation after source departure to test whether el
 Hellkite shares the sorted damage history with Ooze. The two player seats fit in two viewer-relative flags on each v11 permanent or pending activation.
 
 Compression retains the sorted pair representation and reads the combat-player range directly. Permanent and stack rows share the same viewer-relative seat conversion.
+
+For Lunar Insight the fixture restores a cloned pending game, following the Steel Hellkite card fixture. Felling Blow is the next planned resolution-order witness.

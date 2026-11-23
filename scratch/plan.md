@@ -122,15 +122,15 @@ At `5a5f87c0`, `flow/play.rs::legal_activation_x_values` reads the mana componen
 
 Working review at `fb5cc087` reran both Hellkite fixtures, Katara’s waterbend X fixture, automatic Ally-only spend, Animal Attendant’s two manual spends, spend-rider receipt projection and waterbend versus floating-mana accounting. All seven passed in the debug cards target. The Hellkite finding is closed and Lunar Insight is next. The full working phase, integrated replay/privacy validation and Engine Budget comparisons remain open.
 
-## Next slice · Lunar Insight
+## Implemented slice · Lunar Insight
 
-The ledger obligation is “Count distinct mana values among current nonland permanents.” Author Lunar Insight with a draw amount evaluated at resolution. Use a distinct-mana-value EffectValue over the existing battlefield selection (ObjectSelector::Each, YouControl, nonland). Read the same permanent mana value as Hellkite. DrawCards evaluates the amount once before the first draw. Keep the spell’s ordinary saved frame, native draw events and viewer-specific hand projection. A running per-seat count would duplicate the current board across control and type changes. This query needs no retained turn fact.
+Lunar Insight evaluates DistinctManaValues over controlled nonlands when DrawCards begins. The card fixture restored the same pending spell for each board. Two Foods and Felidar Cub drew two cards. Replacing one Food with Kellan drew three. With only an Island and the opposing Gray Ogre, it drew zero. The catalog token fixture verified the draw, aggregate, scope and nonland predicate. Both focused tests passed.
 
-From the same saved pending spell, compare equal-sized boards with mana values 0, 0, 2 and 0, 1, 2 among the caster’s nonlands. Verify two and three actual draws respectively. Include a land and an opposing nonland with an otherwise absent value, and a branch with no qualifying permanent for zero draws. Change the board after announcement to distinguish a resolution read from an announcement snapshot. Check the authored expression in the catalog tokens and update the FDN ledger with the passing fixture.
+Next, exercise Felling Blow’s power read after its counter is placed.
 
 ## Evidence to carry forward
 
-The 75 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+The 74 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 

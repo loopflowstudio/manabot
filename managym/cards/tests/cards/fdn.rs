@@ -722,3 +722,45 @@ fn cat_collectors_food_creates_a_cat_only_on_its_controllers_first_gain() {
         assert_eq!(s.battlefield_permanents_named(0, "Cat").len(), 1);
     }
 }
+
+#[test]
+fn lunar_insight_counts_distinct_controlled_nonland_values_at_resolution() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{hand, top_spell},
+        play::cast_card,
+    };
+    use managym::state::player::ManaPayment;
+
+    let mut s = five_color_setup(&[
+        "Lunar Insight",
+        "Felidar Cub",
+        "Kellan, Planar Trailblazer",
+        "Gray Ogre",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Island");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let spell = force_new_card_in_hand(&mut s, 0, "Lunar Insight");
+    cast_card(&mut s, spell);
+    assert_eq!(top_spell(&s).spent.total(), 3);
+    let pending = s.game().clone();
+
+    for (foods, one_drop, expected) in [(2, false, 2), (1, true, 3), (0, false, 0)] {
+        *s.game_mut() = pending.clone();
+        for _ in 0..foods {
+            s.game_mut()
+                .create_token("token.food", PlayerId(0), false)
+                .unwrap();
+        }
+        if foods > 0 {
+            s.force_permanent_on_battlefield(0, "Felidar Cub");
+        }
+        if one_drop {
+            s.force_permanent_on_battlefield(0, "Kellan, Planar Trailblazer");
+        }
+        let before = hand(&s, 0).len();
+        settle(&mut s);
+        assert_eq!(hand(&s, 0).len() - before, expected);
+    }
+}

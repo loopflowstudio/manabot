@@ -77,6 +77,12 @@ impl Game {
                         .is_none_or(|predicate| self.object_matches_predicate(*object, predicate))
                 })
                 .count() as i32,
+            EffectValue::DistinctManaValues { of } => self
+                .selected_permanents(of, frame)
+                .into_iter()
+                .map(|id| self.permanent_mana_value(id))
+                .collect::<std::collections::BTreeSet<_>>()
+                .len() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TriggeringManaValue => match frame.context_target {
@@ -126,6 +132,7 @@ impl Game {
         match value {
             EffectValue::Fixed(value) => *value,
             EffectValue::Objects { .. }
+            | EffectValue::DistinctManaValues { .. }
             | EffectValue::X
             | EffectValue::ExcessDamage
             | EffectValue::LifeLostThisWay

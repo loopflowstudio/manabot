@@ -5934,3 +5934,25 @@ fn library_knowledge_positions_reach_their_named_rows() {
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other.opponent.known_library.is_empty());
 }
+
+#[test]
+fn lunar_insight_catalog_tokens_describe_its_draw_amount() {
+    let pack = default_content_pack();
+    let definition = pack
+        .definition(pack.definition_id("Lunar Insight").unwrap())
+        .unwrap();
+    let tokens = tokens_of(definition);
+    for variant in [
+        "Effect::DrawCards",
+        "EffectValue::DistinctManaValues",
+        "ObjectSelector::Each",
+        "Scope::YouControl",
+        "CardType::Land",
+    ] {
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
+    assert!(tokens.contains(&(TokenKind::Field, name_value("not_card_types"))));
+}

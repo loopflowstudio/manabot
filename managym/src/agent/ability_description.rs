@@ -776,6 +776,10 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
+        EffectValue::DistinctManaValues { of } => format!(
+            "the number of different mana values among {}",
+            selector_description(of)
+        ),
         EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
             let objects = match predicate {
                 None => "objects".into(),
