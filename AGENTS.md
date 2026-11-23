@@ -18,33 +18,34 @@ Never add "Co-Authored by:" tags in commits
   Always ASCII (never "Étude").
 
 Jack Heart selected Manabot and `manabot.gg` on 2026-10-14, replacing the
-provisional Fantasia project name. Academy remains the name of the UI.
+provisional Fantasia project name.
 
-Boundary rule for anything those lines don't settle: if it is the browser UI,
-it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
-world, it is managym; if it launches or records experiments, it is Etude. So
+Boundary rule: browser UI is Academy; training and evaluation is manabot; the
+rules engine is managym; experiment launching and recording is Etude. So
 the play server, experience protocol, curated packs, and their env/error
 namespaces (`ACADEMY_PLAY_*`) take Academy names, while training
 infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
-correctly keeps manabot names. Frozen evidence — experiment IDs, contracts,
+keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `x-etude-*` wire headers,
-`etude.*` browser storage keys and schema identifiers. Hosted services are `academy-play` and `fantasia-website`, with
-deployment secrets in Doppler `manabot/prd` (Jack Heart, 2026-10-14).
-`etude.gg` and its legacy aliases redirect to `manabot.gg`, preserving paths
-and queries; hosted play is available at both `play.manabot.gg` and
-`academy.manabot.gg` (equivalent addresses selected by Jack Heart, 2026-10-14).
-Namecheap is the registrar and Cloudflare manages DNS. Existing and shared Etude
-service identifiers stay unchanged. "Sepia Etude" remains the name of the visual
-language.
+`etude.*` browser storage keys and schema identifiers. Hosted services are
+`academy-play` and `fantasia-website`, with deployment secrets in Doppler
+`manabot/prd` (Jack Heart, 2026-10-14). `etude.gg` and its legacy aliases
+redirect to `manabot.gg`, preserving paths and queries; hosted play is
+available at both `play.manabot.gg` and `academy.manabot.gg` (equivalent
+addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
+Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
-`record_vocabulary` in `managym`; consumer-specific names in `manabot`). Do not
-reuse established repository terms (`recipe` for training recipes, `manifest`
-for content packs, `replay` for seed-and-action replays) for unrelated concepts,
-even in internal types or when a brief uses them informally. Rename published
-names via a deprecated alias stating the removal release; serialized keys,
-checkpoint fields and frozen evidence keep their spelling.
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`), and
+qualify generic role names with the domain unit they act on (`decision_weights`
+over `weights` or `loss_weights`, `SnapshotScorer` / `snapshot_scorer` over
+`ScorerFn` / `scorer`). Do not reuse established repository terms (`recipe` for
+training recipes, `manifest` for content packs, `replay` for seed-and-action
+replays) for unrelated concepts, even in internal types or when a brief uses
+them informally. Rename published names via a deprecated alias stating the
+removal release; serialized keys, checkpoint fields and frozen evidence keep
+their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
@@ -106,31 +107,30 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Base new training and learnability trials on the current TLA frontier setup
+  (`experiments/tla_frontier.py`) rather than falling back to Elemental; TLA
+  does not have larger or longer games.
 - Etude report curves average runs within a job. For a per-seed readout,
   select that seed's fixed checkpoint seatings in its own panel and declare
   `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
-
-- Most runs are exploratory: calibration, throughput, capacity, pilots and
-  anything run to make later work possible. They need no prediction, protocol
-  or review; the report ends them. A finding, a result that will be cited as a claim
-  about a method or about playing strength, opens its report with one
-  paragraph committed before any scored run: question, numeric prediction, the
-  result that would refute it and a cost cap. When unsure, it is exploratory.
-- The freeze is the commit and the Etude run ID. A change that keeps the
-  question (capacity, crash fix, device, retry) is a dated line in the report,
-  never a new protocol version. Cost is the launcher's number for the run,
-  recorded once; do not reconstruct bills, reserves or settlements.
-- An experiment whose whole cost is at or under USD25 launches under the
-  launcher's cap (`--max-usd`). Above that, a person approves the amount first.
-- Etude rental admission includes the on-demand startup allowance in addition
-  to `Job.max_hours`. Size both job and experiment dollar caps for that whole
-  window; a price offer does not guarantee provider capacity.
-- An experiment is `experiments/<name>.py` at a commit with one report,
-  `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
-  a digest check or a test suite for one experiment's schedule; reusable
-  machinery belongs in `manabot/` or Etude, tested once there.
-- Paired deals, replay verification, checkpoint input compatibility and training
-  seeds as the unit of evidence are measurement quality and stay as they are.
+- Exploratory runs (calibration, throughput, capacity, pilots) need no
+  prediction, protocol or review; the report ends them. Findings (cited claims
+  about a method or playing strength) open their report with one committed
+  paragraph before scoring: question, numeric prediction, refuting result and
+  cost cap. When unsure, treat a run as exploratory.
+- The freeze is the commit and Etude run ID. Changes keeping the question
+  (capacity, crash fix, device, retry) are dated lines in the report, never new
+  protocol versions. Record the launcher's cost once; never reconstruct bills,
+  reserves or settlements.
+- Experiments costing at most USD25 launch under `--max-usd`; higher caps need
+  approval first. Rental admission includes the on-demand startup allowance
+  beyond `Job.max_hours`; size job and experiment caps for the whole window (a
+  price offer does not guarantee provider capacity).
+- Each experiment is `experiments/<name>.py` at a commit with
+  `experiments/reports/<name>.md`—no per-experiment protocol doc, serialized
+  regime, digest check or schedule test suite. Put reusable machinery in
+  `manabot/` or Etude. Keep paired deals, replay verification, checkpoint
+  compatibility and training seeds as the unit of evidence.
 
 ### Python structure and documentation
 
