@@ -40,6 +40,12 @@ Stay in the working phase. After rebuilding and atomically installing the CPytho
 
 The combined hand, snapshot, text, Academy navigation and pinned-pilot run reported 84 passed, five failed and one optional checkpoint skipped. Full workspace validation and Engine Budget measurements remain later phases.
 
+## Verified prerequisite fixes
+
+At reset, before the first CHOOSE_TARGET prefix Command, the human opening hand contains Man-o'-War at registry row 291. The retained catalog assigned that card row 290. The name-sorted catalog now includes Bilbo, Muldrotha, Smaug and Zul Ashur. Native state hashes include each object's definition row. All five recorded prefixes still reached the same revision, action space and offers. Replaying them with the repository's navigation fixture writer refreshed the derived frames and digests. All five retained-position tests passed, including stale rejection.
+
+Nested printed characteristics serialize as CardDefinition too. The token writer now skips identity fields at either depth while keeping nested program fields. The Smaug regression passed after changing both inset strings and comparing tokens, then changing only damage from five to four.
+
 ## Next slice
 
 The printed choice currently travels as an Adventure boolean through `CastChoices::from_route`, pending decisions and `SpellOnStack`. Replace that boolean with one selected profile when adding Omen. Keep the exact exile grant separate from the choice of spell. Preserve existing Adventure Commands and the four observed prices.
