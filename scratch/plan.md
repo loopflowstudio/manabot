@@ -86,6 +86,8 @@ The separated-card identity probe established that parking a card in a vacant sl
 
 Have an opponent exile the pair. In `managym/src/flow/zones.rs`, `meld_order_choice` currently handles library and graveyard placement for the owner. Carry the player responsible for exile through the resolved proposal and reuse the pending batch for that player’s relative timestamp choice. Restore the pre-commit position, take each legal order, and check both exact exile arrivals and their timestamps. Keep the library and graveyard decisions with the owner. [Comprehensive Rules, meld departure and exile timestamps](https://media.wizards.com/2026/downloads/MagicCompRules%2020260619.pdf)
 
+Use a two-seat fixture before migrating callers. At the exile timestamp decision assert that Ragnarok is still present and the exiling opponent owns both offers. Restore both branches, inspect both exact arrivals and their relative timestamps, then submit the spent Command and compare history and timestamps. Use the existing Lost Days owner-order fixture as the control. The continuation consumes the complete EventResult even when the caller needs only to know the move finished.
+
 Audit battlefield callers of `move_object_with_entry`, which still completes a batch immediately and returns its first arrival. Keep single-successor reads for single-card moves. Route any caller that can separate a pair through the existing resumable batch. Remaining meld witnesses include death and graveyard ordering, owner-only order visibility, stale Command rejection with unchanged history and Clue count, and recorded replay. Continue with Manifest Dread before settling the shared form representation.
 
 ## Native implementation and deletions

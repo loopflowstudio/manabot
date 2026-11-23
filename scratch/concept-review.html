@@ -2,40 +2,29 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · branch through e37e804d</small>
-<h1>Do battlefield forms and their engine records line up?</h1>
-<p>A search caller chooses legal actions, forks a decision and resolves each continuation. The engine owns which object an ability follows, which characteristics can be copied and which cards actually move.</p>
-<h2>Existing · one trigger, two continuations</h2>
-<p>Clone enters as Homunculus Horde. Scout’s Warning supplies the second draw and leaves the Horde trigger on the stack.</p>
-<table><tr><th>Continuation</th><th>Clone after resolution</th><th>Token created</th></tr>
-<tr><td>Pass priority</td><td>Homunculus Horde</td><td>One Horde</td></tr>
-<tr><td>Return Clone to hand, recast it as Gray Ogre, snapshot and restore, then pass</td><td>Gray Ogre</td><td>One Horde with the same copiable definition</td></tr></table>
-<p>The earlier failure was visible at the next decision. A departed Clone copying Joo Dee produced printed Clone’s entry choice and panicked on stale focus. Today declining surveil produces one Joo Dee token and its controller can select and sacrifice it. The branch records both native regressions passing. The restore above uses an in-memory GameSnapshot. Portable replay and viewer equivalence remain open.</p>
-<h2>Do the rules concepts and code concepts line up?</h2>
-<table><tr><th>Rules operation</th><th>Existing engine owner</th><th>Fit</th></tr>
-<tr><td>Resolve Lightning Bolt after Cecil transforms</td><td><code>Effect::TransformSource</code> changes the face in place. At 13 life the controller loses three, reaches 10 and sees the Paladin with the same counter and equipment. Bolt still hits. On attack, the other attacker gains indestructible.</td><td>Yes · the three Cecil scenarios also cover staying above half and splitting damage across recipients.</td></tr>
-<tr><td>Follow Esper Origins from the stack through exile to its Saga face</td><td><code>Effect::exile_and_return_transformed</code> chains the two exact movement results.</td><td>Yes</td></tr>
-<tr><td>Resolve an ability from the appearance that produced it</td><td>The stack retains its program and source. <code>Game::copy_source</code> reads live values or the departed appearance’s last known values.</td><td>Yes for the two tested copy cases</td></tr>
-<tr><td>Bind both arrivals and a subsequent discard</td><td><code>EventResult::arrivals</code> keeps both destination appearances in one event slot.</td><td>Yes for the binding fixture</td></tr>
-<tr><td>Move the two cards that melded into one target</td><td><code>Permanent.object</code> names one exact object. The ordinary move restores one printing.</td><td>No · physical membership has no owner for the pair</td></tr>
-<tr><td>Inspect a manifested card privately and copy its public form</td><td>Native knowledge, copy and possible-world APIs need a shared distinction between backing and public characteristics.</td><td>No · hidden battlefield backing is still a planned case</td></tr>
-</table>
-<section><h2>Biggest remaining mismatch · what moves when one target leaves?</h2>
-<p><b>Existing.</b> Esper and Clone each have a single physical card to follow. That coincidence lets an ordinary move answer both “which permanent left?” and “which card reached its destination?”</p>
-<p><b>Proposed.</b> Movement consumes one battlefield appearance and emits a destination appearance for each constituent card. Fang and Vanille in play as Ragnarok give a search caller one target and one battlefield departure. A move to an ordered library offers both orders. A token copying Ragnarok has the meld face’s copiable values and zero physical members. It supplies neither original card on departure.</p></section>
-<p>Keep ordinary backing inline and share immutable copiable data across forks. Snapshot the pending order, its exact members and its chooser. Restoring the choice must preserve both legal continuations. Applying either consumes the move once. Project a single public permanent row. For manifest, only authorized viewers can inspect the backing. Opponent observations and possible worlds must agree across roots that differ solely in that hidden printing.</p>
-<section><h2>Proposed recovery witness</h2><p>With library order pending, save the position. In the first fork choose Fang above Vanille. Restore and choose Vanille above Fang. Each library must contain both original cards exactly once. Resubmitting the first Command after committing must leave the library and event history intact.</p><p><b>Existing.</b> <code>EventResult.moved</code> has two slots. The binding fixture supplies both arrivals and a separate discard result. It checks their association and bottom placement. Fang’s graveyard trigger also has native coverage. The meld test filter selected zero tests.</p>
-<p><b>Biggest gap.</b> <code>move_object_with_entry</code> completes the batch immediately and returns its first arrival, falling back to the input object. Its return cannot express a pending choice or identify both arrivals. A wider result record alone leaves this interaction unreachable.</p>
-<p><b>Proposed.</b> Route every move that can take Ragnarok off the battlefield through the resumable batch. Keep the one-card convenience for callers whose input already guarantees one card, such as drawing from the library. At the pending decision retain the resolved destination, both members, the chooser and the batch cursor. On commit emit one departure result and let the following discard consume its own result.</p></section>
-<h2>Proposed fixture · put Ragnarok on the bottom</h2>
-<table><caption>Draw sequence with one unrelated card X already in the library</caption><tr><th>Owner’s choice</th><th>Next draws, in order</th><th>Physical arrivals</th></tr>
-<tr><td>Fang above Vanille</td><td>X → Fang → Vanille</td><td>Fang once, Vanille once</td></tr>
-<tr><td>Restore, choose Vanille above Fang</td><td>X → Vanille → Fang</td><td>Vanille once, Fang once</td></tr>
-<tr><td>Move a token copy instead</td><td>X</td><td>Zero. No ordering decision.</td></tr></table>
-<p>Applying bottom placement to each member in sequence inserts each at index zero. Both cards could arrive exactly once in the wrong order. Bind the owner’s choice to the final relative positions and check the draw sequence in each fork.</p>
-<h2>Where resolution pauses</h2>
-<p><b>Existing control.</b> Lost Days removes a token copy of Fang. The physical Fang stays in play, the library keeps its order and the effect creates its Clue. The paired-arrivals unit test begins later in the lifecycle, with both destination identities already supplied. Neither fixture offers a legal Command to order a genuine pair.</p>
-<p><b>Proposed decision boundary.</b> Pay Vanille’s first-main trigger with the genuine pair, then resolve Lost Days targeting Ragnarok. At the owner’s order decision, snapshot the game. Inspect more than the offered labels: the one target must still be on the battlefield, the library must contain only X, and the Clue from the following instruction must still be absent. Restoring this snapshot recovers the same two Commands without repeating payment. In each branch, committing the chosen order removes the target once and finishes Lost Days with one Clue. Retry the spent Command and check that the Clue count, draws and history stay fixed.</p>
-<p><b>Counterexample.</b> Paying with a namesake copy can pass the name check and still leave the exiled cards unable to meld. Preserve that completed payment and exile on restoration. A failed meld and a stale Command have different consequences.</p>
-<h2>Review choices</h2><ol><li>Which witness comes next? <b>1a · Ragnarok (selected)</b> exposes the single-result assumption on a public board. 1b · Manifest first would exercise private inspection while leaving multi-card movement unresolved.</li>
-<li>What should a caller receive for Ragnarok? <b>2a · One battlefield target and both successors in its departure result (selected).</b> 2b · Two battlefield rows would give the caller separate handles for a single strategic target.</li></ol></main></html>
+<main><small>MTG-420 · engine review at 4409ede0</small>
+<h1>Does one battlefield target stay one rules event when two cards leave?</h1>
+<p>Yes for Lost Days. A search policy targets Ragnarok once. The owner then chooses how Fang and Vanille enter the library. The next instruction creates a Clue. Search needs a fork at that choice with the spell still resolving.</p>
+<h2>Existing · restore either library order</h2>
+<table><thead><tr><th>Decision or continuation<th>Battlefield<th>Library, next draw first<th>Clues
+<tbody><tr><td>Snapshot before owner answers<td>Ragnarok<td>Unrelated card<td>0
+<tr><td>Restore → Fang first<td>Pair has left<td>Unrelated card → Fang → Vanille<td>1
+<tr><td>Restore → Vanille first<td>Pair has left<td>Unrelated card → Vanille → Fang<td>1
+<tr><td>Target a token copy instead<td>Original Ragnarok remains<td>Original library order<td>1</table>
+<p>The FIN fixtures compare both original card identities through the final draw. The token branch returns to priority. A namesake can also satisfy Vanille’s name check and still fail to meld after exile. The name identifies a candidate. Physical backing determines the result.</p>
+<h2>Do the caller’s concepts line up with the engine?</h2>
+<table><thead><tr><th>What the caller needs<th>Engine owner<th>Fit
+<tbody><tr><td>One target across an in-place transformation<td>PermanentId and exact ObjectId for Cecil. Esper Origins instead acquires a new appearance through exile.<td>Yes
+<tr><td>Two physical cards under one target<td>Both CardIds resolve to Ragnarok’s ObjectId. A token copy owns neither constituent.<td>Yes
+<tr><td>A triggered copy effect can finish after its source leaves<td>CopiableValues for the departed appearance. The Horde trigger survives Clone returning as Gray Ogre.<td>Yes
+<tr><td>Resolve a departure and keep its consequences together<td>EventResult carries both arrivals. The general move_object_with_entry API completes immediately and returns its first arrival.<td>No · the same zone change has two caller contracts.
+<tr><td>Give the decision to the responsible seat<td>meld_order_choice reads the owner for library and graveyard. Exile has no corresponding timestamp choice here.<td>No · owner and exiling player can differ.
+<tr><td>Search a hidden battlefield from the acting viewer’s knowledge<td>Manifest Dread still needs a viewer projection and possible-world witness with distinct hidden printings.<td>No · the public meld witness cannot establish private search behavior.</table>
+<section><h2>Biggest mismatch · asking for the successor of a permanent</h2>
+<p><b>Existing.</b> An object handle alone admits a token, an ordinary card or a genuine pair. An immediate move returning one handle cannot express a pending order or tell a linked effect which two arrivals it owns.</p>
+<p><b>Proposed.</b> A battlefield departure submits one zone-change proposal. After replacements fix the destination, the batch retains any ordering decision and resumes the original instruction with all its arrivals. Carry the player performing the exile into this decision. Preserve the cheap single-card path where the source zone guarantees it, including a draw from the library.</p></section>
+<h2>Proposed · the counterexample to owner ordering</h2>
+<p>Have the opponent exile a genuine Ragnarok. At the timestamp decision, fork with Ragnarok still present. Restore each branch, submit a different order as the exiling player and inspect the exact exile appearances and relative timestamps. Replay a spent Command and check that history and both timestamps stay fixed. Retain the owner’s library-order test as the control. Portable replay and stale rejection at this new boundary still need evidence.</p>
+<p>After exile, test Manifest Dread with two roots that differ only in the hidden printing. Exact forks must retain that printing. Opponent observations, policy inputs and search may expose only the permitted information. Measure encoding and fork cost before settling the shared form representation.</p>
+<h2>Review questions</h2><ol><li>Which interaction should drive the next change? <b>1a · Opponent exile (selected)</b> distinguishes the two seats. 1b · Manifest first examines privacy while leaving departure ownership open.</li>
+<li>What should a battlefield move return to its continuation? <b>2a · The complete event result (selected)</b> preserves linked arrivals. 2b · A primary handle requires callers to rediscover the other card after the move.</li></ol></main></html>
