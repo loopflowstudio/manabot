@@ -359,9 +359,11 @@ even after the source `Env` is gone. Here two opening choices share the same
 unseen library order.
 
 ```python
+import json
 from pathlib import Path
 
 import managym
+from managym.journal import DurableJournal
 from managym.recording import read_record
 from managym.replay import walk
 
@@ -385,9 +387,9 @@ branch_b = snapshot.restore(
     managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=1)
 )
 
-# Save the inputs needed to reopen this branch in another process.
+# Atomically save both decks and the branch seed in an owner-only file.
 replay_path = Path("branch-a.json")
-replay_path.write_text(branch_a.snapshot().to_replay_json())
+DurableJournal(replay_path).replace(json.loads(branch_a.snapshot().to_replay_json()))
 
 reopened = managym.GameSnapshot.from_replay_json(replay_path.read_text())
 continuation = reopened.restore()
