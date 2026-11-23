@@ -291,7 +291,11 @@ class _TrainingCapture:
                     retained_count=retained,
                     dropped_count=count - retained,
                     decision_kind=kind,
-                    game=game.model_copy(deep=True),
+                    game=(
+                        self.game_inputs(game.stream - self.games[0].stream)
+                        if isinstance(self, recording.CapturedVector)
+                        else game
+                    ).model_copy(deep=True),
                 )
             )
         overflows = sum(counts.overflows for counts in self._policy_counts.values())

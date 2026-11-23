@@ -20,6 +20,11 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static CONSTRUCTIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 impl Game {
     /// A match on the catalog. Panics when a deck submitted to the world fails
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
@@ -49,6 +54,8 @@ impl Game {
         capture: Option<CaptureMode>,
         statistics: bool,
     ) -> Self {
+        #[cfg(test)]
+        CONSTRUCTIONS.set(CONSTRUCTIONS.get() + 1);
         let disclosure = player_configs.decklists.resolve(seed);
         admit_submitted(player_configs)
             .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));

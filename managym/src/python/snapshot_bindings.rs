@@ -56,6 +56,11 @@ impl PyGameSnapshot {
 pub(super) struct PyRestoreOptions(pub(super) RestoreOptions);
 #[pymethods]
 impl PyRestoreOptions {
+    #[getter]
+    fn forced_first_action(&self) -> Option<usize> {
+        self.0.forced_first_action
+    }
+
     #[new]
     fn new() -> Self {
         Self(RestoreOptions::default())

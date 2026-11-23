@@ -536,7 +536,10 @@ print(games.next_fresh_seeds())
   not write to `games_path` or fresh statistics/exposure; branch replay inputs
   (including interventions) are materialized lazily on failure or when
   journaling, and `managym.replay` replays vector records with branch
-  interventions.
+  interventions. Call `game_inputs(slot)` for the resolved setup, original
+  commitments and attempted suffix of one slot. This materializes the branch
+  prefix on demand. A terminal step settles a recorded fresh game immediately,
+  including its winner and final digest, even when its replacement comes later.
 
 ## Ask questions of recorded games
 

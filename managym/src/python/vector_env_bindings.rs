@@ -106,6 +106,17 @@ struct PySlotLoad(SlotLoad);
 
 #[pymethods]
 impl PySlotLoad {
+    /// Detached replay authority for a recording wrapper, including the intervention.
+    #[getter]
+    fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
+        match &self.0 {
+            SlotLoad::Fresh(_) => None,
+            SlotLoad::Snapshot(_, source, options) => {
+                Some((PyGameSnapshot(source.clone()), PyRestoreOptions(*options)))
+            }
+        }
+    }
+
     #[staticmethod]
     fn fresh(slot: usize) -> Self {
         Self(SlotLoad::Fresh(slot))
@@ -652,8 +663,11 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn current_exposure(&self) -> PyResult<Vec<String>> {
-        self.inner.current_exposure().map_err(map_agent_err)
+    #[pyo3(signature = (active=None))]
+    fn current_exposure(&self, active: Option<Vec<bool>>) -> PyResult<Vec<String>> {
+        self.inner
+            .selected_exposure(active.as_deref())
+            .map_err(map_agent_err)
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
