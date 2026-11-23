@@ -602,6 +602,40 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
             "{1}{B}",
             "{0}",
         }
+        # A public source sustains one specific cost. Swapping those sources
+        # must exchange their terms even when every legal action stays fixed.
+        space = ObservationSpace(ObservationConfig())
+        sources = state["agent_permanents"][:2]
+        first_permanent = 3 + 2 * space.config.max_cards_per_player
+        source_terms = []
+        for order in (sources, sources[::-1]):
+            for grant, permanent in zip(card["cast_permissions"], order, strict=True):
+                grant["source_permanent_id"] = permanent["id"]
+            bound = managym.Observation.from_json(json.dumps(state))
+            buffers = encode_observation(space, bound)
+            # The original card columns still describe the first grant.
+            singleton = card.pop("cast_permissions")
+            card["cast_permission"] = singleton[0]
+            single = encode_observation(
+                space, managym.Observation.from_json(json.dumps(state))
+            )
+            np.testing.assert_array_equal(single["agent_cards"], buffers["agent_cards"])
+            card.pop("cast_permission")
+            card["cast_permissions"] = singleton
+
+            facts = buffers["facts"]
+            source_terms.append(
+                [
+                    facts[
+                        facts[:, column("facts", "object")] == first_permanent + i, 1:
+                    ]
+                    for i in range(2)
+                ]
+            )
+        original, swapped = source_terms
+        assert len(original[0]) and not np.array_equal(original[0], original[1])
+        np.testing.assert_array_equal(original[0], swapped[1])
+        np.testing.assert_array_equal(original[1], swapped[0])
     submit_response(env, decision, cast.reference)
 
 

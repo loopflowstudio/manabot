@@ -1759,6 +1759,7 @@ pub const WARD: &str = "Ward";
 
 /// Effect program labels for overlapping grants and consumed type allowances.
 pub const PLAY_GRANT: &str = "CastPermission::Grant";
+pub const PLAY_GRANT_SOURCE: &str = "CastPermission::GrantSource";
 pub const SPENT_TYPE: &str = "CastPermission::SpentType";
 
 /// One fact row before its object join and timestamp rank are known.
@@ -1956,8 +1957,8 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
 fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     // Each occurrence starts at ordinal zero. The owner join identifies the
     // card or granting permanent; player terms are relative to this viewer.
-    let mut program = |object, label, tokens: Vec<(u16, i32)>| {
-        for (ordinal, (kind, value)) in tokens.into_iter().enumerate() {
+    let mut program = |object, label, tokens: &[(u16, i32)]| {
+        for (ordinal, &(kind, value)) in tokens.iter().enumerate() {
             out.push(Fact {
                 object,
                 kind: FactKind::EffectProgram,
@@ -1970,26 +1971,31 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     };
     let pack = crate::cards::content_pack::default_content_pack;
     for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
-        if card.cast_permissions.len() > 1 {
-            for grant in &card.cast_permissions {
-                let terms = (
-                    grant.player_id == obs.agent.id,
-                    &grant.cost,
-                    grant.this_turn,
-                    grant.through_next_turn,
-                    grant.own_turn_only,
-                    grant.after_turn,
-                    grant.source_permanent_id.is_some(),
-                    grant.flash,
-                    grant.any_mana,
-                    grant.waterbend,
-                    grant.foretold,
-                );
-                program(
-                    card.id,
-                    PLAY_GRANT,
-                    crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms"),
-                );
+        for grant in &card.cast_permissions {
+            let overlapping = card.cast_permissions.len() > 1;
+            if !overlapping && grant.source_permanent_id.is_none() {
+                continue;
+            }
+            let terms = (
+                grant.player_id == obs.agent.id,
+                &grant.cost,
+                grant.this_turn,
+                grant.through_next_turn,
+                grant.own_turn_only,
+                grant.after_turn,
+                grant.source_permanent_id.is_some(),
+                grant.flash,
+                grant.any_mana,
+                grant.waterbend,
+                grant.foretold,
+            );
+            let tokens =
+                crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms");
+            program(card.id, PLAY_GRANT, &tokens);
+            // Adjacent source and card programs describe the same occurrence.
+            // A singleton still carries its terms in the existing card columns.
+            if let Some(source) = grant.source_permanent_id {
+                program(source, PLAY_GRANT_SOURCE, &tokens);
             }
         }
     }
@@ -1999,7 +2005,7 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
             program(
                 source as i32,
                 SPENT_TYPE,
-                crate::cards::tokens::rules_tokens(&terms, pack())
+                &crate::cards::tokens::rules_tokens(&terms, pack())
                     .expect("public graveyard allowance"),
             );
         }
