@@ -2,7 +2,11 @@
 
 Start at native reset. Either player can mulligan, choose the order of cards going to the bottom, and take opening-hand actions before the first turn. Time Stop and Sundial of the Infinite use the same route into cleanup. Poison, life, failed draws and explicit card instructions produce one authoritative result for play, search and replay.
 
-This is the working-phase design at `0b1cc9cfef9c1a98430c825b9764a49237182696`. The six Foundations rows below are the non-planeswalker cards whose **primary** batch is `game_procedure`. Hare Apparent and Bloodthirsty Conqueror are dependency references in other primary batches. The five loyalty rows belong to Milestone 2 Task 06. Keep tournament sideboarding, general event-history expansion, casting profiles and copiable forms with their respective owners. [Milestone 2, item 07](../.lf/wave/coverage/research/standard-2026-11/milestone.md) · [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl)
+The implemented cohort covers six Foundations primary rows and the cross-set witnesses below. Planeswalkers, tournament sideboarding, general event history, casting profiles and copiable forms have separate owners.
+
+## Next slice
+
+Review Maze’s End and Fabled Passage from the card definitions through the shared count condition, resolution and terminal Env result. Compare the recorded seed-161 branches below. Include the subsequent opening-label and legend-scan changes in focused review. Gate still owns the complete suite, package and schema checks, representative Academy play, captured mid-game snapshot compatibility and the paired same-runner 10% Engine Budget.
 
 ## Cards and behavior witnesses
 
@@ -46,16 +50,9 @@ Seven focused native cases passed at the earlier review. Seed 161 exposed a gap 
 The seed-161 fixture checked both tensor joins and compared each bound activation with indexed play through exile, payment receipt and remaining mana. On the rebuilt CPython 3.13 extension, the seed-23 semantic and Academy Commands matched indexed play at targeting and after payment for either Bracelet. The fixture in `tests/academy/test_bracelet_offers.py` now selects the indexed action independently by the Ogre and Bracelet permanent IDs. This catches a shared offer-binding error even if both Commands agree.
 Behavior review at `dcdb8301` closes the two-Bracelet defect. Thirteen constructed native debug cases passed across Bracelet, Cube and Bloodbending, including control tokens, private visibility and delegated-payment replay. Both seed-23 consumer cases passed, as did Academy’s original Command import and stale-revision rejection case. The working phase is satisfied. The full suite and paired 10% Engine Budget remain at gate.
 
-## Remaining cross-consumer obligations
+## Cross-consumer acceptance
 
-**Decisions and control.** Use the ordinary native `Decision`, `Action` and semantic Command binding for each new choice. Keep `ActionSpace.player` as the chooser, `Decision.player()` as the rules subject and the active player as turn owner. Retain `TurnState.player_controls`, `Effect::ControlPlayer` and `Game::shares_information` for all three control sources. A skipped combat preserves pending next-combat control. Exercise a legal foretell or land play as a priority special action during delegated play. Pregame actions have no priority window. Neither a control effect nor a new procedure grants sideboard access or authority to concede for another seat.
-
-## Focused debug checks and receipts
-
-- Extend `managym/tests/rules/{cr_103_game_start,cr_514_cleanup,cr_704_sba}.rs` and the first-printing card suites. Keep the existing Sundial case in `cards/tests/cards/m12.rs` and the Secret cases in `cards/tests/cards/tla.rs`. Run debug tests for both seats, both keeping, both redrawing, different mulligan counts, at least two differently ordered bottom cards, zero retained cards, and two private hands with identical public views. Check direct reset through Env and VectorEnv. Exercise the card rows through legal actions, including negative branches.
-- Project procedure stage, public declarations, remaining counts, entitled object choices, poison, mode history, restrictions, control and outcome through native viewer observations, Python bindings, fresh tensor/fact rows and LLM descriptions. Trace through `agent/{observation,observation_json,observation_layout,observation_encoder,record_vocabulary}.rs`, `src/cards/tokens.rs`, `manabot/semantic/text_observation.py` and `managym/cards/tests/cards/observability.rs`. Verify exact values, viewer-relative joins, action labels and catalog learning tokens. Keep saved column prefixes, v9/v10 frozen layouts and typed capacity failures. Native/Academy offer every legal choice. Only configured policy overflow can truncate. Only a sole legal action skips.
-- Seed an exact fork before the second bottom selection, another during controlled payment, and another at a suspended cleanup choice. Bind and replay the same Commands. Compare chooser, complete offers, ordered events, state hash (including procedure, RNG, outcome and private commitments), next observation and terminal result. Choose another branch to prove root isolation. Reject stale, duplicate and wrong-actor Commands atomically. Compare both seat views, viewer trace/text, Academy reconnect at the pending decision, and possible-world samples consistent with known bottom cards. Run existing `tests/semantic/test_player_control.py`, `tests/semantic/test_text_observation.py`, `tests/academy/test_player_control_session.py` and the applicable observation/model tests after rebuilding the matching extension.
-- For integrated validation, attach the actual debug test names, seed or constructed position, revision and expected/observed branch for each row above here as implementation lands. Keep new procedure recordings alongside original frozen evidence. A failure belongs to its specific interaction. Keep native catalog admission by definition. Integrated validation owns deck selection and training.
+Native decisions own the rules subject and publish the chooser once. Preserve private bottom positions, sideboard privacy, forced-choice skipping, complete native and Academy offers, replay and fork isolation, stale and wrong-actor rejection, and saved model column prefixes. At gate compare both viewers, reconnect at the pending choice, and check native, Python, tensor and text projections. Keep frozen evidence at its original revision.
 
 ### Turn ending at `f2caa4fde913dfb70ccedea1d16d9ea2a1ee8b22`
 
@@ -72,27 +69,7 @@ A pending state-based choice already retains a native frame in the cloned and ha
 
 All 20 turn-ending, cleanup and Bloodbending debug tests passed again with nextest at `f2caa4fde`. The Scryfall conformance check passed at `cc3671bd4`. A release CPython 3.13 build replayed a Python text offer to cast Time Stop at seed 23 with six Islands. Both seats observed the spell in exile and seat 1 took the next turn. The focused Python checks for Bloodbending's text/policy/Academy authority and reconnecting at a pending discard passed (three cases). The Engine Budget and full-suite gate remain pending.
 
-## Subsequent phases
-
-### Decomposition at `6ed6a04d`
-
-The next implementation cut is the post-search condition on Maze’s End. Fabled Passage already composes a library selection with a controlled-land threshold and a conditional effect. Its threshold counts permanents. Maze counts different effective names among controlled permanents matching the Gate subtype. Its conditional belongs *after* the entire optional search, because declining to find with ten names still wins. Preserve Passage’s existing placement of the untap instruction and its moved-object selector.
-
-| Consumers | Rules owner and projection |
-|---|---|
-| Maze’s End, Fabled Passage | The definitions in `dgm.rs` and `eld.rs` own predicate, threshold, timing and consequence. Extend the controlled-permanent count used by `Condition::ControlsAtLeast` to count distinct effective names when requested. Keep ordinary object counting as the default for existing cards and their tokens. Use the layer view appropriate to each evaluation context in `flow/layers.rs` and `flow/statics.rs`. Maze composes `Effect::If` with an instructed win. Pact’s instructed loss and Maze’s instructed win go through the existing protection and outcome authority in `flow/sba.rs`. |
-| Leyline Axe, Quicksilver | `StaticAbility::BeginOnBattlefield` selects exact hand objects in `flow/opening.rs`. The opening workspace owns progress. Viewer action focus and private library knowledge project each commitment. Seed 103 exercises both definitions in one hand. |
-| Time Stop, Sundial | Both definitions emit `Effect::EndTheTurn`. The resolution frame owns the return to cleanup after state-based choices. Frame descriptions expose suspended work. Retain the seed-725 legend fork and the controlled repeated-cleanup case. |
-| Fynn, Virulent Silencer, Herald | `DealsCombatDamage` filters the damaging source and recipient. The printed effects put poison counters on the damaged player. Player counter facts project the same count that SBA checks against Herald’s current restriction. The token and nontoken branches at seed 161 distinguish the selectors. |
-| Bracelet, Construct a Cosmic Cube, Secret of Bloodbending | Each definition supplies its target, duration and route to `Effect::ControlPlayer`. The turn control records govern chooser publication and information sharing. The Bracelet’s ability source and Equipment cost remain distinct focus joins in native offers, tensors and viewer text. Retain the independent indexed-action comparison at seed 23. |
-
-#### Delete — do not maintain
-
-1. Remove the singleton `WinCause::MazesEnd` from rules arbitration and the Env fixture that constructs it. Represent an instructed victory in the committed result. Trace serialized outcome and hash consumers before changing that representation and retain old evidence with its original revision.
-2. Remove `Effect::WinWithDistinctGates` and its dedicated subtype scan, threshold, English description and observability-enumeration arms in the same cut that migrates Maze. Put the Gate predicate and ten-name threshold in its card definition. Derive descriptions and catalog tokens from the conditional and win instruction. Check old catalog token identities and saved bindings explicitly.
-3. Keep the public count, poison total, turn controller and terminal result under their existing native owners. Retain the shared openers, cleanup and control routes above. Their directed tests already exercise a second card with a different entry point or selector.
-
-**Review criterion.** Reading Maze and Passage side by side must explain which permanents count, whether names are distinct, when the condition runs and what succeeds. Neither resolution nor outcome arbitration may name Maze, Gate or ten. Run the existing Passage and Maze witnesses, including nine names plus a duplicate, finding a tenth, declining with ten and Herald flashing in response. Check the learning tokens distinguish both count semantics and the viewer description states the threshold. Rerun Pact’s indexed/Command reward and restore parity alongside the changed victory projection. Earlier passing receipts above describe the pre-cut implementation. A different result on a named branch reopens its behavior contract before further decomposition.
+## Gate measurements
 
 **Performance** keeps the paired same-runner 10% Engine Budget and its semantic digests. Real mulligan decisions change decision sequences even on ordinary decks. Record rule-driven digest changes under the repository baseline procedure and retain the old recording. Measure ordinary play, training stepping and search alongside bounded constructed positions in `managym/examples/bench_states.rs`. Compare size, action count and work at the decision as well as time. Add a named state where existing fixtures miss the shape. [Validation and stress-state harness](../docs/development.md#stress-states)
 
@@ -119,7 +96,7 @@ The CPython 3.13 release build passed scalar/vector opening parity at seed 213. 
 
 ### State-based terminal outcomes at `6591d386`
 
-The release build at the earlier sync failed the 4096-byte GameState assertion. Compact opening counters alone were insufficient. OpeningHands, Playing and Finished now share one procedure field, and combat storage is allocated during combat. The release build passed the original ceiling. The match-state hash contract is v18.
+The release build at the earlier sync failed the 4096-byte GameState assertion. Compact opening counters alone were insufficient. OpeningHands, Playing and Finished now share one procedure field, and combat storage is allocated during combat. The release build passed the original ceiling. That revision used match-state hash v18. The instructed-victory revision below uses v19.
 
 - At seed 213, the CPython 3.13 release extension restored snapshots at both the first private bottom selection (seven offers) and the second selection after one card was already placed (six offers). Both seat views and the exact search witness matched. Restoring the saved replay JSON and choosing the original card reproduced the same successor. Choosing another card changed only the entitled viewer’s library knowledge.
 - At seed 161, `fynn_poison_and_herald_loss_protection` attacked with Fynn at eight opposing poison. The defender reached ten in both viewer observations. The unprotected defender lost; a defender with Herald survived, consumed a failed draw, then lost to poison on Herald’s removal. `herald_protects_against_a_failed_draw_in_its_last_sba_batch` kept the game live after a lethally damaged Herald protected against a failed draw in its final batch. A subsequent failed draw ended it.
@@ -160,6 +137,6 @@ At seed 161, nine names plus a duplicate failed on decline, finding the tenth wo
 
 On the rebuilt CPython 3.13 extension, the seed-23 Pact Command matched indexed play across live and replay-restored snapshots. Both checkpoint formats passed catalog-growth binding, and the saved-column-prefix case passed. The native rename table exposed the retired Maze variant.
 
-### Next step
+### Simplification at `c2c94d20`
 
-Review the shared condition and instructed victory. Gate still owns the full suite and paired same-runner 10% Engine Budget, including semantic digests for ordinary games with opening decisions.
+OpeningHands now labels bottom and battlefield selections from its own stage. The text verification fixture follows offered actions from reset to first-main priority. The legend scan drops one controller’s accumulated groups when it encounters the exemption. Review the ordinary legend choice in the suspended cleanup fork alongside Sakashima’s two-Bracelet exemption. The existing receipts predate this cut.
