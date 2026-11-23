@@ -19,3 +19,5 @@ The pending hand fixture uses twelve Mountains to cover both Spew Flame and the 
 Use separate constructed and ordinary-play Smaug roots. The ordinary-play root supplies the recoverable history for cold replay.
 
 The ordinary-play replay witness uses two Ogre targets and Lightning Bolt in each deck so the target choice and paid spell are both observable with native trivial skipping enabled.
+
+Use Twinmaw's top-library versus hand offers as the first Omen witness. That comparison can expose a profile-filtering error before the shuffle implementation exists.

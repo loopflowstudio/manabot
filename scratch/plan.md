@@ -34,6 +34,8 @@ At `897faeaf`, the overlap fixture in `managym/cards/tests/cards/hob.rs` checks 
 
 The printed choice currently travels as an Adventure boolean through `CastChoices::from_route`, pending decisions and `SpellOnStack`. Replace that boolean with one selected profile when adding Omen. Keep the exact exile grant separate from the choice of spell. Preserve existing Adventure Commands and the four observed prices.
 
+Start with one top-library position and move the same Twinmaw to hand. Make permission eligibility a query on the exact object and candidate printed profile together. The library lookup supplies the object once. Evaluate each route predicate on the proposed spell, using the existing effective-object evaluation for the ordinary face. Require one creature offer at the top and two offers in hand before implementing Omen resolution. This isolates permission filtering from shuffle behavior. Keep enumeration borrowed or allocation-free for the common single hand cast and measure it under the existing Engine Budget.
+
 Use Twinmaw Stormbrood // Charring Bite to extend printed spell selection to Omen. Test the creature-only library permission and both hand offers, then compare successful resolution, a counter and an illegal target. The first Adventure and Bilbo cover the exercised routes. Other resolution-time permissions, modal playable faces, linked preparation, the remaining cohorts and the Engine Budget still need their planned work.
 
 ## Scope
