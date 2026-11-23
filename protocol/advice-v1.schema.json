@@ -3361,6 +3361,11 @@
           "title": "Agent Player Id",
           "type": "integer"
         },
+        "creature_died_this_turn": {
+          "default": false,
+          "title": "Creature Died This Turn",
+          "type": "boolean"
+        },
         "phase": {
           "title": "Phase",
           "type": "string"

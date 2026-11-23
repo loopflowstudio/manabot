@@ -34,3 +34,5 @@ For Drake Hatcher, carry the amount through combat batch matching into its pendi
 The pending damage binding exceeded the 4096-byte GameState ceiling with trigger placement stored inline. Boxing the placement round preserves the ceiling. The countered-activation fork uses a constructed instant with the engine’s counter-ability instruction.
 
 For Hunter, use a nontoken noncreature copying a creature as one simultaneous victim. This makes the departure and destination readings distinguishable.
+
+Prowler’s turn-wide fact uses the active player row as its v11 join for either viewer. The turn owns the single boolean.

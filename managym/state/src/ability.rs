@@ -274,6 +274,7 @@ pub enum Condition {
     /// turn").
     AnyOf(Vec<Condition>),
     AllOf(Vec<Condition>),
+    CreatureDiedThisTurn,
     GainedLifeThisTurn,
     LostLifeThisTurn,
     /// Resolution only: the resolving spell was kicked (CR 702.33).
@@ -409,6 +410,7 @@ impl Condition {
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
+            | Condition::CreatureDiedThisTurn
             | Condition::GainedLifeThisTurn
             | Condition::LostLifeThisTurn
             | Condition::AttackedThisTurn

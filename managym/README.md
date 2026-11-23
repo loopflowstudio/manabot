@@ -285,6 +285,9 @@ Death triggers check whether each permanent was a creature as it left the
 battlefield. High-Society Hunter draws for each other nontoken creature that
 dies alongside it, including a land that was copying a creature. Sacrificing
 a creature token to its attack trigger puts a counter on Hunter without a draw.
+That sacrifice also satisfies Cackling Prowler's end-step condition. Both
+viewers can see whether a creature died this turn, including a token or a
+land copying a creature. Exile does not count. The fact resets each turn.
 
 Delayed abilities compose event matching, frequency, expiry, captured subjects
 and effects. `CreateDelayedTrigger.event` only matches the event;

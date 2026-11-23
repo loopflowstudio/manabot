@@ -1517,6 +1517,8 @@ impl From<PyPlayer> for PlayerData {
 #[derive(Clone)]
 pub struct PyTurn {
     #[pyo3(get, set)]
+    pub creature_died_this_turn: bool,
+    #[pyo3(get, set)]
     pub turn_number: i32,
     #[pyo3(get, set)]
     pub phase: PhaseEnum,
@@ -1532,6 +1534,7 @@ pub struct PyTurn {
 impl From<TurnData> for PyTurn {
     fn from(value: TurnData) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number as i32,
             phase: value.phase.into(),
             step: value.step.into(),
@@ -1545,6 +1548,7 @@ impl From<TurnData> for PyTurn {
 impl From<PyTurn> for TurnData {
     fn from(value: PyTurn) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),

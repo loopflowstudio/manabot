@@ -68,10 +68,11 @@ pub enum FactKind {
     AbilityResolution = 15,
     LifeGains = 16,
     TriggeringDamage = 17,
+    CreatureDied = 18,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 16] = [
+    pub const ALL: [FactKind; 17] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -88,6 +89,7 @@ impl FactKind {
         FactKind::AbilityResolution,
         FactKind::LifeGains,
         FactKind::TriggeringDamage,
+        FactKind::CreatureDied,
     ];
 }
 
@@ -1839,6 +1841,9 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             effect: None,
         })
     };
+    if layout == InputLayout::OneToken && obs.turn.creature_died_this_turn {
+        push(obs.turn.active_player_id, FactKind::CreatureDied, 0, 1.0);
+    }
     for player in [&obs.agent, &obs.opponent] {
         if layout == InputLayout::OneToken && player.turn_history.life_gains > 0 {
             push(
@@ -2366,6 +2371,7 @@ mod tests {
             game_over: false,
             won: false,
             turn: TurnData {
+                creature_died_this_turn: false,
                 turn_number: 1,
                 phase: PhaseKind::Combat,
                 step: StepKind::DeclareAttackers,

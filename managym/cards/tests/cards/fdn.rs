@@ -962,8 +962,9 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
     };
     use managym::agent::action::Action;
 
-    let mut s = five_color_setup(&["High-Society Hunter"]);
+    let mut s = five_color_setup(&["High-Society Hunter", "Cackling Prowler"]);
     let hunter = s.force_permanent_on_battlefield(0, "High-Society Hunter");
+    let prowler = s.force_permanent_on_battlefield(0, "Cackling Prowler");
     let token = s
         .game_mut()
         .create_token("token.cat", PlayerId(0), false)
@@ -976,7 +977,9 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
         |s| !offered_cards(s).is_empty(),
         "Hunter sacrifice choice".into(),
     );
-    assert_eq!(offered_cards(&s), vec![cat]);
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), 2);
+    assert!(offered.contains(&cat) && offered.contains(&card_of(&s, prowler)));
     let pending = s.game().clone();
     let hand = s.zone_size(0, ZoneType::Hand);
     for sacrifice in [false, true] {
@@ -990,6 +993,35 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
         assert_eq!(s.game().state.permanents[token].is_none(), sacrifice);
         assert_eq!(counters(&s, hunter), i32::from(sacrifice));
         assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+        let restored = s.game().clone();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+            assert_eq!(obs.turn.creature_died_this_turn, sacrifice);
+        }
+        let mut end_hash = None;
+        for replay in [false, true] {
+            if replay {
+                *s.game_mut() = restored.clone();
+            }
+            s.advance_to_active_step(0, StepKind::End);
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+                assert_eq!(obs.stack_objects.len(), usize::from(sacrifice));
+                if sacrifice {
+                    let key = s.game().state[card_of(&s, prowler)].definition_id;
+                    assert_eq!(obs.stack_objects[0].source_card_registry_key, key.0 as i32);
+                    assert_eq!(obs.stack_objects[0].ability_index, Some(0));
+                }
+            }
+            let hash = s.game().state.deterministic_hash();
+            if let Some(previous) = end_hash.replace(hash) {
+                assert_eq!(previous, hash);
+            }
+            settle(&mut s);
+            assert_eq!(counters(&s, prowler), i32::from(sacrifice));
+        }
+        s.advance_to_active_step(1, StepKind::Main);
+        assert!(!s.game().state.turn.creature_died_this_turn);
     }
 }
 
@@ -1045,5 +1077,41 @@ fn high_society_hunter_draws_for_simultaneous_nontoken_deaths() {
                 && c.characteristics.name == object.name));
         }
         assert!(foe.opponent_cards.iter().all(|c| c.zone != ZoneType::Hand));
+    }
+}
+
+#[test]
+fn cackling_prowler_ward_counters_a_spell_unless_two_is_paid() {
+    use crate::support::{
+        game::{clear_hand, five_color_unfunded_setup, force_lands},
+        play::cast_only,
+    };
+    use managym::{
+        agent::action::{ActionSpaceKind, ActionType},
+        flow::turn::StepKind,
+        state::game_object::PlayerId,
+    };
+    for pay in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Cackling Prowler", "Lightning Strike"]);
+        let prowler = s.force_permanent_on_battlefield(0, "Cackling Prowler");
+        force_lands(&mut s, 1, "Mountain", 4);
+        clear_hand(&mut s, 0);
+        clear_hand(&mut s, 1);
+        s.force_card_in_hand(1, "Lightning Strike");
+        s.advance_to_active_step(1, StepKind::Main);
+        cast_only(&mut s);
+        s.choose_target_named("Cackling Prowler");
+        s.pass_priority();
+        s.pass_priority();
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert!(s.take_action_by_type(if pay {
+            ActionType::PayCost
+        } else {
+            ActionType::DeclineChoice
+        }));
+        s.pass_priority();
+        s.pass_priority();
+        assert_eq!(s.game().state.permanents[prowler].is_none(), pay);
     }
 }

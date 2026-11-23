@@ -567,7 +567,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 26] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 27] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -577,6 +577,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 26] {
         history,
         graveyard_from_battlefield: _,
         ability_triggers_this_turn: _,
+        creature_died_this_turn: _,
         damage_pairs: _,
         ability_resolutions_this_turn: _,
         extra_turns: _,
@@ -600,6 +601,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 26] {
     } = history[0];
     [
         ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
+        ("creature_died_this_turn", Seen::Via("creature death fact on active player")),
         ("active_player", Seen::Player(player::IS_ACTIVE, player::LIBRARY_COUNT)),
         (
             "turn_number",
@@ -1204,6 +1206,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         }
         Condition::AllOf(_) => "Condition::AllOf",
         Condition::LostLifeThisTurn => "Condition::LostLifeThisTurn",
+        Condition::CreatureDiedThisTurn => "Condition::CreatureDiedThisTurn",
         Condition::GainedLifeThisTurn => "Condition::GainedLifeThisTurn",
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
@@ -1251,6 +1254,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
         Condition::AllOf(vec![Condition::YourTurn]),
         Condition::LostLifeThisTurn,
+        Condition::CreatureDiedThisTurn,
         Condition::GainedLifeThisTurn,
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
@@ -3059,6 +3063,7 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
         FactKind::TriggeringDamage => "ContinuationFrame.triggering_damage",
+        FactKind::CreatureDied => "TurnData.creature_died_this_turn",
         FactKind::LifeGains => "PlayerTurnHistory.life_gains",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
@@ -3126,6 +3131,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         order => [Rows("v7 effect_members column 1: reversible native record order")],
     }));
     fields.extend(encoding!(TurnData {
+        creature_died_this_turn => [Fact(FactKind::CreatureDied)],
         turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
         step => [Columns(Player, player::STEP_UNTAP, 12)],
@@ -4361,6 +4367,27 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert_eq!(waiting(&s, 0), None, "fired");
+}
+
+#[test]
+fn creature_death_fact_joins_the_active_player_for_either_viewer() {
+    let (mut game, ogre) = ogre_game();
+    let object = game.state.permanents[ogre].as_ref().unwrap().object;
+    game.move_object(object, ZoneType::Graveyard);
+    for viewer in 0..2 {
+        let (obs, encoded) = observe(&game, viewer);
+        let rows: Vec<_> = encoded
+            .facts
+            .chunks_exact(FACT_DIM)
+            .filter(|row| row[fact::KIND] == FactKind::CreatureDied as u8 as f32)
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][fact::VALUE], 1.0);
+        assert_eq!(
+            rows[0][fact::OBJECT],
+            if obs.agent.is_active { 1.0 } else { 2.0 }
+        );
+    }
 }
 
 #[test]

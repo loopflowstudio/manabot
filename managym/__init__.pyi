@@ -1087,6 +1087,7 @@ class Permanent:
     def card(self) -> Card | None: ...
 
 class Turn:
+    creature_died_this_turn: bool
     turn_number: int
     phase: PhaseEnum
     step: StepEnum

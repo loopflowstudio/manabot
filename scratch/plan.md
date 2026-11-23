@@ -155,17 +155,17 @@ The two `high_society_hunter` native card fixtures passed. From one attack trigg
 
 Behavior review at `41cbdd99`: both Hunter card tests passed again. The FDN ledger links both fixtures. Hunter uses the shared optional sacrifice and conditional effect instructions. Its pending draws use the ordinary stack source and ability index, which the v11 encoder projects even after Hunter leaves. Three shared consumer controls passed for text stack links, hidden-hand permutations and manual Commands with stale rejection. Hunter adds no mana spend or token instruction. Its working slice is satisfied. The forks exercised native game clones; integrated replay, Academy parity and budget checks remain with gate. The delayed watcher defect below remains open for the Prowler slice.
 
-## Next slice · Cackling Prowler
+## Implemented slice · Cackling Prowler
 
-Branch from Hunter’s attack trigger with Prowler in play. Sacrifice the Cat in one branch and decline in the other. With no other deaths, only the sacrifice branch should give Prowler a counter at its controller’s end step. Carry that game into the next turn and verify the fact resets. Target Prowler from the opposing seat and exercise paying and declining ward.
+The graveyard move and delayed death watchers read the same departure creature status as Hunter. As the sole departure, an Island copying Gray Ogre set the turn fact and fired the watcher on death. Exile did neither. Flipping only the turn fact changed the canonical hash. Its version is 23.
 
-Hunter’s death matcher already reads effective creature status at departure (`managym/src/flow/triggers.rs`). Have the turn-history writer use the same departure fact. The matcher still reads other card types from the moved card. If a remaining predicate needs another effective type at departure, consolidate that lookup before extending it.
+Restoring the native game clone after Hunter's sacrifice choice reproduced the end-step hash. Both viewers saw Prowler's pending ability only after sacrifice, and only that branch added a counter. The next turn started with the fact clear. Paying ward let Lightning Strike kill Prowler and declining kept it alive.
 
-The delayed CreatureDies matcher in `flow/triggers.rs::delayed_triggers_for_event` also needs migration. It combines destination type with an animation flag, which can miss a noncreature copying a creature. First isolate that copy as the sole death with a delayed watcher present. Check exile as a control. Use one exact-departure classification for the watcher, Hunter’s death matching and the turn fact. Keep the graveyard arrival identities used by existing effects. For Prowler retain one public turn-wide boolean across forks, restore and hashing, reset it at each new turn, and expose it in native observation, v11, text and Academy. Restore after the Cat sacrifice before the end step and verify the same pending ability. Preserve the separate ward payment branches.
+Next slice: Incinerating Blast. Exercise damage before the optional discard, the resulting draw, and loss of the only target before resolution.
 
 ## Evidence to carry forward
 
-Eight of 81 primary rows have definitions and directed fixtures. Hunter and Hatcher are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
+Eight of 81 primary rows have definitions and directed fixtures. Hunter, Hatcher and Prowler are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 

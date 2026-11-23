@@ -584,6 +584,8 @@ pub struct LegacyPlayerView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyTurnView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub creature_died_this_turn: bool,
     pub turn_number: u32,
     pub phase: String,
     pub step: String,

@@ -294,6 +294,7 @@ export interface Observation {
   won: boolean;
   turn: {
     turn_number: number;
+    creature_died_this_turn?: boolean;
     phase: string;
     step: string;
     active_player_id: number;

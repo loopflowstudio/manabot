@@ -3,6 +3,7 @@ use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
         PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -17,6 +18,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         blasphemous_edict(),
+        cackling_prowler(),
         cat_collector(),
         claws_out(),
         drake_hatcher(),
@@ -438,6 +440,30 @@ fn fiendish_panda() -> CardDefinition {
                 },
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cackling_prowler() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.cackling_prowler",
+        scryfall_id: "1bd8e971-c075-4203-8d83-c28f22d4f9b9",
+        printed: PrintedCharacteristics {
+            name: "Cackling Prowler".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Hyena".into(), "Rogue".into()],
+            power: Some(4),
+            toughness: Some(3),
+            statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{2}")))],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::CreatureDiedThisTurn),
+                effects: vec![Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1)],
+            }],
+            text_box: "Ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nMorbid — At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature.".into(),
             ..Default::default()
         },
         ..Default::default()

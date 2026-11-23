@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 22;
+pub const MATCH_STATE_HASH_VERSION: u32 = 23;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -78,6 +78,8 @@ struct CanonicalTurn<'a> {
     spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
     #[serde(skip_serializing_if = "crate::flow::turn::DamageHistory::is_empty")]
     damage_pairs: &'a crate::flow::turn::DamageHistory,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    creature_died_this_turn: bool,
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -108,6 +110,7 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
+            creature_died_this_turn: turn.creature_died_this_turn,
             history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn

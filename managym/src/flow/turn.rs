@@ -211,6 +211,8 @@ pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub graveyard_from_battlefield: Vec<ObjectId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub creature_died_this_turn: bool,
     /// Positive damage to permanents and combat damage to players this turn.
     #[serde(skip_serializing_if = "DamageHistory::is_empty")]
     pub damage_pairs: DamageHistory,
@@ -255,6 +257,7 @@ impl TurnState {
             turn_number: 1,
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
+            creature_died_this_turn: false,
             damage_pairs: Default::default(),
             history: Default::default(),
             graveyard_from_battlefield: Vec::new(),
@@ -383,6 +386,7 @@ impl TurnState {
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
+        self.creature_died_this_turn = false;
         self.damage_pairs.0.clear();
         self.history = Default::default();
         self.graveyard_from_battlefield.clear();

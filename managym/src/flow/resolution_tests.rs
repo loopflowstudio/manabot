@@ -1399,6 +1399,46 @@ fn delay_life_gain(
     game.resolve_top_of_stack();
 }
 
+#[test]
+fn copied_island_death_uses_departure_type_for_morbid_and_delayed_watchers() {
+    let deck = BTreeMap::from([("Island".into(), 20), ("Gray Ogre".into(), 20)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        418,
+        false,
+    );
+    let ogre = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let island = game
+        .scenario_force_battlefield(PlayerId(1), "Island", true)
+        .unwrap();
+    let object = game.state.permanents[island].as_ref().unwrap().object;
+    let original = game.state[game.state.permanents[ogre].as_ref().unwrap().object].clone();
+    game.state[object].become_copy_of(&original, &[]);
+    delay_life_gain(
+        &mut game,
+        DelayedEvent::CreatureDies,
+        DelayedFrequency::Once,
+        DelayedExpiry::ThisTurn,
+    );
+    for zone in [ZoneType::Exile, ZoneType::Graveyard] {
+        let mut branch = game.clone();
+        branch.move_object(object, zone);
+        branch.process_game_events();
+        assert!(branch.flush_triggers().is_none());
+        let died = zone == ZoneType::Graveyard;
+        assert_eq!(branch.state.turn.creature_died_this_turn, died);
+        assert_eq!(branch.state.stack_objects.len(), usize::from(died));
+        let hash = branch.state.deterministic_hash();
+        branch.state.turn.creature_died_this_turn = !died;
+        assert_ne!(branch.state.deterministic_hash(), hash);
+    }
+}
+
 /// The same matcher composes with either firing policy and either expiry.
 /// These bounded synthetic effects exercise the real resolver and occurrence queue.
 #[test]

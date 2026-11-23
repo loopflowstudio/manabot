@@ -1814,6 +1814,9 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creature_died_this_turn": {
+          "type": "boolean"
+        },
         "phase": {
           "type": "string"
         },

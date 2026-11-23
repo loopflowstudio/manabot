@@ -709,6 +709,12 @@ impl Game {
                 .or_default() += 1;
         }
         if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
+            if self
+                .object_lki(prior_object)
+                .is_some_and(|lki| lki.was_creature)
+            {
+                self.state.turn.creature_died_this_turn = true;
+            }
             self.state.turn.graveyard_from_battlefield.push(object_id);
         }
 

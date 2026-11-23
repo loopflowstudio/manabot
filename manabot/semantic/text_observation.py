@@ -1172,6 +1172,7 @@ class _Renderer:
             "All legal alternatives are listed. Further choices occur only when offered.",
             "Optional details are shown when provided; unavailable facts are marked explicitly.",
             "",
+            *(["A creature died this turn."] if state.turn.creature_died_this_turn else []),
             f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",

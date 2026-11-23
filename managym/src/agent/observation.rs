@@ -26,6 +26,8 @@ use std::collections::{BTreeMap, HashSet};
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TurnData {
+    #[serde(default)]
+    pub creature_died_this_turn: bool,
     pub turn_number: u32,
     #[serde(deserialize_with = "super::observation_json::phase")]
     pub phase: PhaseKind,
@@ -1004,6 +1006,7 @@ impl Observation {
             .is_some_and(|winner| winner == agent_player.0);
 
         let turn = TurnData {
+            creature_died_this_turn: game.state.turn.creature_died_this_turn,
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
             step: game.state.turn.current_step_kind(),

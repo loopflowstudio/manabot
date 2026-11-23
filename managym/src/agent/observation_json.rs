@@ -95,6 +95,9 @@ impl Serialize for TurnJson<'_> {
         map.serialize_entry("agent_player_id", &value.agent_player_id)?;
         map.serialize_entry("phase", &(value.phase as i32))?;
         map.serialize_entry("step", &(value.step as i32))?;
+        if value.creature_died_this_turn {
+            map.serialize_entry("creature_died_this_turn", &true)?;
+        }
         map.serialize_entry("turn_number", &value.turn_number)?;
         map.end()
     }

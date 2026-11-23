@@ -819,6 +819,7 @@ impl Game {
             Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
                 self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
+            Condition::CreatureDiedThisTurn => self.state.turn.creature_died_this_turn,
             Condition::GainedLifeThisTurn => self.state.turn.history[controller.0].life_gains > 0,
             Condition::LostLifeThisTurn => self.state.turn.history[controller.0].life_lost > 0,
             Condition::AllOf(conditions) => conditions.iter().all(|condition| {

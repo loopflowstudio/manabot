@@ -14,6 +14,7 @@ from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     FACT_ABILITY_RESOLUTION,
+    FACT_CREATURE_DIED,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_LIFE_GAINS,
@@ -801,6 +802,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "exceptions": "except <effect phrase>",
     },
     managym.Turn: {
+        "creature_died_this_turn": "A creature died this turn.",
         "turn_number": "Turn",
         "phase": "Phase",
         "step": "Step",
@@ -821,6 +823,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)
     state = payload["observation"]["viewer_state"]
+    state["turn"]["creature_died_this_turn"] = True
     mountain, ogre = state["agent_permanents"]
     ogre |= {
         "attacking": True,
@@ -860,6 +863,11 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     facts = encode_observation(ObservationSpace(ObservationConfig()), observation)[
         "facts"
     ]
+    assert "A creature died this turn." in decision.text
+    assert serialize_observation(observation)["turn"]["creature_died_this_turn"]
+    assert facts[
+        facts[:, FACT_KIND_INDEX] == FACT_CREATURE_DIED, FACT_VALUE_INDEX
+    ].tolist() == [1]
     counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
     assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
     assert facts[

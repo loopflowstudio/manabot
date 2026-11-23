@@ -439,6 +439,7 @@ def serialize_observation(
         "won": bool(obs.won),
         "turn": {
             "turn_number": int(obs.turn.turn_number),
+            "creature_died_this_turn": obs.turn.creature_died_this_turn,
             "phase": enum_name(PhaseEnum, obs.turn.phase),
             "step": enum_name(StepEnum, obs.turn.step),
             "active_player_id": int(obs.turn.active_player_id),

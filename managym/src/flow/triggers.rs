@@ -1284,32 +1284,26 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
-        let creature_died = match event {
-            GameEvent::CardMoved {
-                object_id: object,
-                from: Some(ZoneType::Battlefield),
-                to: ZoneType::Graveyard,
-                ..
-            } => {
-                self.state[*object].types.is_creature()
-                    || event
-                        .departed_object()
-                        .and_then(|object| self.object_lki(object))
-                        .is_some_and(|lki| lki.animated_creature)
-            }
-            _ => false,
-        };
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, GameEvent::CardMoved { .. })
-                    if creature_died =>
-                {
-                    event
+                (
+                    DelayedTriggerEvent::CreatureDies,
+                    GameEvent::CardMoved {
+                        from: Some(ZoneType::Battlefield),
+                        to: ZoneType::Graveyard,
+                        ..
+                    },
+                ) => {
+                    let Some(lki) = event
                         .departed_object()
                         .and_then(|object| self.object_lki(object))
-                        .map(|lki| Target::Permanent(lki.permanent))
+                        .filter(|lki| lki.was_creature)
+                    else {
+                        continue;
+                    };
+                    Some(Target::Permanent(lki.permanent))
                 }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },

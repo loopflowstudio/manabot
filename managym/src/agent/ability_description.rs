@@ -381,6 +381,7 @@ fn condition_text(condition: &Condition) -> String {
         Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
             format!("an opponent lost {amount} or more life this turn")
         }
+        Condition::CreatureDiedThisTurn => "a creature died this turn".into(),
         Condition::GainedLifeThisTurn => "you gained life this turn".into(),
         Condition::LostLifeThisTurn => "you lost life this turn".into(),
         Condition::AllOf(conditions) => conditions

@@ -548,6 +548,21 @@
       "B"
     ]
   },
+  "Cackling Prowler": {
+    "name": "Cackling Prowler",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Hyena Rogue",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Ward",
+      "Morbid"
+    ],
+    "oracle_text": "Ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nMorbid — At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
   "Callous Inspector": {
     "name": "Callous Inspector",
     "mana_cost": "{B}",

@@ -559,6 +559,7 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
+    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     turn_number: UInt32
     phase: str
     step: str
