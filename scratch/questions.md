@@ -17,3 +17,5 @@ Concept review moves the Bilbo replacement fork ahead of batch authoring. Two su
 The pending hand fixture uses twelve Mountains to cover both Spew Flame and the later Smaug cast in one turn. An opposing Counterspell branches from the same announced Adventure.
 
 Use separate constructed and ordinary-play Smaug roots. The ordinary-play root supplies the recoverable history for cold replay.
+
+The ordinary-play replay witness uses two Ogre targets and Lightning Bolt in each deck so the target choice and paid spell are both observable with native trivial skipping enabled.
