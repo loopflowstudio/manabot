@@ -128,11 +128,4 @@ Routing the counting allocator through mimalloc reproduced every inline size, pe
 
 The native Cargo feature `mimalloc` retains the allocator used in this trial. The system allocator remains the default. Build the Rust budget examples with `--features mimalloc` for timing, or build `bench_footprint` with `--features benchmark,mimalloc` for request counts. Its opening JSON line identifies the backing allocator.
 
-Run the four-worker prefix against the local mimalloc extension.
-
-```sh
-uv run --extra play maturin develop --release --manifest-path managym/Cargo.toml --features python,mimalloc
-uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
-```
-
-For the system comparison, rebuild with `--features python` and pass `--expect-allocator system`. Both release wheels reported the expected allocator with counting disabled and reproduced the 2,048-decision digest above. Requesting mimalloc with the system wheel loaded stopped the script before timing. These short macOS samples support the opt-in feature. A Linux training default needs matched Linux measurements. CI compares the default engine with the committed Engine Budget reference.
+Both release wheels reported the expected allocator with counting disabled and reproduced the 2,048-decision digest above. Requesting mimalloc with the system wheel loaded stopped the script before timing. These short macOS samples support the opt-in feature. A Linux training default needs matched Linux measurements. CI compares the default engine with the committed Engine Budget reference. [Allocator build and collection commands](../../managym/README.md#native-allocator)

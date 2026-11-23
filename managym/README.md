@@ -333,22 +333,6 @@ For a 3.12 compatibility check, use a separate environment and rebuild for that
 interpreter; a `cp313` extension cannot be reused by `cp312`. Follow
 [AGENTS.md](../AGENTS.md#commands) when replacing an already loaded extension.
 
-Native builds use the system allocator by default. Pass `--features mimalloc`
-to Cargo to select mimalloc, or build the Python extension and run the
-four-worker collection benchmark from the repository root.
-
-```bash
-uv run --extra play maturin develop --release \
-  --manifest-path managym/Cargo.toml --features python,mimalloc
-uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
-```
-
-`managym.NATIVE_ALLOCATOR` identifies the allocator in the loaded extension.
-`--no-sync` keeps uv from replacing that build. The separate Cargo feature
-`benchmark` counts Rust allocation requests on either allocator and sets
-`managym.ALLOCATION_COUNTING` to true. Use it for clone footprint diagnostics.
-Collection timings require counting to be disabled.
-
 The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
 Card-shell checks and replay agreement do not independently prove rules
@@ -365,6 +349,25 @@ failure remains historical evidence; this bounded pass does not certify all
 payment rules. See the audit's
 [ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
+
+### Native allocator
+
+Native builds use the system allocator by default. Pass `--features mimalloc`
+to Cargo to select mimalloc. For a Python build, run the following commands
+from the repository root to build and measure four-worker collection.
+
+```bash
+uv run --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python,mimalloc
+uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
+```
+
+For the system comparison, use `--features python` and `--expect-allocator system`.
+`--no-sync` preserves the local build. The benchmark checks the loaded
+extension's `managym.NATIVE_ALLOCATOR` before timing. The separate Cargo
+feature `benchmark` counts Rust allocation requests on either allocator and
+sets `managym.ALLOCATION_COUNTING` to true. Use it for footprint diagnostics.
+Collection timings require counting to be disabled.
 
 ## Style
 
