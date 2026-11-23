@@ -2,9 +2,9 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Slice 2 adds Arahbo and Helpful Hunter. Eleven rows have confirmed deferrals and 205 await the readiness audit. The Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo and Helpful Hunter. Eleven cards have documented deferrals and 205 await audit.
 
-**Arahbo and Helpful Hunter.** The focused release test in `cards/tests/cards/fdn.rs` passed both trigger orders. Arahbo entered first and created one Cat. On Hunter's entry, one branch drew before the second Cat appeared and the other created it before the draw. Both finished with one additional card in hand, two 2/2 Cat tokens and no pending triggers.
+**Arahbo and Helpful Hunter.** The focused release test in `managym/cards/tests/cards/fdn.rs` passed both orders from the same trigger-order decision (`ea02298f`). Arahbo's entry created one Cat. After Hunter entered, the first resolution either added one card to hand or created one more Cat. Both orders finished with one card drawn, the original Cat and one new Cat each at 2/2, and no pending triggers. The fixture exercises ordinary Arahbo. Its token-copy self-entry case remains a directed check for the new shared trigger subject.
 
 ### Behavior after the shared repair at `12096ae8`
 
@@ -95,10 +95,8 @@ Every slice follows the same authoring rules: file each card once under its **fi
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
 Arahbo and Helpful Hunter are registered. A token copy of Arahbo also triggers on its own entry, so the single entry ability needs a distinct self alternative. Matching an entering Cat needs its live token status and effective subtype. Complete the cohort partition across the remaining slices.
 1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit each group against native rules before authoring it. Start the targeting group with Drakuseth, Maw of Flames. The token group can proceed independently. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
-2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
-   - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.
-   - Regal Caracal: creates 2 `token.cat_1_1_w_lifelink` tokens; remove Caracal and confirm those tokens retain lifelink while Arahbo's Cat does not.
-   - Anthem of Champions: Cat entering after Anthem gets +1/+1.
+2. **Next playable slice — Regal Caracal.** Audit its entry and continuous grants, add its printed definition and lifelink Cat face, and use Arahbo's existing ordinary Cat in the same position. Check that Caracal creates exactly two Cats with intrinsic lifelink. While Caracal is present the ordinary Cat also has lifelink. Remove Caracal and check that only its two tokens retain lifelink. Reuse the existing token creation and continuous-effect forms.
+   - Follow with Prideful Parent and Anthem of Champions. Check that Anthem's bonus applies to a Cat entering after it.
 3. **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
    - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.
    - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).
