@@ -1,7 +1,5 @@
-at: 5a43ee032a8f71ce4bf59fd601793592c3f2f78c
+at: f5d4bb7ad864bcaca3c72429fc2b84c9c4f4fabd
 first:
-  - path: managym/src/flow/resolution_tests.rs
-    why: Follow both suspended Time Stop cleanup choices
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
   - path: managym/src/flow/game.rs
@@ -16,6 +14,8 @@ first:
     why: Count matching permanents or their effective names
   - path: managym/src/flow/resolution.rs
     why: Follow turn ending and explicit wins
+  - path: managym/src/flow/resolution_tests.rs
+    why: Follow both suspended Time Stop cleanup choices
   - path: managym/src/flow/sba.rs
     why: Resolve simultaneous losses and group legends by controller
   - path: managym/src/agent/env.rs
@@ -36,6 +36,8 @@ first:
     why: Distinguish activation source from exile cost
   - path: manabot/verify/text_observation.py
     why: Reach first-main priority through offered opening choices
+  - path: manabot/verify/decision_memory.py
+    why: Reuse opening choices with decision recording enabled
   - path: tests/academy/test_bracelet_offers.py
     why: Compare both Commands with independently selected native actions
   - path: managym/cards/tests/cards/eoe.rs

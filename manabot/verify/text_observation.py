@@ -23,6 +23,26 @@ from managym.decision import SemanticContractError, apply_semantic_command
 from managym.decision_capture import CardReference, DecisionInput
 
 
+def reset_to_first_main(env: managym.Env, setup: managym.GameSetup) -> int:
+    """Reset a fixture and advance it to first-main priority and return its acting seat."""
+    obs, _ = env.reset(setup)
+    for _ in range(22):
+        if obs.turn.turn_number and obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
+            return obs.agent.player_index
+        # Keep the dealt hand, decline pregame entries, then pass priority.
+        index = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if (action.action_type == managym.ActionEnum.CHOOSE_MODE and action.mode_index == 0)
+            or action.action_type in (
+                managym.ActionEnum.DECLINE_CHOICE,
+                managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+            )
+        )
+        obs = env.step(index)[0]
+    raise AssertionError("main phase not reached")
+
+
 def priority_root(
     hand: tuple[str, ...],
     battlefield: tuple[str, ...],
@@ -36,29 +56,13 @@ def priority_root(
     # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
-    obs, _ = env.reset(
+    actor = reset_to_first_main(
+        env,
         managym.GameSetup(
             [managym.PlayerConfig(name, deck) for name in ("a", "b")],
             mana_floats=(mana_floats, mana_floats),
-        )
+        ),
     )
-    for _ in range(22):
-        if obs.turn.turn_number and obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
-            break
-        # Keep the dealt hand, decline pregame entries, then pass priority.
-        index = next(
-            i
-            for i, action in enumerate(obs.action_space.actions)
-            if (action.action_type == managym.ActionEnum.CHOOSE_MODE and action.mode_index == 0)
-            or action.action_type in (
-                managym.ActionEnum.DECLINE_CHOICE,
-                managym.ActionEnum.PRIORITY_PASS_PRIORITY,
-            )
-        )
-        obs = env.step(index)[0]
-    else:
-        raise AssertionError("main phase not reached")
-    actor = obs.agent.player_index
     env.scenario_clear_hand(actor)
     for card in hand:
         env.scenario_force_card_in_hand(actor, card)
