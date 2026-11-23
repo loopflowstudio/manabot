@@ -243,7 +243,8 @@ Selection uses magnitude, so strongly bad decisions stay alongside strongly good
 ones. By default, a dropped row leaves both the policy and value losses;
 `filter_scope="actor"` keeps every row for the value loss. Advantages are not
 renormalized after filtering. If nothing survives, the iteration still counts
-but takes no optimizer step.
+but takes no optimizer step. Mixed snapshot batches apply the filter separately
+to eligible fresh and snapshot rows. [Snapshot learning rules](training-loop.md#rloo-baselines-stratified-filtering-and-plr)
 
 These are the last five decisions of a real lost game, from a batch that kept
 81 of 324 rows on an untrained network. `uv run python scripts/inspect_batch.py`
@@ -397,7 +398,8 @@ damping decay with the fraction of a declared `horizon` completed
 
 Training keeps two sets of weights. The **raw** weights are the learner, and
 they play the next batch. The **EMA** is an average updated once per iteration
-at 0.999, including iterations the filter emptied. A recipe can collect with the
+at 0.999, including iterations the filter emptied. Discovery batches with zero
+sample weight skip both Adam and EMA. A recipe can collect with the
 EMA by setting `behavior="ema-self"`; otherwise it is only an evaluation output.
 
 A checkpoint is bound to the meaning of what it reads and chooses: its input
@@ -417,7 +419,7 @@ so a result can't be picked by looking at the test.
 | Question | Metric | Reading it |
 | --- | --- | --- |
 | Is the agent improving? | Evaluation scores | The only strength signal. Self-play results can't show it, because both seats are the same agent. |
-| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of trajectory columns paused mid-game. Always 0 for complete games. |
+| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of seat trajectories that end with a critic bootstrap. A column containing two completed games and one paused game contributes three trajectories. |
 | Is the filter working as designed? | `retained` / `rows` | Should sit near a quarter. |
 | Is the policy moving too fast? | `collection_kl`, `numerical/clip_fraction` | Rising values mean updates are pushing against their limits. |
 | Is exploration collapsing? | `entropy` | A fast fall means the policy is committing early. |
@@ -575,12 +577,12 @@ each piece they are made of as a public function.
 | --- | --- |
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
-| Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Advantages and value targets | [`compute_batch_targets`](../manabot/training/updates/targets.py) |
 | Damped objective | `damped_policy_loss`, `minibatch_objective` in [`training/updates/objective.py`](../manabot/training/updates/objective.py) |
 | Loss terms | `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
-| Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
-| Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
+| Update rule | `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
+| Filter and per-source diagnostics | [`select_sources`](../manabot/training/updates/selection.py) |
 | Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
 | Defaults | `DampedPolicyLearning` in [`training/learning.py`](../manabot/training/learning.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

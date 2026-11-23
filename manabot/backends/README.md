@@ -216,8 +216,8 @@ backend against them:
   (`clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`,
   `categorical_value_loss`, `entropy`, `clip_fraction`), returns
   (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`,
-  `outcome_probabilities`, `expected_outcome`), selection (`selected_rows`,
-  `selection_mask`, `selected_mean`), `constant` for a value with no gradient
+  `outcome_probabilities`, `expected_outcome`), selection (`selected_magnitudes`) and
+  reductions (`selected_mean`, `weighted_sum`), `constant` for a value with no gradient
   path, and the refusals (`require`, `require_finite`, `float64_operand`,
   `NumericalError`).
 - `backend.learner`: its `Learner` holds the policy and optimizer, sets the
@@ -259,7 +259,7 @@ health, `selection_diagnostics` and `value_scale`. Logic that is pure NumPy
 lives once in `manabot.policy`: `reference_distribution` (`prepare.py`) and
 the returns and selection recursions (`returns.py`), which both backends'
 `transition_gae` wrap; torch keeps advantage selection on the minibatch's
-device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
+device (`selected_magnitudes`, `torch.quantile`), matching `returns.quantile` bit
 for bit. The
 algorithm modules (`damped_policy.py` and `ppo.py`) import no framework and no backend, even for annotations
 (`tests/test_package_boundaries.py` enforces it); they name the backend's
@@ -278,8 +278,7 @@ documents them. A backend never carries its own copy of an update's loss:
 - MLX's `rl` holds what the scalar damped update calls. It has no categorical
   critic functions (`categorical_lambda_returns`, `categorical_value_loss`,
   `outcome_probabilities`, `expected_outcome`), and the backend refuses a
-  categorical checkpoint; it also lacks `standardized_advantages` and
-  `selected_rows`, which only PPO calls.
+  categorical checkpoint. PPO also requires `standardized_advantages`.
 - `OptimizerHealth` counts steps and rejections on every backend; its sampled
   gradient and parameter detail comes from the learner and is absent on MLX.
 - The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
@@ -296,7 +295,7 @@ require their original revision; retained captures remain readable.
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
 | `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_magnitudes`, `selected_rows`, `selection_mask`, `selected_mean`, `weighted_sum`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of`, `on_device` |

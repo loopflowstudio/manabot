@@ -203,6 +203,7 @@ def transition_gae(
     next_value: mx.array,
     gamma: float,
     lam: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> tuple[mx.array, mx.array]:
     """GAE for transition-end flags [T,E], on the host
     (`manabot.policy.returns.transition_gae`)."""
@@ -213,6 +214,7 @@ def transition_gae(
         np.array(next_value),
         gamma,
         lam,
+        bootstrap_indexes,
     )
     return mx.array(advantages), mx.array(value_targets)
 
@@ -279,6 +281,19 @@ def clip_fraction(log_ratio: mx.array, clip: float) -> float:
 # -- Selection -----------------------------------------------------------------
 
 
+def selected_magnitudes(
+    advantages: mx.array,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[mx.array, float | None]:
+    """Retained flat indexes and empirical cutoff before the absolute floor."""
+    rows, cutoff = returns.selected_magnitudes(
+        np.array(advantages), kind, fraction, minimum
+    )
+    return mx.array(rows), cutoff
+
+
 def selection_mask(
     advantages: mx.array,
     kind: Literal["top_count", "quantile"],
@@ -290,6 +305,11 @@ def selection_mask(
     return mx.array(
         returns.selection_mask(np.array(advantages), kind, fraction, minimum)
     )
+
+
+def weighted_sum(values: mx.array, weights: mx.array) -> mx.array:
+    """Sum per-row losses with constant logical-minibatch coefficients."""
+    return (values.astype(mx.float32) * weights.astype(mx.float32)).sum()
 
 
 def selected_mean(values: mx.array, selected: mx.array) -> mx.array:

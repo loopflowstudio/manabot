@@ -38,9 +38,11 @@ class AdmittedRollout(AdmittedRows):
     """A rollout batch whose observations one MLX policy reads. The batch must
     not change afterwards."""
 
-    def next_observation(self, device: object) -> Prepared:
+    def next_observation(self, device: object) -> Prepared | None:
         """Inference-prepared bootstrap observations [trajectory, ...]."""
-        return next(self.next_observations(device, len(self.batch.next_done)))
+        return next(
+            self.next_observations(device, max(1, len(self.batch.next_done))), None
+        )
 
     def next_observations(self, device: object, size: int) -> Iterator[Prepared]:
         """Admit and prepare one bootstrap chunk at a time."""

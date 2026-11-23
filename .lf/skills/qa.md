@@ -746,6 +746,24 @@ publish, land or choose the next Graph step from here.
   `test_game_errors.py`. Read a failed job while its run is still in progress
   with `gh api --allow-escape-sequences
   repos/<owner>/<repo>/actions/jobs/<job-id>/logs`.
+- Snapshot-aware self-play (`SnapshotConfig`, `docs/training-loop.md#snapshot-aware-self-play`):
+  extract the guide's `snapshot_recipe.py` block into `.runs/` and run its three
+  commands verbatim with `ETUDE_HOME` there (about 25 s each on CPU). Read
+  `snapshot/*`, `source_selection/<source>/*`, `decisions_per_game` and
+  `optimizer_exposures` per update with `etude.train.read.read(...).points`;
+  the bank is `extra.snapshot_bank` in `out/state/save-*/state.json`. With
+  four streams and the guide's defaults the first group starts at update 3.
+  Also try `{"horizon": null}`, `{"group_size": 1}`,
+  `{"replay_fraction": 1.0, "fresh_floor": 0.0}` (fresh rates must be absent),
+  `--seconds 8` then `--resume`, and a pty Ctrl-C. With `{"record_games": 1,
+  "statistics": true}`, `read_records(Path(out / "games"))` (a `Path`, not a
+  string) must hold only fresh games: a continuation's 15-action prefix
+  replay is a defect, as is an empty `reset` record repeating a fresh seed
+  (16 complete plus one zero-action in-flight game per stream after 4
+  updates). `points(...)` returns `Points` with `.x`/`.y` arrays. `workers`
+  is not a recipe config key: check the startup refusals (`workers=2`,
+  `wdl_entropy` on a scalar critic, `action_value_spread`) with a `.runs/`
+  copy of the recipe that `model_copy`s `SelfPlay`/`SnapshotConfig` fields.
 - Decision memory is opt-in on raw engines: `managym.Env(...)` and
   `VectorEnv(...)` record no viewer decision log unless built with
   `decision_memory=True` (the training wrappers derive it from

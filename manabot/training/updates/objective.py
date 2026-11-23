@@ -8,6 +8,8 @@ This module can also be used independently of game, rollout and model code.
 
 from typing import Any, Protocol, runtime_checkable
 
+from manabot.training.updates.decision_weights import actor_term, critic_term
+
 # The framework owns array operations, indexing, reductions and differentiation.
 type Array = Any
 
@@ -44,6 +46,8 @@ class LossTerms(Protocol):
     ) -> None: ...
 
     def require(self, condition: Array, invariant: str, **tensors: Array) -> None: ...
+
+    def weighted_sum(self, values: Array, weights: Array) -> Array: ...
 
     def selected_mean(self, values: Array, selected: Array) -> Array: ...
 
@@ -134,6 +138,7 @@ def minibatch_objective(
     reference_forward_kl: float = 0.0,
     policy_weight: float = 1.0,
     value_weight: float = 1.0,
+    weights: Array | None = None,
 ) -> tuple[Array, Array, Array]:
     """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
 
@@ -142,11 +147,12 @@ def minibatch_objective(
     when `categorical`) from the current forward, the legal mask [B,A], and
     the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
     [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
-    actor-selected rows [B]. The policy term averages equation (6) over the
-    actor's rows; the critic term averages every row. Gradients reach only
+    actor-selected rows [B]. Optional [B,2] coefficients include the actor
+    and critic weights and their logical minibatch denominators. Gradients reach only
     `logits` and `value_logits`.
     """
-    policy_loss = rl.selected_mean(
+    policy_loss = actor_term(
+        rl,
         damped_policy_loss(
             rl,
             logits,
@@ -161,16 +167,17 @@ def minibatch_objective(
             reference_forward_kl=reference_forward_kl,
         ),
         actor_mask,
+        policy_weight,
+        weights,
     )
     if categorical:
         if not isinstance(rl, CategoricalValueLoss):
             raise TypeError(
                 f"{getattr(rl, '__name__', type(rl).__name__)} has no categorical critic"
             )
-        value_loss = rl.categorical_value_loss(value_logits, value_targets).mean()
+        value_rows = rl.categorical_value_loss(value_logits, value_targets)
     else:
         # Representation ablation, not the paper's outcome objective.
-        value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
-    policy_loss = policy_loss * policy_weight
-    value_loss = value_loss * value_weight
+        value_rows = rl.squared_value_loss(value_logits, value_targets)
+    value_loss = critic_term(rl, value_rows, value_weight, weights)
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss

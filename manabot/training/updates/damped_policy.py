@@ -20,6 +20,7 @@ gradient.
 
 from dataclasses import dataclass
 from typing import Any
+import warnings
 
 import numpy as np
 
@@ -34,9 +35,12 @@ from manabot.training.updates.backend import (
     Observations,
     Policy,
     UpdateBackend,
-    categorical_rl,
 )
-from manabot.training.updates.bootstrap import bootstrap_predictions
+from manabot.training.updates.decision_weights import (
+    actor_term,
+    batch_weights,
+    logical_weights,
+)
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -49,6 +53,7 @@ from manabot.training.updates.selection import (
     selection_diagnostics,
     value_scale,
 )
+from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 
 
 @dataclass(frozen=True)
@@ -65,56 +70,16 @@ def compute_targets(
     learning: DampedPolicyLearning,
     bootstrap_agent: Policy | None = None,
 ) -> DampedTargets:
-    """Build detached learning targets and selection from an admitted rollout."""
-    rl, device = backend.rl, learner.device
-    batch = admitted.batch
-    with backend.learner.no_grad():
-        rewards = backend.arrays.from_numpy(batch.rewards, device)
-        ends = backend.arrays.from_numpy(batch.dones, device)
-        values = backend.arrays.from_numpy(batch.values, device)
-        rl.require_finite("nonfinite_collection_values", values=values)
-        rl.require_finite("nonfinite_rewards", rewards=rewards)
-        next_raw = bootstrap_predictions(
-            backend, learner, admitted, bootstrap_agent or learner.agent
-        )
-        rl.require_finite("nonfinite_bootstrap", values=next_raw)
-        if learner.agent.config.value_kind == "categorical_wdl":
-            if batch.outcome_probabilities is None:
-                raise ValueError(
-                    "categorical update requires collection outcome probabilities"
-                )
-            outcomes = batch.outcome_probabilities
-            if not np.allclose(
-                batch.values, outcomes[..., 2] - outcomes[..., 0], atol=1e-5
-            ):
-                raise ValueError(
-                    "saved value differs from collection outcome probabilities"
-                )
-            probabilities = backend.arrays.from_numpy(outcomes, device)
-            wdl = categorical_rl(rl)
-            bootstrap = wdl.outcome_probabilities(next_raw)
-            value_targets = wdl.categorical_lambda_returns(
-                probabilities, rewards, ends, bootstrap, learning.value_lambda
-            )
-            next_value = wdl.expected_outcome(bootstrap)
-        else:
-            next_value = next_raw.squeeze(-1)
-            _, value_targets = rl.transition_gae(
-                rewards, values, ends, next_value, 1.0, learning.value_lambda
-            )
-        advantages, _ = rl.transition_gae(
-            rewards, values, ends, next_value, 1.0, learning.policy_lambda
-        )
-        rl.require_finite("nonfinite_advantages", advantages=advantages)
-        rl.require_finite("nonfinite_value_targets", targets=value_targets)
-        # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
-        selected = rl.selection_mask(
-            advantages,
-            learning.filter_kind,
-            1 - learning.advantage_quantile,
-            learning.min_advantage,
-        )
-    return DampedTargets(advantages, value_targets, selected)
+    """Compatibility reader for the original three damped target arrays."""
+    warnings.warn(
+        "compute_targets is deprecated and will be removed in 0.4.0; use compute_batch_targets",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    targets = compute_batch_targets(
+        backend, learner, admitted, learning, bootstrap_agent
+    )
+    return DampedTargets(targets.advantages, targets.value_targets, targets.selected)
 
 
 def update_damped_iteration(
@@ -126,6 +91,7 @@ def update_damped_iteration(
     *,
     bootstrap_agent: Policy | None = None,
     learner_transitions: int | None = None,
+    targets: BatchTargets | None = None,
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
@@ -151,7 +117,12 @@ def update_damped_iteration(
         admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         actions = to_device(batch.actions, device)
     with track("Targets"):
-        targets = compute_targets(backend, learner, admitted, learning, bootstrap_agent)
+        if targets is None:
+            targets = compute_batch_targets(
+                backend, learner, admitted, learning, bootstrap_agent
+            )
+        else:
+            targets.check(batch, learning)
         advantage_abs_mean = float(targets.advantages.abs().mean())
     # Which rows the actor trains on, [T,E] on the host.
     actor_rows = to_host(targets.selected)
@@ -161,6 +132,9 @@ def update_damped_iteration(
         "value_kind": learner.agent.config.value_kind,
         "rows": batch.actions.size,
         "retained": int(actor_rows.sum()),
+        "source_selection": {
+            s.source: s.diagnostics() for s in targets.source_selection
+        },
         "optimizer_exposures": 0,
         "actor_exposures": 0,
         "critic_exposures": 0,
@@ -175,9 +149,7 @@ def update_damped_iteration(
         ),
         "reference": learning.reference,
         "advantage_abs_mean": advantage_abs_mean,
-        "bootstrapped_tail_fraction": float(
-            np.mean(~batch.dones[-1], dtype=np.float32)
-        ),
+        "bootstrapped_tail_fraction": batch.bootstrapped_tail_fraction(),
     }
     if learning.decision_schedule is not None:
         assert learner_transitions is not None
@@ -194,14 +166,8 @@ def update_damped_iteration(
         )
         diagnostics["numerical"] = health
         observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
-        expected_targets = (
-            categorical_rl(rl).expected_outcome(targets.values)
-            if categorical
-            else targets.values
-        )
-        expected_rows = to_host(expected_targets)
-        # In the backend's arithmetic: these residuals are credit evidence.
-        residuals = to_host(expected_targets - to_device(batch.values, device))
+        expected_rows = to_host(targets.expected_targets)
+        residuals = to_host(targets.residuals)
         if batch.assignments is not None:
             batch.target_residuals = residuals
         diagnostics["selection_groups"] = selection_diagnostics(
@@ -210,6 +176,7 @@ def update_damped_iteration(
             actor_rows,
             batch.dones,
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
+            batch.segment_ends(),
         )
         diagnostics["value_scale"] = value_scale(
             batch.values,
@@ -218,8 +185,8 @@ def update_damped_iteration(
             kind=learning.filter_kind,
             quantile=learning.advantage_quantile,
             minimum=learning.min_advantage,
+            sources=targets.source_selection,
         )
-    learner.set_learning_rate(rate)
     # Compute credit on the original seat trajectories before regrouping rows.
     # Rectangular rollouts retain one timestep per minibatch. Complete-game
     # rollouts are packed into one column; use the same native stream count
@@ -227,19 +194,25 @@ def update_damped_iteration(
     width = learner.minibatch_rows
     actions = actions.flatten(0, 1)
     advantages = targets.advantages.flatten(0, 1)
-    value_targets = targets.values.flatten(0, 1)
+    value_targets = targets.value_targets.flatten(0, 1)
     actor_rows = actor_rows.reshape(-1)
     actor_critic = learning.filter_scope == "actor_critic"
-    if not actor_rows.any() and actor_critic:
-        diagnostics["skipped"] = "empty advantage filter"
+    trained = actor_rows if actor_critic else targets.positive_weight.ravel()
+    health["critic_rows"] = int(trained.sum())
+    if not trained.any():
+        diagnostics["skipped"] = targets.empty_filter_reason
+        if diagnostics["skipped"] == "empty advantage filter":
+            learner.set_learning_rate(rate)
         health["skipped_steps"] = (len(actor_rows) + width - 1) // width
         return diagnostics
     # Rows each minibatch trains: the actor's under actor_critic scope, else all.
-    trained = actor_rows if actor_critic else np.ones_like(actor_rows)
+    learner.set_learning_rate(rate)
+    training_rows = np.flatnonzero(trained)
+    normalized = batch_weights(
+        batch, training_rows, actor_rows, learning.root_actor_weight
+    )
     with track("Minibatches"):
-        admitted.admit_rows(
-            np.flatnonzero(trained), min(width, learner.execution_rows or width)
-        )
+        admitted.admit_rows(training_rows, min(width, learner.execution_rows or width))
         for start in range(0, len(actor_rows), width):
             window = trained[start : start + width]
             if not window.any():
@@ -249,6 +222,9 @@ def update_damped_iteration(
             execution_rows = learner.execution_rows or len(logical_rows)
             split = len(logical_rows) > execution_rows
             actor_count = int(actor_rows[logical_rows].sum())
+            weights = logical_weights(
+                normalized, logical_rows, actor_count, backend.arrays, device
+            )
             totals = dict(
                 loss=0.0,
                 policy_loss=0.0,
@@ -262,6 +238,11 @@ def update_damped_iteration(
             for offset in range(0, len(logical_rows), execution_rows):
                 rows_host = logical_rows[offset : offset + execution_rows]
                 with track("Forward and loss"):
+                    coefficients = (
+                        None
+                        if weights is None
+                        else weights[offset : offset + execution_rows]
+                    )
                     indexes = to_device(rows_host, device)
                     minibatch_actions = actions[indexes]
                     obs, rows = admitted.rows(rows_host, device)
@@ -272,7 +253,7 @@ def update_damped_iteration(
                         device,
                     )
                     actor_selected = actor_rows[rows_host]
-                    actor_mask = to_device(actor_selected, device)
+                    actor_mask = targets.selected.reshape(-1)[indexes]
                     # Actor and critic have different denominators under actor-only filtering.
                     policy_weight = int(actor_selected.sum()) / max(1, actor_count)
                     value_weight = len(rows_host) / len(logical_rows)
@@ -302,6 +283,7 @@ def update_damped_iteration(
                                 reference_forward_kl=learning.reference_forward_kl,
                                 policy_weight=policy_weight,
                                 value_weight=value_weight,
+                                weights=coefficients,
                             ),
                             logits,
                             value_logits,
@@ -347,22 +329,21 @@ def update_damped_iteration(
                     totals["entropy"] += (
                         float(rl.entropy(logs, valid).mean()) * value_weight
                     )
-                    totals["collection_kl"] += (
-                        float(rl.reverse_kl(logs, behavior_logs, valid).mean())
-                        * value_weight
-                    )
                     magnet_logs = rl.reference_logs(reference, valid)
-                    totals["reference_kl"] += (
-                        float(rl.reverse_kl(logs, magnet_logs, valid).mean())
-                        * value_weight
-                    )
-                    totals["reference_forward_kl"] += (
-                        float(
-                            rl.selected_mean(
-                                rl.forward_kl(logs, magnet_logs, valid), actor_mask
-                            )
+                    for name, target_logs in (
+                        ("collection_kl", behavior_logs),
+                        ("reference_kl", magnet_logs),
+                    ):
+                        divergence = rl.reverse_kl(logs, target_logs, valid)
+                        totals[name] += float(divergence.mean()) * value_weight
+                    totals["reference_forward_kl"] += float(
+                        actor_term(
+                            rl,
+                            rl.forward_kl(logs, magnet_logs, valid),
+                            actor_mask,
+                            policy_weight,
+                            coefficients,
                         )
-                        * policy_weight
                     )
                     totals["clip_fraction"] += (
                         float(

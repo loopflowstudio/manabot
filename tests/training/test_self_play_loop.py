@@ -29,6 +29,7 @@ from manabot.training.loops.self_play import CLOCKS, Counts, SelfPlay, self_play
 from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.state.backend import SelfPlayBackend
 from manabot.training.updates.selection import UpdateDiagnostics
+from manabot.training.updates.targets import BatchTargets
 from tests.fixtures.training_records import recording
 
 SEED = 197
@@ -387,6 +388,7 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
         rng: np.random.Generator,
         *,
         backend: SelfPlayBackend,
+        targets: BatchTargets | None = None,
     ) -> UpdateDiagnostics:
         raise NumericalError(
             "fixture_nonfinite", {"values": torch.tensor([float("nan")])}

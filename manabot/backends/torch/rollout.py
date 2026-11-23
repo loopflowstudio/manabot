@@ -39,9 +39,11 @@ class AdmittedRollout(AdmittedRows):
     must not change afterwards.
     """
 
-    def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
+    def next_observation(self, device: torch.device) -> Prepared[torch.Tensor] | None:
         """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
-        return next(self.next_observations(device, len(self.batch.next_done)))
+        return next(
+            self.next_observations(device, max(1, len(self.batch.next_done))), None
+        )
 
     def next_observations(
         self, device: torch.device, size: int

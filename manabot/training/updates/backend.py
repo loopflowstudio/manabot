@@ -8,7 +8,7 @@ an update steps and runs forward. `manabot.policy.protocol.Backend` also
 provides checkpoint admission. Parity supplies its own learner and layout contract.
 
 Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
-standardization, top-count selection and a policy `__call__`/`get_value`; only
+standardization and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
 `categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
 likewise refuses an unsupported PPO update before reading rollout or learner state.
@@ -72,15 +72,16 @@ class RL(LossTerms, Protocol):
         next_value: Array,
         gamma: float,
         lam: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> tuple[Array, Array]: ...
 
     def entropy(self, logs: Array, valid: Array) -> Array: ...
 
     def clip_fraction(self, log_ratio: Array, clip: float) -> float: ...
 
-    def selection_mask(
+    def selected_magnitudes(
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
-    ) -> Array: ...
+    ) -> tuple[Array, float | None]: ...
 
 
 @runtime_checkable
@@ -98,6 +99,7 @@ class CategoricalRL(RL, CategoricalValueLoss, Protocol):
         ends: Array,
         bootstrap: Array,
         trace_lambda: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> Array: ...
 
 
@@ -115,15 +117,6 @@ class PPORL(CategoricalRL, Protocol):
 
     def standardized_advantages(
         self, advantages: Array, over: Array | None = None
-    ) -> Array: ...
-
-    def selected_rows(
-        self,
-        advantages: Array,
-        fraction: float,
-        minimum: float,
-        *,
-        kind: FilterKind = "top_count",
     ) -> Array: ...
 
 
@@ -168,7 +161,7 @@ class AdmittedRollout(Protocol):
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None: ...
 
-    def next_observation(self, device: Device) -> Observations: ...
+    def next_observation(self, device: Device) -> Observations | None: ...
     def next_observations(
         self, device: Device, size: int
     ) -> Iterator[Observations]: ...

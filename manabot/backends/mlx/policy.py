@@ -901,6 +901,15 @@ class MLXActorCritic(nn.Module):
             )
         keep = (validity != 0)[..., None].astype(objects.dtype)
 
+        # Masked-mean critic.
+        value = self.value_head.layers
+        projected = value[1](value[0](encoded_objects)) * keep
+        pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
+        values = value[5](value[4](value[3](pooled_value))).astype(mx.float32)
+        # A horizon bootstrap can contain only non-acting viewers.
+        if not batch.legal_batches.size:
+            return mx.full(batch.legal.shape, -1e8, dtype=mx.float32), values
+
         # Legal actions: joined rows, focus objects, policy head.
         legal_batches = mx.array(batch.legal_batches)
         actions = self.action_embedding(self._floating(batch.action_features))
@@ -956,11 +965,7 @@ class MLXActorCritic(nn.Module):
             -1e8,
         )
 
-        # Masked-mean critic.
-        value = self.value_head.layers
-        projected = value[1](value[0](encoded_objects)) * keep
-        pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
-        return logits, value[5](value[4](value[3](pooled_value))).astype(mx.float32)
+        return logits, values
 
     def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
