@@ -128,3 +128,11 @@ At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact
 ### Native admission and release checks
 
 At `5d6e00bb` the native probe admitted Silencer alone among the three cards. At `0ea0c204` the rebuilt CPython 3.13 extension admitted Bracelet, Cube and Silencer together. The earlier review passed nine focused native cases and the seed-23 Pact parity fixture. Three focused Python cases subsequently passed across the paid and unpaid Bloodbending decision surfaces and Academy reconnect at a pending delegated discard.
+
+### Behavior review at `758e0910` — continue the working phase
+
+Seven focused debug cases passed in the existing card test binary. The two seed-161 fixtures reproduced the Bracelet payment and Cube control branches above. Five observability cases checked the control-card learning tokens, control relations, counter facts, restricted mana and payment references.
+
+One defect remains in the two-Bracelet offer. With both Bracelets on Gray Ogre, native focus identifies the Ogre permanent followed by the particular Equipment permanent. The native cost description formats the grantor's underlying card object ID instead. The semantic text formatter presents both permanent references as ability sources, then appends the cost description with the card ID. Thus the reference attached to “exile” uses a different identity from the Equipment reference in the same offer. The current native fixture checks each representation separately and passes. The tensor encoder traverses both focus slots, but this fixture does not check their encoded rows.
+
+Use the visible Equipment permanent reference for the exile cost and label the Ogre alone as the activation source. Extend the two-offer fixture through tensor joins, rendered text and Academy's accessible offer labels. Execute each bound activation Command and compare the exact exiled object, receipt and floating pool against its native branch. The Cube fixture already replays its nested payment Command and checks the chooser, resource owner, hidden actions and unchanged root. Full-suite validation and the paired Engine Budget remain at gate.
