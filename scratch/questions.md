@@ -22,3 +22,5 @@
 - Use match-state hash v19 for the smaller serialized victory record. Keep the previous hash in git and leave the recorded games at their original revisions.
 
 - For the local measurement slice, pair duplicate-creatures with one Herald per seat on diverse static boards. This isolates a common SBA consumer and the combat workspace at bounded sizes.
+
+- Count a rules draw separately from simulation timeout. Credit a committed win or draw on the last allowed step and keep all games in the win-rate denominator.
