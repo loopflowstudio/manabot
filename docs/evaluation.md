@@ -180,11 +180,15 @@ and replace `local` in the checkpoint path with that name.
   recorded none, such as a TLA frontier run, plays only a `DeckMatchup`.
 - `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
   checkpoint preparation, scalar play and replay, including child startup.
+- `--backend {torch,mlx}` (default `torch`) chooses which backend admits the
+  checkpoint and runs the scalar CPU game children. Selecting `mlx` resolves
+  explicit `precision="float32"` on CPU without importing PyTorch and does not
+  change `EvaluationRequest`, `EvaluationKey` or registration digests.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.
 
 It needs no training records, credentials or the `evaluation` extra, uses CPU
-with one Torch thread per process, and never rents hardware, enters an Etude
+(with one Torch thread per process when `--backend torch`), and never rents hardware, enters an Etude
 queue or starts a callback endpoint. Exit 0 means a complete replayed cohort;
 1 means an incomplete attempt. An admission timeout retains
 `admission-failure.json`. Results are labelled `local-check-not-admission`:
@@ -192,8 +196,9 @@ a quick check, not promotion or held-out evidence.
 
 Typed callers pass a `Backend` to
 `manabot.eval.local.checkpoint_request(..., backend=backend)` and use
-`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=...)`.
-An unknown training seed stays `None`, never inferred from deals.
+`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=..., backend_name="torch")`
+(pass `backend_name="mlx"` to execute scalar CPU children on MLX without altering
+the frozen request or key). An unknown training seed stays `None`, never inferred from deals.
 
 `evaluate(request, out_dir=..., agents=...)` is the single execution entry
 point shared by the local CLI, training monitoring and Etude benchmark/Duel

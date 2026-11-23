@@ -172,10 +172,12 @@ message naming both versions. An unavailable device fails explicitly. Float64
 loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
-inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
-on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
-`backend="mlx"` for tracked scalar damped self-play. They read and write the
-same portable policies and can resume an [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery).
+inputs and frozen opponents are unsupported on MPS. Evaluation and search stay on CPU. On Apple Silicon, the baseline, local and
+Elemental recipes accept `backend="mlx"` for tracked scalar damped self-play.
+They read and write the same portable policies, preserve live streams and RNGs
+across stops between updates in an
+[MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
+and verify baseline runs through the selected backend in explicit CPU float32.
 
 ### Saved regimes
 
@@ -1125,8 +1127,10 @@ is `experiments/data/etu126/cuda-admission-20261008.json` in the artifact store.
 There is one recovery contract: a run carries on from the last state it saved,
 and Etude does the saving, the carrying and the calling again. The loop
 calls `run.save()` every update. Torch registers its learner, Adam, EMA and counts
-with Etude. MLX registers counts and exports its arrays into the same staged save
-through a callback. Resume uses the backend that wrote the run.
+with Etude. MLX registers counts and atomically writes `training.safetensors`
+and framework-free `continuation.json` (live stream state, committed action
+prefixes and host RNGs) into the same staged save through a callback. Resume
+uses the backend that wrote the run.
 [Tracked MLX training](../manabot/backends/mlx.md#tracked-training-and-recovery)
 
 | The run | What carries it on |
@@ -1152,7 +1156,7 @@ its rows replace the earlier attempt's, so the record reads as one run.
 
 | Kept across a resume | Started again |
 | --- | --- |
-| Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, and every published checkpoint | Native game streams (seeded from the run seed and the update they start at), RNG state, and every update after the last save |
+| Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, every published checkpoint, and — on MLX (`schema="2"`) — committed stream roots/action prefixes, collector sampling RNG and host/framework RNGs | On Torch (and schema-1 MLX saves): native game streams (seeded from the run seed and the update they start at) and RNG state; on every backend: any uncommitted work after the last save |
 
 Work after the last save repeats, and Etude charges its hours and dollars to
 the run. Etude writes a save five minutes after the last one and always on the
@@ -1179,11 +1183,15 @@ policies load on later revisions by name
   `elemental-uniform-174-v1`, `elemental-ur-gw-186-v1`,
   `tla-frontier-c5fba4-w64`) reproduce with that behavior only from the
   revision [saved regimes](#saved-regimes) names.
-- **Proof that a resumed run equals an uninterrupted one.** A resumed run
-  plays different games after the resume point than an uninterrupted run with
-  the same seed would have. Each checkpoint names the revision that wrote it
-  and, under `etude launch`, its Etude run. Etude's run record names the attempts and their resume
-  coordinates. These records preserve provenance, not identical bytes.
+- **Proof that a resumed run equals an uninterrupted one on Torch.** A resumed
+  Torch run starts fresh streams after the resume point, so it plays different
+  games than an uninterrupted run with the same seed. A schema-2 MLX run stopped
+  at a safe update boundary replays the same committed streams and RNGs (exact
+  on CPU float32; on Metal, keys, slots, action traces, digests and restored
+  arrays match identically while subsequent GPU math follows device float32
+  repeatability). Each checkpoint names the revision that wrote it and, under
+  `etude launch`, its Etude run. Etude's run record names the attempts and their
+  resume coordinates.
 - **A check that a fix is compatible.** After a bug fix, `--resume` runs the
   current code as another attempt of the same run; `--source-repair-reason`
   is gone. Each attempt records its commit, existing checkpoints stay as

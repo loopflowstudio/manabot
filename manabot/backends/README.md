@@ -24,12 +24,14 @@ A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
 preparation, the checkpoint container and the host inference contract. Tracked training defaults to PyTorch. The baseline, local and Elemental recipes
-also accept MLX. PyTorch supplies evaluation and the parity reference.
+also accept MLX. PyTorch is the default for evaluation and supplies the
+numerical parity reference; local evaluation and baseline verification also run
+on MLX in explicit CPU float32.
 
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | scalar damped training, Etude continuation and portable policies | [mlx.md](mlx.md) |
+| `mlx` | scalar damped training, exact same-backend continuation, sampled health, local evaluation and portable policies | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
@@ -142,16 +144,21 @@ cumulative clocks and training saves. The loop requires the backend's
 ### Continuing a run
 
 Resume the same Etude run from its committed save in the original backend.
-Torch registers its learner, optimizer and EMA objects. MLX saves raw and EMA
-weights and Adam arrays in `training.safetensors` alongside Etude’s JSON state.
-The loop restores the saved model readings, optimizer and cumulative counts,
-then starts fresh game and sampling streams at the saved update. Source, world,
+Torch registers its learner, optimizer and EMA objects and starts fresh game and
+sampling streams at the saved update. MLX atomically stages
+`training.safetensors` (raw and EMA weights, Adam state, collector sampling RNG
+and MLX RNG) alongside framework-free `continuation.json` (global-slot stream
+roots and committed action prefixes, `learned_game_rows`, opponent RNG when
+`behavior="random"`, minibatch RNG, and Python/NumPy RNGs), bound by SHA-256 in
+`schema="2"`. Resuming a schema-2 MLX save restores weights, optimizer, counts,
+live streams and RNGs so the next update continues from the same decisions
+(existing schema-1 MLX saves remain readable with fresh streams). Source, world,
 input, artifact digest and stage-lineage checks still apply. See the
 [two-attempt CLI example](mlx.md#tracked-training-and-recovery).
 
-Exact update replay uses collector and RNG snapshots. Torch retains its
-format-4 snapshots and the historical `torch_rng` field, restoring framework
-RNG last. Snapshots and incident evidence use the producing backend’s format.
+Torch retains its format-4 snapshots and the historical `torch_rng` field,
+restoring framework RNG last. Snapshots and incident evidence use the producing
+backend's format.
 
 ### Inspection and belief
 
@@ -168,9 +175,11 @@ arithmetic, the random stream and learned state. Fitting takes a
 `BeliefTrainer`. For held-out reports, Torch scores the target and samples
 hands. The host pools calibration, Brier scores and support violations per decision.
 
-Health reporting keeps step and rejection counters on the host. The learner
-supplies sampled tensor measurements. The update, rollout and search-sampling
-modules can all be imported with Torch absent.
+Health reporting keeps step and rejection counters on the host behind one
+`StepRecorder` protocol (`manabot.training.updates.health.StepRecorder`). Both
+Torch and MLX learners supply sampled gradient and parameter measurements on the
+shared schedule. The update, rollout and search-sampling modules can all be
+imported with Torch absent.
 
 ## Algorithms are written once
 
@@ -279,8 +288,6 @@ documents them. A backend never carries its own copy of an update's loss:
   critic functions (`categorical_lambda_returns`, `categorical_value_loss`,
   `outcome_probabilities`, `expected_outcome`), and the backend refuses a
   categorical checkpoint. PPO also requires `standardized_advantages`.
-- `OptimizerHealth` counts steps and rejections on every backend; its sampled
-  gradient and parameter detail comes from the learner and is absent on MLX.
 - The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
   `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
 
@@ -296,7 +303,7 @@ require their original revision; retained captures remain readable.
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
 | `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
 | `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_magnitudes`, `selected_rows`, `selection_mask`, `selected_mean`, `weighted_sum`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
-| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
+| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of`, `on_device` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
