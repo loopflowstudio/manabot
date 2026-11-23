@@ -1,5 +1,11 @@
-at: de7a03c4ef2249f4d782dd0a82b72b8636ac05c1
+at: 13fa3e328ab8f3b5ad4a3f5c0cce5811f3cb180f
 first:
+  - path: managym/src/flow/proposed_event.rs
+    why: Follow the damage batch and both Pridemate outcomes
+  - path: managym/src/flow/damage.rs
+    why: Only committed damage contributes to each source’s gain
+  - path: managym/cards/src/m11.rs
+    why: Pridemate turns each gain into one counter
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
