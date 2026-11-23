@@ -438,7 +438,8 @@ controller, including tokens), `stack_len`, `action_count`, `action_kind`
 sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
 stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
-observation JSON or opens hidden zones.
+observation JSON or opens hidden zones. `snapshot.state_digest` returns the
+cached state digest and `snapshot.seed` returns the originating reset seed.
 
 `snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
@@ -459,6 +460,83 @@ forced-decision skipping is enabled, both seats use `agent`, and decklist
 disclosure agrees. The acting view hides the opponent’s hand. The spectator
 response includes both hands. The board draws the bottom seat’s cards and
 shows the top seat’s hand count. Branch seeds stay on the server.
+
+### Batched snapshots and deferred reset
+
+`VectorEnv` and `CapturedVector` support masked snapshot capture, lightweight
+slot metadata reads, deferred terminal resets (`auto_reset=False`), and
+unified sparse slot loading for mixing fresh games and restored branches in one
+batch:
+
+```python
+import numpy as np
+import managym
+
+layout = managym.ObservationLayout()
+buffers = {
+    **layout.allocate(2),
+    "rewards": np.zeros(2, dtype=np.float64),
+    "terminated": np.zeros(2, dtype=np.uint8),
+    "truncated": np.zeros(2, dtype=np.uint8),
+}
+games = managym.VectorEnv(num_envs=2, seed=42, auto_reset=False)
+games.set_buffers(buffers, layout=layout)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+games.reset_all_into_buffers(players)
+
+# Read metadata or clone snapshots only for masked slots.
+[meta, _] = games.slot_metadata([True, False])
+[snap, _] = games.snapshot_slots([True, False])
+assert meta is not None and snap is not None
+
+# Mix restored branches and fresh games in one sparse call.
+results = games.load_slots_into_buffers([
+    managym.SlotLoad.snapshot(
+        0, snap, managym.RestoreOptions.shuffle_libraries(seed=101)
+    ),
+    managym.SlotLoad.fresh(1),
+])
+for result in results:
+    print(result.slot, result.seed, result.acting_player, result.terminal)
+# 0 42 0 False
+# 1 45 0 False
+print(games.next_fresh_seeds())
+# [42, 47]
+```
+
+- **`auto_reset=False`** (default `True`): `step_into_buffers` and
+  `step_isolated_into_buffers` report terminal reward, done flags, winner and
+  diagnostics once, then park the ended slot in a terminal state
+  (`current_agent_indices()[slot] == -1`) without constructing a replacement
+  game. Stepping a terminal or poisoned slot raises until the slot is replaced
+  by `load_slots_into_buffers` or reset.
+- **`slot_metadata(mask)`** derives `SnapshotMetadata` directly from live
+  slots without cloning state or touching RNG (`None` where `mask` is `False`;
+  unset or poisoned slots raise). **`snapshot_slots(mask)`** clones only masked
+  slots into detached `GameSnapshot` handles. An all-`False` mask does no work.
+  **`next_fresh_seeds()`** reports each slot's next unspent fresh seed.
+- **`load_slots_into_buffers(requests)`** validates every request slot (in
+  bounds, no duplicates), snapshot compatibility, forced-action legality and
+  observation capacity before publishing any mutated game or buffer row, and
+  returns one `SlotLoadResult` (`slot`, `generation`, `seed`, `acting_player`,
+  `terminal`, `source_digest`) per request in caller order. Overwriting an
+  untouched fresh slot with a snapshot rewinds its next fresh seed without
+  emitting partial statistics or exposure; replacing a non-untouched fresh slot
+  flushes its completed statistics first. Fresh statistics and exposure stay
+  disabled while a branch runs and resume on the next `SlotLoad.fresh(slot)`.
+  If a `forced_first_action` ends the game on restore, the slot enters terminal
+  state with `terminated=1`, `winner_index` in `get_last_info()`,
+  `terminal=True` and `acting_player=None`.
+- **`CapturedVector`** forwards `auto_reset`, `snapshot_slots`,
+  `slot_metadata`, `load_slots_into_buffers`, `next_fresh_seeds` and sparse
+  `write_observations_for_players` (`None` entries skip slots). Branch slots do
+  not write to `games_path` or fresh statistics/exposure; branch replay inputs
+  (including interventions) are materialized lazily on failure or when
+  journaling, and `managym.replay` replays vector records with branch
+  interventions.
 
 ## Ask questions of recorded games
 
