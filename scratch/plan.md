@@ -111,7 +111,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Next slice.** Follow a replacement choice through damage commitment and Pridemate resolution.
+**Next slice.** Follow a replacement choice through damage commitment and Pridemate resolution. Use damage actually dealt as the distinguishing assertion. Full prevention yields zero damage, zero gains and zero counters. A prohibition on life gain preserves the damage but still yields zero gains and zero counters. The two-attacker ordering and recovery fixture already covers ordinary combat.
 
 - Fully prevented damage and `PlayersCantGainLife` each yield zero gain triggers. Fork at a pending replacement choice and resolve each branch to check the gains due for its committed damage and that the root stays intact. Replay the same replacement choice on an independent fork and compare the committed gains, pending stack order after the same ordering decisions, and resulting Pridemate counters.
 - Author Marauding Blight-Priest and Drogskol Reaver using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
