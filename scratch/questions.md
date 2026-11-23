@@ -15,3 +15,5 @@ The next slice starts Smaug // Spew Flame in hand to exercise a second printed p
 Concept review moves the Bilbo replacement fork ahead of batch authoring. Two successful casts ending in exile give a stronger test of grant ownership than comparing resolution with a counter alone.
 
 The pending hand fixture uses twelve Mountains to cover both Spew Flame and the later Smaug cast in one turn. An opposing Counterspell branches from the same announced Adventure.
+
+Use separate constructed and ordinary-play Smaug roots. The ordinary-play root supplies the recoverable history for cold replay.

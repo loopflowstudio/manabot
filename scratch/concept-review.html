@@ -3,7 +3,7 @@
 <style>
 :root{color-scheme:light dark;font:1rem/1.55 system-ui}main{max-width:54rem;margin:auto;padding:1rem}h1,h2{line-height:1.15}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}aside{border-inline-start:.25rem solid GrayText;padding-inline:1rem}code{overflow-wrap:anywhere}
 </style><main>
-<p>Managym · MTG-419 · d24208e7</p>
+<p>Managym · MTG-419 · reviewed at 31893a04</p>
 <h1>Does the engine remember which spell search chose?</h1>
 <p>From a funded hand with a legal target, search should see two plays on one card. Choosing Smaug announces a permanent spell. Choosing Spew Flame asks for its target and pays its cost. At a payment fork, replaying the same Command should produce the same spell, receipt and witness.</p>
 <aside><h2>The missing fact is the selected printed program</h2>
@@ -12,6 +12,7 @@
 <h2>What each caller can rely on</h2>
 <table><tr><th>Caller’s question</th><th>Engine owner today</th><th>Fit</th></tr>
 <tr><td>What can this Ghoul do once I make mana?</td><td><code>play_grants_on</code> and <code>CardData.cast_permissions</code></td><td><b>Yes.</b> Both viewers see both public costs in either grant order at zero mana. Foretell keeps its private projection.</td></tr>
+<tr><td>Which permanent sustains the free grant?</td><td>v11 grant facts on the card and its source permanent</td><td><b>Yes.</b> In the two-grant capture, exchanging the sources exchanges their public row associations. The first grant still supplies the singleton columns.</td></tr>
 <tr><td>Which future cast does this choice spend?</td><td><code>PlayRoute</code>, committed player/source/type allowance</td><td><b>Yes.</b> After a counter only the Zul branch can use Muldrotha for a second Ghoul. The allowance remains inspectable with an empty graveyard.</td></tr>
 <tr><td>Which program passes Vizier’s creature test?</td><td><code>library_top_castable</code> tests the physical object</td><td><b>No.</b> A creature with an Omen needs two independent eligibility checks. The Omen can be legal from hand while only the creature qualifies on top.</td></tr>
 <tr><td>Can I cast Smaug after this exile?</td><td>Exact-object grants and stack departure</td><td><b>No.</b> The grant mechanism exists. The selected Adventure replacement still needs to issue the grant for the resulting incarnation. Bilbo can cause the same destination with different future plays.</td></tr>
@@ -23,7 +24,7 @@
 <tr><td>Resolve successfully using Adventure exile.</td><td>The new exile incarnation offers Smaug. Move it and exile it again and that offer disappears.</td></tr>
 <tr><td>Counter the spell, lose its only target, or choose Bilbo’s competing replacement.</td><td>No Adventure grant. In the Bilbo fork, exile alone cannot explain the difference. A later priority frame reflects the actual replacement.</td></tr>
 </table>
-<p>The earlier recovery controls cover a cold Gray Ogre payment and a stale Ghoul address. Neither control selects a second program. Repeat recovery on Spew Flame before authoring the remaining cards.</p>
+<p>The earlier recovery controls cover a cold Gray Ogre payment and a stale Ghoul address. Neither control selects a second program. The constructed Smaug fixture currently stops at deck admission. Use it for fast fork checks once the card is registered. For cold recovery, reach a pending Spew Flame choice through a seeded game with a replayable action history. Reopen the saved game, submit the original Command on both branches and compare the resulting witnesses.</p>
 <h2>Choice made for review</h2>
 <p>Keep the direct native offer. A second selector would add a search decision and force a caller to choose the card before it saw which spell was legal. Keep the ordinary hand route cheap and the ordinary Command stable. Derive candidates per decision, share immutable definitions across forks, and retain only the committed selection in a pending cast. Project it into v11 action and stack rows, semantic text and Academy from the same native observation.</p>
 <p>Etali needs the same selection plus its remaining objects when the parent resumes. Omen needs the selected program on a stack copy. A modal permanent also needs the selected face on entry. Preparation adds a persistent link only for the lifetime of the prepared copy. Measure action width, ordinary step and Search-64 against the same-runner 10% budget before claiming performance.</p>
