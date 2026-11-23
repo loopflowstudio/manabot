@@ -792,3 +792,25 @@ fn arahbo_and_helpful_hunter_resolve_in_either_order() {
     after_first.sort();
     assert_eq!(after_first, [(0, 1), (1, 0)]);
 }
+
+#[test]
+fn token_copy_of_arahbo_triggers_on_its_own_entry_once() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::now,
+        play::{cast, choose, choose_mode},
+    };
+    use managym::{agent::action::Action, state::game_object::Target};
+    let mut s = five_color_setup(&["Foggy Swamp Visions", "Arahbo, the First Fang"]);
+    let grave = plant_in_graveyard(&mut s, 0, "Arahbo, the First Fang");
+    cast(&mut s, "Foggy Swamp Visions");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::GraveyardCard(now(&s, grave))));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    let copy = permanent_named(&s, "Arahbo, the First Fang");
+    assert!(!s.game().state[card_of(&s, copy)].is_card());
+    let cats = s.battlefield_permanents_named(0, "Cat");
+    assert_eq!(cats.len(), 1);
+    assert_eq!(s.game().characteristics(cats[0]).pt(), (2, 2));
+}

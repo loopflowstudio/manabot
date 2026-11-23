@@ -1970,3 +1970,41 @@ def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
     with pytest.raises(SemanticContractError):
         submit_response(env, payment, source.reference)
     assert env.state_digest() == before
+
+
+def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() -> None:
+    arahbo = "Arahbo, the First Fang"
+    hunter = "Helpful Hunter"
+    env = managym.Env(seed=23)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig(
+                    "a", {"Plains": 6, "Gray Ogre": 8, hunter: 1, arahbo: 1}
+                ),
+                managym.PlayerConfig("b", {"Mountain": 20}),
+            ],
+            decklists="closed",
+            mana_payment=("auto", "auto"),
+        )
+    )
+    env.scenario_clear_hand(0)
+    for _ in range(5):
+        env.scenario_force_battlefield(0, "Plains", ready=True)
+    for name in (hunter, arahbo, "Plains"):
+        env.scenario_force_card_in_hand(0, name)
+    env.scenario_refresh()
+    _choose(env, arahbo)
+    _choose(env, hunter)
+    decision = capture_text_decision(env)
+    _assert_policy_input_holds_the_decision(env, decision)
+    assert len(decision.actions) == 2
+    for source in (arahbo, hunter):
+        [action] = [a for a in decision.actions if f"({source})" in a.description]
+        branch = _replay_text_choice(env, action.reference)
+        assert [
+            card.characteristics.name
+            for card in branch.observation_for_player(0).agent_cards
+            if card.zone == managym.ZoneEnum.HAND
+        ].count("Gray Ogre") == 1
+        assert "Gray Ogre" not in branch.semantic_observation_json(1)

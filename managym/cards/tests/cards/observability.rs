@@ -5811,3 +5811,25 @@ fn library_knowledge_positions_reach_their_named_rows() {
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other.opponent.known_library.is_empty());
 }
+
+#[test]
+fn self_entry_adds_to_the_learning_tokens_for_another_nontoken_cat() {
+    let another = TriggerSubject::another_you_control(CardPredicate {
+        token: Some(false),
+        ..CardPredicate::subtype("Cat")
+    });
+    let encode = |subject| {
+        tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield { subject },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+            }],
+            ..Default::default()
+        }))
+    };
+    assert_ne!(
+        encode(another.clone()),
+        encode(TriggerSubject::ThisOr(Box::new(another)))
+    );
+}
