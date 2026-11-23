@@ -22,7 +22,7 @@ use crate::{
     },
     state::{
         ability::{LinkedGrant, PlayWindow},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId},
+        game_object::{CardId, ObjectId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
     },
@@ -118,25 +118,10 @@ const AIRBEND_COST: &str = "{2}";
 pub(crate) const FORETELL_ACTION_COST: &str = "{2}";
 
 impl Game {
-    /// Airbend the permanent: exile it and, unless it was a token, let its
-    /// owner cast that exiled card for {2}.
-    pub(crate) fn airbend_permanent(&mut self, permanent_id: PermanentId) {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return;
-        };
-        let object_id = permanent.object;
+    /// Each surviving card of an airbent object can be cast independently.
+    pub(super) fn grant_airbend_cast(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| ExileCastGrant {
-            cost: Some(ManaCost::parse(AIRBEND_COST)),
-            ..ExileCastGrant::new(object, owner)
-        });
-    }
-
-    /// Airbend a spell (CR 701.65a): it leaves the stack for exile, and its
-    /// owner may cast that card for {2}; a copy ceases to exist (CR 707.10a).
-    pub(crate) fn airbend_spell(&mut self, object_id: ObjectId) {
-        let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| ExileCastGrant {
+        self.grant_if_exiled(object_id, |object| ExileCastGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..ExileCastGrant::new(object, owner)
         });

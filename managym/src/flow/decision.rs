@@ -1466,7 +1466,14 @@ impl Game {
         let moved = results.iter().flat_map(|result| result.arrivals());
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
-            EventBinding::Bending { player, kind } => self.record_bending(player, kind),
+            EventBinding::Bending { player, kind } => {
+                if kind == crate::flow::turn::Bending::Air {
+                    for object in moved {
+                        self.grant_airbend_cast(object);
+                    }
+                }
+                self.record_bending(player, kind);
+            }
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {
                 for result in results {

@@ -1236,25 +1236,26 @@ impl Game {
                 None
             }
             Effect::Airbend { what } => {
-                let selected = self.select(what, frame);
-                let mut bent = false;
-                for object in selected {
-                    match self.state.zones.zone_of(object) {
-                        Some(ZoneType::Battlefield) => {
-                            if let Ok(id) = self.lookup_current_permanent(object) {
-                                self.airbend_permanent(id);
-                                bent = true;
-                            }
-                        }
-                        Some(ZoneType::Stack) => {
-                            self.airbend_spell(object);
-                            bent = true;
-                        }
-                        _ => {}
-                    }
-                }
-                if bent {
-                    self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
+                let events: Vec<_> = self
+                    .select(what, frame)
+                    .into_iter()
+                    .filter(|&object| {
+                        matches!(
+                            self.state.zones.zone_of(object),
+                            Some(ZoneType::Battlefield | ZoneType::Stack)
+                        )
+                    })
+                    .map(|object| {
+                        self.zone_move_proposal(object, ZoneType::Exile, ZoneEntry::default())
+                    })
+                    .collect();
+                if !events.is_empty() {
+                    let mut batch = self.event_batch(events);
+                    batch.binding = EventBinding::Bending {
+                        player: frame.controller,
+                        kind: crate::flow::turn::Bending::Air,
+                    };
+                    frame.batch = Some(batch);
                 }
                 None
             }

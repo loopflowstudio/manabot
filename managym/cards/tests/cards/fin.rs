@@ -650,6 +650,86 @@ fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
 }
 
 #[test]
+fn ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw() {
+    use crate::support::{game::force_new_card_in_hand, play::castable};
+    use managym::state::{mana::ManaCost, target::Target};
+
+    let mut s = form_ragnarok(&["Airbending Lesson"]);
+    let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let object = s.game().permanent_object(permanent).unwrap();
+    let state = &s.game().state;
+    let cards = [
+        state.card_of(object).unwrap(),
+        state.zones.melded_card(object).unwrap(),
+    ];
+    let owner = PlayerId(0);
+    let caster = PlayerId(1);
+    let hand = |s: &Scenario| {
+        s.game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, caster)
+            .len()
+    };
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2W");
+    let lesson = force_new_card_in_hand(&mut s, 1, "Airbending Lesson");
+    cast_card(&mut s, lesson);
+    assert!(s.choose_target(Target::Permanent(permanent)));
+    spend_colorless(&mut s);
+    let before = hand(&s);
+    let top = s.game().state.card_of(library_top(&s, 1)).unwrap();
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().player, Some(caster));
+    for (first, mut env, cmd) in restored_meld_orders(&s) {
+        *s.game_mut() = env.benchmark_game_mut().clone();
+        assert_eq!(s.game().permanent_object(permanent), Some(object));
+        assert_eq!(hand(&s), before);
+        assert!(s.game().state.cast_permissions.exile_grants.is_empty());
+        s.game_mut().execute_semantic_command(&cmd).unwrap();
+        let state = &s.game().state;
+        let arrivals = [first, 1 - first].map(|i| state.object_of(cards[i]));
+        assert_eq!(
+            state.zones.zone_objects(ZoneType::Exile, owner).to_vec(),
+            arrivals
+        );
+        assert!(state
+            .zones
+            .contains(state.object_of(top), ZoneType::Hand, caster));
+        assert_eq!(hand(&s), before + 1);
+        let grants = state.cast_permissions.clone();
+        assert_eq!(grants.exile_grants.len(), 2);
+        for arrival in arrivals {
+            assert!(grants.exile_grants.iter().any(|g| g.object == arrival
+                && g.player == owner
+                && g.cost == Some(ManaCost::parse("{2}"))));
+        }
+        let history = state.events.iter().cloned().collect::<Vec<_>>();
+        assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
+        assert!(s.game().state.events.iter().eq(&history));
+        assert_eq!(s.game().state.cast_permissions, grants);
+        assert_eq!(hand(&s), before + 1);
+
+        s.advance_to_active_step(0, StepKind::Main);
+        s.set_player_mana_pool(0, "4");
+        assert!(castable(&mut s, arrivals[1]));
+        cast_card(&mut s, arrivals[0]);
+        spend_colorless(&mut s);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+        resolve_everything(&mut s);
+        cast_card(&mut s, arrivals[1]);
+        spend_colorless(&mut s);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        for (arrival, zone) in arrivals
+            .into_iter()
+            .zip([ZoneType::Battlefield, ZoneType::Stack])
+        {
+            assert_eq!(zone_of(&s, arrival), Some(zone));
+        }
+    }
+}
+
+#[test]
 fn ragnarok_token_copy_departs_without_ordering_or_moving_either_card() {
     use managym::{agent::action::ActionSpaceKind, state::target::Target};
     let mut s = form_ragnarok(&["Lost Days", "Ember Island Production"]);
