@@ -1,13 +1,15 @@
-at: 3c8daa64ea6bbedfc1db15ae0d14bf2bf522a7c0
+at: 48afc8e363be8e8ddab5069a3fe87eb8010cd991
 first:
-  - path: scratch/plan.md
-    why: Records the timing branches and remaining coverage
-  - path: managym/cards/src/blb.rs
-    why: Defines both triggers and the life payment
-  - path: managym/state/src/ability.rs
-    why: Names turn predicates and their conjunction
-  - path: managym/src/flow/statics.rs
-    why: Evaluates predicates against the controller’s history
-  - path: managym/cards/tests/cards/blb.rs
-    why: Follows each payment timing from the same decision
+  - path: managym/cards/tests/cards/dka.rs
+    why: Plays the attack, surviving block and later death
+  - path: managym/cards/src/dka.rs
+    why: Defines the two independent counter triggers
+  - path: managym/src/flow/damage.rs
+    why: Records exact objects when damage commits
+  - path: managym/src/flow/turn.rs
+    why: Owns pair membership and turn reset
+  - path: managym/src/flow/triggers.rs
+    why: Matches the departing creature against its damage source
+  - path: managym/src/agent/env/snapshot.rs
+    why: Exercises reentry, countering and viewer-relative joins
 hide: []
