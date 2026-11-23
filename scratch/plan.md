@@ -110,6 +110,15 @@ Exercise the private selection through the turn-face-up decision and a copy of t
 
 Start with paired exact roots at the opponent’s first decision after manifest. Swap a hidden creature and noncreature between the manifested slot and an unknown library slot so the public graveyard and deck counts stay fixed. Compare the entire permanent projection, especially the backing registry key that add_permanent currently always emits, before implementing payment. Preserve the exact key in private snapshots. Derive permitted inspection separately from copiable characteristics so a copy of the public 2/2 cannot inherit the original’s inspection or turn-up action. Then exercise turn-up payment and stale rejection from a restored controller decision. At 5a06fb19 all five native Ragnarok tests passed together.
 
+**Paired-root counterexample.** At the first opponent priority, a native constructed-position probe gave the following values. Both seed-161 games used the same decks, put Plains in the graveyard, and left Lightning Bolt available to the opponent. The fixture installed the nameless 2/2 characteristics directly on the battlefield object. It exercised projection, not the Manifest Dread spell.
+
+| Physical printing | Permanent id | Projected object id | Registry key | Public name and stats |
+| --- | ---: | ---: | ---: | --- |
+| Gray Ogre | 178 | 21 | 215 | empty, 2/2 |
+| Forest | 178 | 17 | 199 | empty, 2/2 |
+
+Correcting the registry key alone cannot make these projections equal. Setup allocates the physical public ids in deck-name order before shuffling, and the permanent projection exports that id as `object_id`. Matching it by editing the fixture ids would remove the observed disclosure from the test. Existing battlefield event references already use the permanent id. Revise the slice to project a face-down permanent's public references consistently from that battlefield identity, including action focus and v11's lookup of object references. Retain physical identity and printing in exact private state and derive inspection from the controller's native information rights. Verify controller inspection and exact forks on both roots, then compare the opponent's complete permanent records without normalizing any fields. A native battlefield face-down form must reach those projections first: the existing `ZoneEntry::for_zone` restricts face-down entry to exile. The production projection and playable card remain open.
+
 Keep the remaining immediate movement callers under review, including linked entry follow-ups. Trace each caller’s legal source zones before migrating it. Airbend needed a retained batch because one selected permanent produced two arrivals. A top-of-library move in `flow/cast_permission.rs` takes one card. Lost Days still needs owner-only library-order visibility and recorded replay checks.
 
 ## Native implementation and deletions
