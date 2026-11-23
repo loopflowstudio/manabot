@@ -998,28 +998,22 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
             let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
             assert_eq!(obs.turn.creature_died_this_turn, sacrifice);
         }
-        let mut end_hash = None;
-        for replay in [false, true] {
-            if replay {
-                *s.game_mut() = restored.clone();
+        s.advance_to_active_step(0, StepKind::End);
+        let end_hash = s.game().state.deterministic_hash();
+        *s.game_mut() = restored;
+        s.advance_to_active_step(0, StepKind::End);
+        assert_eq!(s.game().state.deterministic_hash(), end_hash);
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+            assert_eq!(obs.stack_objects.len(), usize::from(sacrifice));
+            if sacrifice {
+                let key = s.game().state[card_of(&s, prowler)].definition_id;
+                assert_eq!(obs.stack_objects[0].source_card_registry_key, key.0 as i32);
+                assert_eq!(obs.stack_objects[0].ability_index, Some(0));
             }
-            s.advance_to_active_step(0, StepKind::End);
-            for viewer in [PlayerId(0), PlayerId(1)] {
-                let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
-                assert_eq!(obs.stack_objects.len(), usize::from(sacrifice));
-                if sacrifice {
-                    let key = s.game().state[card_of(&s, prowler)].definition_id;
-                    assert_eq!(obs.stack_objects[0].source_card_registry_key, key.0 as i32);
-                    assert_eq!(obs.stack_objects[0].ability_index, Some(0));
-                }
-            }
-            let hash = s.game().state.deterministic_hash();
-            if let Some(previous) = end_hash.replace(hash) {
-                assert_eq!(previous, hash);
-            }
-            settle(&mut s);
-            assert_eq!(counters(&s, prowler), i32::from(sacrifice));
         }
+        settle(&mut s);
+        assert_eq!(counters(&s, prowler), i32::from(sacrifice));
         s.advance_to_active_step(1, StepKind::Main);
         assert!(!s.game().state.turn.creature_died_this_turn);
     }

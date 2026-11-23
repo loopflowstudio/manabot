@@ -1,7 +1,7 @@
-at: 7ada41e6384111c02f41f9fdb910e39120a77cb7
+at: 50d0f59f0c706253a4c6a990220824a5b1e8acbb
 first:
   - path: managym/cards/tests/cards/fdn.rs
-    why: Sacrifice, restore and ward payment branches
+    why: Original and restored end steps, then ward payment choices
   - path: managym/src/flow/zones.rs
     why: Records death from the departing creature
   - path: managym/src/flow/triggers.rs
