@@ -56,6 +56,9 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
   await page.getByTestId('opponent-select').selectOption('random');
+  // This deal's only playable opening card is the rightmost card in hand.
+  await page.getByRole('combobox', { name: 'Deal mode' }).selectOption('repeat');
+  await page.getByLabel('Seed', { exact: true }).fill('1467515640');
   await page.getByRole('button', { name: 'Start game', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
@@ -77,13 +80,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 
-  // Arrows move within a region: the hand's cards one by one.
+  // Tab enters the hand at the playable Mountain. Both arrows move one card.
   expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const first = (await focused(page)).label;
+  const hand = page.getByRole('region', { name: /^Your hand/ });
+  const mountain = hand.getByRole('button', { name: /^Mountain/ });
+  await expect(mountain).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(hand.getByRole('button', { name: /^Otter-Penguin/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  const second = await focused(page);
-  expect(second.region).toMatch(/^Your hand/);
-  expect(second.label).not.toBe(first);
+  await expect(mountain).toBeFocused();
 
   // Several decisions: a land from the hand, attacks on the field, Space for the rest.
   let byEnter = 0;

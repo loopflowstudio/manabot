@@ -24,7 +24,7 @@ from manabot.env.observation import (
     allocate_vector_buffers,
 )
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend, BackendPolicy
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 # -----------------------------------------------------------------------------
@@ -258,7 +258,7 @@ class ValueSearchPlayer:
 
 
 def load_value_scorer(
-    checkpoint: str, *, backend: Backend, device: str = "cpu"
+    checkpoint: str, *, backend: PolicyLoader, device: str = "cpu"
 ) -> ValueScorer:
     agent, _ = backend.load_policy(checkpoint)
     return ValueScorer(agent, device=device)

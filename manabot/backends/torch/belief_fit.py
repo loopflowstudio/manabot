@@ -1,8 +1,7 @@
-"""Torch autoregressive fitting, calibration and checkpoint encoding.
+"""Torch autoregressive fitting, seeded hand sampling and checkpoint encoding.
 
 `fit_belief_sampler` optimizes joint NLL on training games; `evaluate_sampler`
-scores held-out games. Metric records and artifact publication remain in the
-host `belief.sampling_fit` module, independent of this numerical implementation.
+supplies hand scores and draws to the host sampler metrics.
 """
 
 from __future__ import annotations
@@ -12,9 +11,9 @@ from dataclasses import asdict
 import io
 import math
 import time
-import tracemalloc
 from typing import cast
 
+import numpy as np
 import torch
 
 from manabot.backends.torch.belief import (
@@ -24,13 +23,13 @@ from manabot.backends.torch.belief import (
 )
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
 from manabot.belief.sampling_fit import (
-    CalibrationBin,
     SamplerArmMetrics,
     SamplerEvaluation,
     SamplerFitMetrics,
     SamplerFitResult,
-    calibration_error,
+    score_sampler_arm,
 )
+from manabot.belief.sampling_types import SamplerInput
 from manabot.infra.torch import deterministic_cpu
 
 
@@ -39,94 +38,27 @@ def _check(check: Callable[[], None] | None) -> None:
         check()
 
 
-def _calibration_bins(
-    probabilities: torch.Tensor, truths: torch.Tensor
-) -> tuple[CalibrationBin, ...]:
-    # Ten fixed equal-width bins; the last includes probability one.
-    buckets = (probabilities * 10).long().clamp(max=9)
-    return tuple(
-        CalibrationBin(
-            int((buckets == index).sum()),
-            float(probabilities[buckets == index].sum()),
-            float(truths[buckets == index].sum()),
-        )
-        for index in range(10)
-    )
-
-
 @torch.no_grad()
 def _evaluate_arm(
     model: AutoregressiveBeliefSampler | None,
     examples: Sequence[SamplerExample],
     *,
-    physical: bool,
     samples: int,
     seed: int,
     check: Callable[[], None] | None,
 ) -> SamplerArmMetrics:
-    if not physical and model is None:
-        raise ValueError("learned evaluation requires a sampler")
-    score_hand = physical_deal_log_prob if model is None or physical else model.log_prob
-    draw_hand = sample_physical_deal if model is None or physical else model.sample
+    score_hand = physical_deal_log_prob if model is None else model.log_prob
+    draw_hand = sample_physical_deal if model is None else model.sample
     generator = torch.Generator().manual_seed(seed)
-    nll = 0.0
-    forecasts: list[torch.Tensor] = []
-    outcomes: list[torch.Tensor] = []
-    conjunction_errors: list[torch.Tensor] = []
-    violations = 0
-    elapsed = 0.0
-    largest_tensor = 0
-    peak_python = 0
-    owns_trace = not tracemalloc.is_tracing()
-    if owns_trace:
-        tracemalloc.start()
-    try:
-        for example in examples:
-            _check(check)
-            inputs = example.inputs
-            target = torch.tensor([example.target_hand], dtype=torch.int64)
-            score = score_hand([inputs], target)
-            nll -= float(score[0])
-            started = time.perf_counter()
-            batch = [inputs] * samples
-            draws = draw_hand(batch, generator=generator)
-            elapsed += time.perf_counter() - started
-            largest_tensor = max(largest_tensor, draws.numel() * draws.element_size())
-            present = draws > 0
-            probabilities = present.double().mean(dim=0)
-            truth = (target[0] > 0).double()
-            forecasts.append(probabilities)
-            outcomes.append(truth)
-            if draws.shape[1] > 1:
-                joint = (present[:, :-1] & present[:, 1:]).double().mean(dim=0)
-                conjunction_errors.append((joint - truth[:-1] * truth[1:]).square())
-            low = torch.tensor(inputs.known_minima)
-            high = torch.tensor(inputs.pool_counts)
-            invalid = ((draws < low) | (draws > high)).any(dim=1) | (
-                draws.sum(dim=1) != inputs.hand_size
-            )
-            violations += int(invalid.sum())
-            peak_python = max(peak_python, tracemalloc.get_traced_memory()[1])
-    finally:
-        if owns_trace:
-            tracemalloc.stop()
-    probabilities = torch.cat(forecasts)
-    truths = torch.cat(outcomes)
-    bins = _calibration_bins(probabilities, truths)
-    return SamplerArmMetrics(
-        joint_nll=nll / len(examples),
-        inclusion_brier=float((probabilities - truths).square().mean()),
-        inclusion_ece=calibration_error(bins),
-        conjunction_brier=float(torch.cat(conjunction_errors).mean())
-        if conjunction_errors
-        else None,
-        support_violations=violations,
-        sampled_hands=len(examples) * samples,
-        sampling_seconds=elapsed,
-        peak_python_bytes=peak_python,
-        largest_sample_tensor_bytes=largest_tensor,
-        calibration_bins=bins,
-    )
+
+    def log_prob(example: SamplerExample) -> float:
+        target = torch.tensor([example.target_hand], dtype=torch.int64)
+        return float(score_hand([example.inputs], target)[0])
+
+    def sample(inputs: SamplerInput) -> np.ndarray:
+        return draw_hand([inputs] * samples, generator=generator).cpu().numpy()
+
+    return score_sampler_arm(examples, log_prob=log_prob, sample=sample, check=check)
 
 
 def evaluate_physical_sampler(
@@ -135,9 +67,7 @@ def evaluate_physical_sampler(
     """Measure saved labels against the physical prior without a model artifact."""
     if not examples or samples < 1:
         raise ValueError("evaluation needs examples and a positive sample count")
-    return _evaluate_arm(
-        None, examples, physical=True, samples=samples, seed=seed, check=None
-    )
+    return _evaluate_arm(None, examples, samples=samples, seed=seed, check=None)
 
 
 def evaluate_sampler(
@@ -162,10 +92,10 @@ def evaluate_sampler(
         return SamplerEvaluation(
             examples=len(examples),
             learned=_evaluate_arm(
-                model, examples, physical=False, samples=samples, seed=seed, check=check
+                model, examples, samples=samples, seed=seed, check=check
             ),
             physical_baseline=_evaluate_arm(
-                model, examples, physical=True, samples=samples, seed=seed, check=check
+                None, examples, samples=samples, seed=seed, check=check
             ),
         )
     finally:

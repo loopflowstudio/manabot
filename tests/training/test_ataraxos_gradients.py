@@ -11,11 +11,12 @@ from collections.abc import Iterator
 import pytest
 import torch
 
+import manabot.backends.torch.rl as rl
 from manabot.backends.torch.rl import (
     categorical_lambda_returns,
-    damped_policy_loss,
     selected_moves,
 )
+from manabot.training.updates.objective import damped_policy_loss
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +40,7 @@ def test_enumerated_mixed_policy_gradient(advantages: list[float]) -> None:
     saved_behavior = behavior.expand(3, -1).clone().requires_grad_()
     saved_reference = reference.expand(3, -1).clone().requires_grad_()
     losses = damped_policy_loss(
+        rl,
         logits.expand(3, -1),
         torch.arange(3),
         advantage,
@@ -78,6 +80,7 @@ def test_padding_and_action_permutation_preserve_loss_and_gradient() -> None:
     action = torch.tensor([3])
     advantages = torch.tensor([0.6], dtype=torch.float64)
     original = damped_policy_loss(
+        rl,
         logits,
         action,
         advantages,
@@ -95,6 +98,7 @@ def test_padding_and_action_permutation_preserve_loss_and_gradient() -> None:
     permutation = torch.tensor([3, 2, 0, 1])
     moved_logits = logits.detach()[:, permutation].requires_grad_()
     moved = damped_policy_loss(
+        rl,
         moved_logits,
         torch.tensor([0]),
         advantages,
@@ -119,6 +123,7 @@ def test_invalid_distribution_rejected(bad: list[float], which: str) -> None:
     invalid = torch.tensor([bad])
     with pytest.raises(ValueError):
         damped_policy_loss(
+            rl,
             torch.zeros((1, 2)),
             torch.tensor([0]),
             torch.ones(1),
@@ -134,6 +139,7 @@ def test_invalid_distribution_rejected(bad: list[float], which: str) -> None:
 def test_mass_on_padding_rejected() -> None:
     with pytest.raises(ValueError):
         damped_policy_loss(
+            rl,
             torch.zeros((1, 2)),
             torch.tensor([0]),
             torch.ones(1),
@@ -217,7 +223,7 @@ def test_forward_floor_restores_rare_offers(gap: float) -> None:
         valid,
     )
     loss = damped_policy_loss(
-        *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=0.002
+        rl, *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=0.002
     )
     loss.sum().backward()
     target = magnet.detach()[valid].double()
@@ -228,14 +234,14 @@ def test_forward_floor_restores_rare_offers(gap: float) -> None:
     probabilities = logits.detach().masked_fill(~valid, -torch.inf).softmax(-1)
     torch.testing.assert_close(logits.grad, 0.002 * (probabilities - magnet.detach()))
     assert magnet.grad is None
-    default = damped_policy_loss(*args, clip=0.2, collection_kl=0.1, tau=0.05)
+    default = damped_policy_loss(rl, *args, clip=0.2, collection_kl=0.1, tau=0.05)
     explicit = damped_policy_loss(
-        *args, clip=0.2, collection_kl=0.1, tau=0.05, reference_forward_kl=0
+        rl, *args, clip=0.2, collection_kl=0.1, tau=0.05, reference_forward_kl=0
     )
     assert torch.equal(default, explicit)
     with pytest.raises(ValueError, match="invalid damping coefficients"):
         damped_policy_loss(
-            *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=-1
+            rl, *args, clip=0.2, collection_kl=0, tau=0, reference_forward_kl=-1
         )
 
 
@@ -250,6 +256,7 @@ def test_forward_floor_reopens_two_offer_choice_within_60_steps(
     for _ in range(60):
         optimizer.zero_grad()
         loss = damped_policy_loss(
+            rl,
             logits,
             torch.tensor([0]),
             torch.zeros(1),

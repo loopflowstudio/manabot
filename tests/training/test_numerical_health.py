@@ -20,11 +20,11 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.learner import Learner, gradient_step
 from manabot.backends.torch.policy import ActorCritic
+import manabot.backends.torch.rl as rl
 from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
     check_probabilities,
-    damped_policy_loss,
     legal_mask,
     policy_logs,
     selected_moves,
@@ -45,6 +45,7 @@ from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
 )
+from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.selection import value_scale
 from tests.model.prepared_routes import device_input
 
@@ -85,6 +86,7 @@ def test_extreme_logs_loss_and_gradients_match_double(gap: float) -> None:
     logits = _tensor([[-0.3, 0.4, 900.0]], grad=True)
     reference = _tensor([[0.5, 0.5, 0.0]])
     loss = damped_policy_loss(
+        rl,
         logits,
         actions,
         _tensor([[0.7]]).flatten(),
@@ -98,6 +100,7 @@ def test_extreme_logs_loss_and_gradients_match_double(gap: float) -> None:
     loss.sum().backward()
     expected_logits = logits.detach().double().requires_grad_()
     expected = damped_policy_loss(
+        rl,
         expected_logits,
         actions,
         _tensor([[0.7]], double=True).flatten(),
@@ -124,6 +127,7 @@ def test_extreme_sampled_ratio_does_not_overflow_float32() -> None:
     logits = _tensor([[0.0, 0.0]], grad=True)
     behavior = _tensor([[0.0, -100.0]])
     loss = damped_policy_loss(
+        rl,
         logits,
         torch.tensor([1], device=DEVICE),
         _tensor([[1.0]]).flatten(),
@@ -171,6 +175,7 @@ def test_forced_action_is_finite_with_exact_zero_gradient() -> None:
     valid = torch.tensor([[False, True, False]], device=DEVICE)
     logs = policy_logs(logits.detach(), valid)
     loss = damped_policy_loss(
+        rl,
         logits,
         torch.tensor([1], device=DEVICE),
         _tensor([[1.0]]).flatten(),
@@ -246,6 +251,7 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         behavior = policy_logs(logits.detach(), valid)
         loss = (
             damped_policy_loss(
+                rl,
                 logits,
                 torch.arange(2, device=DEVICE),
                 torch.tensor([1.0, -1.0], device=DEVICE),
@@ -465,6 +471,7 @@ def test_nonfinite_learner_logits_use_incident_error() -> None:
     valid = torch.tensor([[True, True]], device=DEVICE)
     with pytest.raises(NumericalError, match="nonfinite_legal_logits"):
         damped_policy_loss(
+            rl,
             _tensor([[float("nan"), 0.0]]),
             torch.tensor([0], device=DEVICE),
             _tensor([[1.0]]).flatten(),
@@ -495,6 +502,27 @@ def test_nonfinite_gradient_rejects_before_adam() -> None:
     assert caught.value.health["rejected_steps"] == 1
     assert not optimizer.state
     assert torch.isfinite(model.weight).all()
+
+
+def test_post_step_refusal_keeps_the_clipped_gradient_sample() -> None:
+    model = torch.nn.Linear(1, 1, bias=False, device=DEVICE)
+    optimizer = torch.optim.SGD(model.parameters(), lr=float("inf"))
+    health = _health()
+    with pytest.raises(
+        NumericalError, match="nonfinite_parameters_after_step"
+    ) as caught:
+        gradient_step(
+            model.weight.sum(),
+            model,
+            optimizer,
+            0.5,
+            recorder=OptimizerHealth(health, 1, backend=torch_backend),
+        )
+    assert caught.value.health == health
+    assert health["optimizer_steps"] == 0 and health["rejected_steps"] == 1
+    assert health["sampled_steps"] == 1
+    assert health["gradient_norm_after"] == pytest.approx(0.5, abs=1e-6)
+    assert "parameter_delta_l2" not in health
 
 
 def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
