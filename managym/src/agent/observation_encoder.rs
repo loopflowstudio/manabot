@@ -263,6 +263,10 @@ impl ObservationEncoderConfig {
         self.max_cards_per_player * CARD_DIM
     }
 
+    pub fn player_dim(&self) -> usize {
+        self.layout.player_columns().len()
+    }
+
     /// Permanent row width: v11's, or the deprecated v9/v10 rows'.
     pub fn permanent_dim(&self) -> usize {
         match self.layout {
@@ -513,8 +517,8 @@ pub fn encode(
         decklists: vec![0.0; config.decklists_len()],
         player_turn_state: vec![0.0; config.player_turn_state_len()],
         card_turn_state: vec![0.0; config.card_turn_state_len()],
-        agent_player: vec![0.0; PLAYER_DIM],
-        opponent_player: vec![0.0; PLAYER_DIM],
+        agent_player: vec![0.0; config.player_dim()],
+        opponent_player: vec![0.0; config.player_dim()],
         agent_cards: vec![0.0; config.cards_len()],
         opponent_cards: vec![0.0; config.cards_len()],
         agent_permanents: vec![0.0; config.permanents_len()],
@@ -636,8 +640,12 @@ fn encode_into_memory(
     if let Some(state) = unrepresentable_state(obs) {
         return Err(ObservationEncodeError::Unrepresentable(state));
     }
-    validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
-    validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
+    validate_buffer_len("agent_player", out.agent_player.len(), config.player_dim())?;
+    validate_buffer_len(
+        "opponent_player",
+        out.opponent_player.len(),
+        config.player_dim(),
+    )?;
     validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
     validate_buffer_len(
         "opponent_cards",
@@ -1463,6 +1471,9 @@ fn encode_player_features(
     }
     out[player::HAND_ONLY] = bool_to_f32(player.hand_only_until.is_some());
     out[player::NO_MAXIMUM_HAND_SIZE] = bool_to_f32(player.no_maximum_hand_size);
+    if let Some(flag) = out.get_mut(player::ANOTHER_DAMAGE_STEP) {
+        *flag = bool_to_f32(turn.another_damage_step);
+    }
     out[player::TURN] = turn.turn_number as f32 / 20.0;
     // Seat 0 is on the play.
     out[player::SEAT] = player.player_index as f32;
@@ -1670,8 +1681,11 @@ fn encode_permanent_features(
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
         out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
+        out[permanent::VALID] = 1.0;
+        out[permanent::FIRST_STRIKE_PARTICIPANT] = bool_to_f32(permanent.first_strike_participant);
+    } else {
+        out[super::legacy_input::PERMANENT_VALID] = 1.0;
     }
-    out[out.len() - 1] = 1.0;
 }
 
 /// Stack rows, top first, each indexed by its stack object id; a spell's card
@@ -2277,6 +2291,7 @@ mod tests {
                 turn_number: 1,
                 phase: PhaseKind::Combat,
                 step: StepKind::DeclareAttackers,
+                another_damage_step: false,
                 active_player_id: 10,
                 agent_player_id: 10,
             },
@@ -2588,9 +2603,9 @@ mod tests {
         // object is its permanent row only.
         assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
         assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_permanents[super::permanent::VALID], 1.0);
         assert_eq!(
-            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            encoded.agent_permanents[super::permanent::VALID + PERMANENT_DIM],
             0.0
         );
 

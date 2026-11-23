@@ -15,3 +15,9 @@ pub struct CombatState {
     pub attackers_to_declare: Vec<PermanentId>,
     pub blockers_to_declare: Vec<PermanentId>,
 }
+
+impl CombatState {
+    pub fn another_damage_step(&self) -> bool {
+        !self.first_strikers.is_empty() && !self.regular_damage_step
+    }
+}

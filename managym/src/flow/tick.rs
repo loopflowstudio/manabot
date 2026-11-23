@@ -182,7 +182,7 @@ impl Game {
         self.remember_controlled_hands();
         if step == StepKind::CombatDamage {
             if let Some(combat) = self.state.combat.as_mut() {
-                if !combat.first_strikers.is_empty() && !combat.regular_damage_step {
+                if combat.another_damage_step() {
                     combat.regular_damage_step = true;
                     self.state.turn.step_initialized = false;
                     self.state.turn.turn_based_actions_complete = false;

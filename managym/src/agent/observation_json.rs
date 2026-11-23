@@ -93,6 +93,9 @@ impl Serialize for TurnJson<'_> {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("active_player_id", &value.active_player_id)?;
         map.serialize_entry("agent_player_id", &value.agent_player_id)?;
+        if value.another_damage_step {
+            map.serialize_entry("another_damage_step", &true)?;
+        }
         map.serialize_entry("phase", &(value.phase as i32))?;
         map.serialize_entry("step", &(value.step as i32))?;
         map.serialize_entry("turn_number", &value.turn_number)?;
@@ -733,6 +736,8 @@ pub(super) struct WirePermanentData {
     /// observations retained before this field stay canonical.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -884,6 +889,7 @@ impl From<WirePermanentData> for PermanentData {
             is_animated: w.is_animated,
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
             once_each_turn_used: w.once_each_turn_used,
@@ -951,6 +957,7 @@ impl Serialize for PermanentData {
             is_animated: self.is_animated,
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
             once_each_turn_used: self.once_each_turn_used,

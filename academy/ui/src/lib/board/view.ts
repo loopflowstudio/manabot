@@ -184,7 +184,7 @@ function isLand(permanent: PermanentState): boolean {
 /** Everything a person could tell two permanents apart by, plus their offers. */
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
-  if (item.paid || item.attached.length || p.attacking || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
+  if (item.paid || item.attached.length || p.attacking || p.first_strike_participant || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
   return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
     p.plus1_counters, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false,
     item.offers.map(placed => placed.offer.label)]);

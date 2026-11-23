@@ -133,6 +133,6 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
   const { turn } = frame.projection;
   const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
   const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';
-  const next = declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
+  const next = turn.another_damage_step ? 'To regular damage' : declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
   return next ? { text: next, description: `${offer}: ${next.toLowerCase()}` } : { text: offer, description: offer };
 }

@@ -2711,6 +2711,9 @@
           "title": "Exile If Dies This Turn",
           "type": "boolean"
         },
+        "first_strike_participant": {
+          "type": "boolean"
+        },
         "granted_firebending": {
           "default": 0,
           "maximum": 4294967295,
@@ -3322,6 +3325,9 @@
           "minimum": 0,
           "title": "Agent Player Id",
           "type": "integer"
+        },
+        "another_damage_step": {
+          "type": "boolean"
         },
         "phase": {
           "title": "Phase",

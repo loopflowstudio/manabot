@@ -101,6 +101,15 @@ describe('primaryLabel', () => {
     return frame;
   }
 
+  it('names the next damage step while the stack is empty', () => {
+    const frame = emptyStack();
+    frame.projection.turn.step = 'COMBAT_DAMAGE';
+    frame.projection.turn.another_damage_step = true;
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To regular damage');
+    frame.projection.turn.another_damage_step = false;
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To end of combat');
+  });
+
   it('names the stack top while something waits to resolve', () => {
     const frame = emptyStack();
     frame.projection.stack_objects = [{ id: 9001, kind: 'spell', controller: 0, label: 'Lightning Bolt' }];

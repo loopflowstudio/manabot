@@ -448,6 +448,8 @@ pub struct LegacyPermanentView {
     /// Attacking in the current combat.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
@@ -582,6 +584,8 @@ pub struct LegacyTurnView {
     pub phase: String,
     pub step: String,
     pub active_player_id: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub another_damage_step: bool,
     pub agent_player_id: u32,
 }
 

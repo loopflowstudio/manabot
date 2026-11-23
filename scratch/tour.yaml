@@ -1,5 +1,13 @@
-at: 17b09632cf5dbd97d2a5ef675fa39f8788067f62
+at: 59f696829e190e30fa0076e4a7311219601eeb90
 first:
+  - path: managym/README.md
+    why: Public meaning of the two combat flags
+  - path: managym/src/agent/observation.rs
+    why: Both viewers read the same combat history
+  - path: managym/src/agent/observation_layout.rs
+    why: Append combat flags to v11 columns
+  - path: tests/semantic/test_text_observation.py
+    why: Compare both windows with ordinary combat
   - path: managym/cards/src/dka.rs
     why: Reaver draws for each committed gain
   - path: managym/cards/tests/cards/dka.rs

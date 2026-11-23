@@ -15,3 +15,5 @@ Use Foggy Swamp Visions to copy Arahbo from the graveyard without another Arahbo
 Combat assignments use the existing modal Command. For multiple blockers the attacker chooses an amount per blocker in declaration order, so the engine never materializes the Cartesian product of allocations.
 
 Replay doubling first without Giant Cindermaw as the positive control for prohibited lifelink.
+
+Use the public question “does another damage step follow?” as the damage-pass flag. The existing step identifier already names combat damage, and the flag stays false during ordinary single-step damage.

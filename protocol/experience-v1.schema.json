@@ -1364,6 +1364,9 @@
         "exile_if_dies_this_turn": {
           "type": "boolean"
         },
+        "first_strike_participant": {
+          "type": "boolean"
+        },
         "granted_firebending": {
           "description": "Firebending granted until end of turn.",
           "type": "integer",
@@ -1767,6 +1770,9 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "another_damage_step": {
+          "type": "boolean"
         },
         "phase": {
           "type": "string"

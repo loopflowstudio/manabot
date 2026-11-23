@@ -172,11 +172,15 @@ fn encoded_to_dict<'py>(
         &encoded.relations,
         &[continuation::RELATION_ROWS, continuation::RELATION_DIM],
     )?;
-    put("agent_player", &encoded.agent_player, &[1, enc::PLAYER_DIM])?;
+    put(
+        "agent_player",
+        &encoded.agent_player,
+        &[1, config.player_dim()],
+    )?;
     put(
         "opponent_player",
         &encoded.opponent_player,
-        &[1, enc::PLAYER_DIM],
+        &[1, config.player_dim()],
     )?;
     let cards = [config.max_cards_per_player, enc::CARD_DIM];
     put("agent_cards", &encoded.agent_cards, &cards)?;
@@ -1521,6 +1525,8 @@ pub struct PyTurn {
     #[pyo3(get, set)]
     pub active_player_id: i32,
     #[pyo3(get, set)]
+    pub another_damage_step: bool,
+    #[pyo3(get, set)]
     pub agent_player_id: i32,
 }
 
@@ -1531,6 +1537,7 @@ impl From<TurnData> for PyTurn {
             turn_number: value.turn_number as i32,
             phase: value.phase.into(),
             step: value.step.into(),
+            another_damage_step: value.another_damage_step,
             active_player_id: value.active_player_id,
             agent_player_id: value.agent_player_id,
         }
@@ -1544,6 +1551,7 @@ impl From<PyTurn> for TurnData {
             turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),
+            another_damage_step: value.another_damage_step,
             active_player_id: value.active_player_id,
             agent_player_id: value.agent_player_id,
         }
@@ -2289,6 +2297,10 @@ impl PyPermanent {
     #[setter]
     fn set_exile_if_dies_this_turn(&mut self, value: bool) {
         self.data.exile_if_dies_this_turn = value;
+    }
+    #[getter]
+    fn first_strike_participant(&self) -> bool {
+        self.data.first_strike_participant
     }
     #[getter]
     fn attacking(&self) -> bool {

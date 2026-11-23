@@ -17,6 +17,15 @@ use super::{
     shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
 };
 
+impl InputLayout {
+    pub fn player_columns(self) -> &'static [Column] {
+        match self {
+            Self::OneToken => player::COLUMNS,
+            Self::Legacy => &player::COLUMNS[..player::ANOTHER_DAMAGE_STEP],
+        }
+    }
+}
+
 /// A permanent row's columns: input v11 writes every `permanent` column; the
 /// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
 /// (`legacy_input`).
@@ -278,6 +287,7 @@ columns! { player {
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
+    74: ANOTHER_DAMAGE_STEP => ("another_damage_step", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
@@ -403,6 +413,7 @@ columns! { permanent {
     48: HAS_WARD => ("has_ward", ValueLayout::FLAG),
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
+    51: FIRST_STRIKE_PARTICIPANT => ("first_strike_participant", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -908,7 +919,7 @@ pub fn observation_layout(
     let mut layout = BTreeMap::new();
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
-            ("player", "player", Some(1), player::COLUMNS),
+            ("player", "player", Some(1), layout_kind.player_columns()),
             ("cards", "card", None, card::COLUMNS),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
@@ -1108,12 +1119,16 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 74),
+                (
+                    "agent_player",
+                    config.player_dim(),
+                    if one_token { 75 } else { 74 },
+                ),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 51 } else { 38 },
+                    if one_token { 52 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1159,7 +1174,16 @@ mod tests {
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-            for key in ["agent_cards", "agent_permanents", "facts", "effects"] {
+            let permanent_valid = if one_token {
+                permanent::VALID
+            } else {
+                super::super::legacy_input::PERMANENT_VALID
+            };
+            assert_eq!(
+                layout["agent_permanents"].columns[permanent_valid].name,
+                "valid"
+            );
+            for key in ["agent_cards", "facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

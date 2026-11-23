@@ -31,6 +31,8 @@ pub struct TurnData {
     pub phase: PhaseKind,
     #[serde(deserialize_with = "super::observation_json::step")]
     pub step: StepKind,
+    #[serde(default)]
+    pub another_damage_step: bool,
     pub active_player_id: i32,
     pub agent_player_id: i32,
 }
@@ -782,6 +784,7 @@ pub struct PermanentData {
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
     pub attacking: bool,
+    pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     pub exhausted_abilities: i32,
@@ -999,6 +1002,12 @@ impl Observation {
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
             step: game.state.turn.current_step_kind(),
+            another_damage_step: game.state.turn.current_step_kind() == StepKind::CombatDamage
+                && game
+                    .state
+                    .combat
+                    .as_ref()
+                    .is_some_and(|c| c.another_damage_step()),
             active_player_id: game.state.players[game.active_player().0].id.0 as i32,
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };
@@ -1509,6 +1518,11 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
+            first_strike_participant: game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.first_strikers.contains(&perm_id)),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()

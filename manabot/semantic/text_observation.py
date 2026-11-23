@@ -954,6 +954,8 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.first_strike_participant:
+                optional += "; participated in the first-strike damage step"
             if permanent.attacking:
                 optional += "; attacking"
             if permanent.colors is not None:
@@ -1162,6 +1164,7 @@ class _Renderer:
             "Optional details are shown when provided; unavailable facts are marked explicitly.",
             "",
             f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
+            *(["Another combat damage step follows."] if state.turn.another_damage_step else []),
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
             "",

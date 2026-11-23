@@ -147,6 +147,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "placement",
     "pre-event object",
     "combat damage source",
+    "another damage step",
+    "first-strike participant",
     "minimum assignment",
     "last blocker",
     "assigned combat damage",
@@ -1173,6 +1175,7 @@ pub(crate) fn project_decision(
         Decision::AssignCombatDamage {
             attacker,
             blocker,
+            pass,
             minimum,
             remaining,
             last,
@@ -1181,6 +1184,17 @@ pub(crate) fn project_decision(
         } => {
             out.object("combat damage source", *attacker);
             out.object("target", *blocker);
+            out.field(
+                "another damage step",
+                &matches!(pass, crate::flow::game::CombatDamagePass::FirstStrike),
+            );
+            if let Some(combat) = &game.state.combat {
+                for &id in &combat.first_strikers {
+                    if let Some(object) = game.permanent_object(id) {
+                        out.object("first-strike participant", object);
+                    }
+                }
+            }
             out.field("minimum assignment", minimum);
             out.field("remaining", remaining);
             out.field("last blocker", last);

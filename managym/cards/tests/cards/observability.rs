@@ -2241,7 +2241,7 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
     let player = &game.state.players[0];
     let fields = permanent_fields(permanent)
         .into_iter()
-        .map(|(field, seen)| (field, seen, PERMANENT_DIM - 1))
+        .map(|(field, seen)| (field, seen, PERMANENT_DIM))
         .chain(
             player_fields(player)
                 .into_iter()
@@ -2250,7 +2250,9 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
         );
     for (field, seen, width) in fields {
         match seen {
-            Seen::Permanent(column) => assert!(column < width, "{field}"),
+            Seen::Permanent(column) => {
+                assert!(column < width && column != permanent::VALID, "{field}")
+            }
             Seen::Player(start, end) => assert!(start < end && end <= width, "{field}"),
             Seen::Card(column) => assert!(column < CARD_DIM, "{field}"),
             Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
@@ -2709,7 +2711,11 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
                 });
         assert!(runs_card, "{} does not run {}", row.test, row.card);
         match row.seen {
-            Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
+            Seen::Permanent(column) => assert!(
+                column < PERMANENT_DIM && column != permanent::VALID,
+                "{}",
+                row.token
+            ),
             Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
             Seen::Player(start, end) => assert!(start < end && end <= PLAYER_DIM, "{}", row.token),
             Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
@@ -2985,6 +2991,7 @@ impl Buffer {
         match self {
             Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
             Buffer::Relation => Some(relation::VALID),
+            Buffer::Permanent => Some(permanent::VALID),
             Buffer::Facts => Some(fact::VALID),
             Buffer::Action => Some(action::VALID),
             _ => Some(self.width() - 1),
@@ -3095,6 +3102,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
         step => [Columns(Player, player::STEP_UNTAP, 12)],
+        another_damage_step => [column(Player, player::ANOTHER_DAMAGE_STEP)],
         active_player_id => [column(Player, player::IS_ACTIVE)],
         agent_player_id => [Side],
     }));
@@ -3273,6 +3281,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_animated => [column(Permanent, permanent::ANIMATED)],
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
+        first_strike_participant => [column(Permanent, permanent::FIRST_STRIKE_PARTICIPANT)],
         attacking => [column(Permanent, permanent::ATTACKING)],
         exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],
         once_each_turn_used => [column(Permanent, permanent::ONCE_EACH_TURN_USED)],

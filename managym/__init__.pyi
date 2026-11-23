@@ -1053,6 +1053,7 @@ class Permanent:
     has_exile_link: bool
     exile_if_dies_this_turn: bool
     attacking: bool
+    first_strike_participant: bool
     exhausted_abilities: int
     once_each_turn_used: int
     granted_firebending: int
@@ -1087,6 +1088,7 @@ class Turn:
     phase: PhaseEnum
     step: StepEnum
     active_player_id: int
+    another_damage_step: bool
     agent_player_id: int
 
 class Action:
