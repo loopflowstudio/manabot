@@ -651,8 +651,10 @@ observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A forced permanent is not summoning-sick. With exactly enough untapped lands a
-manual payment finishes itself after its last object choice; calling `pay_rest`
+For a creature ready to attack or pay a tap cost, use native
+`scenario_force_battlefield(..., ready=true)`. The Rust test helper
+`force_permanent_on_battlefield` applies summoning sickness to creatures without haste.
+With exactly enough untapped lands a manual payment finishes itself after its last object choice; calling `pay_rest`
 then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
 apart on `cards/search`, and append its row to

@@ -909,7 +909,9 @@ class _Renderer:
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
             if card.cast_permission is not None:
-                optional += "; " + self._cast_permission(card.cast_permission)
+                optional += "; " + self._cast_permission(
+                    card.cast_permission, int(card.zone)
+                )
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )
@@ -917,7 +919,7 @@ class _Renderer:
             lines.append("Empty.")
         return lines
 
-    def _cast_permission(self, permission: managym.CastPermission) -> str:
+    def _cast_permission(self, permission: managym.CastPermission, zone: int) -> str:
         terms = [
             "as a land play"
             if permission.cost is None
@@ -942,7 +944,7 @@ class _Renderer:
         if permission.waterbend:
             terms.append("generic may be paid by waterbending")
         return (
-            f"may be played from exile by {self.name(permission.player_id)}: "
+            f"may be played from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}: "
             + ", ".join(terms)
         )
 

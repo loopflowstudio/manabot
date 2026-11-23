@@ -313,7 +313,7 @@ pub struct LegacyCardView {
     /// Foretold and face down in exile; only its owner's views list it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cast_permission: Option<LegacyCastPermissionView>,
     /// The value of X announced for this spell on the stack.
@@ -321,7 +321,7 @@ pub struct LegacyCardView {
     pub x: Option<i32>,
 }
 
-/// A public permission to play an exiled card. Only set terms are present.
+/// A public permission to play a card in its current zone. Only set terms are present.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCastPermissionView {

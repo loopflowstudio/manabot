@@ -2044,7 +2044,7 @@ impl PyCard {
     }
 }
 
-/// A public permission to play an exiled card; see `CastPermissionData`.
+/// A public permission to play a card in its current zone; see `CastPermissionData`.
 #[cfg(feature = "python")]
 #[pyclass(name = "CastPermission")]
 #[derive(Clone)]

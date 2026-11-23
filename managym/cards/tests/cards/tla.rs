@@ -4688,7 +4688,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
             .zone_objects(ZoneType::Exile, PlayerId(0))
             .to_vec();
         assert_eq!(foretold.len(), 2);
-        let grants = &game.state.cast_permissions.exile_grants;
+        let grants = &game.state.cast_permissions.grants;
         assert_eq!(grants.iter().filter(|grant| grant.foretold).count(), 2);
         for object_id in &foretold {
             assert_eq!(game.state[*object_id].name, "Sozin's Comet");
@@ -6967,7 +6967,7 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
         assert_eq!(exiled.len(), 1);
         let foretold = exiled[0];
         assert_eq!(branch.state[foretold].name, "Sozin's Comet");
-        let grant = &branch.state.cast_permissions.exile_grants[0];
+        let grant = &branch.state.cast_permissions.grants[0];
         assert_eq!(Some(grant.object), branch.state.live(foretold));
         resampled |= foretold != comet;
     }
@@ -14214,7 +14214,7 @@ fn may_play_exiled(s: &Scenario, object_id: ObjectId) -> bool {
     s.game()
         .state
         .cast_permissions
-        .exile_grants
+        .grants
         .iter()
         .any(|grant| Some(grant.object) == object)
 }

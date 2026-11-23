@@ -2,8 +2,8 @@
 // Permissions to cast exact cards outside their owner's hand, and the
 // prohibitions that override them.
 //
-// `CastPermissions` lives on `GameState`. A grant names the exact exiled
-// object (CR 400.7): once that card leaves exile it is a new object and the
+// `CastPermissions` lives on `GameState`. A grant names the exact zone
+// object (CR 400.7): once that card changes zones it is a new object and the
 // grant is stale, so lookups compare the current incarnation instead of
 // pruning on every zone move. Airbend (CR 701.65) is the first producer.
 // A `HandOnly` restriction ("can't cast spells from anywhere other than
@@ -28,10 +28,10 @@ use crate::{
     },
 };
 
-/// `player` may play one exact exiled object: cast it (for `cost` rather
-/// than its mana cost, when set) or, for a land, play it.
+/// Permission for one player to cast or play a card in one exact zone appearance.
+/// The granting effect determines the eligible object and the duration.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct ExileCastGrant {
+pub struct PlayGrant {
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub object: ObjectId,
     pub player: PlayerId,
@@ -69,7 +69,10 @@ pub struct ExileCastGrant {
     pub foretold: bool,
 }
 
-impl ExileCastGrant {
+#[deprecated(note = "use PlayGrant; ExileCastGrant will be removed in 0.4.0")]
+pub type ExileCastGrant = PlayGrant;
+
+impl PlayGrant {
     /// A grant with no further terms: cast for the card's mana cost, any time
     /// its timing allows.
     pub fn new(object: ObjectId, player: PlayerId) -> Self {
@@ -100,14 +103,15 @@ pub struct HandOnly {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastPermissions {
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub exile_grants: Vec<ExileCastGrant>,
+    #[serde(rename = "exile_grants")] // Retained state digest field.
+    pub grants: Vec<PlayGrant>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hand_only: Vec<HandOnly>,
 }
 
 impl CastPermissions {
     pub fn is_empty(&self) -> bool {
-        self.exile_grants.is_empty() && self.hand_only.is_empty()
+        self.grants.is_empty() && self.hand_only.is_empty()
     }
 }
 
@@ -126,9 +130,9 @@ impl Game {
         };
         let object_id = permanent.object;
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| ExileCastGrant {
+        self.exile_with_play_grant(object_id, |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
-            ..ExileCastGrant::new(object, owner)
+            ..PlayGrant::new(object, owner)
         });
     }
 
@@ -136,9 +140,9 @@ impl Game {
     /// owner may cast that card for {2}; a copy ceases to exist (CR 707.10a).
     pub(crate) fn airbend_spell(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| ExileCastGrant {
+        self.exile_with_play_grant(object_id, |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
-            ..ExileCastGrant::new(object, owner)
+            ..PlayGrant::new(object, owner)
         });
     }
 
@@ -155,10 +159,10 @@ impl Game {
             let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
                 return;
             };
-            self.exile_with_play_grant(object_id, |object| ExileCastGrant {
+            self.exile_with_play_grant(object_id, |object| PlayGrant {
                 this_turn: until == PlayWindow::ThisTurn,
                 through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
-                ..ExileCastGrant::new(object, player)
+                ..PlayGrant::new(object, player)
             });
         }
     }
@@ -202,10 +206,10 @@ impl Game {
                 ..ZoneEntry::default()
             },
         );
-        self.grant_if_exiled(self.state.object_of(card), |object| ExileCastGrant {
+        self.grant_if_exiled(self.state.object_of(card), |object| PlayGrant {
             after_turn: Some(turn),
             foretold: true,
-            ..ExileCastGrant::new(object, player)
+            ..PlayGrant::new(object, player)
         });
         self.restart_priority_round();
     }
@@ -253,7 +257,7 @@ impl Game {
             let from = self.state.live(old).expect("a foretold card is exiled");
             let to = self.state.live(new).expect("an unseen card is hidden");
             self.state.zones.replace_face_down_exile(player, old, new);
-            for grant in &mut self.state.cast_permissions.exile_grants {
+            for grant in &mut self.state.cast_permissions.grants {
                 if grant.object == from {
                     grant.object = to;
                 }
@@ -285,18 +289,18 @@ impl Game {
         };
         let mana_value = self.object_mana_value(object_id);
         self.exile_with_play_grant(object_id, |object| {
-            let base = ExileCastGrant {
+            let base = PlayGrant {
                 source: Some(source),
                 own_turn_only: true,
-                ..ExileCastGrant::new(object, player)
+                ..PlayGrant::new(object, player)
             };
             match linked {
-                LinkedGrant::WaterbendManaValue => ExileCastGrant {
+                LinkedGrant::WaterbendManaValue => PlayGrant {
                     cost: Some(ManaCost::default().with_generic(mana_value)),
                     waterbend: true,
                     ..base
                 },
-                LinkedGrant::FlashAnyMana => ExileCastGrant {
+                LinkedGrant::FlashAnyMana => PlayGrant {
                     flash: true,
                     any_mana: true,
                     ..base
@@ -310,7 +314,7 @@ impl Game {
     fn exile_with_play_grant(
         &mut self,
         object: ObjectId,
-        grant: impl FnOnce(ObjectId) -> ExileCastGrant,
+        grant: impl FnOnce(ObjectId) -> PlayGrant,
     ) {
         let exiled = self.move_object(object, ZoneType::Exile);
         self.grant_if_exiled(exiled, grant);
@@ -318,11 +322,7 @@ impl Game {
 
     /// Add the grant `grant` builds for `card`'s exiled object. A token, or a
     /// card a replacement kept out of exile, receives no grant.
-    fn grant_if_exiled(
-        &mut self,
-        object_id: ObjectId,
-        grant: impl FnOnce(ObjectId) -> ExileCastGrant,
-    ) {
+    fn grant_if_exiled(&mut self, object_id: ObjectId, grant: impl FnOnce(ObjectId) -> PlayGrant) {
         if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile)
             || !self.state[object_id].is_card()
         {
@@ -330,7 +330,7 @@ impl Game {
         }
         if let Some(object) = self.state.live(object_id) {
             let grant = grant(object);
-            self.state.cast_permissions.exile_grants.push(grant);
+            self.state.cast_permissions.grants.push(grant);
         }
     }
 
@@ -339,7 +339,7 @@ impl Game {
     /// turn.
     pub(crate) fn expire_turn_cast_grants(&mut self) {
         let (active, turn) = (self.active_player(), self.state.turn.turn_number);
-        self.state.cast_permissions.exile_grants.retain(|grant| {
+        self.state.cast_permissions.grants.retain(|grant| {
             !grant.this_turn
                 && !grant
                     .through_next_turn
@@ -364,27 +364,21 @@ impl Game {
             .retain(|restriction| restriction.until_turn_of != active);
     }
 
-    /// The grants naming this exact card while it is in exile. Producers
-    /// exile a new object for every grant, so a card holds at most one.
-    fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &ExileCastGrant> {
-        let object = (self.state.zones.zone_of(object_id) == Some(ZoneType::Exile))
-            .then(|| self.state.live(object_id))
-            .flatten();
+    /// The grants naming this exact card in its current zone appearance (CR 400.7).
+    fn grants_naming(&self, object_id: ObjectId) -> impl Iterator<Item = &PlayGrant> {
         self.state
             .cast_permissions
-            .exile_grants
+            .grants
             .iter()
-            .filter(move |grant| Some(grant.object) == object)
+            .filter(move |grant| {
+                grant.object == object_id && self.state.zones.zone_of(object_id).is_some()
+            })
     }
 
-    /// The live grant letting `player` play this exact exiled card now.
+    /// The live grant letting `player` play this exact card now.
     /// Another player's card is castable too; a permanent spell enters
     /// under its caster's control (CR 110.2).
-    pub(crate) fn exile_grant(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-    ) -> Option<&ExileCastGrant> {
+    pub(crate) fn play_grant(&self, player: PlayerId, object: ObjectId) -> Option<&PlayGrant> {
         self.grants_naming(object).find(|grant| {
             grant.player == player
                 && (!grant.own_turn_only || self.active_player() == player)
@@ -404,11 +398,7 @@ impl Game {
     /// What casting `card` under `grant` costs: its foretell cost, the
     /// grant's alternative, or its mana cost. `None` when it has no cost to
     /// pay (a land is played, not cast).
-    pub(crate) fn grant_cast_cost(
-        &self,
-        grant: &ExileCastGrant,
-        object: ObjectId,
-    ) -> Option<ManaCost> {
+    pub(crate) fn grant_cast_cost(&self, grant: &PlayGrant, object: ObjectId) -> Option<ManaCost> {
         let definition = &self.state[object];
         if definition.types.is_land() {
             return None;
@@ -433,10 +423,10 @@ impl Game {
         })
     }
 
-    /// The permission naming this exact exiled card, whatever its timing,
+    /// The permission naming this exact card, whatever its timing,
     /// for viewers to inspect. A grant tied to a source that has left the
     /// battlefield can never be used again and is not shown.
-    pub(crate) fn exile_grant_on(&self, object: ObjectId) -> Option<&ExileCastGrant> {
+    pub(crate) fn play_grant_on(&self, object: ObjectId) -> Option<&PlayGrant> {
         self.grants_naming(object).find(|grant| {
             grant
                 .source
@@ -463,20 +453,25 @@ impl Game {
             return true;
         }
         if self.state[object].types.is_land() {
-            return self.exile_grant(player, object).is_some();
+            return self.state.zones.zone_of(object) == Some(ZoneType::Exile)
+                && self.play_grant(player, object).is_some();
         }
-        self.zone_cast_cost(player, object).is_some()
+        self.zone_cast_permission(player, object).is_some()
     }
 
-    /// Cards named by `player`'s exile grants, stale ones included; callers
-    /// check [`Game::may_play_from_zone`].
-    pub(crate) fn exile_granted_cards(&self, player: PlayerId) -> Vec<CardId> {
+    /// Exiled candidates only. Priority already visits the player's graveyard.
+    pub(crate) fn exile_granted_cards(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = CardId> + '_ {
         self.state
             .cast_permissions
-            .exile_grants
+            .grants
             .iter()
-            .filter(|grant| grant.player == player)
-            .filter_map(|grant| self.state.card_id(grant.object))
-            .collect()
+            .filter(move |grant| {
+                grant.player == player
+                    && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
+            })
+            .filter_map(|grant| self.state.card_of(grant.object))
     }
 }

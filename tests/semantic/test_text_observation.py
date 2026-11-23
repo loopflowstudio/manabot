@@ -15,6 +15,7 @@ from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
@@ -410,9 +411,8 @@ def test_continuation_text_states_announcing_only_when_present() -> None:
 def _choose(env: managym.Env, wording: str) -> None:
     """Submit the one offered action whose line contains `wording`."""
     decision = capture_text_decision(env)
-    [line] = [
-        line for line in decision.text.splitlines() if " — " in line and wording in line
-    ]
+    actions = decision.text.split("Legal actions:\n", 1)[1]
+    [line] = [line for line in actions.splitlines() if wording in line]
     submit_response(env, decision, line.split(" — ", 1)[0])
 
 
@@ -511,6 +511,44 @@ def test_foretell_is_an_ability_offer_naming_the_card() -> None:
     assert "; zone exile; " in _card_line(decision.text, "C1")
     assert "; foretold, face down" in _card_line(decision.text, "C1")
     assert [a.description for a in decision.actions] == ["Pass priority"]
+
+
+def test_zul_ashur_graveyard_cast_in_text_and_policy_input() -> None:
+    env = priority_root(
+        ("Lightning Bolt",),
+        ("Mountain", "Swamp", "Swamp", "Hungry Ghoul", "Zul Ashur, Lich Lord"),
+    )
+    _choose(env, "Cast ")
+    _choose(env, "Hungry Ghoul")
+    for _ in range(2):
+        _choose(env, "Pass priority")
+    _choose(env, "Zul Ashur")
+    _choose(env, "Hungry Ghoul")
+    for _ in range(2):
+        _choose(env, "Pass priority")
+
+    decision = capture_text_decision(env)
+    [cast] = [a for a in decision.actions if a.description.startswith("Cast ")]
+    assert "Hungry Ghoul" in cast.description
+    alias = cast.description.split()[1]
+    assert "may be played from graveyard by You: cast for {1}{B}, this turn only" in (
+        _card_line(decision.text, alias)
+    )
+    observation = _viewer_observation(decision)
+    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    rows = encoded["agent_cards"]
+    row = next(
+        i for i, card in enumerate(observation.agent_cards) if card.cast_permission
+    )
+    assert rows[row, CARD_PERMISSION_INDEX] == 1
+    assert rows[row, column("agent_cards", "permission_this_turn")] == 1
+    for viewer in (0, 1):
+        board = decision_surface_view(env, viewer)
+        seat = "agent" if viewer == env.current_agent_index() else "opponent"
+        [ghoul] = [c for c in board[seat]["graveyard"] if c["name"] == "Hungry Ghoul"]
+        assert ghoul["cast_permission"]["cost"] == "{1}{B}"
+        assert ghoul["cast_permission"]["this_turn"]
+    submit_response(env, decision, cast.reference)
 
 
 def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
@@ -650,7 +688,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "ward_cost": "ward mana value",
         "kicker_cost": "kicker mana value",
         "face_down": "face down",
-        "cast_permission": "may be played from exile by",
+        "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },

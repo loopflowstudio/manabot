@@ -686,7 +686,7 @@ pub(super) struct WireCardData {
     /// Foretold and face down in exile; listed only for its owner.
     #[serde(default)]
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     #[serde(default)]
     pub cast_permission: Option<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),

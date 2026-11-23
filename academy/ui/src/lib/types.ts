@@ -28,13 +28,13 @@ export interface CardState {
   types: CardTypes;
   /** Foretold and face down in exile; only its owner's views list it. */
   face_down?: boolean;
-  /** The permission to play this card from exile, when it has one. */
+  /** The permission to play this card from its current zone, when it has one. */
   cast_permission?: CastPermission;
   /** The value of X announced for this spell on the stack. */
   x?: number;
 }
 
-/** A public permission to play an exiled card; only set terms are present. */
+/** A public permission to play a card in its current zone; only set terms are present. */
 export interface CastPermission {
   player_id: number;
   /** Mana symbols paid to cast it; absent for a land play. */

@@ -1048,6 +1048,8 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
+    /// The controller may cast the targeted graveyard card this turn at its normal cost and timing.
+    GrantGraveyardCastThisTurn { target: TargetSpec },
     /// "Exile the top `count` cards of your library. You may play them
     /// [`until`]."
     ExileTopCardsToPlay { count: usize, until: PlayWindow },
@@ -1684,7 +1686,9 @@ impl Effect {
             }
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
-            Effect::ExileLinked { target, .. } => Some(target),
+            Effect::GrantGraveyardCastThisTurn { target } | Effect::ExileLinked { target, .. } => {
+                Some(target)
+            }
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),

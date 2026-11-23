@@ -252,6 +252,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "kind",
         "attacking",
         "kicked",
+        "flashback",
         "x",
         "free",
         "resolving",
@@ -378,6 +379,7 @@ mod tests {
             rules_tokens(
                 &CastChoices {
                     kicked: true,
+                    flashback: true,
                     x: 1,
                     free: true,
                     resolving: true,

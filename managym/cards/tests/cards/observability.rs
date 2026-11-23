@@ -732,6 +732,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::AddMana { .. } => "Effect::AddMana",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::Airbend { .. } => "Effect::Airbend",
+        Effect::GrantGraveyardCastThisTurn { .. } => "Effect::GrantGraveyardCastThisTurn",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
         Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
@@ -771,7 +772,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 83;
+const EFFECT_VARIANTS: usize = 84;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -900,6 +901,11 @@ fn effect_witnesses() -> Vec<Effect> {
                 predicate: CardPredicate::creature(),
                 except: Some(Except::Target),
                 max_mana_value: None,
+            },
+        },
+        Effect::GrantGraveyardCastThisTurn {
+            target: TargetSpec::GraveyardCardYouOwn {
+                predicate: creature(),
             },
         },
         Effect::OpponentsCastOnlyFromHand,

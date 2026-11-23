@@ -5,6 +5,7 @@
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
+        cast_permission::PlayGrant,
         decision::{
             Decision, EffectFrame, FrameCompletion, ResolutionCastOffer, ResolutionTarget,
             TargetIteration,
@@ -1203,6 +1204,18 @@ impl Game {
                 }
                 if bent {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
+                }
+                None
+            }
+            Effect::GrantGraveyardCastThisTurn { .. } => {
+                if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
+                    let grant = PlayGrant {
+                        this_turn: true,
+                        ..PlayGrant::new(object, frame.controller)
+                    };
+                    if !self.state.cast_permissions.grants.contains(&grant) {
+                        self.state.cast_permissions.grants.push(grant);
+                    }
                 }
                 None
             }

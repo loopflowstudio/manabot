@@ -488,7 +488,10 @@ instrumentation attributes board, clone and dependency work without adding
 counters to ordinary wheels.
 
 A resolving spell remains on the stack until the zone-move authority commits
-its departure. That authority applies flashback exile replacement and captures
+its departure. A spell cast with flashback carries that choice onto the stack.
+A Zombie cast from the graveyard with Zul Ashur pays its normal cost, enters
+the battlefield on resolution and returns to the graveyard if countered.
+The zone-move authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual

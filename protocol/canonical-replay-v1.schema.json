@@ -1069,7 +1069,7 @@
       "type": "object",
       "properties": {
         "cast_permission": {
-          "description": "The permission to play this card from exile, when it has one.",
+          "description": "The permission to play this card from its current zone, when it has one.",
           "anyOf": [
             {
               "$ref": "#/$defs/LegacyCastPermissionView"
@@ -1145,7 +1145,7 @@
       ]
     },
     "LegacyCastPermissionView": {
-      "description": "A public permission to play an exiled card. Only set terms are present.",
+      "description": "A public permission to play a card in its current zone. Only set terms are present.",
       "type": "object",
       "properties": {
         "after_turn": {

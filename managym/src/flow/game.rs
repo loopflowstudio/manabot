@@ -241,6 +241,9 @@ pub enum ActivationSource {
 /// when unset so ordinary casts keep their shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastChoices {
+    /// Casting via flashback replaces any departure from the stack with exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
     /// The optional additional cost (kicker, or a waterbend additional cost)
     /// is paid (CR 702.33).
     pub kicked: bool,

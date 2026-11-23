@@ -684,7 +684,7 @@ impl Game {
     /// or a conditional "as though it had flash" that currently holds.
     pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
         let granted_flash = self
-            .exile_grant(player, object)
+            .play_grant(player, object)
             .is_some_and(|grant| grant.flash);
         let object = &self.state[object];
         granted_flash

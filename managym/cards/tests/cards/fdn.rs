@@ -701,3 +701,133 @@ fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
     assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
+
+#[test]
+fn zul_ashur_grants_one_exact_zombie_for_the_turn() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{assert_choice_contract, can_cast, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::game_object::Target,
+    };
+
+    let mut s = five_color_unfunded_setup(&[
+        "Zul Ashur, Lich Lord",
+        "Hungry Ghoul",
+        "Gray Ogre",
+        "Counterspell",
+    ]);
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let zul_card = card_of(&s, zul);
+    let zombie = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    move_from_library(&mut s, 1, "Hungry Ghoul", ZoneType::Graveyard);
+    move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    let targets: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseTarget {
+                target: Target::GraveyardCard(card),
+                ..
+            } => Some(*card),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(targets.len(), 2);
+    assert!(targets.contains(&zombie) && targets.contains(&other));
+    assert_choice_contract(&s);
+    assert!(s.choose_target(Target::GraveyardCard(zombie)));
+    // The activated ability resolves independently of its source.
+    move_card(&mut s, zul_card, ZoneType::Graveyard);
+    settle(&mut s);
+    assert!(!can_cast(&s, zombie)); // The printed mana cost is still owed.
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let permitted: Vec<_> = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .filter_map(|card| Some((card, card.cast_permission.as_ref()?)))
+            .collect();
+        let [(card, grant)] = permitted.as_slice() else {
+            panic!("expected exactly one public grant")
+        };
+        assert_eq!(card.id, s.game().state[zombie].id.0 as i32);
+        assert_eq!(card.zone, ZoneType::Graveyard);
+        assert!(grant.this_turn);
+        assert_eq!(grant.cost.as_ref().unwrap().mana_value, 2);
+        assert_eq!(grant.player_id, s.game().state.players[0].id.0 as i32);
+    }
+
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, zombie));
+    assert!(!can_cast(&s, other));
+    assert_choice_contract(&s);
+    let cast = |a: &Action| matches!(a, Action::CastSpell { object, .. } if *object == zombie);
+    let mut resolved = fork_choosing(&s, cast);
+    settle(&mut resolved);
+    assert_eq!(zone_of(&resolved, zombie), Some(ZoneType::Battlefield));
+    assert_eq!(resolved.game().state.players[0].mana_pool.total(), 0);
+
+    let mut expired = fork_choosing(&s, |a| matches!(a, Action::PassPriority { .. }));
+    expired.advance_to_active_step(1, StepKind::Main);
+    expired.advance_to_active_step(0, StepKind::Main);
+    expired.set_player_mana_pool(0, "1B");
+    expired.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&expired, zombie));
+
+    // Casting and countering creates two new appearances. Neither inherits
+    // the grant, and an ordinary graveyard cast has no flashback replacement.
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    s.set_player_mana_pool(1, "UU");
+    choose(&mut s, cast);
+    let spell = crate::support::inspect::now(&s, zombie);
+    s.pass_priority();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == counter),
+    );
+    assert!(s.choose_target(Target::StackSpell(spell)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, zombie), Some(ZoneType::Graveyard));
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, zombie));
+}
+
+#[test]
+fn zul_ashur_ward_costs_the_opponent_two_life() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        play::{cast_only, resolve_top},
+    };
+    use managym::agent::action::ActionType;
+
+    let mut s = five_color_unfunded_setup(&["Zul Ashur, Lich Lord", "Lightning Bolt"]);
+    let zul = s.force_permanent_on_battlefield(0, "Zul Ashur, Lich Lord");
+    let zombie = card_of(&s, zul);
+    force_lands(&mut s, 1, "Mountain", 1);
+    s.force_card_in_hand(1, "Lightning Bolt");
+    s.advance_to_active_step(1, StepKind::Main);
+    cast_only(&mut s);
+    s.choose_target_named("Zul Ashur, Lich Lord");
+    resolve_top(&mut s);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    s.assert_life(1, 18);
+    settle(&mut s);
+    assert_eq!(
+        crate::support::inspect::zone_of(&s, zombie),
+        Some(ZoneType::Graveyard)
+    );
+}

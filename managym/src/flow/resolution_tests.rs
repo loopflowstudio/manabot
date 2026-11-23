@@ -3515,7 +3515,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
 fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     use crate::{
         flow::{
-            cast_permission::ExileCastGrant,
+            cast_permission::PlayGrant,
             decision::{Decision, EffectFrame},
         },
         possible_worlds::{MaterializeMode, PossibleWorldSpace},
@@ -3572,13 +3572,10 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     let (bolts, ogres) = (current(&bolts), current(&ogres));
     for object_id in &ogres {
         let object = root.state.live(*object_id).unwrap();
-        root.state
-            .cast_permissions
-            .exile_grants
-            .push(ExileCastGrant {
-                foretold: true,
-                ..ExileCastGrant::new(object, player)
-            });
+        root.state.cast_permissions.grants.push(PlayGrant {
+            foretold: true,
+            ..PlayGrant::new(object, player)
+        });
     }
     // The constructed root starts with unknown library positions. The
     // visible setup moves above would otherwise disclose all three Bolts.

@@ -946,6 +946,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Destroy { what } => format!("Destroy {}",selector_description(what)),
         Airbend { what: what @ ObjectSelector::Each { .. } } => format!("Airbend {}. Their owners may cast them from exile for {{2}}", selector_description(what)),
         Airbend { what } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",selector_description(what)),
+        GrantGraveyardCastThisTurn { target } => format!("You may cast {} this turn", target_description(target)),
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileTopCardsToPlay { count, until } => format!(
             "Exile the top {} of your library. You may play {} {}",

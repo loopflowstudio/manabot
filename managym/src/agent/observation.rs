@@ -182,8 +182,7 @@ impl RestrictedManaData {
     }
 }
 
-/// A public permission to play an exiled card (airbend, impulse draw,
-/// linked exile, foretell), projected from the engine's exile grant. The
+/// A permission to play this card in its current zone. The
 /// terms describe when it may be used; a pending offer to cast the card
 /// exists only while they are all met and the player is not hand-only.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -326,7 +325,7 @@ pub struct CardData {
     pub is_token: bool,
     /// Foretold and face down in exile; listed only for its owner.
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     pub cast_permission: Option<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
@@ -1626,7 +1625,7 @@ impl Observation {
             characteristics: Self::printed_characteristics_data(game, object_id),
             face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permission: game
-                .exile_grant_on(object_id)
+                .play_grant_on(object_id)
                 .map(|grant| CastPermissionData {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
                     cost: game.grant_cast_cost(grant, object_id),

@@ -14,6 +14,7 @@
 use crate::{
     agent::action::AgentError,
     flow::{
+        cast_permission::PlayGrant,
         decision::{EffectFrame, FrameCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
@@ -52,6 +53,12 @@ struct TargetSelection {
     requirement_index: usize,
     chosen: Vec<Target>,
     chosen_req_indices: Vec<usize>,
+}
+
+pub(super) enum ZoneCastPermission<'a> {
+    LibraryTop,
+    Flashback(ManaCost),
+    Grant(&'a PlayGrant),
 }
 
 impl Game {
@@ -153,24 +160,32 @@ impl Game {
         .then_some(card)
     }
 
-    /// The cost `player` may pay to cast `card` from outside their hand:
-    /// graveyard flashback, an exact-object exile grant, or the top of their
-    /// library while a permanent permits it. A hand-only restriction overrides
-    /// all three.
-    pub(crate) fn zone_cast_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
+    /// The authority for a priority cast outside the hand, before payment.
+    pub(super) fn zone_cast_permission(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Option<ZoneCastPermission<'_>> {
         if self.casts_only_from_hand(player) {
             return None;
         }
         match self.state.zones.zone_of(object)? {
-            ZoneType::Graveyard => self.flashback_cost(player, object),
-            ZoneType::Exile => self.grant_cast_cost(self.exile_grant(player, object)?, object),
+            ZoneType::Graveyard => self
+                .play_grant(player, object)
+                .map(ZoneCastPermission::Grant)
+                .or_else(|| {
+                    self.flashback_cost(player, object)
+                        .map(ZoneCastPermission::Flashback)
+                }),
+            ZoneType::Exile => self
+                .play_grant(player, object)
+                .map(ZoneCastPermission::Grant),
             ZoneType::Library
                 if self
                     .library_top_castable(player)
-                    .map(|card| self.state.object_of(card))
-                    == Some(object) =>
+                    .is_some_and(|card| self.state.object_of(card) == object) =>
             {
-                self.state[object].mana_cost.clone()
+                Some(ZoneCastPermission::LibraryTop)
             }
             _ => None,
         }
@@ -193,7 +208,11 @@ impl Game {
         } else if cast.resolving || self.state.zones.zone_of(object) == Some(ZoneType::Hand) {
             self.state[object].mana_cost.clone()
         } else {
-            self.zone_cast_cost(player, object)
+            match self.zone_cast_permission(player, object)? {
+                ZoneCastPermission::LibraryTop => self.state[object].mana_cost.clone(),
+                ZoneCastPermission::Flashback(cost) => Some(cost),
+                ZoneCastPermission::Grant(grant) => self.grant_cast_cost(grant, object),
+            }
         }
     }
 
@@ -333,32 +352,21 @@ impl Game {
             return Err(AgentError("a choice is already pending".to_string()));
         }
 
-        let (is_land, owner, is_instant_speed) = {
-            let card_ref = &self.state[self.state.object_of(card)];
-            (
-                card_ref.types.is_land(),
-                card_ref.owner,
-                self.has_instant_timing(player, self.state.object_of(card)),
-            )
-        };
-
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("card is not in a permitted casting zone".into()));
+        let object = self.state.object_of(card);
+        if self.state[object].types.is_land() {
+            return Err(AgentError("land cards cannot be cast".into()));
         }
-        if is_land {
-            return Err(AgentError("land cards cannot be cast".to_string()));
-        }
-        if owner != player
-            && self
-                .exile_grant(player, self.state.object_of(card))
-                .is_none()
-        {
-            return Err(AgentError("card does not belong to player".to_string()));
+        let mut cast = CastChoices::default();
+        if !self.state.zones.contains(object, ZoneType::Hand, player) {
+            let permission = self
+                .zone_cast_permission(player, object)
+                .ok_or_else(|| AgentError("card is not in a permitted casting zone".into()))?;
+            cast.flashback = matches!(permission, ZoneCastPermission::Flashback(_));
         }
         if self.state.priority.holder != player {
             return Err(AgentError("player does not have priority".to_string()));
         }
-        if is_instant_speed {
+        if self.has_instant_timing(player, object) {
             if !self.can_cast_instants(player) {
                 return Err(AgentError("cannot cast instant now".to_string()));
             }
@@ -368,7 +376,7 @@ impl Game {
             ));
         }
 
-        self.begin_cast(player, self.state.object_of(card), CastChoices::default())
+        self.begin_cast(player, object, cast)
     }
 
     /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
@@ -633,7 +641,7 @@ impl Game {
             .fold(0u8, u8::saturating_add);
         let granted = !cast.free
             && self
-                .exile_grant(player, object)
+                .play_grant(player, object)
                 .is_some_and(|grant| grant.waterbend);
         if granted {
             u8::MAX

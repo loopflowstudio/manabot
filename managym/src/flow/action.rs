@@ -641,10 +641,8 @@ impl Game {
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
-        else {
-            return Some(0);
-        };
+        // Permission opens the zone. An absent payable cost is distinct from {0}.
+        let cost = self.effective_spell_cost(player, self.state.object_of(card), cast, None)?;
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {

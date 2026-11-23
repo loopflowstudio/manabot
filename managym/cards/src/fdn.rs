@@ -22,6 +22,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         kellan_planar_trailblazer(),
         luminous_rebuke(),
         sire_of_seven_deaths(),
+        zul_ashur_lich_lord(),
     ]
 }
 
@@ -238,6 +239,39 @@ fn claws_out() -> CardDefinition {
                 ObjectSelector::each_you_control(CardPredicate::creature()),
                 Modification::pump(2, 2),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn zul_ashur_lich_lord() -> CardDefinition {
+    let text_box = "Ward—Pay 2 life. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays 2 life.)\n{T}: You may cast target Zombie creature card from your graveyard this turn.";
+    CardDefinition {
+        key: "fdn.zul_ashur_lich_lord",
+        scryfall_id: "34ad4fdb-9805-45b3-ba20-e47a15d6ff38",
+        printed: PrintedCharacteristics {
+            name: "Zul Ashur, Lich Lord".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Zombie".into(), "Warlock".into()],
+            power: Some(2),
+            toughness: Some(2),
+            statics: vec![StaticAbility::Ward(PaymentCost::Life(2))],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::GrantGraveyardCastThisTurn {
+                    target: TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            subtype: Some("Zombie".into()),
+                            ..CardPredicate::creature()
+                        },
+                    },
+                }],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

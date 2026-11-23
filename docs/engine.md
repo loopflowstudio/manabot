@@ -1119,7 +1119,7 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | --- | --- | --- |
 | CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
 | CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | `CardMoved.object_id` is the successor; `departed` names its exact pre-move appearance for LKI |
-| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact exiled `ObjectId` it applies to; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
+| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact `ObjectId` in its permitted zone; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
 | CR 400.7i | an effect that lets a land be played finds the land on the battlefield | the entry batch's `EventResult.moved`, bound when the batch completes (an entry replacement may suspend it first) |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |

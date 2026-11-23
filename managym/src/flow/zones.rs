@@ -503,7 +503,6 @@ impl Game {
         cast: CastChoices,
     ) -> ObjectId {
         let cast_from = self.state.zones.zone_of(object).expect("cast source zone");
-        let flashback = cast_from == ZoneType::Graveyard;
         // CR 400.7g, h: the spell is the object the card became on the stack.
         let object = self.move_object(object, ZoneType::Stack);
         let id = self.state.id_gen_mut().next_id();
@@ -515,7 +514,7 @@ impl Game {
                 object,
                 controller,
                 cast_from,
-                flashback,
+                flashback: cast.flashback,
                 source_definition_id,
                 targets,
                 target_req_indices,
