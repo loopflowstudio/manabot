@@ -509,6 +509,23 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
+- Snapshot self-play (`SelfPlay.snapshot`, native slot loading): extract the
+  `## Snapshot-aware self-play` recipe from `docs/training-loop.md` into a
+  `.runs/` folder and run its three commands with `ETUDE_HOME` there (about
+  30 s each on CPU), plus `--config '{"workers": 1}'` / `4` and
+  `{"horizon": null, "record_games": 1, "statistics": true}`. Read
+  `snapshot/starts`, `horizon_cuts`, `terminals` and `failed_branches` per
+  update; branches start at update 3. Recorded games must equal
+  `coordinates/games` with contiguous seeds and none for a branch-only update.
+  Returning user: run `main`'s version of the same doc recipe (it passes
+  `InMemorySnapshotVector.factory`) on a base worktree, copy its home, then
+  `--resume` here; compare `extra/snapshot_bank` in each save's `state.json`
+  (legacy entries byte-equal by `snapshot_id`, new ones carry `replay_json`).
+  To journal a branch, poll the `vector-N.jsonl` evidence line and SIGKILL
+  when a game's seed is older than the newest fresh seed (a branch keeps its
+  root's seed). `--attempt` counts receipt lines; a change line raises
+  `KeyError: 'attempt'`. The `docs/engine-python.md` batched example prints
+  seeds 42/45 and `[42, 47]`.
 - Training game journals (`diagnostics: detailed`): run `etude train manabot/recipes/local.py --experiment NAME --config '{"updates": 200, "diagnostics": "detailed"}'` from a supervised `Popen(start_new_session=True)`, poll `game-journals/operation.json` and `os.killpg(..., SIGKILL)` while `collection` is pending after update 1; copy `vector-N.jsonl` and replay it with `manabot.training.state.game_errors --attempt 1`. Kills land at `ready` boundaries; a pending native step is reachable only through the `os._exit` child fixtures. Compare on/off runs by safetensors tensor bytes (metadata differs by `run_id`; the dev venv has no `safetensors` package, so read the little-endian u64 header length, the JSON header and each tensor's `data_offsets` slice directly); `SelfPlay.workers=2` gives sharded files.
 - Standalone statistics/recording: stage and install an engine-only wheel into a
   fresh venv, then run the two Python examples in `docs/engine-python.md` outside
