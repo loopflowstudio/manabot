@@ -118,7 +118,7 @@ At `73475291`, Ooze and Hellkite share one sorted damage history. Resolution and
 
 ## Next slice · Lunar Insight
 
-The ledger obligation is “Count distinct mana values among current nonland permanents.” Author Lunar Insight with a draw amount evaluated at resolution. Reuse the current permanent mana-value lookup used by Hellkite and check the controller and nonland filters before counting distinct values. This query needs no retained turn fact.
+The ledger obligation is “Count distinct mana values among current nonland permanents.” Author Lunar Insight with a draw amount evaluated at resolution. Use a distinct-mana-value EffectValue over the existing battlefield selection (ObjectSelector::Each, YouControl, nonland). Read the same permanent mana value as Hellkite. DrawCards evaluates the amount once before the first draw. Keep the spell’s ordinary saved frame, native draw events and viewer-specific hand projection. A running per-seat count would duplicate the current board across control and type changes. This query needs no retained turn fact.
 
 From the same saved pending spell, compare equal-sized boards with mana values 0, 0, 2 and 0, 1, 2 among the caster’s nonlands. Verify two and three actual draws respectively. Include a land and an opposing nonland with an otherwise absent value, and a branch with no qualifying permanent for zero draws. Change the board after announcement to distinguish a resolution read from an announcement snapshot. Check the authored expression in the catalog tokens and update the FDN ledger with the passing fixture.
 
