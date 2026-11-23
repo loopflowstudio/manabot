@@ -1206,6 +1206,18 @@
       "R"
     ]
   },
+  "Felling Blow": {
+    "name": "Felling Blow",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put a +1/+1 counter on target creature you control. Then that creature deals damage equal to its power to target creature an opponent controls.",
+    "colors": [
+      "G"
+    ]
+  },
   "Fencing Ace": {
     "name": "Fencing Ace",
     "mana_cost": "{1}{W}",
@@ -2294,6 +2306,31 @@
     "oracle_text": "Landfall — Whenever a land you control enters, add one mana of any color.",
     "colors": [
       "G"
+    ]
+  },
+  "Lunar Convocation": {
+    "name": "Lunar Convocation",
+    "mana_cost": "{W}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your end step, if you gained life this turn, each opponent loses 1 life.\nAt the beginning of your end step, if you gained and lost life this turn, create a 1/1 black Bat creature token with flying.\n{1}{B}, Pay 2 life: Draw a card.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
+  "Lunar Insight": {
+    "name": "Lunar Insight",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw a card for each different mana value among nonland permanents you control.",
+    "colors": [
+      "U"
     ]
   },
   "Mai, Jaded Edge": {
@@ -3416,6 +3453,18 @@
     "colors": [
       "U"
     ]
+  },
+  "Steel Hellkite": {
+    "name": "Steel Hellkite",
+    "mana_cost": "{6}",
+    "type_line": "Artifact Creature — Dragon",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\n{2}: This creature gets +1/+0 until end of turn.\n{X}: Destroy each nonland permanent with mana value X whose controller was dealt combat damage by this creature this turn. Activate only once each turn.",
+    "colors": []
   },
   "Suki, Courageous Rescuer": {
     "name": "Suki, Courageous Rescuer",
