@@ -1,4 +1,4 @@
-at: f5d4bb7ad864bcaca3c72429fc2b84c9c4f4fabd
+at: 5390217b482744ce0149dbc6dafb10ec58a6045f
 first:
   - path: docs/engine.md
     why: Read the game procedure from reset to outcome
@@ -20,6 +20,8 @@ first:
     why: Resolve simultaneous losses and group legends by controller
   - path: managym/src/agent/env.rs
     why: Both step APIs project the committed outcome
+  - path: manabot/sim/sim.py
+    why: Follow terminal receipts into simulation counts and rates
   - path: tests/env/test_game_snapshot.py
     why: Compare Pact results across restored branches
   - path: managym/cards/tests/cards/dgm.rs
