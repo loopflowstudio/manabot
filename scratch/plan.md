@@ -144,3 +144,40 @@ Maze’s End and Fabled Passage share the search and battlefield-count logic. Ma
 The seed-213 scalar/vector opening-label check, ordinary cleanup legend choice and Sakashima/two-Bracelet exemption passed. Seed 725 initially failed before either fork because it built the stack during opening hands. At `72d87467`, the fixture in `managym/src/flow/resolution_tests.rs` took both native keep choices and asserted Playing before constructing the position. The directed test passed with “turn is ending” visible at the legend choice. Either choice resumed cleanup and resolved the surviving trigger for three life while the original state hash stayed unchanged.
 
 The decomposition criterion is met. The only remaining mention of the retired Maze instruction in engine source is its catalog token retirement entry. Maze and Passage each express their timing in the card definition through the shared search and count operations. The focused seed-725 native test passed again on review. Gate retains the affected suites and performance measurement.
+
+### Candidate measurement at 7e5f71bd
+
+Local protocol set before sampling. Use this Linux x86_64 runner (CPU model unreported), Cargo 1.99.1, locked release build with benchmark counters. Run the curated 512-game headless reset/step workload once, and the ordinary seeded Search-64 harness once with a 240-second wall limit, retaining complete seed rows. For constructed states use seed 7, sizes 4 and 8, duplicate Gray Ogres and one Herald per seat among cycling static abilities. Measure clone, observation and the damage pass with the harness's three timing samples and a separate single allocation sample. No cross-machine timing comparison.
+
+Follow-up attribution, chosen after seeing the initial allocation counts. Run the same three layers and sizes on herald-healthy and herald-statics together after ordinary search finishes. These roots differ only in seat zero's life (20 or 0). Compare damage allocations and work, since timing alone cannot attribute Herald's protection query.
+
+The 512 ordinary games all finished, with 118,255 decisions in 3.584 s (32,992 steps/s), digest 17942664948341206392. Layer-board evaluation took 0.572 s over 208,412 builds. Search-64 finished 40 decisions on each seed without a playout cap hit.
+
+| Search seed | Total s | Worst reply s | Simulations | Decision digest |
+|---|---:|---:|---:|---:|
+| 1 | 29.277 | 2.359 | 7,872 | 9802435900664878732 |
+| 2 | 34.207 | 1.827 | 9,152 | 16681168173759266580 |
+| 3 | 28.400 | 1.855 | 8,128 | 10971803445708699009 |
+
+At the blocked damage checkpoint, size counts the variable creatures per seat. The two Herald rows use the matched follow-up timings.
+
+| Board | Median µs, 4 → 8 | Allocations, 4 → 8 | Allocated bytes, 4 → 8 | Layer-board builds, 4 → 8 |
+|---|---:|---:|---:|---:|
+| Duplicate Ogres | 20.31 → 33.63 | 174 → 274 | 44,918 → 85,982 | 4 → 8 |
+| Statics with Herald, starting life | 41.17 → 130.37 | 763 → 3,307 | 109,112 → 476,033 | 4 → 9 |
+| Same board, seat zero at zero life | 39.09 → 122.37 | 863 → 3,308 | 120,623 → 476,055 | 5 → 9 |
+
+At size eight on the protected board, observation used 120 allocations / 38,070 bytes, and exact fork used 26 / 15,484. In the first run their medians were 10.91 and 2.60 µs. Timing and allocation modes produced the same surface and successor digest in each experiment: c9651da83aabe75a912d82063882d4d18eedaf30a166d9e7059eeeefe560df70 for Ogres plus protected Herald, fe95622bc016a436347f87cfc401223770fb33151bfa041c8864e6df8749502c for the matched Herald boards. The release example test passed for every named recipe.
+
+**Implementation decision.** Keep the procedure and combat representation. The expensive measured transition is crowded combat with layered characteristics. The matched size-eight boards differ by one allocation and 22 bytes. A loss-protection index would add invalidation work without addressing the observed growth. At size four the pending loss did add a board evaluation, so that inference is specific to the larger cell. No runtime deletion is justified in this phase.
+
+A follow-up can instrument which writes invalidate the nine board evaluations inside the size-eight damage pass. If successive evaluations read identical layer inputs, remove the redundant invalidation at its writer. Any such change needs the debug layer oracle, damage/trigger order, simultaneous SBA and Herald-removal fixtures, exact fork and both constructed digests. Keep the complete legal actions, native skipping and observation capacity checks. The counts alone cannot establish which writes are redundant.
+
+The ordinary decision digests differ from the recorded pre-mulligan reference. Gate must review those changes and run the uninstrumented paired budget on its dedicated runner. With candidate and reference examples built as in engine-budget.yml, run:
+
+```bash
+uv run --no-project --python 3.13 python scripts/engine_budget.py sample --candidate managym/target/release/examples --reference other/managym/target/release/examples
+uv run --no-project --python 3.13 python scripts/engine_budget.py compare
+```
+
+No baseline update or relative speed claim follows from the local instrumented sample.

@@ -20,3 +20,5 @@
 - Use Sakashima of a Thousand Faces to keep two legendary Bracelets on the same creature. Use Doubling Season to cross seven plan counters with one placement.
 
 - Use match-state hash v19 for the smaller serialized victory record. Keep the previous hash in git and leave the recorded games at their original revisions.
+
+- For the local measurement slice, pair duplicate-creatures with one Herald per seat on diverse static boards. This isolates a common SBA consumer and the combat workspace at bounded sizes.
