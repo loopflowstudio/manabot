@@ -1,15 +1,11 @@
-at: fd8678451bff02227bac5f64dd98027a12656ce1
+at: f9a251a95c9d736904359af4378608b11a4bc259
 first:
-  - path: managym/cards/src/fdn.rs
-    why: Panda combines a graveyard predicate with source power
-  - path: managym/src/flow/resolution.rs
-    why: Each target is checked against its captured source
-  - path: managym/src/flow/triggers.rs
-    why: Announcement uses the same requirement as resolution
-  - path: managym/src/flow/retarget.rs
-    why: Retargeting groups sibling targets by their announced clause
-  - path: managym/src/agent/env/snapshot.rs
-    why: Replays Panda after either object changes zones
+  - path: managym/src/agent/observation.rs
+    why: Projects the activated ability’s exact source power
+  - path: managym/src/agent/observation_encoder.rs
+    why: Writes that value into the v11 stack row
   - path: managym/cards/tests/cards/m21.rs
-    why: Prowess survives sacrifice for Immolator’s damage
+    why: Checks pending and resolved power after source reentry
+  - path: tests/verify/test_immolator_source_power.py
+    why: Compares both activations across consumers with history disabled
 hide: []
