@@ -396,3 +396,46 @@ fn fang_returning_from_the_graveyard_sees_only_later_departures() {
     resolve_everything(&mut s);
     s.assert_life(0, 19);
 }
+
+#[test]
+fn fang_token_copy_leaves_the_library_order_intact() {
+    use crate::support::play::{pass_until, target_opponent};
+    use managym::{agent::action::ActionSpaceKind, state::target::Target};
+
+    let name = "Fang, Fearless l'Cie";
+    let mut s = five_color_setup(&[name, "Clone Legion", "Lost Days"]);
+    let original = s.force_permanent_on_battlefield(1, name);
+    cast(&mut s, "Clone Legion");
+    target_opponent(&mut s);
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let copies = s.battlefield_permanents_named(0, name);
+    assert_eq!(copies.len(), 1);
+    let token = copies[0];
+    assert!(!s.game().state[permanent(&s, token).object].is_card());
+
+    cast(&mut s, "Lost Days");
+    assert!(s.choose_target(Target::Permanent(token)));
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let owner = PlayerId(0);
+    let library = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, owner)
+        .to_vec();
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(
+        s.game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, owner)
+            .to_vec(),
+        library
+    );
+    assert!(s.game().permanent_object(token).is_none());
+    assert!(s.game().permanent_object(original).is_some());
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+}

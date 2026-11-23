@@ -638,7 +638,7 @@ impl Game {
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
-        let departing_ref = old_zone.map(|_| object_id);
+        let departing_object = object_id;
         let owner = self.state.entry_object(object_id).owner;
 
         let definition = self.state.entry_object(object_id).definition_id;
@@ -761,7 +761,7 @@ impl Game {
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             object_id,
-            departed: departing_ref,
+            departed: old_zone.map(|_| departing_object),
             from: old_zone,
             to: to_zone,
             controller: event_controller,
@@ -787,7 +787,7 @@ impl Game {
             }
         }
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(departing_ref, to_zone, followups);
+            self.handle_leaves_battlefield(departing_object, to_zone, followups);
         }
         // An attachment that grants or removes abilities changes the mana
         // its creature's controller, possibly the opponent, can produce.
@@ -886,7 +886,7 @@ impl Game {
     /// (Jailer links — the exiled card returns immediately, no stack).
     fn handle_leaves_battlefield(
         &mut self,
-        departing_ref: Option<ObjectId>,
+        departing_object: ObjectId,
         to_zone: ZoneType,
         followups: &mut Vec<ProposedEvent>,
     ) {
@@ -894,9 +894,7 @@ impl Game {
         // exiled, for earthbend) and are dropped otherwise: they watched this
         // battlefield stint only.
         let watches = |trigger: &DelayedTrigger| match trigger.event {
-            DelayedTriggerEvent::Leaves { watched, .. } => {
-                departing_ref.is_some_and(|object_ref| watched == object_ref)
-            }
+            DelayedTriggerEvent::Leaves { watched, .. } => watched == departing_object,
             _ => false,
         };
         if self.state.delayed_triggers.iter().any(watches) {
@@ -905,8 +903,8 @@ impl Game {
                     .into_iter()
                     .partition(watches);
             *self.state.delayed_triggers_mut() = kept;
-            let departed = departing_ref
-                .and_then(|object_ref| self.object_lki(object_ref))
+            let departed = self
+                .object_lki(departing_object)
                 .map(|lki| Target::Permanent(lki.permanent));
             for trigger in watching {
                 let DelayedTriggerEvent::Leaves { or_exiled, .. } = trigger.event else {
@@ -919,25 +917,14 @@ impl Game {
         }
 
         // CR 400.7: continuous effects on the departing object end.
-        if let Some(object) = departing_ref {
-            self.end_effects_on(object);
-        }
+        self.end_effects_on(departing_object);
 
         // "Until this creature leaves the battlefield" durations end now:
         // linked exiled cards return under their owners' control.
-        let ended: Vec<_> = {
-            let mut kept = Vec::new();
-            let mut ended = Vec::new();
-            for link in std::mem::take(&mut self.state.exile_links) {
-                if departing_ref.is_some_and(|object_ref| link.source == object_ref) {
-                    ended.push(link);
-                } else {
-                    kept.push(link);
-                }
-            }
-            self.state.exile_links = kept;
-            ended
-        };
+        let (ended, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.state.exile_links)
+            .into_iter()
+            .partition(|link| link.source == departing_object);
+        self.state.exile_links = kept;
         for link in ended.into_iter().filter(|link| link.returns) {
             let Ok(exiled_object) = self.state.object(link.exiled_object) else {
                 continue;

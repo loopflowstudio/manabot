@@ -1,4 +1,4 @@
-at: b3d9b91a515206237d96d6425b7d20c997d9e963
+at: d93580d4b077dad6a10ba13cebfb9474d511de57
 first:
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
@@ -7,7 +7,7 @@ first:
   - path: managym/state/src/ability.rs
     why: See the source, event quantity and life condition.
   - path: managym/src/flow/zones.rs
-    why: Place paired arrivals and remember the owner’s chosen order.
+    why: Follow the departing appearance through watches and linked returns.
   - path: managym/src/flow/proposed_event.rs
     why: Collect departures and bind one result per event.
   - path: managym/src/flow/decision.rs
@@ -19,7 +19,7 @@ first:
   - path: managym/src/agent/continuation.rs
     why: Follow the quantity into the viewer’s stack frame.
   - path: managym/cards/tests/cards/fin.rs
-    why: Play the threshold, pending target and lethal combat cases.
+    why: Check Fang’s token departure, draw trigger and Cecil’s transformations.
   - path: managym/tests/support/play.rs
     why: Declare the chosen attackers through native actions.
   - path: managym/state/src/game_object.rs
