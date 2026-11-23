@@ -8,7 +8,7 @@ use search::{best_action, digest_decision};
 
 use managym::{
     agent::action::Action,
-    benchmark_allocations, benchmark_layers,
+    allocator, benchmark_layers,
     state::{
         ability::Condition,
         card::{
@@ -105,7 +105,7 @@ fn main() {
     }
     benchmark_layers::reset();
     if allocations {
-        benchmark_allocations::start();
+        allocator::start();
     }
     let start = Instant::now();
     let mut digest = blake3::Hasher::new();
@@ -135,7 +135,7 @@ fn main() {
     }
     let elapsed = start.elapsed().as_secs_f64();
     let traffic = if allocations {
-        benchmark_allocations::stop()
+        allocator::stop()
     } else {
         (0, 0)
     };
@@ -152,7 +152,7 @@ fn main() {
     for decision in 0..8 {
         benchmark_layers::reset();
         if allocations {
-            benchmark_allocations::start();
+            allocator::start();
         }
         let start = Instant::now();
         let result = env
@@ -160,7 +160,7 @@ fn main() {
             .unwrap();
         let elapsed = start.elapsed().as_secs_f64();
         let traffic = if allocations {
-            benchmark_allocations::stop()
+            allocator::stop()
         } else {
             (0, 0)
         };
@@ -257,13 +257,13 @@ fn payment(
             }
         }).unwrap_or_else(|| panic!("payment decision {decision}, pool={pool}: {actions:?}"));
         if allocations {
-            benchmark_allocations::start();
+            allocator::start();
         }
         let start = Instant::now();
         env.step(index as i64).unwrap();
         elapsed += start.elapsed().as_secs_f64();
         if allocations {
-            let counts = benchmark_allocations::stop();
+            let counts = allocator::stop();
             traffic.0 += counts.0;
             traffic.1 += counts.1;
         }

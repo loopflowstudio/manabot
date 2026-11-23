@@ -13,7 +13,7 @@ use managym::{
         player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
-    benchmark_allocations, benchmark_layers, benchmark_payments,
+    allocator, benchmark_layers, benchmark_payments,
     flow::event::GameEvent,
     state::{
         game_object::PlayerId,
@@ -810,7 +810,7 @@ fn run(
             benchmark_layers::reset();
             benchmark_payments::reset();
             if allocations {
-                benchmark_allocations::start();
+                allocator::start();
             }
             let start = Instant::now();
             let output = match layer {
@@ -890,7 +890,7 @@ fn run(
                 }
             };
             if allocations {
-                traffic = Some(benchmark_allocations::stop());
+                traffic = Some(allocator::stop());
             } else {
                 times.push(start.elapsed().as_secs_f64() * 1000.0);
             }
@@ -926,9 +926,9 @@ fn run(
                 }
                 // Clone bytes are allocation traffic, measured separately.
                 if layer == "clone" {
-                    benchmark_allocations::start();
+                    allocator::start();
                     black_box(root.fork().unwrap());
-                    let (_, bytes) = benchmark_allocations::stop();
+                    let (_, bytes) = allocator::stop();
                     clone_bytes = Some(bytes);
                 }
             }
