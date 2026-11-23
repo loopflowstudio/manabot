@@ -610,7 +610,9 @@ def test_watch_publishes_the_determinized_offers(
     assert shown["decision"]["offer"]["label"] == "Pass priority"
 
 
-def test_standalone_snapshot_replay_and_unterminated_journal_row(tmp_path: Path) -> None:
+def test_standalone_snapshot_replay_and_unterminated_journal_row(
+    tmp_path: Path,
+) -> None:
     env = managym.Env(seed=42)
     env.reset(setup())
     saved = json.loads(env.snapshot().to_replay_json())
