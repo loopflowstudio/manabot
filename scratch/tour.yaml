@@ -1,5 +1,11 @@
-at: d93580d4b077dad6a10ba13cebfb9474d511de57
+at: 85bc1ad5c8447af4d226a018f2b9b4fc62e7b887
 first:
+  - path: scratch/plan.md
+    why: Read the physical identity probe and formation correction.
+  - path: managym/state/src/zone.rs
+    why: Follow an exile appearance through retirement and reentry.
+  - path: managym/tests/rules/cr_400_identity.rs
+    why: Check stale exile identities and direct successor links.
   - path: docs/engine.md
     why: Compare transforming, changing zones and copying departed sources.
   - path: managym/cards/src/fin.rs
