@@ -63,6 +63,25 @@ impl Game {
         }
         use crate::flow::decision::Decision;
         match action {
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let view = self.characteristics(*permanent);
+                let ability = view.activated_abilities.get(*ability_index)?;
+                if !ability.exile_grantor {
+                    return None;
+                }
+                let grantor = &self.state[ability.granted_by?.grantor];
+                Some(format!(
+                    "Pay {} and exile {} (object {}) — {}",
+                    crate::agent::ability_description::cost_description(&ability.mana_cost),
+                    grantor.name,
+                    grantor.id.0,
+                    crate::agent::ability_description::effects_description(&ability.effects)
+                ))
+            }
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
                     .state
@@ -272,7 +291,8 @@ impl Game {
                     | CostComponent::Mana { .. }
                     | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
-                    | CostComponent::Source(_) => None,
+                    | CostComponent::Source(_)
+                    | CostComponent::ExileGrantor(_) => None,
                 });
                 if paying.is_some() {
                     paying
@@ -954,7 +974,7 @@ impl Game {
                     .collect(),
                 vec![self.state[*tapped].id],
             ),
-            CostComponent::Life(_) | CostComponent::Source(_) => {
+            CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         };

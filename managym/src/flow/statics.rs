@@ -75,6 +75,7 @@ impl Characteristics {
     fn has_dynamic_activations(&self) -> bool {
         self.activated_abilities.iter().any(|ability| {
             ability.power_up
+                || ability.reduce_by_source_power
                 || ability.cost_reduction_per.is_some()
                 || matches!(
                     ability.effects.as_slice(),
@@ -370,6 +371,7 @@ impl Game {
             return view;
         }
 
+        let power = view.power.clamp(0, u8::MAX.into()) as u8;
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
             if let [effect] = ability.effects.as_slice() {
                 if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
@@ -380,6 +382,9 @@ impl Game {
                 if let Some(cost) = &self.state[permanent.object].mana_cost {
                     ability.mana_cost = ability.mana_cost.reduced_by(cost);
                 }
+            }
+            if ability.reduce_by_source_power {
+                ability.mana_cost = ability.mana_cost.reduced_generic(power);
             }
             self.price_activation(permanent.controller, ability);
             let floor = ability.mana_cost.mana_value.saturating_sub(1);

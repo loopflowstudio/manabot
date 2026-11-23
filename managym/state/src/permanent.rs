@@ -40,6 +40,7 @@ pub enum CounterKind {
     /// or Planet's "N+" abilities count them (CR 702.184).
     Charge,
     Poison,
+    Plan,
 }
 
 impl CounterKind {
@@ -61,6 +62,7 @@ impl CounterKind {
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
             CounterKind::Poison => "poison",
+            CounterKind::Plan => "plan",
             CounterKind::Charge => "charge",
         }
     }
@@ -73,7 +75,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 16] = [
+    pub const ALL: [CounterKind; 17] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -90,6 +92,7 @@ impl CounterKind {
         CounterKind::Ice,
         CounterKind::Charge,
         CounterKind::Poison,
+        CounterKind::Plan,
     ];
 }
 

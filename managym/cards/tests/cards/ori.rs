@@ -319,15 +319,12 @@ fn exhausted_pact_keeps_its_history_until_it_leaves() {
 fn countered_pact_mode_stays_used_when_the_permanent_is_stolen() {
     use crate::support::{
         game::force_new_card_in_hand,
-        inspect::{card_of, offered_targets},
-        play::{activate, cast_card, choose_mode, resolve_top, settle},
+        play::{cast_card, choose_mode, counter_stacked_ability, resolve_top, settle},
     };
     use managym::{
         agent::action::Action,
         flow::turn::StepKind,
         state::{
-            ability::{Effect, ObjectSelector, TargetSpec},
-            card::ActivatedAbilityDefinition,
             game_object::{PlayerId, Target},
             player::ManaPayment,
         },
@@ -339,26 +336,7 @@ fn countered_pact_mode_stays_used_when_the_permanent_is_stolen() {
     choose_mode(&mut s, 2);
     let hand = s.zone_size(0, ZoneType::Hand);
     s.pass_priority();
-    // Give the scenario permanent the native "counter target ability" effect.
-    let counter = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let object = card_of(&s, counter);
-    s.game_mut().state[object]
-        .activated_abilities
-        .push(ActivatedAbilityDefinition {
-            effects: vec![Effect::CounterAbility {
-                what: ObjectSelector::Target(TargetSpec::Ability),
-            }],
-            ..Default::default()
-        });
-    activate(&mut s, counter, 0);
-    let targets = offered_targets(&s);
-    assert!(
-        matches!(targets.as_slice(), [Target::StackAbility(_)]),
-        "{:?} {targets:?}",
-        s.action_space().kind
-    );
-    assert!(s.choose_target(targets[0]));
-    settle(&mut s);
+    counter_stacked_ability(&mut s);
     s.assert_zone_size(0, ZoneType::Hand, hand);
 
     s.advance_to_active_step(1, StepKind::Main);

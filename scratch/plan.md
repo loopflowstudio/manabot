@@ -29,13 +29,15 @@ The cross-set selection takes both non-planeswalker EOE player-procedure rows an
 
 Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 725. [Comprehensive Rules, November 6, 2026](https://media.wizards.com/2026/downloads/MagicCompRules%2020261106.txt) · [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes) · [Edge of Eternities release notes](https://magic.wizards.com/en/news/feature/edge-of-eternities-release-notes) · [Marvel Super Heroes release notes](https://magic.wizards.com/en/news/feature/marvel-super-heroes-release-notes)
 
-## Next working slice
+## Player-control cards
 
-The Dominion Bracelet is the next end-to-end slice. Equip it, vary the creature’s current power across the zero-cost boundary, choose a target and pay the locked cost with the granting Bracelet and mana. Resolve the stacked ability after the Bracelet leaves and exercise the first delegated decision. Use the existing `PaymentReceipt` and `Effect::ControlPlayer` so the receipt identifies what was spent and the existing chooser mapping controls the next turn. Compare manual contributions, restricted-first automatic spending and mana left floating.
+The Dominion Bracelet and Construct a Cosmic Cube use the existing next-turn control effect. The next integrated checks are the remaining cross-consumer obligations below. The full suite and paired Engine Budget belong at gate.
 
-Start the Bracelet fixture with two copies attached to one creature. Choose a specific grant, lock its price with both bonuses present, and fork at payment. Check that only the selected Bracelet leaves. Replay the same contribution to the same receipt and successor, then vary the contribution on a sibling without changing the root. Counter the paid activation on one branch: all costs remain committed and the opponent retains their next turn. Resolve it on another: the captured effect delegates that turn. Keep the grant identity through cost selection and the chosen effects on the stack through resolution. This exercises the distinction between paying for control and acquiring it.
-
-Construct a Cosmic Cube follows. Exercise the second draw, the seventh-counter crossing, failed sacrifice and a countered reflexive trigger. Fork a successful controlled turn at a nested payment and check chooser, resource owner, replay and root isolation. The shared consumer checks below and the full suite and paired Engine Budget at gate remain open.
+| Seed 161 native fixture | Observed outcome |
+|---|---|
+| `dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price` | Sakashima let two Bracelets equip one Gray Ogre. Both +1/+1 bonuses gave a price of eleven. Raising power to sixteen, fifteen and fourteen gave prices of zero, zero and one. Each observed offer identified its Equipment. Forks spent either ordinary blue or restricted colorless mana and left the other unit floating. Repeating either choice reproduced the receipt and successor. Automatic payment spent the restricted unit. Both branches exiled only the chosen Bracelet. The opponent kept their next turn when the paid ability was countered and delegated it when the ability resolved. |
+| `construct_a_cosmic_cube_requires_the_plan_to_be_sacrificed` | Doubling Season turned the second draw trigger into two 2/1 Villains with menace and two plan counters. Both viewers saw eight counters. Removing the Plan before sacrifice or countering the separately targeted trigger preserved the opponent’s turn. After successful resolution seat zero chose which of seat one’s Mountains paid for its Gray Ogre. The bound Command reproduced the same successor, spent seat one’s mana and left seat zero’s pool and the fork root intact. |
+| `player_control_card_costs_and_trigger_threshold_reach_learning_tokens`, `every_trigger_condition_and_ability_reaches_the_learning_tokens`, `each_counter_kind_reaches_a_fact_row` | The catalog exposes the grantor exile, power reduction, counter crossing and reflexive trigger. The plan counter joins its permanent through the existing counter fact rows. |
 
 ## Remaining cross-consumer obligations
 

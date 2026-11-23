@@ -16,3 +16,5 @@
 - Use byte-sized opening counters (at most seven) and allocate the combat workspace only during combat. Compacting the opening state alone still failed the synced 4096-byte assertion. The paired budget at gate will measure the combat allocation.
 
 - Return the same terminal info from indexed and semantic Env steps. Derive it from the committed native outcome so restoring a snapshot needs no second stored receipt.
+
+- Use Sakashima of a Thousand Faces to keep two legendary Bracelets on the same creature. Use Doubling Season to cross seven plan counters with one placement.

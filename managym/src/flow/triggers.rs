@@ -129,9 +129,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             EventKinds::of(EventKind::AbilityTriggered)
         }
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
-        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
-            EventKinds::of(EventKind::CountersPut)
-        }
+        TriggerCondition::NthCounter { .. }
+        | TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
     }
 }
 
@@ -1944,6 +1944,22 @@ impl Game {
                     && self.state.permanents[*attacker]
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
+            }
+            (
+                TriggerCondition::NthCounter { kind, nth },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    count,
+                    total,
+                    ..
+                },
+            ) => {
+                let threshold = i32::from(*nth);
+                kind == put
+                    && self.state.permanent_of(source_object) == Some(*permanent)
+                    && total - count < threshold
+                    && threshold <= *total
             }
             (
                 TriggerCondition::Chapter { chapter },

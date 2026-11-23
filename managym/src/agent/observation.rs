@@ -2091,8 +2091,28 @@ impl Observation {
                 .card_id(*object)
                 .map(|card| vec![game.state.cards[card].public_id])
                 .unwrap_or_default(),
-            Action::ActivateAbility { permanent, .. }
-            | Action::DeclareAttacker { permanent, .. }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let Some(source) = game.state.permanents[*permanent].as_ref() else {
+                    return vec![];
+                };
+                let mut focus = vec![source.id];
+                let view = game.characteristics(*permanent);
+                if let Some(grantor) = view
+                    .activated_abilities
+                    .get(*ability_index)
+                    .filter(|ability| ability.exile_grantor)
+                    .and_then(|ability| ability.granted_by)
+                    .and_then(|grant| game.state.permanent_of(grant.grantor))
+                {
+                    focus.push(game.state.permanents[grantor].as_ref().unwrap().id);
+                }
+                focus
+            }
+            Action::DeclareAttacker { permanent, .. }
             | Action::WaterbendTap { permanent, .. }
             | Action::TapForMana { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()

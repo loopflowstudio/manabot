@@ -1340,6 +1340,15 @@ discards and marked damage clears. If a player gets priority in cleanup,
 another cleanup step follows. Combat-only control ends when combat ends.
 Turn-long control applies to every cleanup discard that turn.
 
+The Dominion Bracelet locks its activation price using the equipped creature’s
+power. When several Bracelets grant that ability, each offer identifies the
+Bracelet it exiles. The payment receipt retains that object and the mana spent,
+even if the ability is countered. Construct a Cosmic Cube puts its sacrifice
+trigger on the stack when a placement crosses seven plan counters. A successful
+sacrifice puts a separate targeted control trigger on the stack. Once either
+card’s control effect resolves, the chooser makes decisions during the targeted
+opponent’s next turn using that opponent’s resources.
+
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
 Replacement and prevention definitions from the immutable card definitions

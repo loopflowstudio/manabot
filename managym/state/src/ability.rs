@@ -103,6 +103,8 @@ pub enum TriggerCondition {
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
     Chapter { chapter: u8 },
+    /// Triggers once when a placement crosses this count on the source.
+    NthCounter { kind: CounterKind, nth: u8 },
     /// "Whenever [who] puts one or more [kind] counters on a [on]
     /// permanent": once per permanent an instruction that player controls
     /// puts them on. The trigger's X is how many were put ("that much").

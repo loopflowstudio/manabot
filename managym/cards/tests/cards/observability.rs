@@ -1081,6 +1081,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YourAttackingCreatureTriggers => {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
+        TriggerCondition::NthCounter { .. } => "TriggerCondition::NthCounter",
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
         TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
@@ -1160,6 +1161,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             }),
         },
         TriggerCondition::YourAttackingCreatureTriggers,
+        TriggerCondition::NthCounter {
+            kind: CounterKind::Plan,
+            nth: 7,
+        },
         TriggerCondition::Chapter { chapter: 2 },
         TriggerCondition::YouCastThis,
         TriggerCondition::NoCounters {
@@ -5857,4 +5862,22 @@ fn library_knowledge_positions_reach_their_named_rows() {
     assert!(encoded.known_library[2..].iter().all(|value| *value == 0.0));
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other.opponent.known_library.is_empty());
+}
+
+#[test]
+fn player_control_card_costs_and_trigger_threshold_reach_learning_tokens() {
+    let bracelet = tokens_of(&card_definition("The Dominion Bracelet"));
+    for field in ["exile_grantor", "reduce_by_source_power"] {
+        let at = bracelet
+            .iter()
+            .position(|token| *token == (TokenKind::Field, name_value(field)))
+            .unwrap();
+        assert_eq!(bracelet[at + 1], (TokenKind::Boolean, 1));
+    }
+    let cube = tokens_of(&card_definition("Construct a Cosmic Cube"));
+    assert!(cube.contains(&(
+        TokenKind::Variant,
+        name_value("TriggerCondition::NthCounter")
+    )));
+    assert!(cube.contains(&(TokenKind::Variant, name_value("Effect::WhenYouDo"))));
 }

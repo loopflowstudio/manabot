@@ -271,3 +271,141 @@ fn silencer_requires_combat_damage_to_the_player() {
         0
     );
 }
+
+#[test]
+fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
+    use crate::support::inspect::zone_of;
+    use managym::state::target::Target;
+    for selected in 0..2 {
+        let mut s = five_color_unfunded_setup(&[
+            "The Dominion Bracelet",
+            "Sakashima of a Thousand Faces",
+            "Gray Ogre",
+        ]);
+        s.force_permanent_on_battlefield(0, "Sakashima of a Thousand Faces");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let bracelets = [0, 1].map(|_| {
+            let bracelet = s.force_permanent_on_battlefield(0, "The Dominion Bracelet");
+            s.set_player_mana_pool(0, "1");
+            activate(&mut s, bracelet, 0);
+            assert!(s.choose_target(Target::Permanent(ogre)));
+            settle(&mut s);
+            card_of(&s, bracelet)
+        });
+        let view = s.game().characteristics(ogre);
+        assert_eq!(view.power, 4);
+        let index = view
+            .activated_abilities
+            .iter()
+            .position(|a| {
+                a.granted_by
+                    .is_some_and(|g| g.grantor == bracelets[selected])
+            })
+            .unwrap();
+        assert_eq!(view.activated_abilities[index].mana_cost.generic(), 11);
+        for (counters, price) in [(12, 0), (11, 0), (10, 1)] {
+            set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, counters);
+            assert_eq!(
+                s.game().characteristics(ogre).activated_abilities[index]
+                    .mana_cost
+                    .generic(),
+                price
+            );
+        }
+        use managym::state::mana::{Mana, ManaRestriction};
+        let restriction = ManaRestriction::ExceptNonartifactSpells;
+        s.set_player_mana_pool(0, "U");
+        s.game_mut().state.players[0].mana_pool.add(
+            &Mana::restricted_to(restriction.clone(), [0, 0, 0, 0, 0, 1]),
+            None,
+        );
+        if selected == 1 {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+        for bracelet in bracelets {
+            let expected = format!(
+                "exile The Dominion Bracelet (object {})",
+                s.game().state[bracelet].id.0
+            );
+            let offer = obs
+                .action_space
+                .actions
+                .iter()
+                .find(|a| {
+                    a.description
+                        .as_ref()
+                        .is_some_and(|d| d.contains(&expected))
+                })
+                .unwrap();
+            let grantor = s.game().state.permanent_of(bracelet).unwrap();
+            assert_eq!(
+                offer.focus,
+                [ogre, grantor]
+                    .map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32)
+            );
+        }
+        activate(&mut s, ogre, index);
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        if selected == 0 {
+            let root = s.game().state.deterministic_hash();
+            let choices = s.action_space().actions.len();
+            assert_eq!(choices, 2, "{:?}", s.action_space());
+            let mut colors = Vec::new();
+            for choice in 0..choices {
+                let fork = crate::support::play::fork_stepping(&s, choice);
+                let replay = crate::support::play::fork_stepping(&s, choice);
+                let paid = &top_activation(&fork).paid;
+                assert_eq!(paid, &top_activation(&replay).paid);
+                assert_eq!(
+                    fork.game().state.deterministic_hash(),
+                    replay.game().state.deterministic_hash()
+                );
+                assert_eq!(
+                    paid.contributed(How::Exiled, Toward::Printed)
+                        .collect::<Vec<_>>(),
+                    [bracelets[selected]]
+                );
+                let color = paid.mana()[0].color;
+                colors.push(color);
+                let pool = &fork.game().state.players[0].mana_pool;
+                assert_eq!(pool.total(), 1);
+                assert_eq!(
+                    pool.mana().restricted_of(&restriction)[5],
+                    u8::from(color != 5)
+                );
+            }
+            colors.sort();
+            assert_eq!(colors, [1, 5]);
+            assert_eq!(s.game().state.deterministic_hash(), root);
+            s.step_action(0);
+        } else {
+            assert_eq!(top_activation(&s).paid.mana()[0].color, 5);
+        }
+        let ability = top_activation(&s);
+        assert_eq!(
+            ability
+                .paid
+                .contributed(How::Exiled, Toward::Printed)
+                .collect::<Vec<_>>(),
+            [bracelets[selected]]
+        );
+        assert_eq!(zone_of(&s, bracelets[selected]), Some(ZoneType::Exile));
+        assert_eq!(
+            zone_of(&s, bracelets[1 - selected]),
+            Some(ZoneType::Battlefield)
+        );
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+        if selected == 1 {
+            crate::support::play::counter_stacked_ability(&mut s);
+        } else {
+            settle(&mut s);
+        }
+        s.advance_to_active_step(1, StepKind::Upkeep);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(1)),
+            PlayerId(selected)
+        );
+    }
+}

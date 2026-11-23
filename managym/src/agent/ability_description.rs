@@ -117,6 +117,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "{} while this is attacking",
             condition_description(condition)
         ),
+        TriggerCondition::NthCounter { kind, nth } => format!("When the number of {} counters on this reaches {}", kind.name(), nth),
         TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
         TriggerCondition::LeavesTheBattlefield { subject } => {
             format!(

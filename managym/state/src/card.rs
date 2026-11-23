@@ -769,6 +769,10 @@ pub struct ActivatedAbilityDefinition {
     /// "Costs {1} less to activate for each [predicate] you control."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_reduction_per: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub reduce_by_source_power: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_grantor: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
