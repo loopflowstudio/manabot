@@ -120,3 +120,11 @@ At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact
 - Through `b75a5670`, at seed 161 the Pact fixtures resolved all three resource modes, countered the draw trigger before Agent of Treachery stole Pact, and observed only the three unused choices for the new controller. After four resolved modes under Herald the next upkeep had no trigger on the stack. A second Pact or a blinked original offered all four choices. The countering fixture uses a scenario-local activation with the native counter-ability effect.
 - At `14d58670`, the opposing seat flashed Herald while Maze’s activation was on the stack and Maze was already in hand. Herald resolved first and prevented victory despite ten distinct Gate names.
 - At seed 161, the Maze land fixture played the land, observed tapped entry, advanced to the controller's next upkeep, and confirmed the mana choice added exactly one colorless. Both Maze fixtures passed. The seed-23 Pact outcome parity fixture also passed against the installed release extension.
+
+### Behavior review at `5d6e00bb` — return to implementation
+
+The native admission probe `managym.unsupported_cards(["The Dominion Bracelet", "Construct a Cosmic Cube", "Virulent Silencer"])` returned exactly the Cube and Bracelet. The EOE and MSH native definitions contain neither card. This blocks both interactions before a legal offer exists for any consumer.
+
+Implement the two-Bracelet grant and payment fork described above, including restricted-first automatic spending, distinct manual spends, the receipt and floating remainder. Implement Cube’s second-draw and threshold triggers, then follow the successful sacrifice through its respondable targeted trigger to the controlled seat’s nested payment. Check the bound chooser, resource owner and unchanged fork root. Both cards still require the shared observation and token checks above.
+
+The focused debug binary passed nine Pact, Maze, Silencer and Axe/Fynn cases. The seed-23 Python Pact snapshot fixture passed against the installed extension with `uv run --no-sync --with blake3 pytest -q tests/env/test_game_snapshot.py -k pact`. Indexed and semantic outcome parity is closed. The working phase remains incomplete. Full-suite validation and the paired Engine Budget remain at gate.
