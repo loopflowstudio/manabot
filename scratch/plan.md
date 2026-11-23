@@ -107,7 +107,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in the same damage step. Check the two separate gains and submit the Pridemate trigger order through a bound Command. Replay that order on an independent fork, reject stale resubmission, and resolve both counters. Reuse the existing combat assignment and Command helper. The batch fixture already distinguishes source counts, while the combat fixture above exercises a single source.
+**Next fixture.** Attack with two lifelink sources dealing 2 and 3 in the same damage step. Check the two separate gains and submit the Pridemate trigger order through a bound Command. Replay that order on an independent fork, reject stale resubmission, and resolve both counters. Reuse the existing combat assignment and Command helper. Its witness comparison ends at Command execution. Carry an independent fork through trigger resolution in this fixture and compare the final counters and ordered life changes on both branches. The batch fixture already distinguishes source counts, while the combat fixture above exercises a single source.
 
 Then cover the remaining boundaries and callers.
 
