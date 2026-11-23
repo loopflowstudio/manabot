@@ -761,6 +761,8 @@ pub struct ActivatedAbilityDefinition {
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub power_up: bool,
     /// "Activate only once each turn" (CR 602.5b); counted per object.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub once_each_turn: bool,
@@ -851,6 +853,7 @@ pub struct StaticContinuous {
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    BeginOnBattlefield,
     /// One continuous effect whose parts may apply in different layers.
     Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's

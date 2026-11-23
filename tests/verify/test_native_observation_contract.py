@@ -42,6 +42,7 @@ from manabot.env.observation import (
     ObservationSpace,
     ZoneEnum,
     allocate_vector_buffers,
+    column,
     encode_observation,
 )
 from manabot.infra.config import UnsupportedPolicyInput
@@ -361,6 +362,8 @@ def _token_low(name: str) -> int:
 def test_encodes_every_observed_permanent_and_card_field() -> None:
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
+    env.step(0)
+    env.step(0)
     env.scenario_force_battlefield(0, "Mountain")
     env.scenario_force_battlefield(1, "Forest")
     obs = env.scenario_refresh()
@@ -414,7 +417,7 @@ def test_encodes_every_observed_permanent_and_card_field() -> None:
     np.testing.assert_allclose(
         row[27:37], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1]
     )
-    assert row[PERMANENT_DIM - 1] == 1
+    assert row[column("agent_permanents", "valid")] == 1
     # Fact rows, in order: counters, added subtypes, set name and creature
     # type, used abilities, copy and its exceptions (one row per keyword).
     facts = actual["facts"]

@@ -100,3 +100,58 @@ def test_builtins_match_separate_native_selectors_with_live_combat_events() -> N
         obs = expected[0]
         if expected[2] or expected[3]:
             break
+
+
+def test_normal_reset_offers_both_seats_the_same_opening_choices_in_scalar_and_vector() -> (
+    None
+):
+    scalar = managym.Env(seed=213)
+    batch = managym.VectorEnv(1, seed=213)
+    observation, _ = scalar.reset(players())
+    batch_observation, _ = batch.reset_all(players())[0]
+    for seat, labels, choice in (
+        (0, ["Keep hand", "Mulligan"], 1),
+        (1, ["Keep hand", "Mulligan"], 0),
+        (0, None, 3),
+        (0, ["Keep hand", "Mulligan"], 0),
+    ):
+        assert observation.toJSON() == batch_observation.toJSON()
+        assert scalar.current_agent_index() == seat
+        assert observation.turn.turn_number == 0
+        offers = [action.description for action in observation.action_space.actions]
+        if labels is None:
+            assert len(offers) == 7
+            assert all(label and "deepest first" in label for label in offers)
+        else:
+            assert offers == labels
+        assert not scalar.observation_for_player(1 - seat).action_space.actions
+        observation = scalar.step(choice)[0]
+        batch_observation = batch.step([choice])[0][0]
+    assert observation.toJSON() == batch_observation.toJSON()
+    assert observation.turn.turn_number == 1
+
+
+def test_other_seat_cannot_distinguish_private_bottom_choices() -> None:
+    env = managym.Env(seed=213)
+    env.reset(players())
+    env.step(1)
+    env.step(0)
+    choices = env.observation_for_player(0).action_space.actions
+    other_index = next(
+        i for i, a in enumerate(choices) if a.description != choices[0].description
+    )
+    branch = env.clone_env()
+    env.step(0)
+    branch.step(other_index)
+    assert (
+        env.observation_for_player(1).toJSON()
+        == branch.observation_for_player(1).toJSON()
+    )
+    assert (
+        env.observation_for_player(0).agent.known_library
+        != branch.observation_for_player(0).agent.known_library
+    )
+    owner_view = env.observation_for_player(0).toJSON()
+    sampled = env.clone_env()
+    sampled.determinize(seed=704, perspective=0)
+    assert sampled.observation_for_player(0).toJSON() == owner_view

@@ -463,6 +463,9 @@ pub struct LegacyPermanentView {
     /// It was dealt damage this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// It entered the battlefield during this turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entered_this_turn: bool,
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,

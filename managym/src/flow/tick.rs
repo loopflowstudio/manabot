@@ -92,7 +92,7 @@ impl Game {
 
     pub(crate) fn tick(&mut self) -> bool {
         loop {
-            let action_space = self.turn_tick();
+            let action_space = self.opening_actions().or_else(|| self.turn_tick());
             if self.is_game_over() {
                 self.finish_combat_capture();
                 self.publish_action_space(ActionSpace::game_over());

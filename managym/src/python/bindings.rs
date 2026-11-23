@@ -2406,6 +2406,10 @@ impl PyPermanent {
         self.data.used_abilities = value;
     }
     #[getter]
+    fn entered_this_turn(&self) -> bool {
+        self.data.entered_this_turn
+    }
+    #[getter]
     fn dealt_damage_this_turn(&self) -> bool {
         self.data.dealt_damage_this_turn
     }

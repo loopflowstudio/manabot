@@ -47,6 +47,12 @@ print("chooser:", game.current_agent_index())
 print("game over:", terminated or truncated)
 ```
 
+Reset starts before turn one. Each seat can keep or mulligan. After both seats
+declare, those taking a mulligan redraw and privately choose cards for the
+bottom of their library, deepest first. After both keep, each can put eligible
+cards from their opening hand onto the battlefield in any order. Finishing
+passes that opportunity to the next seat.
+
 Run `uv run --no-project --python .venv/bin/python play.py`. It starts a game
 from two bundled decks and executes the first legal action, then prints the
 next chooser and whether the game ended. Both seats' choices belong to the

@@ -8,3 +8,5 @@
 - The cleanup fixtures need eight independently selectable hand objects. Draw eight from their seeded decks instead of planting particular basic lands.
 
 - Use OpeningHands, Playing and Finished as lifecycle positions. Keep the end-turn return point in its existing frame. For ordered bottoming choose deepest first and name that direction in the offer.
+
+- Use turn zero for pregame entries. Store the turn a permanent entered so power-up keeps its discount through any priority during repeated cleanup.

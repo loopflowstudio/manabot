@@ -9,7 +9,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![ironheart_clever_champion()]
+    vec![ironheart_clever_champion(), quicksilver_brash_blur()]
 }
 
 fn ironheart_clever_champion() -> CardDefinition {
@@ -38,5 +38,34 @@ fn ironheart_clever_champion() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+fn quicksilver_brash_blur() -> CardDefinition {
+    use managym_state::{
+        ability::{Effect, ObjectSelector},
+        card::ActivatedAbilityDefinition,
+        permanent::CounterKind,
+    };
+    CardDefinition {
+        key: "msh.quicksilver_brash_blur",
+        scryfall_id: "2d5819ca-165d-4f4c-9500-3ac206994880",
+        printed: PrintedCharacteristics {
+            name: "Quicksilver, Brash Blur".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Mutant".into(), "Hero".into()],
+            power: Some(1), toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            statics: vec![StaticAbility::BeginOnBattlefield],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                power_up: true, mana_cost: ManaCost::parse("{4}{R}"),
+                effects: vec![Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne,1), Effect::put_counters(ObjectSelector::This,CounterKind::DoubleStrike,1)],
+                ..Default::default()
+            }],
+            text_box: "If Quicksilver, Brash Blur is in your opening hand, you may begin the game with him on the battlefield.\nHaste\nPower-up — {4}{R}: Put a +1/+1 counter and a double strike counter on Quicksilver. (Activate each power-up ability only once. Reduce the cost by his mana cost if he entered this turn.)".into(),
+            ..Default::default()
+        }, ..Default::default()
     }
 }

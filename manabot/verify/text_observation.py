@@ -43,6 +43,11 @@ def priority_root(
             mana_floats=(mana_floats, mana_floats),
         )
     )
+    # Keep both dealt hands for this turn-position fixture.
+    for _seat in range(2):
+        env.step(0)
+    while env.observation_for_player(env.current_agent_index()).turn.turn_number == 0:
+        _choose(env, "decline")
     for _ in range(20):
         contract = SemanticDecisionContract.from_env(env)
         observation = Observation.from_json(

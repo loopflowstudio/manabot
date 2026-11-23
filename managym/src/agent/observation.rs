@@ -814,6 +814,7 @@ pub struct PermanentData {
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     pub dealt_damage_this_turn: bool,
+    pub entered_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     pub effects: Vec<ContinuousEffectData>,
@@ -1565,6 +1566,7 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
             used_abilities: characteristics
                 .activated_abilities
                 .iter()

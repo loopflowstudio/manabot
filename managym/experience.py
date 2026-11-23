@@ -437,6 +437,7 @@ class LegacyPermanentView(ProtocolModel):
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    entered_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )

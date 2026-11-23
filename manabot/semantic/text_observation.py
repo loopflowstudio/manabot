@@ -655,7 +655,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision', 'opening hand'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -672,6 +672,21 @@ class _Renderer:
             details.append(f"may select up to {relation.mode or 0} more cards")
         elif relation.kind == 6 and relation.decision == 29:
             details.append("choose the next event replacement")
+        elif relation.kind == 15:
+            stage = _enum(
+                (
+                    "unused",
+                    "choosing keep or mulligan",
+                    "kept",
+                    "waiting",
+                    "bottoming",
+                    "taking opening actions",
+                ),
+                relation.decision,
+            )
+            details.append(f"{stage}, {relation.mode or 0} mulligans")
+            if relation.active_clause is not None:
+                details.append(f"{relation.active_clause} cards left to bottom")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -1008,6 +1023,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.entered_this_turn:
+            parts.append("entered this turn")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
         if permanent.copy is not None:

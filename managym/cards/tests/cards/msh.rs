@@ -135,3 +135,28 @@ fn ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells() {
         assert!(!tapped(&s, ironheart));
     }
 }
+
+#[test]
+fn quicksilver_power_up_discounts_only_normal_entry_and_is_spent_on_activation() {
+    use crate::support::{game::enter_battlefield, play::activate};
+    use managym::state::{card::Keyword, permanent::CounterKind};
+    let name = "Quicksilver, Brash Blur";
+    let mut s = five_color_unfunded_setup(&[name]);
+    let permanent = enter_battlefield(&mut s, name);
+    let view = s.game().characteristics(permanent);
+    assert!(view.keywords.has(Keyword::Haste));
+    assert_eq!(view.activated_abilities[0].mana_cost.mana_value, 4);
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, permanent, 0);
+    settle(&mut s);
+    let source = s.game().state.permanents[permanent].as_ref().unwrap();
+    for kind in [CounterKind::PlusOnePlusOne, CounterKind::DoubleStrike] {
+        assert_eq!(source.counter_count(kind), 1);
+    }
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!has_action(
+        &s,
+        |action| matches!(action, Action::ActivateAbility { permanent: id,.. } if *id == permanent)
+    ));
+}

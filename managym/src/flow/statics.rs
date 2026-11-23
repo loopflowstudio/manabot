@@ -74,7 +74,8 @@ impl Characteristics {
     /// Dynamic outputs and reductions can change without changing source plans.
     fn has_dynamic_activations(&self) -> bool {
         self.activated_abilities.iter().any(|ability| {
-            ability.cost_reduction_per.is_some()
+            ability.power_up
+                || ability.cost_reduction_per.is_some()
                 || matches!(
                     ability.effects.as_slice(),
                     [crate::state::ability::Effect::If { .. }
@@ -373,6 +374,11 @@ impl Game {
             if let [effect] = ability.effects.as_slice() {
                 if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
                     ability.effects = vec![effect];
+                }
+            }
+            if ability.power_up && permanent.entered_this_turn(self.state.turn.turn_number) {
+                if let Some(cost) = &self.state[permanent.object].mana_cost {
+                    ability.mana_cost = ability.mana_cost.reduced_by(cost);
                 }
             }
             self.price_activation(permanent.controller, ability);

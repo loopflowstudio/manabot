@@ -40,6 +40,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub opening: Option<crate::flow::opening::OpeningHands>,
     pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,

@@ -123,6 +123,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Mount", Creature),
     ("Mountain", Land),
     ("Mutagen", Artifact),
+    ("Mutant", Creature),
     ("Noble", Creature),
     ("Ogre", Creature),
     ("Omen", Spell),

@@ -1657,6 +1657,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::ENTERED_THIS_TURN] = bool_to_f32(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
@@ -1670,8 +1671,10 @@ fn encode_permanent_features(
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
         out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
+        out[permanent::VALID] = 1.0;
+    } else {
+        out[out.len() - 1] = 1.0;
     }
-    out[out.len() - 1] = 1.0;
 }
 
 /// Stack rows, top first, each indexed by its stack object id; a spell's card
@@ -2192,9 +2195,9 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
-        PLAYER_DIM, ZONE_DIM,
+        action, encode, encode_into, fact, permanent, EncodedObservationMut,
+        ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
+        FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
@@ -2588,9 +2591,9 @@ mod tests {
         // object is its permanent row only.
         assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
         assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
         assert_eq!(
-            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
             0.0
         );
 

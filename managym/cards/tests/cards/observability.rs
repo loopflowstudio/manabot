@@ -135,7 +135,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     let Permanent {
         transforms: _,
         id: _,
@@ -145,6 +145,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
         summoning_sick: _,
         damage: _,
         deathtouch_damage: _,
+        entry_turn: _,
         dealt_damage_this_turn: _,
         timestamp: _,
         counters: _,
@@ -159,6 +160,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     } = permanent;
     [
         ("id", Seen::Identity),
+        (
+            "entered_this_turn",
+            Seen::Permanent(permanent::ENTERED_THIS_TURN),
+        ),
         ("card", Seen::Permanent(permanent::DEFINITION)),
         ("controller", Seen::Permanent(permanent::IS_MINE)),
         ("transforms", Seen::Via("Transforms fact rows")),
@@ -1279,6 +1284,7 @@ const fn witnessed(
 /// No wildcard: a new `StaticAbility` must be named here.
 fn static_seen(ability: &StaticAbility) -> Witnessed {
     match ability {
+        StaticAbility::BeginOnBattlefield => witnessed("StaticAbility::BeginOnBattlefield", Seen::Actions("retained opening card can enter"), "Leyline Axe", "fdn", "leyline_axe_moves_its_grants_when_equipped_again"),
         StaticAbility::Continuous(_) => witnessed(
             "StaticAbility::Continuous",
             Seen::Permanent(permanent::POWER),
@@ -1679,6 +1685,7 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
 fn static_witnesses() -> Vec<StaticAbility> {
     let creature = CardPredicate::creature;
     vec![
+        StaticAbility::BeginOnBattlefield,
         StaticAbility::Continuous(managym::state::card::StaticContinuous {
             scope: StaticScope::This,
             condition: None,
@@ -1836,6 +1843,8 @@ fn ogre_game() -> (Game, PermanentId) {
         7,
         false,
     );
+    game.step(0).unwrap();
+    game.step(0).unwrap();
     let ogre = game
         .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
         .unwrap();
@@ -2239,7 +2248,7 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
     let player = &game.state.players[0];
     let fields = permanent_fields(permanent)
         .into_iter()
-        .map(|(field, seen)| (field, seen, PERMANENT_DIM - 1))
+        .map(|(field, seen)| (field, seen, PERMANENT_DIM))
         .chain(
             player_fields(player)
                 .into_iter()
@@ -2479,6 +2488,7 @@ fn each_permanent_status_moves_its_named_column() {
         "tapped" => permanent.tapped = !permanent.tapped,
         "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
         "damage" => permanent.damage = 1,
+        "entered_this_turn" => permanent.entry_turn = base_game.state.turn.turn_number,
         "dealt_damage_this_turn" => permanent.dealt_damage_this_turn = true,
         "attacking" => permanent.attacking = true,
         other => panic!("no directed mutation for {other}"),
@@ -2707,7 +2717,7 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
                 });
         assert!(runs_card, "{} does not run {}", row.test, row.card);
         match row.seen {
-            Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
+            Seen::Permanent(column) => assert!(column < PERMANENT_DIM, "{}", row.token),
             Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
             Seen::Player(start, end) => assert!(start < end && end <= PLAYER_DIM, "{}", row.token),
             Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
@@ -3291,6 +3301,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
+        entered_this_turn => [column(Permanent, permanent::ENTERED_THIS_TURN)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],

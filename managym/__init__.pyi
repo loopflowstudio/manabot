@@ -1012,6 +1012,7 @@ class Permanent:
     blocking: int | None
     abilities_lost: bool
     used_abilities: list[int]
+    entered_this_turn: bool
     dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]

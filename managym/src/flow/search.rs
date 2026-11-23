@@ -157,10 +157,13 @@ impl Game {
                                 | Decision::CastDuringResolution { .. }
                         )
             });
-        if refresh {
+        if refresh || self.state.opening.is_some() {
             // Republishing advances the epoch, which invalidates decoded
             // Commands; a world that left the offers alone keeps its identity.
-            if let Some(space) = self.suspended_decision_action_space() {
+            if let Some(space) = self
+                .opening_actions()
+                .or_else(|| self.suspended_decision_action_space())
+            {
                 // The published chooser is resolved at publication, so only
                 // the offers themselves are compared.
                 let unchanged = self.current_action_space.as_ref().is_some_and(|current| {

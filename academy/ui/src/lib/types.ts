@@ -124,6 +124,7 @@ export interface PermanentState {
   used_abilities?: number[];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;
+  entered_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
   effects?: ContinuousEffect[];
   /** The copy effect that made it a copy (CR 707.2). */

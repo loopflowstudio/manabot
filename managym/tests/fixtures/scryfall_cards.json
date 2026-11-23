@@ -2153,6 +2153,18 @@
       "G"
     ]
   },
+  "Leyline Axe": {
+    "name": "Leyline Axe",
+    "mana_cost": "{4}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
   "Lightning Bolt": {
     "name": "Lightning Bolt",
     "mana_cost": "{R}",
@@ -2789,6 +2801,21 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Pyroclasm deals 2 damage to each creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Quicksilver, Brash Blur": {
+    "name": "Quicksilver, Brash Blur",
+    "mana_cost": "{R}",
+    "type_line": "Legendary Creature — Mutant Hero",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Power-up",
+      "Haste"
+    ],
+    "oracle_text": "If Quicksilver, Brash Blur is in your opening hand, you may begin the game with him on the battlefield.\nHaste\nPower-up — {4}{R}: Put a +1/+1 counter and a double strike counter on Quicksilver. (Activate each power-up ability only once. Reduce the cost by his mana cost if he entered this turn.)",
     "colors": [
       "R"
     ]

@@ -301,6 +301,16 @@ impl Game {
             announcing: None,
             paid: Vec::new(),
         };
+        if let Some(opening) = &self.state.opening {
+            let (stage, instruction) = opening.instruction();
+            view.stage = stage.into();
+            view.instruction = if viewer == actor {
+                instruction.into()
+            } else {
+                format!("Waiting for Seat {}.", actor.0 + 1)
+            };
+            return Some(view);
+        }
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);

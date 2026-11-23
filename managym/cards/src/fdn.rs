@@ -21,6 +21,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
+        leyline_axe(),
         sire_of_seven_deaths(),
     ]
 }
@@ -239,6 +240,47 @@ fn claws_out() -> CardDefinition {
                 Modification::pump(2, 2),
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn leyline_axe() -> CardDefinition {
+    use managym_state::card::{StaticKeywordGrant, StaticPtBuff, StaticScope};
+    CardDefinition {
+        key: "fdn.leyline_axe",
+        scryfall_id: "b9c03336-a321-4c06-94d1-809f328fabd8",
+        printed: PrintedCharacteristics {
+            name: "Leyline Axe".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::BeginOnBattlefield,
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: 1,
+                    toughness: 1,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::DoubleStrike, Keyword::Trample]),
+                }),
+            ],
+            text_box: "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3}".into(),
             ..Default::default()
         },
         ..Default::default()
