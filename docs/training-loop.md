@@ -331,6 +331,15 @@ uninterrupted hot-cached bank.
   rather than `dones`, so horizon-cut spans report `"censored"` and never leak
   credit across cuts or seats.
 
+To collect from an existing root, open a both-seat self-play collector with
+`snapshot_vector=vector`. Build a `SnapshotRecipe` from the retained
+`GameInputs`, root digest and chooser with `SnapshotRecipe.from_inputs`.
+Pass `snapshot_starts=[SnapshotBranch(snapshot_id, recipe, horizon=3)]` to
+`collect`. The collector consumes starts in slot order as streams become
+available. A `None` entry or the end of the iterable selects a fresh game.
+The returned batch records the source, snapshot and group IDs, root marker
+and sample weight for each decision.
+
 For a custom collector, pass `trajectories` when constructing the packed
 `RolloutBatch`. For example, three decisions by seats 0, 0, 1 can be stored
 as `(TrajectorySpan(0, 2, seat=0, bootstrap_index=1), TrajectorySpan(2, 3,

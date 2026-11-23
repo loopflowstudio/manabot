@@ -20,6 +20,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.env.failures import CapturedVector
+from manabot.training.rollout.snapshot_vector import ObservationRead
 import managym
 
 Array = NDArray[np.generic]
@@ -145,6 +146,45 @@ class ShardedVectorEnv:
                 for shard in self._shards
             ]
         )
+
+    def write_observations_for_players(
+        self,
+        players: list[int],
+        buffers: dict[str, Array],
+        action_overflow: Literal["error", "first-legal"] = "error",
+        *,
+        layout: managym.ObservationLayout,
+    ) -> list[ObservationRead]:
+        """Project native seats into disjoint row slices and return global identities."""
+        self._rows(len(players))
+        for value in buffers.values():
+            self._rows(len(value))
+        reads = self._run(
+            [
+                partial(
+                    shard.native.write_observations_for_players,
+                    players[shard.start : shard.stop],
+                    {
+                        key: value[shard.start : shard.stop]
+                        for key, value in buffers.items()
+                    },
+                    action_overflow,
+                    layout=layout,
+                )
+                for shard in self._shards
+            ]
+        )
+        return [
+            ObservationRead(
+                shard.start + read.slot,
+                read.player,
+                read.game_id,
+                read.seed,
+                read.revision,
+            )
+            for shard, local in zip(self._shards, reads, strict=True)
+            for read in local
+        ]
 
     # The two roster setters run serially, before reset: native admission is
     # input-determined, so a rejection comes from the first shard and leaves
