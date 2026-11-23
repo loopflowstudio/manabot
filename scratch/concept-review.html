@@ -1,21 +1,25 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Which spell may search cast?</title>
-<style>:root{color-scheme:light dark;font:1rem/1.55 system-ui}main{max-width:54rem;margin:auto;padding:1rem}h1,h2{line-height:1.2}td,th{text-align:left;vertical-align:top;padding:.6em;border-bottom:1px solid GrayText}table{border-collapse:collapse}aside{border-inline-start:4px solid GrayText;padding-inline:1em}</style>
-<main><p>Managym · MTG-419 · 7c1f638e</p><h1>Which spell may search cast?</h1>
-<p>A search caller selects a legal spell on an exact object under a particular permission. A fork must keep all three facts through targeting and payment. The same selection must price the offer, authorize the cast and determine the program that resolves.</p>
-<aside><h2>Biggest mismatch · permission to play a card can depend on the proposed spell</h2>
-<p><b>Existing.</b> <code>library_top_castable(player)</code> checks the top object's types and returns a card ID. On top of the library, Twinmaw Stormbrood qualifies for Vizier's creature permission. That answer alone cannot tell the caller whether it can cast Charring Bite.</p>
-<p><b>Proposed.</b> Read the top object once. For each printed profile, evaluate the permission against its spell characteristics and publish each consequential legal route. With sufficient mana and a legal target, Vizier offers Twinmaw alone. Moving the card to hand exposes both profiles. This pair of positions is the first implementation check.</p></aside>
-<h2>Do the caller's concepts and the code's concepts line up?</h2>
-<table><thead><tr><th>Caller needs</th><th>Existing owner</th><th>Fit</th></tr></thead><tbody>
-<tr><td>One card in a deck</td><td>Smaug's physical definition owns both printed programs.</td><td>Yes</td></tr>
-<tr><td>Which spell?</td><td>An Adventure boolean runs through CastChoices and SpellOnStack.</td><td>No. It distinguishes today's two programs but cannot identify an Omen. Bind a catalog-local profile once and carry it onto the stack and its copies.</td></tr>
-<tr><td>What authorizes this play?</td><td>PlayRoute and exact-object grants preserve paid and free Smaug offers and the source of a spent type allowance.</td><td>Yes for the exercised routes.</td></tr>
-<tr><td>Which library plays?</td><td>The top-card check tests the object before selecting a program.</td><td>No. Apply the predicate per candidate profile.</td></tr>
-<tr><td>Can I cast Smaug again?</td><td>The chosen Adventure replacement grants access to the resulting exile object.</td><td>Yes. Bilbo can produce the same zone without the grant.</td></tr>
-<tr><td>Which prepared copy can I cast?</td><td>The planned preparation link binds an exact permanent and an exact exile copy.</td><td>No existing implementation. Derive entitlement from the linked permanent's current controller. Two Seed Suture copies can share a name and have different controllers.</td></tr></tbody></table>
-<h2>One cast across execution and recovery</h2>
-<p><b>Existing.</b> Choose Spew Flame from hand, select the Ogre and pay five. Resolution kills the Ogre and offers Smaug from exile. Counterspell preserves the Ogre and puts Smaug in the graveyard. In the ordinary-play replay fixture, restore at the choice of two Ogre targets and submit the original Command. The paid stack spell and witness agree. The hand, cold-restore and Bilbo replacement fixtures passed at this revision.</p>
-<p><b>Proposed.</b> Preserve Adventure Command decoding and saved policy prefixes while exposing distinct profile choices in native actions, v11 rows, text and Academy. A resolving copied Omen is a counterexample to deriving its shuffle from a physical card reaching the library. Bind the program on the stack copy and compare seeded library order after replay. Keep private top-card identity within the authorized viewer's observation.</p>
-<h2>Review choices</h2><ol><li><b>1a · Selected.</b> Bind the profile and consequential permission on one cast offer. <b>1b.</b> Ask for the profile at a second decision. This adds a search node to a choice already known at priority.</li>
-<li><b>2a · Selected.</b> Gate Omen on the one-offer library and two-offer hand comparison, then test resolution, failure and replay. <b>2b.</b> Exercise the shuffle first. That leaves library eligibility untested.</li></ol></main></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What did the caller cast?</title><style>
+:root{color-scheme:light dark;font:1rem/1.55 system-ui}main{max-width:56rem;margin:auto;padding:1rem}h1,h2{line-height:1.2}table{border-collapse:collapse}th,td{padding:.55rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}aside{border-inline-start:.25rem solid GrayText;padding-inline:1rem}code{overflow-wrap:anywhere}
+</style></head><body><main><p>Managym · MTG-419 · reviewed at 7c38d118</p>
+<h1>Do the caller’s casting concepts and the engine’s records line up?</h1>
+<p>Search chooses a spell and a permission together, then makes decisions that depend on that choice. A replay must recover the precise pending decision. A policy needs to read the same public properties the rules use to test a target.</p>
+<aside><h2>Biggest mismatch · what is this spell’s mana value?</h2>
+<p><b>Existing.</b> A target predicate reads <code>Game::object_mana_value</code>, which includes announced X. The v11 stack encoder reads the base value of the printed mana cost. Choosing a larger X can change which spells a target predicate accepts while that column stays fixed.</p>
+<p><b>Proposed.</b> Give the stack observation its effective mana value from the native calculation. With one X symbol and base value B, each branch should read as follows.</p>
+<table><tr><th>Cast</th><th>Printed base</th><th>Mana spent, absent modifiers</th><th>Stack value</th></tr>
+<tr><td>Paid, X = 2</td><td>B</td><td>B + 2</td><td>B + 2</td></tr>
+<tr><td>Free, X fixed at 0</td><td>B</td><td>0</td><td>B</td></tr></table>
+<p>Keep the existing column for saved pilots. Append the effective value for new models. Compute it from the stack entry during projection so encoding a stack needs one pass.</p></aside>
+<h2>From deck to resolution</h2><table><tr><th>Caller concept</th><th>Record or API</th><th>Fit today</th></tr>
+<tr><td>One deck card, two spells</td><td>Physical definition and SpellProfile on CastChoices and SpellOnStack</td><td>Yes for Adventure and Omen. Vizier offers only Twinmaw on top and both spells are legal from hand.</td></tr>
+<tr><td>Which permission pays or spends an allowance?</td><td>PlayRoute, exact grants and source-specific quotas</td><td>Yes for the tested Muldrotha and Zul branches. The original payment Command survives cold restore.</td></tr>
+<tr><td>What can target the announced spell?</td><td>Native target predicate and the v11 stack row</td><td>No. Their mana-value readings diverge for positive X.</td></tr>
+<tr><td>What happens when the spell leaves?</td><td>Selected stack program, resolution and replacement choice</td><td>Yes for the tested branches. Bilbo and Adventure can both exile Smaug, yet only one grants access. A resolving Omen copy can shuffle while the physical spell loses its target.</td></tr>
+<tr><td>Which prepared spell can this player cast?</td><td>Proposed link from the exact permanent to an exile copy</td><td>No implementation yet. A shared spell name cannot distinguish two copies when control of one source changes.</td></tr></table>
+<h2>Proposed witness · Exude Toxin</h2>
+<p>Cast the Omen from hand. Save at the X choice. Choose a payable positive X, inspect both viewers’ stack rows and test a mana-value threshold between the printed and effective values. Resolve the weakening effect and record the library order. A free grant fixes X at zero and supplies a second branch with a distinct receipt.</p>
+<p>For failure, counter the paid Omen. The payment stands, the card reaches the graveyard and the shuffle RNG stays put. For recovery, restore the pending choice from ordinary-play history and submit its original Command. Compare the stack, receipt, library order and RNG with the original successful branch. The existing Twinmaw witness covers live forks and failure. Cold Omen replay remains open.</p>
+<h2>Questions for review</h2><ol><li>How should saved models see stack value? <b>1a · Chosen.</b> Append effective value and preserve the printed reading. <b>1b.</b> Change the existing column, altering saved-model inputs.</li>
+<li>What should exercise the next profile? <b>2a · Chosen.</b> Use the second Omen to compare target legality, projection and replay at different X values. <b>2b.</b> Start the preparation link first and defer the cross-consumer check.</li></ol></main></body></html>

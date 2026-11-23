@@ -25,3 +25,5 @@ Use Twinmaw's top-library versus hand offers as the first Omen witness. That com
 Use Pyromancer’s Goggles for the copied Omen witness. The copy can kill the sole target, so the physical card’s graveyard destination isolates the copy’s shuffle.
 
 Use Scavenger Regent as the second Omen because its X cost exercises announcement and free casting through the same selected profile.
+
+Keep the existing v11 stack mana-value column's printed-cost reading for saved models. Expose the native on-stack mana value separately and use Exude Toxin at two X values to distinguish the readings.
