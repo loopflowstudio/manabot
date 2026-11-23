@@ -6,11 +6,19 @@ The implemented cohort covers six Foundations primary rows and the cross-set wit
 
 ## Next slice
 
-Gate is next. Run the complete suite, package and schema checks, representative Academy play, model and captured mid-game snapshot compatibility, and the paired same-runner 10% Engine Budget described below. The focused opening-label and legend-rule checks passed, including both forks of the repaired seed-725 fixture.
+The next end-to-end check is the paired Engine Budget. Build the candidate and reference on the dedicated runner, run the sample and compare commands below, and reconcile the changed ordinary-game decision digests against real opening choices before judging the 10% limit. The local candidate measurements justify carrying the current implementation into review. A relative performance result is still missing.
+
+Gate also owns the complete suite, schema and package checks, representative Academy play, model compatibility and restored mid-game self-play. The sync at `a3f33b18` brought in MLX tracked self-play training and resume. Include the affected snapshot consumer in that check.
+
+### What changed in the last slice
+
+Decision-memory verification assumed reset offered priority before first main. Reset now offers opening choices. At `1ddc2105`, decision-memory and text-observation fixtures share `reset_to_first_main` in `manabot/verify/text_observation.py`. Both keep the dealt hand, decline optional entries and pass priority through the live action space. Exercise both callers at gate.
+
+The matched Herald boards below narrowed the optimization question. At size eight the pending loss added one allocation and 22 bytes across the damage pass. Both boards built layers nine times. Those counts support keeping the existing combat storage and loss check. They do not identify a redundant layer invalidation. Revisit that path only if the paired budget shows a regression there.
 
 ## Cards and behavior witnesses
 
-Each row is an interaction for integrated validation. The expected results come from the set reviews, printed rules and release notes. Define each card in `managym/cards/src/<first-printing set>.rs`, register it in the native catalog, and put its directed test in the corresponding set suite. Use the printing's Scryfall ID and definition key. Update only the delivered rows' implementation records in the FDN ledger.
+Each row is an interaction for integrated validation. The expected results come from the set reviews, printed rules and release notes. The native definitions and directed set fixtures cover the cohort below.
 
 | Foundations card (set module) | Constructed interaction and observable result |
 |---|---|
@@ -67,7 +75,7 @@ A pending state-based choice already retains a native frame in the cloned and ha
 | `cr_514_cleanup::cr_514_3a_cleanup_grants_priority_after_a_legend_choice` | A cleanup whose only work was a legend-rule choice granted priority and stayed in cleanup (CR 514.3a). Before `f2caa4fde` it did not. |
 | `m12::sundial_of_the_infinite_ends_the_turn_exiling_the_stack` and `combat_counts_partners_and_committed_deaths_in_a_terminal_combat` | Sundial still exiled the underlying spell, expired the Ogre's buff and remained own-turn only. Interrupted combat still settled capture counts. |
 
-All 20 turn-ending, cleanup and Bloodbending debug tests passed again with nextest at `f2caa4fde`. The Scryfall conformance check passed at `cc3671bd4`. A release CPython 3.13 build replayed a Python text offer to cast Time Stop at seed 23 with six Islands. Both seats observed the spell in exile and seat 1 took the next turn. The focused Python checks for Bloodbending's text/policy/Academy authority and reconnecting at a pending discard passed (three cases). The Engine Budget and full-suite gate remain pending.
+All 20 turn-ending, cleanup and Bloodbending debug tests passed again with nextest at `f2caa4fde`. The Scryfall conformance check passed at `cc3671bd4`. A release CPython 3.13 build replayed a Python text offer to cast Time Stop at seed 23 with six Islands. Both seats observed the spell in exile and seat 1 took the next turn. The focused Python checks for Bloodbending's text/policy/Academy authority and reconnecting at a pending discard passed (three cases).
 
 ## Gate measurements
 
@@ -103,15 +111,11 @@ The release build at the earlier sync failed the 4096-byte GameState assertion. 
 - At seed 704302, a seat at zero life with a failed draw and an opposing seat at zero life drew. Both causes survived on the first seat. Semantic Commands replayed on exact forks. The Env result fixture verified poison rewards of +1 and −1 and draw rewards of zero for both seats; the simultaneous life/empty-draw seat reported `deck_empty`.
 - Player counters use the existing sparse counter storage and counter fact rows. Both viewer-relative joins carry the poisoned player’s count. Text and Academy expose the same public count, and the terminal result records the pre-batch conditions after applying protection.
 
-### Behavior review at `237b4511` — continue implementation
-
-The earlier size and private-restoration blocker is closed. This review reran the seed-213 scalar/vector opening fixture and both private-bottom snapshot cases against the installed extension (3 passed). The second-bottom case restores after a private commitment, replays the original action to the same witness, and branches to a different owner view while preserving the opponent view. The existing debug binaries passed 12 focused cases covering CR 103, Time Stop, controlled cleanup, Fynn, Herald, simultaneous terminal conditions and Env reasons/rewards.
-
 ### Instructed outcomes and explicit wins at `77f1c4b3` and `c4c61653`
 
 At seed 161, the Pact upkeep offered all four modes. The loss Command replayed identically on an exact fork. Without a response its controller lost. Flashing Herald in response kept the controller alive through resolution and subsequent removal. Only the three unused modes were offered at the next upkeep. A CPython 3.13 release run at seed 23 restored the pending upkeep from both a live snapshot and serialized replay. The same bound Command reached the same terminal witness on each branch and left the root unchanged.
 
-Maze's End returned to hand before the search. Nine Gate names plus a duplicate failed when the controller declined to find. Finding the tenth name won. With ten names already on the battlefield, declining to find also won, and an opposing Herald prevented the win. The Env fixture checked both seat assignments, the instructed loss reason and winner/loser rewards for each kind of outcome. Existing simultaneous-loss reward and reason projections passed. The full suite and Engine Budget remain at gate.
+Maze's End returned to hand before the search. Nine Gate names plus a duplicate failed when the controller declined to find. Finding the tenth name won. With ten names already on the battlefield, declining to find also won, and an opposing Herald prevented the win. The Env fixture checked both seat assignments, the instructed loss reason and winner/loser rewards for each kind of outcome. Existing simultaneous-loss reward and reason projections passed.
 
 At `4edddb75`, seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
 
