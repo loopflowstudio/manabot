@@ -290,6 +290,10 @@ impl StructuredOfferSet {
         &self.projection
     }
 
+    pub(crate) fn into_projection(self) -> StructuredOfferProjection {
+        self.projection
+    }
+
     pub(crate) fn object_candidate_bindings(
         &self,
     ) -> Vec<(OfferId, RoleId, CandidateId, ObjectId)> {

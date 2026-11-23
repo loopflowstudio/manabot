@@ -26,7 +26,7 @@
 
   let { player, name, deck, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
-  const hand = $derived(player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length);
+  const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
     { key: 'Hand', count: hand, cards: null },
     { key: 'Library', count: player.library_count, cards: null },

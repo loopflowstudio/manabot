@@ -197,7 +197,7 @@ mod tests {
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
             .collect::<Vec<_>>();
-        Game::construct(configs.into(), 17, true, capture, true)
+        Game::construct(&configs.into(), 17, true, capture, true)
     }
 
     #[test]
