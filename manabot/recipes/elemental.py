@@ -72,6 +72,8 @@ def settings(config: ElementalConfig) -> SelfPlay:
 def train(config: ElementalConfig) -> None:
     from manabot.backends import resolve
 
+    # Resolve before opening the run: a missing framework leaves no failed run.
+    backend = resolve(config.backend)
     with track(clocks=CLOCKS, config=config) as run:
         if config.validate_numerics:
             gate(run.out / "numerics")
@@ -79,5 +81,5 @@ def train(config: ElementalConfig) -> None:
             settings(config),
             run,
             updates=config.updates,
-            backend=resolve(config.backend),
+            backend=backend,
         )

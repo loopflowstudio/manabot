@@ -24,6 +24,8 @@ def train(config: LocalConfig) -> None:
     from manabot.backends import resolve
 
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
+    # Resolve before opening the run: a missing framework leaves no failed run.
+    backend = resolve(config.backend)
     with track(clocks=CLOCKS, config=config) as run:
         self_play(
             inputs,
@@ -31,7 +33,7 @@ def train(config: LocalConfig) -> None:
             updates=config.updates,
             kind="smoke",
             recipe="manabot.recipes.local",
-            backend=resolve(config.backend),
+            backend=backend,
         )
         games = run.out / "games"
         if any(games.glob("*.jsonl")):

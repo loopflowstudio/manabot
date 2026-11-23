@@ -81,12 +81,14 @@ def report() -> Report:
 def train(config: BaselineConfig) -> None:
     from manabot.backends import resolve
 
+    # Resolve before opening the run: a missing framework leaves no failed run.
+    backend = resolve(config.backend)
     with track(clocks=CLOCKS, config=config) as run:
         self_play(
             settings(config),
             run,
             updates=config.updates,
-            backend=resolve(config.backend),
+            backend=backend,
         )
 
 
