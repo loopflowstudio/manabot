@@ -33,10 +33,8 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from manabot.training.updates.damped_policy import (
-    compute_targets,
-    update_damped_iteration,
-)
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.targets import compute_batch_targets
 
 STREAMS = 2
 
@@ -58,11 +56,11 @@ def _arguments() -> argparse.Namespace:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
     )
     advantages = targets.advantages.flatten().numpy()
-    value_targets = targets.values.flatten().numpy()
+    value_targets = targets.value_targets.flatten().numpy()
     kept = targets.selected.flatten().numpy()
     values = batch.values.flatten()
     rewards = batch.rewards.flatten()

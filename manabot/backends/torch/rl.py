@@ -508,12 +508,24 @@ def selected_rows(
 
     Top-count sorts by magnitude with stable ties; quantiles retain row order.
     """
+    return selected_magnitudes(advantages, kind, fraction, minimum)[0]
+
+
+def selected_magnitudes(
+    advantages: Tensor,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[Tensor, float | None]:
+    """Retained flat indexes and empirical cutoff before the absolute floor."""
+    magnitude = advantages.detach().abs().flatten()
     if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum).nonzero().flatten()
-    magnitude = advantages.abs()
+        cutoff = magnitude_quantile(advantages, 1 - fraction)
+        return (magnitude >= max(cutoff, minimum)).nonzero().flatten(), cutoff
     count = max(1, math.ceil(len(magnitude) * fraction))
     indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
-    return indices[magnitude[indices] >= minimum]
+    cutoff = float(magnitude[indices[-1]]) if len(indices) else None
+    return indices[magnitude[indices] >= minimum], cutoff
 
 
 def magnitude_quantile(advantages: Tensor, quantile: float) -> float:
@@ -537,6 +549,11 @@ def selection_mask(
     mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
     mask[selected_rows(advantages.flatten(), fraction, minimum, kind=kind)] = True
     return mask.reshape_as(advantages)
+
+
+def weighted_sum(values: Tensor, weights: Tensor) -> Tensor:
+    """Sum per-row losses with constant logical-minibatch coefficients."""
+    return (float64_operand(values) * float64_operand(weights)).sum()
 
 
 def selected_mean(values: Tensor, selected: Tensor) -> Tensor:

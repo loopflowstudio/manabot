@@ -243,7 +243,8 @@ Selection uses magnitude, so strongly bad decisions stay alongside strongly good
 ones. By default, a dropped row leaves both the policy and value losses;
 `filter_scope="actor"` keeps every row for the value loss. Advantages are not
 renormalized after filtering. If nothing survives, the iteration still counts
-but takes no optimizer step.
+but takes no optimizer step. Mixed snapshot batches apply the filter separately
+to eligible fresh and snapshot rows. [Snapshot learning rules](training-loop.md#rloo-baselines-stratified-filtering-and-plr)
 
 These are the last five decisions of a real lost game, from a batch that kept
 81 of 324 rows on an untrained network. `uv run python scripts/inspect_batch.py`
@@ -396,7 +397,8 @@ damping decay with the fraction of a declared `horizon` completed
 
 Training keeps two sets of weights. The **raw** weights are the learner, and
 they play the next batch. The **EMA** is an average updated once per iteration
-at 0.999, including iterations the filter emptied. A recipe can collect with the
+at 0.999, including iterations the filter emptied. Discovery batches with zero
+sample weight skip both Adam and EMA. A recipe can collect with the
 EMA by setting `behavior="ema-self"`; otherwise it is only an evaluation output.
 
 A checkpoint is bound to the meaning of what it reads and chooses: its input

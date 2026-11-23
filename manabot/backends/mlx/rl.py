@@ -294,6 +294,19 @@ def clip_fraction(log_ratio: mx.array, clip: float) -> float:
 # -- Selection -----------------------------------------------------------------
 
 
+def selected_magnitudes(
+    advantages: mx.array,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[mx.array, float | None]:
+    """Retained flat indexes and empirical cutoff before the absolute floor."""
+    rows, cutoff = returns.selected_magnitudes(
+        np.array(advantages), kind, fraction, minimum
+    )
+    return mx.array(rows), cutoff
+
+
 def selection_mask(
     advantages: mx.array,
     kind: Literal["top_count", "quantile"],
@@ -305,6 +318,11 @@ def selection_mask(
     return mx.array(
         returns.selection_mask(np.array(advantages), kind, fraction, minimum)
     )
+
+
+def weighted_sum(values: mx.array, weights: mx.array) -> mx.array:
+    """Sum per-row losses with constant logical-minibatch coefficients."""
+    return (values.astype(mx.float32) * weights.astype(mx.float32)).sum()
 
 
 def selected_mean(values: mx.array, selected: mx.array) -> mx.array:

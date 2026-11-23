@@ -150,6 +150,23 @@ def magnitude_quantile(advantages: NDArray[np.float32], q: float) -> float:
     return quantile(np.abs(advantages), q)
 
 
+def selected_magnitudes(
+    advantages: NDArray[np.float32],
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[NDArray[np.intp], float | None]:
+    """Flat retained indexes in PPO pre-shuffle order and empirical cutoff before the floor."""
+    flat = np.abs(advantages).ravel()
+    if kind == "quantile":
+        cutoff = quantile(flat, 1 - fraction)
+        return np.flatnonzero(flat >= max(cutoff, minimum)), cutoff
+    count = max(1, math.ceil(len(flat) * fraction))
+    kept = np.argsort(-flat, kind="stable")[:count]
+    cutoff = float(flat[kept[-1]]) if len(kept) else None
+    return kept[flat[kept] >= minimum], cutoff
+
+
 def selection_mask(
     advantages: NDArray[np.float32],
     kind: Literal["top_count", "quantile"],
@@ -159,12 +176,7 @@ def selection_mask(
     """Boolean mask shaped like `advantages` keeping `fraction` of rows by
     magnitude, |A| >= minimum. A quantile filter keeps every tie at its
     inclusive threshold; a top-count filter keeps a fixed share, stable ties."""
-    magnitude = np.abs(advantages)
-    if kind == "quantile":
-        return magnitude >= max(quantile(magnitude, 1 - fraction), minimum)
-    flat = magnitude.ravel()
-    count = max(1, math.ceil(len(flat) * fraction))
-    kept = np.argsort(-flat, kind="stable")[:count]
-    mask = np.zeros(len(flat), bool)
-    mask[kept[flat[kept] >= minimum]] = True
+    rows, _ = selected_magnitudes(advantages, kind, fraction, minimum)
+    mask = np.zeros(advantages.size, bool)
+    mask[rows] = True
     return mask.reshape(advantages.shape)

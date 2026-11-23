@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import replace
 from typing import Literal
 from unittest.mock import patch
@@ -29,8 +30,15 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.policy.checkpoint import from_torch_state
+from manabot.policy.checkpoint import (
+    PolicyCheckpoint,
+    canonical_parameters,
+    from_torch_state,
+)
+from manabot.policy.prepare import reference_distribution
+from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.loops.self_play import Counts, learn
 from manabot.training.rollout.collection import (
     Collector,
     RolloutBatch,
@@ -54,11 +62,9 @@ from manabot.training.state.game_errors import (
     RecordAttempt,
     settle,
 )
-from manabot.training.updates.damped_policy import (
-    compute_targets,
-    update_damped_iteration,
-)
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
+from manabot.training.updates.targets import compute_batch_targets
 import managym
 from managym.recording import GameInputs, PlayerSetup
 from tests.model.prepared_routes import device_input
@@ -245,7 +251,9 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         advantage_quantile=0,
         min_advantage=0,
     )
-    targets = compute_targets(backend, learner, AdmittedRollout(agent, batch), learning)
+    targets = compute_batch_targets(
+        backend, learner, AdmittedRollout(agent, batch), learning
+    )
     predictions = raw.softmax(-1) if kind == "categorical_wdl" else raw
     expected = predictions[[0, 0, 1]]
     # The two native views must make distinguishable predictions for this control.
@@ -264,7 +272,8 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         0.25 * torch.from_numpy(collected[1, 0:1]).flatten() + 0.75 * expected[1]
     )
     torch.testing.assert_close(
-        targets.values, expected[:, None] if kind == "categorical_wdl" else expected
+        targets.value_targets,
+        expected[:, None] if kind == "categorical_wdl" else expected,
     )
     torch.testing.assert_close(
         targets.advantages[:, 0], signed - torch.from_numpy(batch.values[:, 0])
@@ -276,10 +285,10 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         next_obs={k: v[[1, 0]] for k, v in batch.next_obs.items()},
         trajectories=(TrajectorySpan(0, 2, 0, 1), TrajectorySpan(2, 3, 1, 0)),
     )
-    reordered_targets = compute_targets(
+    reordered_targets = compute_batch_targets(
         backend, learner, AdmittedRollout(agent, reordered), learning
     )
-    torch.testing.assert_close(reordered_targets.values, targets.values)
+    torch.testing.assert_close(reordered_targets.value_targets, targets.value_targets)
     torch.testing.assert_close(reordered_targets.advantages, targets.advantages)
 
     # Replace just one viewer's frozen input. Only its span may change credit.
@@ -289,7 +298,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         perturbed = replace(
             batch, next_obs={k: v[[other, other]] for k, v in batch.next_obs.items()}
         )
-        changed = compute_targets(
+        changed = compute_batch_targets(
             backend, learner, AdmittedRollout(agent, perturbed), learning
         )
         torch.testing.assert_close(
@@ -352,26 +361,24 @@ def test_packed_terminal_spans_need_no_bootstrap_input(
     batch, _ = three_choices(agent, terminal=True)
     admitted = AdmittedRollout(agent, batch)
     assert admitted.next_observation(torch.device("cpu")) is None
-    targets = compute_targets(
+    targets = compute_batch_targets(
         backend,
         Learner(agent, "cpu", minibatch_rows=3),
         admitted,
         DampedPolicyLearning(gradient="damped_policy", value_lambda=1),
     )
     signed = (
-        backend.rl.expected_outcome(targets.values)
+        backend.rl.expected_outcome(targets.value_targets)
         if kind == "categorical_wdl"
-        else targets.values
+        else targets.value_targets
     )
     torch.testing.assert_close(signed[:, 0], torch.tensor([1.0, 1.0, -1.0]))
 
 
-def test_mlx_scalar_cut_and_terminal_targets() -> None:
-    pytest.importorskip("mlx.core")
-    mlx = resolve("mlx")
+def scalar_backend_agent() -> ActorCritic:
     with pytest.warns(DeprecationWarning):
         space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    agent = ActorCritic(
+    return ActorCritic(
         space,
         ModelConfig(
             hidden_dim=16,
@@ -380,14 +387,24 @@ def test_mlx_scalar_cut_and_terminal_targets() -> None:
             world=managym.WORLD_SETUP,
         ),
     )
-    batch, raw = three_choices(agent)
-    checkpoint = from_torch_state(
+
+
+def scalar_checkpoint(agent: ActorCritic) -> PolicyCheckpoint:
+    return from_torch_state(
         agent.config,
-        space.config,
+        agent.observation_space.config,
         {k: v.detach().numpy() for k, v in agent.state_dict().items()},
         parameter_names=dict(agent.named_parameters()),
         readings=agent.readings,
     )
+
+
+def test_mlx_scalar_cut_and_terminal_targets() -> None:
+    pytest.importorskip("mlx.core")
+    mlx = resolve("mlx")
+    agent = scalar_backend_agent()
+    batch, raw = three_choices(agent)
+    checkpoint = scalar_checkpoint(agent)
     learner = mlx.learner.Learner(mlx.load(checkpoint)[0], "cpu", minibatch_rows=3)
     learning = DampedPolicyLearning(
         gradient="damped_policy", policy_lambda=1, value_lambda=1
@@ -396,11 +413,11 @@ def test_mlx_scalar_cut_and_terminal_targets() -> None:
         (batch, raw.numpy()[[0, 0, 1], 0]),
         (three_choices(agent, terminal=True)[0], np.array([1, 1, -1])),
     ):
-        targets = compute_targets(
+        targets = compute_batch_targets(
             mlx, learner, mlx.rollout.AdmittedRollout(learner.agent, rollout), learning
         )
         np.testing.assert_allclose(
-            mlx.arrays.to_numpy(targets.values)[:, 0], expected, atol=1e-5
+            mlx.arrays.to_numpy(targets.value_targets)[:, 0], expected, atol=1e-5
         )
 
 
@@ -571,3 +588,432 @@ def test_install_rejects_the_wrong_root_before_sampling() -> None:
         with pytest.raises(ValueError, match="snapshot 17 root identity mismatch"):
             collect(collector, agent, 1, snapshot_starts=[branch])
         assert collector.stats.micro_steps == 0
+
+
+def terminal_siblings(agent: ActorCritic) -> RolloutBatch:
+    """Three two-seat continuations plus an independent trajectory pair."""
+    recipe, _ = replay_root(agent.observation_space, terminal=True)
+    with replay_collector(agent.observation_space, recipe) as collector:
+        batch = collect(
+            collector,
+            agent,
+            12,
+            snapshot_starts=[
+                SnapshotBranch(
+                    7,
+                    recipe,
+                    horizon=3,
+                    branch_group_id=9 if i < 3 else -1,
+                    branch_index=i,
+                )
+                for i in range(4)
+            ],
+        )
+    rewards = batch.rewards.copy()
+    for i, outcome in enumerate([1, 0, -1, 1]):
+        rewards[2 * i + 1, 0] = outcome
+        rewards[8 + i, 0] = -outcome
+    return replace(batch, rewards=rewards)
+
+
+@pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
+def test_sibling_roots_use_empirical_returns_and_leave_descendants_unchanged(
+    kind: Literal["scalar", "categorical_wdl"],
+) -> None:
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
+    )
+    batch = terminal_siblings(agent)
+    learner = Learner(agent, "cpu", minibatch_rows=12)
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", policy_lambda=0.1, value_lambda=0.2
+    )
+    action_values = np.arange(len(batch.action_data.slots), dtype=np.float32)
+    targets = compute_batch_targets(
+        backend,
+        learner,
+        AdmittedRollout(agent, batch),
+        learning,
+        action_values=action_values,
+    )
+    ordinary = compute_batch_targets(
+        backend,
+        learner,
+        AdmittedRollout(agent, replace(batch, branch_group_id=None)),
+        learning,
+    )
+    roots = [0, 2, 4]
+    others = np.setdiff1d(np.arange(12), roots)
+    assert torch.equal(targets.advantages[roots, 0], torch.tensor([1.5, 0, -1.5]))
+    expected = torch.zeros(3) if kind == "scalar" else torch.full((3, 3), 1 / 3)
+    assert torch.equal(targets.value_targets[roots, 0], expected)
+    assert torch.equal(targets.advantages[others], ordinary.advantages[others])
+    assert torch.equal(targets.value_targets[others], ordinary.value_targets[others])
+    signals = targets.signals
+    np.testing.assert_allclose(
+        signals.critic_residual, np.abs(targets.residuals.numpy().ravel())
+    )
+    np.testing.assert_allclose(
+        signals.positive_value_loss, targets.residuals.numpy().ravel().clip(0)
+    )
+    np.testing.assert_array_equal(
+        signals.action_value_spread, np.diff(batch.action_data.offsets) - 1
+    )
+    assert not signals.critic_residual.flags.writeable
+    logs = batch.action_data.log_probabilities
+    for row, (a, b) in enumerate(
+        zip(batch.action_data.offsets[:-1], batch.action_data.offsets[1:], strict=True)
+    ):
+        assert signals.policy_entropy[row] == pytest.approx(
+            -np.dot(np.exp(logs[a:b]), logs[a:b])
+        )
+    if kind == "categorical_wdl":
+        probs = batch.outcome_probabilities.reshape(-1, 3)
+        np.testing.assert_allclose(
+            signals.wdl_entropy, -(probs * np.log(probs)).sum(-1)
+        )
+    else:
+        assert signals.wdl_entropy is None
+    assert ordinary.signals.action_value_spread is None
+    # Supplying frozen targets must not run the bootstrap or either estimator again.
+    with patch.object(backend.rl, "transition_gae", side_effect=AssertionError):
+        result = update_damped_iteration(
+            backend, learner, batch, learning, 1, targets=targets
+        )
+    assert result["optimizer_exposures"] > 0 and batch.target_residuals is None
+
+
+def cut_siblings(agent: ActorCritic) -> RolloutBatch:
+    recipe, _ = replay_root(agent.observation_space)
+    with replay_collector(agent.observation_space, recipe) as collector:
+        return collect(
+            collector,
+            agent,
+            4,
+            snapshot_starts=[
+                SnapshotBranch(7, recipe, horizon=h, branch_group_id=9, branch_index=i)
+                for i, h in enumerate((3, 1))
+            ],
+        )
+
+
+def test_grouped_ppo_discounts_root_viewer_cuts_and_validates_identity() -> None:
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
+    )
+    _, long_tail = three_choices(agent)
+    _, short_tail = three_choices(agent, horizon=1)
+    batch = cut_siblings(agent)
+    spans = batch.trajectories
+    assert spans is not None
+    batch = replace(batch, rewards=np.array([[0.1], [0.2], [0.3], [-0.1]], np.float32))
+    learning = Learning(gamma=0.5, epochs=1, minibatches=1, retained_fraction=1)
+    learner = Learner(agent, "cpu", minibatch_rows=3)
+    targets = compute_batch_targets(
+        backend, learner, AdmittedRollout(agent, batch), learning
+    )
+    g0 = 0.1 + 0.5 * (0.2 + 0.5 * long_tail[0].item())
+    g1 = 0.3 + 0.5 * short_tail[0].item()
+    np.testing.assert_allclose(
+        targets.advantages[[0, 2], 0], [g0 - g1, g1 - g0], atol=1e-7
+    )
+    np.testing.assert_allclose(
+        targets.value_targets[[0, 2], 0], (g0 + g1) / 2, atol=1e-7
+    )
+    with patch.object(backend.rl, "transition_gae", side_effect=AssertionError):
+        update_iteration(
+            backend,
+            learner,
+            batch,
+            learning,
+            0,
+            np.random.default_rng(2),
+            targets=targets,
+        )
+    for mixed in (
+        replace(batch, trajectories=(spans[0], replace(spans[1], seat=1), spans[2])),
+        replace(batch, snapshot_id=np.array([[7], [7], [8], [7]], np.int64)),
+    ):
+        with pytest.raises(ValueError, match="snapshot ID and seat"):
+            compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, mixed), learning
+            )
+
+
+def test_wdl_group_at_a_cut_averages_frozen_root_viewer_distributions() -> None:
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(attention_on=False, hidden_dim=8, value_kind="categorical_wdl"),
+    )
+    _, long_tail = three_choices(agent)
+    _, short_tail = three_choices(agent, horizon=1)
+    batch = cut_siblings(agent)
+    root_distributions = torch.stack([long_tail[0], short_tail[0]]).softmax(-1)
+    signed = root_distributions[:, 2] - root_distributions[:, 0]
+    learning = DampedPolicyLearning(gradient="damped_policy", value_lambda=0)
+    targets = compute_batch_targets(
+        backend,
+        Learner(agent, "cpu", minibatch_rows=4),
+        AdmittedRollout(agent, batch),
+        learning,
+    )
+    torch.testing.assert_close(
+        targets.value_targets[[0, 2], 0], root_distributions.mean(0).expand(2, -1)
+    )
+    torch.testing.assert_close(
+        targets.advantages[[0, 2], 0], signed - signed.flip(dims=(0,))
+    )
+    assert not torch.allclose(root_distributions[0], root_distributions[1])
+
+
+@pytest.mark.parametrize("kind", ["top_count", "quantile"])
+def test_mixed_sources_filter_eligible_rows_independently(
+    kind: Literal["top_count", "quantile"],
+) -> None:
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
+    )
+    batch = terminal_siblings(agent)
+    shape = batch.actions.shape
+    weights = np.ones(shape, np.float32)
+    weights[[5, 11]] = 0
+    batch = replace(
+        batch,
+        branch_group_id=None,
+        snapshot_id=None,
+        is_root_decision=None,
+        values=np.zeros(shape, np.float32),
+        dones=np.ones(shape, bool),
+        rewards=np.array([1, 2, 3, 3, 4, 500, 10, 20, 30, 30, 40, 5000], np.float32)[
+            :, None
+        ],
+        episode_source=np.repeat([0, 1], 6).astype(np.int8)[:, None],
+        sample_weight=weights,
+        trajectories=tuple(TrajectorySpan(i, i + 1, 0) for i in range(12)),
+        next_done=np.empty(0, bool),
+        next_obs={},
+    )
+    learning = Learning(
+        epochs=1, minibatches=1, filter_kind=kind, retained_fraction=0.4
+    )
+    learner = Learner(agent, "cpu", minibatch_rows=12)
+    targets = compute_batch_targets(
+        backend, learner, AdmittedRollout(agent, batch), learning
+    )
+    expected = [10, 8, 4, 2] if kind == "top_count" else [2, 3, 4, 8, 9, 10]
+    assert targets.retained.tolist() == expected
+    result = update_iteration(
+        backend, learner, batch, learning, 0, np.random.default_rng(4), targets=targets
+    )
+    for source, threshold in (("fresh", 3), ("snapshot", 30)):
+        n = len(expected) // 2
+        assert result["source_selection"][source] == dict(
+            eligible=5, retained=n, retention_rate=n / 5, threshold=threshold
+        )
+
+
+@pytest.mark.parametrize("rule", ["ppo", "damped", "mlx"])
+def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
+    """One fractional-weight step agrees with an independent full-batch Adam step."""
+    if rule == "mlx":
+        pytest.importorskip("mlx.core")
+    agent = scalar_backend_agent()
+    batch, _ = three_choices(agent, terminal=True)
+    batch = replace(batch, sample_weight=np.array([[0.2], [0.3], [0]], np.float32))
+    # Separate current and behavior policies so the KL terms carry gradient.
+    with torch.no_grad():
+        agent.policy_head[-1].weight.mul_(8)
+    reference = Learner(deepcopy(agent), "cpu", minibatch_rows=3)
+    learning = (
+        Learning(root_actor_weight=3, retained_fraction=1, epochs=1, minibatches=1)
+        if rule == "ppo"
+        else DampedPolicyLearning(
+            gradient="damped_policy",
+            root_actor_weight=3,
+            advantage_quantile=0,
+            min_advantage=0,
+            reference_forward_kl=0.1,
+        )
+    )
+    targets = compute_batch_targets(
+        backend, reference, AdmittedRollout(reference.agent, batch), learning
+    )
+    indices = np.array([0, 1])
+    rows = batch.observations(indices)
+    logits, values = reference.agent(device_input(reference.agent, rows.observation))
+    valid = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+    behavior_logs = torch.tensor(rows.log_probabilities)
+    magnet = torch.tensor(reference_distribution(rows.observation, learning.reference))
+    actions = torch.tensor(batch.actions[indices, 0])
+    advantages = targets.advantages[indices, 0]
+    value_loss = (values - targets.value_targets[indices, 0]).square()
+    if isinstance(learning, Learning):
+        rate, tau = learning.learning_rate.at(0), learning.tau.at(0)
+        logs = backend.rl.policy_logs(logits, valid)
+        advantages = backend.rl.standardized_advantages(advantages)
+        policy_loss = backend.rl.clipped_surrogate(
+            backend.rl.action_logs(logs - behavior_logs, actions),
+            advantages,
+            learning.clip,
+        )
+        policy_loss += tau * backend.rl.reverse_kl(
+            logs, backend.rl.reference_logs(magnet, valid), valid
+        )
+        policy_loss += learning.collection_kl * backend.rl.reverse_kl(
+            logs, behavior_logs, valid
+        )
+        value_loss *= 0.5 * learning.value_weight
+    else:
+        rate, tau = learning.rates(1)
+        policy_loss = backend.rl.damped_policy_loss(
+            logits,
+            actions,
+            advantages,
+            behavior_logs,
+            magnet,
+            valid,
+            clip=learning.clip,
+            collection_kl=learning.collection_kl,
+            tau=tau,
+            reference_forward_kl=learning.reference_forward_kl,
+        )
+    # The root has triple actor weight. The critic still sees the original 2:3 ratio.
+    expected_loss = (2 * policy_loss[0] + policy_loss[1]) / 3 + (
+        2 * value_loss[0] + 3 * value_loss[1]
+    ) / 5
+    reference.set_learning_rate(rate)
+    reference.step(expected_loss, learning.max_grad_norm)
+    assert any(
+        not torch.equal(a, b)
+        for a, b in zip(reference.agent.parameters(), agent.parameters(), strict=True)
+    )
+
+    if rule == "mlx":
+        mlx = resolve("mlx")
+        checkpoint = scalar_checkpoint(agent)
+        learner = mlx.learner.Learner(mlx.load(checkpoint)[0], "cpu", minibatch_rows=3)
+        result = update_damped_iteration(mlx, learner, batch, learning, 1)
+        expected = mlx.parameter_layout(canonical_parameters(reference.parameters()))
+        for key, actual in learner.parameters().items():
+            np.testing.assert_allclose(
+                actual, expected[key], atol=1e-6, rtol=0, err_msg=key
+            )
+    else:
+        for chunk in (None, 1):
+            learner = Learner(
+                deepcopy(agent), "cpu", minibatch_rows=3, execution_rows=chunk
+            )
+            if isinstance(learning, Learning):
+                result = update_iteration(
+                    backend, learner, batch, learning, 0, np.random.default_rng(7)
+                )
+            else:
+                result = update_damped_iteration(backend, learner, batch, learning, 1)
+            for actual, expected_param in zip(
+                learner.agent.parameters(), reference.agent.parameters(), strict=True
+            ):
+                torch.testing.assert_close(actual, expected_param, atol=1e-6, rtol=0)
+            assert result["numerical"]["optimizer_steps"] == 1
+    assert result["actor_exposures"] == result["critic_exposures"] == 2
+    assert result["loss"] == pytest.approx(expected_loss.item(), abs=1e-6)
+
+
+@pytest.mark.parametrize("rule", ["ppo", "damped"])
+def test_zero_weight_discovery_preserves_live_adam_and_ema(rule: str) -> None:
+    learning = (
+        Learning(
+            horizon=2,
+            root_actor_weight=0,
+            ema=0.5,
+            filter_scope="actor",
+            epochs=1,
+            minibatches=1,
+        )
+        if rule == "ppo"
+        else DampedPolicyLearning(
+            gradient="damped_policy", root_actor_weight=0, filter_scope="actor"
+        )
+    )
+    settings = gray_ogre_self_play(horizon=2).model_copy(update={"learning": learning})
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
+    )
+    learner = Learner(agent, "cpu", minibatch_rows=3)
+    ema = deepcopy(agent)
+    batch, _ = three_choices(agent, terminal=True)
+    # Only the root contributes to the critic. Its actor weight is zero.
+    weighted = replace(batch, sample_weight=np.array([[1], [0], [0]], np.float32))
+    before = learner.parameters()
+    result = learn(settings, learner, ema, Counts(), weighted, np.random.default_rng(0))
+    assert result["actor_exposures"] == 0 and result["critic_exposures"] == 1
+    after = learner.parameters()
+    assert any(
+        not np.array_equal(after[k], before[k]) for k in after if k.startswith("value_")
+    )
+    assert all(
+        np.array_equal(after[k], before[k])
+        for k in after
+        if k.startswith("policy_head.")
+    )
+    ema_before = deepcopy(ema.state_dict())
+    adam_before = deepcopy(learner.optimizer.state_dict())
+    assert adam_before["state"]
+    discovery = replace(batch, sample_weight=np.zeros_like(batch.rewards))
+    targets = compute_batch_targets(
+        backend, learner, AdmittedRollout(agent, discovery), learning
+    )
+    assert (
+        targets.signals.policy_entropy.shape == (3,)
+        and np.isfinite(targets.signals.critic_residual).all()
+    )
+    result = learn(
+        settings,
+        learner,
+        ema,
+        Counts(updates=1),
+        discovery,
+        np.random.default_rng(0),
+        targets=targets,
+    )
+    assert (
+        result["skipped"] == "zero sample weight" and result["optimizer_exposures"] == 0
+    )
+    assert result["source_selection"]["snapshot"] == dict(eligible=0, retained=0)
+    torch.testing.assert_close(
+        learner.optimizer.state_dict(), adam_before, rtol=0, atol=0
+    )
+    for key, value in learner.parameters().items():
+        np.testing.assert_array_equal(value, after[key])
+    torch.testing.assert_close(ema.state_dict(), ema_before, rtol=0, atol=0)
+
+
+def test_mlx_scalar_critic_only_step_and_zero_weight_adam_state() -> None:
+    pytest.importorskip("mlx.core")
+    mlx = resolve("mlx")
+    agent = scalar_backend_agent()
+    batch, _ = three_choices(agent, terminal=True)
+    learner = mlx.learner.Learner(
+        mlx.load(scalar_checkpoint(agent))[0], "cpu", minibatch_rows=3
+    )
+    rule = DampedPolicyLearning(
+        gradient="damped_policy", filter_scope="actor", root_actor_weight=0
+    )
+    before = learner.parameters()
+    weighted = replace(batch, sample_weight=np.array([[0.1], [0], [0]], np.float32))
+    result = update_damped_iteration(mlx, learner, weighted, rule, 1)
+    assert result["actor_exposures"] == 0 and result["critic_exposures"] == 1
+    after = learner.parameters()
+    changed = {k for k in after if not np.array_equal(after[k], before[k])}
+    assert any(k.startswith("value_") for k in changed)
+    assert not any(k.startswith("policy_head.") for k in changed)
+    adam = mlx.arrays.flat_numpy(learner.optimizer.state)
+    discovery = replace(batch, sample_weight=np.zeros_like(batch.rewards))
+    result = update_damped_iteration(mlx, learner, discovery, rule, 2)
+    assert (
+        result["skipped"] == "zero sample weight" and result["optimizer_exposures"] == 0
+    )
+    for key, value in learner.parameters().items():
+        np.testing.assert_array_equal(value, after[key])
+    for key, value in mlx.arrays.flat_numpy(learner.optimizer.state).items():
+        np.testing.assert_array_equal(value, adam[key])

@@ -370,8 +370,9 @@ trajectory, including strided ranges for ordinary multi-column batches.
   `retained_fraction` / `advantage_quantile` and `min_advantage`, preventing
   high-magnitude snapshot advantages from crowding out fresh rows. Single-source
   unit-weight batches take the unchanged global filter bit-for-bit.
-  `UpdateDiagnostics` reports per-source eligible count, retained count,
-  retention rate and applied threshold.
+  `UpdateDiagnostics["source_selection"]` reports `eligible`, `retained`,
+  `retention_rate` and `threshold` under each source name. A source with zero
+  eligible rows reports only the two counts.
 - **`PLR⊥` zero-weight discovery (`fresh_weight=0.0`):** Setting
   `fresh_weight=0.0` marks fresh rows with `sample_weight=0.0` while snapshot
   rows keep `snapshot_weight`. Zero-weight rows still compute detached targets
@@ -424,10 +425,24 @@ def root_surprise_scorer(entry: EntrySignals) -> float:
     )
 ```
 
-In a custom loop, call `compute_batch_targets` (`manabot.training.updates.targets`)
-once, pass `targets=targets` into `update_damped_iteration` or
-`update_iteration`, and commit `bank.commit(receipt, targets.signals)` after
-the update succeeds. `RolloutBatch` is never mutated to carry signals.
+In a custom loop, compute targets before updating the learner. Pass the same
+batch and learning rule into the update. Supply the collection policy as
+`bootstrap_agent` when it differs from the learner.
+
+```python
+from manabot.training.updates.targets import compute_batch_targets
+
+admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
+targets = compute_batch_targets(backend, learner, admitted, learning, bootstrap_agent)
+metrics = update_damped_iteration(backend, learner, batch, learning, iteration, targets=targets)
+```
+
+PPO accepts the same `targets=` argument. Each available array in
+`targets.signals` is read-only and follows flat batch row order, including
+zero-weight rows. To score action-value spread, supply `action_values=` to
+`compute_batch_targets` with one value per legal offer in
+`batch.action_data.slots` order. A bank commits its receipt and these signals
+after the update succeeds.
 
 ### Requirements, accounting and recovery
 

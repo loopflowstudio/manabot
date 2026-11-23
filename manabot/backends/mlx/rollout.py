@@ -33,8 +33,8 @@ class AdmittedRollout:
     def __init__(self, agent: MLXActorCritic, batch: "RolloutBatch") -> None:
         self.agent = agent
         self.batch = batch
+        self._next: Prepared | None = None
         self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        self._next = agent.prepare(batch.next_obs) if len(batch.next_done) else None
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
         """Validate learner rows in bounded chunks, once across all epochs."""
@@ -46,12 +46,15 @@ class AdmittedRollout:
 
     def next_observation(self, device: object) -> Prepared | None:
         """Bootstrap observations [trajectory, ...]."""
+        if self._next is None and len(self.batch.next_done):
+            self._next = self.agent.prepare(self.batch.next_obs)
         return self._next
 
     def next_observations(self, device: object, size: int) -> Iterator[Prepared]:
         # Explicit limits are refused by the MLX learner before this path.
-        if self._next is not None:
-            yield self._next
+        obs = self.next_observation(device)
+        if obs is not None:
+            yield obs
 
     def rows(
         self, indexes: NDArray[np.int64], device: object

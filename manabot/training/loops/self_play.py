@@ -105,6 +105,7 @@ from manabot.training.update_metrics import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
+from manabot.training.updates.targets import BatchTargets
 import managym
 
 # Offsets that separate a run seed's random streams (see the module docstring).
@@ -648,6 +649,8 @@ def learn(
     counts: Counts,
     batch: RolloutBatch,
     rng: np.random.Generator,
+    *,
+    targets: BatchTargets | None = None,
 ) -> UpdateDiagnostics:
     """Learn from one batch in place: the update its learning record selects, then EMA.
 
@@ -663,6 +666,7 @@ def learn(
             settings.learning,
             counts.updates + 1,
             bootstrap_agent=behavior(settings, learner, ema),
+            targets=targets,
             learner_transitions=counts.learner_transitions,
         )
     else:
@@ -676,8 +680,9 @@ def learn(
             rng,
             iteration=counts.updates + 1,
             bootstrap_agent=behavior(settings, learner, ema),
+            targets=targets,
         )
-    if ema is not None:
+    if ema is not None and metrics.get("skipped") != "zero sample weight":
         assert settings.learning.ema is not None
         update_ema(ema, learner.agent, settings.learning.ema)
     return metrics
