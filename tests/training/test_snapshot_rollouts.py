@@ -1495,6 +1495,101 @@ def test_bank_decays_old_scores_and_spends_only_whole_group_allowance() -> None:
         bank.close()
 
 
+def test_full_staleness_bank_keeps_new_capture_and_evicts_oldest() -> None:
+    agent = scalar_backend_agent()
+    learner = Learner(agent, "cpu", minibatch_rows=8)
+    recipe, _ = replay_root(agent.observation_space)
+    bank = SnapshotBank(
+        SnapshotConfig(
+            capacity=2,
+            replay_fraction=0,
+            fresh_floor=1,
+            signal="staleness",
+            capture=CapturePolicy(every_n_decisions=1, max_captures_per_batch=1),
+        )
+    )
+    captured = []
+    with replay_collector(agent.observation_space, recipe) as collector:
+        for _ in range(3):
+            with bank.begin_batch() as plan:
+                batch = collect(collector, agent, 1, snapshot_plan=plan)
+                assert plan.receipt is not None
+                [candidate] = plan.receipt.captures
+                captured.append(root_id(candidate.snapshot.recipe))
+                targets = compute_batch_targets(
+                    backend, learner, AdmittedRollout(agent, batch), Learning()
+                )
+                bank.commit(plan.receipt, targets.signals)
+                assert {e.snapshot_id for e in bank.state().entries} == set(
+                    captured[-2:]
+                )
+        assert len(set(captured)) == 3
+        bank.close()
+
+
+def test_eight_streams_launch_funded_pairs_and_resume_retry_debt() -> None:
+    agent = scalar_backend_agent()
+    learner = Learner(agent, "cpu", minibatch_rows=8)
+    recipe, _ = replay_root(agent.observation_space)
+    config = SnapshotConfig(
+        capacity=1,
+        replay_fraction=0.5,
+        fresh_floor=0.5,
+        group_size=2,
+        horizon=2,
+        capture=CapturePolicy(every_n_decisions=1, max_captures_per_batch=1),
+    )
+    bank = SnapshotBank(config)
+    recovery = GameErrorPolicy()
+    with replay_collector(
+        agent.observation_space,
+        recipe,
+        num_envs=8,
+        game_errors=recovery,
+        record_attempt=lambda state, attempt: settle(state, attempt, recovery),
+    ) as collector:
+        with bank.begin_batch() as warmup:
+            batch = collect(collector, agent, 1, snapshot_plan=warmup)
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), Learning()
+            )
+            assert warmup.receipt is not None
+            bank.commit(warmup.receipt, targets.signals)
+        get_info = collector._env.get_last_info
+        failed = False
+
+        def fail_third_start_once() -> list[dict[str, Any]]:
+            nonlocal failed
+            info = get_info()
+            episode = collector._episodes[2]
+            if not failed and episode.branch is not None and episode.choices == 1:
+                assert episode.branch.branch_index == 0
+                info[2] = dict(info[2], game_error="retry the first funded branch")
+                failed = True
+            return info
+
+        with (
+            bank.begin_batch() as plan,
+            patch.object(
+                collector._env, "get_last_info", side_effect=fail_third_start_once
+            ),
+        ):
+            batch = collect(collector, agent, 1, snapshot_plan=plan)
+            assert failed and plan.receipt is not None
+            assert len(plan.receipt.visited_groups) == 2
+            targets = compute_batch_targets(
+                backend, learner, AdmittedRollout(agent, batch), Learning()
+            )
+            bank.commit(plan.receipt, targets.signals)
+        saved = SnapshotBankState.model_validate_json(bank.state().model_dump_json())
+        assert saved.scheduler.allowance == -1
+        cold = SnapshotBank.from_state(config, saved)
+        with cold.begin_batch() as plan:
+            assert [plan.next_episode() for _ in range(3)] == [None, None, None]
+            assert plan.next_episode() is not None
+        bank.close()
+
+
 def test_coverage_cycle_and_random_draws_resume_with_the_saved_rng() -> None:
     agent = scalar_backend_agent()
     recipe, _ = replay_root(agent.observation_space)

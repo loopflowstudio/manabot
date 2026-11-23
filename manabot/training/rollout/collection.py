@@ -1289,10 +1289,6 @@ def _collect(
         if snapshot_plan.closed or snapshot_plan.vector is not None:
             raise ValueError("snapshot plan already collected")
         snapshot_plan.vector = env
-        if collector.game_errors:
-            snapshot_plan.retry_reserve = (
-                num_envs * snapshot_plan.config.max_group_retries
-            )
     snapshots = None
     if collector._episodes:
         snapshots = _SnapshotRollout(

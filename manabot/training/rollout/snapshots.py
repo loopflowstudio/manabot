@@ -137,7 +137,7 @@ class SchedulerState(Strict):
     groups: int = Field(default=0, ge=0)
     # Units of 1 / replay_rate.denominator starts. Integer arithmetic avoids
     # losing a whole group at decimal boundaries or across JSON round trips.
-    allowance: int = Field(default=0, ge=0)
+    allowance: int = 0  # Retries can borrow against subsequent fresh starts.
     coverage: tuple[int, ...] = ()
     rng: RandomState
     capture_rng: RandomState
@@ -211,7 +211,6 @@ class BatchPlan:
             )
         )
         self.pending: deque[SnapshotBranch] = deque()
-        self.retry_reserve = 0
         self.completed_episodes = 0
         self.successes: dict[int, int] = defaultdict(int)
         self.retry_counts: dict[int, int] = defaultdict(int)
@@ -287,13 +286,7 @@ class BatchPlan:
         if self.closed or self.receipt is not None:
             raise ValueError("snapshot plan is finished")
         k = self.config.group_size
-        # With isolated failures, reserve enough starts to retry every group
-        # concurrently in flight. This keeps retries funded even after closure.
-        if (
-            not self.pending
-            and self.entries
-            and self.can_replay(k + self.retry_reserve)
-        ):
+        if not self.pending and self.entries and self.can_replay(k):
             entry = self._draw()
             group = self.scheduler.groups
             self.scheduler.groups += 1
@@ -626,15 +619,19 @@ class SnapshotBank:
             )
         excess = len(entries) - config.capacity
         if excess > 0:
-            for key in sorted(
-                entries,
-                key=lambda k: (
-                    entries[k].priority(config, generation, self.scorer),
-                    entries[k].last_visit_generation,
-                    k,
-                ),
-            )[:excess]:
-                del entries[key]
+
+            def eviction_order(entry: SnapshotEntry) -> tuple[float, int, int]:
+                # Age prioritizes replay, but a newly discovered root needs a
+                # chance to be drawn before eviction from a full staleness bank.
+                priority = (
+                    0.0
+                    if config.signal == "staleness" and self.scorer is None
+                    else entry.priority(config, generation, self.scorer)
+                )
+                return priority, entry.last_visit_generation, entry.snapshot_id
+
+            for entry in sorted(entries.values(), key=eviction_order)[:excess]:
+                del entries[entry.snapshot_id]
         scheduler = receipt.next_scheduler_state.model_copy(
             update=dict(
                 coverage=tuple(

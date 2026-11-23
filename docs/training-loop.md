@@ -262,9 +262,8 @@ legal action count and current branch.
 The replay allowance is `min(replay_fraction, 1 - fresh_floor)` of episode
 starts. An empty bank starts fresh games and accrues no credit. Once the
 allowance funds a whole group, free streams draw its `group_size` siblings.
-At the batch floor they finish outstanding siblings and retries. Isolated
-game recovery reserves allowance for `max_group_retries` per concurrent group
-(default one). Failed episodes lose their rows and captures. Exhausting a
+At the batch floor they finish outstanding siblings and retries. A retry spends a replay start and can borrow against future fresh starts.
+Each group has up to `max_group_retries` retries (default one). Failed episodes lose their rows and captures. Exhausting a
 group's retries discards every sibling. [Game failures](training.md#game-failures)
 
 `horizon=H` counts surfaced decisions across both seats of each continuation.
@@ -317,7 +316,9 @@ or whole episodes (default).
 Stored scores halve every `score_half_life` generations. Draws visit new entries
 first. Then every fifth group advances a coverage queue. Other draws choose
 the oldest visit with probability 0.25 and sample by score rank otherwise.
-Eviction orders entries by priority, then oldest visit, then snapshot ID.
+A full bank evicts the lowest-priority entry, breaking ties by oldest visit
+and then snapshot ID. Built-in staleness evicts by oldest visit and then ID,
+so newly captured roots can enter the bank.
 
 Pass a runtime `scorer` to `self_play` or `SnapshotBank` for a custom priority.
 It receives `EntrySignals(root_signals, episode_signals, age_since_visit)`
