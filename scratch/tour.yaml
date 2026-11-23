@@ -1,7 +1,7 @@
-at: c56f72fbc0d6e2adc9b933038fb09486c740a0b4
+at: c97fee3a7c9797fad3974ee5a6bcc77ee8ab3096
 first:
   - path: scratch/plan.md
-    why: Read the library and exile departure witnesses.
+    why: Read the three restored ordering witnesses.
   - path: managym/cards/src/fin.rs
     why: Follow Vanille’s payment into Ragnarok.
   - path: managym/state/src/zone.rs
@@ -13,7 +13,7 @@ first:
   - path: managym/src/flow/decision.rs
     why: Carry the resolving controller through the pending move.
   - path: managym/cards/tests/cards/fin.rs
-    why: Compare token departures and restore both exile orders.
+    why: Restore each graveyard order and resolve Ragnarok’s death trigger.
   - path: managym/tests/rules/cr_400_identity.rs
     why: Check that separated exile identities stay stale.
   - path: managym/state/src/ability.rs
