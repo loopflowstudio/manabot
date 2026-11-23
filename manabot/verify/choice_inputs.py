@@ -20,7 +20,11 @@ from manabot.policy.buckets import (
 import managym
 
 
-def encode(raw: managym.Observation, space: ObservationSpace) -> dict[str, np.ndarray]:
+def encode(
+    raw: managym.Observation, space: ObservationSpace | None = None
+) -> dict[str, np.ndarray]:
+    if space is None:
+        space = ObservationSpace()
     return {key: value[None] for key, value in encode_observation(space, raw).items()}
 
 
