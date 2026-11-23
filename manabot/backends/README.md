@@ -344,10 +344,14 @@ change a default learner batch into an inference batch. Torch rollout `rows`
 and `minibatches` always prepare learner rows; `next_observation` always
 prepares inference rows for bootstrapping.
 
-For parity, Torch’s `BACKEND.load` returns an
-`ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
-names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
-back).
+`Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
+refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
+than silently falling back to float32. For parity, Torch’s `BACKEND.load`
+accepts optional `device`, `precision` and `bucketed_shapes` (defaulting to
+CPU, float32 and padded; `"bfloat16"` translates to `"bf16"` for `Learner`)
+and returns an `ActorCritic` and a `Learner`, whose parameters and gradients
+keep torch's names (`torch_name` in `manabot.policy.checkpoint` maps canonical
+names back).
 
 Read card-program rows through `SemanticCardEncoder.lookup`
 (`manabot/backends/torch/_semantic_cards.py`), never `table[rows]`. Card and fact IDs
@@ -495,6 +499,40 @@ cannot be read, the checkpoint is refused or no backend is installed; a
 timing in the ordinary MLX pilot requires passing parity. The MPS retest
 explicitly retains approximate arms and reports their numerical differences.
 
-For explicit MLX half precision, select `--backend mlx --precision bfloat16`.
-See the [compute precision guide](mlx.md#compute-precision) for
-the API and dtype-specific numerical gates.
+For a specific device, precision, shape layout or thread count, pass the
+execution target explicitly:
+
+```sh
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture \
+  --backend torch --device mps --precision bfloat16 --bucketed --threads 4 --json parity.json
+```
+
+```text
+torch  finite clipped Adam step                 max |Δ| 1.7e-04 (diagnostic; no float32 step bound)  ok
+torch  forward logits                           Δ 5.9e-05 (tol 0.001)  ok
+torch  forward values                           Δ 3.8e-03 (tol 0.01)  ok
+torch  collection logits                        Δ 5.2e-05 (tol 0.001)  ok
+torch  collection values                        Δ 3.1e-03 (tol 0.01)  ok
+torch  learner loss                             Δ 2.1e-03 (tol 0.01)  ok
+torch  full gradient                            cosine 0.999054 (tol 0.99); tensor minimum 0.963081 (semantic_cards.token_embedding.weight, diagnostic)  ok
+torch  one step                                 params max |Δ| 1.7e-04, update min cosine 0.994210 (cosine diagnostic only)
+parity: pass (torch)
+```
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--backend` | all installed | Select `torch` or `mlx`. |
+| `--device` | `cpu` (Torch), `mps` (MLX) | Candidate execution device (`cpu`, `mps` or `cuda` on Torch; `mps`/`gpu` or `cpu` on MLX). Unavailable devices and `--backend torch --device cpu --precision bfloat16` exit 2 with no silent fallback. |
+| `--precision` | `float32` | Candidate forward precision (`float32` or `bfloat16`). Both `--backend mlx` and `--backend torch` on `mps`/`cuda` run forwards under their production precision scope and promote logits and values to float32 before computing `minibatch_objective`. |
+| `--bucketed` | off (padded) | Prepare candidate batches with `bucketed_shapes=True` while comparing against the same CPU float32 padded reference capture. |
+| `--threads` | backend default | Run candidate loading and evaluation inside `runtime.scoped(...)` with the requested thread count and restore it on exit. |
+
+The reference stays Torch CPU float32 padded, and the candidate keeps the same
+device, precision and bucketed settings across both initial load and the
+post-step reload. Every report verifies and records execution proof in
+`--json` (`actual_device`, `observed_forward_dtype` before float32 promotion,
+`bucketed_shapes`, `minibatches_checked` and `collection_checked`), failing
+parity (exit 1) if any target mismatches, if fewer than one minibatch or
+collection call ran, or if any logit, value, loss, gradient or clipped step is
+nonfinite. See the [compute precision guide](mlx.md#compute-precision) for the
+`bfloat16` tolerance table and its limits.
