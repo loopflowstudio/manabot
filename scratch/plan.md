@@ -72,6 +72,10 @@ At `71838e7e`, Fang is registered in `managym/cards/src/fin.rs`. Its trigger use
 
 ## Next slice — form Ragnarok and resolve its departure
 
+Behavior review at `f848ff30`: the three `fin::fang` debug fixtures passed. Lost Days targeting a Clone Legion copy of Fang returns directly to priority with one Clue and the original library order. The FIN Vanille, Ragnarok and meld filters selected zero of 819 tests. The paired-arrivals debug unit test passed for both supplied orders, including owner-only library facts and the following discard binding. One member was already in the library when the test supplied its result. No pending meld choice was produced or restored.
+
+The working phase still needs implementation. The FIN registry has no Vanille or Ragnarok, so no consumer can offer first-main payment or decline. The immediate movement API commits and returns only the first arrival. Use the pre-commit Lost Days acceptance boundary below to verify the shared producer and both physical backing cases. Viewer buffers, text, tokens, stale Commands and replay for that choice remain unverified. Full suites and performance measurements belong to gate.
+
 At `3d9375d1`, the FIN meld filters selected zero of 818 tests. Nine Fang, Cecil, Esper Origins and departed Clone fixtures passed, along with the trigger-condition token guard, paired-arrivals unit test and Esper text fixture. Fang ignores the opponent’s departure and its own return. Vanille and Ragnarok still have no definitions in `managym/cards/src/fin.rs`.
 
 The paired-arrivals fixture in `managym/src/flow/decision.rs` already checks private placement for both orders and binding of the following discard. It supplies the arrivals directly. The missing producer is in `managym/src/flow/zones.rs`, where `move_object_with_entry` completes the batch immediately and selects its first arrival.
