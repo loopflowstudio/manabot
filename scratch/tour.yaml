@@ -1,23 +1,10 @@
-at: 87f3480ef1884546ae7484f4f417427104bbd609
+at: 5a5f87c0e09d9d410eed082e9b97a4a2aaa59f1a
 first:
-  - path: managym/README.md
-    why: Describes combat history across viewers and source departure
-  - path: managym/cards/src/som.rs
-    why: Defines both Hellkite activations and the destruction selector
-  - path: managym/src/flow/turn.rs
-    why: Owns exact damage recipients across the turn
-  - path: managym/src/flow/damage.rs
-    why: Records combat hits after prevention
-  - path: managym/src/flow/resolution.rs
-    why: Selects current controllers and exact mana values
-  - path: managym/src/agent/observation.rs
-    why: Projects damage history after the source leaves
-  - path: managym/src/agent/observation_encoder.rs
-    why: Encodes hit seats relative to each viewer
+  - path: managym/src/flow/mana.rs
+    why: Prices X using the activation’s actual payment component
+  - path: managym/src/flow/play.rs
+    why: Enumerates payable announcements
+  - path: managym/src/flow/action.rs
+    why: Checks affordability before offering the activation
   - path: managym/cards/tests/cards/som.rs
-    why: Plays both copies and checks the turn reset
-  - path: managym/src/agent/env/snapshot.rs
-    why: Replays Commands and restores a departed source’s activation
-  - path: tests/semantic/test_text_observation.py
-    why: Announces X and checks both Academy projections
-hide: []
+    why: Resolves every offered value from the saved decision
