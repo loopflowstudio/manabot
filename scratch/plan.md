@@ -14,7 +14,7 @@ Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, th
 
 **Drakuseth audit complete.** Its ledger row remains pending. Target selection permits reuse across clauses and resolution cannot assign 4 and 3 damage to their respective recipients in one batch. The choice-continuations obligation below covers both gaps.
 
-At `3a54967f`, both directed debug fixtures passed again. The target-submission fixture rejected the first permanent twice in one clause and accepted it again in the next clause. This reproduces the selection gap independently of the damage-batching finding from code inspection. Parent and Anthem satisfy their working obligation. Per-source life gain remains the next working slice. Full consumer and conformance suites remain with gate.
+At `3a54967f`, both directed debug fixtures passed again. The target-submission fixture rejected the first permanent twice in one clause and accepted it again in the next clause. This reproduces the selection gap independently of the damage-batching finding from code inspection. Parent and Anthem satisfy their working obligation. Full consumer and conformance suites remain with gate.
 
 ### Behavior after the shared repair at `12096ae8`
 
@@ -33,7 +33,7 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Run Away Together remains deferred.** With two creatures controlled by one player and none by the other, the spell has no legal pair. With one creature per player, changing control of one in response makes both targets illegal. If one leaves instead, its last known controller determines whether the surviving creature returns. These are acceptance positions for the missing definition. Native `TargetRequirement` has no different-controller relation, and `resolution_targets` rechecks each target independently except for shared creature type. The shared targeting authority needs the relation at selection and resolution. [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
 
-The native damage-batch fixture for Ajani’s Pridemate passed. Damage of 2 to a creature and 3 to its controller produced one gain of 5 from a single source, or gains of 2 and 3 from distinct sources. Pridemate resolved to 3/3 and 4/4 respectively. The fixture submits combat damage directly. Full combat assignment, prevention, replacement-choice forks, Marauding Blight-Priest and Drogskol Reaver remain in Slice 2. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
+**Ajani’s Pridemate.** The directed fixture `pridemate_triggers_once_per_lifelink_source_in_a_damage_batch` in `managym/src/flow/proposed_event.rs` passed. Damage of 2 to a creature and 3 to its controller produced one gain of 5 from a single source, or gains of 2 and 3 from distinct sources. Pridemate resolved to 3/3 and 4/4 respectively. The fixture submits the damage batch directly. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 
@@ -56,9 +56,7 @@ Authoring Foundations cards should be direct, predictable, and collision-free: o
    - Give every **new** non-predefined creature token in `managym/cards/src/tokens.rs` a self-describing, characteristic-qualified key: `token.<name>_<p>_<t>_<colors>[_<ability>]` (e.g., `token.cat_1_1_w`, `token.cat_1_1_w_lifelink`, `token.knight_1_1_w`, `token.soldier_1_1_w`, `token.dragon_4_4_r_flying`, `token.elf_warrior_1_1_g`, `token.goblin_1_1_r`, `token.zombie_2_2_b`, `token.dog_1_1_w`, `token.beast_4_4_g`, `token.insect_1_1_bg_flying`, `token.faerie_1_1_u_flying`).
    - *Choice made for review:* Characteristic-qualified keys over ad-hoc adjectives (`plain_dragon`, `lifelink_cat`), so future Standard sets never collide.
 
-4. **Per-source lifelink batching and `TriggerCondition::GainsLife`.** `damage.rs::commit_damage` currently calls `commit_life_change` per damage target, bypassing `ProposedEvent::LifeChange` and splitting a single lifelink+trample creature (blocker + player) into two life-gain events (violating CR 702.15b / 119.9), and `TriggerCondition` has no lifegain trigger.
-   - Aggregate positive lifelink damage **per damage source** within each damage batch and route each source's gain through `ProposedEvent::LifeChange` (so one trampling lifelinker = 1 life-gain event, two lifelinkers = 2 life-gain events, double strike = 1 event per combat damage pass, and prevented damage / `PlayersCantGainLife` = 0 events).
-   - Add `TriggerCondition::GainsLife { who: Actor }` wired to positive `GameEvent::LifeChanged` (and indexed in `TriggerIndex`, `observability.rs`, and LLM text).
+4. **Per-source lifelink and life-gain triggers.** `damage.rs` reads source keywords once for lifelink and deathtouch. During batch commitment, `proposed_event.rs` totals dealt lifelink damage by source object and controller and emits one `LifeChange` proposal per total. Replacement choices on the incoming damage finish before commitment, so the accumulator can stay local. `GainsLife { who }` matches a positive committed life change for the selected actor. Use this condition for the remaining life-gain cards.
 
 5. **Composable damage and entry replacements.** `ReplacementEffect` currently has card-shaped damage variants (`DoubleDamageToController`, `PreventDamageToController` — 0 real-card callers — plus `OpponentDamagePlusCounters`), and `StaticAbility::EntersTapped(CardPredicate)` applies to both players (cannot express `Authority of the Consuls`).
    - Add one composable damage replacement (`ReplacementEffect::ModifyDamage { source_by, source_predicate, recipient_by, combat_only, transform }`) covering `Twinflame Tyrant` (your sources → opponents/their permanents → double), `Gratuitous Violence` (your creatures → any → double), and `Fog Bank` (combat damage dealt to or by this → prevent all).
@@ -105,11 +103,13 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
-   - First compare equal totals: one source deals 2 to a blocker and 3 to a player; two sources deal 2 and 3. Both gain 5. Require one positive life-change event versus two before wiring Pridemate, then require one trigger versus two. This pair distinguishes event ownership even when the life totals match. If a replacement choice suspends the batch, exact forks at that choice must resume without losing or duplicating a gain. Keep any partial accounting with the pending batch.
-   - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).
-   - Double-strike lifelinker (`Drogskol Reaver`) → 1 trigger in first-strike damage + 1 in normal combat damage.
-   - Prevented damage or `PlayersCantGainLife` → 0 triggers.
+**Next fixture.** Play through attack, block and trample assignment with Ajani’s Pridemate on the battlefield. Assign 2 to the blocker and 3 to the defending player. Check that combat produces one gain of 5 and one +1/+1 counter. Repeat with two lifelink sources dealing the same amounts in one damage step and require two counters.
+
+Then cover the remaining boundaries and callers.
+
+- Fully prevented damage and `PlayersCantGainLife` each yield zero gain triggers. Fork at a pending replacement choice and resolve each branch to check the gains due for its committed damage and that the root stays intact.
+- Author Marauding Blight-Priest and Drogskol Reaver using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
+- Check the life-gain condition in the catalog learning tokens and its viewer text. Keep the consumer and conformance suites at gate.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
 1. Implement `ReplacementEffect::ModifyDamage` (migrating/retiring test-only `DoubleDamageToController` and `PreventDamageToController` cleanly with `token_renames.rs` and checking `test_pinned_pilot.py`) and opponent-scoped entry-tapped replacement (preserving Zhao's pinned tokens).
