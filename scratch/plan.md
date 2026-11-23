@@ -31,7 +31,9 @@ Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 
 
 ## Next working slice
 
-Build The Dominion Bracelet next. The payment must lock the equipped creature’s current power and the identity of the granting Equipment. Exercise competing manual and automatic mana contributions, the zero-cost boundary, the receipt and next-turn control. Then implement Construct a Cosmic Cube and fork its controlled turn during a nested payment. The full suite and paired Engine Budget stay at gate.
+The Dominion Bracelet is the next end-to-end slice. Equip it, vary the creature’s current power across the zero-cost boundary, choose a target and pay the locked cost with the granting Bracelet and mana. Resolve the stacked ability after the Bracelet leaves and exercise the first delegated decision. Use the existing `PaymentReceipt` and `Effect::ControlPlayer` so the receipt identifies what was spent and the existing chooser mapping controls the next turn. Compare manual contributions, restricted-first automatic spending and mana left floating.
+
+Construct a Cosmic Cube follows. Exercise the second draw, the seventh-counter crossing, failed sacrifice and a countered reflexive trigger. Fork a successful controlled turn at a nested payment and check chooser, resource owner, replay and root isolation. The shared consumer checks below and the full suite and paired Engine Budget at gate remain open.
 
 ## Remaining cross-consumer obligations
 
@@ -107,18 +109,12 @@ Maze's End returned to hand before the search. Nine Gate names plus a duplicate 
 
 At `4edddb75`, seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
 
-### Behavior review at `4bb40e8d` — working phase remains open
+At `4bb40e8d`, seed 23 exposed a consumer discrepancy. Indexed and semantic Pact steps reached the same exact terminal state with reward −1, but the semantic info dictionary was empty. Three mana encoding/filter fixtures also passed at this revision. Bracelet still needs a payment witness through its own granted activation.
 
-Seed 23 gives a shorter reproduction of the Env discrepancy than the proposed final-pass fork. Restore the pending four-mode Pact upkeep from the snapshot in `test_pending_pact_upkeep_restores_and_replays_its_loss_command`. With default trivial skipping, indexed action 3 and the bound fourth offer both terminate immediately. The exact successor witnesses match, and both return reward −1, terminated true and truncated false. Indexed info contains winner_index 1, winner_name Opponent and p0_loss_reason instructed_loss. Semantic info is empty. Share the terminal reward and outcome projection in `agent/env.rs` and assert those fields at this public entry point. Profiler metadata is separate from the outcome.
-
-Seven existing debug card fixtures passed for Pact/Herald, Maze, Axe/Fynn, poison and turn ending. Fynn's per-object combat-damage trigger gives two counters on each hit; the equipped Fynn fixture observes four across the two damage steps. The native poison fact/token join passed for both seats. Six release Python cases passed across Pact snapshot/replay, private bottom choices, scalar/vector reset, Academy reconnect and poison text/Academy output.
-
-Virulent Silencer, The Dominion Bracelet and Construct a Cosmic Cube still lack executable definitions. Three existing mana encoding/filter fixtures passed, but none exercises Bracelet's locked cost, competing manual pip and pool choices, restricted-first automatic spend or committed-versus-floating receipt. The next working slice above retains these cases, Cube's controlled nested payment and the remaining Pact and Maze interactions. Full-suite and paired Engine Budget checks belong to gate.
-
-### Env parity and card interactions
+### Env parity and card interactions through `5466dbe3`
 
 - At `d3aec3f4`, the seed-23 Pact snapshot fixture stepped indexed action 3 and its bound Command from both live and replay-restored snapshots. All four branches returned reward −1, terminated true, truncated false, winner 1 (Opponent), and p0 loss reason instructed_loss. Their exact successors matched and the root stayed intact. The test also passed on the release extension rebuilt with Silencer.
 - At `7d62f9e3`, the seed-161 Silencer fixture granted deathtouch to Silencer or a Ballistic Boulder token. Their two-damage hits put two or one poison triggers on the stack. Exiling Fynn before either resolved preserved its trigger. Six poison became ten and a loss for the nontoken hit, or eight for the token hit. Fully prevented damage, blocker-only damage and a Warstorm Surge hit produced no poison. The native Scryfall conformance test passed.
-- At seed 161 the Pact fixtures resolved all three resource modes, countered the draw trigger before Agent of Treachery stole Pact, and observed only the three unused choices for the new controller. After four resolved modes under Herald the next upkeep had no trigger on the stack. A second Pact or a blinked original offered all four choices. The countering fixture uses a scenario-local activation with the native counter-ability effect.
+- Through `b75a5670`, at seed 161 the Pact fixtures resolved all three resource modes, countered the draw trigger before Agent of Treachery stole Pact, and observed only the three unused choices for the new controller. After four resolved modes under Herald the next upkeep had no trigger on the stack. A second Pact or a blinked original offered all four choices. The countering fixture uses a scenario-local activation with the native counter-ability effect.
 - At `14d58670`, the opposing seat flashed Herald while Maze’s activation was on the stack and Maze was already in hand. Herald resolved first and prevented victory despite ten distinct Gate names.
 - At seed 161, the Maze land fixture played the land, observed tapped entry, advanced to the controller's next upkeep, and confirmed the mana choice added exactly one colorless. Both Maze fixtures passed. The seed-23 Pact outcome parity fixture also passed against the installed release extension.
