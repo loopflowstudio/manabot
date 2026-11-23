@@ -1130,7 +1130,36 @@ impl Game {
                 None
             }
             Effect::EndTheTurn => {
-                self.end_the_turn();
+                // CR 725.1a: collect occurrences from earlier instructions
+                // before discarding them. Later triggers wait for cleanup.
+                self.process_game_events();
+                self.check_state_triggers();
+                self.state.pending_triggers_mut().clear();
+                self.capture_resolution(frame);
+
+                // CR 725.1b: abilities cease to exist and all spells move
+                // together, including this spell and any spell copies.
+                self.state
+                    .stack_objects_mut()
+                    .retain(|item| matches!(item, StackObject::Spell(_)));
+                let moves = self
+                    .state
+                    .stack_objects
+                    .iter()
+                    .rev()
+                    .map(|spell| {
+                        self.zone_move_proposal(
+                            spell.source_object(),
+                            ZoneType::Exile,
+                            Default::default(),
+                        )
+                    })
+                    .collect();
+                *frame = EffectFrame {
+                    batch: Some(self.event_batch(moves)),
+                    completion: FrameCompletion::EndTurn,
+                    ..EffectFrame::new(frame.controller, Vec::new())
+                };
                 None
             }
             Effect::ControlPlayer { what, duration } => {

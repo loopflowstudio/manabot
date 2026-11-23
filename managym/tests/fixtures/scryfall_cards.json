@@ -3642,6 +3642,18 @@
       "U"
     ]
   },
+  "Time Stop": {
+    "name": "Time Stop",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "End the turn. (Exile all spells and abilities, including this spell. The player whose turn it is discards down to their maximum hand size. Damage heals and \"this turn\" and \"until end of turn\" effects end.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Tireless Provisioner": {
     "name": "Tireless Provisioner",
     "mana_cost": "{2}{G}",

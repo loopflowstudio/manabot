@@ -9,10 +9,7 @@ use crate::{
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{
-        card::StaticAbility, game_object::PlayerId, permanent::CounterKind,
-        stack_object::StackObject, zone::ZoneType,
-    },
+    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
 };
 
 impl Game {
@@ -162,8 +159,9 @@ impl Game {
                     return Some(space);
                 }
                 // CR 514.3a: repeat cleanup after this priority round finishes.
-                self.state.set_cleanup_priority(false);
-                self.state.set_turn_based_actions_complete(false);
+                if self.state.turn.step_initialized && !self.is_game_over() {
+                    self.end_step_for_cleanup();
+                }
                 return None;
             }
         }
@@ -172,7 +170,7 @@ impl Game {
             if let Some(space) = self.tick_priority() {
                 return Some(space);
             }
-            if !self.state.turn.step_initialized {
+            if !self.state.turn.step_initialized || self.is_game_over() {
                 return None;
             }
         }
@@ -187,37 +185,17 @@ impl Game {
         None
     }
 
-    /// End the turn (CR 723.1): exile every spell on the stack and remove
-    /// every ability from it (723.1a), drop triggered abilities waiting to be
-    /// put on it (723.1b), end combat, and skip every remaining phase and
-    /// step but cleanup (723.1d). The cleanup step then runs normally, and
-    /// may repeat if anything triggers during it (723.1e).
-    pub(crate) fn end_the_turn(&mut self) {
-        while let Some(object) = self.state.stack_objects.last() {
-            match object {
-                StackObject::Spell(spell) => {
-                    let object_id = spell.object;
-                    self.move_object(object_id, ZoneType::Exile);
-                }
-                _ => {
-                    self.state.stack_objects_mut().pop();
-                }
-            }
-        }
-        self.state.pending_triggers_mut().clear();
-        if self.state.combat.is_some() {
-            self.on_step_end(StepKind::EndOfCombat);
-        }
+    /// Leave the interrupted step (CR 725.1d) or repeat cleanup (CR 514.3a).
+    pub(crate) fn end_step_for_cleanup(&mut self) {
+        let step = if self.state.turn.current_phase_kind() == PhaseKind::Combat {
+            StepKind::EndOfCombat
+        } else {
+            self.state.turn.current_step_kind()
+        };
         self.clear_mana_pools();
-        let turn = &mut self.state.turn;
-        turn.additional_combats.clear();
-        turn.combat_attackers = None;
-        let ending = PhaseKind::Ending as usize;
-        turn.current_phase = ending;
-        turn.current_step = PHASE_STEPS[ending].len() - 1;
-        turn.step_initialized = false;
-        turn.turn_based_actions_complete = false;
-        turn.cleanup_priority = false;
+        self.on_step_end(step);
+        self.remember_controlled_hands();
+        self.state.turn.start_cleanup();
     }
 
     /// A player skipping their combat phases passes from the precombat main
@@ -299,7 +277,6 @@ impl Game {
         if matches!(step, StepKind::Cleanup) {
             // Safety net: no combat mana survives the turn.
             self.clear_combat_mana_pools();
-            self.expire_turn_cast_grants();
         }
     }
 
@@ -490,6 +467,7 @@ impl Game {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.end_turn_modifiers();
+                self.expire_turn_cast_grants();
                 None
             }
             _ => None,
@@ -526,9 +504,8 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
-                    if !self.state.turn.step_initialized {
-                        // The resolution ended the turn (CR 723.1d): the
-                        // cleanup step begins without priority.
+                    if !self.state.turn.step_initialized || self.is_game_over() {
+                        // A turn-ending resolution leaves this priority round.
                         return None;
                     }
                     self.restart_priority_round();

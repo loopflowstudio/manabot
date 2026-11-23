@@ -1295,6 +1295,14 @@ when nothing remains. State-based actions discovered together share one
 pre-batch trigger snapshot and commit in `ObjectId` order; a stale id
 is rejected rather than followed after a zone change.
 
+Time Stop and Sundial of the Infinite end the turn during resolution. The
+engine drops earlier waiting triggers, exiles the stack, and checks state-based
+actions while still in the interrupted step. A required legend choice pauses
+the procedure there. New triggers wait until cleanup, after the active player
+discards and marked damage clears. If a player gets priority in cleanup,
+another cleanup step follows. Combat-only control ends when combat ends.
+Turn-long control applies to every cleanup discard that turn.
+
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
 Replacement and prevention definitions from the immutable card definitions

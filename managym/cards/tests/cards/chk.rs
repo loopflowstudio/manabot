@@ -217,3 +217,84 @@ fn heartbeat_of_spring_ignores_nonlands_and_badgermole_stays_with_its_controller
     choose_mode(&mut s, 1);
     assert_eq!(*pool(&s, 0), Mana::parse("U"));
 }
+
+/// Cast Time Stop from the defending seat over a spell and an activated
+/// ability. Cleanup still demands the active player's discard.
+#[test]
+fn time_stop_exiles_the_stack_during_opposing_combat() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup, force_new_card_in_hand},
+        inspect::{assert_choice_contract, permanent},
+        play::{attack_with, cast, resolve_top, target_opponent},
+    };
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&[
+        "Time Stop",
+        "Sundial of the Infinite",
+        "Lightning Bolt",
+        "Gray Ogre",
+    ]);
+    let sundial = s.force_permanent_on_battlefield(0, "Sundial of the Infinite");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    assert!(permanent(&s, ogre).attacking);
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+    s.game_mut().state.turn.extra_turns.push(PlayerId(0));
+    s.set_player_mana_pool(0, "1R");
+    s.set_player_mana_pool(1, "4UU");
+    let bolt = cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    activate(&mut s, sundial, 0);
+    s.pass_priority();
+    let stop = force_new_card_in_hand(&mut s, 1, "Time Stop");
+    cast_card(&mut s, stop);
+    assert_eq!(s.game().state.stack_objects.len(), 3);
+    for land in ["Forest", "Island"].into_iter().cycle().take(8) {
+        force_new_card_in_hand(&mut s, 0, land);
+    }
+    let turn = s.game().state.turn.turn_number;
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, stop), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, bolt), Some(ZoneType::Exile));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert!(s.game().state.combat.is_none());
+    assert!(!permanent(&s, ogre).attacking);
+    assert!(s.game().state.turn.additional_combats.is_empty());
+    assert_eq!(s.current_step(), StepKind::Cleanup);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert_choice_contract(&s);
+    s.step_action(0);
+    assert_eq!(s.game().state.turn.turn_number, turn + 1);
+    assert_eq!(s.active_player(), 0, "the queued extra turn is preserved");
+    s.assert_life(1, 20);
+}
+
+/// Unearth's delayed trigger waits for an end step that actually begins.
+#[test]
+fn time_stop_skips_the_end_step_but_preserves_its_delayed_trigger() {
+    use crate::support::{
+        game::{five_color_setup, plant_in_graveyard},
+        play::{activate_card, cast, resolve_top, settle, spend_colorless},
+    };
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Time Stop", "Cityscape Leveler"]);
+    let leveler = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
+    activate_card(&mut s, leveler, 0);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    cast(&mut s, "Time Stop");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert_eq!(s.active_player(), 1);
+    assert_eq!(zone_of(&s, leveler), Some(ZoneType::Battlefield));
+    s.advance_to_active_step(1, StepKind::End);
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, leveler), Some(ZoneType::Exile));
+}

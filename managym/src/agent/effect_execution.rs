@@ -82,6 +82,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "distinct name search",
     "effect execution",
     "end batch",
+    "end the turn",
     "entering card",
     "entering definition",
     "enters face down",
@@ -392,6 +393,12 @@ impl<'a> Projection<'a> {
         match completion {
             FrameCompletion::Priority => {}
             FrameCompletion::Continue => self.field("return", &"turn action"),
+            FrameCompletion::EndTurn => {
+                self.summary(|| {
+                    "The turn is ending. Cleanup follows the state-based actions.".into()
+                });
+                self.field("return", &"end the turn");
+            }
             FrameCompletion::CombatNormal => {
                 self.summary(|| "Normal combat damage follows these choices.".into());
                 self.field("return", &"normal combat damage");

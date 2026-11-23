@@ -48,6 +48,8 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
+    /// After stack exile, finish state-based actions before starting cleanup.
+    EndTurn,
     /// The spell's whole cost is paid; `payment.receipt` is what it actually
     /// took (CR 601.2h).
     Paid {
@@ -875,6 +877,7 @@ impl SuspendedResolution {
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
                 FrameCompletion::Paid { .. }
                 | FrameCompletion::Activated { .. }
+                | FrameCompletion::EndTurn
                 | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
                 | FrameCompletion::Continue
@@ -1302,8 +1305,13 @@ impl Game {
                         frame.completion = *next;
                         continue;
                     }
-                    FrameCompletion::CombatNormal => {
+                    FrameCompletion::CombatNormal | FrameCompletion::EndTurn => {
+                        if frame.completion == FrameCompletion::EndTurn {
+                            self.process_game_events();
+                            self.check_state_triggers();
+                        }
                         match self.perform_state_based_actions() {
+                            crate::flow::sba::SbaProgress::Changed if self.is_game_over() => return,
                             crate::flow::sba::SbaProgress::Changed => continue,
                             crate::flow::sba::SbaProgress::Pending => {
                                 self.state
@@ -1312,10 +1320,14 @@ impl Game {
                                     .expect("pending SBA")
                                     .frame
                                     .completion
-                                    .then(FrameCompletion::CombatNormal);
+                                    .then(frame.completion);
                                 return;
                             }
                             crate::flow::sba::SbaProgress::Stable => {}
+                        }
+                        if frame.completion == FrameCompletion::EndTurn {
+                            self.end_step_for_cleanup();
+                            return;
                         }
                         if !self.is_game_over() {
                             frame.batch = self.combat_damage_batch(

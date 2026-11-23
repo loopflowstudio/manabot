@@ -641,7 +641,10 @@ mod tests {
         }
         // Ending the turn during combat also settles the ledger.
         let mut surviving = game.rollback_snapshot();
-        surviving.end_the_turn();
+        surviving.run_frame(crate::flow::decision::EffectFrame::new(
+            active,
+            vec![crate::state::ability::Effect::EndTheTurn],
+        ));
         let facts = surviving.exposure_mut().unwrap();
         assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
         assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
