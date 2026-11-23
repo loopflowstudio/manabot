@@ -2,8 +2,8 @@
 
 Exploratory. Demonstrate Etude 0.4.5's Google Colab provider by training one
 seed each of the small (`w64`) and large (`w160l8`) TLA trophy models together
-on a single two-slot Colab L4 runtime (`colab-l4-s2`) toward ~2 million games
-per model, and compare Colab throughput and cost against historical RunPod runs.
+on a single two-slot Colab L4 runtime (`colab-l4-s2`) to ~500k games per model,
+and compare Colab throughput and cost against historical RunPod runs.
 
 ## Setup
 
@@ -12,9 +12,9 @@ per model, and compare Colab throughput and cost against historical RunPod runs.
   decklists, `focus_film=True`, `stream_norm=True`, damped policy learning at
   `tau_scale=0.1` (no forward-KL floor), `streams=256`, `transitions=64`,
   `rows=512`, `workers=4`, `threads=2`, float32, bucketed shapes and live-token
-  attention, raw checkpoints every 250 updates.
-- **Horizon.** 7,500 updates (~269 complete games/update ≈ 2.02M games) mapped
-  onto the 10,000-step reference damping curve (`IterationSchedule(steps=7500)`).
+  attention, raw checkpoints every 100 updates.
+- **Horizon.** 2,000 updates (~257 complete games/update ≈ 514k games) mapped
+  onto the 10,000-step reference damping curve (`IterationSchedule(steps=2000)`).
 - **Models.** One seed (`40902`) each of `w64` (width 64, 2 layers, 4 heads)
   and `w160l8` (width 160, 8 layers, 8 heads), packed onto one `colab-l4-s2`
   runtime (`etude provider set colab --kind colab --storage r2 --usd-per-unit 0.10`,
@@ -63,4 +63,4 @@ Testing live on Colab exposed three issues patched in `/Users/jack/src/etude.col
 Over 40.7 minutes on session 4 (`colab-l4-s2-a066620b9e72`, `workers=4, threads=2`, `$0.194/hr`):
 - **`w64@40902`** (`u41` → `u71`): **`81.4 s/update`** (~11,900 games/hr)
 - **`w160l8@40902`** (`u25` → `u49`): **`101.8 s/update`** (~9,500 games/hr; 1.6× faster than init as games shorten)
-- At current speed, reaching 7,500 updates (~2M games each) takes ~212 hours (~412 CU / **~$41 total**, ~1.91 CU / ~$0.19 per run spent so far).
+- At current speed, reaching 2,000 updates (~514k games each) takes ~56 hours (~109 CU / **~$11 total**). (The initial `tla_trophies_colab_2m` pilot ran 91 / 64 updates for ~$0.47 before switching the horizon to 500k games with `IterationSchedule(steps=2000)`.)

@@ -1,10 +1,10 @@
-"""Train one w64 seed and one w160l8 seed together on Colab to ~2M games.
+"""Train one w64 seed and one w160l8 seed together on Colab to ~500k games.
 
 Applies the trophy-floor study's recommended default (`tau_scale=0.1`, no
 forward-KL floor) over the complete TLA trophy split (7,859 training pools,
 873 held-out pools) with both model sizes packed onto one two-slot Colab GPU.
-At ~269 complete games per update (`streams=256, transitions=64`), 7,500 updates
-is roughly two million games per model.
+At ~257 complete games per update (`streams=256, transitions=64`), 2,000 updates
+is roughly 500k games per model.
 """
 
 from collections.abc import Sequence
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 
 
 SEED = 40902
-# ~269 complete games per update at 256 streams × 64-decision floor ≈ 2.02M games.
-TARGET_UPDATES = 7_500
+# ~257 complete games per update at 256 streams × 64-decision floor ≈ 514k games.
+TARGET_UPDATES = 2_000
 HELD_OUT = "tla-trophies-colab-held-out-32"
 HALF_TRAINING = "tla-trophies-colab-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Colab half-training deal {i + 1}" for i in range(32))
@@ -80,14 +80,14 @@ def train(config: Config) -> None:
 def training_jobs(
     revision: str | None = None,
     updates: int = TARGET_UPDATES,
-    hours: float = 140.0,
-    usd_per_run: float = 12.0,
+    hours: float = 80.0,
+    usd_per_run: float = 10.0,
     attempts: int = 12,
     threads: int = 2,
     workers: Literal[1, 2, 4] = 4,
     streams: int = 256,
     rows: int = 512,
-    checkpoint_every: int = 250,
+    checkpoint_every: int = 100,
 ) -> list[TrainingJob]:
     return [
         TrainingJob(
@@ -96,7 +96,7 @@ def training_jobs(
             config=Config(
                 size=size,
                 updates=updates,
-                schedule_steps=TARGET_UPDATES,
+                schedule_steps=updates,
                 threads=threads,
                 workers=workers,
                 streams=streams,
