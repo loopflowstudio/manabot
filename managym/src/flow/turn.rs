@@ -129,42 +129,39 @@ impl Bending {
     pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
 }
 
-/// Damage follows both exact objects through the turn (CR 400.7).
-#[derive(Clone, Debug, Default)]
-pub struct DamageHistory(BTreeMap<ObjectId, std::collections::BTreeSet<ObjectId>>);
+/// Both appearances belong to the hit (CR 400.7). Hash each in full.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+struct DamagePair(
+    #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+    #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+);
+
+/// Sorted by source then recipient, so each source's hits form one slice.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct DamageHistory(Vec<DamagePair>);
 
 impl DamageHistory {
     pub fn record(&mut self, source: ObjectId, recipient: ObjectId) {
-        self.0.entry(source).or_default().insert(recipient);
+        let pair = DamagePair(source, recipient);
+        if let Err(index) = self.0.binary_search(&pair) {
+            self.0.insert(index, pair);
+        }
     }
 
     pub fn contains(&self, source: ObjectId, recipient: ObjectId) -> bool {
-        self.0
-            .get(&source)
-            .is_some_and(|targets| targets.contains(&recipient))
+        self.0.binary_search(&DamagePair(source, recipient)).is_ok()
     }
 
     pub fn recipients(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
-        self.0.get(&source).into_iter().flatten().copied()
+        let start = self.0.partition_point(|pair| pair.0 < source);
+        self.0[start..]
+            .iter()
+            .take_while(move |pair| pair.0 == source)
+            .map(|pair| pair.1)
     }
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-}
-
-impl serde::Serialize for DamageHistory {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        #[derive(serde::Serialize)]
-        struct Pair(
-            #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
-            #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
-        );
-        serializer.collect_seq(
-            self.0.iter().flat_map(|(&source, targets)| {
-                targets.iter().map(move |&target| Pair(source, target))
-            }),
-        )
     }
 }
 

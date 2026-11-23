@@ -379,9 +379,9 @@ mod card_history_tests {
             .unwrap();
         let recipient = game.permanent_object(victim).unwrap();
         let ooze = game.permanent_object(source).unwrap();
-        let hit = |g: &mut Game| {
+        let hit = |g: &mut Game, source| {
             assert!(g.commit_damage(
-                Some(ooze),
+                Some(source),
                 ProposedDamageTarget::Object(recipient),
                 1,
                 false
@@ -392,13 +392,8 @@ mod card_history_tests {
             .unwrap();
         let other_ooze = game.permanent_object(other).unwrap();
         let mut alternate = game.clone();
-        alternate.commit_damage(
-            Some(other_ooze),
-            ProposedDamageTarget::Object(recipient),
-            1,
-            false,
-        );
-        hit(game);
+        hit(&mut alternate, other_ooze);
+        hit(game, ooze);
         let config = ObservationEncoderConfig::default();
         for viewer in [PlayerId(0), PlayerId(1)] {
             let encoded_pair = |g: &Game| {
@@ -433,7 +428,7 @@ mod card_history_tests {
         let mut branch_env = fork();
         assert_eq!(branch_env.selected_witness().unwrap(), witness);
         let repeated = branch_env.game.as_mut().unwrap();
-        hit(repeated);
+        hit(repeated, ooze);
         assert_eq!(die(repeated, recipient), 1);
         assert!(repeated.flush_triggers().is_none());
         let pending = branch_env.snapshot().unwrap();
@@ -453,12 +448,7 @@ mod card_history_tests {
         blink(&mut branch, ooze);
         assert_eq!(die(&mut branch, recipient), 0);
         let mut both = fork().game.take().unwrap();
-        both.commit_damage(
-            Some(other_ooze),
-            ProposedDamageTarget::Object(recipient),
-            1,
-            false,
-        );
+        hit(&mut both, other_ooze);
         assert_eq!(die(&mut both, recipient), 2);
         assert_eq!(env.selected_witness().unwrap(), witness);
         let game = env.game.as_mut().unwrap();

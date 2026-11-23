@@ -1,15 +1,17 @@
-at: 48afc8e363be8e8ddab5069a3fe87eb8010cd991
+at: d4852430b470ac51f87c2ceab8d56488a24d0ece
 first:
-  - path: managym/cards/tests/cards/dka.rs
-    why: Plays the attack, surviving block and later death
   - path: managym/cards/src/dka.rs
-    why: Defines the two independent counter triggers
-  - path: managym/src/flow/damage.rs
-    why: Records exact objects when damage commits
+    why: Defines both Predator Ooze triggers
   - path: managym/src/flow/turn.rs
-    why: Owns pair membership and turn reset
+    why: Owns exact damage pairs and their turn lifetime
+  - path: managym/src/flow/damage.rs
+    why: Records the pair when positive damage commits
   - path: managym/src/flow/triggers.rs
     why: Matches the departing creature against its damage source
+  - path: managym/src/agent/observation.rs
+    why: Projects live recipients into public permanent IDs
+  - path: managym/cards/tests/cards/dka.rs
+    why: Plays the attack, surviving block and later death
   - path: managym/src/agent/env/snapshot.rs
     why: Exercises reentry, countering and viewer-relative joins
 hide: []
