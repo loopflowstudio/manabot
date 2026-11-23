@@ -35,13 +35,13 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Ajani’s Pridemate.** The directed fixture `pridemate_triggers_once_per_lifelink_source_in_a_damage_batch` in `managym/src/flow/proposed_event.rs` passed. Damage of 2 to a creature and 3 to its controller produced one gain of 5 from a single source, or gains of 2 and 3 from distinct sources. Pridemate resolved to 3/3 and 4/4 respectively. The fixture submits the damage batch directly. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
 
-**Slice 2 behavior review at `cf9d7bc5` — iterate.** The constructed batch and trigger-token checks passed again. The M11 definition listens for a positive controller life change and puts one counter on its source. Native viewer events and policy history derive the signed amount from the same old and new life totals. The two-source fixture orders pending triggers directly. It does not exercise a viewer Command, its stale rejection or an independent fork at that decision.
-
 **Combat assignment at `e4784f29`.** Before the repair, a 5-power Foggy Swamp Spirit Keeper blocked by Gray Ogre gained only 2 life. The damage batch had already discarded the other 3 before lifelink ran. The passing regression `combat_assignment_deals_all_five_damage_as_one_lifelink_gain` in `managym/cards/tests/cards/tla.rs` now observes 5 damage to the sole blocker without trample. With trample it checks all four blocker/player offers (2/3 through 5/0). The shared Command helper submits 2/3, checks stale rejection and compares the independent fork witness. Combat ends at 25/17 life with one gain of 5 and one Pridemate counter. The shared assignment path in `managym/src/flow/combat_actions.rs` builds the damage batch for both cases.
 
 **Behavior review at `5c1aa5be` — iterate.** The directed combat regression passed again. The native modal decision enumerates the inclusive damage range and focuses the public attacker and blocker. Its labels name both recipients. Continuation code 32 identifies the decision in policy relations. The independent fork witness is checked immediately after the Command, and the original scenario checks the resolved gain and counter. Tensor, LLM and Academy rendering were not exercised in this run.
 
-The focused library command `cargo test --offline --manifest-path managym/Cargo.toml -p managym --lib pridemate_triggers_once_per_lifelink_source_in_a_damage_batch` failed before running a test. In `every_decision_code_is_within_the_validated_bound` (`agent/continuation.rs`), the new assignment case passes two deck entries of type `CardId` where the decision requires `ObjectId` (E0308 at lines 1353–1354). Supply the current object identities in the fixture and rerun both the decision-code and damage-batch tests. The two-source combat Command fixture below is still required for Slice 2. Full consumer and compatibility suites remain for gate.
+**Two-attacker combat fixture delivered.** Two Foggy Swamp Spirit Keepers attack together, one with a +1/+1 counter. The fixture selects the second Pridemate trigger through a bound Command, checks stale resubmission and resolves the original and independent fork through end of combat. Both record gains of 2 then 3 and finish with two Pridemate counters. The focused native card test passed.
+
+The decision-code fixture now takes the current object identity of each deck card. Both previously blocked library checks passed, covering the decision-code bound and per-source gain in a constructed damage batch.
 
 ## Experience and model to build
 
@@ -111,9 +111,7 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-**Two-attacker combat fixture delivered.** Two Foggy Swamp Spirit Keepers attack together, one with a +1/+1 counter. The fixture selects the second Pridemate trigger through a bound Command, checks stale resubmission and resolves the original and independent fork through end of combat. Both record gains of 2 then 3 and finish with two Pridemate counters. The focused native card test passed.
-
-Then cover the remaining boundaries and callers.
+**Next slice.** Follow a replacement choice through damage commitment and Pridemate resolution.
 
 - Fully prevented damage and `PlayersCantGainLife` each yield zero gain triggers. Fork at a pending replacement choice and resolve each branch to check the gains due for its committed damage and that the root stays intact. Replay the same replacement choice on an independent fork and compare the committed gains, pending stack order after the same ordering decisions, and resulting Pridemate counters.
 - Author Marauding Blight-Priest and Drogskol Reaver using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.

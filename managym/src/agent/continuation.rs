@@ -1350,8 +1350,8 @@ mod tests {
             },
             Decision::AssignCombatDamage {
                 player,
-                attacker: game.state.players[0].deck[0],
-                blocker: game.state.players[1].deck[0],
+                attacker: game.state.object_of(game.state.players[0].deck[0]),
+                blocker: game.state.object_of(game.state.players[1].deck[0]),
                 minimum: 2,
                 remaining: 5,
                 last: true,
