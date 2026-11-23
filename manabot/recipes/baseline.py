@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Literal
 
 from etude.report import Report
 from etude.train.tracking import track
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from manabot.infra.config import ModelConfig
 from manabot.infra.run_settings import RunSettings
-from manabot.recipes.builders import PACK
+from manabot.recipes.builders import PACK, require_backend_device
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
@@ -34,6 +34,11 @@ class BaselineConfig(RunSettings):
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
     padded_shapes: bool = False
+
+    @model_validator(mode="after")
+    def backend_runs_on_device(self) -> "BaselineConfig":
+        require_backend_device(self.backend, self.device)
+        return self
 
 
 def settings(config: BaselineConfig) -> SelfPlay:

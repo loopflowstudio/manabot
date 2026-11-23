@@ -37,6 +37,16 @@ def fitted_horizon(wall_seconds: float, seconds_per_update: float) -> int:
     return max(1, min(REFERENCE_UPDATES, int(wall_seconds // seconds_per_update)))
 
 
+def require_backend_device(backend: str, device: str) -> None:
+    """Refuse a framework/device pair before a recipe opens its Etude run.
+
+    A refusal inside `track` would leave a failed run whose name a corrected
+    config cannot reuse.
+    """
+    if backend == "mlx" and device == "cuda":
+        raise ValueError("backend 'mlx' runs on device 'mps' or 'cpu', not 'cuda'")
+
+
 # ---------------------------------------------------------------------------
 # Matches
 # ---------------------------------------------------------------------------

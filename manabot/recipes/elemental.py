@@ -10,10 +10,10 @@ from typing import Literal
 
 from etude.report import Report
 from etude.train.tracking import track
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from manabot.infra.run_settings import RunSettings
-from manabot.recipes.builders import elemental_self_play
+from manabot.recipes.builders import elemental_self_play, require_backend_device
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import self_play_report
 
@@ -30,6 +30,13 @@ class ElementalConfig(RunSettings):
     # Run the CUDA numerics gate before the first update; refuse to train on failure.
     validate_numerics: bool = False
     streams: int = Field(default=256, ge=2)
+
+    @model_validator(mode="after")
+    def backend_runs_on_device(self) -> "ElementalConfig":
+        require_backend_device(self.backend, self.device)
+        if self.validate_numerics and self.backend != "torch":
+            raise ValueError("the CUDA numerics gate requires backend 'torch'")
+        return self
 
 
 def gate(directory: Path) -> None:
@@ -67,8 +74,6 @@ def train(config: ElementalConfig) -> None:
 
     with track(clocks=CLOCKS, config=config) as run:
         if config.validate_numerics:
-            if config.backend != "torch":
-                raise ValueError("the CUDA numerics gate requires Torch")
             gate(run.out / "numerics")
         self_play(
             settings(config),
