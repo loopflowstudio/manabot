@@ -1,17 +1,23 @@
-at: 70e8d954a62763ac2ea225d0f51b85c616ec457f
+at: 1b962435617ef3714a1e47174da134d1e5da2e47
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Run Away Together needs a cross-target controller check
+    why: Foundation card dispositions and definition locations
+  - path: managym/cards/src/akh.rs
+    why: Caracal grants lifelink and creates two Cats
+  - path: managym/cards/tests/cards/akh.rs
+    why: Remove Caracal and inspect each remaining Cat
   - path: managym/cards/src/fdn.rs
     why: Arahbo and Hunter compose entry effects
   - path: managym/cards/tests/cards/fdn.rs
-    why: Fork one Hunter entry into both trigger orders
+    why: Copy Arahbo and resolve both Hunter trigger orders
+  - path: managym/cards/tests/cards/observability.rs
+    why: Self-entry changes the trigger subject learning tokens
   - path: managym/state/src/ability.rs
     why: Shared trigger subjects include self or another match
   - path: managym/cards/src/tokens.rs
-    why: Ordinary white Cat token face
+    why: Ordinary and lifelink white Cat faces
   - path: managym/src/flow/triggers.rs
     why: Match entering Cats by effective characteristics and token status
   - path: managym/state/src/predicate.rs
