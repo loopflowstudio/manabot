@@ -1,26 +1,21 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Who resumes Etali’s attack trigger?</title>
-<style>:root{color-scheme:light dark;font:1rem/1.55 system-ui}body{max-width:55rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}h1,h2{line-height:1.15}strong{font-weight:700}</style>
-<main><p>Managym · MTG-419 · Concept review</p>
-<h1>Do the caller’s casting choices line up with the engine’s records?</h1>
-<p>Search should be able to choose Charring Bite during Etali’s attack trigger, fork at its target decision, then choose whether to cast the other exiled card. The target Command belongs to Bite. The next cast offer still belongs to Etali.</p>
-<h2>Where the concepts line up today</h2>
-<table><thead><tr><th>Caller’s question<th>Native owner<th>Match?</tr></thead><tbody>
-<tr><td>Which spell can I cast?<td>The physical definition supplies the printed profile. Vizier offers Twinmaw from the library. The hand also offers Charring Bite.<td>Yes</tr>
-<tr><td>Which permission am I spending?<td>The selected route determines the cost and quota. Countering a committed Muldrotha cast leaves its selected type spent.<td>Yes</tr>
-<tr><td>What did I announce?<td><code>CastChoices</code> binds the profile through announcement. For Exude Toxin at X=2 the stack shows effective mana value 4. Saved v11 prefixes still read printed value 2.<td>Yes</tr>
-<tr><td>Where does the card go?<td>Adventure’s chosen replacement can grant access to the new exile object. A resolving Omen shuffles. A countered Omen leaves the shuffle RNG untouched.<td>Yes</tr>
-<tr><td>Who acts after I cast during an effect?<td><code>Decision::CastDuringResolution</code> runs the parent frame before <code>begin_resolution_cast</code> enters ordinary casting.<td><strong>No.</strong> The caller can still owe choices to an effect the dispatcher has already finished.</tr>
-<tr><td>Which prepared spell am I using?<td>The planned link joins a particular preparation to its permanent. Two permanents with the same printed spell name must be independently usable.<td>No. This link is still planned.</tr>
-</tbody></table>
-<h2>Biggest mismatch · finishing the parent</h2>
-<p><strong>Existing order</strong> &nbsp; Select card and profile → run the remaining parent instructions → begin the spell. The assertion in <code>flow/decision.rs</code> assumes the parent cannot ask another question. A last-instruction cast can conceal this assumption.</p>
-<p><strong>Proposed order</strong> &nbsp; Select Charring Bite → choose target → commit free spell → offer Etali’s remaining card or stop → finish trigger → grant priority. If both spells are cast, the second lies above Bite and resolves first after passes. Choosing stop immediately leaves both cards in exile.</p>
-<p>Keep the resolving frame and its remaining exact objects in native forkable state. At commit, resume that frame once. Recompute legal profiles from the current position. Cache neither a second list of legal actions nor a copy of the parent per offer. Ordinary priority casts need no remaining-object list. Academy, policy rows and semantic Commands all project the current native decision.</p>
-<h2>Break it, then recover it</h2>
-<p>Fork at Bite’s target decision. Submit a stale Command on one branch. The same target offer, untaken card, stack and RNG must survive rejection. Cold-restore the pending decision and submit the original Command. Compare remaining offers, stack order and the first priority holder with the uninterrupted branch. Repeat with the opposite cast order and with stop after one spell.</p>
-<p>Cascade is the counterexample to a universal “remaining cards stay in exile” rule. Its uncast remainder goes to the bottom in random order. Let each resolving instruction own that disposition and test the seeded order and RNG after the cast. A later counter to the child spell cannot restart its parent.</p>
-<h2>Review choices</h2>
-<ol><li>Who resumes resolution? <b>1a · chosen</b> Resume the native frame at cast commit. <b>1b</b> Give Etali a separate cast loop. That duplicates state search must recover.</li>
-<li>Which witness comes first? <b>2a · chosen</b> Etali with Twinmaw and a second spell exposes ordering and target recovery together. <b>2b</b> Add another single-spell cast first. It leaves the early parent completion untested.</li></ol></main></html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Casting a particular Seed Suture</title>
+<style>:root{color-scheme:light dark;font:1rem/1.55 system-ui}main{max-width:54rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.2}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}caption{text-align:left;font-weight:bold}section{border-inline-start:.25rem solid GrayText;padding-inline-start:1rem}code{overflow-wrap:anywhere}</style>
+<main><p>Managym · MTG-419 · Concept review</p><h1>Can search cast a particular Seed Suture?</h1>
+<p>Two permanents can prepare the same spell. A policy choosing between those spells decides which permanent will still be prepared after payment. The name gives the program to execute. The source and exile object tell the caller which resource it will spend.</p>
+<table><caption>Caller choices and their native owners</caption><thead><tr><th>What the caller chooses or observes<th>Engine record or boundary<th>Aligned today?</tr></thead><tbody>
+<tr><td>Smaug or Spew Flame<td>One physical definition enumerates profiles. CastChoices binds the selected program through payment and onto the stack.<td>Yes</tr>
+<tr><td>Zul Ashur’s grant or Muldrotha’s allowance<td>The selected play route determines price and which quota is charged at commit.<td>Yes</tr>
+<tr><td>Exude Toxin at X=2<td>Its stack record supplies effective value 4. Saved policy prefixes retain printed value 2.<td>Yes</tr>
+<tr><td>Adventure exile or Bilbo exile<td>The chosen replacement determines subsequent access to the resulting object. Omen owns its successful shuffle.<td>Yes</tr>
+<tr><td>Cast Charring Bite, then cast Ogre or stop<td>Etali’s suspended frame resumes at child commit. Cascade owns the bottom order of its own remainder.<td>Yes</tr>
+<tr><td>Cast the Angel’s Seed Suture<td><code>cast_spell_action</code> takes a physical CardId. <code>begin_cast</code> already takes the exact ObjectId. State-based cleanup removes an exiled SpellCopy.<td><strong>No.</strong> The priority boundary and cleanup cannot express this live copy’s identity and entitlement.</tr></tbody></table>
+<h2>Biggest mismatch · which object is available at priority?</h2>
+<p><b>Existing</b> · Select a card → look up its current object → validate route → announce. A prepared exile copy has no physical card to select.</p>
+<section><h3>Proposed · two offers at the same priority decision</h3>
+<p>Blossom-Blessed Angel → exile copy A → cast Seed Suture<br>Emergency Phytomedic → exile copy B → cast Seed Suture</p>
+<p>Bind each offer to its exact copy. Join the copy to its source in both viewer observations, action rows and semantic text. The live link explains its survival in exile and its source controller’s permission. Reuse the ordinary casting transaction and preserve existing physical-card Commands. Fork the links with game state. Derive legal offers when the branch needs them.</p></section>
+<h2>One decision, three outcomes</h2>
+<ol><li><b>Cast A.</b> Pay its cost and commit. The Angel becomes unprepared. Counter the spell. B remains available.</li><li><b>Transfer the Angel.</b> Only A’s entitlement changes. Submitting the former chooser’s stale Command must preserve the digest and both links.</li><li><b>Recover.</b> Cold-restore the original priority decision. Submit the original A Command and compare payment, stack, remaining link and state digest to uninterrupted play. Fork from the same root and choose B to reverse which permanent remains prepared.</li></ol>
+<p>A blink can produce a fresh preparation under the same printed name. Binding by name or by the source card across incarnations could spend the fresh copy with an old Command. Ability loss on the same permanent preserves its existing preparation.</p>
+<h2>Review choices</h2><ol><li><b>1a · selected</b> Publish each source-linked copy directly. <b>1b</b> Group by name and ask for a source later. That adds a search decision even though the caller already knows both sources.</li><li><b>2a · selected</b> Begin with both sources and fork on the copy. <b>2b</b> Begin with one source. That can pass even if two identical programs collapse into one offer.</li></ol></main></html>
