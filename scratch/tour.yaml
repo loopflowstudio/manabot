@@ -1,31 +1,25 @@
-at: ea10a4aac351971d0cdd95e66491b206ea656e98
+at: 965cc919b43d1019d1f366e01a1df3a5a2332827
 first:
-  - path: docs/engine.md
-    why: How later instructions use a committed result
-  - path: managym/cards/src/kld.rs
-    why: Fumigate counts the creatures it destroyed
-  - path: managym/cards/src/som.rs
-    why: Exsanguinate gains the life opponents actually lost
-  - path: managym/state/src/ability.rs
-    why: Object counts and scoped life loss
-  - path: managym/src/flow/resolution.rs
-    why: Which results each instruction requests and reads
-  - path: managym/src/flow/proposed_event.rs
-    why: Each proposal commits and returns its outcome
+  - path: managym/src/flow/turn.rs
+    why: Turn history owns both counts
   - path: managym/src/flow/zones.rs
-    why: A move returns the exact appearance it minted
-  - path: managym/src/flow/damage.rs
-    why: A life change returns its applied difference
-  - path: managym/src/flow/decision.rs
-    why: Bind one completed batch to its instruction
-  - path: managym/src/agent/effect_execution.rs
-    why: Project retained results into viewer observations
-  - path: managym/cards/tests/cards/kld.rs
-    why: Destruction with exile and an indestructible survivor
-  - path: managym/cards/tests/cards/som.rs
-    why: Protected losses and zero X
-  - path: managym/cards/tests/cards/observability.rs
-    why: Text, policy tokens and divergent discard choices
+    why: Committed gains retain their ordinal
+  - path: managym/src/flow/resolution.rs
+    why: Only resolving abilities advance their captured source
+  - path: managym/src/state/hash.rs
+    why: The witness preserves source generations
+  - path: managym/cards/src/fdn.rs
+    why: Cat Collector reads the first gain
+  - path: managym/cards/src/snc.rs
+    why: Venom Connoisseur reads its second resolution
+  - path: managym/src/agent/observation.rs
+    why: Live permanents and stack entries retain distinct counts
   - path: managym/src/flow/resolution_tests.rs
-    why: Retaining destruction counts through a second move
-hide: []
+    why: Queued gains, counters, and overlapping source incarnations
+  - path: managym/cards/tests/cards/snc.rs
+    why: Priority Commands replay both incarnations
+  - path: managym/cards/tests/cards/tla.rs
+    why: Returning Voyager draws on its second resolution
+hide:
+  - path: protocol/
+    why: Schema projections of the native viewer records
