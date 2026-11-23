@@ -8,29 +8,33 @@ vanishes at large gaps. This exploratory study asks whether a small forward
 KL to the reference (ε · KL(q ‖ π)) or a larger tau keeps those choices open,
 and what that costs in playing strength. It makes no committed prediction.
 
-**Status, 2026-11-22 06:40 UTC.** All 19 runs reached update 400 and every
+**Status, 2026-11-23: final.** All 19 runs reached update 400 and every
 held-out evaluation through 400 is complete. Seed 40902 of tau ×2 + forward
-KL 0.002, tau ×2 and tau ×4 is extending to update 1,000; it has reached
-610–650, and the section on longer training reports it through 600.
+KL 0.002, tau ×2 and tau ×4 continued to update 1,000 and met in a final
+round at update 1,000 on 2,000 deals drawn from every held-out pool.
 
 ## Answer
 
-Every treatment removes the lock and none costs strength. Each treated arm
-scores 0.70–0.75 against the heuristic at update 400, against the control's
-0.64, and plays the control about evenly head to head. Tau ×2 + forward KL
-0.002 is the most open and the strongest: no saturated decisions, 0.74
-against the heuristic and 0.53 against the control. Tau ×2 alone is starting
-to re-lock by update 400 (9–25% of probe attacks saturated), so the floor
-matters most as tau keeps decaying. Forward KL 0.01 also unlocks an already
-locked policy within 25 updates, but on fresh runs it over-regularizes: it
-learned more slowly and trails the control head to head.
+Every treatment removes the lock at update 400 and none costs strength
+there. Each treated arm scores 0.70–0.75 against the heuristic at update
+400, against the control's 0.64, and plays the control about evenly head to
+head. Forward KL 0.01 also unlocks an already locked policy within 25
+updates, but on fresh runs it over-regularizes: it learned more slowly and
+trails the control head to head.
+
+Longer training separates the two tau-based mechanisms. By update 1,000 tau
+alone re-locks part of combat (tau ×2: 35% of probe attacks and 17% of
+blocks saturated; tau ×4: 27% and 12%), while tau ×2 + forward KL 0.002
+stays open (no saturated attacks, 3% of blocks). But the open policy is
+slightly weaker: in the final round it scores 0.466 against tau ×2
+(3,584 games, ±0.008) and 0.488 against tau ×4, and 0.750 against the
+heuristic to tau ×2's 0.782. Tau ×2 and tau ×4 are level (0.502 over 4,168
+games). The partial re-lock does not cost tau ×2 strength at this horizon.
 
 **Recommended default for new trophy runs:** tau_scale 0.1 (tau ×2) with no
-forward-KL floor. At update 1,000 of seed 40902, tau ×2 + forward KL 0.002
-scores 0.464 against tau ×2 alone (1,064 games, ±0.015) and 0.753 against
-the heuristic to tau ×2's 0.785. The floor keeps combat choices open but no
-longer buys strength by then, and tau ×2 plays tau ×4 evenly (0.507 over
-2,916 games).
+forward-KL floor. The baseline recipe now trains at tau_scale 0.1. The floor
+remains available (`reference_forward_kl`) for when open combat choices
+matter more than a few points of strength.
 
 | Arm | Seeds | Score vs heuristic, 400 | vs control, 400 | Attackers declared, 400 | Blockers declared, 400 | Saturated attacks, probe 400 | Rare offers, 8+ offers, 200 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -119,29 +123,69 @@ update 400, so all of them were still improving.
 
 ## What happens with longer training?
 
-Seed 40902 of the three tau arms continues past update 400 (dotted line).
-Through update 600 every arm still holds 0.70–0.77 against the heuristic,
-and tau ×2 alone keeps its partial lock rather than deepening it: 20–34% of
-its probe attacks are saturated from update 400 on, against none for the
-combined arm. Tau ×4 begins to drift toward a lock near update 600 (attack
-gap up to 4.7, up to 11% saturated) as its tau decays to 0.019; the combined
-arm's attack gap stays at 1–3 with no saturated attacks and under 3% of
-blocks saturated.
+Seed 40902 of the three tau arms continues past update 400 (dotted line) to
+update 1,000. Every arm keeps improving: each scores 0.56–0.62 against its
+own checkpoint from half as many updates at 1,000, and 0.78–0.81 against the
+heuristic on the original held-out deals. Combat behaviour diverges. Tau ×2
+alone keeps 10–40% of its probe attacks saturated from update 250 on; tau ×4
+drifts toward a lock after 600 as its tau decays to 0.017; both start
+saturating blocks after 600. The combined arm's attack gap stays mostly at 1–3
+with no saturated attacks and under 5% of blocks saturated throughout.
 
-![Seed 40902 past update 400](../data/mtg408/report/extensions.png)
+![Seed 40902 through update 1,000](../data/mtg408/report/extensions.png)
 
-| Seed 40902 | vs heuristic, 400 / 500 / 600 | vs half its updates, 400 / 600 | Attack gap, 600 | Saturated attacks, 600 | Saturated blocks, 600 |
+| Seed 40902 | vs heuristic, 400 / 600 / 800 / 1,000 | vs half its updates, 1,000 | Attack gap, 1,000 | Saturated attacks, 1,000 | Saturated blocks, 1,000 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Tau ×2 + forward KL 0.002 | 0.75 / 0.70 / 0.73 | 0.63 / pending | 2.0 | 0% | 3% |
-| Tau ×2 | 0.72 / 0.77 / 0.75 | 0.57 / 0.55 | 5.2 | 27% | 3% |
-| Tau ×4 | 0.71 / 0.73 / 0.77 | 0.58 / 0.58 | 4.1 | 6% | 3% |
+| Tau ×2 + forward KL 0.002 | 0.75 / 0.74 / 0.76 / 0.78 | 0.60 | 1.2 | 0% | 3% |
+| Tau ×2 | 0.72 / 0.75 / 0.78 / 0.80 | 0.56 | 5.1 | 35% | 17% |
+| Tau ×4 | 0.71 / 0.75 / 0.76 / 0.81 | 0.62 | 5.4 | 27% | 12% |
 
-Each held-out point is 128 games of one seed, so differences of 0.05 are
-within noise; tau ×2's update-600 point has 48 games so far. Against the
-half-update checkpoint the arms still score above 0.5, so all three are
-still improving at 600. These panels are drawn from the seed's own records:
-the Etude page's curves average a job's seeds and would jump at update 400
+The update-400 points are 128 games; later points are 570–700 games of the
+original 32 held-out deals plus 128 more. Head to head at matched updates
+from 500 to 1,000, pooled, the combined arm scores 0.43 against tau ×2
+(1,540 games) and 0.51 against tau ×4 (1,844); tau ×4 scores 0.48 against
+tau ×2 (2,124). These panels are drawn from the seed's own records: the
+Etude page's curves average a job's seeds and would jump at update 400
 where seed 40901 stops.
+
+### Final round at update 1,000
+
+The update-1,000 checkpoints played 2,000 deals drawn from every one of the
+873 held-out pools, each deal with both seats. The round against the
+heuristic stopped once each arm had 1,600–3,700 games, enough for ±0.01.
+
+![Final round at update 1,000](../data/mtg408/report/final-round.png)
+
+| Pairing at update 1,000 | Score of first | Games | 95% interval |
+| --- | ---: | ---: | ---: |
+| Tau ×2 + forward KL 0.002 vs tau ×2 | 0.466 | 3,584 | 0.450–0.482 |
+| Tau ×2 + forward KL 0.002 vs tau ×4 | 0.488 | 3,896 | 0.472–0.504 |
+| Tau ×4 vs tau ×2 | 0.502 | 4,168 | 0.487–0.517 |
+| Tau ×2 + forward KL 0.002 vs heuristic | 0.750 | 3,260 | 0.735–0.765 |
+| Tau ×2 vs heuristic | 0.782 | 1,616 | 0.762–0.802 |
+| Tau ×4 vs heuristic | 0.769 | 3,748 | 0.755–0.782 |
+
+Intervals treat games as independent; both seats of a deal share its decks,
+so the true intervals are somewhat wider.
+
+## Cards: Manabot against 17Lands players
+
+Every card-evidence game in which both seats were Manabot checkpoints
+(41,372 player-games, so Manabot's overall win rate is exactly 50%) gives a
+games-in-hand win rate (GIH WR) per card. The 17Lands public TLA Premier
+Draft game dump (562,924 games, CC BY 4.0) gives the human GIH WR for the
+same cards. 299 cards have both; the median card has 1,132 Manabot GIH
+games and 166 cards have at least 1,000.
+
+Measured against each side's own average, Manabot's card values correlate
+0.38 with humans' over those 166 cards. Cards Manabot values most above humans include
+Wartime Protestors, Diligent Zookeeper and The Boulder, Ready to Rumble
+(10–14 points above humans relative to average); those it values least
+include Cunning Maneuver, Sun-Blessed Peak, Secret Tunnel and Airbender's
+Reversal (8–16 points below). Decks are fixed trophy decks, so a card's
+GIH WR also carries its deck's strength.
+
+[Per-card table: Manabot vs 17Lands GIH WR](../data/mtg408/cards.html)
 
 ## Does the zero-weight control reproduce MTG-409?
 
@@ -176,25 +220,25 @@ run mapped onto a 10,000-step curve; the tau arms scale it by two and four.
 
 ## Cost
 
-USD35 approved for the experiment. The 19 training runs to update 400 cost
-USD25.61 by Etude's per-run estimates, on rented L4s; evaluation ran on
-owned machines. The 1,000-update extensions share one L4 rental capped at
-USD6.60 to 11:11 UTC, with a second short rental to finish the remaining
-updates.
+USD35 approved. The launcher's per-run estimates total USD33.52: USD25.61
+for the 19 runs to update 400, the rest for extending seed 40902 of the
+three tau arms to update 1,000. Evaluation ran on owned machines.
 
 ## Limits
 
 - Seeds: three per forward-KL arm, two per tau arm. Differences of a few
   points in score are within seed spread; the head-to-head games, which pair
   every treated seed with every control seed, are the tighter comparison.
-- Length: 400 updates for the comparison, 600 so far for one seed of three
-  arms. The policies are still improving.
+- Length: 400 updates for the comparison, 1,000 for one seed of three
+  arms. The policies are still improving at 1,000, and the final-round
+  verdict is one training seed.
 - Rare offers were measured at update 200, before the combined arm existed.
-- Evaluation failures: about a dozen of ~3,000 matches failed and are
-  excluded — a card-capture bug on cards entering from outside the game
-  (Task a383b2), one interrupted match and one observation over the 32-slot
-  stack. If the capture bug only fires on Lesson decks, those decks are
-  slightly under-counted in every arm alike.
+- Evaluation failures: about a dozen of ~3,000 matches through update 400
+  failed and are excluded, and a few dozen of the final round's matches. Most
+  are the card-capture bug (Task a383b2, then MTG-415: "unrecorded physical
+  copy"), plus one interrupted match and one observation over the 32-slot
+  stack. If the capture bug favours some decks, those decks are slightly
+  under-counted in every arm alike.
 - Native panics (Task 6213de) occurred in training games; the game error
   policy recovered them.
 - Rare offers come from 81 positions played by one frozen control

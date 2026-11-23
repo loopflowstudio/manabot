@@ -41042,6 +41042,10 @@
    "sha256": "4f1b6db53d8942296d8caa6437620441c1c95482243dc715cff00ac51f11a668",
    "bytes": 2621440
   },
+  "experiments/data/mtg408/cards.html": {
+   "sha256": "c6d2f35406db862c16809df39d9506317c846621a290dd6891305be0aafc827e",
+   "bytes": 75777
+  },
   "experiments/data/mtg408/report/attack-shifts.png": {
    "sha256": "0c279e96db87c619cfdade9780074e6f45d72c43c786aa96374b02f2d867dd7e",
    "bytes": 44219
@@ -41075,8 +41079,12 @@
    "bytes": 55100
   },
   "experiments/data/mtg408/report/extensions.png": {
-   "sha256": "5c26d535cca8ede71ebf0327237195e49d07d5fcb2515f7931f412855e8c1c26",
-   "bytes": 196818
+   "sha256": "5dbe6710f60c5f3815e01dfa8318a2ed6ecd2af189f70584e1ebc4fe1d204594",
+   "bytes": 191328
+  },
+  "experiments/data/mtg408/report/final-round.png": {
+   "sha256": "42fda093b145c514688b198d12e64bafed258c895e32092465bcccaee5c1da8f",
+   "bytes": 34434
   },
   "experiments/data/mtg408/report/grad-norm.png": {
    "sha256": "61a76ac850a8b9e4399e1f37a68e373b7e6f82cf08fe7d08f793435e4602f326",
