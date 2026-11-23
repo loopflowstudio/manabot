@@ -52,18 +52,16 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 ## What the backend covers
 
-The backend runs what current damped self-play recipes (`baseline`, `elemental`
-and `w160l8`) use: a catalog world with catalog record ids, table attention
-(post- or pre-norm), a masked-mean scalar critic, `stream_norm`, `focus_film`,
-`policy_film`, `bucketed_shapes`, gradient accumulation and policy inputs v9,
-v10 and v11 (stack tokens and known library positions).
-The container carries every configuration, so `backend.load_policy` and
-`backend.runtime.create_policy` refuse what is not yet implemented: belief
-inputs, decision memory, policy history (`recent_events`), categorical WDL or
-other value aggregations, and `attention_on=False` raise `UnsupportedPolicy`
-naming every unsupported field, rather than running partially. The sized column
-readings (`one_hot`, `steps`) are host preparation and need nothing from the
-backend.
+MLX supports fresh scalar damped self-play with catalog record ids, table
+attention and a masked-mean critic. Inputs v9 through v11 use the same saved
+column readings as Torch. The model supports stream normalization, focus and
+policy FiLM, and v11 stack and known-library rows. Collection and learning
+support bucketed shapes and bounded execution chunks. The tracked baseline
+and Elemental recipes use Torch for training and recovery.
+
+Fresh construction and checkpoint loading both call `require_supported`.
+It reports unsupported settings together, including belief inputs, decision
+memory, recent events, other critic layouts and disabled attention.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:

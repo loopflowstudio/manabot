@@ -44,7 +44,6 @@ from manabot.policy.checkpoint import (
     read_container,
     read_metadata,
     save_policy_checkpoint,
-    torch_name,
 )
 from manabot.policy.protocol import Precision
 
@@ -89,37 +88,39 @@ _GRU = {
     "hidden_bias": "hidden_bias",
 }
 _GRU_INVERSE = {value: key for key, value in _GRU.items()}
+_QKV = ("query", "key", "value")
+
+
+def gru_name(name: str, leaves: dict[str, str]) -> str:
+    """Both frameworks keep the GRU prefix and rename its four leaves."""
+    for prefix in GRUS:
+        if name.startswith(prefix + "."):
+            leaf = name[len(prefix) + 1 :]
+            if leaf not in leaves:
+                raise KeyError(f"unmapped GRU tensor {name}")
+            return f"{prefix}.{leaves[leaf]}"
+    return name
+
+
+def put_parameter(out: dict[str, np.ndarray], name: str, value: np.ndarray) -> None:
+    if name in out:
+        raise KeyError(f"two tensors map to {name}")
+    out[name] = np.ascontiguousarray(value, dtype=np.float32)
 
 
 def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Canonical arrays in MLX names; only renames and splits, preserving norms."""
     out: dict[str, np.ndarray] = {}
 
-    def put(key: str, value: np.ndarray) -> None:
-        if key in out:
-            raise KeyError(f"two canonical tensors map to {key}")
-        out[key] = np.ascontiguousarray(value, dtype=np.float32)
-
     for name, tensor in canonical.items():
-        tensor = np.asarray(tensor)
-        prefix = next((p for p in GRUS if name.startswith(p + ".")), None)
-        if prefix is not None:
-            leaf = name[len(prefix) + 1 :]
-            if leaf in _GRU:
-                put(f"{prefix}.{_GRU[leaf]}", tensor)
-            else:
-                raise KeyError(f"unmapped GRU tensor {name}")
-            continue
-        name = _SEQUENTIAL.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}.layers.{m.group(3)}.", name
-        )
+        name = _SEQUENTIAL.sub(r"\1\2.layers.\3.", gru_name(name, _GRU))
         if name.endswith((".mha.qkv_weight", ".mha.qkv_bias")):
             stem, leaf = name.rsplit(".", 1)
             leaf = leaf.removeprefix("qkv_")
-            for part, value in zip(("query", "key", "value"), np.split(tensor, 3)):
-                put(f"{stem}.{part}_proj.{leaf}", value)
+            for part, value in zip(_QKV, np.split(tensor, 3), strict=True):
+                put_parameter(out, f"{stem}.{part}_proj.{leaf}", value)
             continue
-        put(name, tensor)
+        put_parameter(out, name, tensor)
     return out
 
 
@@ -128,38 +129,23 @@ def canonical_from_mlx(mlx_named: ParameterArrays) -> dict[str, np.ndarray]:
     out: dict[str, np.ndarray] = {}
     qkv: dict[tuple[str, str], dict[str, np.ndarray]] = {}
 
-    def put(key: str, value: np.ndarray) -> None:
-        if key in out:
-            raise KeyError(f"two MLX tensors map to canonical {key}")
-        out[key] = np.ascontiguousarray(value, dtype=np.float32)
-
     for name, tensor in mlx_named.items():
-        array = np.asarray(tensor, dtype=np.float32)
-        prefix = next((p for p in GRUS if name.startswith(p + ".")), None)
-        if prefix is not None:
-            leaf = name[len(prefix) + 1 :]
-            if leaf in _GRU_INVERSE:
-                put(f"{prefix}.{_GRU_INVERSE[leaf]}", array)
-            else:
-                raise KeyError(f"unmapped MLX GRU tensor {name}")
-            continue
-        canonical = _MLX_SEQUENTIAL.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}.{m.group(3)}.", name
-        )
+        canonical = _MLX_SEQUENTIAL.sub(r"\1\2.\3.", gru_name(name, _GRU_INVERSE))
         matched = re.match(
             r"^(.*\.mha)\.(query|key|value)_proj\.(weight|bias)$", canonical
         )
         if matched is not None:
             stem, part, leaf = matched.groups()
-            qkv.setdefault((stem, leaf), {})[part] = array
+            qkv.setdefault((stem, leaf), {})[part] = tensor
             continue
-        put(canonical, array)
+        put_parameter(out, canonical, tensor)
     for (stem, leaf), parts in qkv.items():
-        if set(parts) != {"query", "key", "value"}:
+        if parts.keys() != set(_QKV):
             raise KeyError(f"incomplete MLX attention projections for {stem}.{leaf}")
-        put(
+        put_parameter(
+            out,
             f"{stem}.qkv_{leaf}",
-            np.concatenate([parts["query"], parts["key"], parts["value"]], axis=0),
+            np.concatenate([parts[part] for part in _QKV], axis=0),
         )
     return out
 
@@ -210,7 +196,6 @@ def save_checkpoint(
     if agent.compute_dtype != mx.float32:
         raise ValueError("close the forward precision scope before saving")
     parameters = canonical_from_mlx(flat_numpy(agent.parameters()))
-    parameter_names = [torch_name(name) for name in parameters]
     receipt = architecture_receipt(
         agent.config,
         obs_space,
@@ -222,7 +207,6 @@ def save_checkpoint(
         path,
         parameters=parameters,
         buffers=agent.buffers(),
-        parameter_names=parameter_names,
         readings=agent.readings,
         architecture=receipt,
         player_configs=player_configs,
@@ -310,9 +294,7 @@ class MLXBackend:
 
     read_policy = staticmethod(read_container)
 
-    @staticmethod
-    def metadata(path: str) -> dict[str, Any]:
-        return read_metadata(path)
+    metadata = staticmethod(read_metadata)
 
     @staticmethod
     def seed(seed: int, *, deterministic: bool | None = None) -> None:
@@ -322,11 +304,8 @@ class MLXBackend:
         policy = assemble(checkpoint, precision=self.precision)
         return policy, Learner(policy, minibatch_rows=1)
 
-    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
-        return mlx_parameters(canonical)
-
-    def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
-        return mlx_parameters(canonical)
+    parameter_layout = staticmethod(mlx_parameters)
+    gradient_layout = staticmethod(mlx_parameters)
 
 
 BACKEND = MLXBackend()

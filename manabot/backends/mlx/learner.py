@@ -13,7 +13,6 @@ nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
 `gradients` returns them without stepping. The learner runs in its policy's
 precision (bfloat16 for wide models, float32 otherwise, or an explicit choice);
 bfloat16 forwards keep float32 master weights, loss, clipping and Adam.
-Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
 counts steps and rejections; the sampled gradient and parameter detail it
 reads from torch modules stays absent here.

@@ -18,7 +18,6 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-import torch
 
 from manabot.backends import resolve
 from manabot.backends.parity import (
@@ -28,40 +27,24 @@ from manabot.backends.parity import (
     STEP_PARAMETER_TOLERANCE,
     TOLERANCES,
     Report,
-    installed_backends,
 )
-from manabot.backends.torch.collection import (
-    CollectionSession as TorchCollectionSession,
-)
-from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     PERMANENT_ATTACHED_INDEX,
-    ObservationSpace,
-)
-from manabot.infra.config import (
-    MatchConfig,
-    ModelConfig,
-    ObservationConfig,
-    RewardConfig,
 )
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_parameters,
-    from_torch_state,
 )
 from manabot.policy.protocol import Backend, Precision
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import (
     RolloutBatch,
-    collect,
-    open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
-import managym
+from tests.training.backend_fixtures import installed_backend, legacy_capture
 
 LEARNING = DampedPolicyLearning(
     gradient="damped_policy",
@@ -90,38 +73,7 @@ _POLICY_TERMS = (
 @pytest.fixture(scope="module")
 def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
     """Initial weights in the shared container and one batch collected with them."""
-    torch.manual_seed(7)
-    # The framework backends implement input v9 only.
-    with pytest.warns(DeprecationWarning):
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    agent = ActorCritic(
-        space,
-        ModelConfig(
-            hidden_dim=16,
-            num_attention_heads=2,
-            value_aggregation="masked_mean",
-            world=managym.WORLD_SETUP,
-        ),
-    )
-    state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    collector = open_collector(
-        space,
-        Match(MatchConfig()),
-        Reward(RewardConfig()),
-        num_envs=2,
-        opponent_mode="self",
-        learning_seats="one",
-        batch_closure="exact-quota",
-        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
-    )
-    batch = collect(collector, agent, 6)
-    return from_torch_state(
-        agent.config,
-        space.config,
-        state,
-        parameter_names=dict(agent.named_parameters()),
-        readings=agent.readings,
-    ), batch
+    return legacy_capture(seed=7, num_envs=2, decisions=6)
 
 
 def _update(
@@ -160,10 +112,8 @@ def _assert_close(actual: object, expected: object) -> None:
 def test_damped_update_agrees_with_the_torch_backend(
     name: str, captured: tuple[PolicyCheckpoint, RolloutBatch]
 ) -> None:
-    if name not in installed_backends():
-        pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    reference, module = resolve("torch"), resolve(name)
+    reference, module = resolve("torch"), installed_backend(name)
     rows = batch.actions.size
     expected, _, reference_after = _update(reference, weights, batch, rows)
     actual, before, after = _update(module, weights, batch, rows)
@@ -234,9 +184,7 @@ def test_half_damped_update_after_cached_inference(
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
     precision: Precision = "bfloat16"
-    if "mlx" not in installed_backends():
-        pytest.skip("MLX is not installed")
-    module = resolve("mlx", precision=precision)
+    module = installed_backend("mlx", precision=precision)
     weights, batch = captured
     agents = [module.load(weights)[0] for _ in range(2)]
     learners = [module.learner.Learner(agent, minibatch_rows=2) for agent in agents]
@@ -298,10 +246,8 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
     captured: tuple[PolicyCheckpoint, RolloutBatch],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if name not in installed_backends():
-        pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    module = resolve(name)
+    module = installed_backend(name)
     agent = module.load(weights)[0]
     original = RolloutBatch.observations
     # Each corruption is otherwise a real batch. Check the raw action mask
@@ -357,10 +303,8 @@ def test_actor_filtered_floor_is_the_reported_penalty(
     name: str,
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
-    if name not in installed_backends():
-        pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    backend = resolve(name)
+    backend = installed_backend(name)
     results: list[UpdateDiagnostics] = []
     for coefficient in (0.0, 0.002):
         learning = LEARNING.model_copy(

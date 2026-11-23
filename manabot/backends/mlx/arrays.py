@@ -18,6 +18,16 @@ from manabot.policy.protocol import Precision
 FLOAT = mx.float32
 
 
+def mlx_device(name: str) -> mx.DeviceType:
+    if name == "cpu":
+        return mx.cpu
+    if name in {"mps", "gpu"}:
+        return mx.gpu
+    if name == "cuda":
+        raise ValueError("MLX does not support CUDA")
+    raise ValueError(f"MLX does not support device {name!r}")
+
+
 def precision_dtype(precision: Precision) -> mx.Dtype:
     """The compute dtype; parameters and optimizer state remain float32."""
     dtypes = {"float32": mx.float32, "bfloat16": mx.bfloat16}

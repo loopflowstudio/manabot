@@ -49,8 +49,15 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import row_needs, sizes_of, trim_observation
-from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
+from manabot.policy.buckets import trim_to_needs
+from manabot.policy.prepare import (
+    BeliefRows,
+    Layout,
+    Prepared,
+    Tables,
+    object_ownership,
+    prepare,
+)
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 import managym
@@ -285,22 +292,11 @@ class ActorCritic(nn.Module):
             self.belief_global_embedding = None
 
         # Static ownership mask over the concatenated visible object sequence.
-        is_agent_parts = [
-            torch.ones(1, dtype=torch.bool),
-            torch.zeros(1, dtype=torch.bool),
-            torch.ones(observation_space.config.max_cards_per_player, dtype=torch.bool),
-            torch.zeros(
-                observation_space.config.max_cards_per_player, dtype=torch.bool
-            ),
-            torch.ones(
-                observation_space.config.max_permanents_per_player, dtype=torch.bool
-            ),
-            torch.zeros(
-                observation_space.config.max_permanents_per_player, dtype=torch.bool
-            ),
-        ]
-        is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
-        self.register_buffer("_is_agent_template", is_agent_template)
+        ownership = object_ownership(
+            observation_space.config.max_cards_per_player,
+            observation_space.config.max_permanents_per_player,
+        )
+        self.register_buffer("_is_agent_template", torch.tensor(ownership[None]))
 
         # Construct optional parameters after the historical model to preserve
         # its initialization order and state-dict names.
@@ -570,18 +566,10 @@ class ActorCritic(nn.Module):
         spec = self._admission_spec()
         capacity = obs["actions_valid"].shape[1]
         if self.bucketed_shapes:
-            if needs is None:
-                needs = row_needs(obs, self.observation_space)
-            if needs is not None:
-                obs = trim_observation(
-                    obs,
-                    sizes_of(
-                        needs,
-                        self.observation_space,
-                        objects=self.object_trimming(),
-                    ),
-                )
-        batch = prepare(
+            obs, needs = trim_to_needs(
+                obs, self.observation_space, needs, objects=self.object_trimming()
+            )
+        return prepare(
             obs,
             spec.tables,
             inference=inference and device_of(self).type == "cpu",
@@ -593,14 +581,8 @@ class ActorCritic(nn.Module):
             memory_roots=memory_roots,
             binding=spec.binding,
             action_capacity=capacity,
+            bucket_needs=needs,
             select_programs=not inference and not self.bucketed_shapes,
-        )
-
-        return replace(
-            batch,
-            bucket_needs=None
-            if needs is None
-            else tuple(tuple(map(int, row)) for row in needs),
         )
 
     def _evaluate_outputs(

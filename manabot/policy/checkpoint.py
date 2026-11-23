@@ -165,6 +165,43 @@ class Dimensions:
     links: int
     stack: int = 0
 
+    @classmethod
+    def from_layout(
+        cls,
+        model: ModelConfig,
+        space: ObservationSpace,
+        columns: Layout,
+        *,
+        token_rows: int,
+        name_rows: int,
+    ) -> "Dimensions":
+        """Use the policy's input readings and its actual embedding sizes."""
+        player = columns.numeric_width("agent_player")
+        card = columns.numeric_width("agent_cards")
+        if space.turn_state:
+            player += columns.numeric_width("player_turn_state")
+            card += 1
+        return cls(
+            hidden=model.hidden_dim,
+            heads=model.num_attention_heads,
+            layers=model.attention_layers,
+            feedforward=model.attention_feedforward_dim
+            or model.num_attention_heads * model.hidden_dim,
+            player=player,
+            card=card,
+            permanent=columns.numeric_width("agent_permanents"),
+            action=columns.numeric_width("actions"),
+            focus=space.config.max_focus_objects,
+            relation=columns.numeric_width("relations"),
+            effect=columns.numeric_width("effects"),
+            fact=columns.fact_width(catalog_ids=True),
+            fact_kinds=FACT_KINDS,
+            token_rows=token_rows,
+            name_rows=name_rows,
+            links=len(columns.link_columns),
+            stack=columns.numeric_width("stack") if space.one_token else 0,
+        )
+
 
 # -- canonical names -----------------------------------------------------------------
 
@@ -255,34 +292,14 @@ class PolicyCheckpoint:
         return Tables.from_buffers(self.buffers, Layout(self.readings))
 
     def dimensions(self) -> Dimensions:
-        model = self.model
-        columns = Layout(self.readings)
-        player = columns.numeric_width("agent_player")
-        card = columns.numeric_width("agent_cards")
-        if self.space.turn_state:
-            player += columns.numeric_width("player_turn_state")
-            card += 1
-        return Dimensions(
-            hidden=model.hidden_dim,
-            heads=model.num_attention_heads,
-            layers=model.attention_layers,
-            feedforward=model.attention_feedforward_dim
-            or model.num_attention_heads * model.hidden_dim,
-            player=player,
-            card=card,
-            permanent=columns.numeric_width("agent_permanents"),
-            action=columns.numeric_width("actions"),
-            focus=self.space.config.max_focus_objects,
-            relation=columns.numeric_width("relations"),
-            effect=columns.numeric_width("effects"),
-            fact=columns.fact_width(catalog_ids=True),
-            fact_kinds=FACT_KINDS,
-            token_rows=int(
-                self.parameters["semantic_cards.token_embedding.weight"].shape[0]
-            ),
-            name_rows=int(self.parameters["name_candidates.embedding.weight"].shape[0]),
-            links=len(columns.link_columns),
-            stack=columns.numeric_width("stack") if self.space.one_token else 0,
+        tokens = self.parameters["semantic_cards.token_embedding.weight"]
+        names = self.parameters["name_candidates.embedding.weight"]
+        return Dimensions.from_layout(
+            self.model,
+            self.space,
+            Layout(self.readings),
+            token_rows=tokens.shape[0],
+            name_rows=names.shape[0],
         )
 
 
@@ -359,10 +376,10 @@ def save_policy_checkpoint(
     *,
     parameters: Mapping[str, np.ndarray],
     buffers: Mapping[str, np.ndarray],
-    parameter_names: Sequence[str],
     readings: Readings,
     architecture: ArchitectureReceipt,
     player_configs: "Sequence[managym.PlayerConfig] | None",
+    parameter_names: Sequence[str] | None = None,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
@@ -400,21 +417,22 @@ def save_policy_checkpoint(
             card_vocab_size=agent.config.belief_card_vocab_size,
         )
     )
-    checked_params: dict[str, np.ndarray] = {}
     for name, value in parameters.items():
-        array = np.asarray(value)
-        if array.dtype != np.float32:
-            raise TypeError(f"parameter {name}: expected float32, got {array.dtype}")
-        checked_params[name] = (
-            array if array.flags.c_contiguous else np.ascontiguousarray(array)
-        )
+        if value.dtype != np.float32:
+            raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
     meta = checkpoint_metadata(record)
-    meta["parameter_names"] = json.dumps(list(parameter_names))
+    # Keep the writer's parameter order for positional Adam snapshots.
+    names = (
+        [torch_name(name) for name in parameters]
+        if parameter_names is None
+        else list(parameter_names)
+    )
+    meta["parameter_names"] = json.dumps(names)
     container = PolicyCheckpoint(
         model=agent.config,
         space=obs_space,
-        parameters=checked_params,
-        buffers={name: np.asarray(value) for name, value in buffers.items()},
+        parameters=parameters,
+        buffers=buffers,
         metadata=meta,
         readings=readings,
     )

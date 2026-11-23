@@ -1,5 +1,6 @@
 """Host lookup tables for encoding the running catalog and binding stored policies."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -7,7 +8,13 @@ import numpy as np
 from manabot.env.observation import ObservationSpace
 from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
 from manabot.infra.config import ModelConfig
-from manabot.policy.prepare import Layout, RecordNamespace, Tables, record_key
+from manabot.policy.prepare import (
+    Layout,
+    RecordNamespace,
+    Tables,
+    object_ownership,
+    record_key,
+)
 from manabot.policy.readings import Readings
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
@@ -143,6 +150,22 @@ def catalog_tables(
     )
 
 
+def name_definitions(candidates: Sequence[managym.NameCandidate]) -> np.ndarray:
+    """One-based definition joins for the unique public names. Zero denotes absence."""
+    if not candidates or len({candidate.name for candidate in candidates}) != len(
+        candidates
+    ):
+        raise ValueError("naming vocabulary must be nonempty and unique")
+    return np.asarray(
+        [0]
+        + [
+            candidate.definition + 1 if candidate.definition is not None else 0
+            for candidate in candidates
+        ],
+        dtype=np.int64,
+    )
+
+
 def fresh_policy_tables(
     space: ObservationSpace, model: ModelConfig, readings: Readings
 ) -> tuple[Tables, int, int]:
@@ -160,36 +183,15 @@ def fresh_policy_tables(
             buffers[f"semantic_cards.{name}"] = value
         token_rows = catalog.embedding_rows
         definition_rows = catalog.buffers["definition_rows"]
-    candidates = managym.naming_catalog()
-    if not candidates or len({candidate.name for candidate in candidates}) != len(
-        candidates
-    ):
-        raise ValueError("naming vocabulary must be nonempty and unique")
-    name_definitions = np.asarray(
-        [0]
-        + [
-            candidate.definition + 1 if candidate.definition is not None else 0
-            for candidate in candidates
-        ],
-        dtype=np.int64,
-    )
-    buffers["name_candidates.definitions"] = name_definitions
+    definitions = name_definitions(managym.naming_catalog())
+    buffers["name_candidates.definitions"] = definitions
     if definition_rows is not None:
-        buffers["name_candidates.program_rows"] = definition_rows[name_definitions]
-    cards = space.config.max_cards_per_player
-    perms = space.config.max_permanents_per_player
-    buffers["_is_agent_template"] = np.concatenate(
-        [
-            np.ones(1, dtype=bool),
-            np.zeros(1, dtype=bool),
-            np.ones(cards, dtype=bool),
-            np.zeros(cards, dtype=bool),
-            np.ones(perms, dtype=bool),
-            np.zeros(perms, dtype=bool),
-        ]
+        buffers["name_candidates.program_rows"] = definition_rows[definitions]
+    buffers["_is_agent_template"] = object_ownership(
+        space.config.max_cards_per_player, space.config.max_permanents_per_player
     )[None]
     return (
         Tables.from_buffers(buffers, Layout(readings)),
         token_rows,
-        len(candidates) + 1,
+        len(definitions),
     )

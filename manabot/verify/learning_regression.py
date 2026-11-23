@@ -16,6 +16,7 @@ from typing import Literal
 
 from etude.train.read import read_all
 import numpy as np
+from numpy.typing import ArrayLike
 from pydantic import Field
 
 from manabot.env.observation import ActionEnum
@@ -26,7 +27,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
@@ -143,36 +144,46 @@ def inspect_policy(
     """Use the checkpoint loader and exact setup; never refit weights."""
     if not cases:
         raise ValueError("empty frozen choice corpus")
-    if len(cases) > 32:
-        chunks = [
-            inspect_policy(path, cases[i : i + 32], updates, backend=backend)
-            for i in range(0, len(cases), 32)
-        ]
-        return PolicySnapshot(
-            updates=updates,
-            checkpoint_sha256=chunks[0].checkpoint_sha256,
-            choices=[choice for chunk in chunks for choice in chunk.choices],
-            maximum_invariance_error=max(
-                chunk.maximum_invariance_error for chunk in chunks
-            ),
-        )
-    agent, _ = backend.load_policy(str(path))
+    agent, _ = backend.load_policy(path)
     configs = [
         managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
     ]
     validate_agent_setup(agent, configs)
+    restored, _ = backend.load_policy(path)
+    choices: list[ChoiceScore] = []
+    maximum = 0.0
+    for start in range(0, len(cases), 32):
+        scores, error = score_choices(agent, restored, cases[start : start + 32])
+        choices.extend(scores)
+        maximum = max(maximum, error)
+    return PolicySnapshot(
+        updates=updates,
+        checkpoint_sha256=file_sha256(path),
+        choices=choices,
+        maximum_invariance_error=maximum,
+    )
+
+
+def score_choices(
+    agent: BackendPolicy, restored: BackendPolicy, cases: list[Case]
+) -> tuple[list[ChoiceScore], float]:
+    """Score a bounded batch and check reload, batching and permutation invariance."""
+
+    def evaluate(
+        policy: BackendPolicy, observation: Mapping[str, ArrayLike]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        host = {key: np.asarray(value) for key, value in observation.items()}
+        return policy.evaluate(policy.prepare(host, inference=True))
+
     stacked = {
-        key: np.concatenate([np.asarray(case.obs[key]) for case in cases], axis=0)
+        key: np.concatenate([case.obs[key] for case in cases], axis=0)
         for key in cases[0].obs
     }
-    logits, values = agent.evaluate(agent.prepare(stacked, inference=True))
+    logits, values = evaluate(agent, stacked)
     probabilities = _softmax(logits)
     if not np.isfinite(probabilities).all() or not np.isfinite(values).all():
         raise ValueError("nonfinite frozen checkpoint output")
-    restored, _ = backend.load_policy(str(path))
-    loaded_logits, loaded_values = restored.evaluate(
-        restored.prepare(stacked, inference=True)
-    )
+    loaded_logits, loaded_values = evaluate(restored, stacked)
     errors = [
         float(np.abs(_softmax(loaded_logits) - probabilities).max()),
         float(np.abs(loaded_values - values).max()),
@@ -180,24 +191,13 @@ def inspect_policy(
     scores: list[ChoiceScore] = []
     for row, case in enumerate(cases):
         obs = case.obs
-        host_obs = {key: np.asarray(value) for key, value in obs.items()}
-        single, value = agent.evaluate(agent.prepare(host_obs, inference=True))
+        single, value = evaluate(agent, obs)
         p = _softmax(single)
-        count = int(host_obs["actions_valid"].sum())
-        order = np.arange(count - 1, -1, -1)
-        reordered_offers = {
-            key: np.asarray(val)
-            for key, val in reorder_offers(obs, order).items()  # type: ignore[arg-type]
-        }
-        offers, offer_value = agent.evaluate(
-            agent.prepare(reordered_offers, inference=True)
-        )
-        reordered_objects = {
-            key: np.asarray(val) for key, val in reorder_objects(obs).items()
-        }
-        objects, object_value = agent.evaluate(
-            agent.prepare(reordered_objects, inference=True)
-        )
+        valid = np.asarray(obs["actions_valid"])
+        count = int(valid.sum())
+        order = list(reversed(range(count)))
+        offers, offer_value = evaluate(agent, reorder_offers(obs, order))
+        objects, object_value = evaluate(agent, reorder_objects(obs))
         errors.extend(
             [
                 float(np.abs(p[0] - probabilities[row]).max()),
@@ -206,7 +206,7 @@ def inspect_policy(
                 float(np.abs(_softmax(objects) - p).max()),
                 float(np.abs(offer_value - value).max()),
                 float(np.abs(object_value - value).max()),
-                float(p[host_obs["actions_valid"] == 0].sum()),
+                float(p[valid == 0].sum()),
             ]
         )
         # Log-sum-exp avoids underflow and gives identical public copies shared
@@ -224,12 +224,7 @@ def inspect_policy(
     maximum = max(errors)
     if maximum > 1e-4:
         raise ValueError(f"frozen-policy invariance error {maximum} exceeds 1e-4")
-    return PolicySnapshot(
-        updates=updates,
-        checkpoint_sha256=file_sha256(path),
-        choices=scores,
-        maximum_invariance_error=maximum,
-    )
+    return scores, maximum
 
 
 class FamilyChange(Strict):

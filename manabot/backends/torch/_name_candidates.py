@@ -18,6 +18,7 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
+from manabot.policy.catalog import name_definitions
 from manabot.policy.prepare import Prepared
 import managym
 
@@ -33,23 +34,7 @@ class NameCandidateEncoder(nn.Module):
     ) -> None:
         super().__init__()
         self.onto_definitions = onto_definitions
-        if not candidates or len({candidate.name for candidate in candidates}) != len(
-            candidates
-        ):
-            raise ValueError("naming vocabulary must be nonempty and unique")
-        # Row identity is the name, not an executable-definition surrogate.
-        # Definition-free validated names therefore never enter the card catalog.
-        self.register_buffer(
-            "definitions",
-            torch.tensor(
-                [0]
-                + [
-                    candidate.definition + 1 if candidate.definition is not None else 0
-                    for candidate in candidates
-                ],
-                dtype=torch.long,
-            ),
-        )
+        self.register_buffer("definitions", torch.tensor(name_definitions(candidates)))
         self.embedding = nn.Embedding(len(candidates) + 1, hidden_dim, padding_idx=0)
         # Bucketed shapes join names without a data-dependent selection.
         self.bucketed = False

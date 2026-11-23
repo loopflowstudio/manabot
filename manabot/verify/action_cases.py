@@ -284,7 +284,7 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
 
 
 def reorder_offers(
-    obs: dict[str, torch.Tensor], order: torch.Tensor
+    obs: dict[str, torch.Tensor], order: torch.Tensor | list[int]
 ) -> dict[str, torch.Tensor]:
     """Permute legal offers together with their masks and object references."""
     result = {k: v.clone() for k, v in obs.items()}

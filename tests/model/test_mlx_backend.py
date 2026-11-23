@@ -4,61 +4,95 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
+from collections.abc import Mapping
 from dataclasses import replace
 import json
 from pathlib import Path
+import time
 
 import numpy as np
 import pytest
 import torch
 
 from tests.model.checkpoint_fixture import read_checkpoint
+from tests.training.backend_fixtures import policy_weights, self_play_batch
 
 mx = pytest.importorskip("mlx.core")
 
-from mlx.utils import tree_flatten  # noqa: E402
+# ruff: noqa: E402 (optional MLX imports follow importorskip)
 
-from manabot.backends import resolve  # noqa: E402
-from manabot.backends.convert import convert  # noqa: E402
-from manabot.backends.mlx.checkpoint import (  # noqa: E402
+from mlx.utils import tree_flatten
+
+from manabot.backends import resolve
+from manabot.backends.convert import convert
+import manabot.backends.mlx as mlx_backend
+from manabot.backends.mlx.arrays import (
+    default_precision,
+    flat_numpy,
+    precision_dtype,
+    to_numpy,
+)
+from manabot.backends.mlx.checkpoint import (
+    MLXBackend,
+    assemble,
+    canonical_from_mlx,
     mlx_parameters,
     require_supported,
 )
-from manabot.backends.mlx.policy import (  # noqa: E402
+from manabot.backends.mlx.learner import Learner as MLXLearner, update_ema
+from manabot.backends.mlx.policy import (
     ObjectAttention,
     PackedGRU,
     attend,
     packed_steps,
 )
-from manabot.backends.torch.checkpoint import (  # noqa: E402
+from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
+from manabot.backends.parity import (
+    COSINE_TOLERANCE,
+    LOGIT_TOLERANCE,
+    LOSS_TOLERANCE,
+    STEP_PARAMETER_TOLERANCE,
+    gradient_agreement,
+    minibatch_loss,
+)
+import manabot.backends.torch as torch_module
+from manabot.backends.torch.checkpoint import (
     load_metadata,
     save_checkpoint,
 )
-from manabot.backends.torch.policy import ActorCritic  # noqa: E402
-from manabot.env.match import Match  # noqa: E402
-from manabot.env.observation import (  # noqa: E402
+from manabot.backends.torch.collection import (
+    CollectionSession as TorchCollectionSession,
+)
+from manabot.backends.torch.learner import Learner as TorchLearner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.env.match import Match
+from manabot.env.observation import (
     ObservationSpace,
     encode_observation,
 )
-from manabot.infra.config import (  # noqa: E402
+from manabot.infra.config import (
     BF16_MIN_HIDDEN_DIM,
     MatchConfig,
     ModelConfig,
     ObservationConfig,
 )
-from manabot.policy.checkpoint import (  # noqa: E402
+from manabot.policy.buckets import bucket_sizes, trim_observation
+from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     canonical_parameters,
-    from_torch_state,
     read_safetensors,
     write_safetensors,
 )
-from manabot.policy.prepare import Tables, pack  # noqa: E402
-from manabot.policy.protocol import Precision  # noqa: E402
-import managym  # noqa: E402
+from manabot.policy.prepare import Tables, pack, reference_distribution
+from manabot.policy.protocol import Precision, Settings, Targets
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.verify.choice_corpus import collect_choices
+from manabot.verify.learning_regression import inspect_policy
+import managym
 
 
-def _mlx_names(torch_named: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+def _mlx_names(torch_named: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
     return mlx_parameters(canonical_parameters(torch_named))
 
 
@@ -133,6 +167,27 @@ def test_sequential_children_move_under_layers() -> None:
         assert list(_mlx_names({torch_name: weight})) == [mlx_name]
 
 
+def lesson_match() -> Match:
+    return Match(
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    )
+
+
+@pytest.fixture
+def baseline_model() -> ModelConfig:
+    return ModelConfig(
+        hidden_dim=16,
+        attention_layers=2,
+        num_attention_heads=4,
+        world="ur-lessons-vs-gw-allies",
+        value_kind="scalar",
+        value_aggregation="masked_mean",
+        policy_film=True,
+        focus_film=True,
+        stream_norm=True,
+    )
+
+
 def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
     space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(
@@ -145,10 +200,7 @@ def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
         ),
     )
     original = tmp_path / "policy.pt"
-    match = Match(
-        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
-    )
-    save_checkpoint(agent, space, original, player_configs=match.to_rust())
+    save_checkpoint(agent, space, original, player_configs=lesson_match().to_rust())
     torch.save(read_checkpoint(original), original)
     target, tensors = convert(original)
     assert tensors == len(agent.state_dict())
@@ -209,10 +261,8 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
 def test_unimplemented_layouts_are_refused_by_name(
     kwargs: dict[str, object], pattern: str
 ) -> None:
-    model = ModelConfig(
-        world="elemental-world-v2",
-        value_aggregation=kwargs.pop("value_aggregation", "masked_mean"),  # type: ignore[arg-type]
-        **kwargs,  # type: ignore[arg-type]
+    model = ModelConfig.model_validate(
+        {"world": "elemental-world-v2", "value_aggregation": "masked_mean", **kwargs}
     )
     with pytest.raises(UnsupportedPolicy, match=pattern):
         require_supported(model, ObservationConfig())
@@ -221,92 +271,33 @@ def test_unimplemented_layouts_are_refused_by_name(
 @pytest.mark.parametrize("bucketed", [False, True])
 def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     bucketed: bool,
+    baseline_model: ModelConfig,
 ) -> None:
     """Latest baseline config (v11 + stream_norm + focus_film + policy_film)
     agrees with PyTorch on forward, loss, every gradient tensor and clipped Adam."""
-    import manabot.backends.mlx as mlx_backend
-    from manabot.backends.mlx.arrays import to_numpy
-    from manabot.backends.mlx.checkpoint import assemble, canonical_from_mlx
-    from manabot.backends.mlx.learner import Learner as MLXLearner
-    from manabot.backends.parity import (
-        COSINE_TOLERANCE,
-        LOGIT_TOLERANCE,
-        LOSS_TOLERANCE,
-        STEP_PARAMETER_TOLERANCE,
-        gradient_agreement,
-        minibatch_loss,
-    )
-    import manabot.backends.torch as torch_backend
-    from manabot.backends.torch.collection import (
-        CollectionSession as TorchCollectionSession,
-    )
-    from manabot.backends.torch.learner import Learner as TorchLearner
-    from manabot.env.match import Reward
-    from manabot.infra.config import RewardConfig
-    from manabot.policy.prepare import reference_distribution
-    from manabot.policy.protocol import Settings, Targets
-    from manabot.training.rollout.collection import collect, open_collector
 
     torch.manual_seed(11)
     space = ObservationSpace(ObservationConfig())
     assert space.one_token
-    model = ModelConfig(
-        hidden_dim=16,
-        attention_layers=2,
-        num_attention_heads=4,
-        world="ur-lessons-vs-gw-allies",
-        value_kind="scalar",
-        value_aggregation="masked_mean",
-        policy_film=True,
-        focus_film=True,
-        stream_norm=True,
-    )
-    agent = ActorCritic(space, model, bucketed_shapes=bucketed)
+    agent = ActorCritic(space, baseline_model, bucketed_shapes=bucketed)
     # Give zero-initialized residual/FiLM layers non-zero weights so every
     # branch (stack_source, policy_film, links, focus_film) actually fires.
     with torch.no_grad():
         for name, param in agent.named_parameters():
             if param.abs().max() == 0:
                 param.copy_(torch.randn_like(param) * 0.1)
-    state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    checkpoint = from_torch_state(
-        agent.config,
-        space.config,
-        state,
-        parameter_names=dict(agent.named_parameters()),
-        readings=agent.readings,
+    checkpoint = policy_weights(agent)
+    rollout = self_play_batch(
+        agent, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
     )
-    match = Match(
-        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
-    )
-    collector = open_collector(
-        space,
-        match,
-        Reward(RewardConfig()),
-        num_envs=2,
-        opponent_mode="self",
-        learning_seats="one",
-        batch_closure="exact-quota",
-        numerics=TorchCollectionSession(device="cpu", seed=3, precision="float32"),
-    )
-    rollout = collect(collector, agent, 8)
     rows = rollout.observations(np.arange(rollout.actions.size))
     obs = rows.observation
 
     policy = assemble(checkpoint, bucketed_shapes=bucketed)
-    # Verify exact round-trip of canonical_from_mlx over every v11/stream_norm/FiLM tensor.
-    round_tripped = canonical_from_mlx(
-        {name: to_numpy(value) for name, value in tree_flatten(policy.parameters())}
-    )
+    round_tripped = canonical_from_mlx(flat_numpy(policy.parameters()))
     assert round_tripped.keys() == checkpoint.parameters.keys()
     for name, expected in checkpoint.parameters.items():
         np.testing.assert_array_equal(round_tripped[name], expected)
-
-    # Verify bfloat16 widening in MLX to_numpy.
-    bf = mx.array([1.25, -0.5], dtype=mx.bfloat16)
-    widened = to_numpy(bf)
-    assert widened.dtype == np.float32
-    np.testing.assert_allclose(widened, [1.25, -0.5], atol=1e-2)
 
     torch_batch = agent.prepare(obs)
     mlx_batch = policy.prepare(obs)
@@ -336,7 +327,7 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     mlx_learner = MLXLearner(policy, minibatch_rows=rollout.actions.size)
 
     torch_loss = minibatch_loss(
-        torch_backend, agent, torch_learner, torch_batch, targets, settings
+        torch_module, agent, torch_learner, torch_batch, targets, settings
     )
     mlx_loss = minibatch_loss(
         mlx_backend, policy, mlx_learner, mlx_batch, targets, settings
@@ -345,9 +336,7 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     got_loss = float(mlx_loss)
     assert abs(got_loss - ref_loss) / max(abs(ref_loss), 1e-12) <= LOSS_TOLERANCE
 
-    expected_grads = resolve("mlx").gradient_layout(
-        canonical_parameters(torch_learner.gradients(torch_loss))
-    )
+    expected_grads = _mlx_names(torch_learner.gradients(torch_loss))
     agreement = gradient_agreement(mlx_learner.gradients(mlx_loss), expected_grads)
     assert agreement.min_cosine >= COSINE_TOLERANCE, (
         f"worst gradient {agreement.worst}: {agreement.min_cosine}"
@@ -356,13 +345,11 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     torch_learner.set_learning_rate(settings.learning_rate)
     mlx_learner.set_learning_rate(settings.learning_rate)
     torch_loss2 = minibatch_loss(
-        torch_backend, agent, torch_learner, torch_batch, targets, settings
+        torch_module, agent, torch_learner, torch_batch, targets, settings
     )
     torch_learner.step(torch_loss2, settings.max_grad_norm)
     mlx_learner.step(mlx_loss, settings.max_grad_norm)
-    expected_after = resolve("mlx").parameter_layout(
-        canonical_parameters(torch_learner.parameters())
-    )
+    expected_after = _mlx_names(torch_learner.parameters())
     actual_after = mlx_learner.parameters()
     for name, value in actual_after.items():
         assert (
@@ -371,60 +358,31 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
         ), name
 
 
+def test_bfloat16_host_arrays_widen_to_float32() -> None:
+    widened = to_numpy(mx.array([1.25, -0.5], dtype=mx.bfloat16))
+    assert widened.dtype == np.float32
+    np.testing.assert_array_equal(widened, [1.25, -0.5])
+
+
 def test_mlx_full_self_play_cycle_create_collect_update_save_and_torch_reload(
     tmp_path: Path,
+    baseline_model: ModelConfig,
 ) -> None:
     """MLX creates a fresh v11 baseline policy, collects games, runs damped
     self-play update + EMA, saves a portable checkpoint, and Torch loads it
     with matching inference outputs."""
-    from manabot.backends.mlx.learner import Learner as MLXLearner, update_ema
-    from manabot.env.match import Reward
-    from manabot.infra.config import RewardConfig
-    from manabot.training.learning import DampedPolicyLearning
-    from manabot.training.rollout.collection import (
-        close_collector,
-        collect,
-        open_collector,
-    )
-    from manabot.training.updates.damped_policy import update_damped_iteration
 
     mlx = resolve("mlx")
     torch_backend = resolve("torch")
     space = ObservationSpace(ObservationConfig())
-    model = ModelConfig(
-        hidden_dim=16,
-        attention_layers=2,
-        num_attention_heads=4,
-        world="ur-lessons-vs-gw-allies",
-        value_kind="scalar",
-        value_aggregation="masked_mean",
-        policy_film=True,
-        focus_film=True,
-        stream_norm=True,
-    )
-    match = Match(
-        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
-    )
     mlx.seed(19)
-    policy = mlx.runtime.create_policy(space, model, bucketed_shapes=True)
-    ema = mlx.runtime.create_policy(space, model, bucketed_shapes=True)
+    policy = mlx.runtime.create_policy(space, baseline_model, bucketed_shapes=True)
+    ema = mlx.runtime.create_policy(space, baseline_model, bucketed_shapes=True)
     learner = MLXLearner(policy, minibatch_rows=4)
-    collector = open_collector(
-        space,
-        match,
-        Reward(RewardConfig()),
-        num_envs=2,
-        opponent_mode="self",
-        learning_seats="one",
-        batch_closure="exact-quota",
-        numerics=mlx.collection.CollectionSession(
-            device="mps", seed=19, precision="float32"
-        ),
+    match = lesson_match()
+    batch = self_play_batch(
+        policy, match, mlx.collection.CollectionSession(device="mps", seed=19), 6
     )
-    try:
-        batch = collect(collector, policy, 6)
-    finally:
-        close_collector(collector)
     diagnostics = update_damped_iteration(
         mlx,
         learner,
@@ -456,12 +414,6 @@ def test_mlx_full_self_play_cycle_create_collect_update_save_and_torch_reload(
     legal = obs["actions_valid"] > 0
     assert float(np.abs(mlx_logits - torch_logits)[legal].max()) <= 1e-4
     assert float(np.abs(mlx_values - torch_values).max()) <= 1e-4
-
-    # Host `inspect_policy` runs on any Backend (no Torch-only verification module).
-    import time
-
-    from manabot.verify.choice_corpus import collect_choices
-    from manabot.verify.learning_regression import inspect_policy
 
     cases, _, findings = collect_choices(
         tmp_path / "choices", 4000, time.perf_counter() + 30, closest=True
@@ -540,44 +492,31 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
 
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
     """Remapped opponent joins and ownership survive changes in object capacity."""
-    import manabot.backends.mlx as backend
-    from manabot.backends.mlx.checkpoint import assemble
-    from manabot.backends.mlx.learner import Learner
-    from manabot.backends.parity import minibatch_loss
-    from manabot.policy.buckets import bucket_sizes, trim_observation
-    from manabot.policy.protocol import Settings, Targets
 
-    torch.set_num_threads(1)
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
-    obs = {k: torch.zeros((2, *shape)) for k, shape in space.shapes.items()}
+    obs = {
+        k: np.zeros((2, *shape), dtype=np.float32) for k, shape in space.shapes.items()
+    }
     obs["agent_player_valid"][:] = 1
     obs["opponent_player_valid"][:] = 1
     obs["agent_cards_valid"][:, 1] = 1
     obs["opponent_permanents_valid"][:, 0] = 1
     obs["actions_valid"][:, :2] = 1
-    obs["action_focus"].fill_(-1)
+    obs["action_focus"].fill(-1)
     obs["action_focus"][:, 0, 0] = 0
     obs["action_focus"][:, 1, 0] = (
         2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
     )
-    sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, space, objects=True)
+    sizes = bucket_sizes(obs, space, objects=True)
     assert sizes is not None and sizes.trims_objects
-    trimmed = trim_observation({k: v.numpy() for k, v in obs.items()}, sizes)
-    policy = assemble(
-        from_torch_state(
-            agent.config,
-            space.config,
-            {k: v.numpy() for k, v in agent.state_dict().items()},
-            parameter_names=dict(agent.named_parameters()),
-            readings=agent.readings,
-        )
-    )
-    learner = Learner(policy, minibatch_rows=2)
+    trimmed = trim_observation(obs, sizes)
+    policy = assemble(policy_weights(agent))
+    learner = MLXLearner(policy, minibatch_rows=2)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
-    policy.check_observation({k: v.numpy() for k, v in obs.items()})
+    policy.check_observation(obs)
     results = []
-    for tensors in ({k: v.numpy() for k, v in obs.items()}, trimmed):
+    for tensors in (obs, trimmed):
         prepared = policy.prepare_admitted(tensors)
         assert prepared.is_agent.shape == prepared.validity.shape
         logits, values = policy.evaluate(prepared)
@@ -592,7 +531,7 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
             logs,
             reference,
         )
-        loss = minibatch_loss(backend, policy, learner, prepared, targets, settings)
+        loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
         gradients = learner.gradients(loss)
         results.append((logits[:, :2], values, float(loss), gradients))
     expected, actual = results
@@ -608,12 +547,6 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
 def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
     precision: Precision = "bfloat16"
-    import manabot.backends.mlx as backend
-    from manabot.backends.mlx.arrays import precision_dtype
-    from manabot.backends.mlx.checkpoint import assemble
-    from manabot.backends.mlx.learner import Learner
-    from manabot.backends.parity import minibatch_loss
-    from manabot.policy.protocol import Settings, Targets
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
@@ -621,17 +554,9 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
     obs["actions_valid"][:, :2] = 1
     obs["action_focus"][:] = -1
-    policy = assemble(
-        from_torch_state(
-            agent.config,
-            space.config,
-            {k: v.numpy() for k, v in agent.state_dict().items()},
-            parameter_names=dict(agent.named_parameters()),
-            readings=agent.readings,
-        )
-    )
+    policy = assemble(policy_weights(agent))
     assert policy.precision == "float32"
-    learner = Learner(policy, precision=precision, minibatch_rows=2)
+    learner = MLXLearner(policy, precision=precision, minibatch_rows=2)
     dtype = precision_dtype(precision)
     assert learner.precision == policy.precision == precision
     batch = policy.prepare(obs)
@@ -654,7 +579,7 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     np.testing.assert_array_equal(inference_logits, np.array(logits))
     np.testing.assert_array_equal(inference_values, np.array(values).reshape(-1))
     before = learner.parameters()
-    loss = minibatch_loss(backend, policy, learner, batch, targets, settings)
+    loss = minibatch_loss(mlx_backend, policy, learner, batch, targets, settings)
     assert loss.dtype == mx.float32 and bool(mx.isfinite(loss))
     gradients = learner.gradients(loss)
     norm = np.sqrt(
@@ -694,8 +619,6 @@ def test_omitted_precision_follows_the_width_rule(
 ) -> None:
     """A policy, backend and learner built without a precision run bfloat16
     from the threshold width, with float32 masters and outputs."""
-    from manabot.backends.mlx.arrays import default_precision, precision_dtype
-    from manabot.backends.mlx.checkpoint import MLXBackend, assemble
 
     assert default_precision(width) == expected
     space = ObservationSpace(ObservationConfig(policy_input_version=9))
@@ -708,13 +631,7 @@ def test_omitted_precision_follows_the_width_rule(
             value_aggregation="masked_mean",
         ),
     )
-    weights = from_torch_state(
-        agent.config,
-        space.config,
-        {k: v.numpy() for k, v in agent.state_dict().items()},
-        parameter_names=dict(agent.named_parameters()),
-        readings=agent.readings,
-    )
+    weights = policy_weights(agent)
     policy, learner = MLXBackend().load(weights)
     assert policy.precision == learner.precision == expected
     assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
@@ -727,9 +644,6 @@ def test_omitted_precision_follows_the_width_rule(
 
 def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
     precision: Precision = "bfloat16"
-    from manabot.backends.mlx.arrays import precision_dtype
-    from manabot.backends.mlx.checkpoint import MLXBackend
-    from manabot.backends.mlx.rl import action_logs, policy_logs
 
     _, path, _ = _converted(tmp_path)
     policy, _ = resolve("mlx", precision=precision).load_policy(str(path))
@@ -762,12 +676,10 @@ def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
 
 
 def test_half_overflow_refuses_update(tmp_path: Path) -> None:
-    from manabot.backends.mlx.learner import Learner
-    from manabot.backends.mlx.rl import NumericalError
 
     _, path, _ = _converted(tmp_path)
     policy, _ = resolve("mlx", precision="bfloat16").load_policy(str(path))
-    learner = Learner(policy, minibatch_rows=1)
+    learner = MLXLearner(policy, minibatch_rows=1)
     before = learner.parameters()
 
     def overflow() -> tuple[mx.array, ...]:

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import fields
+from dataclasses import dataclass
 from typing import Literal, cast
 
 import mlx.core as mx
 import numpy as np
 
-from manabot.backends.mlx.arrays import to_numpy
+from manabot.backends.mlx.arrays import mlx_device, to_numpy
 from manabot.backends.mlx.policy import MLXActorCritic, PolicyInference
 from manabot.backends.mlx.rl import (
     NumericalError,
@@ -18,7 +18,7 @@ from manabot.backends.mlx.rl import (
     policy_logs,
     require,
 )
-from manabot.backends.mlx.rollout import check_packed, packing_mask
+from manabot.backends.mlx.rollout import check_packed, observation_arrays, packing_mask
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
@@ -36,18 +36,10 @@ class CollectionSession:
     def __init__(
         self, *, device: str, seed: int, precision: Precision = "float32"
     ) -> None:
-        if device == "cuda":
-            raise ValueError("MLX does not support CUDA")
-        if device not in {"cpu", "mps", "gpu"}:
-            raise ValueError(f"MLX does not support device {device!r}")
-        self._device_name = device
-        self._stream = mx.cpu if device == "cpu" else mx.gpu
+        self.device_name = device
+        self.device = mlx_device(device)
         self.precision = precision
         self._key = mx.random.key(seed + 1)
-
-    @property
-    def device_name(self) -> str:
-        return self._device_name
 
     def next_key(self) -> mx.array:
         self._key, draw = mx.random.split(self._key)
@@ -60,17 +52,13 @@ class CollectionSession:
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
         mlx_agent = cast(MLXActorCritic, agent)
         with PolicyInference(mlx_agent) as inference:
-            yield CollectionScope(self, mlx_agent, inference)
+            yield CollectionScope(self, inference)
 
 
+@dataclass
 class CollectionScope:
-    def __init__(
-        self,
-        session: CollectionSession,
-        agent: MLXActorCritic,
-        inference: PolicyInference,
-    ) -> None:
-        self.session, self.agent, self.inference = session, agent, inference
+    session: CollectionSession
+    inference: PolicyInference
 
     def opponent_actions(
         self, observation: ObservationBuffers, *, execution_rows: int | None = None
@@ -86,9 +74,8 @@ class CollectionScope:
         except NumericalError as error:
             error.tensors.update(
                 {
-                    f"observation/{item.name}": mx.array(value)
-                    for item in fields(obs)
-                    if isinstance(value := getattr(obs, item.name), np.ndarray)
+                    f"observation/{name}": mx.array(value)
+                    for name, value in observation_arrays(obs).items()
                 }
             )
             raise
@@ -100,16 +87,15 @@ class CollectionScope:
         *,
         execution_rows: int | None = None,
     ) -> SampledRows:
-        if execution_rows is not None and execution_rows < 1:
-            raise ValueError("execution rows must be positive")
         count = len(observation["actions_valid"])
-        width = execution_rows or count
+        width = count if execution_rows is None else execution_rows
         if width < 1:
             raise ValueError("execution rows must be positive")
         logs_parts: list[mx.array] = []
         value_parts: list[mx.array] = []
         needs_parts: list[np.ndarray] = []
-        with mx.stream(self.session._stream), self.agent.forward_precision():
+        agent = self.inference.agent
+        with mx.stream(self.session.device), agent.forward_precision():
             self.inference.cache_programs()
             for start in range(0, count, width):
                 with profiler.track("Observation preparation"):
@@ -119,7 +105,7 @@ class CollectionScope:
                         )
                     )
                 with profiler.track("Policy inference and action selection"):
-                    logits, value = self.agent.forward_distribution(obs)
+                    logits, value = agent.forward_distribution(obs)
                     logits = logits.astype(mx.float32)
                     value = value.astype(mx.float32)
                     logs_parts.append(self._policy_logs(logits, obs))
@@ -133,10 +119,9 @@ class CollectionScope:
                     if obs.bucket_needs is not None:
                         needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
                 del obs, logits, value
-            logs = logs_parts[0] if len(logs_parts) == 1 else mx.concatenate(logs_parts)
-            values = (
-                value_parts[0] if len(value_parts) == 1 else mx.concatenate(value_parts)
-            )
+            # Draw once for the original group, independent of execution chunk size.
+            logs = mx.concatenate(logs_parts)
+            values = mx.concatenate(value_parts)
             actions = mx.random.categorical(logs, key=self.session.next_key())
             selected = action_logs(logs, actions)
             mx.eval(actions, selected, values, logs)
@@ -162,10 +147,8 @@ class SelectionPredictor:
         encoded: dict[str, np.ndarray],
         reference: Literal["uniform", "action_type_uniform"],
     ) -> SelectionPrediction:
-        prepared = self.agent.prepare(
-            {key: value[None] for key, value in encoded.items()},
-            inference=True,
-        )
+        batch = {key: value[None] for key, value in encoded.items()}
+        prepared = self.agent.prepare(batch, inference=True)
         logits_np, value_np = self.agent.evaluate(prepared)
         logits = mx.array(logits_np)
         probabilities = mx.softmax(logits, axis=-1)
@@ -173,10 +156,7 @@ class SelectionPredictor:
         action = int(mx.random.categorical(logits[0], key=draw))
         probs_np = to_numpy(probabilities)
         logs = np.log(np.maximum(probs_np, 1e-12))
-        ref = reference_distribution(
-            {k: encoded[k][None] for k in ("actions_valid", "actions")},
-            reference,
-        )
+        ref = reference_distribution(batch, reference)
         return SelectionPrediction(
             action,
             float(value_np[0]),

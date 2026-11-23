@@ -143,16 +143,12 @@ Health reporting keeps step and rejection counters on the host, with tensor
 measurements supplied by the learner. Importing `training.updates.ppo`,
 `training.updates.damped_policy`, any `training.rollout` module or
 `sim.search.sampling` does not import Torch. Executing an operation still
-requires a backend that implements its capabilities; helpers do not fall back to
-Torch. Policy inspection (`verify.learning_regression.inspect_policy`) runs over
-`Backend.load_policy` and `BackendPolicy.evaluate` on any backend, and
-checkpoint export (`policy.checkpoint.save_policy_checkpoint`) is shared across
-backends. Autoregressive belief-sampler fitting (`backends.torch.belief_fit`) is
-a separate `BeliefTrainer` passed by composition roots rather than a `Backend`
-method. MLX supports policy creation, inference, collection, portable checkpoint
-saving, bucketed shapes and the scalar damped update (including gradient
-accumulation); it does not support PPO, belief sampling or Torch update-state
-recovery.
+requires a backend that implements it. Frozen-policy inspection loads and
+evaluates the policy through its backend. Both frameworks export through
+`policy.checkpoint.save_policy_checkpoint`. Belief-sampler fitting takes an
+explicit `BeliefTrainer` from the caller. MLX supports fresh collection,
+bucketed inference, scalar damped updates and portable policy export.
+Tracked training and recovery use Torch.
 
 A policy checkpoint supplies weights for play. Exact training continuation
 also needs the admitted optimizer, EMA, collector and RNG snapshot. State
