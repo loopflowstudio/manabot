@@ -22,7 +22,6 @@ never a native default.
 """
 
 from collections.abc import Mapping
-from functools import cached_property
 from typing import Any, ItemsView, KeysView, ValuesView
 import warnings
 
@@ -215,6 +214,7 @@ class ObservationSpace(gym.spaces.Space):
             max_decision_members=config.max_decision_members,
         )
         self.shapes = self.layout.shapes
+        self.axis_buffers = self.layout.axis_buffers
         self.one_token = "stack" in self.shapes
         self.turn_state = "player_turn_state" in self.shapes
         # Checkpoints record str() of each NumPy scalar type.
@@ -229,11 +229,6 @@ class ObservationSpace(gym.spaces.Space):
                 for name, shape in self.shapes.items()
             }
         )
-
-    @cached_property
-    def axis_buffers(self) -> dict[str, list[tuple[str, int]]]:
-        """Variable row axes of this layout, reused across preparation calls."""
-        return self.layout.axis_buffers
 
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed buffers for this space, with `leading_dims` before each shape."""

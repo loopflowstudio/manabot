@@ -33,10 +33,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationBuffers, ObservationSpace, width
 from manabot.infra.config import ModelConfig
+from manabot.policy.decision_memory import retained_memory
 
 MIN_BUCKET = 8
 
@@ -174,7 +174,7 @@ def bucket_sizes(
 def bucket_observation(
     obs: ObservationBuffers,
     space: ObservationSpace,
-    needs: np.ndarray | None,
+    needs: np.ndarray | None = None,
     *,
     objects: bool,
 ) -> BucketedObservation | None:
@@ -183,18 +183,11 @@ def bucket_observation(
         needs = row_needs(obs, space)
     if needs is None:
         return None
-    sizes = sizes_of(needs, space, objects=objects)
-    return BucketedObservation(bucket_views(obs, space, sizes), sizes, needs)
-
-
-def bucket_views(
-    obs: ObservationBuffers, space: ObservationSpace, buckets: BucketSizes
-) -> dict[str, np.ndarray]:
-    """Slice the measured rows, keeping all references in their original coordinates."""
+    buckets = sizes_of(needs, space, objects=objects)
+    memory = retained_memory(obs)
     trimmed = (
-        PrefixObservation(obs, obs.prefixes, obs.memory_capacities)
-        if isinstance(obs, PrefixObservation)
-        and not any(key in obs for key in MEMORY_FIELDS)
+        PrefixObservation(obs, memory.prefixes, memory.memory_capacities)
+        if memory is not None
         else dict(obs)
     )
     for axis, buffers in space.axis_buffers.items():
@@ -202,7 +195,7 @@ def bucket_views(
         for key, dimension in buffers:
             prefix = (slice(None),) * (dimension + 1) + (slice(stop),)
             trimmed[key] = obs[key][prefix]
-    return trimmed
+    return BucketedObservation(trimmed, buckets, needs)
 
 
 def object_map(buckets: BucketSizes) -> np.ndarray | None:

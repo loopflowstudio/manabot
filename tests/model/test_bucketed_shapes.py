@@ -185,7 +185,7 @@ def test_remapped_references_are_every_object_table_column() -> None:
     np.testing.assert_array_equal(
         extents["stack"], np.full(count, obs["stack"].shape[1])
     )
-    measured = bucket_observation(obs, space, None, objects=True)
+    measured = bucket_observation(obs, space, objects=True)
     assert measured is not None and measured.buckets.trims_objects
     policy = ActorCritic(
         space,

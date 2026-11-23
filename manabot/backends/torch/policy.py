@@ -524,15 +524,6 @@ class ActorCritic(nn.Module):
         bucketed, tables = self._admit_observation(obs)
         return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
-    def observation_buckets(
-        self, obs: ObservationBuffers, needs: np.ndarray | None = None
-    ) -> BucketedObservation | None:
-        if not self.bucketed_shapes:
-            return None
-        return bucket_observation(
-            obs, self.observation_space, needs, objects=self.object_trimming()
-        )
-
     def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
         bucketed, _ = self._admit_observation(obs)
@@ -569,7 +560,13 @@ class ActorCritic(nn.Module):
         `inference` selects compaction and catalog coverage independently of
         autograd mode; bucketed batches always use the full catalog schedule.
         """
-        bucketed = self.observation_buckets(obs, needs)
+        bucketed = (
+            bucket_observation(
+                obs, self.observation_space, needs, objects=self.object_trimming()
+            )
+            if self.bucketed_shapes
+            else None
+        )
         return self._prepare_rows(
             bucketed or obs, self._admission_spec().tables, inference, memory_roots
         )

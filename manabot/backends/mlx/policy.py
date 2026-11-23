@@ -294,7 +294,6 @@ class _Static:
     binding_cache: admission.BindingCache = field(
         default_factory=admission.BindingCache
     )
-    spec_cache: tuple[str, admission.Spec] | None = None
 
 
 def parameter_ids(parameters: dict[str, object]) -> tuple[int, ...]:
@@ -596,19 +595,6 @@ class MLXActorCritic(nn.Module):
             self.config, self.observation_space, self.readings
         )
 
-    def _admission_spec(self) -> admission.Spec:
-        key = self._binding()
-        cached = self._static.spec_cache
-        if cached is None or cached[0] != key or cached[1].model is not self.config:
-            cached = (
-                key,
-                admission.Spec(
-                    self.config, self.observation_space, self._static.tables, 0
-                ),
-            )
-            self._static.spec_cache = cached
-        return cached[1]
-
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
@@ -659,9 +645,10 @@ class MLXActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": mx.array(mask), "failed": mx.array(failed)},
             ) from error
-        return admission.admit(
-            obs, self._admission_spec(), legal, bucketed=self.bucketed_shapes
+        spec = admission.Spec(
+            self.config, self.observation_space, self._static.tables, 0
         )
+        return admission.admit(obs, spec, legal, bucketed=self.bucketed_shapes)
 
     # Programs ----------------------------------------------------------------------
 

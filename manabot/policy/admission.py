@@ -55,6 +55,7 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
+    effect_span_rows,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.buckets import (
@@ -155,7 +156,7 @@ def admit(
 ) -> BucketedObservation | None:
     """Validate in original coordinates and return the measured views for preparation."""
     measured = (
-        bucket_observation(obs, spec.space, None, objects=object_trimming(spec.model))
+        bucket_observation(obs, spec.space, objects=object_trimming(spec.model))
         if bucketed
         else None
     )
@@ -481,8 +482,8 @@ def shared_effects(
     valid = headers[:, :prefix, EFFECT_VALID]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("state record validity must be binary")
-    positions = np.argwhere(valid)
-    live = headers[positions[:, 0], positions[:, 1]]
+    batches, slots = np.nonzero(valid)
+    live = headers[batches, slots]
     if not np.isfinite(live).all():
         raise ValueError("state records must be finite")
     batch = len(headers)
@@ -492,7 +493,7 @@ def shared_effects(
         MEMBER_DIM,
     ):
         raise ValueError("invalid shared effect buffer shape")
-    if not len(positions):
+    if not len(batches):
         return
     halves = _indexes(live[:, EFFECT_MODIFICATION], 65535, "effect vocabulary half")
     source = _indexes(
@@ -504,13 +505,10 @@ def shared_effects(
     offsets = _indexes(
         live[:, EFFECT_SPANS], max(MEMBER_ROWS, DETAIL_ROWS), "effect CSR offset/count"
     )
-    detail_indexes: list[int] = []
-    member_indexes: list[int] = []
-    member_records: list[int] = []
     previous_batch = -1
     d_end = m_end = 0
-    for i, ((b, _), (d, count, m, targets)) in enumerate(
-        zip(positions.tolist(), offsets.tolist(), strict=True)
+    for b, (d, count, m, targets) in zip(
+        batches.tolist(), offsets.tolist(), strict=True
     ):
         if b != previous_batch:
             d_end = m_end = 0
@@ -524,17 +522,15 @@ def shared_effects(
         ):
             raise ValueError("invalid effect CSR partition")
         d_end, m_end = d + count, m + targets
-        detail_indexes.extend(range(d, d_end))
-        member_indexes.extend(range(m, m_end))
-        member_records.extend([i] * targets)
-    detail_batches = np.repeat(positions[:, 0], offsets[:, 1])
-    detail = details[detail_batches, detail_indexes]
+    detail_records, detail_rows = effect_span_rows(offsets[:, 0], offsets[:, 1])
+    detail = details[batches[detail_records], detail_rows]
     kinds = _indexes(detail[:, DETAIL_KIND], max(DETAIL_KINDS), "effect detail kind")
     ids = _indexes(detail[:, DETAIL_VALUE], 65535, "effect detail half")
     if not np.isin(kinds, DETAIL_KINDS).all():
         raise ValueError("live effect detail has no kind")
-    member_batches = positions[member_records, 0]
-    member = members[member_batches, member_indexes]
+    member_records, member_rows = effect_span_rows(offsets[:, 2], offsets[:, 3])
+    member_batches = batches[member_records]
+    member = members[member_batches, member_rows]
     _indexes(member[:, MEMBER_OBJECT], objects, "effect member")
     orders = _indexes(member[:, _MEMBER_ORDER], MEMBER_ROWS, "effect membership order")
     if (member[:, MEMBER_OBJECT] == 0).any():
@@ -566,19 +562,17 @@ def relations(
     valid = rows[..., RELATION_VALID_INDEX]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("relation validity must be binary")
-    clean = np.where(valid.astype(bool)[..., None], rows, 0)
-    if not np.isfinite(clean).all():
+    live = rows[valid == 1]
+    if not np.isfinite(live).all():
         raise ValueError("relations must be finite")
     for index in _RELATION_OBJECTS:
-        values = clean[..., index]
+        values = live[:, index]
         if not (
             (values == np.floor(values)) & (values >= 0) & (values <= objects)
         ).all():
             raise ValueError("invalid continuation object reference")
-    ids = rows[..., _RELATION_FRAME]
-    if not (
-        ((ids == np.floor(ids)) & (ids >= 1) & (ids <= RELATION_ROWS)) | (valid == 0)
-    ).all():
+    ids = live[:, _RELATION_FRAME]
+    if not ((ids == np.floor(ids)) & (ids >= 1) & (ids <= RELATION_ROWS)).all():
         raise ValueError("invalid continuation frame reference")
 
 

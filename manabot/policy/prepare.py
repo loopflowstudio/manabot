@@ -64,6 +64,7 @@ from manabot.env.shared_effects import (
     MEMBER_OBJECT,
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
+    effect_span_rows,
 )
 from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
@@ -1017,27 +1018,21 @@ def _effects(
     halves = live[:, EFFECT_MODIFICATION]
     source = live[:, EFFECT_SOURCE_DEFINITION]
     links = live[:, EFFECT_LINKS]
-    detail_indexes: list[int] = []
-    member_indexes: list[int] = []
-    member_records: list[int] = []
+    detail_offsets, counts, member_offsets, member_counts = live[:, EFFECT_SPANS].T
+    detail_records, detail_rows = effect_span_rows(detail_offsets, counts)
+    detail_host = details[live_batches[detail_records], detail_rows].astype(np.int64)
+    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
+    records, member_rows = effect_span_rows(member_offsets, member_counts)
+    member_batches = live_batches[records]
+    targets = members[member_batches, member_rows, MEMBER_OBJECT].astype(np.int64)
+
+    # Each sequence reads its three header tokens followed by its detail tokens.
     token_indexes: list[int] = []
-    lengths: list[int] = []
-    header_tokens = 3 * len(live)
-    spans = live[:, EFFECT_SPANS]
-    for i, (d, count, m, targets) in enumerate(spans.tolist()):
-        detail_start = header_tokens + len(detail_indexes)
+    detail_start = 3 * len(live)
+    for i, count in enumerate(counts.tolist()):
         token_indexes.extend(range(3 * i, 3 * i + 3))
         token_indexes.extend(range(detail_start, detail_start + count))
-        lengths.append(3 + count)
-        detail_indexes.extend(range(d, d + count))
-        member_indexes.extend(range(m, m + targets))
-        member_records.extend([i] * targets)
-    detail_batches = np.repeat(live_batches, spans[:, 1])
-    detail_host = details[detail_batches, detail_indexes].astype(np.int64)
-    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
-    records = np.asarray(member_records, dtype=np.int64)
-    member_batches = live_batches[records]
-    targets = members[member_batches, member_indexes, MEMBER_OBJECT].astype(np.int64)
+        detail_start += count
     numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
@@ -1070,7 +1065,7 @@ def _effects(
         detail_numbers=signed.astype(np.float32),
         detail_is_number=np.isin(token_kinds, NUMBER_TOKEN_KINDS).astype(np.float32),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
-        schedule=pack(lengths),
+        schedule=pack(3 + counts),
         routes=member_batches * objects + object_slots(targets, object_remap),
         member_records=records,
     )

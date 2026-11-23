@@ -29,7 +29,7 @@ the full action width.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
   measures each item's occupied rows, object references, continuation joins
-  and effect spans. `bucket_views` reads the buffer names and row dimensions
+  and effect spans. `bucket_observation` reads the buffer names and row dimensions
   from `ObservationLayout.axis_buffers` and slices in original coordinates.
   `object_map` supplies the lookup for joins into the trimmed object table.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:

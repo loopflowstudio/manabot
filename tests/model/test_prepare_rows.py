@@ -114,7 +114,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     check(obs, spec, obs["actions_valid"].astype(bool))
     device_input(agent, tensors)
     measured = (
-        bucket_observation(obs, space, None, objects=agent.object_trimming())
+        bucket_observation(obs, space, objects=agent.object_trimming())
         if bucketed
         else None
     )
@@ -285,7 +285,7 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
     readings = legacy_readings(space) if legacy else fresh_readings(space)
     agent = ActorCritic(space, config, bucketed_shapes=True, readings=readings)
     actual = agent.prepare(obs)
-    measured = bucket_observation(obs, space, None, objects=True)
+    measured = bucket_observation(obs, space, objects=True)
     assert measured is not None and measured.buckets.trims_objects
     # Independently renumber raw coordinates by their positions among kept slots.
     slots = original_object_slots(obs, measured.rows)
@@ -411,7 +411,7 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
         bucketed_shapes=True,
     )
     obs["card_turn_state"][:, :, 31] = 1
-    measured = bucket_observation(obs, space, None, objects=True)
+    measured = bucket_observation(obs, space, objects=True)
     assert measured is not None
     trimmed = measured.rows
     assert trimmed["card_turn_state"].shape[2] == trimmed["agent_cards"].shape[1]
