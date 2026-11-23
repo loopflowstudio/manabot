@@ -328,7 +328,9 @@ class AdaptiveSampler:
             case "E":
                 priority = rank_weights(error)
             case "ME":
-                priority = [(a + b) / 2 for a, b in zip(m, rank_weights(error), strict=True)]
+                priority = [
+                    (a + b) / 2 for a, b in zip(m, rank_weights(error), strict=True)
+                ]
         s.window, s.matchup_scores, s.error_scores = window, matchup, error
         s.probabilities = _cap(priority)
         s.generation += 1
