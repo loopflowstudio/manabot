@@ -2,7 +2,7 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · branch through b688f472</small>
+<main><small>MTG-420 · branch through e37e804d</small>
 <h1>Do battlefield forms and their engine records line up?</h1>
 <p>A search caller chooses legal actions, forks a decision and resolves each continuation. The engine owns which object an ability follows, which characteristics can be copied and which cards actually move.</p>
 <h2>Existing · one trigger, two continuations</h2>
@@ -33,5 +33,9 @@
 <tr><td>Restore, choose Vanille above Fang</td><td>X → Vanille → Fang</td><td>Vanille once, Fang once</td></tr>
 <tr><td>Move a token copy instead</td><td>X</td><td>Zero. No ordering decision.</td></tr></table>
 <p>Applying bottom placement to each member in sequence inserts each at index zero. Both cards could arrive exactly once in the wrong order. Bind the owner’s choice to the final relative positions and check the draw sequence in each fork.</p>
+<h2>Where resolution pauses</h2>
+<p><b>Existing control.</b> Lost Days removes a token copy of Fang. The physical Fang stays in play, the library keeps its order and the effect creates its Clue. The paired-arrivals unit test begins later in the lifecycle, with both destination identities already supplied. Neither fixture offers a legal Command to order a genuine pair.</p>
+<p><b>Proposed decision boundary.</b> Pay Vanille’s first-main trigger with the genuine pair, then resolve Lost Days targeting Ragnarok. At the owner’s order decision, snapshot the game. Inspect more than the offered labels: the one target must still be on the battlefield, the library must contain only X, and the Clue from the following instruction must still be absent. Restoring this snapshot recovers the same two Commands without repeating payment. In each branch, committing the chosen order removes the target once and finishes Lost Days with one Clue. Retry the spent Command and check that the Clue count, draws and history stay fixed.</p>
+<p><b>Counterexample.</b> Paying with a namesake copy can pass the name check and still leave the exiled cards unable to meld. Preserve that completed payment and exile on restoration. A failed meld and a stale Command have different consequences.</p>
 <h2>Review choices</h2><ol><li>Which witness comes next? <b>1a · Ragnarok (selected)</b> exposes the single-result assumption on a public board. 1b · Manifest first would exercise private inspection while leaving multi-card movement unresolved.</li>
 <li>What should a caller receive for Ragnarok? <b>2a · One battlefield target and both successors in its departure result (selected).</b> 2b · Two battlefield rows would give the caller separate handles for a single strategic target.</li></ol></main></html>
