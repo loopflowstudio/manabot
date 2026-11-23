@@ -592,6 +592,8 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        // CR 119.9: all simultaneous damage from one lifelink source is one gain.
+        let mut lifelink = std::collections::BTreeMap::new();
         // Sacrifice is committed with this batch, after all replacement
         // choices. Match its subjects while every pre-batch permanent still
         // exists: moving a Food first would erase the predicate it satisfied.
@@ -702,7 +704,8 @@ impl Game {
             if let Some((owner, definition)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
-            let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
+            let committed =
+                self.commit_proposed_event(event, departing_lki, &mut followups, &mut lifelink);
             // CR 400.7: the object this move made, or the same object when
             // it entered its first zone (CR 400.11).
             let moved_object = moved_object.filter(|_| committed).and_then(|object_id| {
@@ -767,6 +770,11 @@ impl Game {
                 }
             }
         }
+        followups.extend(
+            lifelink
+                .into_iter()
+                .map(|((_, player), delta)| ProposedEvent::LifeChange { player, delta }),
+        );
         if !died.is_empty() {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
@@ -1428,6 +1436,7 @@ impl Game {
         event: ProposedEvent,
         lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
+        lifelink: &mut std::collections::BTreeMap<(ObjectId, PlayerId), i32>,
     ) -> bool {
         match event {
             ProposedEvent::Damage {
@@ -1435,7 +1444,7 @@ impl Game {
                 target,
                 amount,
                 combat,
-            } => self.commit_damage(source, target, amount, combat),
+            } => self.commit_damage(source, target, amount, combat, lifelink),
             ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
             ProposedEvent::CreateTokens { .. } => unreachable!("creation owns an entry batch"),
             ProposedEvent::Destroy { .. } | ProposedEvent::Sacrifice { .. } => {
@@ -1711,6 +1720,79 @@ mod tests {
             Some(ZoneType::Graveyard)
         );
         assert!(game.object_lki(current).is_some());
+    }
+
+    #[test]
+    fn pridemate_triggers_once_per_lifelink_source_in_a_damage_batch() {
+        use super::ProposedDamageTarget;
+        let player = PlayerId(0);
+        let deck = BTreeMap::from([("Ajani's Pridemate".into(), 20), ("Plains".into(), 20)]);
+        for distinct in [false, true] {
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck.clone()),
+                ],
+                614900,
+                false,
+            );
+            let mate = game
+                .scenario_force_battlefield(player, "Ajani's Pridemate", true)
+                .unwrap();
+            let mate_object = game.permanent_object(mate).unwrap();
+            let mut cat = |owner| {
+                let id = game
+                    .create_token("token.cat_1_1_w_lifelink", owner, false)
+                    .unwrap();
+                game.permanent_object(id).unwrap()
+            };
+            let first = cat(player);
+            let second = if distinct { cat(player) } else { first };
+            let blocker = cat(PlayerId(1));
+            game.state.events.clear();
+            let damage = |source, target, amount| ProposedEvent::Damage {
+                source: Some(source),
+                target,
+                amount,
+                combat: true,
+            };
+            let batch = game.event_batch(vec![
+                damage(first, ProposedDamageTarget::Object(blocker), 2),
+                damage(second, ProposedDamageTarget::Player(PlayerId(1)), 3),
+            ]);
+            game.complete_immediate_batch(batch);
+            let gains: Vec<_> = game
+                .state
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    GameEvent::LifeChanged {
+                        player: PlayerId(0),
+                        old,
+                        new,
+                    } if new > old => Some(new - old),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(gains, if distinct { vec![2, 3] } else { vec![5] });
+            assert_eq!(game.state.players[0].life, 25);
+            let triggers = &game.state.pending_triggers;
+            assert_eq!(triggers.len(), gains.len());
+            assert!(triggers
+                .iter()
+                .all(|trigger| trigger.source_object() == mate_object));
+            if distinct {
+                let first = triggers[0].id;
+                assert!(game.flush_triggers().is_some());
+                game.choose_trigger(player, first).unwrap();
+            }
+            assert!(game.flush_triggers().is_none());
+            for _ in &gains {
+                game.resolve_top_of_stack();
+            }
+            let size = 2 + gains.len() as i32;
+            assert_eq!(game.characteristics(mate).pt(), (size, size));
+        }
     }
 
     #[test]

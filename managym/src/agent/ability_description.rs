@@ -150,6 +150,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             ordinal(*n),
             predicate_description(predicate, "spell")
         ),
+        TriggerCondition::GainsLife { who } => format!("Whenever {} life", actor_does(*who, "gain", "gains")),
         TriggerCondition::Draws { who, nth: None } => {
             format!("Whenever {} a card", actor_does(*who, "draw", "draws"))
         }

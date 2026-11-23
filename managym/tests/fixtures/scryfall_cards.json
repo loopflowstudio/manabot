@@ -152,6 +152,18 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card.",
     "colors": []
   },
+  "Ajani's Pridemate": {
+    "name": "Ajani's Pridemate",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Cat Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
   "Allies at Last": {
     "name": "Allies at Last",
     "mana_cost": "{2}{G}",

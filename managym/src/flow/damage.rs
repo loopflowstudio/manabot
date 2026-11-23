@@ -51,6 +51,7 @@ impl Game {
         target: ProposedDamageTarget,
         amount: i32,
         combat: bool,
+        lifelink: &mut std::collections::BTreeMap<(ObjectId, PlayerId), i32>,
     ) -> bool {
         if amount <= 0 {
             return false;
@@ -145,8 +146,9 @@ impl Game {
             }
         }
 
-        if let Some(controller) = lifelink_controller {
-            self.commit_life_change(controller, amount);
+        if let (Some(source), Some(controller)) = (source, lifelink_controller) {
+            let total = lifelink.entry((source, controller)).or_default();
+            *total = total.saturating_add(amount);
         }
         true
     }

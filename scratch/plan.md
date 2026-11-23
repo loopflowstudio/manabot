@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent and Anthem of Champions. Twelve cards have documented deferrals and 201 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions and Ajani's Pridemate. Twelve cards have documented deferrals and 200 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -33,7 +33,7 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Run Away Together remains deferred.** With two creatures controlled by one player and none by the other, the spell has no legal pair. With one creature per player, changing control of one in response makes both targets illegal. If one leaves instead, its last known controller determines whether the surviving creature returns. These are acceptance positions for the missing definition. Native `TargetRequirement` has no different-controller relation, and `resolution_targets` rechecks each target independently except for shared creature type. The shared targeting authority needs the relation at selection and resolution. [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
 
-The next Slice 2 group is per-source lifelink and life-gain triggers. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
+The native damage-batch fixture for Ajani’s Pridemate passed. Damage of 2 to a creature and 3 to its controller produced one gain of 5 from a single source, or gains of 2 and 3 from distinct sources. Pridemate resolved to 3/3 and 4/4 respectively. The fixture submits combat damage directly. Full combat assignment, prevention, replacement-choice forks, Marauding Blight-Priest and Drogskol Reaver remain in Slice 2. Full debug, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 

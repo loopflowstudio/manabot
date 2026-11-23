@@ -128,6 +128,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
+        TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
         TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
             EventKinds::of(EventKind::CountersPut)
@@ -1077,7 +1078,9 @@ impl Game {
                 GameEvent::SpellCast {
                     object_id: object, ..
                 } => Some(self.spell_caster(*object)),
-                GameEvent::CardDrawn { player, .. } => Some(*player),
+                GameEvent::CardDrawn { player, .. } | GameEvent::LifeChanged { player, .. } => {
+                    Some(*player)
+                }
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
                     object_id: object,
@@ -1987,6 +1990,9 @@ impl Game {
                             .position(|cast| cast == object)
                             == Some(n as usize - 1)
                     })
+            }
+            (TriggerCondition::GainsLife { who }, GameEvent::LifeChanged { player, old, new }) => {
+                new > old && who.includes(source_controller, *player)
             }
             (
                 TriggerCondition::Draws { who, nth },
