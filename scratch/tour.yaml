@@ -1,4 +1,4 @@
-at: e1e2379303eb536854c4e418cf0501c00817c920
+at: 0e1ff25501bb1f9c0a86a9a0538201136d6a6d9c
 first:
   - path: managym/cards/src/fdn.rs
     why: Twinflame Tyrant selects source and recipient controllers
@@ -9,7 +9,7 @@ first:
   - path: managym/cards/tests/cards/fdn.rs
     why: Eight Lightning Bolt casts distinguish both controller scopes
   - path: managym/tests/rules/cr_614_replacement.rs
-    why: Affected player orders prevention and doubling
+    why: One battlefield tests both orders and the committed damage
   - path: managym/src/cards/token_renames.rs
     why: Retain checkpoint bindings for retired replacement names
 hide: []
