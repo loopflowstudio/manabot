@@ -33,6 +33,8 @@ Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 
 
 The Dominion Bracelet is the next end-to-end slice. Equip it, vary the creature’s current power across the zero-cost boundary, choose a target and pay the locked cost with the granting Bracelet and mana. Resolve the stacked ability after the Bracelet leaves and exercise the first delegated decision. Use the existing `PaymentReceipt` and `Effect::ControlPlayer` so the receipt identifies what was spent and the existing chooser mapping controls the next turn. Compare manual contributions, restricted-first automatic spending and mana left floating.
 
+Start the Bracelet fixture with two copies attached to one creature. Choose a specific grant, lock its price with both bonuses present, and fork at payment. Check that only the selected Bracelet leaves. Replay the same contribution to the same receipt and successor, then vary the contribution on a sibling without changing the root. Counter the paid activation on one branch: all costs remain committed and the opponent retains their next turn. Resolve it on another: the captured effect delegates that turn. Keep the grant identity through cost selection and the chosen effects on the stack through resolution. This exercises the distinction between paying for control and acquiring it.
+
 Construct a Cosmic Cube follows. Exercise the second draw, the seventh-counter crossing, failed sacrifice and a countered reflexive trigger. Fork a successful controlled turn at a nested payment and check chooser, resource owner, replay and root isolation. The shared consumer checks below and the full suite and paired Engine Budget at gate remain open.
 
 ## Remaining cross-consumer obligations

@@ -4,12 +4,12 @@
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
 </style>
-<main><small>Managym · MTG-422 · reviewed at 6fe0ae50</small>
+<main><small>Managym · MTG-422 · reviewed at 00f147c6</small>
 <h1>Do the caller’s decisions and results have one native owner?</h1>
 <p>From reset, a policy needs the current chooser and every legal action. Search must be able to fork there. Once the game finishes, evaluation needs a stable result for either seat.</p>
-<aside><h2>Biggest mismatch · the same finish has two receipts</h2>
-<p><b>Existing.</b> Resolve Pact’s loss instruction. An indexed Env step reports the winner and the losing seat’s <code>instructed_loss</code> reason. A semantic Env step computes the chooser’s reward separately and returns an empty info dictionary. An evaluator changing how it submits a decision loses the explanation for the score.</p>
-<p><b>Proposed.</b> Both step methods project reward and info from the committed game for the chooser captured before the step. Keep each method’s own observation and transition. Reading a result should never drain events or advance the game.</p></aside>
+<aside><h2>Biggest mismatch · paying with the object that grants the ability</h2>
+<p><b>Existing.</b> Managym can identify an attachment through <code>AbilityGrant</code>, retain an activation’s chosen effects on the stack, and record its payment. The Dominion Bracelet has no catalog definition. A caller cannot yet use those pieces together to exile the Bracelet and take the opponent’s next turn.</p>
+<p><b>Proposed.</b> Offer the equipped creature’s activation at sorcery timing. Lock the cost while the Bracelet still boosts power. Pay with that exact Equipment and the creature controller’s mana. After responses, resolve the captured control effect. The first delegated offer identifies the chooser and the controlled seat still supplies the resources.</p></aside>
 <h2>From reset to evaluation</h2>
 <table><thead><tr><th>Caller interaction<th>Code owner<th>Fit<tbody>
 <tr><td>Keep, redraw and choose private bottom order<td>OpeningHands publishes exact objects deepest first.<td>Yes. A fork can vary one commitment without exposing it to the opponent.
@@ -17,11 +17,17 @@
 <tr><td>Resume interrupted combat into cleanup<td>FrameCompletion::EndTurn retains the return point across a mandatory choice.<td>Yes. Cleanup can grant priority and repeat.
 <tr><td>Choose for another seat<td>ActionSpace.player owns choice. Action.player() identifies whose resources apply.<td>Yes. Bloodbending exercises the distinction. Cube’s nested payment still needs a witness.
 <tr><td>Distinguish victory, one seat losing and simultaneous losses<td>GameProcedure::Finished holds GameOutcome. Losses retain multiple causes per seat. Victory names the winner and cause.<td>Yes. Maze can win after a failed search with ten distinct Gate names already in play.
-<tr><td>Read the reason after either Env step<td>finish_game_step builds terminal info. step_semantic_command returns empty_info_dict().<td>No. The submission method determines which result fields reach the caller.
+<tr><td>Read the reason after either Env step<td>game_step_outcome reads the committed result for the chooser captured before stepping.<td>Yes. Seed 23 produced the same reward, winner and loss reason on both paths.
+<tr><td>Exile this particular Bracelet to pay for the creature’s activation<td>AbilityGrant, PaymentReceipt and ActivatedAbilityOnStack cover different moments in the activation.<td>No. The card does not yet connect those moments in a playable action.
 </table>
-<h2>One Pact upkeep, two successors</h2>
-<p><b>Recorded.</b> At seed 23, restoring the pending upkeep from a snapshot or replay and submitting the original loss-mode Command reproduced the terminal witness. At seed 161, flashing Herald before resolution let play continue after Herald later left. The next upkeep offered three modes. Protection consumed the instruction. Ten poison on a protected player behaves differently because the counters survive for the next state-based check.</p>
-<p><b>Failure and recovery.</b> Seed 103 exercised stale rejection during ordered bottoming. Recover by reading the current offer and binding a fresh Command. Seed 213 restored that decision after one private commitment and reproduced its successor. Applying the same recovery at Pact must preserve the spent mode, pending trigger, both views and root witness.</p>
-<p><b>First check proposed.</b> Fork immediately before the final pass resolving Pact. Submit the corresponding index and bound Command. Compare both returned info dictionaries, chooser-relative rewards and successor witnesses. Repeat with the protected live game, an explicit Maze victory and a simultaneous draw. A live step and a draw both pay zero. Only the draw is terminal. Rollout cap accounting and Monte Carlo scoring retain their own meanings.</p>
-<h2>Questions for review</h2><ol><li>Which step returns the terminal explanation? <b>1a · selected</b> Both Env methods. <b>1b</b> Indexed steps only.</li>
-<li>Where should recovery get that explanation? <b>2a · selected</b> Derive it from the restored native result. <b>2b</b> Persist a second receipt alongside the game.</li></ol></main></html>
+<h2>Follow one activation across a fork</h2>
+<ol><li><b>Normal path, proposed.</b> Equip a creature and open its granted activation. Bind the target and choose legal mana contributions. Once paid, the Bracelet is in exile before anyone can respond. Removing its power bonus then cannot increase the amount owed.</li>
+<li><b>Failure.</b> Counter the paid ability. The Bracelet stays exiled and the mana stays spent. The opponent chooses on their own turn. A payment receipt proves a cost was paid; it cannot prove control was acquired.</li>
+<li><b>Recovery.</b> Restore the pending payment on an exact fork. Replay the bound choice and compare the receipt, stack, remaining mana and next chooser. Take a different legal contribution on another fork and verify the root’s offers and mana are intact.</li></ol>
+<p><b>Counterexample.</b> Two Bracelets can grant identical text to one creature. Selecting one must exile that object, preserve the other grant and charge the amount locked before either leaves. This distinguishes grants by identity even when their displayed costs match.</p>
+<h2>Where the lifecycle already holds</h2>
+<p>At seed 213 a restored private bottom choice reproduced its successor. Another selection changed only the owner’s library knowledge. Time Stop used the retained end-turn frame to resume after a legend choice. Combat-only control expired before cleanup while turn-long control lasted through repeated cleanup.</p>
+<p>At seed 23 the indexed Pact choice and bound Command agreed across live and replay-restored snapshots, down to winner 1 (Opponent) and seat 0’s instructed loss. Herald consumed the loss instruction on a protected branch. Poison counters survive protection and can cause a later loss. A single pending-loss flag would conflate those branches.</p>
+<p><b>Next witness.</b> Cube should use the same turn-control effect after its separately counterable reflexive trigger resolves. Fork inside the controlled player’s payment. Full-suite and paired Engine Budget results remain open.</p>
+<h2>Questions for review</h2><ol><li>When is Bracelet’s price determined? <b>1a · selected</b> Lock it before paying. <b>1b</b> Recompute after exile, when the power bonus has gone.</li>
+<li>What survives payment? <b>2a · selected</b> The stack ability’s chosen effects and receipt. <b>2b</b> A link requiring a live Equipment to recover the effect.</li></ol></main></html>
