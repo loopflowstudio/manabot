@@ -1,11 +1,9 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
 `MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
-module, for the configurations `require_supported` admits (the w160l8 regime's: a
-catalog world with catalog record ids, table attention, masked-mean scalar
-critic, policy input v9). Its float arithmetic follows the PyTorch forward line
-by line; the integer bookkeeping comes precomputed in a `Prepared` batch
-(`manabot.policy.prepare`).
+module, for the scalar catalog policies admitted by `require_supported`.
+Its forward uses the integer lookups in a `Prepared` batch from
+`manabot.policy.prepare`.
 
 The catalog GRU always encodes every definition. PyTorch learning encodes
 only the rows a batch references; the others never reach the loss, so their
@@ -35,11 +33,17 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map
 import numpy as np
 
-from manabot.backends.mlx.arrays import default_precision, precision_dtype, to_numpy
+from manabot.backends.mlx.arrays import (
+    default_precision,
+    mlx_device,
+    precision_dtype,
+    to_numpy,
+)
 from manabot.backends.mlx.rl import NumericalError
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
+from manabot.policy.buckets import trim_to_needs
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
     Packed,
@@ -48,6 +52,7 @@ from manabot.policy.prepare import (
     prepare,
 )
 from manabot.policy.protocol import InferenceResult, Precision
+from manabot.policy.readings import Readings
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -156,12 +161,19 @@ def attend(mha: nn.MultiHeadAttention, x: mx.array, mask: mx.array) -> mx.array:
 
 
 class ObjectAttention(nn.Module):
-    """`GameObjectAttention`: perspective, self-attention, two post-norm blocks."""
+    """`GameObjectAttention`: perspective, self-attention, two post- or pre-norm blocks."""
 
     def __init__(
-        self, dims: int, heads: int, feedforward: int, *, ownership: bool
+        self,
+        dims: int,
+        heads: int,
+        feedforward: int,
+        *,
+        ownership: bool,
+        pre_norm: bool = False,
     ) -> None:
         super().__init__()
+        self.pre_norm = pre_norm
         if ownership:
             self.perspective = mx.zeros((dims,))
         self.mha = nn.MultiHeadAttention(dims, heads, bias=True)
@@ -178,17 +190,45 @@ class ObjectAttention(nn.Module):
         objects; `mask` [B,1,1,N] is additive (-inf on padding keys); `keep`
         [B,N,1] zeros padding outputs."""
         owned = objects + sign * self.perspective if "perspective" in self else objects
-        attended = attend(self.mha, owned, mask)
-        x = self.norm1(owned + attended)
+        attention_input = self.norm1(owned) if self.pre_norm else owned
+        attended = attend(self.mha, attention_input, mask)
+        residual = owned + attended
+        if self.pre_norm:
+            return (residual + self.mlp(self.norm2(residual))) * keep
+        x = self.norm1(residual)
         return self.norm2(x + self.mlp(x)) * keep
 
 
+def padding_embedding(rows: int, width: int) -> nn.Embedding:
+    """Match Torch's zero padding row on fresh token and name embeddings."""
+    embedding = nn.Embedding(rows, width)
+    embedding.weight = embedding.weight.at[0].multiply(0)
+    return embedding
+
+
+def zero_projection(width: int) -> nn.Linear:
+    """Start additive and FiLM residuals at zero on fresh policies."""
+    layer = nn.Linear(width, width)
+    layer.weight = mx.zeros_like(layer.weight)
+    layer.bias = mx.zeros_like(layer.bias)
+    return layer
+
+
 class SemanticCards(nn.Module):
-    def __init__(self, dims: Dimensions) -> None:
+    def __init__(
+        self, dims: Dimensions, *, library: bool = False, stream_norm: bool = False
+    ) -> None:
         super().__init__()
-        self.token_embedding = nn.Embedding(dims.token_rows, dims.hidden)
+        self.token_embedding = padding_embedding(dims.token_rows, dims.hidden)
         self.encoder = PackedGRU(dims.hidden, dims.hidden)
         self.decklist_projection = nn.Linear(4 * dims.hidden, dims.hidden)
+        if library:
+            self.library_projection = nn.Linear(dims.hidden, dims.hidden, bias=False)
+        if stream_norm:
+            self.hand_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
+            if library:
+                self.library_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
+            self.decklist_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
 
 
 class Facts(nn.Module):
@@ -220,7 +260,7 @@ class SharedEffects(nn.Module):
 class NameCandidates(nn.Module):
     def __init__(self, dims: Dimensions) -> None:
         super().__init__()
-        self.embedding = nn.Embedding(dims.name_rows, dims.hidden)
+        self.embedding = padding_embedding(dims.name_rows, dims.hidden)
 
 
 class Continuation(nn.Module):
@@ -249,7 +289,13 @@ class _Static:
     cache: dict[str, mx.array] = field(default_factory=dict)
 
 
+def parameter_ids(parameters: dict[str, object]) -> tuple[int, ...]:
+    return tuple(id(value) for _, value in tree_flatten(parameters))
+
+
 class MLXActorCritic(nn.Module):
+    _cast_state: tuple[tuple[int, ...], tuple[int, ...]] | None
+
     def __init__(
         self,
         dims: Dimensions,
@@ -258,25 +304,35 @@ class MLXActorCritic(nn.Module):
         space: ObservationSpace,
         *,
         precision: Precision | None = None,
+        bucketed_shapes: bool = False,
     ) -> None:
         super().__init__()
         if precision is None:
             precision = default_precision(dims.hidden)
         precision_dtype(precision)
         object.__setattr__(self, "_precision", precision)
+        object.__setattr__(self, "_cast_state", None)
         self.dims = dims
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
         self.config = config
+        self.bucketed_shapes = bucketed_shapes
+        self.stack_tokens = space.one_token
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = None
         hidden = dims.hidden
-        self.semantic_cards = SemanticCards(dims)
+        self.semantic_cards = SemanticCards(
+            dims, library=space.one_token, stream_norm=config.stream_norm
+        )
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
         self.action_embedding = Projection(dims.action, hidden)
         self.attention = ObjectAttention(
-            hidden, dims.heads, dims.feedforward, ownership=True
+            hidden,
+            dims.heads,
+            dims.feedforward,
+            ownership=True,
+            pre_norm=config.stream_norm,
         )
         self.action_layer = Projection((dims.focus + 1) * hidden, hidden)
         self.policy_head = nn.Sequential(
@@ -291,15 +347,36 @@ class MLXActorCritic(nn.Module):
             nn.Linear(hidden, 1),
         )
         self.extra_attention = [
-            ObjectAttention(hidden, dims.heads, dims.feedforward, ownership=False)
+            ObjectAttention(
+                hidden,
+                dims.heads,
+                dims.feedforward,
+                ownership=False,
+                pre_norm=config.stream_norm,
+            )
             for _ in range(dims.layers - 1)
         ]
+        if config.policy_film:
+            self.policy_film = zero_projection(hidden)
         self.link_from_target = [nn.Linear(hidden, hidden) for _ in range(dims.links)]
         self.link_to_target = [nn.Linear(hidden, hidden) for _ in range(dims.links)]
         self.facts = Facts(dims)
         self.shared_effects = SharedEffects(dims)
         self.name_candidates = NameCandidates(dims)
         self.continuation = Continuation(dims)
+        if space.one_token:
+            self.stack_embedding = Projection(dims.stack, hidden)
+            self.stack_source = zero_projection(hidden)
+        if config.stream_norm:
+            self.final_norm = nn.LayerNorm(hidden, eps=1e-5)
+            streams = ["player", "card", "permanent", "definition", "context"]
+            if space.one_token:
+                streams.append("stack")
+            self.stream_norms = {
+                name: nn.LayerNorm(hidden, eps=1e-5) for name in streams
+            }
+        if config.focus_film:
+            self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
         programs = tables.full_programs
         tokens, schedule = programs.tokens, programs.schedule
         named = np.nonzero(tables.name_definitions != 0)[0]
@@ -318,12 +395,36 @@ class MLXActorCritic(nn.Module):
         )
 
     @property
-    def device_type(self) -> str:
+    def readings(self) -> Readings:
+        return self._static.tables.layout.readings
+
+    def buffers(self) -> dict[str, np.ndarray]:
+        """Lookup buffers under their canonical state-dict names (`Tables.BUFFERS`)."""
+        tables = self._static.tables
+        exported: dict[str, np.ndarray] = {}
+        for field_name, buffer_name in Tables.BUFFERS.items():
+            value = getattr(tables, field_name)
+            if value is None or (value.size == 0 and field_name != "is_agent"):
+                continue
+            exported[buffer_name] = (
+                value[None] if field_name == "is_agent" and value.ndim == 1 else value
+            )
+        return exported
+
+    def object_trimming(self) -> bool:
+        """Whether buckets may trim object axes: padding objects must be inert."""
         return (
-            "cpu"
-            if getattr(self, "_inference_device", mx.default_device()) == mx.cpu
-            else "mps"
+            self.config.value_aggregation != "historical_mean"
+            and self.belief_count_buckets == 0
         )
+
+    @property
+    def inference_device(self) -> mx.Device | mx.DeviceType:
+        return getattr(self, "_inference_device", mx.default_device())
+
+    @property
+    def device_type(self) -> str:
+        return "cpu" if self.inference_device == mx.cpu else "mps"
 
     @property
     def parameter_count(self) -> int:
@@ -342,10 +443,6 @@ class MLXActorCritic(nn.Module):
             return weights / weights.sum(axis=-1, keepdims=True)
         return to_numpy(mx.softmax(mx.array(logits), axis=-1))
 
-    @staticmethod
-    def probability_from_logit(value: float) -> float:
-        return float(1.0 / (1.0 + np.exp(-np.float64(value))))
-
     @property
     def resident_bytes(self) -> int:
         tables = self._static.tables
@@ -359,9 +456,6 @@ class MLXActorCritic(nn.Module):
     @property
     def has_programs(self) -> bool:
         return True
-
-    def admit_belief(self, belief_schema: object) -> None:
-        raise NotImplementedError("MLX does not support belief inputs")
 
     def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
         return PolicyInference(self, cache_catalog=cache_catalog)
@@ -396,11 +490,7 @@ class MLXActorCritic(nn.Module):
 
     def to(self, device: str) -> "MLXActorCritic":
         """Select the inference stream on MLX's shared-memory devices."""
-        if device not in {"cpu", "mps", "gpu"}:
-            raise ValueError(f"MLX does not support device {device!r}")
-        object.__setattr__(
-            self, "_inference_device", mx.cpu if device == "cpu" else mx.gpu
-        )
+        object.__setattr__(self, "_inference_device", mlx_device(device))
         return self
 
     def sample(
@@ -413,7 +503,7 @@ class MLXActorCritic(nn.Module):
     ) -> np.ndarray:
         if not batch.legal_support:
             raise ValueError("No valid actions available")
-        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+        with mx.stream(self.inference_device):
             logits, _ = self(batch)
             actions = (
                 mx.argmax(logits, axis=-1)
@@ -431,7 +521,7 @@ class MLXActorCritic(nn.Module):
         temperature: float = 1.0,
         sampling: Literal["categorical", "multinomial"] = "categorical",
     ) -> np.ndarray:
-        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+        with mx.stream(self.inference_device):
             values = mx.array(logits)
             actions = (
                 mx.argmax(values, axis=-1)
@@ -442,7 +532,7 @@ class MLXActorCritic(nn.Module):
         return to_numpy(actions).astype(np.int64)
 
     def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
-        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+        with mx.stream(self.inference_device):
             _, values = self(batch)
             probabilities = mx.sigmoid(values[:, 0])
             mx.eval(probabilities)
@@ -480,11 +570,17 @@ class MLXActorCritic(nn.Module):
             yield
             return
         masters = self.parameters()
-        self.update(tree_map(lambda p: p.astype(dtype), masters))
+        casts = tree_map(lambda p: p.astype(dtype), masters)
+        self.update(casts)
         try:
+            # A frozen inference scope can recognize these casts of its own masters.
+            object.__setattr__(
+                self, "_cast_state", (parameter_ids(masters), parameter_ids(casts))
+            )
             yield
         finally:
             self.update(masters)
+            object.__setattr__(self, "_cast_state", None)
 
     def memory_gates(self) -> dict[str, float]:
         """MLX does not implement decision memory."""
@@ -498,18 +594,31 @@ class MLXActorCritic(nn.Module):
         return self.prepare_admitted(obs, inference=inference)
 
     def prepare_admitted(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self,
+        obs: ObservationBuffers,
+        *,
+        inference: bool = False,
+        needs: np.ndarray | None = None,
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
+        space = self._static.space
+        capacity = obs["actions_valid"].shape[1]
+        if self.bucketed_shapes:
+            obs, needs = trim_to_needs(
+                obs, space, needs, objects=self.object_trimming()
+            )
         return prepare(
             obs,
             self._static.tables,
             inference=inference,
+            bucketed=self.bucketed_shapes,
             binding=admission.binding(
                 self.config,
-                self._static.space,
+                space,
                 self._static.tables.layout.readings,
             ),
+            action_capacity=capacity,
+            bucket_needs=needs,
         )
 
     def check_observation(self, obs: ObservationBuffers) -> None:
@@ -555,7 +664,7 @@ class MLXActorCritic(nn.Module):
 
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
-        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+        with mx.stream(self.inference_device):
             logits, values = self(batch)
             mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
@@ -563,7 +672,7 @@ class MLXActorCritic(nn.Module):
     def evaluate_probabilities(
         self, batch: Prepared[np.ndarray]
     ) -> tuple[np.ndarray, np.ndarray]:
-        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+        with mx.stream(self.inference_device):
             logits, values = self(batch)
             probabilities = mx.softmax(logits, axis=-1)
             mx.eval(probabilities, values)
@@ -584,6 +693,30 @@ class MLXActorCritic(nn.Module):
         names = _take(self.name_candidates.embedding.weight, static.named_names)
         return programs.at[static.named_rows].add(names)
 
+    def _stream(self, name: str, x: mx.array) -> mx.array:
+        """Normalize one stream summed into object tokens (`stream_norm`)."""
+        if "stream_norms" not in self:
+            return x
+        return self.stream_norms[name](x)
+
+    def _definition_table(self, table: mx.array) -> mx.array:
+        """Normalize a definition table [definitions + 1, D] with row 0 kept zero."""
+        if "stream_norms" not in self:
+            return table
+        normed = self.stream_norms["definition"](table[1:])
+        return mx.concatenate([mx.zeros((1, table.shape[1]), normed.dtype), normed])
+
+    def _masked_norm(
+        self, norm: nn.LayerNorm | None, stream: mx.array, weights: np.ndarray
+    ) -> mx.array:
+        """A normalized knowledge source contributes zero for seats with no entries."""
+        if norm is None:
+            return stream
+        present = (
+            (weights > 0).reshape(weights.shape[0], weights.shape[1], -1).any(axis=-1)
+        )
+        return norm(stream) * self._floating(present)[..., None]
+
     # Forward -----------------------------------------------------------------------
 
     def _floating(self, values: np.ndarray) -> mx.array:
@@ -603,61 +736,94 @@ class MLXActorCritic(nn.Module):
             self.config, static.space, static.tables.layout.readings
         ):
             raise ValueError("prepared batch belongs to another policy configuration")
-        dims = self.dims
-        hidden = dims.hidden
+        hidden = self.dims.hidden
         b = batch.batch
         programs = static.cache.get("programs")
         if programs is None:
             programs = self.programs()
-        definitions = self._public(programs)
+        # Every object reader sees the normalized table; raw `programs` keep
+        # scoring naming candidates.
+        definitions = self._definition_table(self._public(programs))
         cards = self.semantic_cards
         tokens = cards.token_embedding.weight
 
         def defs(rows: np.ndarray) -> mx.array:
-            return _take(definitions, mx.array(rows.reshape(-1))).reshape(
-                *rows.shape, hidden
-            )
+            return _take(definitions, mx.array(rows))
 
-        # Objects: players, cards and permanents with their programs.
+        # Objects: players, cards, permanents and optional v11 stack rows.
         card_programs = defs(batch.card_rows)
+        attenuation = 1.0 if self.config.stream_norm else 60.0
         known = (
-            defs(batch.known_rows) * self._floating(batch.known_counts)[..., None] / 60
+            defs(batch.known_rows)
+            * self._floating(batch.known_counts)[..., None]
+            / attenuation
         ).sum(2)
+        known = self._masked_norm(
+            getattr(cards, "hand_norm", None), known, batch.known_counts
+        )
+        if "library_projection" in cards:
+            library_pooled = (
+                defs(batch.library_rows)
+                * self._floating(batch.library_weights)[..., None]
+                / attenuation
+            ).sum(2)
+            known = known + self._masked_norm(
+                getattr(cards, "library_norm", None),
+                cards.library_projection(library_pooled),
+                batch.library_weights,
+            )
         pooled = mx.einsum(
             "bsrh,bsrc->bsch", defs(batch.deck_rows), self._floating(batch.deck_counts)
         ).reshape(b, 2, 4 * hidden)
-        known = known + cards.decklist_projection(pooled)
+        known = known + self._masked_norm(
+            getattr(cards, "decklist_norm", None),
+            cards.decklist_projection(pooled),
+            batch.deck_counts,
+        )
         agent_player = (
-            self.player_embedding(self._floating(batch.agent_player))
+            self._stream(
+                "player", self.player_embedding(self._floating(batch.agent_player))
+            )
             + known[:, 0, None]
         )
         opponent_player = (
-            self.player_embedding(self._floating(batch.opponent_player))
+            self._stream(
+                "player", self.player_embedding(self._floating(batch.opponent_player))
+            )
             + known[:, 1, None]
         )
         agent_cards = (
-            self.card_embedding(self._floating(batch.agent_cards)) + card_programs[:, 0]
+            self._stream("card", self.card_embedding(self._floating(batch.agent_cards)))
+            + card_programs[:, 0]
         )
         opponent_cards = (
-            self.card_embedding(self._floating(batch.opponent_cards))
+            self._stream(
+                "card", self.card_embedding(self._floating(batch.opponent_cards))
+            )
             + card_programs[:, 1]
         )
-        permanents = self.perm_embedding(self._floating(batch.permanents)) + defs(
-            batch.permanent_rows
-        )
-        objects = mx.concatenate(
-            [
-                agent_player,
-                opponent_player,
-                agent_cards,
-                opponent_cards,
-                permanents[:, 0],
-                permanents[:, 1],
-            ],
-            axis=1,
-        )
+        permanents = self._stream(
+            "permanent", self.perm_embedding(self._floating(batch.permanents))
+        ) + defs(batch.permanent_rows)
+        parts = [
+            agent_player,
+            opponent_player,
+            agent_cards,
+            opponent_cards,
+            permanents[:, 0],
+            permanents[:, 1],
+        ]
+        if self.stack_tokens:
+            assert batch.stack is not None and batch.stack_rows is not None
+            parts.append(
+                self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
+                + defs(batch.stack_rows)
+            )
+        objects = mx.concatenate(parts, axis=1)
         count = objects.shape[1]
         objects = self._links(batch, objects)
+        if self.stack_tokens:
+            objects = self._join_stack_sources(batch, objects)
         objects = self._facts(batch, objects, tokens, definitions)
         objects = self._effects(batch, objects, tokens, definitions)
 
@@ -687,7 +853,8 @@ class MLXActorCritic(nn.Module):
             * valid[..., None]
         )
         rows = encoded.shape[1]
-        shared = encoded.sum(1) / mx.maximum(valid.sum(1, keepdims=True), 1)
+        relation_count = valid.sum(1, keepdims=True)
+        shared = encoded.sum(1) / mx.maximum(relation_count, 1)
         frames = mx.array(batch.frame_indexes)
         pooled_frames = (
             mx.zeros((b * rows, hidden), objects.dtype)
@@ -698,6 +865,10 @@ class MLXActorCritic(nn.Module):
             mx.zeros((b * rows,), objects.dtype).at[frames].add(valid.reshape(-1))
         )
         frame_context = pooled_frames / mx.maximum(frame_counts, 1)[:, None]
+        if "stream_norms" in self:
+            shared = self._stream("context", shared) * (relation_count > 0).astype(
+                shared.dtype
+            )
         objects = objects + shared[:, None]
 
         # Attention over the object table.
@@ -716,6 +887,8 @@ class MLXActorCritic(nn.Module):
         encoded_objects = self.attention(attended, sign, mask, keep)
         for layer in self.extra_attention:
             encoded_objects = layer(encoded_objects, sign, mask, keep)
+        if "final_norm" in self:
+            encoded_objects = self.final_norm(encoded_objects) * keep
         if columns is not None:
             # Restore the original coordinates; unused columns are zero.
             positions = np.zeros(count, dtype=np.int64)
@@ -771,7 +944,17 @@ class MLXActorCritic(nn.Module):
         focused = (focused * self._floating(batch.focus_mask)[..., None]).reshape(
             focus.shape[0], -1
         )
+        if "focus_film" in self:
+            actions = actions * (1 + self.focus_film(focused))
         informed = self.action_layer(mx.concatenate([actions, focused], axis=-1))
+        if "policy_film" in self:
+            valid_mask = validity[..., None]
+            pooled_state = (encoded_objects * valid_mask).sum(1) / mx.maximum(
+                valid_mask.sum(1), 1
+            )
+            informed = informed * (
+                1 + _take(self.policy_film(pooled_state), legal_batches)
+            )
         # Loss arithmetic and the invalid-logit sentinel stay float32.
         scores = self.policy_head(informed)[:, 0].astype(mx.float32)
         logits = mx.where(
@@ -788,8 +971,9 @@ class MLXActorCritic(nn.Module):
         """`ActorCritic._join_permanent_links`."""
         b, count, hidden = objects.shape
         start = 2 + 2 * batch.agent_cards.shape[1]
+        perm_count = 2 * batch.permanents.shape[2]
         flat = objects.reshape(b * count, hidden)
-        permanents = objects[:, start:]
+        permanents = objects[:, start : start + perm_count]
         delta = mx.zeros_like(flat)
         local = mx.zeros_like(permanents)
         for targets, mask, from_target, to_target in zip(
@@ -809,10 +993,22 @@ class MLXActorCritic(nn.Module):
                 + from_target(_take(flat, index).reshape(permanents.shape)) * linked
             )
         delta = delta.reshape(b, count, hidden)
-        local = mx.concatenate(
-            [mx.zeros((b, start, hidden), objects.dtype), local], axis=1
-        )
-        return objects + delta + local
+        return (objects + delta).at[:, start : start + perm_count].add(local)
+
+    def _join_stack_sources(
+        self, batch: Prepared[np.ndarray], objects: mx.array
+    ) -> mx.array:
+        """`ActorCritic._join_stack_sources`: add source embeddings to v11 stack rows."""
+        assert batch.stack is not None
+        assert batch.stack_targets is not None and batch.stack_mask is not None
+        b, total, hidden = objects.shape
+        start = 2 + 2 * batch.agent_cards.shape[1] + 2 * batch.permanents.shape[2]
+        count = batch.stack.shape[1]
+        sources = _take(
+            objects.reshape(b * total, hidden), mx.array(batch.stack_targets)
+        ).reshape(b, count, hidden)
+        delta = self.stack_source(sources) * self._floating(batch.stack_mask)[..., None]
+        return objects.at[:, start : start + count].add(delta)
 
     def _facts(
         self,
@@ -944,22 +1140,30 @@ class PolicyInference:
     """An unchanged inference policy and its optional weight-only program cache."""
 
     def __init__(self, agent: MLXActorCritic, *, cache_catalog: bool = True) -> None:
+        if agent.compute_dtype != mx.float32:
+            raise RuntimeError("open inference scopes on float32 master weights")
         self.agent = agent
         self.cache_catalog = cache_catalog
         self._closed = False
-        self._weights = tuple(
-            id(value) for _, value in tree_flatten(agent.parameters())
-        )
+        self._weights = parameter_ids(agent.parameters())
+        self._precision = agent.precision
         self._binding = agent.config.model_dump_json()
         agent.clear_cache()
 
     def _check(self) -> None:
         if self._closed:
             raise RuntimeError("inference scope is closed")
+        current = parameter_ids(self.agent.parameters())
+        cast_state = self.agent._cast_state
+        same_weights = (
+            current == self._weights
+            if cast_state is None
+            else cast_state == (self._weights, current)
+        )
         if (
             self._binding != self.agent.config.model_dump_json()
-            or self._weights
-            != tuple(id(value) for _, value in tree_flatten(self.agent.parameters()))
+            or self._precision != self.agent.precision
+            or not same_weights
         ):
             raise RuntimeError("inference policy changed within its scope")
 
@@ -981,6 +1185,10 @@ class PolicyInference:
         self._closed = True
         self.agent.clear_cache()
 
+    def prepare(self, obs: ObservationBuffers) -> Prepared[np.ndarray]:
+        self._check()
+        return self.agent.prepare(obs, inference=True)
+
     def infer(
         self,
         obs: ObservationBuffers,
@@ -990,10 +1198,10 @@ class PolicyInference:
         self._check()
         measure = span or (lambda name: nullcontext())
         with measure("input_admission_and_transfer_host"):
-            batch = self.agent.prepare(obs, inference=True)
+            batch = self.prepare(obs)
         with (
             measure("forward_host"),
-            mx.stream(getattr(self.agent, "_inference_device", mx.default_device())),
+            mx.stream(self.agent.inference_device),
         ):
             self.cache_programs()
             logits, _ = self.agent(batch)

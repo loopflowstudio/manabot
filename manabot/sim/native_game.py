@@ -29,7 +29,7 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import SimulationBackend
 from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import (
     bind_record,
@@ -60,9 +60,9 @@ class _InChildPlayers:
     supplied agents.
     """
 
-    def __init__(self, backend_factory: Callable[[], Backend] | None) -> None:
+    def __init__(self, backend_factory: Callable[[], SimulationBackend] | None) -> None:
         self._backend_factory = backend_factory
-        self._backend: Backend | None = None
+        self._backend: SimulationBackend | None = None
         self._game_trackers: tuple[type, ...] = ()
         self._step_observers: tuple[type, ...] = ()
 
@@ -114,7 +114,7 @@ def execute_game(
     max_commands: int,
     send: Callable[[tuple[str, Any]], None],
     *,
-    backend_factory: Callable[[], Backend] | None = None,
+    backend_factory: Callable[[], SimulationBackend] | None = None,
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
 ) -> None:
@@ -408,7 +408,7 @@ def game_worker(
 ) -> None:
     """Standalone scalar child; Etude games call execute_game in their own process."""
 
-    def backend_factory() -> Backend:
+    def backend_factory() -> SimulationBackend:
         import torch
 
         torch.set_num_threads(1)

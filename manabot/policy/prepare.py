@@ -586,6 +586,11 @@ class Prepared[A]:
     stack_mask: A | None = None
 
 
+def object_ownership(cards: int, permanents: int) -> np.ndarray:
+    """Ownership of the two players and their card and permanent slots."""
+    return np.repeat([True, False] * 3, [1, 1, cards, cards, permanents, permanents])
+
+
 def prepare(
     obs: ObservationBuffers,
     tables: Tables,
@@ -599,6 +604,7 @@ def prepare(
     memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
     action_capacity: int | None = None,
+    bucket_needs: np.ndarray | None = None,
     select_programs: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
@@ -723,7 +729,7 @@ def prepare(
         ]
     c, p = cards[0].shape[1], permanents.shape[2]
     ownership = np.broadcast_to(
-        np.repeat([True, False, True, False, True, False], [1, 1, c, c, p, p]),
+        object_ownership(c, p),
         (batch, 2 + 2 * c + 2 * p),
     )
     if stack is not None:
@@ -738,6 +744,9 @@ def prepare(
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
+        bucket_needs=tuple(tuple(map(int, row)) for row in bucket_needs)
+        if bucket_needs is not None
+        else None,
         agent_player=players[0],
         opponent_player=players[1],
         agent_cards=cards[0],

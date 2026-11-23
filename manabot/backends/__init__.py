@@ -1,16 +1,39 @@
 """Framework backends; only composition roots select one through `resolve`."""
 
 import importlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
-    from manabot.policy.protocol import Backend, Precision
+    from manabot.backends.mlx.checkpoint import MLXBackend
+    from manabot.backends.torch.checkpoint import TorchBackend
+    from manabot.policy.protocol import Precision
 
 
-def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend":
+@overload
+def resolve(
+    name: Literal["torch"], *, precision: "Precision | None" = None
+) -> "TorchBackend": ...
+
+
+@overload
+def resolve(
+    name: Literal["mlx"], *, precision: "Precision | None" = None
+) -> "MLXBackend": ...
+
+
+@overload
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend": ...
+
+
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend":
     """Select a configured backend, loading its optional framework on first use.
 
-    MLX's omitted precision follows each policy's width. Torch's resolver
+    With precision omitted, MLX uses the self-play settings for training
+    and the policy's width for standalone inference. Torch's resolver
     supports float32; reduced-precision training is configured on its learner.
     """
     if name not in {"torch", "mlx"}:

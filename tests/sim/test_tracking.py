@@ -67,7 +67,11 @@ def test_simulation_admits_exact_etude_checkpoint(
         monkeypatch.setattr(artifacts, "storage_from_uri", lambda _: storage)
         retained = tmp_path / "bucket/policy.pt"
     policy.unlink()  # The SDK retained its own bytes.
-    player = sim.load_player(str(record), backend=TORCH_BACKEND)
+
+    class Loader:
+        load_policy = staticmethod(TORCH_BACKEND.load_policy)
+
+    player = sim.load_player(str(record), backend=Loader())
     assert isinstance(player, ModelPlayer)
     assert not player.agent.training
     for name, value in original.state_dict().items():

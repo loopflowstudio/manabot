@@ -46,19 +46,19 @@ It uses the baseline model and horizon-scaled damped policy objective, records
 actual counts through Etude and publishes admitted checkpoints. This is a
 software smoke, not playing-strength evidence.
 
-A recipe's device is a config field: local defaults to CPU, and baseline
-defaults to CUDA and rejects CPU. Apple MPS is used only on explicit request
-(`--config '{"device": "mps"}'`). MPS self-play uses float32 and requires
-Torch 2.15 or newer; evaluation
-and search run on CPU. Belief inputs and frozen opponents
-are unsupported on MPS. This makes no speed or strength claim.
+Local and Elemental default to Torch on CPU. Baseline defaults to Torch on
+CUDA. All three recipes accept an explicit device. On Apple Silicon,
+`--config '{"backend": "mlx", "device": "mps"}'` runs damped self-play on
+the GPU. [MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
-The self-play loop logs an update clock and cumulative transition counts to
-the run, publishes each milestone checkpoint there and registers its learner,
-Adam, EMA and counts with the run, which saves them under `out/state/` and
-loads them into the next attempt
-([recovery](../docs/training.md#recovery)). Remote storage, rentals and
-scientific runs require explicit allocation.
+Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
+on CPU. The device guide covers precision, belief inputs and frozen opponents.
+[Training devices](../docs/training.md#run-training)
+
+The loop logs completed updates and cumulative transitions, publishes raw
+and configured EMA policies, and saves the learner, Adam, EMA and counts under
+`out/state/` for the next attempt. Remote storage, rentals and scientific runs
+require explicit allocation. [Training recovery](../docs/training.md#recovery)
 
 Saved `TrainingRegime` files and their run records are not read or run
 here; the guide names the revision that does both

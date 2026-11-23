@@ -23,6 +23,7 @@ class BeliefConfig(BaseModel):
 
 def train(config: BeliefConfig) -> None:
     from manabot.backends import resolve
+    from manabot.backends.torch import belief_fit
 
     backend = resolve("torch")
     with track(clocks=["steps"], config=config) as run:
@@ -41,7 +42,7 @@ def train(config: BeliefConfig) -> None:
             run.out / "belief.pt",
             config.sampler,
             seed=run.seed,
-            backend=backend.belief_fit,
+            backend=belief_fit,
             codec=backend.belief,
         )
         run.checkpoint(sampler, steps=config.sampler.steps)

@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from manabot.policy.catalog import catalog_tables
+from manabot.policy.catalog import CatalogTables, catalog_tables
 from manabot.policy.prepare import CatalogPrograms, Prepared
 
 
@@ -60,7 +60,7 @@ class CatalogShape:
 class SemanticCardEncoder(nn.Module):
     def __init__(
         self,
-        pack_key: str,
+        pack_key: str | CatalogTables,
         hidden_dim: int,
         decklists: bool = False,
         *,
@@ -76,8 +76,10 @@ class SemanticCardEncoder(nn.Module):
         `stream_norm` pools known cards without the `/ 60` attenuation and
         normalizes each knowledge stream on its own (`knowledge_streams`)."""
         super().__init__()
-        catalog = catalog_tables(
-            pack_key, records=records, decision_memory=decision_memory
+        catalog = (
+            catalog_tables(pack_key, records=records, decision_memory=decision_memory)
+            if isinstance(pack_key, str)
+            else pack_key
         )
         self.token_vocabulary = catalog.vocabulary
         self.token_embedding = nn.Embedding(catalog.embedding_rows, hidden_dim)
@@ -95,7 +97,7 @@ class SemanticCardEncoder(nn.Module):
         self.library_projection = (
             nn.Linear(hidden_dim, hidden_dim, bias=False) if library else None
         )
-        self.records = records
+        self.records = "record_name_keys" in catalog.buffers
         # One norm per knowledge source, so a first known card cannot set the
         # scale of the decklist stream (or the reverse).
         self.hand_norm = nn.LayerNorm(hidden_dim) if stream_norm else None

@@ -1,12 +1,15 @@
 """Reusable settings for current self-play recipes. No builder executes training."""
 
-from typing import Literal
+from typing import Literal, Self
+
+from pydantic import Field, model_validator
 
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
     ObservationConfig,
 )
+from manabot.infra.run_settings import RunSettings
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
 from manabot.training.loops.self_play import SelfPlay
@@ -35,6 +38,21 @@ def fitted_horizon(wall_seconds: float, seconds_per_update: float) -> int:
     if wall_seconds <= 0 or seconds_per_update <= 0:
         raise ValueError("wall and per-update seconds must be positive")
     return max(1, min(REFERENCE_UPDATES, int(wall_seconds // seconds_per_update)))
+
+
+class SelfPlayRecipe(RunSettings):
+    """Validate the execution device before Etude opens the named run."""
+
+    backend: Literal["torch", "mlx"] = Field(
+        default="torch", exclude_if=lambda value: value == "torch"
+    )
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
+
+    @model_validator(mode="after")
+    def backend_runs_on_device(self) -> Self:
+        if self.backend == "mlx" and self.device == "cuda":
+            raise ValueError("backend 'mlx' runs on device 'mps' or 'cpu', not 'cuda'")
+        return self
 
 
 # ---------------------------------------------------------------------------

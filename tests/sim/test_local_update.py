@@ -316,6 +316,8 @@ def attach_learned_sampler(
         max_steps=1000,
         backend=resolve("torch"),
     )
+    from manabot.backends.torch import belief_fit
+
     result = fit_belief_sampler(
         dataset,
         steps=1,
@@ -323,12 +325,10 @@ def attach_learned_sampler(
         hidden_size=8,
         evaluation_samples=2,
         seed=18,
-        backend=resolve("torch").belief_fit,
+        backend=belief_fit,
     )
     path = tmp_path / "sampler.pt"
-    digest = save_belief_sampler(
-        path, result, dataset, codec=resolve("torch").belief_fit
-    )
+    digest = save_belief_sampler(path, result, dataset, codec=belief_fit)
     return LocalUpdateTeacher(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,

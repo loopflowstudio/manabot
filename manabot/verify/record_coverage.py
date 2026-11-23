@@ -29,7 +29,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.state.backend import TrainingBackend
+from manabot.training.state.backend import FreshPolicies
 import managym
 
 _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -97,7 +97,7 @@ def coverage_sweep(
     games: int,
     seed: int = 0,
     *,
-    backend: TrainingBackend,
+    backend: FreshPolicies,
     decks: Literal["world", "elemental"] = "world",
 ) -> CoverageReport:
     """Play `games` seeded random games and embed every decision through a

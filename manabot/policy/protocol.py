@@ -1,20 +1,16 @@
-"""What a framework backend provides: a policy, a learner and a parameter layout.
+"""Framework-independent reads for policy inference and checkpoint admission.
 
-A backend (`manabot.backends.<name>`) runs the policy forward and an update's
-optimizer step in one array framework, over the `Prepared` batches of
-`manabot.policy.prepare`. The host-facing policy and parity methods exchange
-NumPy arrays, so callers such as `manabot.backends.parity` compare backends
-without touching their framework arrays.
-`BackendLearner` is what an update steps: it differentiates a loss written
-once over the backend's own arrays (`manabot.training.updates`). `Targets`
-and `Settings` are one captured minibatch's constants and coefficients.
+Simulation loads a host-facing policy over Prepared batches. Inspection can
+read checkpoint metadata and tensors without constructing a policy. The
+parity learner exposes host copies of its parameters and gradients for
+one captured minibatch's Targets and Settings.
 """
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType, TracebackType
+from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
 import numpy as np
@@ -24,7 +20,6 @@ from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 
 if TYPE_CHECKING:
-    from manabot.belief.encoding import BeliefEncodingSchema
     from manabot.infra.config import ModelConfig
 
 Precision = Literal["float32", "bfloat16"]
@@ -83,10 +78,6 @@ class InferenceScope(Protocol):
 
 
 class BackendPolicy(Protocol):
-    def memory_gates(self) -> dict[str, float]:
-        """Effective decision-memory gates at an update boundary."""
-        ...
-
     observation_space: ObservationSpace
     belief_count_buckets: int
     value_semantic: Literal["signed_outcome", "win_logit"] | None
@@ -108,10 +99,6 @@ class BackendPolicy(Protocol):
     @property
     def has_programs(self) -> bool: ...
 
-    def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
-        """Refuse belief inputs that this policy cannot represent."""
-        ...
-
     def inference_scope(self, *, cache_catalog: bool = True) -> InferenceScope: ...
 
     def sample_rows(
@@ -129,8 +116,6 @@ class BackendPolicy(Protocol):
     ) -> np.ndarray:
         """Normalize host logits with the backend's established arithmetic."""
         ...
-
-    def probability_from_logit(self, value: float) -> float: ...
 
     def to(self, device: str) -> Self:
         """Place the policy for inference; refuse unsupported devices."""
@@ -179,11 +164,6 @@ class BackendPolicy(Protocol):
         """Probabilities and values normalized in the policy's framework/device."""
         ...
 
-    def forward_distribution(self, batch: Prepared) -> tuple[Any, Any]:
-        """The training forward as the backend's own arrays, differentiable:
-        logits [B,A] and the critic's output [B,1]."""
-        ...
-
     def cache_programs(self) -> None:
         """Encode weight-only inputs once, for inference with fixed weights."""
         ...
@@ -221,26 +201,8 @@ class BackendLearner(Protocol):
         ...
 
 
-class Backend(Protocol):
-    """A configured loader and the array modules its updates use.
-
-    Update modules load on access so inference does not import training.
-    A directly imported framework module also satisfies `UpdateBackend`.
-    """
-
-    name: str
-
-    @property
-    def rl(self) -> ModuleType: ...
-
-    @property
-    def arrays(self) -> ModuleType: ...
-
-    @property
-    def learner(self) -> ModuleType: ...
-
-    @property
-    def rollout(self) -> ModuleType: ...
+class PolicyLoader(Protocol):
+    """Load an admitted inference policy in the selected framework."""
 
     def load_policy(
         self,
@@ -252,6 +214,10 @@ class Backend(Protocol):
         """Read a portable policy and validate its world and input contract."""
         ...
 
+
+class CheckpointReader(Protocol):
+    """Inspect the saved metadata and tensors without creating a policy."""
+
     def read_policy(self, path: str) -> PolicyCheckpoint:
         """Read and bind the tensors without constructing a policy."""
         ...
@@ -260,26 +226,18 @@ class Backend(Protocol):
         """Decode checkpoint metadata without constructing a policy."""
         ...
 
-    def seed_training(self, seed: int, *, torch_deterministic: bool = True) -> None:
-        """Seed the framework and apply its training determinism setting."""
+
+class Backend(PolicyLoader, CheckpointReader, Protocol):
+    """Checkpoint admission needs the saved input contract and the loaded policy."""
+
+
+class SimulationBackend(PolicyLoader, Protocol):
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None:
+        """Seed the backend's global action RNG; optionally set determinism."""
         ...
 
-    def seed(self, seed: int) -> None:
-        """Seed the backend's global action RNG at an explicit decision boundary."""
-        ...
 
-    def load(
-        self, checkpoint: PolicyCheckpoint
-    ) -> tuple[BackendPolicy, BackendLearner]:
-        """A policy holding the checkpoint's weights, and a fresh learner on it."""
-        ...
-
-    def parameter_layout(self, canonical: ParameterArrays) -> ParameterArrays:
-        """Canonical parameters (or deltas: the map is linear) in the
-        backend's names and layout, as `BackendLearner.parameters` returns them."""
-        ...
-
-    def gradient_layout(self, canonical: ParameterArrays) -> ParameterArrays:
-        """Gradients of canonical parameters as gradients of the backend's,
-        as `BackendLearner.gradients` returns them."""
-        ...
+class SeededPolicyLoader(PolicyLoader, Protocol):
+    def seeded_inference(
+        self, seed: int, *, cpu_only: bool = False
+    ) -> AbstractContextManager[object]: ...
