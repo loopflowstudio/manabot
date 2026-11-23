@@ -34,3 +34,5 @@ Use Twinmaw and a second nonland card for the Etali fixture so the same suspende
 Use two prepared sources in the first priority fixture. A single Seed Suture cannot expose grouping by program name. Preserve physical-card Command bindings while carrying the exact offered object into announcement.
 
 Use Regent’s existing Omen as the prepared-inset control. Changing only the inset kind isolates the hand and Cascade eligibility rule.
+
+Use an unrelated exiled spell copy as the negative cleanup control in the two-source fixture.
