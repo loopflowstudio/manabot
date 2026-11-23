@@ -96,6 +96,8 @@ The timing fixtures in `managym/cards/tests/cards/blb.rs` establish that existin
 
 The FDN ledger gives the obligation as “Damage-source history relates later death to exact damaged incarnation.” Damage a creature with Ooze and let it survive. From that position, compare its death later that turn with the death of the same card after it leaves and returns. Only the original recipient’s death should put Ooze’s death trigger on the stack and add a counter on resolution. Distinguish that counter from its attack trigger. Use the resulting indestructible Ooze in the outstanding Fumigate interaction. Convocation is a BLB witness, so 77 of 81 primary FDN rows remain.
 
+Record each distinct exact source and recipient at the positive damage commit in `flow/damage.rs`, while the object reference is available. Read that turn relation at death using the departing incarnation. Choose membership over an event transcript scan: repeated hits from one Ooze qualify once, while two different Oozes can both qualify. Start with a snapshot after a surviving hit and branch on recipient reentry and source reentry separately. Restore again with the death trigger pending, then resolve or counter it. Verify snapshot witnesses, independent forks and turn reset. Project visible pairs from that same authority through native observations, v11, text and Academy with optional history off. Compare equally wounded boards with different damage sources.
+
 ## Evidence to carry forward
 
 The 77 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.

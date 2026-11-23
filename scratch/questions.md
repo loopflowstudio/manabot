@@ -15,3 +15,4 @@ For the exact-source pair, start with Panda and restore its pending trigger befo
 The checkout's library-order pin addition failed to compile with an unbound pre-move object and exceeded the GameState size guard. The prerequisite repair uses the departing object and boxes the two existing pin sets together.
 
 For Lunar Convocation, place the Food gain before the enchantment enters. This distinguishes controller history from events witnessed by the permanent in the same two-branch fixture.
+For Predator Ooze, use membership per exact source and recipient. Repeated hits and source reentry distinguish this from a per-hit count or a card identity.
