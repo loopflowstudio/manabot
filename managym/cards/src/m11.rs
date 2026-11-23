@@ -1,6 +1,6 @@
 //! Magic 2011.
 use managym_state::{
-    ability::{Ability, Actor, Effect, ObjectSelector, TriggerCondition},
+    ability::{Ability, Effect, ObjectSelector},
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     permanent::CounterKind,
@@ -17,15 +17,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
             subtypes: vec!["Cat".into(), "Soldier".into()],
             power: Some(2),
             toughness: Some(2),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::GainsLife { who: Actor::You },
-                intervening_if: None,
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            }],
+            abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            ))],
             text_box: "Whenever you gain life, put a +1/+1 counter on this creature.".into(),
             ..Default::default()
         },

@@ -1,5 +1,7 @@
-at: 8f9f172f99e59535e62ea1364299d1206f979e59
+at: bbbd9e4db2b2d1f047132ef9717eae599fc82748
 first:
+  - path: managym/state/src/ability.rs
+    why: Shared life-gain trigger for three printed abilities
   - path: managym/cards/src/znr.rs
     why: One opposing life loss per controller life gain
   - path: managym/cards/tests/cards/znr.rs
@@ -34,8 +36,6 @@ first:
     why: Delivered behavior and remaining readiness audit
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Foundation card dispositions and definition locations
-  - path: managym/state/src/ability.rs
-    why: Entry abilities pair a subject with its effects
   - path: managym/cards/src/akh.rs
     why: Caracal grants lifelink and creates two Cats
   - path: managym/cards/tests/cards/akh.rs

@@ -1,6 +1,6 @@
 //! Dark Ascension.
 use managym_state::{
-    ability::{Ability, Actor, Effect, EffectValue, TriggerCondition},
+    ability::{Ability, Effect, EffectValue},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
 };
@@ -17,11 +17,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
             keywords: Keywords::of(&[Keyword::Flying, Keyword::DoubleStrike, Keyword::Lifelink]),
             power: Some(3),
             toughness: Some(5),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::GainsLife { who: Actor::You },
-                intervening_if: None,
-                effects: vec![Effect::DrawCards { count: EffectValue::Fixed(1) }],
-            }],
+            abilities: vec![Ability::when_you_gain_life(Effect::DrawCards { count: EffectValue::Fixed(1) })],
             text_box: "Flying\nDouble strike (This creature deals both first-strike and regular combat damage.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhenever you gain life, draw a card.".into(),
             ..Default::default()
         },

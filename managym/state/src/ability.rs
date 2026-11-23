@@ -27,6 +27,14 @@ impl Ability {
         }
     }
 
+    pub fn when_you_gain_life(effect: Effect) -> Self {
+        Self::Triggered {
+            condition: TriggerCondition::GainsLife { who: Actor::You },
+            intervening_if: None,
+            effects: vec![effect],
+        }
+    }
+
     /// The triggered rule represented by printed or granted ward (CR 702.21).
     pub fn ward(cost: PaymentCost) -> Self {
         Self::Triggered {
