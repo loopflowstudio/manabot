@@ -8,7 +8,11 @@ Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, th
 
 **Regal Caracal.** The Amonkhet definition creates two white Cat tokens with printed lifelink. Alongside the ordinary Cat all three were 2/2 with lifelink. Removing Caracal returned all three to 1/1 and only the two new Cats kept lifelink. Caracal and the opposing Cat received no lifelink from its ability.
 
-**Behavior review at `edac17e6`.** Four directed Rust tests passed in the debug test profile: the two Arahbo positions, the self-entry learning-token comparison and Caracal's removal. Five Python cases passed (the Hunter draw and four Lightshell cases). At the Hunter trigger-order decision both source-bound Commands reproduced the transition and digest on independent forks. Reusing each capture failed without changing the committed branch or its root. The privacy check covers the closed opponent's semantic observation and Academy projection. This satisfies the Cat iteration. The working phase stays open for the remaining 204 audits, starting with the Parent and Anthem position below. Full debug, pinned-pilot and browser checks remain with gate.
+**Behavior review at `edac17e6`.** Four directed Rust tests passed in the debug test profile: the two Arahbo positions, the self-entry learning-token comparison and Caracal's removal. Five Python cases passed (the Hunter draw and four Lightshell cases).
+
+**Prideful Parent and Anthem of Champions.** At `7b808969`, the directed position in `managym/cards/tests/cards/fdn.rs` checks Parent and its Cat before Anthem enters (2/2 and 1/1), while it is present (3/3 and 2/2), and after it leaves (2/2 and 1/1). Parent keeps vigilance and the opposing Cat stays 1/1 at all three points. Both ledger rows cite the fixture. The existing entry trigger, ordinary Cat token and controller-scoped continuous effect cover the interaction.
+
+**Drakuseth audit complete.** Its ledger row remains pending. Target selection permits reuse across clauses and resolution cannot assign 4 and 3 damage to their respective recipients in one batch. The choice-continuations obligation below covers both gaps.
 
 ### Behavior after the shared repair at `12096ae8`
 
@@ -97,13 +101,9 @@ Candidates still to verify:
 
 Every slice follows the same authoring rules: file each card once under its **first printing's set module** (`managym/cards/src/<set>.rs`) with its Scryfall printing ID, register via `cards()` and `cards/src/lib.rs`, snapshot shell + Oracle text in `managym/tests/fixtures/scryfall_cards.json`, update `fdn.jsonl` (`status: "source definition found"`, exact source path), and add directed set tests covering normal paths and counterexamples.
 
-### Slice 2 — Remaining token, targeting and lifegain work
+### Slice 2 — Per-source life gain
 
-The Cat entry tests above cover the previous iteration's requests. The four authored cards now use `Ability::when_enters` in `managym/state/src/ability.rs` for entry triggers without an intervening condition. The subject still distinguishes Arahbo entering itself from another qualifying Cat entering. Regal Caracal uses one continuous ability for both grants and a separate printed token face for intrinsic lifelink.
-
-1. **Parent and Anthem.** The directed FDN position resolves Parent’s entry first. Parent and its single Cat start at 2/2 and 1/1, gain +1/+1 when Anthem enters, and return to their printed sizes when it leaves. Parent retains vigilance and the opposing Cat stays 1/1 throughout.
-2. **Targeting audit complete.** Drakuseth remains pending as documented above. Both authored rows and Drakuseth’s obligation are recorded in the FDN ledger.
-3. **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
+**Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
    - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.
    - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).
    - Double-strike lifelinker (`Drogskol Reaver`) → 1 trigger in first-strike damage + 1 in normal combat damage.
