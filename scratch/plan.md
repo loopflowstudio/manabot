@@ -44,6 +44,10 @@ Both viewers read printed base mana value 2 from v11 stack column 12. Column 37 
 
 The ordinary-play fixture restores seed 42 at the pending X decision, reuses the original X=1 Command and compares payment, both viewers’ stack rows, semantic text, the resolving transition, the full state digest (including zone order), and the eight-word RNG continuation. The directed checks are `scavenger_regent` in the cards binary, `announced_x_reaches_the_stack_row`, `exude_toxin_target_threshold` in the managym library, and `test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle`. The TDM ledger records both programs under Oracle ID `7e97a242-0bac-4f18-9228-e98ecca36254`.
 
+**Behavior review at 8e1535e0.** Eleven focused native checks passed across Regent, announced X, targeting, catalog tokens, spending and privacy. The cold replay passed with the original X Command, matching payment, both viewers’ stack rows, semantic text, final digest and shuffle RNG. Both bundled pinned pilots passed and the optional checkpoint was skipped.
+
+All five retained Academy navigation positions failed. The single CHOOSE_TARGET case accepted its prefix and failed at test_choice_navigation.py line 60: digest 17408a11…c36899 versus retained 7411641a…3952d8. This stops the test before its final frame comparison and stale-Command check. Replay the original prefixes, identify the first state difference and compare complete offers and projections before refreshing any derived fixture. The Regent rules slice passed, but the working phase remains open for this regression and the planned casting cohorts. Gate owns the complete suites.
+
 ## Next slice · Etali casts during resolution
 
 At `04fbb56a`, Regent exercised the existing X announcement and Omen resolution paths. The compatibility constraint was on observation: a saved v11 model reads printed mana value, while a stack targeting predicate needs the announced value. The two columns now have separate witnesses. The later snapshot-helper consolidation at `5d461815` retained the cold replay fixture. The merge at `124c87de` brought in tracked MLX self-play.
