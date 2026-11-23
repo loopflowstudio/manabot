@@ -151,6 +151,8 @@ The catalog fixture update at `ef9a8011` supplied reference data. Count delivery
 
 From the same attack trigger, take the optional sacrifice and decline it in a sibling. Use a creature token to distinguish paying the sacrifice from qualifying for a death draw. Then destroy Hunter, another friendly nontoken creature and an opposing nontoken creature together. Expect two draws. Inspect the existing departure and trigger matching paths before adding a query. The deciding facts are which creatures died, their token status at departure and which one was Hunter. Link the passing fixture in the FDN cost-payment row.
 
+First make the simultaneous-death case discriminate between the two current readers in `flow/triggers.rs::subject_matches_moved_object`. Include a nontoken noncreature card copying a creature at departure among the two qualifying victims. Its destination card alone cannot answer Hunter’s question. Use the pre-batch snapshot to identify listeners and the exact departed object’s effective creature and token status to qualify each victim. Share that creature-status read with Predator Ooze. Preserve ordinary entry predicate semantics. Keep one pending draw per qualifying death. Restore with both draws pending and counter one in a sibling. Check both viewers can identify the public triggers and only the entitled viewer learns a private draw. This exercises the matcher before adding any new history storage.
+
 ## Evidence to carry forward
 
 The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.

@@ -32,3 +32,5 @@ The Felling Blow fixture uses Gray Ogre and Steel Hellkite for the requested 2-p
 For Drake Hatcher, carry the amount through combat batch matching into its pending trigger. Use a restored paid activation to distinguish spending counters from creating the token.
 
 The pending damage binding exceeded the 4096-byte GameState ceiling with trigger placement stored inline. Boxing the placement round preserves the ceiling. The countered-activation fork uses a constructed instant with the engine’s counter-ability instruction.
+
+For Hunter, use a nontoken noncreature copying a creature as one simultaneous victim. This makes the departure and destination readings distinguishable.
