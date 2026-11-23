@@ -235,6 +235,56 @@ Everything the viewer can see is preserved.
 [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
 want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
 
+**Snapshot and continuation.** `Env::fork` is built for ephemeral single-thread
+search clones (with decision-memory capture disabled). For saving a live
+position once, dropping the source `Env`, and spawning independent live
+continuations across threads or processes, capture an immutable, `Send + Sync`
+`GameSnapshot`:
+
+```rust
+use std::sync::Arc;
+use managym::agent::{BranchMode, RestoreOptions};
+
+let snapshot = Arc::new(env.snapshot()?);
+drop(env);
+
+// Concurrent threads can restore isolated continuations from one snapshot.
+// Sharing a ShuffleLibraries seed gives Common Random Numbers across choices.
+let branch = snapshot.restore(RestoreOptions {
+    mode: BranchMode::ShuffleLibraries { seed: 101 },
+    enable_decision_memory: None,
+    forced_first_action: Some(0),
+})?;
+
+// Export a compact (~1 KB) private replay recipe and reopen it elsewhere.
+let recipe = branch.snapshot()?.to_recipe_json()?;
+let reopened = managym::agent::GameSnapshot::from_recipe_json(&recipe)?;
+```
+
+`GameSnapshot` owns only the game's authority state, decision and history logs,
+policies, originating `reset_seed`, already-issued semantic object bindings,
+and shared provenance; per-`Env` `RefCell` caches, profiling, statistics, and
+recorder sinks stay out of it and rebuild lazily on restore. `RestoreOptions`
+applies one deterministic pipeline: validate options, materialize a fresh `Env`,
+apply `BranchMode` (`Exact { reseed }`, `ShuffleLibraries { seed }`, or
+`Determinize { viewer, seed }`), apply `enable_decision_memory` (`None`
+preserves the snapshot game's actual setting; `Some(false)` freezes the prefix;
+`Some(true)` starts appending at this boundary), and execute an optional
+`forced_first_action` (rejecting terminal roots or an offer shifted by
+`Determinize`). Invalid options fail before mutating anything.
+
+`to_recipe_json()` writes a private `managym-snapshot-v1` envelope over the
+canonical `GameProvenance` (originating `reset_seed`, setups, external `step`
+and semantic `Command` calls, and ordered boundary interventions). The same
+native intervention executor drives `GameSnapshot::restore`,
+`GameSnapshot::from_recipe_json`, `managym.replay`, and Academy Watch, so cold
+recipes open directly without a separate converter. `Env`s mutated through
+unjournaled helpers (`scenario_*`, direct world materializers, compound
+submissions, or external `random_action_index()`) still support in-memory
+snapshots but fail closed on `to_recipe_json()`. See the
+[Python snapshot guide](engine-python.md#save-and-restore-game-positions) for
+the Python `GameSnapshot`, `RestoreOptions`, and `SnapshotMetadata` API.
+
 ### Remembered library positions
 
 Native knowledge retains public hand minima and exact card definitions at
@@ -257,6 +307,14 @@ native facts. Samplers reserve distinct definition witnesses for known library
 positions before dealing the remaining hand and library. An unshared sampled
 opponent's private position map resets to their public map. Clones preserve
 both maps. Closed opposing decklists still refuse hidden-world sampling.
+
+`BranchMode::ShuffleLibraries` works on both open and closed decks without
+altering either hand, face-down exile, or future rules RNG. Because the
+positional knowledge maps are bounded at ten entries, the engine separately
+pins every library object that was inspected, revealed as a visible top, or
+placed/repositioned in the library until a genuine rules shuffle clears that
+seat's pins (and pins an entire library while a suspended search inspects it).
+Only the remaining exchangeable slots permute in place.
 
 ## Batched games
 
@@ -404,7 +462,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
 | Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
-| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Revision-bound Commands, decision captures, live snapshots (`GameSnapshot` / `RestoreOptions`), forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
 | Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |

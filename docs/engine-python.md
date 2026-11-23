@@ -284,7 +284,11 @@ A record holds the seed and both decks, so it holds both hands. Files use mode
 cards; Academy still shows each viewer only what that seat could see.
 
 Rows written before this format (`native-failure-v1` receipts and journals)
-read through the same functions. `FailureEvidence` and `read_failure` are the
+read through the same functions. Private snapshot recipes (`managym-snapshot-v1`
+exported by `GameSnapshot.to_recipe_json()`) also open directly through
+`read_record`, `read_records`, `records_from_source`, `walk`, and
+`managym academy replay`, executing any recorded boundary interventions natively.
+`FailureEvidence` and `read_failure` are the
 former names of `GameRecord` and `read_record`; they warn and are removed in
 0.4.0.
 
@@ -347,6 +351,125 @@ A persistence error after execution does not mean the operation did not run.
 Retain existing evidence and repair storage before starting a new attempt;
 there is no automatic retry or game skipping. Local durability cannot protect
 against host deletion: collect private files before removing the machine.
+
+## Save and restore game positions
+
+Save any initialized scalar `Env` into an immutable `GameSnapshot`, drop the
+original `Env`, and spawn independent live continuations from it — including
+concurrently across threads:
+
+```python
+from pathlib import Path
+
+import managym
+from managym.recording import read_record
+from managym.replay import walk
+
+game = managym.Env(seed=42, decision_memory=True, decision_memory_include_own=True)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+game.reset(managym.GameSetup(players, decklists="closed"))
+
+snapshot = game.snapshot()
+meta = snapshot.metadata()
+print(meta.turn, meta.phase, meta.action_count, meta.terminal)
+# 1 PhaseEnum.PRECOMBAT_MAIN 2 False
+
+# Drop the source Env and compare two opening choices under the same unseen
+# library order (Common Random Numbers), on open or closed decks.
+del game
+branch_a = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=0)
+)
+branch_b = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=1)
+)
+
+# Export a compact (~1 KB) private recipe and reopen it in another process.
+recipe_path = Path("branch-a.json")
+recipe_path.write_text(branch_a.snapshot().to_recipe_json())
+
+reopened = managym.GameSnapshot.from_recipe_json(recipe_path.read_text())
+continuation = reopened.restore()
+assert continuation.state_digest() == branch_a.state_digest()
+
+# The same recipe feeds managym.replay and Academy Watch directly.
+replay = walk(read_record(recipe_path))
+print(replay.stop.status, replay.stop.index)
+# interrupted 1
+```
+
+```bash
+uv run --no-project --python .venv/bin/python python -m managym.replay branch-a.json --seconds 30
+uv run --no-project managym academy replay branch-a.json
+```
+
+`game.snapshot()` works at any decision boundary and on a finished game; it
+raises on an unreset `Env`. Stepping or dropping the source `Env`, or any
+restored sibling, never changes the snapshot or other branches. Profiling,
+statistics counters, recorder sinks, and card-capture state stay with the
+source `Env`; each restored `Env` starts a fresh game generation with empty
+caches.
+
+`snapshot.restore(options=None)` validates options upfront and leaves the
+snapshot unchanged on failure. Choose the continuation mode with
+`managym.RestoreOptions` constructors:
+
+| Constructor | Effect at the saved boundary |
+|---|---|
+| `RestoreOptions()` / `RestoreOptions.exact(*, reseed=None, ...)` | Preserves full game authority state. Supply `reseed` to replace only future rules RNG. |
+| `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
+| `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with everything `viewer` (`0` or `1`) can see. Requires an open opponent decklist; closed decks are refused. |
+
+Every constructor accepts two optional keyword arguments:
+
+- `enable_decision_memory`: `None` (default) preserves the snapshot game's
+  actual capture setting. `False` freezes the retained decision-memory prefix
+  for this branch; `True` begins appending new records from this boundary
+  without inventing earlier ones. Existing `decision_memory_include_own`
+  settings and prefixes are preserved. (By contrast, search clones created with
+  `Env.clone_env()` or `fork_exact()` always freeze decision memory for
+  hypothetical rollouts.)
+- `forced_first_action`: executes that legal action index once immediately
+  after applying the branch mode and decision-memory setting, returning the
+  resulting `Env` even if that action ends the game. Rejected on terminal
+  snapshots, out-of-range indices, or when `determinize` shifts the published
+  action at that index. On a built-in (`random` or `heuristic`) seat, this
+  overrides that seat's choice once and records the override so cold replay
+  reproduces it.
+
+`snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
+(`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
+controller, including tokens), `stack_len`, `action_count`, `action_kind`
+(`ActionSpaceEnum | None`), `acting_player` (`int | None`), `terminal`, and
+sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
+stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
+and `action_kind` and `acting_player` are `None`. Reading metadata never builds
+observation JSON or opens hidden zones.
+
+`snapshot.to_recipe_json()` writes a compact `managym-snapshot-v1` JSON recipe
+holding the originating seed, player setups, external committed actions,
+ordered boundary interventions (such as reseeds, library reshuffles,
+determinizations, decision-memory transitions, and forced built-in overrides),
+the catalog `card_digest`, and the expected `state_digest`.
+`GameSnapshot.from_recipe_json(raw)` validates the schema and catalog digest,
+replays every action and intervention natively, checks `state_digest`, and
+fails closed on any corruption or world mismatch.
+
+An `Env` modified by unjournaled test or search helpers (`scenario_*`,
+`materialize_possible_world`, `materialize_sampled_hand`, `step_structured`,
+`step_legacy_submission`, or direct external `random_action_index()` calls)
+still supports in-memory `snapshot()` and `restore()`, but `to_recipe_json()`
+fails closed instead of emitting an inaccurate replay prefix.
+
+A snapshot recipe holds the deal seed, both decks, and branch RNG seeds, so it
+holds both hands. Store and share it as private data (like a game record). When
+opened in Academy Watch, each viewer still sees only what that seat could see,
+and opponent hands and branch seeds never leave the server; Academy's usual
+admission rules (`skip_trivial=True`, `player_policies=("agent", "agent")`, and
+matching decklist disclosure) still apply.
 
 ## Ask questions of recorded games
 

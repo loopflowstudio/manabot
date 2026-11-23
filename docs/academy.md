@@ -229,8 +229,11 @@ played, **Evaluation game**, one played afterwards to measure policies, or
 **Recorded game** for a record that says neither.
 
 Any game managym recorded opens this way with only `managym` installed: your
-own loop's ([Record games](engine-python.md#record-games)), a training run's
-or an evaluation's. A record holds the seed, both setups and the actions, so
+own loop's ([Record games](engine-python.md#record-games)), a training run's,
+an evaluation's, or a private snapshot recipe exported by
+`GameSnapshot.to_recipe_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
+A record holds the seed, both setups, the actions, and any recorded boundary
+interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
 digest before every decision, and saves what it verified to this traces
 directory as a finished recording. It runs no policy and loads no checkpoint,
