@@ -262,8 +262,20 @@ def test_mlx_chunking_preserves_the_collection_draw_and_logical_adam_step(
         )
 
 
+def measured_report(precision: Precision = "float32") -> Report:
+    return Report(
+        requested_device="cpu" if precision == "float32" else "mps",
+        actual_device="cpu" if precision == "float32" else "mps",
+        bucketed_shapes=False,
+        precision=precision,
+        observed_forward_dtype=precision,
+        minibatches=[{"index": 0}],
+        collection_indices=[0],
+    )
+
+
 def test_parity_requires_a_matching_optimizer_step() -> None:
-    report = Report()
+    report = measured_report()
     assert "clipped Adam weights" in report.failures()
     report.step_checked = True
     assert report.failures() == []
@@ -272,7 +284,8 @@ def test_parity_requires_a_matching_optimizer_step() -> None:
 
 
 def test_float32_parity_requires_every_tensor_gradient_to_agree() -> None:
-    report = Report(
+    report = replace(
+        measured_report(),
         step_checked=True,
         gradient_cosine=1.0,
         gradient_min_cosine=0.98,
@@ -323,8 +336,8 @@ def test_half_damped_update_after_cached_inference(
 def test_half_parity_uses_measured_dtype_tolerances() -> None:
     precision: Precision = "bfloat16"
     tolerance = TOLERANCES[precision]
-    report = Report(
-        precision=precision,
+    report = replace(
+        measured_report(precision),
         step_checked=True,
         step_parameter_max_abs=0.00017,
         gradient_min_cosine=-1,

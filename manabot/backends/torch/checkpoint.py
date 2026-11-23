@@ -54,6 +54,7 @@ from manabot.policy.checkpoint import (
     torch_name,
 )
 from manabot.policy.prepare import Tables
+from manabot.policy.protocol import Precision
 import managym
 
 
@@ -345,14 +346,22 @@ class TorchBackend:
         self,
         checkpoint: PolicyCheckpoint,
         *,
+        device: str | None = None,
+        precision: Precision | None = None,
+        bucketed_shapes: bool = False,
         minibatch_rows: int = 1,
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
     ) -> tuple[ActorCritic, Learner]:
-        agent = assemble(checkpoint)
+        device = "cpu" if device is None else device
+        self.runtime.require_device(torch.device(device).type)
+        if precision is None:
+            precision = "float32"
+        agent = assemble(checkpoint, bucketed_shapes=bucketed_shapes)
         return agent, Learner(
             agent,
-            "cpu",
+            device,
+            precision="bf16" if precision == "bfloat16" else precision,
             minibatch_rows=minibatch_rows,
             execution_rows=execution_rows,
             bootstrap_rows=bootstrap_rows,

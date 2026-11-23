@@ -507,17 +507,11 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
   --backend torch --device mps --precision bfloat16 --bucketed --threads 4 --json parity.json
 ```
 
-```text
-torch  finite clipped Adam step                 max |Δ| 1.7e-04 (diagnostic; no float32 step bound)  ok
-torch  forward logits                           Δ 5.9e-05 (tol 0.001)  ok
-torch  forward values                           Δ 3.8e-03 (tol 0.01)  ok
-torch  collection logits                        Δ 5.2e-05 (tol 0.001)  ok
-torch  collection values                        Δ 3.1e-03 (tol 0.01)  ok
-torch  learner loss                             Δ 2.1e-03 (tol 0.01)  ok
-torch  full gradient                            cosine 0.999054 (tol 0.99); tensor minimum 0.963081 (semantic_cards.token_embedding.weight, diagnostic)  ok
-torch  one step                                 params max |Δ| 1.7e-04, update min cosine 0.994210 (cosine diagnostic only)
-parity: pass (torch)
-```
+On the M1 w64l2 baseline capture, this command checked eight minibatches and
+eight collection calls. The bucketed Torch MPS forward ran in bfloat16 and
+the clipped Adam step was finite. The largest relative learner-loss difference
+was 3.63% against the 1% tolerance, so the command exited 1 and wrote
+`"failures": ["learner loss"]` to the report.
 
 | Flag | Default | Effect |
 | --- | --- | --- |
@@ -525,12 +519,12 @@ parity: pass (torch)
 | `--device` | `cpu` (Torch), `mps` (MLX) | Candidate execution device (`cpu`, `mps` or `cuda` on Torch; `mps`/`gpu` or `cpu` on MLX). Unavailable devices and `--backend torch --device cpu --precision bfloat16` exit 2 with no silent fallback. |
 | `--precision` | `float32` | Candidate forward precision (`float32` or `bfloat16`). Both `--backend mlx` and `--backend torch` on `mps`/`cuda` run forwards under their production precision scope and promote logits and values to float32 before computing `minibatch_objective`. |
 | `--bucketed` | off (padded) | Prepare candidate batches with `bucketed_shapes=True` while comparing against the same CPU float32 padded reference capture. |
-| `--threads` | backend default | Run candidate loading and evaluation inside `runtime.scoped(...)` with the requested thread count and restore it on exit. |
+| `--threads` | current Torch thread count | Set Torch threads for the CPU reference and any Torch candidate during the check. MLX manages its own thread pool. |
 
 The reference stays Torch CPU float32 padded, and the candidate keeps the same
 device, precision and bucketed settings across both initial load and the
 post-step reload. Every report verifies and records execution proof in
-`--json` (`actual_device`, `observed_forward_dtype` before float32 promotion,
+`--json` (`actual_device`, `observed_forward_dtype` from the critic head before float32 promotion,
 `bucketed_shapes`, `minibatches_checked` and `collection_checked`), failing
 parity (exit 1) if any target mismatches, if fewer than one minibatch or
 collection call ran, or if any logit, value, loss, gradient or clipped step is

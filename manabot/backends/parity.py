@@ -33,33 +33,36 @@ backend, writes
 backend's worst components if any check fails; it exits 2 when the checkpoint
 or capture is missing, the checkpoint is refused or no backend is installed.
 
-Use `--backend mlx --precision bfloat16` for half precision. Half uses its measured logit/value, loss and full-gradient cosine
+Use `--precision bfloat16` on MLX or Torch MPS/CUDA for half precision. Half uses its measured logit/value, loss and full-gradient cosine
 bars in `TOLERANCES`; the minimum per-tensor cosine and one-step difference
 remain diagnostics. Float32 retains all the stricter checks above. Passing half's
 numerical gates does not establish equivalent optimization or playing strength.
 """
 
 import argparse
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import numpy as np
 import torch
 
 from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch import runtime as torch_runtime
+from manabot.backends.torch.arrays import on_device
+from manabot.backends.torch.checkpoint import read_policy, restore_policy
+from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import (
     ParameterArrays,
     PolicyCheckpoint,
     canonical_parameters,
-    from_torch_state,
 )
 from manabot.policy.prepare import Prepared, reference_distribution
 from manabot.policy.protocol import (
@@ -69,12 +72,17 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
-from manabot.training.updates.backend import Learner, Policy, UpdateBackend
+from manabot.training.updates.backend import Arrays, Learner, Policy, UpdateBackend
 from manabot.training.updates.objective import minibatch_objective
+
+if TYPE_CHECKING:
+    from manabot.backends.mlx.policy import MLXActorCritic
 
 
 class ParityPolicy(BackendPolicy, Policy, Protocol):
     """One policy for both host inference and differentiable parity checks."""
+
+    bucketed_shapes: bool
 
 
 class ParityLearner(Learner, BackendLearner, Protocol):
@@ -88,6 +96,9 @@ class ParityBackend(UpdateBackend, Protocol):
         self,
         checkpoint: PolicyCheckpoint,
         *,
+        device: str | None = None,
+        precision: Precision | None = None,
+        bucketed_shapes: bool = False,
         minibatch_rows: int = 1,
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
@@ -155,7 +166,7 @@ def installed_backends() -> list[str]:
 def minibatch_loss(
     module: UpdateBackend,
     policy: ParityPolicy,
-    learner: BackendLearner,
+    learner: ParityLearner,
     batch: Prepared,
     targets: Targets,
     settings: Settings,
@@ -167,7 +178,7 @@ def minibatch_loss(
     `rl` functions, with the scalar critic every backend supports.
     """
     rl, to_device = module.rl, module.arrays.from_numpy
-    device = getattr(learner, "device", "cpu")
+    device = learner.device
     valid = rl.legal_mask(to_device(batch.legal, device))
     constants = {
         "actions": to_device(targets.actions.astype(np.int64), device),
@@ -185,11 +196,12 @@ def minibatch_loss(
         device_batch = batch
 
     def objective() -> tuple[Any, ...]:
-        logits, values = policy.forward_distribution(device_batch)
+        with learner.forward_precision():
+            logits, values = policy.forward_distribution(device_batch)
         return minibatch_objective(
             rl,
-            logits,
-            values,
+            module.arrays.float32(logits),
+            module.arrays.float32(values),
             valid,
             **constants,
             categorical=False,
@@ -204,6 +216,17 @@ def minibatch_loss(
 
 @dataclass
 class Report:
+    backend: str = ""
+    requested_device: str = ""
+    requested_bucketed_shapes: bool = False
+    actual_device: str | None = None
+    observed_forward_dtype: str | None = None
+    bucketed_shapes: bool | None = None
+    threads: int = 0
+    capture: str = ""
+    checkpoint_sha256: str = ""
+    collection_indices: list[int] = field(default_factory=list)
+    execution_error: str | None = None
     precision: Precision = "float32"
     gradient_cosine: float = 1.0
     forward_logits: float = 0.0
@@ -224,6 +247,26 @@ class Report:
     step_max_grad_norm: float = 0.0
     minibatches: list[dict[str, Any]] = field(default_factory=list)
 
+    @property
+    def placement_matches(self) -> bool:
+        device = "mps" if self.requested_device == "gpu" else self.requested_device
+        return (
+            self.actual_device == device
+            and self.bucketed_shapes == self.requested_bucketed_shapes
+        )
+
+    @property
+    def minibatch_indices(self) -> list[int]:
+        return [row["index"] for row in self.minibatches]
+
+    @property
+    def minibatches_checked(self) -> int:
+        return len(self.minibatches)
+
+    @property
+    def collection_checked(self) -> int:
+        return len(self.collection_indices)
+
     def checks(self) -> list[tuple[str, str, bool]]:
         """(component, measured against its dtype's bar, passed)."""
         tolerance = TOLERANCES[self.precision]
@@ -237,6 +280,24 @@ class Report:
             ).all()
         )
         checks = [
+            (
+                "execution",
+                self.execution_error
+                or f"{self.actual_device} {self.observed_forward_dtype}",
+                self.execution_error is None
+                and self.placement_matches
+                and self.observed_forward_dtype == self.precision,
+            ),
+            (
+                "learner samples",
+                str(self.minibatches_checked),
+                self.minibatches_checked > 0,
+            ),
+            (
+                "collection samples",
+                str(self.collection_checked),
+                self.collection_checked > 0,
+            ),
             (
                 "clipped Adam weights"
                 if tolerance.step is not None
@@ -366,7 +427,7 @@ def gradient_agreement(
     }
     for name, (a, b) in flat.items():
         if a.shape != b.shape or not np.isfinite(a).all() or not np.isfinite(b).all():
-            raise ValueError(f"invalid gradient: {name}")
+            raise ParityMismatch(f"invalid gradient: {name}")
     dot = sum(float(a @ b) for a, b in flat.values())
     actual_square = sum(float(a @ a) for a, _ in flat.values())
     expected_square = sum(float(b @ b) for _, b in flat.values())
@@ -384,9 +445,38 @@ def gradient_agreement(
 def _legal_difference(
     logits: np.ndarray, torch_logits: np.ndarray, legal: np.ndarray
 ) -> tuple[float, float]:
+    if not np.isfinite(logits).all() or not np.isfinite(torch_logits).all():
+        raise ParityMismatch("nonfinite logits")
     difference = np.abs(logits - torch_logits)[legal]
     scale = np.abs(torch_logits[legal]).max()
     return float(difference.max()), float(difference.max() / scale) if scale else 0.0
+
+
+class ParityMismatch(ValueError):
+    """A measured candidate cannot supply the requested numerical comparison."""
+
+
+def evaluate(
+    arrays: Arrays,
+    policy: ParityPolicy,
+    learner: ParityLearner,
+    batch: Prepared,
+    report: Report,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Read the actual critic dtype before the host-facing float32 conversion."""
+    with torch.no_grad(), learner.forward_precision():
+        if isinstance(policy, torch_backend.policy.ActorCritic):
+            logits, values = policy.forward_distribution(
+                on_device(batch, learner.device)
+            )
+        else:
+            mlx_policy = cast("MLXActorCritic", policy)
+            logits, values = mlx_policy.forward_heads(batch)
+    dtype = str(values.dtype).rsplit(".", 1)[-1]
+    report.observed_forward_dtype = dtype
+    if dtype != report.precision:
+        raise ParityMismatch(f"forward dtype {dtype} differs from {report.precision}")
+    return arrays.to_numpy(logits), arrays.to_numpy(values).reshape(-1)
 
 
 def check(
@@ -397,27 +487,105 @@ def check(
     *,
     backend_name: str,
     precision: Precision = "float32",
+    device: str | None = None,
+    bucketed_shapes: bool = False,
+    threads: int | None = None,
 ) -> Report:
-    """Compare one backend against the PyTorch reference."""
-    torch.set_num_threads(8)
-    agent, space = load_checkpoint(str(checkpoint))
-    state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    weights = from_torch_state(
-        agent.config,
-        space.config,
-        state,
-        parameter_names=dict(agent.named_parameters()),
-        readings=agent.readings,
+    """Compare this execution target with the padded CPU float32 reference."""
+    port = resolve(backend_name)
+    if device is None:
+        device = "cpu" if backend_name == "torch" else "mps"
+    if backend_name == "torch" and device not in {"cpu", "mps", "cuda"}:
+        raise ValueError(f"unsupported Torch parity device: {device!r}")
+    if (
+        backend_name == "torch"
+        and device == "mps"
+        and os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") == "1"
+    ):
+        raise ValueError("Torch MPS parity requires operator fallback disabled")
+    if precision not in TOLERANCES:
+        raise ValueError(f"unsupported parity precision: {precision!r}")
+    if threads is None:
+        threads = torch.get_num_threads()
+    if (
+        threads < 1
+        or collection_count < 0
+        or (minibatch_count is not None and minibatch_count < 0)
+    ):
+        raise ValueError("threads must be positive and sample counts nonnegative")
+    report = Report(
+        backend=backend_name,
+        requested_device=device,
+        requested_bucketed_shapes=bucketed_shapes,
+        precision=precision,
+        capture=str(capture),
+        checkpoint_sha256=file_sha256(checkpoint),
+        threads=threads,
     )
-    port = resolve(backend_name, precision=precision)
-    policy, learner = port.load(weights)
-    # The reference: the same loss over the torch backend, on the loaded agent.
-    reference_policy = agent
-    reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
-    report = Report(precision=precision)
+    with ExitStack() as scope:
+        if backend_name != "torch":
+            scope.enter_context(torch_runtime.scoped(threads, "float32", "cpu"))
+        scope.enter_context(
+            port.runtime.scoped(
+                threads, "bf16" if precision == "bfloat16" else precision, device
+            )
+        )
+        weights = read_policy(str(checkpoint))
+
+        def load_candidate() -> tuple[ParityPolicy, ParityLearner]:
+            policy, learner = port.load(
+                weights,
+                device=device,
+                precision=precision,
+                bucketed_shapes=bucketed_shapes,
+            )
+            report.actual_device = policy.device_type
+            report.bucketed_shapes = policy.bucketed_shapes
+            if not report.placement_matches:
+                raise ParityMismatch(
+                    f"loaded {policy.device_type}, bucketed={policy.bucketed_shapes}; requested {device}, bucketed={bucketed_shapes}"
+                )
+            return policy, learner
+
+        try:
+            compare(
+                port,
+                weights,
+                load_candidate,
+                capture,
+                minibatch_count,
+                collection_count,
+                report,
+            )
+        except (
+            ParityMismatch,
+            torch_backend.rl.NumericalError,
+            port.rl.NumericalError,
+        ) as error:
+            report.execution_error = str(error)
+    return report
+
+
+def compare(
+    port: ParityBackend,
+    weights: PolicyCheckpoint,
+    load_candidate: Callable[[], tuple[ParityPolicy, ParityLearner]],
+    capture: Path,
+    minibatch_count: int | None,
+    collection_count: int,
+    report: Report,
+) -> None:
+    def load_reference() -> torch_backend.learner.Learner:
+        return torch_backend.learner.Learner(
+            restore_policy(weights), "cpu", minibatch_rows=1
+        )
+
+    reference_learner = load_reference()
+    policy, learner = load_candidate()
     for index, (obs, targets, settings, meta) in enumerate(
         minibatches(capture, minibatch_count)
     ):
+        reference_policy = reference_learner.agent
         reference_batch = reference_policy.prepare(obs)
         valid = reference_batch.legal
         with torch.no_grad():
@@ -438,7 +606,7 @@ def check(
         )
 
         batch = policy.prepare(obs)
-        port_logits, port_values = policy.evaluate(batch)
+        port_logits, port_values = evaluate(port.arrays, policy, learner, batch, report)
         port_loss = minibatch_loss(port, policy, learner, batch, targets, settings)
         loss_value = float(port.arrays.to_numpy(port_loss))
         grads = learner.gradients(port_loss)
@@ -448,6 +616,19 @@ def check(
             abs(reference_loss), 1e-12
         )
         agreement = gradient_agreement(grads, expected)
+        if not np.isfinite(
+            [
+                absolute,
+                relative,
+                value_difference,
+                loss_relative,
+                agreement.cosine,
+                agreement.min_cosine,
+            ]
+        ).all():
+            raise ParityMismatch(
+                f"nonfinite learner comparison on minibatch {meta['index']}"
+            )
         row = {
             "index": meta["index"],
             "B": int(len(targets.actions)),
@@ -490,19 +671,23 @@ def check(
                 settings,
                 report,
             )
-            policy, learner = port.load(weights)
-            agent.load_state_dict({k: torch.from_numpy(v) for k, v in state.items()})
-            reference_learner = torch_backend.learner.Learner(
-                agent, "cpu", minibatch_rows=1
-            )
+            policy, learner = load_candidate()
+            reference_learner = load_reference()
         print(
-            f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
+            f"{report.backend} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
             f"min cosine {agreement.min_cosine:.6f} ({agreement.worst})",
             flush=True,
         )
-    _collection(agent, policy, capture, collection_count, report)
-    return report
+    _collection(
+        port.arrays,
+        reference_learner.agent,
+        policy,
+        learner,
+        capture,
+        collection_count,
+        report,
+    )
 
 
 def _compare_step(
@@ -538,9 +723,14 @@ def _compare_step(
     worst = 1.0
     largest = 0.0
     for name, value in after.items():
-        largest = max(largest, float(np.abs(value - expected_after[name]).max()))
+        delta = float(np.abs(value - expected_after[name]).max())
+        if not np.isfinite(delta):
+            raise ParityMismatch(f"nonfinite post-step parameter: {name}")
+        largest = max(largest, delta)
         cosine = _cosine(value - initial[name], expected_delta[name])
         if cosine is not None:
+            if not np.isfinite(cosine):
+                raise ParityMismatch(f"nonfinite step cosine: {name}")
             worst = min(worst, cosine)
     report.step_parameter_max_abs = largest
     report.step_update_min_cosine = worst
@@ -548,37 +738,45 @@ def _compare_step(
 
 
 def _collection(
-    agent: torch.nn.Module,
-    policy: BackendPolicy,
+    arrays: Arrays,
+    agent: torch_backend.policy.ActorCritic,
+    policy: ParityPolicy,
+    learner: ParityLearner,
     capture: Path,
     count: int,
     report: Report,
 ) -> None:
-    """Inference parity on spread-out captured collection calls."""
-    agent.eval()
+    """Inference parity on distinct spread-out captured collection calls."""
     calls = sorted((capture / "collection").glob("*.npz"))
-    if not calls:
+    if not calls or not count:
         return
-    policy.cache_programs()
-    for path in [calls[i] for i in np.linspace(0, len(calls) - 1, count).astype(int)]:
-        obs = read_npz(path)
-        with torch.no_grad():
-            logits, values = agent(
-                on_device(
-                    agent.prepare(obs, inference=True),
-                    device_of(agent),
+    agent.eval()
+    policy.eval()
+    with torch.no_grad(), learner.forward_precision():
+        try:
+            policy.cache_programs()
+            for index in np.linspace(
+                0, len(calls) - 1, min(count, len(calls)), dtype=int
+            ):
+                path = calls[index]
+                obs = read_npz(path)
+                logits, values = agent.evaluate(agent.prepare(obs, inference=True))
+                port_logits, port_values = evaluate(
+                    arrays, policy, learner, policy.prepare(obs, inference=True), report
                 )
-            )
-        port_logits, port_values = policy.evaluate(policy.prepare(obs, inference=True))
-        absolute, _ = _legal_difference(
-            port_logits, logits.numpy(), obs["actions_valid"] > 0
-        )
-        report.collection_logits = max(report.collection_logits, absolute)
-        report.collection_values = max(
-            report.collection_values,
-            float(np.abs(port_values.reshape(-1) - values.numpy().reshape(-1)).max()),
-        )
-    policy.clear_cache()
+                absolute, _ = _legal_difference(
+                    port_logits, logits, obs["actions_valid"] > 0
+                )
+                delta = float(np.abs(port_values - values.reshape(-1)).max())
+                if not np.isfinite(delta):
+                    raise ParityMismatch(
+                        f"nonfinite collection value on call {path.stem}"
+                    )
+                report.collection_logits = max(report.collection_logits, absolute)
+                report.collection_values = max(report.collection_values, delta)
+                report.collection_indices.append(int(path.stem))
+        finally:
+            policy.clear_cache()
 
 
 def _print(name: str, report: Report) -> None:
@@ -602,9 +800,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path)
     parser.add_argument("--backend", choices=tuple(BACKENDS))
     parser.add_argument("--precision", choices=tuple(TOLERANCES), default="float32")
+    parser.add_argument("--device", choices=("cpu", "mps", "gpu", "cuda"))
+    parser.add_argument("--bucketed", action="store_true")
+    parser.add_argument("--threads", type=int)
     args = parser.parse_args(argv)
-    if args.precision != "float32" and args.backend != "mlx":
-        parser.error("half precision requires --backend mlx; Torch stays float32")
     names = [args.backend] if args.backend else installed_backends()
     if any(name not in installed_backends() for name in names):
         parser.error("the selected backend's framework is not installed")
@@ -620,6 +819,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.collection,
                 backend_name=name,
                 precision=args.precision,
+                device=args.device,
+                bucketed_shapes=args.bucketed,
+                threads=args.threads,
             )
     except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))  # exits 2; 1 means the models disagree
@@ -632,6 +834,9 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     name: asdict(report)
                     | {
+                        "minibatch_indices": report.minibatch_indices,
+                        "minibatches_checked": report.minibatches_checked,
+                        "collection_checked": report.collection_checked,
                         "tolerances": asdict(TOLERANCES[report.precision]),
                         "failures": failures[name],
                     }
