@@ -659,22 +659,17 @@ def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
     reopened = managym.GameSnapshot.from_replay_json(position.to_replay_json())
     successors = []
     for snapshot in (position, reopened):
-        branch = snapshot.restore()
-        assert branch.search_witness_json() == before
-        branch.execute_semantic_command_json(command)
-        for _ in range(3):
-            if branch.is_game_over():
-                break
-            chooser = branch.current_agent_index()
-            actions = branch.observation_for_player(chooser).action_space.actions
-            branch.step(
-                next(
-                    i
-                    for i, action in enumerate(actions)
-                    if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
-                )
-            )
-        assert branch.is_game_over()
-        successors.append(branch.search_witness_json())
-    assert successors[0] == successors[1]
+        for semantic in (False, True):
+            branch = snapshot.restore()
+            assert branch.search_witness_json() == before
+            if semantic:
+                _, _, reward, terminated, truncated, info = branch.step_semantic_command(command)
+            else:
+                _, reward, terminated, truncated, info = branch.step(3)
+            assert (reward, terminated, truncated) == (-1.0, True, False)
+            assert info["winner_index"] == 1
+            assert info["winner_name"] == "Opponent"
+            assert info["p0_loss_reason"] == "instructed_loss"
+            successors.append(branch.search_witness_json())
+    assert all(successor == successors[0] for successor in successors)
     assert env.search_witness_json() == before

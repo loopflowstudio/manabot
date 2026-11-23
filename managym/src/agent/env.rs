@@ -73,6 +73,11 @@ fn finish_game_step(
     let events = game.take_observation_events();
     let observation = Observation::new(game, &events);
 
+    let (reward, info) = game_step_outcome(game, agent, done);
+    (observation, reward, done, false, info)
+}
+
+fn game_step_outcome(game: &Game, agent: PlayerId, done: bool) -> (f64, InfoDict) {
     let mut reward = 0.0;
     let mut info = empty_info_dict();
     if done {
@@ -102,7 +107,7 @@ fn finish_game_step(
         }
     }
 
-    (observation, reward, done, false, info)
+    (reward, info)
 }
 
 /// Result of a flat Monte Carlo evaluation of the current action space.
@@ -1173,21 +1178,9 @@ impl Env {
             .ok_or_else(|| AgentError("env.step_semantic_command called before reset".into()))?;
         let actor = current_agent(game)?;
         let (transition, observation, done) = self.commit_command(command)?;
-        let reward = if done {
-            self.winner_index()
-                .map(|winner| if winner == actor.0 { 1.0 } else { -1.0 })
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-        Ok((
-            transition,
-            observation,
-            reward,
-            done,
-            false,
-            empty_info_dict(),
-        ))
+        let game = self.game.as_ref().expect("committed game");
+        let (reward, info) = game_step_outcome(game, actor, done);
+        Ok((transition, observation, reward, done, false, info))
     }
 
     /// Transport-only counts for both viewer logs. Pair with capture_generation;
