@@ -4465,6 +4465,19 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
     ]);
     let config = PlayerConfig::new("player", deck);
     let mut game = Game::new(vec![config.clone(), config], 725, false);
+    for seat in [PlayerId(0), PlayerId(1)] {
+        checked_command(
+            &mut game,
+            Action::ChooseMode {
+                player: seat,
+                mode: 0,
+            },
+        );
+    }
+    assert!(matches!(
+        game.state.procedure,
+        crate::flow::game::GameProcedure::Playing
+    ));
     let step = game.state.turn.current_step_kind();
     let first = game
         .scenario_force_battlefield(player, "Curious Farm Animals", true)
