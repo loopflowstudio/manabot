@@ -16,7 +16,6 @@ refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_suppo
 """
 
 from collections.abc import Mapping
-from functools import partial
 import sys
 from typing import Literal
 
@@ -25,14 +24,41 @@ import numpy as np
 from typing_extensions import deprecated
 
 from manabot.policy import returns
-from manabot.training.updates.objective import (
-    damped_policy_loss as shared_damped_policy_loss,
-)
 
-damped_policy_loss = deprecated(
+
+@deprecated(
     "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
     "The backend-bound function will be removed in 0.4.0."
-)(partial(shared_damped_policy_loss, sys.modules[__name__]))
+)
+def damped_policy_loss(
+    logits: mx.array,
+    actions: mx.array,
+    advantages: mx.array,
+    behavior_logs: mx.array,
+    reference: mx.array,
+    valid: mx.array,
+    *,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+    reference_forward_kl: float = 0.0,
+) -> mx.array:
+    # Policy readers also use this module and can run with training unavailable.
+    from manabot.training.updates.objective import damped_policy_loss as objective
+
+    return objective(
+        sys.modules[__name__],
+        logits,
+        actions,
+        advantages,
+        behavior_logs,
+        reference,
+        valid,
+        clip=clip,
+        collection_kl=collection_kl,
+        tau=tau,
+        reference_forward_kl=reference_forward_kl,
+    )
 
 
 # -- Numerical refusals --------------------------------------------------------

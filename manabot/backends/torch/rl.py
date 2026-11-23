@@ -14,7 +14,6 @@ for the operations they support; the gradient step and EMA live in
 """
 
 from collections.abc import Mapping
-from functools import partial
 import math
 import sys
 from typing import Literal
@@ -26,14 +25,41 @@ from typing_extensions import deprecated
 
 from manabot.backends.torch.arrays import from_numpy, to_numpy
 import manabot.policy.returns as returns
-from manabot.training.updates.objective import (
-    damped_policy_loss as shared_damped_policy_loss,
-)
 
-damped_policy_loss = deprecated(
+
+@deprecated(
     "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
     "The backend-bound function will be removed in 0.4.0."
-)(partial(shared_damped_policy_loss, sys.modules[__name__]))
+)
+def damped_policy_loss(
+    logits: Tensor,
+    actions: Tensor,
+    advantages: Tensor,
+    behavior_logs: Tensor,
+    reference: Tensor,
+    valid: Tensor,
+    *,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+    reference_forward_kl: float = 0.0,
+) -> Tensor:
+    # Policy readers also use this module and can run with training unavailable.
+    from manabot.training.updates.objective import damped_policy_loss as objective
+
+    return objective(
+        sys.modules[__name__],
+        logits,
+        actions,
+        advantages,
+        behavior_logs,
+        reference,
+        valid,
+        clip=clip,
+        collection_kl=collection_kl,
+        tau=tau,
+        reference_forward_kl=reference_forward_kl,
+    )
 
 
 # -- Numerical refusals --------------------------------------------------------
