@@ -201,6 +201,7 @@ class _EpisodeAssignment:
     generation: int | None = None
     ordinal: int = -1
     choices: int = 0
+    fresh_ready: bool = False
 
 
 @dataclass
@@ -686,7 +687,6 @@ class Collector:
     _uncommitted_batch: RolloutBatch | None = None
     _needs_assignment: set[int] = field(default_factory=set)
     _reverse_cells: list[int] = field(default_factory=list)
-    _fresh_ready: list[bool] = field(default_factory=list)
     _episodes: list[_EpisodeAssignment] = field(default_factory=list)
     capture_predicate: CapturePredicate | None = None
     snapshot_bank: SnapshotBank | None = None
@@ -935,8 +935,7 @@ def open_collector(
             _ordinals=[0] * num_envs,
             _reverse_cells=reverse_cells,
             capture_predicate=capture_predicate,
-            _fresh_ready=[True] * num_envs if snapshots else [],
-            _episodes=[_EpisodeAssignment() for _ in range(num_envs)]
+            _episodes=[_EpisodeAssignment(fresh_ready=True) for _ in range(num_envs)]
             if snapshots
             else [],
         )
@@ -1746,14 +1745,6 @@ def _start_episodes(
     for slot, episode in starts.items():
         branch = episode.branch
         if branch is not None:
-            if (
-                plan is not None
-                and branch.restore_options is not None
-                and branch.restore_options.forced_first_action is not None
-            ):
-                raise ValueError(
-                    "a grouped snapshot schedule cannot force an opening action"
-                )
             installs.append(
                 SlotInstall(
                     slot,
@@ -1763,17 +1754,15 @@ def _start_episodes(
                     branch.restore_options,
                 )
             )
-        elif not collector._fresh_ready[slot]:
+        elif not collector._episodes[slot].fresh_ready:
             installs.append(SlotInstall(slot, -1, None))
     generations = _install_roots(collector, installs, plan)
     assert collector.stats.snapshot is not None
     for slot, episode in starts.items():
         episode.generation = generations.get(slot)
         collector._episodes[slot] = episode
-        collector._fresh_ready[slot] = episode.branch is None
         collector.stats.snapshot.starts += int(episode.branch is not None)
     _refresh_roots(collector, np.asarray(list(starts), dtype=np.intp))
-    reallocate = False
     for slot, episode in starts.items():
         _expose(collector, slot, "game_roots")
         if episode.branch is None or not collector._buffers["terminated"][slot]:
@@ -1794,8 +1783,7 @@ def _start_episodes(
         completed[slot] = _stream_at_floor(collector, slot, games, num_steps)
         if not completed[slot]:
             snapshots.ready.append(slot)
-            reallocate = True
-    return reallocate
+    return plan is None and bool(snapshots.ready)
 
 
 def _close_horizons(
@@ -1845,12 +1833,7 @@ def _close_horizons(
                 )
         first = frozen.append(
             rows,
-            prefixes=_capture_memory(
-                collector,
-                rows,
-                frozen.buffers,
-                players,
-            ),
+            prefixes=_capture_memory(collector, rows, frozen.buffers, players),
         )
         for offset, row in enumerate(rows):
             _finalize(
@@ -2028,9 +2011,8 @@ def _settle_step(
         )
     if snapshots is not None:
         for row in ended:
-            collector._fresh_ready[row] = (
-                auto_reset and collector._episodes[row].branch is None
-            )
+            episode = collector._episodes[row]
+            episode.fresh_ready = auto_reset and episode.branch is None
         plan = snapshots.plan
         if plan is None:
             snapshots.ready.extend(int(row) for row in ended if not completed[row])

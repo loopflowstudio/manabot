@@ -96,21 +96,14 @@ impl RootRoster {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum SlotState {
     Unset,
-    Fresh { untouched: bool },
-    Branch,
+    /// Only an untouched fresh opening can return its seed or change its setup.
+    FreshOpening,
+    Playing,
     Terminal,
     Poisoned,
 }
 
 impl SlotState {
-    const OPENING: Self = Self::Fresh { untouched: true };
-
-    fn start_step(&mut self) {
-        if let Self::Fresh { untouched } = self {
-            *untouched = false;
-        }
-    }
-
     fn finish_step(
         &mut self,
         out: &mut StepResult,
@@ -121,7 +114,7 @@ impl SlotState {
             *self = Self::Terminal;
             if auto_reset {
                 (out.obs, _) = reset()?;
-                *self = Self::OPENING;
+                *self = Self::FreshOpening;
             }
         }
         Ok(())
@@ -665,7 +658,7 @@ impl VectorEnv {
             .iter()
             .zip(&self.slots)
             .map(|(env, state)| match state {
-                SlotState::Fresh { .. } | SlotState::Branch => {
+                SlotState::FreshOpening | SlotState::Playing => {
                     env.current_agent_index().map_or(-1, |i| i as i64)
                 }
                 _ => -1,
@@ -699,7 +692,7 @@ impl VectorEnv {
         let stride = self.seed_stride;
         let auto_reset = self.auto_reset;
         self.for_each_env(|slot, env, next_seed, configs, roster, state| {
-            state.start_step();
+            *state = SlotState::Playing;
             let mut out = Self::step_one_on_env(env, actions[slot])?;
             state.finish_step(&mut out, auto_reset, || {
                 Self::reset_env_on_env(roster, env, next_seed, stride, configs)
@@ -770,7 +763,7 @@ impl VectorEnv {
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
                 let setup: GameSetup = setup.into();
-                if self.slots[index] != SlotState::OPENING {
+                if self.slots[index] != SlotState::FreshOpening {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
                 let previous = &self.envs[index];
@@ -813,7 +806,7 @@ impl VectorEnv {
             if active.is_some_and(|mask| !mask[env_index]) {
                 return Ok(InfoDict::new());
             }
-            state.start_step();
+            *state = SlotState::Playing;
             let mut result = Self::step_one_on_env(env, actions[env_index])?;
             state.finish_step(&mut result, auto_reset, || {
                 Self::reset_env_on_env(roster, env, next_seed, seed_stride, configs)
@@ -853,7 +846,7 @@ impl VectorEnv {
             if !active[index] {
                 return Ok(InfoDict::new());
             }
-            state.start_step();
+            *state = SlotState::Playing;
             let frame = serde_json::to_string(&env.semantic_decision_frame()?)
                 .map_err(|error| AgentError(error.to_string()))?;
             // A Rust unwind is contained only around gameplay of a disposable
@@ -937,7 +930,7 @@ impl VectorEnv {
                 return Ok(InfoDict::new());
             }
             env.replace_slot(env.replacement_root(*next_seed), Default::default());
-            *state = SlotState::OPENING;
+            *state = SlotState::FreshOpening;
             let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
             write(index, &obs, 0.0, false, false)?;
             Ok(info)
@@ -1063,7 +1056,7 @@ impl VectorEnv {
             env.replace_slot(env.replacement_root(*next_seed), Default::default());
         }
         let opening = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
-        *state = SlotState::OPENING;
+        *state = SlotState::FreshOpening;
         Ok(opening)
     }
 
@@ -1693,7 +1686,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        assert_ne!(vector.slots[0], super::SlotState::OPENING);
+        assert_ne!(vector.slots[0], super::SlotState::FreshOpening);
         let seeds = vector.current_game_seeds();
         let next = vector.next_seeds.clone();
         assert!(vector

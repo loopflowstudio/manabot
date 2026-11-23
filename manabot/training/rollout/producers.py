@@ -39,6 +39,10 @@ class StreamShard:
     stop: int
     native: CapturedVector
 
+    @property
+    def rows(self) -> slice:
+        return slice(self.start, self.stop)
+
 
 @dataclass(frozen=True)
 class ObservationRead:
@@ -107,10 +111,7 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.set_buffers,
-                    {
-                        key: value[shard.start : shard.stop]
-                        for key, value in buffers.items()
-                    },
+                    {key: value[shard.rows] for key, value in buffers.items()},
                     action_overflow,
                     layout=layout,
                 )
@@ -133,17 +134,14 @@ class BufferedStreams:
         selected = [
             shard
             for shard in self._shards
-            if any(player is not None for player in players[shard.start : shard.stop])
+            if any(player is not None for player in players[shard.rows])
         ]
         reads = self._run(
             [
                 partial(
                     shard.native.write_observations_for_players,
-                    players[shard.start : shard.stop],
-                    {
-                        key: value[shard.start : shard.stop]
-                        for key, value in buffers.items()
-                    },
+                    players[shard.rows],
+                    {key: value[shard.rows] for key, value in buffers.items()},
                     action_overflow,
                     layout=layout,
                 )
@@ -184,22 +182,16 @@ class BufferedStreams:
         for shard in self._shards:
             shard.native.set_training_decks(decks, digest, sampling)
 
+    def _read_rows[T](self, read: Callable[[CapturedVector], list[T]]) -> list[T]:
+        self._check()
+        return [row for shard in self._shards for row in read(shard.native)]
+
     def current_player_configs(self) -> list[managym.GameSetup]:
         """Return each current game with resolved open/closed disclosure."""
-        self._check()
-        return [
-            players
-            for shard in self._shards
-            for players in shard.native.current_player_configs()
-        ]
+        return self._read_rows(lambda native: native.current_player_configs())
 
     def current_matchup_indices(self) -> list[tuple[int, int]]:
-        self._check()
-        pairs = [
-            pair
-            for shard in self._shards
-            for pair in shard.native.current_matchup_indices()
-        ]
+        pairs = self._read_rows(lambda native: native.current_matchup_indices())
         return pairs if len(pairs) == self.num_envs else []
 
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
@@ -216,7 +208,7 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.reset_each_into_buffers,
-                    players[shard.start : shard.stop],
+                    players[shard.rows],
                 )
                 for shard in self._shards
             ]
@@ -228,7 +220,7 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.reset_seeds_into_buffers,
-                    seeds[shard.start : shard.stop],
+                    seeds[shard.rows],
                 )
                 for shard in self._shards
             ]
@@ -248,11 +240,11 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.step_into_buffers,
-                    actions[shard.start : shard.stop],
-                    None if active is None else active[shard.start : shard.stop],
+                    actions[shard.rows],
+                    None if active is None else active[shard.rows],
                     annotations=None
                     if annotations is None
-                    else annotations[shard.start : shard.stop],
+                    else annotations[shard.rows],
                 )
                 for shard in self._shards
             ]
@@ -273,12 +265,7 @@ class BufferedStreams:
         ]
 
     def current_agent_indices(self) -> list[int]:
-        self._check()
-        return [
-            index
-            for shard in self._shards
-            for index in shard.native.current_agent_indices()
-        ]
+        return self._read_rows(lambda native: native.current_agent_indices())
 
     def step_isolated_into_buffers(
         self,
@@ -295,12 +282,12 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.step_isolated_into_buffers,
-                    actions[shard.start : shard.stop],
-                    active[shard.start : shard.stop],
+                    actions[shard.rows],
+                    active[shard.rows],
                     recover_capacity,
                     annotations=None
                     if annotations is None
-                    else annotations[shard.start : shard.stop],
+                    else annotations[shard.rows],
                 )
                 for shard in self._shards
             ]
@@ -312,23 +299,17 @@ class BufferedStreams:
             [
                 partial(
                     shard.native.replace_failed_into_buffers,
-                    failed[shard.start : shard.stop],
+                    failed[shard.rows],
                 )
                 for shard in self._shards
             ]
         )
 
     def current_game_seeds(self) -> list[int]:
-        self._check()
-        return [
-            seed for shard in self._shards for seed in shard.native.current_game_seeds()
-        ]
+        return self._read_rows(lambda native: native.current_game_seeds())
 
     def next_fresh_seeds(self) -> list[int]:
-        self._check()
-        return [
-            seed for shard in self._shards for seed in shard.native.next_fresh_seeds()
-        ]
+        return self._read_rows(lambda native: native.next_fresh_seeds())
 
     def _read_slots[T](
         self,
@@ -336,18 +317,13 @@ class BufferedStreams:
         read: Callable[[CapturedVector, Sequence[bool]], list[T | None]],
     ) -> list[T | None]:
         self._rows(len(mask))
-        selected = [
-            shard for shard in self._shards if any(mask[shard.start : shard.stop])
-        ]
+        selected = [shard for shard in self._shards if any(mask[shard.rows])]
         batches = self._run(
-            [
-                partial(read, shard.native, mask[shard.start : shard.stop])
-                for shard in selected
-            ]
+            [partial(read, shard.native, mask[shard.rows]) for shard in selected]
         )
         result: list[T | None] = [None] * self.num_envs
         for shard, rows in zip(selected, batches, strict=True):
-            result[shard.start : shard.stop] = rows
+            result[shard.rows] = rows
         return result
 
     def snapshot_slots(self, mask: Sequence[bool]) -> list[managym.GameSnapshot | None]:
@@ -362,17 +338,18 @@ class BufferedStreams:
             mask, lambda native, selected: native.slot_metadata(selected)
         )
 
-    def _validate_slots(self, slots: Sequence[int]) -> None:
+    def _validate_slots(self, slots: Sequence[int]) -> set[int]:
         self._check()
-        if len(set(slots)) != len(slots) or any(
+        selected = set(slots)
+        if len(selected) != len(slots) or any(
             slot < 0 or slot >= self.num_envs for slot in slots
         ):
             raise ValueError("invalid or duplicate snapshot slots")
+        return selected
 
     def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
         """Freeze only requested decisions, preserving caller order across shards."""
-        self._validate_slots(slots)
-        selected = set(slots)
+        selected = self._validate_slots(slots)
         handles = self.snapshot_slots([i in selected for i in range(self.num_envs)])
         captures = []
         for slot in slots:
@@ -420,32 +397,16 @@ class BufferedStreams:
         return [results[slot] for slot in slots]
 
     def current_game_generations(self) -> list[int]:
-        self._check()
-        return [
-            epoch
-            for shard in self._shards
-            for epoch in shard.native.current_game_generations()
-        ]
+        return self._read_rows(lambda native: native.current_game_generations())
 
     def decision_memory_cursors(self) -> list[list[list[int]]]:
-        self._check()
-        return [
-            cursor
-            for shard in self._shards
-            for cursor in shard.native.decision_memory_cursors()
-        ]
+        return self._read_rows(lambda native: native.decision_memory_cursors())
 
     def decision_memory_counts(self) -> list[list[list[int]]]:
-        self._check()
-        return [
-            counts
-            for shard in self._shards
-            for counts in shard.native.decision_memory_counts()
-        ]
+        return self._read_rows(lambda native: native.decision_memory_counts())
 
     def get_last_info(self) -> list[dict[str, Any]]:
-        self._check()
-        return [info for shard in self._shards for info in shard.native.get_last_info()]
+        return self._read_rows(lambda native: native.get_last_info())
 
     def buffered_call_timings(self) -> tuple[float, float]:
         """Mean shard stepping and encoding seconds: shards run at once."""
@@ -508,35 +469,32 @@ class ShardedVectorEnv(BufferedStreams):
         if not 0 <= seed < 2**64:
             raise ValueError("native seed must fit uint64")
         self.workers = workers
-        shards = [
-            StreamShard(
-                start=index * num_envs // workers,
-                stop=(index + 1) * num_envs // workers,
-                native=CapturedVector(
-                    num_envs=(index + 1) * num_envs // workers
-                    - index * num_envs // workers,
-                    seed=min(seed + index * num_envs // workers, 2**64 - 1),
-                    seed_stride=num_envs,
-                    stream_offset=index * num_envs // workers,
-                    skip_trivial=self.skip_trivial,
-                    auto_reset=auto_reset,
-                    decision_memory=decision_memory,
-                    decision_memory_include_own=decision_memory_include_own,
-                    player_policies=("agent", "agent"),
-                    **(
-                        {
-                            "games_path": games_path.with_name(
-                                f"{games_path.stem}-{index}.jsonl"
-                            ),
-                            "record_fraction": record_fraction,
-                        }
-                        if games_path is not None
-                        else {}
-                    ),
+        shards = []
+        for index in range(workers):
+            start = index * num_envs // workers
+            stop = (index + 1) * num_envs // workers
+            native = CapturedVector(
+                num_envs=stop - start,
+                seed=min(seed + start, 2**64 - 1),
+                seed_stride=num_envs,
+                stream_offset=start,
+                skip_trivial=self.skip_trivial,
+                auto_reset=auto_reset,
+                decision_memory=decision_memory,
+                decision_memory_include_own=decision_memory_include_own,
+                player_policies=("agent", "agent"),
+                **(
+                    {
+                        "games_path": games_path.with_name(
+                            f"{games_path.stem}-{index}.jsonl"
+                        ),
+                        "record_fraction": record_fraction,
+                    }
+                    if games_path is not None
+                    else {}
                 ),
             )
-            for index in range(workers)
-        ]
+            shards.append(StreamShard(start, stop, native))
         super().__init__(num_envs, shards)
         self._pool = ThreadPoolExecutor(
             max_workers=workers, thread_name_prefix="manabot-producer"

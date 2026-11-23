@@ -465,10 +465,9 @@ shows the top seat’s hand count. Branch seeds stay on the server.
 
 ### Batched snapshots and deferred reset
 
-`VectorEnv` and `CapturedVector` support masked snapshot capture, lightweight
-slot metadata reads, deferred terminal resets (`auto_reset=False`), and
-unified sparse slot loading for mixing fresh games and restored branches in one
-batch:
+Use `auto_reset=False` when the next occupant of a finished slot may be a
+restored branch. Both `VectorEnv` and `CapturedVector` accept a mix of fresh
+starts and snapshots in one call.
 
 ```python
 import numpy as np
@@ -509,39 +508,31 @@ print(games.next_fresh_seeds())
 # [42, 47]
 ```
 
-- **`auto_reset=False`** (default `True`): `step_into_buffers` and
-  `step_isolated_into_buffers` report terminal reward, done flags, winner and
-  diagnostics once, then park the ended slot in a terminal state
-  (`current_agent_indices()[slot] == -1`) without constructing a replacement
-  game. Stepping a terminal or poisoned slot raises until the slot is replaced
-  by `load_slots_into_buffers` or reset.
-- **`slot_metadata(mask)`** derives `SnapshotMetadata` directly from live
-  slots without cloning state or touching RNG (`None` where `mask` is `False`;
-  unset or poisoned slots raise). **`snapshot_slots(mask)`** clones only masked
-  slots into detached `GameSnapshot` handles. An all-`False` mask does no work.
-  **`next_fresh_seeds()`** reports each slot's next unspent fresh seed.
-- **`load_slots_into_buffers(requests)`** validates every request slot (in
-  bounds, no duplicates), snapshot compatibility, forced-action legality and
-  observation capacity before publishing any mutated game or buffer row, and
-  returns one `SlotLoadResult` (`slot`, `generation`, `seed`, `acting_player`,
-  `terminal`, `source_digest`) per request in caller order. Overwriting an
-  untouched fresh slot with a snapshot rewinds its next fresh seed without
-  emitting partial statistics or exposure; replacing a non-untouched fresh slot
-  flushes its completed statistics first. Fresh statistics and exposure stay
-  disabled while a branch runs and resume on the next `SlotLoad.fresh(slot)`.
-  If a `forced_first_action` ends the game on restore, the slot enters terminal
-  state with `terminated=1`, `winner_index` in `get_last_info()`,
-  `terminal=True` and `acting_player=None`.
-- **`CapturedVector`** forwards `auto_reset`, `snapshot_slots`,
-  `slot_metadata`, `load_slots_into_buffers`, `next_fresh_seeds` and sparse
-  `write_observations_for_players` (`None` entries skip slots). Branch slots do
-  not write to `games_path` or fresh statistics/exposure; branch replay inputs
-  (including interventions) are materialized lazily on failure or when
-  journaling, and `managym.replay` replays vector records with branch
-  interventions. Call `game_inputs(slot)` for the resolved setup, original
-  commitments and attempted suffix of one slot. This materializes the branch
-  prefix on demand. A terminal step settles a recorded fresh game immediately,
-  including its winner and final digest, even when its replacement comes later.
+`slot_metadata(mask)` reads the live position without cloning it or advancing
+its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
+for skipped slots and reject requests to read an unset or poisoned slot.
+
+`load_slots_into_buffers` checks slot bounds and uniqueness, restore options
+and encoding capacity for the entire vector before changing any row. Each
+`SlotLoadResult` gives the slot, new generation, seed, acting player, terminal
+flag and source digest in request order. Replacing an untouched opening with
+a branch returns its seed to the fresh sequence. `next_fresh_seeds()` reports
+the next unspent seed for each slot.
+
+With deferred reset, a step reports the terminal reward, flags and winner once.
+The slot then reports chooser `-1` and requires a new load or reset before it
+can step again. The same replacement calls recover a poisoned slot. A forced
+opening can itself end a restored game. Its load result has `terminal=True`
+and `acting_player=None`, the buffer has `terminated=1`, and the slot's last
+info carries the winner when there is one.
+
+Game recordings, statistics and exposure count fresh games. Replacing a played
+fresh game retains its evidence. Replacing an untouched opening with a branch
+discards that opening. A recorded fresh terminal includes its winner and final
+digest even if the slot stays parked. For branch evidence,
+`CapturedVector.game_inputs(slot)` joins the original commitments and
+interventions to the attempted suffix on demand. Failure capture and durable
+journaling use the same replay inputs.
 
 ## Ask questions of recorded games
 

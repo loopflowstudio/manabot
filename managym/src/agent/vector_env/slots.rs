@@ -119,8 +119,8 @@ impl VectorEnv {
     fn prepare_slot(&self, request: &SlotLoad) -> Result<SlotReplacement, AgentError> {
         let slot = request.slot();
         let previous = &self.envs[slot];
-        let rewind =
-            matches!(request, SlotLoad::Snapshot(..)) && self.slots[slot] == SlotState::OPENING;
+        let rewind = matches!(request, SlotLoad::Snapshot(..))
+            && self.slots[slot] == SlotState::FreshOpening;
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
             SlotLoad::Fresh(_) => {
@@ -132,7 +132,7 @@ impl VectorEnv {
                     self.seed_stride,
                     &self.player_configs[slot],
                 )?;
-                (env, obs, info, SlotState::OPENING, None)
+                (env, obs, info, SlotState::FreshOpening, None)
             }
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
@@ -156,7 +156,7 @@ impl VectorEnv {
                     env,
                     obs,
                     InfoDict::new(),
-                    SlotState::Branch,
+                    SlotState::Playing,
                     Some(source.state_digest().to_owned()),
                 )
             }

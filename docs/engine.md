@@ -345,7 +345,7 @@ zero indices with choices from your learner.
 
 With one external seat, reset and positional step advance built-ins until the
 external chooser or a terminal state. A scalar terminal must be explicitly reset;
-vector steps auto-reset finished slots. Terminal rewards belong to the external
+vector steps auto-reset finished slots by default. Terminal rewards belong to the external
 seat, including when a built-in finishes the game. Reset never silently starts
 a second game if a built-in wins before an external choice.
 
@@ -600,12 +600,10 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
 ```
 
 `write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
-writes the requested slots in one native call, taking `Sequence[int | None]`
-with one entry per slot: an explicit native seat (`0` or `1`, no implicit
-opponent) or `None` to skip that slot without touching its `Env` or buffer row
-(safe when peers are terminal, poisoned, or unset). It returns one
-`ObservationRead` per requested (`int`) slot in ascending slot order, naming
-the game state each row describes:
+takes one entry per slot. Pass seat `0` or `1` to read it, or `None` to
+leave its game and buffer row untouched. This permits reads beside terminal,
+poisoned or unset slots. Each requested slot returns an `ObservationRead` in
+ascending slot order.
 
 | Field | Meaning |
 |---|---|
@@ -636,15 +634,11 @@ method and CPU identity records. The Torch wrapper supplies its own layout.
 Pass `layout=consumer_space.layout` for a consumer with different capacities.
 Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
 
-The read does not step, reset or consume randomness. After a successful step
-with `auto_reset=True`, done slots describe their replacement games, not the
-terminal states; with `auto_reset=False`, pass `None` for terminal, poisoned,
-or inactive slots to skip them without touching their buffer rows. Passing an
-`int` for every slot reads every slot, including those left unchanged by an
-inactive step mask; apply that mask when selecting results. Ordinary reset/step
-calls do not collect fixed-seat observations. The read does not replace their
-chooser observations, alter legal choices or create Command or decision-capture
-authority.
+A fixed-seat read preserves the chooser's observations, legal choices and RNG.
+After eager reset, a finished slot describes its replacement game. The seat
+list selects rows independently of the preceding step's active mask. Ordinary
+steps and resets only encode the chooser's view. Fixed-seat reads confer no
+Command or decision-capture authority.
 
 A wrong-length seat list, an invalid seat, reading before reset, or malformed
 buffers raises an error. Encoding uses supplied capacities and the selected

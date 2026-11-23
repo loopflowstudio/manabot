@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -113,10 +114,15 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
                     os._exit(73)
             if phase == "executing":
                 vector.step_into_buffers([0, 0])
+            if phase == "synchronizing":
+                # The returned call is durable before Python settles its games.
+                with patch.object(
+                    vector, "_synchronize", side_effect=lambda *a, **kw: os._exit(73)
+                ):
+                    vector.step_into_buffers([0, 0], [True, False])
             method = {
                 "preparing": "semantic_decision_frames_json",
                 "executing": "step_into_buffers",
-                "synchronizing": "current_game_seeds",
                 "sampled_reset": "current_player_configs",
             }[phase]
             vector.native = _ExitNative(vector.native, method)

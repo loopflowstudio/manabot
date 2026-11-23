@@ -5,7 +5,7 @@ supply destinations and context; no training run or phase is discovered here.
 Journals publish intent before native reads, then acknowledge observed returns.
 """
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
@@ -1240,6 +1240,9 @@ class _ExposureSummary(BaseModel):
     cards: CapturedCards
 
 
+type BranchRoot = tuple[managym.GameSnapshot, managym.RestoreOptions]
+
+
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
@@ -1277,9 +1280,7 @@ class CapturedVector(_Capture):
         self.stride = seed_stride or num_envs
         self.decision_memory = decision_memory or decision_memory_include_own
         self.auto_reset = auto_reset
-        self._branch_roots: list[
-            tuple[managym.GameSnapshot, managym.RestoreOptions] | None
-        ] = [None] * num_envs
+        self._branch_roots: list[BranchRoot | None] = [None] * num_envs
         self.skip_trivial = skip_trivial
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
         self.native = managym.VectorEnv(
@@ -1308,7 +1309,6 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
-        self._generations = self.native.current_game_generations()
         # Sampled roots pick setups natively at reset; evidence reads them back.
         self._sampled_roots = False
         self._action_cutoff: int | None = None
@@ -1427,17 +1427,18 @@ class CapturedVector(_Capture):
         reason: str | None = None,
     ) -> None:
         selected = [i for i, on in enumerate(mask) if on]
-        if selected:
-            for index, raw in zip(
-                selected, self.native.current_exposure(mask), strict=True
-            ):
-                info = infos[index] if infos else {}
-                self._end_analysis(
-                    index,
-                    raw,
-                    winner=info.get("winner_index"),
-                    reason=info.get("game_error", reason),
-                )
+        if not selected:
+            return
+        for index, raw in zip(
+            selected, self.native.current_exposure(mask), strict=True
+        ):
+            info = infos[index] if infos else {}
+            self._end_analysis(
+                index,
+                raw,
+                winner=info.get("winner_index"),
+                reason=info.get("game_error", reason),
+            )
 
     def close(self) -> None:
         if self._closed:
@@ -1492,18 +1493,16 @@ class CapturedVector(_Capture):
         activating = self._pending_journal_path is not None
         super()._activate_journal(native)
         if activating:
-            for slot, game in enumerate(self.games):
-                if not game.players and self._branch_roots[slot] is not None:
-                    self.games[slot] = self.game_inputs(slot)
+            self.games = [self._materialize(game) for game in self.games]
 
     def capture_failure(self, error: BaseException) -> None:
-        self._failure(error, lambda: self._evidence_for(self.games, "step"))
+        self._failure(error, self._snapshot)
 
     def recording_mask(self) -> list[bool]:
         return [self._selected(game) for game in self.games]
 
-    def _snapshot(self) -> GameRecord:
-        return self._evidence_for(self.games, "step")
+    def _snapshot(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
+        return self._evidence_for(self.games, operation)
 
     def _evidence_for(
         self, games: list[GameInputs], operation: Literal["reset", "step"]
@@ -1557,7 +1556,7 @@ class CapturedVector(_Capture):
         self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
-                self._evidence_for(self.games, "reset"),
+                self._snapshot("reset"),
                 "reset_each",
                 setup_known=not self._sampled_roots,
                 seeds=self.next_seeds,
@@ -1570,11 +1569,11 @@ class CapturedVector(_Capture):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.players = _retain_players(setup, seed)
             game.restart(seed)
-        with self._guard(lambda: self._evidence_for(self.games, "reset")):
+        with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             result = call()
         self._returned()
-        self._synchronize()
+        self._synchronize(dict.fromkeys(range(len(players))))
         return result
 
     def reassign_roots_into_buffers(
@@ -1583,7 +1582,7 @@ class CapturedVector(_Capture):
         """Retain new setups only after native atomic fresh-root validation."""
         if self._game_journal is not None:
             self._begin_boundary(
-                self._evidence_for(self.games, "reset"),
+                self._snapshot("reset"),
                 "reassign_roots",
                 players=[
                     None if setup is None else _retain_players(setup, seed)
@@ -1609,13 +1608,15 @@ class CapturedVector(_Capture):
             self.native.reassign_roots_into_buffers(players)
         self._returned()
         self.games = proposed
-        self._synchronize()
+        self._synchronize(
+            {i: None for i, setup in enumerate(players) if setup is not None}
+        )
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
         self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
-                self._evidence_for(self.games, "reset"),
+                self._snapshot("reset"),
                 "reset_seeds",
                 setup_known=not self._sampled_roots,
                 seeds=seeds,
@@ -1624,11 +1625,11 @@ class CapturedVector(_Capture):
         for game, seed in zip(self.games, seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.restart(seed)
-        with self._guard(lambda: self._evidence_for(self.games, "reset")):
+        with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             self.native.reset_seeds_into_buffers(seeds)
         self._returned()
-        self._synchronize()
+        self._synchronize(dict.fromkeys(range(len(seeds))))
 
     def load_slots_into_buffers(
         self, requests: Sequence[managym.SlotLoad]
@@ -1643,7 +1644,7 @@ class CapturedVector(_Capture):
         results = self.native.load_slots_into_buffers(requests)
         self._returned()
         self._synchronize(
-            loads={
+            {
                 result.slot: request.branch_root
                 for result, request in zip(results, requests, strict=True)
             }
@@ -1652,27 +1653,18 @@ class CapturedVector(_Capture):
 
     def _synchronize(
         self,
+        roots: dict[int, BranchRoot | None],
         *,
-        finished: set[int] | None = None,
-        loads: dict[int, tuple[managym.GameSnapshot, managym.RestoreOptions] | None]
-        | None = None,
+        finished: Collection[int] = (),
+        infos: Sequence[dict[str, Any]] = (),
     ) -> None:
-        generations = self.native.current_game_generations()
-        restarted = [
-            i
-            for i, generation in enumerate(generations)
-            if generation != self._generations[i]
-        ]
-        self._generations = generations
-        ended = finished or set()
-        if restarted:
+        """Settle completed games before publishing the roots the native call replaced."""
+        if roots:
             self._flush_statistics()
-        infos = (
-            self.native.get_last_info()
-            if ended and (self._recording or self._reductions)
-            else []
-        )
-        for index in sorted(ended):
+            self.next_seeds = self.native.next_fresh_seeds()
+        if finished and not infos and (self._recording or self._reductions):
+            infos = self.native.get_last_info()
+        for index in sorted(finished):
             game = self.games[index]
             info = infos[index] if infos else {}
             self._write_game(
@@ -1683,36 +1675,35 @@ class CapturedVector(_Capture):
                     digest=info.get("record_terminal_digest"),
                 ),
             )
-        if self._reductions and ended and not self.auto_reset:
+        if self._reductions and finished and not self.auto_reset:
             # Deferred terminals still own their exposure until replaced.
             mask = [
-                active and i in ended for i, active in enumerate(self._analysis_active)
+                active and i in finished
+                for i, active in enumerate(self._analysis_active)
             ]
             self._end_current_analysis(mask, infos)
-        if restarted and self._reductions:
+        if roots and self._reductions:
             for index, receipts in enumerate(self.native.take_exposure()):
                 for raw in receipts:
                     self._end_analysis(
                         index,
                         raw,
                         winner=infos[index].get("winner_index")
-                        if index in ended
+                        if index in finished
                         else None,
-                        reason=None if index in ended else "root replaced",
+                        reason=None if index in finished else "root replaced",
                     )
         # Branches carry their own immutable setup. Read native deck draws only
         # when a fresh root is installed (including an eager terminal reset).
-        loads = loads or {}
-        has_fresh_root = any(loads.get(i) is None for i in restarted)
-        players = self.native.current_player_configs() if has_fresh_root else []
-        seeds = self.native.current_game_seeds() if restarted else []
-        for index in restarted:
+        players = self.native.current_player_configs() if None in roots.values() else []
+        seeds = self.native.current_game_seeds() if roots else []
+        for index in sorted(roots):
             game = self.games[index]
-            if game.actions and index not in ended:
+            if game.actions and index not in finished:
                 self._write_game(
                     game, GameEnd(status="interrupted", reason="root replaced")
                 )
-            self._branch_roots[index] = loads.get(index)
+            self._branch_roots[index] = roots[index]
             game.restart(seeds[index])
             if self._reductions:
                 self._analysis_active[index] = False
@@ -1729,11 +1720,10 @@ class CapturedVector(_Capture):
                 self._reductions[index].start(game.players)
                 if self._reductions[index].error is not None:
                     self._reduction.fail(self._reductions[index].error)
-        self.next_seeds = self.native.next_fresh_seeds()
         if self._boundary is not None:
             self._boundary.setup_known = True
         if self._game_journal is not None:
-            self._publish(self._evidence_for(self.games, "step"), "ready")
+            self._publish(self._snapshot(), "ready")
 
     def enable_statistics(self) -> None:
         self.native.enable_statistics()
@@ -1790,7 +1780,7 @@ class CapturedVector(_Capture):
     def replace_failed_into_buffers(self, active: list[bool]) -> None:
         if self._game_journal is not None:
             self._begin_boundary(
-                self._evidence_for(self.games, "reset"),
+                self._snapshot("reset"),
                 "replace_failed",
                 active=active,
                 setup_known=not self._sampled_roots,
@@ -1798,7 +1788,7 @@ class CapturedVector(_Capture):
         self._executing()
         self.native.replace_failed_into_buffers(active)
         self._returned()
-        self._synchronize()
+        self._synchronize({i: None for i, replaced in enumerate(active) if replaced})
 
     def _step(
         self,
@@ -1814,7 +1804,7 @@ class CapturedVector(_Capture):
         enabled = active if active is not None else [True] * len(self.games)
         if self._game_journal is not None:
             self._begin_boundary(
-                self._evidence_for(self.games, "step"),
+                self._snapshot(),
                 "step_isolated" if isolated else "step",
                 actions=[int(action) for action in actions],
                 active=enabled,
@@ -1906,7 +1896,7 @@ class CapturedVector(_Capture):
         try:
             with self._guard(lambda: self._evidence_for(attempted, "step")):
                 if self._game_journal is not None:
-                    self._publish(self._evidence_for(self.games, "step"), "executing")
+                    self._publish(self._snapshot(), "executing")
                 result = None
                 if not buffered:
                     result = self.native.step(actions)
@@ -1935,6 +1925,7 @@ class CapturedVector(_Capture):
                 )
             ]
             self._end_current_analysis(failed_analysis, infos)
+        finished: set[int] = set()
         for index, (game, on) in enumerate(zip(self.games, enabled, strict=True)):
             if not on:
                 continue
@@ -1946,8 +1937,15 @@ class CapturedVector(_Capture):
                 )
                 if self._branch_roots[index] is not None:
                     self.games[index] = self.game_inputs(index)
+                continue
+            game.committed = len(game.actions)
+            if buffered:
+                ended = self._terminated[index] or self._truncated[index]
             else:
-                game.committed = len(game.actions)
+                _, _, terminated, truncated, _ = result[index]
+                ended = terminated or truncated
+            if ended:
+                finished.add(index)
         self._returned()
         if hook_observations:
             from managym.replay import RecordedDecision
@@ -1968,18 +1966,11 @@ class CapturedVector(_Capture):
                     self._analysis_indices[index] += 1
                     if reduction.error is not None:
                         self._reduction.fail(reduction.error)
-        finished = (
-            {
-                i
-                for i, on in enumerate(enabled)
-                if on
-                and (self._terminated[i] or self._truncated[i])
-                and not (infos and infos[i].get("game_error"))
-            }
-            if buffered
-            else {i for i, (_, _, term, trunc, _) in enumerate(result) if term or trunc}
+        self._synchronize(
+            dict.fromkeys(finished) if self.auto_reset else {},
+            finished=finished,
+            infos=infos,
         )
-        self._synchronize(finished=finished)
         return result
 
 

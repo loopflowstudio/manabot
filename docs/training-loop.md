@@ -201,14 +201,11 @@ A `SnapshotBank` stores decisions that self-play can revisit. Use both learning
 seats, complete-game closure and a self-play behavior policy. Snapshot collection
 and adaptive matchup sampling each own the episode schedule.
 
-Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` runs on
-the native deferred-reset vector automatically across 1, 2 or 4 producer
-workers (`BufferedStreams` for 1 worker, `ShardedVectorEnv` for 2 or 4), with
-no custom vector needed. A recipe may still pass its own buffered
-`SnapshotVector` instance or a factory taking
-`(observation_space, match, num_envs, seed)` (custom vectors require
-`workers=1`). `InMemorySnapshotVector.factory` is a deprecated 1-worker alias
-removed in 0.4.0.
+Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` enables
+deferred reset with 1, 2 or 4 native workers. With one worker you may also
+supply a buffered `SnapshotVector` or a factory accepting
+`(observation_space, match, num_envs, seed)`. The deprecated
+`InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
 
 ```python
 from typing import Literal
@@ -281,23 +278,22 @@ Each span indexes its viewer in `next_obs`. Real terminals alone set `dones`.
 Credit and the batch inspector follow these spans. `batch.trajectory_rows()`
 also handles strided rows in rectangular batches.
 
-To replay an existing root directly, build a recipe with
-`SnapshotRecipe.from_replay_json(raw, chooser)` from a `managym-snapshot-v1`
-export (preserving any recorded boundary interventions) or
-`SnapshotRecipe.from_inputs(game, digest, chooser)` from a retained positional
-action prefix. Use the native export for semantic Commands or interventions.
-Open a collector with `snapshots=True` (works with `workers` 1, 2 or 4;
-implied when `snapshot_bank` is supplied, or pass a custom `snapshot_vector`)
-and pass `snapshot_starts=[SnapshotBranch(snapshot_id, recipe, horizon=3)]` to
-`collect`. Starts are consumed in slot order. A `None` entry or the end of the
-sequence starts a fresh game. Pass `restore_options=managym.RestoreOptions...`
-on `SnapshotBranch` to intervene at the root (default exact restore): sharing a
-`shuffle_libraries(seed=...)` seed across siblings gives Common Random Numbers.
-`forced_first_action` is for direct `snapshot_starts` only (rejected in grouped
-`BatchPlan` schedules); if the forced action ends the game on install, the
-branch settles immediately with zero sampled decisions. A direct allocation that
-repeats one cold snapshot ID across workers replays its prefix once. Use a
-`SnapshotBank` to keep that handle for later allocations.
+For a direct start, use `SnapshotRecipe.from_replay_json(raw, chooser)` with a
+`managym-snapshot-v1` export. It preserves semantic Commands and interventions.
+A retained positional prefix also supports
+`SnapshotRecipe.from_inputs(game, digest, chooser)`.
+
+Open the collector with `snapshots=True` (a bank or custom vector implies it)
+and call `collect(..., snapshot_starts=[SnapshotBranch(id, recipe, horizon=3)])`.
+Slots consume starts in order. A `None` entry or an exhausted sequence starts
+a fresh game. Siblings with the same cold snapshot ID share one replay per
+allocation. A bank keeps that handle across allocations.
+
+Branches restore exactly by default. To shuffle siblings with common random
+numbers, pass the same `RestoreOptions.shuffle_libraries(seed=...)` to each
+branch's `restore_options`. A direct start may force its first action. If that
+action ends the game, the branch closes with zero sampled decisions. Grouped
+schedules require the policy to choose the opening action.
 
 ### RLOO baselines, stratified filtering and `PLR⊥`
 

@@ -15,7 +15,7 @@ overwrites failure evidence.
 import argparse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from itertools import chain, islice
+from itertools import islice
 import json
 import os
 from pathlib import Path
@@ -261,7 +261,7 @@ def append_attempt(
 
 
 def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
-    """Bounded positional replay; the final pre-command frame exposes the offer.
+    """Replay retained choices and bind the final attempt to its original offer.
 
     AgentError and PyO3 panic are recorded here only around native gameplay.
     Process interrupts escape. Divergence before the retained failing action is
@@ -295,13 +295,8 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     if any(offset > len(attempt.actions) for offset in boundaries):
         raise ValueError("intervention outside retained action prefix")
     remaining_frames = set(attempt.object_candidate_frames)
-    for index, action in enumerate(chain(attempt.actions, (None,))):
-        if index in boundaries or remaining_frames:
-            apply_boundary(env, boundaries.get(index, ()), remaining_frames)
-        if action is None:
-            if remaining_frames:
-                raise ValueError("snapshot object candidate frame missing")
-            break
+    for index, action in enumerate(attempt.actions):
+        apply_boundary(env, boundaries.get(index, ()), remaining_frames)
         if index == len(attempt.actions) - 1:
             frame = env.semantic_decision_frame_json()
             if attempt.frame_json is not None:
@@ -368,6 +363,9 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "action_index": index,
                 "frame": frame,
             }
+    apply_boundary(env, boundaries.get(len(attempt.actions), ()), remaining_frames)
+    if remaining_frames:
+        raise ValueError("snapshot object candidate frame missing")
     return {
         **asdict(agreement),
         "status": "advanced",
