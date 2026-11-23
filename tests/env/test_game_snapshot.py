@@ -162,8 +162,17 @@ def test_snapshot_rejects_corrupt_recipe_and_retains_unjournaled_hot_state() -> 
     source.reset(setup())
     snapshot = source.snapshot()
     raw = snapshot.to_recipe_json()
+    recipe = json.loads(raw)
     for patch, reason in [
         ({"schema": "unknown"}, "invalid snapshot"),
+        (
+            {
+                "player_configs": [
+                    seat | {"unknown": True} for seat in recipe["player_configs"]
+                ]
+            },
+            "unknown field",
+        ),
         ({"card_digest": "bad"}, "card_digest"),
         ({"state_digest": "bad"}, "recipe_digest"),
         ({"player_policies": ["random", "random"]}, "recipe_digest"),
@@ -175,7 +184,7 @@ def test_snapshot_rejects_corrupt_recipe_and_retains_unjournaled_hot_state() -> 
         ),
     ]:
         with pytest.raises(managym.AgentError, match=reason):
-            managym.GameSnapshot.from_recipe_json(json.dumps(json.loads(raw) | patch))
+            managym.GameSnapshot.from_recipe_json(json.dumps(recipe | patch))
     source.random_action_index()
     hot = source.snapshot()
     assert hot.restore().state_digest() == source.state_digest()

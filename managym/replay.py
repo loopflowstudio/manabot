@@ -169,8 +169,6 @@ class RecordWalker:
     def run(
         self,
         apply: Callable[[RecordedDecision], None] | None = None,
-        *,
-        on_intervention: Callable[[managym.Observation], None] | None = None,
     ) -> Iterator[RecordedDecision]:
         if self._used:
             raise ValueError("a record walker can only be consumed once")
@@ -192,20 +190,18 @@ class RecordWalker:
         boundaries = interventions_by_offset(game)
         remaining_frames = set(game.object_candidate_frames)
 
-        def enter(index: int) -> None:
-            operations = boundaries.get(index, ())
-            apply_boundary(self.env, operations, remaining_frames)
-            if operations:
-                self.observation = self.env.observation_for_player(
-                    self.env.current_agent_index() or 0
-                )
-                if on_intervention is not None:
-                    on_intervention(self.observation)
-
         index = 0
         try:
-            for index, action in enumerate(game.actions[:count]):
-                enter(index)
+            # The final boundary can contain interventions after the last action.
+            for index, action in enumerate(chain(game.actions[:count], (None,))):
+                operations = boundaries.get(index, ())
+                apply_boundary(self.env, operations, remaining_frames)
+                if operations:
+                    self.observation = self.env.observation_for_player(
+                        self.env.current_agent_index() or 0
+                    )
+                if action is None:
+                    break
                 if (
                     index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
@@ -277,8 +273,6 @@ class RecordWalker:
                         self.env.current_agent_index() or 0
                     )
                 yield decision
-            index = count
-            enter(count)
             if count == len(game.actions) and remaining_frames:
                 raise ValueError("snapshot object candidate frame missing")
             end = game.end
@@ -566,7 +560,7 @@ def _replay_game_inputs(
         phase = "prefix"
         boundaries = interventions_by_offset(game)
         remaining_frames = set(game.object_candidate_frames)
-        for offset in range(len(game.actions) + 1):
+        for offset, action in enumerate(chain(game.actions, (None,))):
             operations = boundaries.get(offset, ())
             if operations or remaining_frames:
                 index, phase = offset, "intervention"
@@ -576,12 +570,11 @@ def _replay_game_inputs(
                 apply_boundary(env, operations, remaining_frames)
                 if operations:
                     reached = env.observation_for_player(env.current_agent_index() or 0)
-            if offset == len(game.actions):
+            if action is None:
                 if remaining_frames:
                     raise ValueError("snapshot object candidate frame missing")
                 break
             index, phase = offset, "prefix"
-            action = game.actions[index]
             if (
                 index == len(game.actions) - 1
                 and game.frame is not None

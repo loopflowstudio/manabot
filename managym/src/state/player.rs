@@ -27,7 +27,8 @@ impl DecklistDisclosure {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlayerConfig {
     pub name: String,
     #[serde(flatten)]
@@ -40,13 +41,24 @@ pub struct PlayerConfig {
     #[serde(
         rename = "world",
         skip_serializing_if = "std::ops::Not::not",
-        serialize_with = "serialize_submission"
+        default,
+        serialize_with = "serialize_submission",
+        deserialize_with = "deserialize_submission"
     )]
     pub submitted: bool,
 }
 
 fn serialize_submission<S: serde::Serializer>(_: &bool, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(crate::world::WORLD_POOL)
+}
+
+fn deserialize_submission<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    use serde::{de::Error, Deserialize};
+    match Option::<String>::deserialize(d)?.as_deref() {
+        None => Ok(false),
+        Some(crate::world::WORLD_POOL) => Ok(true),
+        Some(_) => Err(D::Error::custom("unknown submitted deck world")),
+    }
 }
 
 impl PlayerConfig {

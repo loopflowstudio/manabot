@@ -3896,21 +3896,17 @@ impl PyEnv {
         }
         let policies =
             crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(
-                Env::new(
-                    seed,
-                    skip_trivial,
-                    enable_profiler,
-                    enable_behavior_tracking,
-                )
-                .with_player_policies(policies)
-                .with_decision_memory(decision_memory)
-                .with_decision_memory_include_own(decision_memory_include_own),
-            )),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(Self::from_live(
+            Env::new(
+                seed,
+                skip_trivial,
+                enable_profiler,
+                enable_behavior_tracking,
+            )
+            .with_player_policies(policies)
+            .with_decision_memory(decision_memory)
+            .with_decision_memory_include_own(decision_memory_include_own),
+        ))
     }
 
     fn reset(

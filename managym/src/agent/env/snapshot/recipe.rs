@@ -42,7 +42,7 @@ impl GameSnapshot {
             .with_player_policies(provenance.player_policies)
             .with_decision_memory(provenance.decision_memory)
             .with_decision_memory_include_own(provenance.decision_memory_include_own);
-        env.reset((*provenance.setup).clone())?;
+        env.reset(Arc::unwrap_or_clone(provenance.setup))?;
         let mut interventions = provenance.interventions.iter().peekable();
         for action_index in 0..=provenance.actions.len() {
             loop {

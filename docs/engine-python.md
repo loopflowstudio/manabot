@@ -354,9 +354,9 @@ against host deletion: collect private files before removing the machine.
 
 ## Save and restore game positions
 
-Save any initialized scalar `Env` into an immutable `GameSnapshot`, drop the
-original `Env`, and spawn independent live continuations from it — including
-concurrently across threads:
+An immutable `GameSnapshot` can restore independent games on several threads,
+even after the source `Env` is gone. Here two opening choices share the same
+unseen library order.
 
 ```python
 from pathlib import Path
@@ -377,8 +377,6 @@ meta = snapshot.metadata()
 print(meta.turn, meta.phase, meta.action_count, meta.terminal)
 # 1 PhaseEnum.PrecombatMain 6 False
 
-# Drop the source Env and compare two opening choices under the same unseen
-# library order (Common Random Numbers), on open or closed decks.
 del game
 branch_a = snapshot.restore(
     managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=0)
@@ -387,7 +385,7 @@ branch_b = snapshot.restore(
     managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=1)
 )
 
-# Export a compact (~1 KB) private recipe and reopen it in another process.
+# Save the inputs needed to reopen this branch in another process.
 recipe_path = Path("branch-a.json")
 recipe_path.write_text(branch_a.snapshot().to_recipe_json())
 
@@ -408,16 +406,11 @@ uv run --no-project --python .venv/bin/python python -m managym.replay branch-a.
 uv run --no-project managym academy replay branch-a.json
 ```
 
-`game.snapshot()` works at any decision boundary and on a finished game; it
-raises on an unreset `Env`. Stepping or dropping the source `Env`, or any
-restored sibling, never changes the snapshot or other branches. Profiling,
-statistics counters, recorder sinks, and card-capture state stay with the
-source `Env`; each restored `Env` starts a fresh game generation with empty
-caches.
-
-`snapshot.restore(options=None)` validates options upfront and leaves the
-snapshot unchanged on failure. Choose the continuation mode with
-`managym.RestoreOptions` constructors:
+`game.snapshot()` accepts a decision boundary or a finished game and raises
+before the first reset. Each restored game starts a fresh generation with
+empty projection caches. The source keeps its profiler, statistics and
+recording sinks. Use `snapshot.restore()` for exact continuation, or pass
+`RestoreOptions` to change the branch at its root.
 
 | Constructor | Effect at the saved boundary |
 |---|---|
@@ -425,22 +418,16 @@ snapshot unchanged on failure. Choose the continuation mode with
 | `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
 | `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
 
-Every constructor accepts two optional keyword arguments:
+Each constructor also accepts two keyword arguments.
 
-- `enable_decision_memory`: `None` (default) preserves the snapshot game's
-  actual capture setting. `False` freezes the retained decision-memory prefix
-  for this branch; `True` begins appending new records from this boundary
-  without inventing earlier ones. Existing `decision_memory_include_own`
-  settings and prefixes are preserved. (By contrast, search clones created with
-  `Env.clone_env()` or `fork_exact()` always freeze decision memory for
-  hypothetical rollouts.)
-- `forced_first_action`: executes that legal action index once immediately
-  after applying the branch mode and decision-memory setting, returning the
-  resulting `Env` even if that action ends the game. Rejected on terminal
-  snapshots, out-of-range indices, or when `determinize` shifts the published
-  action at that index. On a built-in (`random` or `heuristic`) seat, this
-  overrides that seat's choice once and records the override so cold replay
-  reproduces it.
+- `enable_decision_memory` defaults to the live capture setting. Set it to
+  `False` to freeze the existing logs or `True` to append from this boundary.
+  Both retain the prefix and the setting for own-seat records. Search forks
+  (`Env.clone_env()` and `fork_exact()`) always freeze their logs.
+- `forced_first_action` commits one legal index after sampling and setting
+  capture. It returns the resulting game, including a terminal result.
+  Restore rejects a terminal root, an out-of-range index or a choice changed
+  by determinization. For a built-in seat it records the override for replay.
 
 `snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
 (`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
@@ -451,33 +438,24 @@ stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
 observation JSON or opens hidden zones.
 
-`snapshot.to_recipe_json()` writes a compact `managym-snapshot-v1` JSON recipe
-holding the originating seed, player setups, external committed actions,
-ordered boundary interventions (such as reseeds, library reshuffles,
-determinizations, decision-memory transitions, and forced built-in overrides),
-the catalog `card_digest`, and the expected `state_digest`.
-`GameSnapshot.from_recipe_json(raw)` validates the schema and catalog digest,
-replays every action and intervention natively, and checks `state_digest`.
-The recipe also carries a checksum over its inputs, including the chooser and
-decision-memory settings that the rules digest omits. If the source issued
-object-bearing semantic frames, the recipe retains their fingerprints so a
-reopened Command can use the same object bindings. `read_record(path)` checks the
-recipe checksum, catalog, and intervention offsets without playing the game.
-`walk(record)` plays the recorded inputs and reports the first detected
-divergence, so earlier decisions remain available if the rules have changed.
+`snapshot.to_recipe_json()` exports the seed, both decks, chooser and memory
+settings, committed external actions, and ordered branch interventions. It
+retains fingerprints for issued semantic frames so Commands keep their object
+bindings. `GameSnapshot.from_recipe_json(raw)` checks the schema, catalog and
+recipe checksum, replays the inputs, and verifies the final state digest.
 
-An `Env` modified by unjournaled test or search helpers (`scenario_*`,
-`materialize_possible_world`, `materialize_sampled_hand`, `step_structured`,
-`step_legacy_submission`, or direct external `random_action_index()` calls)
-still supports in-memory `snapshot()` and `restore()`, but `to_recipe_json()`
-fails closed instead of emitting an inaccurate replay prefix.
+`read_record(path)` checks the recipe and its intervention offsets before
+simulation. `walk(record)` then yields the verified decisions and reports
+the first detected divergence if the rules have changed.
 
-A snapshot recipe holds the deal seed, both decks, and branch RNG seeds. Keep
-it private like any other game record. Academy Watch opens it as a **Recorded
-game**. The acting view hides the opponent's hand. Turning on spectator reveal
-shows both hands. Branch seeds stay on the server in both views. The usual Watch
-admission rules (`skip_trivial=True`, `player_policies=("agent", "agent")`, and
-matching decklist disclosure) still apply.
+Unrecorded operations such as `scenario_*`, hidden-world materialization,
+structured submissions, and external `random_action_index()` calls still
+allow in-memory restore. Export raises when it cannot reconstruct the prefix.
+
+Keep recipes private. Academy opens a recipe as a **Recorded game** when
+forced-decision skipping is enabled, both seats use `agent`, and decklist
+disclosure agrees. The acting view hides the opponent’s hand, spectator
+reveal shows both hands, and branch seeds stay on the server.
 
 ## Ask questions of recorded games
 

@@ -11,7 +11,6 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
-    from managym import Observation
     from managym.recording import GameRecord
 
 from fastapi import HTTPException
@@ -522,8 +521,6 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
     try:
         assert session.trace is not None
         session.env = replay.env
-        session.obs = replay.observation
-        session.published_prompt = None
         session.trace.config = GameConfig(
             hero_deck=setups[0].decklist,
             villain_deck=setups[1].decklist,
@@ -545,7 +542,10 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
         )
 
         def apply(decision: RecordedDecision) -> None:
-            seat = int(decision.observation.agent.player_index)
+            # The verified observation includes any interventions at this boundary.
+            session.obs = decision.observation
+            session.published_prompt = None
+            seat = int(session.obs.agent.player_index)
             context = (
                 session._publish_current_prompt()
                 if seat == 0
@@ -584,12 +584,10 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 else None,
             )
 
-        def refresh(observation: "Observation") -> None:
-            session.obs = observation
-            session.published_prompt = None
-
-        for _ in replay.run(apply, on_intervention=refresh):
+        for _ in replay.run(apply):
             pass
+        session.obs = replay.observation
+        session.published_prompt = None
         assert replay.stop is not None
         stop = replay.stop
         reason = "game_over" if stop.status == "complete" else f"record_{stop.status}"

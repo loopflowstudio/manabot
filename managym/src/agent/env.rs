@@ -298,7 +298,7 @@ impl Env {
         // Game creation panics on these; reject them as errors first.
         crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
-        let content = crate::cards::content_pack::default_content_pack();
+        let content = default_content_pack();
         for player in player_configs.iter() {
             for name in player.deck.main.keys() {
                 if content.definition_id(name).is_none() {
@@ -324,19 +324,8 @@ impl Env {
                 self.retained_statistics.push(summary);
             }
         }
-        let setup = Arc::new(player_configs.clone());
-        self.reset_setup = Some(setup.clone());
-        self.provenance = Some(GameProvenance {
-            setup,
-            skip_trivial: self.skip_trivial,
-            player_policies: self.player_policies,
-            decision_memory: self.decision_memory_enabled || self.decision_memory_include_own,
-            decision_memory_include_own: self.decision_memory_include_own,
-            actions: Arc::default(),
-            interventions: Arc::default(),
-        });
         let mut game = Game::construct(
-            player_configs,
+            &player_configs,
             self.seed,
             self.skip_trivial,
             self.capture,
@@ -345,6 +334,17 @@ impl Env {
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
+        let setup = Arc::new(player_configs);
+        self.reset_setup = Some(setup.clone());
+        self.provenance = Some(GameProvenance {
+            setup,
+            skip_trivial: self.skip_trivial,
+            player_policies: self.player_policies,
+            decision_memory: game.decision_memory_enabled,
+            decision_memory_include_own: self.decision_memory_include_own,
+            actions: Arc::default(),
+            interventions: Arc::default(),
+        });
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);

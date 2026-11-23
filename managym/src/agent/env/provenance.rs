@@ -74,18 +74,12 @@ impl GameProvenance {
 // Retained evidence spells game-level settings on each seat.
 mod seats {
     use super::*;
-    use crate::state::deck::Deck;
     use serde::{de::Error, Deserializer, Serializer};
 
     #[derive(Serialize, Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct Seat {
-        name: String,
-        decklist: BTreeMap<String, usize>,
-        #[serde(default)]
-        sideboard: BTreeMap<String, usize>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        world: Option<String>,
+    struct Seat<P> {
+        #[serde(flatten)]
+        player: P,
         #[serde(default, skip_serializing_if = "ManaFloats::is_off")]
         mana_floats: ManaFloats,
         #[serde(default, skip_serializing_if = "ManaPayment::is_manual")]
@@ -95,51 +89,24 @@ mod seats {
     }
 
     pub(super) fn serialize<S: Serializer>(setup: &GameSetup, s: S) -> Result<S::Ok, S::Error> {
-        let seats: Vec<_> = setup
-            .players
-            .iter()
-            .enumerate()
-            .map(|(i, p)| Seat {
-                name: p.name.clone(),
-                decklist: p.deck.main.clone(),
-                sideboard: p.deck.sideboard.clone(),
-                world: p.submitted.then(|| crate::world::WORLD_POOL.to_string()),
-                mana_floats: setup.mana_floats[i],
-                mana_payment: setup.mana_payment[i],
-                disclosure: setup.decklists.resolve(0), // fixed to open or closed at reset
-            })
-            .collect();
-        seats.serialize(s)
+        s.collect_seq(setup.players.iter().enumerate().map(|(i, player)| Seat {
+            player,
+            mana_floats: setup.mana_floats[i],
+            mana_payment: setup.mana_payment[i],
+            disclosure: setup.decklists.resolve(0), // resolved at reset
+        }))
     }
 
     pub(super) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Arc<GameSetup>, D::Error> {
-        let seats = <[Seat; 2]>::deserialize(d)?;
+        let seats = <[Seat<PlayerConfig>; 2]>::deserialize(d)?;
         if seats[0].disclosure != seats[1].disclosure {
             return Err(D::Error::custom("inconsistent seat disclosure"));
         }
-        let decklists = seats[0].disclosure.into();
-        let mana_floats = seats.each_ref().map(|s| s.mana_floats);
-        let mana_payment = seats.each_ref().map(|s| s.mana_payment);
-        let mut players = Vec::with_capacity(2);
-        for seat in seats {
-            if seat
-                .world
-                .as_deref()
-                .is_some_and(|w| w != crate::world::WORLD_POOL)
-            {
-                return Err(D::Error::custom("unknown submitted deck world"));
-            }
-            players.push(PlayerConfig {
-                name: seat.name,
-                deck: Deck::new(seat.decklist, seat.sideboard),
-                submitted: seat.world.is_some(),
-            });
-        }
         Ok(Arc::new(GameSetup {
-            players,
-            decklists,
-            mana_floats,
-            mana_payment,
+            decklists: seats[0].disclosure.into(),
+            mana_floats: seats.each_ref().map(|s| s.mana_floats),
+            mana_payment: seats.each_ref().map(|s| s.mana_payment),
+            players: seats.into_iter().map(|s| s.player).collect(),
         }))
     }
 }

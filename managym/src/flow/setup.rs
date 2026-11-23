@@ -24,7 +24,7 @@ impl Game {
     /// A match on the catalog. Panics when a deck submitted to the world fails
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: impl Into<GameSetup>, seed: u64, skip_trivial: bool) -> Self {
-        Self::construct(player_configs.into(), seed, skip_trivial, None, false)
+        Self::construct(&player_configs.into(), seed, skip_trivial, None, false)
     }
 
     #[cfg(test)]
@@ -34,7 +34,7 @@ impl Game {
         skip_trivial: bool,
     ) -> Self {
         Self::construct(
-            player_configs.into(),
+            &player_configs.into(),
             seed,
             skip_trivial,
             Some(CaptureMode::Cards),
@@ -43,14 +43,14 @@ impl Game {
     }
 
     pub(crate) fn construct(
-        player_configs: GameSetup,
+        player_configs: &GameSetup,
         seed: u64,
         skip_trivial: bool,
         capture: Option<CaptureMode>,
         statistics: bool,
     ) -> Self {
         let disclosure = player_configs.decklists.resolve(seed);
-        admit_submitted(&player_configs)
+        admit_submitted(player_configs)
             .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));
         let content = default_content_pack();
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
