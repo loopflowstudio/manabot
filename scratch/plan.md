@@ -94,11 +94,12 @@ Candidates still to verify:
 
 Every slice follows the same authoring rules: file each card once under its **first printing's set module** (`managym/cards/src/<set>.rs`) with its Scryfall printing ID, register via `cards()` and `cards/src/lib.rs`, snapshot shell + Oracle text in `managym/tests/fixtures/scryfall_cards.json`, update `fdn.jsonl` (`status: "source definition found"`, exact source path), and add directed set tests covering normal paths and counterexamples.
 
-### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
-Arahbo and Helpful Hunter are registered. A token copy of Arahbo also triggers on its own entry, so the single entry ability needs a distinct self alternative. Matching an entering Cat needs its live token status and effective subtype. Complete the cohort partition across the remaining slices.
-1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit each group against native rules before authoring it. Start the targeting group with Drakuseth, Maw of Flames. The token group can proceed independently. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
-2. **Self-entry and Regal Caracal complete.** Native copy, token-face and layer checks live in the FDN and AKH card tests. The observability test compares the entry subjects, and the text-observation test replays both Commands.
-   - Next, author Prideful Parent and Anthem of Champions. Check that Anthem's bonus applies to a Cat entering after it.
+### Slice 2 — Remaining token, targeting and lifegain work
+
+The Cat entry tests above cover the previous iteration's requests. The four authored cards now use `Ability::when_enters` in `managym/state/src/ability.rs` for entry triggers without an intervening condition. The subject still distinguishes Arahbo entering itself from another qualifying Cat entering. Regal Caracal uses one continuous ability for both grants and a separate printed token face for intrinsic lifelink.
+
+1. **Next playable position.** Author Prideful Parent and Anthem of Champions. With Anthem already in play, resolve Parent's entry trigger using the ordinary white Cat face. Check the effective power and toughness of Parent and its token before and after Anthem leaves, Parent's printed vigilance, and an opposing creature as a control. Apply the slice checks below and update both ledger rows.
+2. **Independent targeting audit.** Trace Drakuseth's primary target and its optional secondary targets through selection and resolution. Record which native rule keeps the primary out of the secondary group and assigns damage to each, or document the missing authority in the ledger. Continue partitioning the 204 unaudited rows by capability before authoring each group.
 3. **Per-source lifelink + `TriggerCondition::GainsLife` proof:** Implement per-source lifelink batching through `ProposedEvent::LifeChange` and `TriggerCondition::GainsLife { who }`, wired through `observability.rs`, learning tokens, and LLM text. Author **Ajani's Pridemate**, **Marauding Blight-Priest**, and **Drogskol Reaver**. Verify:
    - Two lifelink creatures dealing combat damage → 2 Pridemate triggers.
    - One lifelink+trample creature dealing damage to a blocker and player → 1 Pridemate trigger (CR 702.15b / 119.9).
@@ -154,6 +155,6 @@ Preserve the four headline integrated-validation witnesses (board, chooser, acti
 
 ## Later phases
 
-**Decomposition.** After Slices 2–N, audit new definitions for duplicated predicates, selectors, and token/trigger helpers (e.g., shared Cat/Angel/Zombie predicates, shared prowess/lifegain/token-creation helpers, shared retained-order handling between `Opt` and `Lightshell Duo`). Move real callers, delete any redundant owner, and keep directed counterexamples.
+**Decomposition.** After Slices 2–N, audit new definitions for duplicated predicates, selectors, and token/trigger helpers (e.g., shared Cat/Angel/Zombie predicates, remaining duplicated lifegain or token-creation logic, shared retained-order handling between `Opt` and `Lightshell Duo`). Move real callers, delete any redundant owner, and keep directed counterexamples.
 
 **Performance.** Run bounded `bench_states` stress positions matching the [stress-state procedure](../docs/development.md#stress-states): repeated Cat/Goblin entries under a lord or Impact Tremors; stacked static sources and attachments (`Arahbo`, `Regal Caracal`, `Anthem of Champions`, `Imprisoned in the Moon`, `Witness Protection`); `Felidar Savior` with mixed eligible/ineligible creatures; `Twinflame Tyrant` with many simultaneous damage recipients and competing replacements. Retain the same-runner Engine Budget (`bench_steps` and `bench_search`, exact digests, 10% limit). Before closing MTG-421, verify the exact partition of all 222 base rows into delivered, previously defined, and pending (each pending row naming its exact missing authority).
