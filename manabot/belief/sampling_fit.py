@@ -8,9 +8,14 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
+import time
+import tracemalloc
 from typing import Protocol
 
+import numpy as np
+
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
+from manabot.belief.sampling_types import SamplerInput
 from manabot.sim.search.sampling import LearnedDistribution
 
 
@@ -91,6 +96,85 @@ def calibration_error(bins: Sequence[CalibrationBin]) -> float:
     if total == 0:
         raise ValueError("calibration needs forecasts")
     return sum(abs(bin.probability_sum - bin.truth_sum) for bin in bins) / total
+
+
+def score_sampler_arm(
+    examples: Sequence[SamplerExample],
+    *,
+    log_prob: Callable[[SamplerExample], float],
+    sample: Callable[[SamplerInput], np.ndarray],
+    check: Callable[[], None] | None = None,
+) -> SamplerArmMetrics:
+    """Score each label once, then draw a batch of hands from its public inputs.
+
+    Pool inclusion errors over card coordinates and conjunction errors over
+    adjacent pairs. Only ten calibration bins survive between decisions.
+    """
+    counts = np.zeros(10, dtype=np.int64)
+    probability_sums = np.zeros(10, dtype=np.float64)
+    truth_sums = np.zeros(10, dtype=np.float64)
+    nll = inclusion_error = conjunction_error = 0.0
+    pair_count = violations = sampled_hands = 0
+    elapsed = 0.0
+    largest_tensor = peak_python = 0
+    owns_trace = not tracemalloc.is_tracing()
+    if owns_trace:
+        tracemalloc.start()
+    try:
+        for example in examples:
+            if check is not None:
+                check()
+            inputs = example.inputs
+            nll -= log_prob(example)
+            started = time.perf_counter()
+            draws = sample(inputs)
+            elapsed += time.perf_counter() - started
+            sampled_hands += len(draws)
+            largest_tensor = max(largest_tensor, draws.nbytes)
+
+            present = draws > 0
+            truth = np.asarray(example.target_hand) > 0
+            probabilities = present.mean(axis=0)
+            inclusion_error += float(np.square(probabilities - truth).sum())
+            joint = (present[:, :-1] & present[:, 1:]).mean(axis=0)
+            conjunction_error += float(
+                np.square(joint - (truth[:-1] & truth[1:])).sum()
+            )
+            pair_count += joint.size
+            # Equal-width bins, with probability one in the final bin.
+            bins = np.minimum((probabilities * 10).astype(np.intp), 9)
+            counts += np.bincount(bins, minlength=10)
+            probability_sums += np.bincount(bins, weights=probabilities, minlength=10)
+            truth_sums += np.bincount(bins, weights=truth, minlength=10)
+            outside_pool = (
+                (draws < inputs.known_minima) | (draws > inputs.pool_counts)
+            ).any(axis=1)
+            violations += int(
+                np.count_nonzero(outside_pool | (draws.sum(axis=1) != inputs.hand_size))
+            )
+            peak_python = max(peak_python, tracemalloc.get_traced_memory()[1])
+    finally:
+        if owns_trace:
+            tracemalloc.stop()
+    calibration = tuple(
+        CalibrationBin(int(count), float(probability), float(truth_sum))
+        for count, probability, truth_sum in zip(
+            counts, probability_sums, truth_sums, strict=True
+        )
+    )
+    ece = calibration_error(calibration)
+    return SamplerArmMetrics(
+        joint_nll=nll / len(examples),
+        inclusion_brier=inclusion_error / int(counts.sum()),
+        inclusion_ece=ece,
+        conjunction_brier=conjunction_error / pair_count if pair_count else None,
+        support_violations=violations,
+        sampled_hands=sampled_hands,
+        sampling_seconds=elapsed,
+        peak_python_bytes=peak_python,
+        largest_sample_tensor_bytes=largest_tensor,
+        calibration_bins=calibration,
+    )
 
 
 class SamplerEncoder(Protocol):

@@ -8,8 +8,7 @@ and uses PyTorch as its numerical reference
 ([parity check](README.md#parity-check)). The ordinary pilot gates timing on
 those checks. The [MPS retest](../../experiments/reports/mps_retest.md) explicitly
 measures approximate half-precision arms too; it reports failing tolerances
-alongside timing and does not treat execution as numerical equivalence. Training, evaluation and the CLI
-still run the PyTorch model; nothing in the PyTorch path imports MLX.
+alongside timing and does not treat execution as numerical equivalence. Evaluation uses PyTorch.
 
 ```python
 from manabot.backends import resolve
@@ -52,15 +51,65 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 ## What the backend covers
 
-The backend runs what the w160l8 recipe uses: a catalog world with catalog
-record ids, table attention, a masked-mean scalar critic and policy input v9.
-The container carries every configuration, so `backend.load_policy` is where the
-rest is refused: a checkpoint that enables belief inputs, policy history,
-another critic, FiLM (`policy_film` or `focus_film`), `stream_norm` or input
-v10 raises `UnsupportedPolicy` naming every unsupported field, rather than
-running partially. Checkpoints of the `local` and `baseline` recipes use FiLM
-and are refused. The sized column readings (`one_hot`, `steps`) are host
-preparation and need nothing from the backend.
+MLX supports tracked and fresh scalar damped self-play with catalog record ids, table
+attention and a masked-mean critic. Inputs v9 through v11 use the same saved
+column readings as Torch. The model supports stream normalization, focus and
+policy FiLM, and v11 stack and known-library rows. Collection and learning
+support bucketed shapes and bounded execution chunks. The baseline, local and Elemental recipes accept `backend="mlx"` for training and recovery.
+
+Run one fresh baseline iteration on Apple Silicon with the recipe’s model,
+learning rule and both-seat routing. Give each run a new output directory.
+
+```python
+from pathlib import Path
+
+from manabot.backends import resolve
+from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.training.loops.self_play import fresh_iteration
+
+recipe = settings(BaselineConfig(device="mps")).model_copy(
+    update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True}
+)
+result = fresh_iteration(
+    recipe, backend=resolve("mlx"), seed=19,
+    out=Path(".runs/mlx-baseline"),
+)
+print(result.checkpoint, result.counts.learner_transitions)
+```
+
+The ordinary self-play loop and `fresh_iteration` share policy creation,
+collection, learning, EMA and milestone export. The output directory holds
+`policies/00000001-raw.safetensors` and, when averaging is enabled,
+`policies/00000001-ema.safetensors`. Both readers can load either file.
+The returned policies are the live sources of those exports. Frozen-choice inspection
+reads them on MLX using the NumPy corpus and its offer and object permutations.
+
+### Tracked training and recovery
+
+Run the bounded local recipe through one update, then continue the same run.
+
+```sh
+uv run --extra mlx etude train manabot/recipes/local.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
+uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates=2
+```
+
+Etude stages `training.safetensors` and `state.json` in one save and commits
+the folder through `state/current.json`. It restores raw and EMA weights,
+Adam moments, learning rate, step and cumulative counts. Restore checks the
+model settings, saved column readings, lookup tables, backend, schema and
+array names, dtypes and shapes before loading the weights. Game streams and
+sampling start again at the saved update. Portable policy exports can start
+a fresh learner on either backend.
+
+A numerical failure ends the attempt. Under `numerical-incident/`, the JSON
+record names the invariant, attempted update and last policy exports.
+`tensors.safetensors` retains bounded evidence from up to 16 rollout rows
+within 32 MiB. `state.safetensors` holds the failure-time model, Adam, EMA
+and RNG state when their tensors fit within 512 MiB.
+
+Fresh construction and checkpoint loading both call `require_supported`.
+It reports unsupported settings together, including belief inputs, decision
+memory, recent events, other critic layouts and disabled attention.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:
@@ -122,8 +171,8 @@ gradient detail of `OptimizerHealth` is absent
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. The backend does not write checkpoints or collect; training
-continuity stays with the PyTorch learner.
+is compiled. Collection samples once per group across execution chunks.
+Portable exports contain the policy’s float32 parameters and lookup buffers.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).
@@ -134,7 +183,10 @@ A policy built without a precision follows the
 [one width rule](../../docs/training.md#reduced-precision) every GPU backend
 shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
 below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
-precision always wins. This does not enable an MLX training CLI.
+precision always wins. Fresh and tracked self-play use `SelfPlay.precision`,
+including when starting from a portable checkpoint. An explicit precision on
+`resolve("mlx", precision=...)` must agree with the recipe. Resuming a tracked
+MLX run requires the precision in its training save.
 
 ```python
 from manabot.backends import resolve
@@ -162,10 +214,11 @@ silently skips a step. Logits, values, log-softmax and sampled action log probab
 are float32 for both behavior and learner evaluation. Both paths use
 `rl.policy_logs` and `rl.action_logs`, promoting before normalization.
 
-Public forwards select precision automatically. A fixed-weight inference loop
-may hold `with policy.forward_precision():` across calls to reuse cast weights;
-close it before differentiating or stepping. `Learner.loss` clears inference
-catalog caches before differentiation, so catalog parameters still learn.
+Public forwards select precision automatically. Collection holds
+`policy.forward_precision()` across all draws from the frozen policy and
+reuses its encoded catalog. Leaving collection restores the master weights
+and clears the catalog before learning. Custom inference loops can use the
+same context manager while their weights are fixed.
 
 Check a checkpoint and real capture with the selected dtype:
 

@@ -39,7 +39,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
 from manabot.policy.protocol import BackendPolicy
-from manabot.training.state.backend import TrainingBackend
+from manabot.training.state.backend import FreshPolicies
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
@@ -98,7 +98,7 @@ def _untrained_agent(
     config: VerificationConfig,
     seed: int,
     *,
-    backend: TrainingBackend,
+    backend: FreshPolicies,
 ) -> BackendPolicy:
     backend.seed(seed)
     agent = backend.runtime.create_policy(observation_space, config.agent)
@@ -119,7 +119,7 @@ def build_hero_policy(
     config,
     seed: int,
     *,
-    backend: TrainingBackend,
+    backend: FreshPolicies,
 ) -> Callable[[dict[str, np.ndarray]], int]:
     """Hero policies: 'random' (uniform over valid) or 'untrained' (fresh ActorCritic)."""
 
@@ -143,7 +143,7 @@ def play_profile_games(
     villain_deck: dict[str, int] | None = None,
     seat_balanced: bool = False,
     agent_seed: int | None = None,
-    backend: TrainingBackend,
+    backend: FreshPolicies,
 ) -> list[GameProfile]:
     """Play games and record the decision profile for each one.
 
@@ -372,7 +372,7 @@ def run_matchup(
     deck: dict[str, int] | None = None,
     seat_balanced: bool = False,
     agent_seed: int | None = None,
-    backend: TrainingBackend,
+    backend: FreshPolicies,
 ) -> dict[str, Any]:
     profiles = play_profile_games(
         hero_policy_name=hero,

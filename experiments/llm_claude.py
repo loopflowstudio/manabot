@@ -111,12 +111,15 @@ def output() -> Path:
 def play(match: Match[Game], agents: Sequence[object]) -> Result:
     """One game: Claude through OpenRouter against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
-    opponent = checkpoint_opponent(checkpoint, output() / "checkpoints")
+    backend = resolve("torch")
+    opponent = checkpoint_opponent(
+        checkpoint, output() / "checkpoints", backend=backend
+    )
     ledger = BudgetLedger(output() / "budget.sqlite", BUDGET)
     ledger.check_admission()
     inference = OpenRouterConfig.model_validate(llm.config)
     with OpenRouterSession(inference, budget=ledger, budget_owner=match.key) as session:
-        return play_game(match, session, opponent, backend=resolve("torch"))
+        return play_game(match, session, opponent, backend=backend)
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:

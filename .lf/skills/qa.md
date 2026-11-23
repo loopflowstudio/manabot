@@ -292,8 +292,7 @@ publish, land or choose the next Graph step from here.
   `tests/model/test_backend_capture.py` with `hidden_dim=384`,
   `attention_layers=8`, `num_attention_heads=8`, 8 streams and 32 transitions
   (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
-  `initial.pt` with `uv run python -m manabot.backends.convert` (`local` recipe
-  checkpoints use FiLM and are refused), load it with
+  `initial.pt` with `uv run python -m manabot.backends.convert`, load it with
   `resolve("mlx").load_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
   preparing each batch with `policy.prepare(obs, inference=True)` and evaluating
   with `policy.evaluate` (logits `[B,A]`, values `[B]`); untrained-policy argmax
@@ -301,6 +300,27 @@ publish, land or choose the next Graph step from here.
   --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
   takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
   show when a relative-loss failure comes from a near-zero loss.
+- Tracked MLX training (baseline, local, Elemental with `backend: "mlx"`):
+  `uv run --extra mlx etude train manabot/recipes/local.py --config
+  '{"backend":"mlx","device":"mps"}' --until updates=1` takes about 11 s on an
+  M4 Max under load, then `--resume --until updates=2`; Elemental with
+  `{"updates": 2, "streams": 4, "backend": "mlx", "device": "mps"}` about 27 s.
+  Cross-read every `out/policies/*.safetensors` of a Torch and an MLX run on
+  both `resolve("torch")` and `resolve("mlx", precision="float32")`: encode a
+  scalar `managym.Env` observation with `encode_observation(space, raw)` and add
+  the batch axis yourself (`{k: v[None]}`), or admission refuses
+  `known_library`. Agreement was below 1e-7 on 153 decisions. Seat an MLX-written
+  Elemental policy in Academy with `--policy`, `--deck elemental_ur
+  --opponent-deck elemental_gw`. For Ctrl-C on a pty, poll the master with
+  `select` (the run prints nothing between "local" and its end, so a blocking
+  read never sends `\x03`). `manabot training-report` hides `local` runs
+  (kind `smoke`) until "Include labeled benchmarks…" is checked.
+  No shipped recipe exposes `precision`. For bf16 MLX, subclass `LocalConfig`
+  in a `.runs/` recipe with `precision` (and optional `pretrained`) fields and
+  `model_copy` them into `settings(config)`. bf16 needs MPS, and `SelfPlay`
+  refuses it on CPU inside `track`. A resume with a changed precision must
+  refuse with `run_identity_conflict`. Read `execution/precision` from the
+  run's `metrics/*.permanent.json` labels.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
