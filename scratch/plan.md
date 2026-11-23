@@ -31,7 +31,9 @@ Rules references for the fixtures are CR 103.5–6, 104, 116, 514, 704, 724 and 
 
 ## Next working slice
 
-Build Virulent Silencer using the existing combat-damage trigger and player-counter authority. Exercise a nontoken artifact creature and an artifact token alongside Fynn. Continue with Bracelet payment and Cube control at a nested payment. The Pact and Maze terminal slice is recorded below. The remaining Pact branches include countering, control change, blink and independent copies.
+Build Virulent Silencer alongside Fynn. Attack with a nontoken artifact creature with deathtouch and an otherwise matching token. Check which triggers reach the stack for each hit, the defender’s poison after each resolves, and the terminal result when a trigger takes the defender to ten. Fynn already expresses the hit with `DealsCombatDamage`, a source predicate and `Per::Object` in `managym/cards/src/khm.rs`. Keep Silencer’s source restriction in its definition and reuse player-counter resolution and the poison SBA. Include the blocked, prevented and noncombat cases and removal of Fynn after its trigger.
+
+Then exercise Bracelet payment and Cube control at a nested payment. Pact still needs its other three mode effects, mode use after countering or control change, blink, independent copies and all modes exhausted. Maze’s opposing-Herald fixture starts with Herald on the battlefield. Flashing it in response to the activation remains an interaction to verify.
 
 ## Remaining cross-consumer obligations
 
@@ -99,10 +101,10 @@ The release build at the earlier sync failed the 4096-byte GameState assertion. 
 
 The earlier size and private-restoration blocker is closed. This review reran the seed-213 scalar/vector opening fixture and both private-bottom snapshot cases against the installed extension (3 passed). The second-bottom case restores after a private commitment, replays the original action to the same witness, and branches to a different owner view while preserving the opponent view. The existing debug binaries passed 12 focused cases covering CR 103, Time Stop, controlled cleanup, Fynn, Herald, simultaneous terminal conditions and Env reasons/rewards.
 
-### Instructed outcomes and explicit wins
+### Instructed outcomes and explicit wins at `77f1c4b3` and `c4c61653`
 
 At seed 161, the Pact upkeep offered all four modes. The loss Command replayed identically on an exact fork. Without a response its controller lost. Flashing Herald in response kept the controller alive through resolution and subsequent removal. Only the three unused modes were offered at the next upkeep. A CPython 3.13 release run at seed 23 restored the pending upkeep from both a live snapshot and serialized replay. The same bound Command reached the same terminal witness on each branch and left the root unchanged.
 
 Maze's End returned to hand before the search. Nine Gate names plus a duplicate failed when the controller declined to find. Finding the tenth name won. With ten names already on the battlefield, declining to find also won, and an opposing Herald prevented the win. The Env fixture checked both seat assignments, the instructed loss reason and winner/loser rewards for each kind of outcome. Existing simultaneous-loss reward and reason projections passed. The full suite and Engine Budget remain at gate.
 
-At seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
+At `4edddb75`, seed 161, equipping Leyline Axe to Fynn and attacking unblocked dealt four combat damage and gave the defender four poison counters across both damage steps.
