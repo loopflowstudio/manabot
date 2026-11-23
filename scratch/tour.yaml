@@ -1,20 +1,10 @@
-at: 487079a5868933c6c2faefc64c1f5732aebf5081
+at: db2d5a535e4c20992a90a85a60ca58e8b8777112
 first:
-  - path: managym/README.md
-    why: Explains damage binding and counter payment
   - path: managym/cards/src/fdn.rs
-    why: Defines Drake Hatcher using both rules
-  - path: managym/src/flow/event.rs
-    why: Defines the source, recipient and amount of a hit
-  - path: managym/src/flow/damage.rs
-    why: Captures each committed player hit
+    why: Defines Hunter’s attack choice and death trigger
   - path: managym/src/flow/triggers.rs
-    why: Binds the matching hit to each occurrence
-  - path: managym/src/flow/payment.rs
-    why: Spends incubation before stacking the activation
-  - path: managym/src/agent/continuation.rs
-    why: Projects pending amounts to each viewer
+    why: Matches each victim at departure
+  - path: managym/state/src/predicate.rs
+    why: Evaluates type clauses against event-time creature status
   - path: managym/cards/tests/cards/fdn.rs
-    why: Exercises unequal hits and both paid branches
-  - path: managym/src/agent/env/snapshot.rs
-    why: Restores the same combat and each pending trigger
+    why: Exercises both choices, simultaneous deaths and draw privacy
