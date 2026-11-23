@@ -29,3 +29,4 @@ Use Scavenger Regent as the second Omen because its X cost exercises announcemen
 Keep the existing v11 stack mana-value column's printed-cost reading for saved models. Expose the native on-stack mana value separately and use Exude Toxin at two X values to distinguish the readings.
 
 Exude Toxin’s cold replay uses Swamps against Mountains and Lightning Bolt. The opponent can respond after payment. The public stack record retains the number of printed X symbols so a captured observation can reconstruct the printed cost and effective value together.
+Use Twinmaw and a second nonland card for the Etali fixture so the same suspended parent exercises profile, target and cast-order choices.
