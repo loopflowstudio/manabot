@@ -92,7 +92,7 @@ jobs:
             tests/training/test_report_helpers.py \
             tests/training/test_experiment_data.py \
             tests/training/test_regimes.py tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py \
-            tests/training/test_batch_closure.py \
+            tests/training/test_batch_closure.py tests/training/test_snapshot_rollouts.py \
             tests/training/test_outcome_tables.py
 
       - name: Experiment runner, monitoring and verification tests
