@@ -1,4 +1,4 @@
-at: a89c2be86f0936cc9fe2552325e2d651e60b8d97
+at: 78259b834b9f5bcf2c06b3ce11c7228712686534
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/hob.jsonl
     why: Find the card definitions and verified outcomes
@@ -8,10 +8,12 @@ first:
     why: Read both cards and both printed programs
   - path: managym/src/flow/play.rs
     why: Price and announce the selected spell
+  - path: managym/src/flow/action.rs
+    why: Follow each permission and profile through affordability checks
   - path: managym/src/flow/proposed_event.rs
     why: See which replacement grants exile access
   - path: managym/cards/tests/cards/hob.rs
-    why: Follow all four Bilbo outcomes
+    why: Check profile prices and all four Bilbo outcomes
   - path: tests/env/test_game_snapshot.py
     why: Restore the pending target Command
 hide: []

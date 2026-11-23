@@ -1051,10 +1051,11 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
+                            let adventure = matches!(action, Action::CastSpell { adventure: true, .. });
                             let (route_mana_value, quota_type) = match action {
                                 Action::CastSpell { object, route: Some(route), .. }
                                 | Action::PlayLand { object, route: Some(route), .. } => {
-                                    let cast = crate::flow::game::CastChoices::from_route(*route);
+                                    let cast = crate::flow::game::CastChoices::from_route(*route, adventure);
                                     let cost = game.casting_mana_cost(*object, cast);
                                     let quota = match route {
                                         crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(*kind as u8 + 1),
@@ -1065,7 +1066,7 @@ impl Observation {
                                 _ => (None, None),
                             };
                             ActionOption {
-                                adventure: matches!(action, Action::CastSpell { adventure:true, .. }),
+                                adventure,
                                 route_mana_value,
                                 quota_type,
                                 description: game.action_description(action),

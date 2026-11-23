@@ -218,3 +218,34 @@ fn spew_flame_cost_reductions_read_the_sorcery_profile() {
         assert_eq!(can_cast(&game, smaug), eligible, "{reducer}");
     }
 }
+
+#[test]
+fn overlapping_grants_price_each_smaug_profile() {
+    use crate::support::game::{five_color_unfunded_setup, move_from_library};
+    use managym::{
+        flow::cast_permission::PlayGrant,
+        state::{mana::ManaCost, zone::ZoneType},
+    };
+
+    let name = "Smaug, the Great Calamity";
+    let mut s = five_color_unfunded_setup(&[name, "Gray Ogre"]);
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = move_from_library(&mut s, 0, name, ZoneType::Exile);
+    for cost in [None, Some(ManaCost::default())] {
+        s.game_mut().state.cast_permissions.grant(PlayGrant {
+            cost,
+            ..PlayGrant::new(card, PlayerId(0))
+        });
+    }
+    s.set_player_mana_pool(0, "5RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let mut prices: Vec<_> = obs
+        .action_space
+        .actions
+        .iter()
+        .filter_map(|offer| Some((offer.adventure, offer.route_mana_value?)))
+        .collect();
+    prices.sort_unstable();
+    assert_eq!(prices, [(false, 0), (false, 7), (true, 0), (true, 5)]);
+}

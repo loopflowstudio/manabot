@@ -85,8 +85,9 @@ impl CastChoices {
         }
     }
 
-    pub(crate) fn from_route(route: PlayRoute) -> Self {
+    pub(crate) fn from_route(route: PlayRoute, adventure: bool) -> Self {
         Self {
+            adventure,
             route: (route != PlayRoute::Hand).then_some(route),
             flashback: matches!(
                 route,
@@ -485,10 +486,7 @@ impl Game {
         if adventure && !self.allows_adventure(object, route) {
             return Err(AgentError("no Adventure available".into()));
         }
-        let cast = CastChoices {
-            adventure,
-            ..CastChoices::from_route(route)
-        };
+        let cast = CastChoices::from_route(route, adventure);
         if self.state.priority.holder != player {
             return Err(AgentError("player does not have priority".to_string()));
         }

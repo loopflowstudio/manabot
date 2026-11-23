@@ -652,10 +652,7 @@ impl Game {
                 if adventure && !self.allows_adventure(object, permission) {
                     break;
                 }
-                let cast = CastChoices {
-                    adventure,
-                    ..CastChoices::from_route(permission)
-                };
+                let cast = CastChoices::from_route(permission, adventure);
                 let spell = cast.spell(&self.state[object]);
                 let types = &spell.types;
                 if types.is_land() {
@@ -700,10 +697,7 @@ impl Game {
         cast: CastChoices,
     ) -> Option<u8> {
         let spell = cast.spell(&self.state[object]);
-        if spell.spell_modes().is_some()
-            && self
-                .legal_spell_modes(player, object, cast)
-                .is_empty()
+        if spell.spell_modes().is_some() && self.legal_spell_modes(player, object, cast).is_empty()
         {
             return None;
         }

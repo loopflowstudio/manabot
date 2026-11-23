@@ -179,12 +179,10 @@ impl Game {
                     }) {
                     cast
                 } else {
-                    CastChoices {
-                        adventure: *adventure,
-                        ..CastChoices::from_route(
-                            self.selected_play_route(player, *object, *route)?,
-                        )
-                    }
+                    CastChoices::from_route(
+                        self.selected_play_route(player, *object, *route)?,
+                        *adventure,
+                    )
                 };
                 let card = cast.spell(&self.state[*object]);
                 if self.cast_needs_x_announcement(*object, cast) {
