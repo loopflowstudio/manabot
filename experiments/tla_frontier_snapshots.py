@@ -1,92 +1,70 @@
-"""Exploratory TLA frontier w64 learnability trial: PLR + Vine-RLOO snapshots vs baseline.
+"""Exploratory TLA trophy w64 learnability trial: PLR + Vine-RLOO snapshots vs stored tau-x2 baseline.
 
-Both arms train one seed (21501) on the 134-deck TLA trophy corpus (`tla_frontier`),
-policy input v11, and identical w64 damped-policy settings. Arm 0 (`baseline`) runs
-ordinary fresh self-play; Arm 1 (`plr-vine-rloo`) adds a 512-entry `SnapshotBank`
-with 4-branch RLOO (`horizon=20`, root `critic_residual` priority, 80% replay /
-20% fresh floor targeting ~50/50 row mix) and `root_actor_weight=2.0`.
+Trains two seeds (40901, 40902) for 400 updates on the weekend `tla_trophies` +
+`tau_scale=0.1` recipe (complete 7,859-pool TLA trophy training split, closed
+decklists, policy input v11, `focus_film=True`, `stream_norm=True`, `streams=256`,
+`transitions=64`, `rows=512`, `workers=4`, `threads=2`, raw checkpoints), adding a
+512-entry `SnapshotBank` with 4-branch Vine-RLOO (`horizon=20`, root
+`critic_residual` priority, 80% replay / 20% fresh floor targeting ~50/50 row mix)
+and `root_actor_weight=2.0`.
 
-Milestones (`25, 50, 100, 150, 200, 300, 400`, plus initialization `0` against the
-heuristic) play `tla_frontier`'s 16 paired trophy deals (4 crossed legs = 64 games
-per comparison). Design notes and results live in
-`experiments/reports/tla_frontier_snapshots.md`.
+No fresh baseline is trained. Evaluation scores checkpoints on `tla_trophies`'s
+32 held-out deals (4 crossed legs = 128 games per seed per checkpoint) against
+the first-64 heuristic, against each line at half its updates, and head-to-head
+at matched updates (100, 200, 300, 400) against the retained
+`tla_trophies_floor/tau-x2` checkpoints (`40901`, `40902`) stored in R2.
 
-    uv run --extra artifacts etude launch experiments/tla_frontier_snapshots.py --revision COMMIT --source r2://manabot/jobs --rent l4 --max-usd 25
-
-Once both training runs are recorded, repeat the launch at the same revision
-to schedule missing checkpoint matches on CPU32 under the experiment cap:
-
-    uv run --extra artifacts etude launch experiments/tla_frontier_snapshots.py --revision COMMIT --source r2://manabot/jobs --rent cpu32 --max-usd 25
-    uv run --extra artifacts etude report experiments/tla_frontier_snapshots.py --source r2://manabot/jobs --open
+    doppler run -p manabot -c prd -- .venv/bin/etude launch experiments/tla_frontier_snapshots.py --rent colab-l4-bench --max-usd 25
+    doppler run -p manabot -c prd -- .venv/bin/etude launch experiments/tla_frontier_snapshots.py --rent mtg344-cpu32 --max-usd 25
+    doppler run -p manabot -c prd -- .venv/bin/etude report experiments/tla_frontier_snapshots.py --source r2://manabot/jobs --open
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from decimal import Decimal
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from etude.checkpoints import CheckpointRecord
-from etude.eval.match import environment
+from etude.checkpoints import CheckpointRecord, CheckpointRef
 from etude.eval.records import (
-    Aligned,
     Benchmark,
-    CheckpointSlot,
-    Code,
-    Environment,
-    Match,
+    CheckpointPlayer,
+    Fraction,
     Seating,
+    checkpoint_player,
 )
-from etude.eval.result import Result
-from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
+from etude.jobs import EvalJob, ExperimentState, TrainingJob
+from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score, Series
+from etude.spec import Variable
 from etude.train.tracking import track
 from pydantic import Field
 
-from experiments import tla_frontier, tla_frontier_snapshots
-from manabot.eval.agents import AGENTS
-from manabot.eval.pairing import play_pairing
+from experiments import tla_trophies as trophies
+from experiments.tla_trophies_floor import final_environment
+from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.experiment.setup import machine_setup
-from manabot.infra.config import ObservationConfig
-from manabot.infra.identity import StrictModel
-from manabot.sim.heuristic import heuristic_source_paths
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves, head_to_head
 from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
-from manabot.training.state.game_errors import GameErrorPolicy
 
 if TYPE_CHECKING:
     from manabot.training.loops.self_play import SelfPlay
 
-ROOT = Path(__file__).resolve().parents[1]
-
-type ArmName = Literal["baseline", "plr-vine-rloo"]
-BASELINE: ArmName = "baseline"
-SNAPSHOT: ArmName = "plr-vine-rloo"
-ARMS: tuple[ArmName, ArmName] = (BASELINE, SNAPSHOT)
-
-SEEDS: tuple[int, ...] = (tla_frontier.PROTOCOL.training_seed,)
+JOB = "plr-vine-rloo"
+SEEDS: tuple[int, ...] = (40901, 40902)
 UPDATES = 400
-CHECKPOINT_EVERY = 25
-MILESTONES: tuple[int, ...] = (25, 50, 100, 150, 200, 300, 400)
+CHECKPOINT_EVERY = 50
+TAU_SCALE = 0.1
+ROOT_ACTOR_WEIGHT = 2.0
 
-HEURISTIC_BENCHMARK = "tla-frontier-snapshots-heuristic-16"
-HEAD_TO_HEAD_BENCHMARK = "tla-frontier-snapshots-vs-baseline-16"
-HEAD_TO_HEAD_SEATINGS: tuple[str, ...] = tuple(
-    f"Matched baseline pair {i + 1}" for i in range(len(tla_frontier.PROTOCOL.pairs))
+HELD_OUT = "tla-snapshots-held-out-32"
+HALF_TRAINING = "tla-snapshots-half-training-32"
+HALF_TRAINING_SEATINGS = tuple(
+    f"Snapshots half-training deal {i + 1}" for i in range(32)
 )
-
-OBSERVATION = ObservationConfig(
-    policy_input_version=11,
-    max_facts=512,
-    max_cards_per_player=128,
-    max_permanents_per_player=96,
-    max_actions=64,
-    action_overflow="first-legal",
-    max_focus_objects=2,
-    max_events=32,
-)
+HEAD_TO_HEAD = "tla-snapshots-vs-tau-x2-32"
+HEAD_TO_HEAD_TAG = "vs-tau-x2"
 
 # Targets roughly a 50/50 fresh-vs-snapshot row mix (~1 fresh game per K=4, H=20 group).
 SNAPSHOT_CONFIG = SnapshotConfig(
@@ -107,57 +85,129 @@ SNAPSHOT_CONFIG = SnapshotConfig(
         fresh_only=True,
     ),
 )
-ROOT_ACTOR_WEIGHT = 2.0
+
+
+def _baseline_player(
+    seed: int, update: int, sha256: str, size_bytes: int
+) -> CheckpointPlayer:
+    file = f"out/policies/{update:08d}-raw.safetensors"
+    uri = f"r2://manabot/jobs/tla_trophies_floor/tau-x2@{seed}/{file}"
+    return CheckpointPlayer(
+        name=f"tau-x2@{seed}-u{update}",
+        checkpoint=CheckpointRef(
+            address=uri,
+            artifact=ArtifactRef(uri=uri, sha256=sha256, size_bytes=size_bytes),
+        ),
+    )
+
+
+# Retained baseline checkpoints from `tla_trophies_floor/tau-x2` (seeds 40901, 40902).
+BASELINE_TAU_X2: dict[int, tuple[tuple[int, CheckpointPlayer], ...]] = {
+    100: (
+        (
+            40901,
+            _baseline_player(
+                40901,
+                100,
+                "7c4f8d86eb0214bf0b2dad50f1dfbef4cfdb58ae4cd0a97c70969e8ae1238c1b",
+                5_671_658,
+            ),
+        ),
+        (
+            40902,
+            _baseline_player(
+                40902,
+                100,
+                "8a15c4c77fcb96d4a3955b7db0cd3384be21357c381d032fa8b90ae36d7d036c",
+                5_671_658,
+            ),
+        ),
+    ),
+    200: (
+        (
+            40901,
+            _baseline_player(
+                40901,
+                200,
+                "9b37dd9e44c3d773154cf61622fc5afe0694f6602a3a717f929c8ed443715268",
+                5_671_658,
+            ),
+        ),
+        (
+            40902,
+            _baseline_player(
+                40902,
+                200,
+                "12e25f8f2f2f277daf2e17f7fa8548345b09d00b735454131000e06618cec9c7",
+                5_671_658,
+            ),
+        ),
+    ),
+    300: (
+        (
+            40901,
+            _baseline_player(
+                40901,
+                300,
+                "dd236e3a910539fa9391002d9b9b030e877e0b49342a44428541de742812c409",
+                5_671_658,
+            ),
+        ),
+        (
+            40902,
+            _baseline_player(
+                40902,
+                300,
+                "657991a70ab61eff1aef69688e9e8dfc4158c1b6e7059e7e3d81ddd1ca2014c4",
+                5_671_658,
+            ),
+        ),
+    ),
+    400: (
+        (
+            40901,
+            _baseline_player(
+                40901,
+                400,
+                "e40993b9a2ab8bd1126d95b20acc38f9cc056a9a39047c5dfbb1be72cf513322",
+                5_671_658,
+            ),
+        ),
+        (
+            40902,
+            _baseline_player(
+                40902,
+                400,
+                "7fed58a3bbbf482898b773966163eda844cb780629bf6ce5628e024602c44499",
+                5_671_658,
+            ),
+        ),
+    ),
+}
 
 
 # -- Training -----------------------------------------------------------------
 
 
-class Config(StrictModel):
-    arm: ArmName
-    updates: int = Field(default=UPDATES, ge=1)
-    device: Literal["cpu", "mps", "cuda"] = "cuda"
-    workers: Literal[1, 2, 4] = 4
-    streams: int = Field(default=256, ge=2)
-    checkpoint_every: int = Field(default=CHECKPOINT_EVERY, ge=1)
+class Config(trophies.Config):
+    tau_scale: float = TAU_SCALE
+    workers: Literal[1, 2, 4] = Field(default=4)
 
 
 def settings(config: Config) -> SelfPlay:
-    """Shared TLA frontier w64 settings on input v11; arms differ only in snapshot/root weight."""
-    from manabot.training.loops.self_play import SelfPlay
-
-    local = config.device == "cpu"
-    use_snapshots = config.arm == SNAPSHOT
-    rule = tla_frontier.learning("w64")
-    if use_snapshots:
-        rule = rule.model_copy(update={"root_actor_weight": ROOT_ACTOR_WEIGHT})
-    return SelfPlay(
-        deck_source=tla_frontier.corpus(),
-        observation=OBSERVATION,
-        model=tla_frontier.model("w64"),
-        learning=rule,
-        behavior="current-self",
-        streams=config.streams,
-        transitions=1 if local else 64,
-        learning_seats="both",
-        batch_closure="complete-games",
-        snapshot=SNAPSHOT_CONFIG if use_snapshots else None,
-        game_errors=GameErrorPolicy(
-            threshold=0.25,
-            window=100,
-            warmup=100,
-            max_game_actions=40_000,
-            recover_capacity=True,
-        ),
-        device=config.device,
-        precision="float32",
-        workers=config.workers,
-        bucketed_shapes=not local,
-        live_tokens=config.device == "cuda",
-        checkpoint_every=config.checkpoint_every,
-        # Per-update ema=0.999 stays near initialization through update 400; evaluate
-        # raw weights directly while still writing EMA siblings beside them.
-        checkpoint_weights="raw",
+    """Weekend tla_trophies + tau_scale=0.1 stack with PLR + Vine-RLOO snapshots."""
+    base = trophies.settings(config)
+    return base.model_copy(
+        update={
+            "workers": config.workers,
+            "learning": base.learning.model_copy(
+                update={
+                    "tau_scale": config.tau_scale,
+                    "root_actor_weight": ROOT_ACTOR_WEIGHT,
+                }
+            ),
+            "snapshot": SNAPSHOT_CONFIG,
+        }
     )
 
 
@@ -171,40 +221,51 @@ def train(config: Config) -> None:
 def training_jobs(
     revision: str | None = None,
     updates: int = UPDATES,
-    hours: float = 11.0,
-    usd_per_run: float = 9.5,
+    hours: float = 18.0,
+    usd_per_run: float = 5.0,
+    attempts: int = 6,
+    threads: int = 2,
     workers: Literal[1, 2, 4] = 4,
+    streams: int = 256,
+    rows: int = 512,
     checkpoint_every: int = CHECKPOINT_EVERY,
 ) -> list[TrainingJob]:
-    """One L4 job per arm on the shared training seed; both jobs + eval fit under USD25."""
+    """Two snapshot seeds packed on a 2-slot Colab L4; baseline is reused from R2."""
     return [
         TrainingJob(
-            name=arm,
+            name=JOB,
             train=train,
             config=Config(
-                arm=arm,
                 updates=updates,
+                threads=threads,
                 workers=workers,
+                streams=streams,
+                rows=rows,
                 checkpoint_every=checkpoint_every,
             ),
             smoke=Config(
-                arm=arm,
-                updates=1,
+                updates=2,
                 device="cpu",
-                workers=1,
-                streams=2,
-                checkpoint_every=1,
+                threads=1,
+                workers=4,
+                streams=4,
+                rows=64,
+                checkpoint_every=2,
+            ),
+            environment=tuple(
+                Variable(name=name, value=str(threads))
+                for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")
             ),
             seeds=SEEDS,
-            repo=str(ROOT),
+            repo=str(trophies.ROOT),
             revision=revision,
             setup=machine_setup(" --extra artifacts"),
+            inputs=(trophies.corpus_input(),),
             extras=("artifacts",),
             max_hours=hours,
             max_usd=Decimal(str(usd_per_run)),
-            max_attempts=1,
+            max_attempts=attempts,
         )
-        for arm in ARMS
     ]
 
 
@@ -215,146 +276,97 @@ def _checkpoint_update(record: CheckpointRecord) -> int:
     return int(record.at["updates"])
 
 
-def _selected_checkpoints(
-    run: TrainingRunSummary, *, include_init: bool
-) -> list[CheckpointRecord]:
-    """Keep declared milestones plus an ended run's final export (including smoke u1)."""
-    if not run.checkpoints:
-        return []
-    wanted = set(MILESTONES)
-    if include_init:
-        wanted.add(0)
-    last = _checkpoint_update(run.checkpoints.last)
-    if run.ended and (include_init or last > 0):
-        wanted.add(last)
-    return [
-        record for record in run.checkpoints if _checkpoint_update(record) in wanted
-    ]
-
-
-def _eval_environment() -> Environment:
-    return environment(
-        name="tla-frontier-snapshots",
-        files=[
-            Path(__file__),
-            tla_frontier.CORPUS,
-            ROOT / "manabot/eval/pairing.py",
-        ],
-        config={"corpus_sha256": tla_frontier.PROTOCOL.corpus_sha256},
-    )
-
-
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
-    """Score both arms against the first-64 heuristic and head-to-head at matched updates."""
-    by_arm: dict[ArmName, list[TrainingRunSummary]] = {arm: [] for arm in ARMS}
-    for run in state.runs:
-        if run.launch in by_arm:
-            by_arm[run.launch].append(run)
-    heuristic_checkpoints = [
-        record
-        for arm in ARMS
-        for run in by_arm[arm]
-        for record in _selected_checkpoints(run, include_init=True)
-    ]
-    if not heuristic_checkpoints:
+    """Score checkpoints against heuristic, half-training self, and stored tau-x2."""
+    runs = [run for run in state.runs if run.launch == JOB]
+    held_out = trophies.held_out_jobs(runs)
+    if not held_out:
         return []
+    (shared,) = held_out
+    benchmark = shared.tournament
+    env = final_environment()
 
-    env = _eval_environment()
-    heuristic = Code(
-        name="heuristic",
-        source=heuristic_source_paths(),
-        config=tla_frontier.HEURISTIC,
-    )
-    heuristic_seatings = tuple(
-        Seating(
-            name=f"Frontier pair {i + 1}",
-            players=(CheckpointSlot(), heuristic),
-            config=pair,
-            games=1,
-        )
-        for i, pair in enumerate(tla_frontier.PROTOCOL.pairs)
-    )
-    jobs: list[EvalJob] = [
-        EvalJob(
-            name=HEURISTIC_BENCHMARK,
-            play=tla_frontier_snapshots.play,
-            agents=AGENTS,
-            checkpoints=heuristic_checkpoints,
-            tournament=Benchmark(
-                name=HEURISTIC_BENCHMARK,
-                environment=env,
-                seatings=heuristic_seatings,
-            ),
-            setup=machine_setup(" --extra artifacts --extra evaluation"),
-            extras=("artifacts", "evaluation"),
-            max_hours=1.0,
-            max_usd=Decimal("1.20"),
-            max_attempts=1,
-        )
-    ]
-
-    baseline_updates = {
-        _checkpoint_update(record)
-        for run in by_arm[BASELINE]
-        for record in run.checkpoints
-    }
-    matched_snapshot = [
-        record
-        for run in by_arm[SNAPSHOT]
-        for record in _selected_checkpoints(run, include_init=False)
-        if _checkpoint_update(record) in baseline_updates
-    ]
-    baseline_seeds = len({run.seed for run in by_arm[BASELINE]})
-    if matched_snapshot and baseline_seeds:
-        h2h_seatings = tuple(
-            Seating(
-                name=label,
-                players=(CheckpointSlot(), Aligned(clock="updates", job=BASELINE)),
-                config=pair,
-                games=baseline_seeds,
+    def against(
+        name: str,
+        checkpoints: Sequence[CheckpointRecord],
+        seating_names: tuple[str, ...] | None = None,
+        opponent: Fraction | None = None,
+    ) -> EvalJob:
+        names = seating_names or tuple(s.name for s in benchmark.seatings)
+        seatings = tuple(
+            seating.model_copy(
+                update={
+                    "name": label,
+                    **(
+                        {}
+                        if opponent is None
+                        else {"players": (seating.players[0], opponent)}
+                    ),
+                }
             )
-            for label, pair in zip(
-                HEAD_TO_HEAD_SEATINGS, tla_frontier.PROTOCOL.pairs, strict=True
-            )
+            for seating, label in zip(benchmark.seatings, names, strict=True)
         )
-        jobs.append(
-            EvalJob(
-                name=HEAD_TO_HEAD_BENCHMARK,
-                play=tla_frontier_snapshots.play,
-                agents=AGENTS,
-                checkpoints=matched_snapshot,
-                tournament=Benchmark(
-                    name=HEAD_TO_HEAD_BENCHMARK,
-                    environment=env,
-                    seatings=h2h_seatings,
+        return shared.model_copy(
+            update={
+                "name": name,
+                "tournament": benchmark.model_copy(
+                    update={
+                        "name": name,
+                        "environment": env,
+                        "seatings": seatings,
+                        "rollups": CARD_ROLLUPS,
+                    }
                 ),
-                setup=machine_setup(" --extra artifacts --extra evaluation"),
-                extras=("artifacts", "evaluation"),
-                max_hours=0.5,
-                max_usd=Decimal("0.80"),
-                max_attempts=1,
+                "checkpoints": checkpoints,
+            }
+        )
+
+    half = Fraction(clock="updates", value=0.5, trained=True)
+    jobs: list[EvalJob] = [
+        against(HELD_OUT, shared.checkpoints),
+        against(HALF_TRAINING, shared.checkpoints, HALF_TRAINING_SEATINGS, half),
+    ]
+
+    h2h_seatings: list[Seating] = []
+    h2h_checkpoints: list[CheckpointRecord] = []
+    deals = tuple(s.config for s in benchmark.seatings)
+    for run in runs:
+        for record in run.checkpoints:
+            update = _checkpoint_update(record)
+            opponents = BASELINE_TAU_X2.get(update)
+            if not opponents:
+                continue
+            h2h_checkpoints.append(record)
+            cand = checkpoint_player(record.ref)
+            for base_seed, base_player in opponents:
+                h2h_seatings.append(
+                    Seating(
+                        name=f"{run.name} u{update} vs tau-x2@{base_seed}",
+                        tags=(HEAD_TO_HEAD_TAG,),
+                        players=(cand, base_player),
+                        configs=deals,
+                        games=1,
+                        seeds="one",
+                    )
+                )
+    if h2h_seatings:
+        jobs.append(
+            shared.model_copy(
+                update={
+                    "name": HEAD_TO_HEAD,
+                    "tournament": Benchmark(
+                        name=HEAD_TO_HEAD,
+                        environment=env,
+                        seatings=tuple(h2h_seatings),
+                        rollups=CARD_ROLLUPS,
+                    ),
+                    "checkpoints": tuple(h2h_checkpoints),
+                    "max_hours": 1.5,
+                    "max_usd": Decimal("2.00"),
+                }
             )
         )
     return jobs
-
-
-def play(match: Match[tla_frontier.Pair], agents: Sequence[object]) -> Result:
-    """Play one frozen 17Lands deck pair across all four crossed seat/deck legs."""
-    pair = tla_frontier.Pair.model_validate(match.config)
-    if pair not in tla_frontier.PROTOCOL.pairs:
-        raise ValueError("evaluation pair differs from tla_frontier schedule")
-    matchup = tla_frontier.deck_matchup(
-        tla_frontier.corpus(), tla_frontier.PROTOCOL, pair
-    )
-    return play_pairing(
-        match,
-        agents,
-        matchup=matchup,
-        deal=pair.deal,
-        matchup_mode="cross",
-        game_seconds=tla_frontier.PROTOCOL.game_seconds,
-        arena="tla-frontier-snapshots",
-    )
 
 
 # -- Report -------------------------------------------------------------------
@@ -408,20 +420,17 @@ SNAPSHOT_PANELS: tuple[Series, ...] = (
 
 
 def report() -> Report:
-    heuristic = Matches(tournament=HEURISTIC_BENCHMARK)
+    heuristic = Matches(tournament=HELD_OUT)
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
-        baseline=BASELINE,
-        labels={
-            BASELINE: "Baseline (fresh self-play)",
-            SNAPSHOT: "PLR + Vine-RLOO (K=4, H=20)",
-        },
+        labels={JOB: "PLR + Vine-RLOO (K=4, H=20)"},
         evals=(
             Curve(title="Score against the heuristic", matches=heuristic),
-            head_to_head(
-                "PLR + Vine-RLOO vs baseline at matched updates",
-                HEAD_TO_HEAD_SEATINGS,
+            head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
+            Curve(
+                title="PLR + Vine-RLOO vs stored tau-x2 baseline at matched updates",
+                matches=Matches(tag=HEAD_TO_HEAD_TAG),
             ),
             *behaviour_curves(matches=heuristic),
         ),
