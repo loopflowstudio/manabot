@@ -48,15 +48,12 @@ fn gratuitous_violence_checks_the_departed_firebrands_effective_type_and_control
         s.advance_to_active_step(controller, StepKind::Main);
         let firebrand = s.force_permanent_on_battlefield(controller, "Fanatical Firebrand");
         let source = card_of(&s, firebrand);
+        let artifact = Modification::SetTypes {
+            types: vec![CardType::Artifact],
+            subtypes: vec![],
+        };
         if !creature {
-            until_end_of_turn(
-                &mut s,
-                firebrand,
-                Modification::SetTypes {
-                    types: vec![CardType::Artifact],
-                    subtypes: vec![],
-                },
-            );
+            until_end_of_turn(&mut s, firebrand, artifact.clone());
         }
         activate(&mut s, firebrand, 0);
         assert!(s.choose_target(Target::Player(PlayerId(0))));
@@ -69,14 +66,7 @@ fn gratuitous_violence_checks_the_departed_firebrands_effective_type_and_control
             .lookup_current_permanent(new_source)
             .unwrap();
         if creature {
-            until_end_of_turn(
-                &mut returned,
-                new_permanent,
-                Modification::SetTypes {
-                    types: vec![CardType::Artifact],
-                    subtypes: vec![],
-                },
-            );
+            until_end_of_turn(&mut returned, new_permanent, artifact);
         }
         assert_ne!(
             returned.game().characteristics(new_permanent).is_creature(),

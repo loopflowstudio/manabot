@@ -1,11 +1,11 @@
-at: fc24614f88dfb9eece3fd78c0868a5f8b7e6e9c9
+at: d977dfffe1ed4633d67f544de58ad5babad880a6
 first:
   - path: managym/cards/src/ons.rs
     why: Printed enchantment and its damage replacement
   - path: managym/src/flow/identity.rs
     why: Capture effective creature status before departure
   - path: managym/src/flow/proposed_event.rs
-    why: Match each damage proposal against its exact source
+    why: Read controller and creature status once per damage proposal
   - path: managym/cards/tests/cards/ons.rs
     why: Compare live sources and fork after sacrifice
 hide: []

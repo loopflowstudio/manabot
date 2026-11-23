@@ -1103,8 +1103,8 @@ impl Game {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
-                let source_controller =
-                    damage_source.and_then(|source| self.damage_source_controller(source));
+                let source_facts = damage_source.and_then(|id| self.damage_source_facts(id));
+                let source_controller = source_facts.map(|(controller, _)| controller);
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
                 // board read across the replacement scan.
@@ -1145,8 +1145,7 @@ impl Game {
                                 ..
                             } => {
                                 (!*creature_source
-                                    || damage_source
-                                        .is_some_and(|id| self.damage_source_is_creature(id)))
+                                    || source_facts.is_some_and(|(_, creature)| creature))
                                     && recipient_by
                                         .includes(permanent.controller, affected_controller)
                                     && (*source_by == Actor::AnyPlayer
@@ -1336,28 +1335,22 @@ impl Game {
         candidates
     }
 
-    /// The controller of a damage source: a permanent, a spell on the
-    /// stack, or the last known information of an object that left.
-    fn damage_source_controller(&self, source: ObjectId) -> Option<PlayerId> {
+    /// Read controller and creature status from the same incarnation of the source.
+    fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
         if let Ok(id) = self.lookup_current_permanent(source) {
-            return self.state.permanents[id].as_ref().map(|p| p.controller);
+            let permanent = self.state.permanents[id].as_ref()?;
+            return Some((
+                permanent.controller,
+                self.permanent_is_battlefield_creature(id),
+            ));
         }
         if self.state.live(source).is_some() {
             if let Some(controller) = self.stack_spell_controller(source) {
-                return Some(controller);
+                return Some((controller, self.state[source].types.is_creature()));
             }
         }
-        self.object_lki(source).map(|lki| lki.controller)
-    }
-
-    fn damage_source_is_creature(&self, source: ObjectId) -> bool {
-        if let Ok(id) = self.lookup_current_permanent(source) {
-            return self.permanent_is_battlefield_creature(id);
-        }
-        if self.state.live(source).is_some() && self.stack_spell_controller(source).is_some() {
-            return self.state[source].types.is_creature();
-        }
-        self.object_lki(source).is_some_and(|lki| lki.was_creature)
+        self.object_lki(source)
+            .map(|lki| (lki.controller, lki.was_creature))
     }
 
     fn damage_target_controller(&self, target: ProposedDamageTarget) -> Option<PlayerId> {
