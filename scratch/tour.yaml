@@ -1,0 +1,22 @@
+at: 03ac59cdcef39c5ff482987ccb5aba1a7f2c8428
+first:
+  - path: docs/engine.md
+    why: Follow Esper Origins from the stack through exile.
+  - path: managym/cards/src/fin.rs
+    why: Read the spell and its three Saga chapters.
+  - path: managym/state/src/ability.rs
+    why: Follow both moves in a transformed return.
+  - path: managym/state/src/predicate.rs
+    why: Identify permanent cards across reveal and graveyard choices.
+  - path: managym/src/flow/zones.rs
+    why: Follow entry, cast receipts and known library cards.
+  - path: managym/src/flow/proposed_event.rs
+    why: Evaluate replacements against the face entering play.
+  - path: managym/src/flow/knowledge.rs
+    why: Record the revealed library top for both players.
+  - path: managym/src/agent/observation.rs
+    why: Project casting origin and battlefield mana value.
+  - path: managym/cards/tests/cards/fin.rs
+    why: Check both casts, exact appearances and chapter outcomes.
+  - path: tests/semantic/test_text_observation.py
+    why: Follow the same casts through text decisions.

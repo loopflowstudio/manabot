@@ -1977,6 +1977,26 @@ impl Effect {
         Self::move_to(what, ZoneType::Hand)
     }
 
+    /// The second move follows the appearance produced by exile.
+    pub fn exile_and_return_transformed(
+        under: Option<PlayerSelector>,
+        with_counter: Option<CounterKind>,
+    ) -> Vec<Effect> {
+        vec![
+            Effect::exile(ObjectSelector::This),
+            Effect::Move {
+                library_end: None,
+                what: ObjectSelector::Moved,
+                to: ZoneType::Battlefield,
+                tapped: false,
+                transformed: true,
+                under,
+                with_counter,
+                linked: None,
+            },
+        ]
+    }
+
     /// "Return [what] to the battlefield [tapped]" under the resolving
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {

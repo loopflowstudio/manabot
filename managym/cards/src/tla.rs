@@ -9425,7 +9425,7 @@ fn the_legend_of_kuruk() -> CardDefinition {
             abilities: vec![
                 Ability::chapter(1, scry_then_draw()),
                 Ability::chapter(2, scry_then_draw()),
-                Ability::chapter(3, return_transformed()),
+                Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9490,7 +9490,7 @@ fn the_legend_of_kyoshi() -> CardDefinition {
                         },
                     ],
                 ),
-                Ability::chapter(3, return_transformed()),
+                Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9546,7 +9546,7 @@ fn the_legend_of_roku() -> CardDefinition {
                     }],
                 ),
                 Ability::chapter(2, vec![one_mana_of_any_color(None)]),
-                Ability::chapter(3, return_transformed()),
+                Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9629,7 +9629,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
                         }],
                     }],
                 ),
-                Ability::chapter(3, return_transformed()),
+                Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9826,7 +9826,7 @@ fn the_rise_of_sozin() -> CardDefinition {
                         effects: vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
                     }],
                 ),
-                Ability::chapter(3, return_transformed()),
+                Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -11711,24 +11711,6 @@ fn zuko_s_exile() -> CardDefinition {
         },
         ..Default::default()
     }
-}
-
-/// "Exile this Saga, then return it to the battlefield transformed under your
-/// control."
-fn return_transformed() -> Vec<Effect> {
-    vec![
-        Effect::exile(ObjectSelector::This),
-        Effect::Move {
-            library_end: None,
-            what: ObjectSelector::Moved,
-            to: ZoneType::Battlefield,
-            tapped: false,
-            transformed: true,
-            under: None,
-            with_counter: None,
-            linked: None,
-        },
-    ]
 }
 
 // ---- Mana constructors ----

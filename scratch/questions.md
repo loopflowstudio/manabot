@@ -1,0 +1,4 @@
+- The checkout started without a scratch design. Use scratch/plan.md as the same-checkout continuation of milestone Task 05.
+- FIN's Clive's Hideaway is face-down exile. Use DSK's Manifest Dread for the battlefield privacy probe, and Cecil and Esper Origins for the two one-card movement cases. The plan names the adjacent characteristics rows selected by mechanism.
+- Build Esper Origins first so a real zone-changing spell exercises transformed entry. Defer the shared representation until the other form probes run.
+- This compression pass covers Esper Origins and the callers sharing its rules. Preserve the serialized type order in existing card predicates so the refactor keeps their learning tokens.

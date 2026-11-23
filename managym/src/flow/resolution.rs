@@ -1929,14 +1929,7 @@ impl Game {
             }
             Effect::PutTopCardsInHand { count } => {
                 for object_id in self.library_top_objects(frame.controller, *count) {
-                    self.move_object_with_entry(
-                        object_id,
-                        ZoneType::Hand,
-                        ZoneEntry {
-                            library_top_departure: true,
-                            ..Default::default()
-                        },
-                    );
+                    self.put_library_top_in_hand(object_id);
                 }
                 self.invalidate_mana_cache(frame.controller);
                 None

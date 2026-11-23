@@ -94,6 +94,20 @@ pub struct CardPredicate {
 }
 
 impl CardPredicate {
+    pub fn permanent() -> Self {
+        Self {
+            card_types_any: vec![
+                CardType::Artifact,
+                CardType::Battle,
+                CardType::Creature,
+                CardType::Enchantment,
+                CardType::Land,
+                CardType::Planeswalker,
+            ],
+            ..Default::default()
+        }
+    }
+
     pub fn creature() -> Self {
         Self {
             card_type: Some(CardType::Creature),

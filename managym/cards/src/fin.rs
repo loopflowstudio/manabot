@@ -12,7 +12,6 @@ use managym_state::{
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
-    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -35,19 +34,10 @@ fn esper_origins() -> CardDefinition {
                 Effect::gain_life(2),
                 Effect::If {
                     condition: Condition::CastFromGraveyard,
-                    then: vec![
-                        Effect::exile(ObjectSelector::This),
-                        Effect::Move {
-                            what: ObjectSelector::Moved,
-                            to: ZoneType::Battlefield,
-                            under: Some(PlayerSelector::Owner),
-                            transformed: true,
-                            with_counter: Some(CounterKind::Finality),
-                            tapped: false,
-                            library_end: None,
-                            linked: None,
-                        },
-                    ],
+                    then: Effect::exile_and_return_transformed(
+                        Some(PlayerSelector::Owner),
+                        Some(CounterKind::Finality),
+                    ),
                     otherwise: vec![],
                 },
             ],
@@ -68,17 +58,7 @@ fn esper_origins() -> CardDefinition {
                     vec![
                         Effect::RevealLibraryTop,
                         Effect::If {
-                            condition: Condition::CardsThisWayMatch(CardPredicate {
-                                card_types_any: vec![
-                                    CardType::Artifact,
-                                    CardType::Battle,
-                                    CardType::Creature,
-                                    CardType::Enchantment,
-                                    CardType::Land,
-                                    CardType::Planeswalker,
-                                ],
-                                ..Default::default()
-                            }),
+                            condition: Condition::CardsThisWayMatch(CardPredicate::permanent()),
                             then: vec![Effect::PutTopCardsInHand { count: 1 }],
                             otherwise: vec![],
                         },

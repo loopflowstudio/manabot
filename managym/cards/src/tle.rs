@@ -935,17 +935,7 @@ fn uncle_s_musings() -> CardDefinition {
             spell_effects: vec![
                 Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Graveyard),
-                    predicate: CardPredicate {
-                        card_types_any: vec![
-                            CardType::Artifact,
-                            CardType::Battle,
-                            CardType::Creature,
-                            CardType::Enchantment,
-                            CardType::Land,
-                            CardType::Planeswalker,
-                        ],
-                        ..Default::default()
-                    },
+                    predicate: CardPredicate::permanent(),
                     min: 0,
                     max: EffectValue::ColorsSpentToCast,
                     effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
