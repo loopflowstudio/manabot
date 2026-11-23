@@ -1948,17 +1948,17 @@ def _read_journal(path: Path) -> GameRecord:
 
 
 def record_from_row(row: dict[str, Any]) -> GameRecord:
-    """Project native replay inputs, validating private recipes with their writer."""
+    """Project native replay inputs, validating snapshot replays with their writer."""
     if not isinstance(row, dict):
         raise ValueError("expected a game record object")
     schema = row.get("schema")
     if schema == "managym-snapshot-v1":
         try:
-            managym.GameSnapshot._check_recipe(json.dumps(row))
+            managym.GameSnapshot._check_replay(json.dumps(row))
         except managym.AgentError as error:
             raise ValueError(str(error)) from error
         trace = row
-        # The native recipe's omitted sideboard is an empty sideboard.
+        # The native snapshot replay's omitted sideboard is an empty sideboard.
         players = [{"sideboard": {}, **seat} for seat in trace["player_configs"]]
         skip_trivial = row.get("skip_trivial", True)
         seed = row["seed"]

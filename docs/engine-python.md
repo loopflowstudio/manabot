@@ -284,8 +284,8 @@ A record holds the seed and both decks, so it holds both hands. Files use mode
 cards; Academy still shows each viewer only what that seat could see.
 
 Rows written before this format (`native-failure-v1` receipts and journals)
-read through the same functions. Private snapshot recipes (`managym-snapshot-v1`
-exported by `GameSnapshot.to_recipe_json()`) also open directly through
+read through the same functions. Private snapshot replays (`managym-snapshot-v1`
+exported by `GameSnapshot.to_replay_json()`) also open directly through
 `read_record`, `read_records`, `records_from_source`, `walk`, and
 `managym academy replay`, executing any recorded boundary interventions natively.
 `FailureEvidence` and `read_failure` are the
@@ -386,15 +386,15 @@ branch_b = snapshot.restore(
 )
 
 # Save the inputs needed to reopen this branch in another process.
-recipe_path = Path("branch-a.json")
-recipe_path.write_text(branch_a.snapshot().to_recipe_json())
+replay_path = Path("branch-a.json")
+replay_path.write_text(branch_a.snapshot().to_replay_json())
 
-reopened = managym.GameSnapshot.from_recipe_json(recipe_path.read_text())
+reopened = managym.GameSnapshot.from_replay_json(replay_path.read_text())
 continuation = reopened.restore()
 assert continuation.state_digest() == branch_a.state_digest()
 
-# The same recipe feeds managym.replay and Academy Watch directly.
-replay = walk(read_record(recipe_path))
+# The same snapshot replay feeds managym.replay and Academy Watch directly.
+replay = walk(read_record(replay_path))
 for _ in replay:
     pass
 print(replay.stop.status, replay.stop.index)
@@ -438,13 +438,13 @@ stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
 observation JSON or opens hidden zones.
 
-`snapshot.to_recipe_json()` exports the seed, both decks, chooser and memory
+`snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
 retains fingerprints for issued semantic frames so Commands keep their object
-bindings. `GameSnapshot.from_recipe_json(raw)` checks the schema, catalog and
-recipe checksum, replays the inputs, and verifies the final state digest.
+bindings. `GameSnapshot.from_replay_json(raw)` checks the schema, catalog and
+replay checksum, replays the inputs, and verifies the final state digest.
 
-`read_record(path)` checks the recipe and its intervention offsets before
+`read_record(path)` checks the snapshot replay and its intervention offsets before
 simulation. `walk(record)` then yields the verified decisions and reports
 the first detected divergence if the rules have changed.
 
@@ -452,7 +452,7 @@ Unrecorded operations such as `scenario_*`, hidden-world materialization,
 structured submissions, and external `random_action_index()` calls still
 allow in-memory restore. Export raises when it cannot reconstruct the prefix.
 
-Keep recipes private. Academy opens a recipe as a **Recorded game** when
+Keep snapshot replays private. Academy opens one as a **Recorded game** when
 forced-decision skipping is enabled, both seats use `agent`, and decklist
 disclosure agrees. The acting view hides the opponent’s hand, spectator
 reveal shows both hands, and branch seeds stay on the server.

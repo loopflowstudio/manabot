@@ -16,7 +16,7 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
-mod recipe;
+mod replay;
 
 /// A detached live position shareable by any number of restoring threads.
 pub struct GameSnapshot {
@@ -304,7 +304,7 @@ mod tests {
         drop(source);
 
         let cold =
-            Arc::new(GameSnapshot::from_recipe_json(&snapshot.to_recipe_json().unwrap()).unwrap());
+            Arc::new(GameSnapshot::from_replay_json(&snapshot.to_replay_json().unwrap()).unwrap());
         let mut generations = BTreeSet::from([generation]);
         thread::scope(|scope| {
             let handles: Vec<_> = [snapshot.clone(), snapshot.clone(), cold]

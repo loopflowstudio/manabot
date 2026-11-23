@@ -96,9 +96,9 @@ def main() -> None:
         branch = env.snapshot().restore(
             managym.RestoreOptions.shuffle_libraries(101, forced_first_action=0)
         )
-        recipe = output.parent / "branch.json"
-        recipe.write_text(branch.snapshot().to_recipe_json())
-        snapshot_replay = academy.replay(recipe)
+        replay_path = output.parent / "branch.json"
+        replay_path.write_text(branch.snapshot().to_replay_json())
+        snapshot_replay = academy.replay(replay_path)
         output.write_text(
             json.dumps(
                 {

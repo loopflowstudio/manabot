@@ -696,7 +696,7 @@ def main() -> None:
     except StopIteration:
         parser.error(
             f"no game records in {args.path}: a directory is read for its .jsonl"
-            " records; pass a snapshot recipe .json file directly"
+            " records; pass a snapshot replay .json file directly"
         )
     except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")

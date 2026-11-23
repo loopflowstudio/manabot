@@ -22,20 +22,20 @@ impl PyGameSnapshot {
         PySnapshotMetadata(self.0.metadata())
     }
 
-    fn to_recipe_json(&self, py: Python<'_>) -> PyResult<String> {
-        py.allow_threads(|| self.0.to_recipe_json())
+    fn to_replay_json(&self, py: Python<'_>) -> PyResult<String> {
+        py.allow_threads(|| self.0.to_replay_json())
             .map_err(map_agent_err)
     }
 
     #[staticmethod]
-    fn _check_recipe(py: Python<'_>, raw: &str) -> PyResult<()> {
-        py.allow_threads(|| GameSnapshot::check_recipe(raw))
+    fn _check_replay(py: Python<'_>, raw: &str) -> PyResult<()> {
+        py.allow_threads(|| GameSnapshot::check_replay(raw))
             .map_err(map_agent_err)
     }
 
     #[staticmethod]
-    fn from_recipe_json(py: Python<'_>, raw: &str) -> PyResult<Self> {
-        py.allow_threads(|| GameSnapshot::from_recipe_json(raw))
+    fn from_replay_json(py: Python<'_>, raw: &str) -> PyResult<Self> {
+        py.allow_threads(|| GameSnapshot::from_replay_json(raw))
             .map(Self)
             .map_err(map_agent_err)
     }

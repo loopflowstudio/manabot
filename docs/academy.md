@@ -230,13 +230,13 @@ played, **Evaluation game**, one played afterwards to measure policies, or
 
 Any game managym recorded opens this way with only `managym` installed: your
 own loop's ([Record games](engine-python.md#record-games)), a training run's,
-an evaluation's, or a private snapshot recipe exported by
-`GameSnapshot.to_recipe_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
+an evaluation's, or a private snapshot replay exported by
+`GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
 A record holds the seed, both setups, the actions, and any recorded boundary
 interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
 digests wherever the source retained them, and saves what it verified to this traces
-directory as a finished recording. A snapshot recipe carries its final digest.
+directory as a finished recording. A snapshot replay carries its final digest.
 It opens as a **Recorded game**. The acting view shows the chooser’s hand,
 and spectator reveal shows both hands. Branch seeds stay private in either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the

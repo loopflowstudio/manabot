@@ -248,8 +248,8 @@ let branch = snapshot.restore(RestoreOptions {
     forced_first_action: Some(0),
     ..Default::default()
 })?;
-let recipe = branch.snapshot()?.to_recipe_json()?;
-let reopened = GameSnapshot::from_recipe_json(&recipe)?;
+let replay = branch.snapshot()?.to_replay_json()?;
+let reopened = GameSnapshot::from_replay_json(&replay)?;
 ```
 
 An exact restore continues the RNG, both decision logs, chooser policies and
@@ -258,10 +258,10 @@ a new capture generation. Choose a branch mode, optionally change decision
 memory capture, then optionally commit a first action. Restore checks that
 the action still identifies the same choice after sampling.
 
-The private recipe replays the original setup, external actions and ordered
-interventions and verifies the resulting digest. See the
+The private snapshot replay reproduces the original setup, external actions and
+ordered interventions and verifies the resulting digest. See the
 [Python snapshot guide](engine-python.md#save-and-restore-game-positions)
-for the mode contracts, recipe limits and Academy Watch import.
+for the mode contracts, replay limits and Academy Watch import.
 
 ### Remembered library positions
 
