@@ -279,25 +279,43 @@ fn claws_out() -> CardDefinition {
 }
 
 fn arahbo_the_first_fang() -> CardDefinition {
+    let cat = CardPredicate::subtype("Cat");
+    let other_nontoken_cat = TriggerSubject::another_you_control(CardPredicate {
+        token: Some(false),
+        ..cat.clone()
+    });
+    let text_box = "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.";
     CardDefinition {
-        key: "fdn.arahbo_the_first_fang", scryfall_id: "524a5d93-26ed-436d-a437-dc9460acce98",
+        key: "fdn.arahbo_the_first_fang",
+        scryfall_id: "524a5d93-26ed-436d-a437-dc9460acce98",
         printed: PrintedCharacteristics {
-            name: "Arahbo, the First Fang".into(), mana_cost: Some(ManaCost::parse("{2}{W}")),
-            types: CardTypes::new([CardType::Creature]), subtypes: vec!["Cat".into(), "Avatar".into()],
-            power: Some(2), toughness: Some(2),
+            name: "Arahbo, the First Fang".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Avatar".into()],
+            power: Some(2),
+            toughness: Some(2),
             supertypes: vec!["Legendary".into()],
             statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Cat")),
+                scope: StaticScope::OtherYouControl(cat),
                 condition: None,
                 characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {power: LayerValue::Fixed(1), toughness: LayerValue::Fixed(1)}],
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
             })],
             abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::ThisOr(Box::new(TriggerSubject::another_you_control(CardPredicate { token: Some(false), ..CardPredicate::subtype("Cat") }))) },
-                intervening_if: None, effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::ThisOr(Box::new(other_nontoken_cat)),
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
             }],
-            text_box: "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.".into(), ..Default::default()
-        }, ..Default::default()
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }
 
@@ -312,7 +330,6 @@ fn helpful_hunter() -> CardDefinition {
             subtypes: vec!["Cat".into()],
             power: Some(1),
             toughness: Some(1),
-
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,

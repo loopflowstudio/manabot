@@ -1,4 +1,4 @@
-at: 90698979988188d39784c5136cfcf212ed4f7cac
+at: 70e8d954a62763ac2ea225d0f51b85c616ec457f
 first:
   - path: scratch/plan.md
     why: Delivered behavior and remaining readiness audit
@@ -6,6 +6,8 @@ first:
     why: Run Away Together needs a cross-target controller check
   - path: managym/cards/src/fdn.rs
     why: Arahbo and Hunter compose entry effects
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Fork one Hunter entry into both trigger orders
   - path: managym/state/src/ability.rs
     why: Shared trigger subjects include self or another match
   - path: managym/cards/src/tokens.rs
@@ -16,8 +18,6 @@ first:
     why: Noncreature spells share one card predicate
   - path: managym/cards/src/tla.rs
     why: Sokka has prowess and grants it to other Allies
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Both trigger orders and both retained library orders
   - path: managym/src/flow/decision.rs
     why: Surveil partitions the inspected prefix before ordering
   - path: managym/src/flow/zones.rs

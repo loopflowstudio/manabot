@@ -31,7 +31,7 @@ Authoring Foundations cards should be direct, predictable, and collision-free: o
 
 ### Canonical authoring model (and choices made for review)
 
-1. **Capability-by-capability readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). The three existing definitions are reconciled. Classify the remaining 207 unaudited rows against native selection, execution and observation. The task brief allows “minimal local primitives”. Treat the designs below as proposals until the audit establishes their callers and scope:
+1. **Capability-by-capability readiness partition of the 222 rows.** `fdn.jsonl`'s `dependencies == []` tag came from a text-only planning scan (*"No games, tests or benchmarks were run"*). The three existing definitions are reconciled. Classify the remaining rows against native selection, execution and observation. The task brief allows “minimal local primitives”. Treat the designs below as proposals until the audit establishes their callers and scope:
    - **Bucket A — Composable today:** Zero engine edits needed; batch-author in capability-grouped slices of ~15–35 cards instead of 1–2 cards per slice.
    - **Bucket B — Unlocked by minimal local primitives:** Land each shared primitive once with directed counterexamples, observability guards, and learning tokens, then batch-author every FDN card it unlocks.
    - **Bucket C — Explicitly deferred:** Record as `definition pending` in `fdn.jsonl` with the exact missing authority and owning parallel track. Do not add one-off shortcuts.
