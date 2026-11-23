@@ -129,12 +129,12 @@ impl PyVectorEnv {
 
     #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_start(&self) {
-        crate::benchmark_allocations::start();
+        crate::allocator::start();
     }
 
     #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_stop(&self) -> (u64, u64) {
-        crate::benchmark_allocations::stop()
+        crate::allocator::stop()
     }
 
     #[new]

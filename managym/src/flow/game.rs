@@ -4,7 +4,7 @@
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ops::{Deref, DerefMut},
 };
 
@@ -54,6 +54,9 @@ pub struct GameState {
     pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
+    /// Physical appearances whose library rank was observed or chosen since the
+    /// last rules shuffle. Private branch sampling reads these, rules play does not.
+    pub(crate) library_order_pins: [BTreeSet<ObjectId>; 2],
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
@@ -83,10 +86,20 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub(crate) fn is_game_over(&self) -> bool {
+        self.players.iter().any(|player| !player.alive)
+    }
+
     /// Put the same appearance in a zone without a zone change. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
     pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+        if self.zones.zone_of(object) == Some(ZoneType::Library) {
+            self.library_order_pins[self.objects[object.slot()].owner.0].remove(&object);
+        }
         self.zones.place(&self.objects, object, holder, zone);
+        if zone == ZoneType::Library {
+            self.library_order_pins[holder.0].insert(object);
+        }
     }
 
     /// Materialize hidden-zone contents, retaining transient occupants and order.
@@ -393,6 +406,10 @@ impl TrackedState {
 
     pub(crate) fn known_library_mut(&mut self, player: PlayerId) -> &mut LibraryKnowledge {
         &mut self.state.players[player.0].known_library
+    }
+
+    pub(crate) fn library_order_pins_mut(&mut self, owner: PlayerId) -> &mut BTreeSet<ObjectId> {
+        &mut self.state.library_order_pins[owner.0]
     }
 
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
@@ -703,6 +720,24 @@ pub struct Game {
     /// Forced passes consumed directly in tick_priority, before a space exists.
     pub(crate) skipped_priority_passes: usize,
 }
+
+// Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
+// with bench_footprint before raising a ceiling. Object and Permanent repeat
+// for each occupied row. TrackedState allows 32 bytes for its revisions
+// in addition to the GameState ceiling.
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    use crate::state::game_object::Object;
+    use std::mem::size_of;
+
+    assert!(size_of::<Object>() <= 96);
+    assert!(size_of::<Permanent>() <= 168);
+    assert!(size_of::<GameState>() <= 4096);
+    assert!(size_of::<TrackedState>() <= 4128);
+    assert!(size_of::<Game>() <= 5248);
+    let cache_limit = if cfg!(debug_assertions) { 104 } else { 96 };
+    assert!(size_of::<DerivedCache>() <= cache_limit);
+};
 
 impl Clone for Game {
     fn clone(&self) -> Self {

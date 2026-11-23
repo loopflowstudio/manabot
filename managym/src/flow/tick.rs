@@ -492,20 +492,15 @@ impl Game {
 
             let player = self.state.priority.holder;
             self.capture_priority_mana(player);
-            let actions = self.compute_player_actions(player);
-            if self.skip_trivial && actions.len() == 1 {
+            let space = self.priority_action_space(player);
+            if self.skip_trivial && space.actions.len() == 1 {
                 self.skipped_priority_passes += 1;
                 let next = self.next_player(player);
                 self.state.priority_mut().on_pass(next);
                 continue;
             }
 
-            return Some(ActionSpace {
-                player: Some(player),
-                kind: ActionSpaceKind::Priority,
-                actions,
-                focus: Vec::new(),
-            });
+            return Some(space);
         }
     }
 }

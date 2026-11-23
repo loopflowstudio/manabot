@@ -201,7 +201,7 @@ impl Game {
     }
 
     pub fn is_game_over(&self) -> bool {
-        self.state.players.iter().filter(|p| p.alive).count() < 2
+        self.state.is_game_over()
     }
 
     pub fn winner_index(&self) -> Option<usize> {
