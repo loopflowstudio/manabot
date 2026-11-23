@@ -1,4 +1,4 @@
-//! Manifest Dread's battlefield after its controller chooses between the top two cards.
+//! Manifest Dread's private library choice and viewer-specific battlefield projection.
 use crate::support::game::{five_color_setup, pin_top};
 use managym::{
     agent::{
@@ -7,6 +7,18 @@ use managym::{
     },
     state::{game_object::PlayerId, zone::ZoneType},
 };
+
+fn assert_anonymous_manifest(view: &Observation) {
+    assert_eq!(view.opponent_permanents.len(), 1);
+    let row = &view.opponent_permanents[0];
+    assert_eq!(row.registry_key, -1);
+    assert_eq!(row.object_id, Some(row.id));
+    assert_eq!(
+        (row.characteristics.power, row.characteristics.toughness),
+        (2, 2)
+    );
+    assert!(row.characteristics.name.is_empty());
+}
 
 #[test]
 fn manifest_dread_hides_the_printing_at_opponent_priority() {
@@ -33,17 +45,8 @@ fn manifest_dread_hides_the_printing_at_opponent_priority() {
         }
         let opponent = Observation::for_player(s.game(), PlayerId(1));
         let encoded = encode(&opponent, &ObservationEncoderConfig::default()).unwrap();
-        let rows = opponent.opponent_permanents;
-        assert_eq!(rows.len(), 1);
-        let row = &rows[0];
-        assert_eq!(row.registry_key, -1);
-        assert_eq!(row.object_id, Some(row.id));
-        assert_eq!(
-            (row.characteristics.power, row.characteristics.toughness),
-            (2, 2)
-        );
-        assert!(row.characteristics.name.is_empty());
-        (rows, encoded.opponent_permanents)
+        assert_anonymous_manifest(&opponent);
+        (opponent.opponent_permanents, encoded.opponent_permanents)
     });
     assert_eq!(projections[0], projections[1]);
 }
@@ -94,7 +97,13 @@ fn manifest_dread_restores_both_private_commands() {
             answers: vec![],
             object_preconditions: vec![],
         };
+        let selected = game.state.card_id(cards[i]).unwrap();
         game.execute_semantic_command(&cmd).unwrap();
+        let manifested = game.state.zones.object_of(selected);
+        assert_eq!(
+            game.state.zones.zone_of(manifested),
+            Some(ZoneType::Battlefield)
+        );
         assert!(game.execute_semantic_command(&cmd).is_err());
         let pass = game
             .action_space()
@@ -108,19 +117,20 @@ fn manifest_dread_restores_both_private_commands() {
         let own = Observation::for_player(game, PlayerId(0));
         assert_eq!(own.agent_permanents[0].registry_key, printing.0 as i32);
         let view = Observation::for_player(game, PlayerId(1));
-        assert_eq!(view.opponent_permanents.len(), 1);
-        let row = &view.opponent_permanents[0];
-        assert!(row.characteristics.name.is_empty());
-        assert_eq!(row.registry_key, -1);
-        assert_eq!(
-            (row.characteristics.power, row.characteristics.toughness),
-            (2, 2)
-        );
+        assert_anonymous_manifest(&view);
         assert!(view
             .opponent_cards
             .iter()
             .any(|c| c.zone == ZoneType::Graveyard && c.characteristics.name == names[1 - i]));
-        assert_eq!(game.state.events.iter().filter(|e| matches!(e, GameEvent::CardMoved { departed: Some(id), to: ZoneType::Graveyard, .. } if *id == cards[1-i])).count(), 1);
+        let other = cards[1 - i];
+        let graveyard_moves = game.state.events.iter().filter(|event| {
+            matches!(event, GameEvent::CardMoved {
+                departed: Some(id),
+                to: ZoneType::Graveyard,
+                ..
+            } if *id == other)
+        });
+        assert_eq!(graveyard_moves.count(), 1);
     }
 }
 

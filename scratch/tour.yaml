@@ -1,4 +1,4 @@
-at: 1250b6f1a152730e741dfdc39f44739b9c2fb126
+at: f17cec7ae0c9ac16a011693ce526db3d598c9883
 first:
   - path: scratch/plan.md
     why: Locate the movement evidence and remaining probes.
@@ -7,7 +7,7 @@ first:
   - path: managym/cards/src/dsk.rs
     why: Find the sorcery and its resolving effect.
   - path: managym/cards/tests/cards/dsk.rs
-    why: Follow both restored Commands through opponent priority.
+    why: Check exact card movement and the shared anonymous projection.
   - path: managym/src/agent/observation.rs
     why: Read the viewer-specific permanent projection.
   - path: managym/cards/tests/cards/fin.rs
