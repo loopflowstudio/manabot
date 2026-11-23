@@ -1,11 +1,13 @@
-at: a5dc5600c62862cb1d36125e53e818946ca451f9
+at: c96616704aa606c803c2ab033f4515e8b2254218
 first:
-  - path: managym/src/agent/observation.rs
-    why: Projects the activated ability’s exact source power
-  - path: managym/src/agent/observation_encoder.rs
-    why: Writes that value into the v11 stack row
-  - path: managym/cards/tests/cards/m21.rs
-    why: Checks pending and resolved power after source reentry
-  - path: tests/verify/test_immolator_source_power.py
-    why: Compares both activations across consumers with history disabled
+  - path: scratch/plan.md
+    why: Records the timing branches and remaining coverage
+  - path: managym/cards/src/blb.rs
+    why: Defines both triggers and the life payment
+  - path: managym/state/src/ability.rs
+    why: Names turn predicates and their conjunction
+  - path: managym/src/flow/statics.rs
+    why: Evaluates predicates against the controller’s history
+  - path: managym/cards/tests/cards/blb.rs
+    why: Plays early payment, late payment, and reset
 hide: []
