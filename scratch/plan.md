@@ -6,7 +6,7 @@ The implemented cohort covers six Foundations primary rows and the cross-set wit
 
 ## Next slice
 
-Review Maze’s End and Fabled Passage from the card definitions through the shared count condition, resolution and terminal Env result. Compare the recorded seed-161 branches below. Include the subsequent opening-label and legend-scan changes in focused review. Gate still owns the complete suite, package and schema checks, representative Academy play, captured mid-game snapshot compatibility and the paired same-runner 10% Engine Budget.
+Concept review at `19671178` found no model change. Keep the search choice, battlefield condition and terminal instruction separately owned. Maze checks distinct effective names after either search branch. Passage counts lands on the branch with a moved object to untap. Both use the shared threshold. The next focused check is the post-compression opening offer label and suspended legend choice, paired with Sakashima’s exemption. Gate still owns the complete suite, package and schema checks, representative Academy play, captured mid-game snapshot compatibility and the paired same-runner 10% Engine Budget.
 
 ## Cards and behavior witnesses
 

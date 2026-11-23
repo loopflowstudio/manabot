@@ -4,14 +4,18 @@
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:55rem;margin:auto;padding:2rem 1rem 4rem}h1,h2{line-height:1.15}h1{max-width:22em}table{width:100%;border-collapse:collapse}td,th{padding:.6em;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:.3em solid Highlight;padding-inline:1em}small{color:GrayText}
 </style>
-<main><small>Managym · MTG-422 · reviewed at 955a6f4e</small>
+<main><small>Managym · MTG-422 · reviewed at 19671178</small>
 <h1>Do the caller’s decisions and results have one native owner?</h1>
 <p>From reset, a policy needs the current chooser and every legal action. Search must be able to fork there. Once the game finishes, evaluation needs a stable result for either seat.</p>
-<aside><h2>Which Bracelet will this activation spend?</h2>
-<p><b>Before.</b> The two grants had the same source and price. Semantic text put both permanents after “Activate ability of”, and the native description identified the Equipment by its underlying card ID. A caller inspecting battlefield rows had to guess which one would leave.</p>
-<p><b>Existing interaction, illustrated.</b> With Gray Ogre at fourteen power and two Bracelets attached, the caller chooses between these offers. A and B stand for distinct visible permanent references.</p>
-<table><thead><tr><th>Ability source<th>Pay<th>Exile as cost<tbody><tr><td>Gray Ogre<td>1 generic mana<td>Bracelet A<tr><td>Gray Ogre<td>1 generic mana<td>Bracelet B</table>
-<p><b>Recommendation.</b> Keep one Command per grant. Its first focus reference joins the creature and its second joins the Equipment. Semantic text names both roles with viewer aliases. Academy presents the native description with the Equipment’s permanent ID.</p></aside>
+<aside><h2>Maze’s End returns to hand. What decides whether you win?</h2>
+<p><b>Biggest mismatch before the decomposition · No.</b> <code>WinWithDistinctGates</code> made a battlefield question and an instruction to end the game one operation. A caller could see the card-specific verdict, but the card definition could not express where the count belonged relative to the search.</p>
+<p><b>Current model · Yes.</b> Pay and return Maze → opponents may respond → search privately and shuffle → count distinct effective Gate names → if at least ten, attempt <code>WinGame</code>. Only the outcome arbiter can commit victory. The algorithm submits an action only where it has a choice.</p>
+<table><caption>Recorded seed-161 branches</caption><thead><tr><th>Position before search<th>Choice or response<th>Successor<tbody>
+<tr><td>Nine names, among ten Gates<td>Decline to find<td>Play continues.
+<tr><td>Nine names<td>Find the tenth name<td>Controller wins.
+<tr><td>Ten names<td>Decline to find<td>Controller wins.
+<tr><td>Ten names<td>Opponent flashes Herald before the search resolves<td>Play continues. Maze is already in hand.</table>
+<p><b>Counterexample · Fabled Passage.</b> Three Forests and a fetched Forest satisfy its four-land condition. With two Forests the fetched land stays tapped. Untapping requires the land that moved. Maze’s victory check still runs when nothing moved. The nesting of effects in each definition preserves that difference.</p></aside>
 <h2>From reset to evaluation</h2>
 <table><thead><tr><th>Caller interaction<th>Code owner<th>Fit<tbody>
 <tr><td>Keep, redraw and choose private bottom order<td>OpeningHands publishes exact objects deepest first.<td>Yes. A fork can vary one commitment without exposing it to the opponent.
@@ -19,6 +23,8 @@
 <tr><td>Resume interrupted combat into cleanup<td>FrameCompletion::EndTurn retains the return point across a mandatory choice.<td>Yes. Cleanup can grant priority and repeat.
 <tr><td>Choose for another seat<td>ActionSpace.player owns choice. Action.player() identifies whose resources apply.<td>Yes. Bloodbending exercises the distinction. Cube’s seed-161 nested payment spends the controlled seat’s mana.
 <tr><td>Distinguish victory, one seat losing and simultaneous losses<td>GameProcedure::Finished holds GameOutcome. Losses retain multiple causes per seat. Victory names the winner and cause.<td>Yes. Maze can win after a failed search with ten distinct Gate names already in play.
+<tr><td>Count qualifying objects or different effective names<td>Condition::ControlsAtLeast and controlled_threshold share the counting rule across resolution and layers.<td>Yes. Ordinary counts stop at the threshold without reading names. Distinct counting keeps a temporary set and tracks name dependencies in layers.
+<tr><td>Start the next vector episode<td>VectorEnv retains the terminal reward and info before reset and returns the next opening observation.<td>Yes. Evaluation attributes the result to the completed episode.
 <tr><td>Read the reason after either Env step<td>game_step_outcome reads the committed result for the chooser captured before stepping.<td>Yes. Seed 23 produced the same reward, winner and loss reason on both paths.
 <tr><td>Exile this particular Bracelet to pay for the creature’s activation<td>AbilityGrant, PaymentReceipt and ActivatedAbilityOnStack cover different moments in the activation.<td>Yes. The offer identifies the exact visible permanent before payment. The receipt identifies the exiled card after payment.
 </table>
@@ -34,5 +40,5 @@
 <h2>What verifies the choice?</h2>
 <p>The seed-161 fixture checks both tensor joins. For each grant it compares the bound Command with native indexed play through target selection and payment, including the exiled card, mana contribution and remaining pool. The seed-23 consumer fixture identifies the indexed action independently by the Ogre and Equipment. Two presentations of the same misbound Command would otherwise agree.</p>
 <p><b>Proposed gate.</b> Run the full suite and paired same-runner 10% Engine Budget. Include ordinary opening decisions and exact search forks. Compare semantic digests alongside timings before accepting the cost of the new procedure state.</p>
-<h2>Questions for review</h2><ol><li>How should a caller identify the cost? <b>1a · selected</b> Name the visible Equipment to exile. <b>1b</b> Ask the caller to infer it from the ability index and focus order.</li>
-<li>How many decisions does choosing the grant require? <b>2a · selected</b> Keep one bound offer per grant. <b>2b</b> Add a separate Equipment picker after activation.</li></ol></main></html>
+<h2>Questions for review</h2><ol><li>When should Maze count Gates? <b>1a · retain</b> After the entire search, including a decline. <b>1b</b> Only after a Gate enters. The ten-name decline distinguishes them.</li>
+<li>Where should victory become final? <b>2a · retain</b> In native outcome arbitration when the instruction resolves. <b>2b</b> At the threshold check. The responding Herald distinguishes them.</li></ol></main></html>
