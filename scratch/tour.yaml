@@ -1,9 +1,11 @@
-at: abdd8f0e2e4df0aafe10c8d874e4f0407a3616a7
+at: 28319e4174e07fe134f6e79288f287e46ee59598
 first:
+  - path: managym/tests/support/play.rs
+    why: Return the fork that replayed the bound Command
   - path: managym/src/flow/combat_actions.rs
     why: Assign blocker and defender damage in one batch
   - path: managym/cards/tests/cards/tla.rs
-    why: Play the trample split and replay its Command
+    why: Resolve both lifelink combat branches through end of combat
   - path: managym/src/flow/damage.rs
     why: Read source keywords once before committing damage
   - path: managym/src/flow/proposed_event.rs
