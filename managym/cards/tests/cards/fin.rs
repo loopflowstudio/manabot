@@ -435,8 +435,8 @@ fn reach_meld_payment(s: &mut Scenario) {
     resolve_top(s);
 }
 
-fn vanille_first_main() -> Scenario {
-    let mut s = five_color_setup(&[VANILLE, FANG, "Lost Days", "Ember Island Production"]);
+fn vanille_first_main(cards: &[&str]) -> Scenario {
+    let mut s = five_color_setup(&[&[VANILLE, FANG][..], cards].concat());
     s.force_permanent_on_battlefield(0, VANILLE);
     s.force_permanent_on_battlefield(0, FANG);
     reach_meld_payment(&mut s);
@@ -451,8 +451,8 @@ fn pay_for_meld(s: &mut Scenario) {
     }
 }
 
-fn form_ragnarok() -> Scenario {
-    let mut s = vanille_first_main();
+fn form_ragnarok(cards: &[&str]) -> Scenario {
+    let mut s = vanille_first_main(cards);
     pay_for_meld(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, RAGNAROK).len(), 1);
     s
@@ -488,7 +488,7 @@ fn vanille_exiles_a_namesake_but_only_melds_the_original_cards() {
 
 #[test]
 fn vanille_can_decline_meld() {
-    let mut s = vanille_first_main();
+    let mut s = vanille_first_main(&[]);
     command(&mut s, |a| matches!(a, Action::Decline { .. }));
     for name in [VANILLE, FANG] {
         assert_eq!(s.battlefield_permanents_named(0, name).len(), 1);
@@ -509,7 +509,9 @@ fn bottom_with_lost_days(
     command(s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
 }
 
-fn meld_snapshot(s: &Scenario) -> managym::agent::env::GameSnapshot {
+fn restored_meld_orders(
+    s: &Scenario,
+) -> impl Iterator<Item = (usize, managym::Env, managym::decision::Command)> {
     use crate::support::game::deck;
     use managym::{state::player::PlayerConfig, Env};
     let mut env = Env::new(1, false, false, false);
@@ -520,12 +522,32 @@ fn meld_snapshot(s: &Scenario) -> managym::agent::env::GameSnapshot {
     )
     .unwrap();
     *env.benchmark_game_mut() = s.game().clone();
-    env.snapshot().unwrap()
+    let snapshot = env.snapshot().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    assert_eq!(frame.offers.len(), 2);
+    (0..2).map(move |first| {
+        let mut env = snapshot.restore(Default::default()).unwrap();
+        assert_eq!(
+            env.benchmark_game_mut()
+                .semantic_decision_frame()
+                .unwrap()
+                .offers,
+            frame.offers
+        );
+        let cmd = managym::decision::Command {
+            command_id: format!("order-{first}"),
+            expected_revision: frame.revision,
+            offer_id: frame.offers[first].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        (first, env, cmd)
+    })
 }
 
 #[test]
 fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
-    let mut s = form_ragnarok();
+    let mut s = form_ragnarok(&["Lost Days"]);
     let owner = PlayerId(0);
     let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
     let object = s.game().permanent_object(permanent).unwrap();
@@ -553,20 +575,22 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
     assert_eq!(s.game().permanent_object(permanent), Some(object));
     assert_eq!(library(&s, 0), vec![library_cards[0]]);
     assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
-    let snapshot = meld_snapshot(&s);
-    let offers = s.game().semantic_decision_frame().unwrap().offers;
-    assert_eq!(offers.len(), 2);
-    for first in 0..2 {
-        *s.game_mut() = snapshot
-            .restore(Default::default())
-            .unwrap()
-            .benchmark_game_mut()
-            .clone();
-        assert_eq!(s.game().semantic_decision_frame().unwrap().offers, offers);
-        command(
-            &mut s,
-            |a| matches!(a, Action::ChooseMode {mode,..} if *mode == first),
-        );
+    assert_eq!(s.action_space().player, Some(owner));
+    for (first, mut env, cmd) in restored_meld_orders(&s) {
+        use managym::search_state::witness;
+        let fork = env.benchmark_game_mut();
+        *s.game_mut() = fork.clone();
+        let before = witness(s.game());
+        fork.execute_semantic_command(&cmd).unwrap();
+        assert_eq!(witness(s.game()), before);
+        s.game_mut().execute_semantic_command(&cmd).unwrap();
+        assert_eq!(witness(s.game()), witness(fork));
+        let history = s.game().state.events.iter().cloned().collect::<Vec<_>>();
+        let ordered = library(&s, 0);
+        assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
+        assert!(s.game().state.events.iter().eq(&history));
+        assert_eq!(library(&s, 0), ordered);
+        assert_eq!(witness(s.game()), witness(fork));
         assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
         for expected in [unrelated, cards[first], cards[1 - first]] {
             assert_eq!(s.game().state.card_of(library_top(&s, 0)), Some(expected));
@@ -579,13 +603,9 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
 #[test]
 fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
     use crate::support::game::force_new_card_in_hand;
-    use managym::{decision::Command, state::target::Target};
+    use managym::state::target::Target;
 
-    let mut s = five_color_setup(&[VANILLE, FANG, "Epic Downfall"]);
-    s.force_permanent_on_battlefield(0, VANILLE);
-    s.force_permanent_on_battlefield(0, FANG);
-    reach_meld_payment(&mut s);
-    pay_for_meld(&mut s);
+    let mut s = form_ragnarok(&["Epic Downfall"]);
     let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
     let object = s.game().permanent_object(permanent).unwrap();
     let state = &s.game().state;
@@ -600,26 +620,10 @@ fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
     assert!(s.choose_target(Target::Permanent(permanent)));
     spend_colorless(&mut s);
     resolve_top(&mut s);
-    let snapshot = meld_snapshot(&s);
-    let offers = s.game().semantic_decision_frame().unwrap().offers;
-    assert_eq!(offers.len(), 2);
-    for first in 0..2 {
-        *s.game_mut() = snapshot
-            .restore(Default::default())
-            .unwrap()
-            .benchmark_game_mut()
-            .clone();
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    for (first, mut env, cmd) in restored_meld_orders(&s) {
+        *s.game_mut() = env.benchmark_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
-        assert_eq!(s.action_space().player, Some(PlayerId(1)));
-        let frame = s.game().semantic_decision_frame().unwrap();
-        assert_eq!(frame.offers, offers);
-        let cmd = Command {
-            command_id: format!("order-{first}"),
-            expected_revision: frame.revision,
-            offer_id: offers[first].id.0,
-            answers: vec![],
-            object_preconditions: vec![],
-        };
         let exile = |s: &Scenario| {
             s.game()
                 .state
@@ -648,7 +652,7 @@ fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
 #[test]
 fn ragnarok_token_copy_departs_without_ordering_or_moving_either_card() {
     use managym::{agent::action::ActionSpaceKind, state::target::Target};
-    let mut s = form_ragnarok();
+    let mut s = form_ragnarok(&["Lost Days", "Ember Island Production"]);
     let original = s.battlefield_permanents_named(0, RAGNAROK)[0];
     cast(&mut s, "Ember Island Production");
     command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -677,13 +681,9 @@ fn ragnarok_token_copy_departs_without_ordering_or_moving_either_card() {
 
 #[test]
 fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
-    use managym::{agent::observation::EventType, decision::Command, state::target::Target};
+    use managym::{agent::observation::EventType, state::target::Target};
 
-    let mut s = five_color_setup(&[VANILLE, FANG, "Blasphemous Act", "Gray Ogre"]);
-    s.force_permanent_on_battlefield(0, VANILLE);
-    s.force_permanent_on_battlefield(0, FANG);
-    reach_meld_payment(&mut s);
-    pay_for_meld(&mut s);
+    let mut s = form_ragnarok(&["Blasphemous Act", "Gray Ogre"]);
     let permanent = s.battlefield_permanents_named(0, RAGNAROK)[0];
     let object = s.game().permanent_object(permanent).unwrap();
     let state = &s.game().state;
@@ -699,11 +699,7 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
     spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
-    let snapshot = meld_snapshot(&s);
-    let frame = s.game().semantic_decision_frame().unwrap();
-    assert_eq!(frame.offers.len(), 2);
-    for (first, offer) in frame.offers.iter().enumerate() {
-        let mut env = snapshot.restore(Default::default()).unwrap();
+    for (first, mut env, cmd) in restored_meld_orders(&s) {
         let game = env.benchmark_game_mut();
         assert_eq!(game.permanent_object(permanent), Some(object));
         let mut expected = game
@@ -711,13 +707,6 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
             .zones
             .zone_objects(ZoneType::Graveyard, PlayerId(0))
             .to_vec();
-        let cmd = Command {
-            command_id: format!("graveyard-{first}"),
-            expected_revision: frame.revision,
-            offer_id: offer.id.0,
-            answers: vec![],
-            object_preconditions: vec![],
-        };
         let (_, obs, ..) = env.step_semantic_command(&cmd).unwrap();
         *s.game_mut() = env.benchmark_game_mut().clone();
         let state = &s.game().state;
