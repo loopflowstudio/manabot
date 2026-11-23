@@ -387,8 +387,15 @@ pub(crate) enum EventBinding {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EventResult {
     pub committed: bool,
-    pub moved: Option<ObjectId>,
+    /// Destination appearances of this event, in draw order for library placement.
+    pub moved: [Option<ObjectId>; 2],
     pub excess_damage: Option<i32>,
+}
+
+impl EventResult {
+    pub fn arrivals(&self) -> impl DoubleEndedIterator<Item = ObjectId> {
+        self.moved.into_iter().flatten()
+    }
 }
 
 pub(crate) enum BatchProgress {
@@ -723,7 +730,7 @@ impl Game {
             results.push(EventResult {
                 committed,
                 excess_damage,
-                moved: moved_object,
+                moved: [moved_object, None],
             });
         }
         if let EventBinding::Moved {
@@ -731,7 +738,7 @@ impl Game {
             ..
         } = batch.binding
         {
-            for object in results.iter().filter_map(|result| result.moved) {
+            for object in results.iter().flat_map(|result| result.arrivals()) {
                 if self.state.zones.zone_of(object) != Some(ZoneType::Exile) {
                     continue;
                 }

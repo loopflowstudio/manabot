@@ -1464,26 +1464,34 @@ impl Game {
         batch: &EventBatch,
         results: &[EventResult],
     ) {
-        let moved = results.iter().filter_map(|result| result.moved);
+        let moved = results.iter().flat_map(|result| result.arrivals());
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
             EventBinding::Bending { player, kind } => self.record_bending(player, kind),
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {
-                for object in moved {
-                    if self.state.zones.zone_of(object) != Some(ZoneType::Library) {
+                for result in results {
+                    let mut arrivals = result.arrivals().filter(|object| {
+                        self.state.zones.zone_of(*object) == Some(ZoneType::Library)
+                    });
+                    let Some(first) = arrivals.next() else {
                         continue;
-                    }
-                    if second_from_top {
-                        let owner = self.state[object].owner;
-                        let below_top = self
-                            .state
+                    };
+                    let second = arrivals.next();
+                    let owner = self.state[first].owner;
+                    // The arrivals entered above the previous top. Insert each
+                    // at the same index so the first chosen is drawn first.
+                    let index = if second_from_top {
+                        self.state
                             .zones
                             .size(ZoneType::Library, owner)
-                            .saturating_sub(2);
-                        self.reposition_library_object(owner, object, below_top);
+                            .saturating_sub(2 + usize::from(second.is_some()))
                     } else {
-                        self.put_on_bottom_of_library(object);
+                        0
+                    };
+                    self.reposition_library_object(owner, first, index);
+                    if let Some(second) = second {
+                        self.reposition_library_object(owner, second, index);
                     }
                 }
             }
@@ -1521,7 +1529,7 @@ impl Game {
                         .iter()
                         .zip(&batch.events)
                         .filter(|(_, event)| is_discard(event))
-                        .filter_map(|(result, _)| result.moved)
+                        .flat_map(|(result, _)| result.arrivals())
                         .collect();
                 }
                 frame.moved = moved.collect();
@@ -4645,5 +4653,83 @@ mod source_scope_tests {
         )));
         let absent = serde_json::to_string(&EffectFrame::new(PlayerId(0), vec![])).unwrap();
         assert!(absent.contains("\"source\":null,\"source_ref\":null"));
+    }
+}
+
+#[cfg(test)]
+mod event_result_tests {
+    use super::*;
+    use crate::state::player::PlayerConfig;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn paired_arrivals_preserve_bottom_draw_order_and_following_discard_binding() {
+        let player = PlayerId(0);
+        let deck = BTreeMap::from([("Mountain".into(), 40)]);
+        let root = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            420,
+            false,
+        );
+        let library = root.library_top_objects(player, 40);
+        let [first, second] = [library[0], library[1]];
+        let discard = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        for reverse in [false, true] {
+            let mut game = root.clone();
+            let mut frame = EffectFrame::new(player, vec![]);
+            let first = game.move_object(first, ZoneType::Battlefield);
+            let mut batch = game.event_batch(vec![
+                game.zone_move_proposal(first, ZoneType::Library, Default::default()),
+                game.zone_move_proposal(discard, ZoneType::Graveyard, Default::default()),
+            ]);
+            let first = game.move_object(first, ZoneType::Library);
+            let pair = if reverse {
+                [second, first]
+            } else {
+                [first, second]
+            };
+            let discarded = game.move_object(discard, ZoneType::Graveyard);
+            let results = [
+                EventResult {
+                    committed: true,
+                    moved: pair.map(Some),
+                    excess_damage: None,
+                },
+                EventResult {
+                    committed: true,
+                    moved: [Some(discarded), None],
+                    excess_damage: None,
+                },
+            ];
+            batch.binding = EventBinding::Moved {
+                linked: None,
+                shuffle: false,
+                library_end: None,
+                reveal: false,
+            };
+            game.bind_event_results(&mut frame, &batch, &results);
+            assert_eq!(frame.this_way, [discarded]);
+            assert_eq!(frame.moved, [pair[0], pair[1], discarded]);
+            let mut second_from_top = game.clone();
+            batch.binding = EventBinding::PlaceInLibrary {
+                second_from_top: true,
+            };
+            second_from_top.bind_event_results(&mut frame, &batch, &results);
+            assert_eq!(
+                second_from_top.library_top_objects(player, 40),
+                [&library[2..3], &pair, &library[3..]].concat()
+            );
+            batch.binding = EventBinding::PlaceInLibrary {
+                second_from_top: false,
+            };
+            game.bind_event_results(&mut frame, &batch, &results);
+            assert_eq!(
+                game.library_top_objects(player, 40),
+                [&library[2..], &pair].concat()
+            );
+        }
     }
 }

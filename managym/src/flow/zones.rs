@@ -363,12 +363,12 @@ impl Game {
             },
         }]);
         let results = self.complete_immediate_batch(batch);
-        for object in results.iter().filter_map(|result| result.moved) {
+        for object in results.iter().flat_map(|result| result.arrivals()) {
             self.finish_created_token(object, tapped_and_attacking);
         }
         results
             .iter()
-            .filter_map(|result| result.moved)
+            .flat_map(|result| result.arrivals())
             .find_map(|object| self.lookup_current_permanent(object).ok())
     }
 
@@ -565,7 +565,7 @@ impl Game {
         self.complete_immediate_batch(batch)
             .into_iter()
             .next()
-            .and_then(|result| result.moved)
+            .and_then(|result| result.arrivals().next())
             .unwrap_or(object)
     }
 
