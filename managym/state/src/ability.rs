@@ -460,6 +460,8 @@ pub enum AttackSize {
 /// Which game objects an event-based trigger condition watches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerSubject {
+    /// The source itself (even a token copy), or another matching subject.
+    ThisOr(Box<TriggerSubject>),
     /// The permanent this ability is on.
     This,
     /// "enchanted creature": the object the source Aura is attached to.

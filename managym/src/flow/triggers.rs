@@ -2126,16 +2126,25 @@ impl Game {
             _ => return false,
         };
         let departed = event.departed_object();
-        let animated = departed
-            .and_then(|object| self.object_lki(object))
-            .map(|lki| lki.animated_creature)
-            .unwrap_or_else(|| {
-                self.state
-                    .permanent_of(moved_object)
-                    .filter(|id| self.state.permanents[*id].is_some())
-                    .is_some_and(|id| self.characteristics(id).is_animated)
-            });
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
+            if let GameEvent::CardMoved {
+                to: ZoneType::Battlefield,
+                ..
+            } = event
+            {
+                if let Some(id) = self.state.permanent_of(moved_object) {
+                    return self.permanent_matches_predicate(id, predicate);
+                }
+            }
+            let animated = departed
+                .and_then(|object| self.object_lki(object))
+                .map(|lki| lki.animated_creature)
+                .unwrap_or_else(|| {
+                    self.state
+                        .permanent_of(moved_object)
+                        .filter(|id| self.state.permanents[*id].is_some())
+                        .is_some_and(|id| self.characteristics(id).is_animated)
+                });
             predicate.matches(
                 &self.state[moved_object],
                 self.object_power(moved_object),
@@ -2146,6 +2155,16 @@ impl Game {
         // it left (CR 603.10a looks back to the departed object).
         let is_source = moved_object == source_object || departed == Some(source_object);
         match subject {
+            TriggerSubject::ThisOr(other) => {
+                is_source
+                    || self.subject_matches_moved_object(
+                        other,
+                        source_object,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2181,6 +2200,15 @@ impl Game {
             return false;
         };
         match subject {
+            TriggerSubject::ThisOr(other) => {
+                permanent.object == source_object
+                    || self.subject_matches_permanent(
+                        other,
+                        source_object,
+                        source_controller,
+                        permanent_id,
+                    )
+            }
             TriggerSubject::This => permanent.object == source_object,
             TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
             TriggerSubject::Matching {

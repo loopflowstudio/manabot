@@ -21,6 +21,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         ally(),
         ballistic_boulder(),
         bear(),
+        cat(),
         clue(),
         dragon(),
         elf_warrior(),
@@ -80,6 +81,19 @@ fn creature(
         color_override: Some(Colors::from_iter(colors)),
         ..definition
     }
+}
+
+fn cat() -> TokenDefinition {
+    token(
+        "token.cat_1_1_w",
+        "5f458f39-27b6-4121-bda9-1a0d1b42f5fb",
+        creature(
+            face("Cat", [CardType::Creature], &["Cat"], ""),
+            1,
+            1,
+            [Color::White],
+        ),
+    )
 }
 
 fn ally() -> TokenDefinition {

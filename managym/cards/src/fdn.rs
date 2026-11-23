@@ -1,12 +1,13 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
+        PlayWindow, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
+        Keywords, LayerValue, PrintedCharacteristics, SacrificeCost, StaticAbility,
+        StaticContinuous, StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -16,8 +17,10 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        arahbo_the_first_fang(),
         blasphemous_edict(),
         claws_out(),
+        helpful_hunter(),
         hungry_ghoul(),
         kellan_planar_trailblazer(),
         lightshell_duo(),
@@ -269,6 +272,57 @@ fn claws_out() -> CardDefinition {
                 Modification::pump(2, 2),
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn arahbo_the_first_fang() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.arahbo_the_first_fang", scryfall_id: "524a5d93-26ed-436d-a437-dc9460acce98",
+        printed: PrintedCharacteristics {
+            name: "Arahbo, the First Fang".into(), mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]), subtypes: vec!["Cat".into(), "Avatar".into()],
+            power: Some(2), toughness: Some(2),
+            supertypes: vec!["Legendary".into()],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Cat")),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {power: LayerValue::Fixed(1), toughness: LayerValue::Fixed(1)}],
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::ThisOr(Box::new(TriggerSubject::another_you_control(CardPredicate { token: Some(false), ..CardPredicate::subtype("Cat") }))) },
+                intervening_if: None, effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+            }],
+            text_box: "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.".into(), ..Default::default()
+        }, ..Default::default()
+    }
+}
+
+fn helpful_hunter() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.helpful_hunter",
+        scryfall_id: "1b9a0e91-80b5-428f-8f08-931d0631be14",
+        printed: PrintedCharacteristics {
+            name: "Helpful Hunter".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into()],
+            power: Some(1),
+            toughness: Some(1),
+
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+            }],
+            text_box: "When this creature enters, draw a card.".into(),
             ..Default::default()
         },
         ..Default::default()

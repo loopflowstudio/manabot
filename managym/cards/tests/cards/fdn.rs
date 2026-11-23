@@ -747,3 +747,48 @@ fn lightshell_duo_orders_or_mills_and_gains_prowess() {
         assert_eq!(keep.game().characteristics(duo).pt(), (3, 4));
     }
 }
+
+#[test]
+fn arahbo_and_helpful_hunter_resolve_in_either_order() {
+    use crate::support::{inspect::library_card, play::pass_until};
+    use managym::agent::action::ActionSpaceKind;
+    let mut after_first = Vec::new();
+    for first in [0, 1] {
+        let mut s = five_color_setup(&["Arahbo, the First Fang", "Helpful Hunter"]);
+        enter_and_settle(&mut s, "Arahbo, the First Fang");
+        let original = s.battlefield_permanents_named(0, "Cat");
+        assert_eq!(original.len(), 1);
+        let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+        let hunter = library_card(&s, 0, "Helpful Hunter");
+        s.game_mut().move_object(hunter, ZoneType::Battlefield);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        pass_until(&mut s, ActionSpaceKind::OrderTriggers);
+        assert_eq!(s.action_space().actions.len(), 2);
+        s.step_action(first);
+        s.advance_until(
+            |s| {
+                s.game().state.stack_objects.len() == 1
+                    && s.action_space().kind == ActionSpaceKind::Priority
+            },
+            "first trigger resolved".into(),
+        );
+        after_first.push((
+            s.zone_size(0, ZoneType::Hand) - hand,
+            s.battlefield_permanents_named(0, "Cat").len() - 1,
+        ));
+        settle(&mut s);
+        assert_eq!(
+            s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+            hand + 1
+        );
+        let cats = s.battlefield_permanents_named(0, "Cat");
+        assert_eq!(cats.len(), 2);
+        assert!(cats.contains(&original[0]));
+        for cat in cats {
+            assert_eq!(s.game().characteristics(cat).pt(), (2, 2));
+        }
+        assert!(s.game().state.pending_triggers.is_empty());
+    }
+    after_first.sort();
+    assert_eq!(after_first, [(0, 1), (1, 0)]);
+}

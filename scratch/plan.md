@@ -2,7 +2,9 @@
 
 ## Working progress
 
-**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Of the other 218, eleven have confirmed deferrals and 207 await the readiness audit. The Arahbo/Hunter, Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+**Working phase requires another implementation pass.** Slice 1 defines Lightshell Duo (`b9208b43d8`, `b522de30c4`). Review against the runtime catalog at `b522de30c4` found four of the 222 selected names from base `0b1cc9cfef9c1a98430c825b9764a49237182696`. Lightshell Duo is new. Kellan, Planar Trailblazer (`fdn.rs`), Imprisoned in the Moon (`emn.rs`) and Doubling Season (`rav.rs`) predate the batch and now have their source paths recorded in the ledger. Slice 2 adds Arahbo and Helpful Hunter. Eleven rows have confirmed deferrals and 205 await the readiness audit. The Doubling Season/Fodder/Tremors and lifelink/Pridemate interactions remain unimplemented as sets of cards.
+
+**Arahbo and Helpful Hunter.** The focused release test in `cards/tests/cards/fdn.rs` passed both trigger orders. Arahbo entered first and created one Cat. On Hunter's entry, one branch drew before the second Cat appeared and the other created it before the draw. Both finished with one additional card in hand, two 2/2 Cat tokens and no pending triggers.
 
 ### Behavior after the shared repair at `12096ae8`
 
@@ -21,7 +23,7 @@ At `2aa72769`, the rebuilt release extension passed all four Lightshell cases in
 
 **Run Away Together remains deferred.** With two creatures controlled by one player and none by the other, the spell has no legal pair. With one creature per player, changing control of one in response makes both targets illegal. If one leaves instead, its last known controller determines whether the surviving creature returns. These are acceptance positions for the missing definition. Native `TargetRequirement` has no different-controller relation, and `resolution_targets` rechecks each target independently except for shared creature type. The shared targeting authority needs the relation at selection and resolution. [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
 
-The next audit starts with Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The next playable witness is Arahbo plus Helpful Hunter, including both trigger orders, the draw, and the resulting Cat's characteristics. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
+The next audit starts with Drakuseth, Maw of Flames: trace whether its optional secondary targets can exclude the primary target and retain their separate damage amounts through resolution. Use that finding to classify related rows together. The next token witness is Regal Caracal alongside an ordinary Cat. The full debug suite, pinned-pilot compatibility and browser checks remain gate evidence.
 
 ## Experience and model to build
 
@@ -91,7 +93,7 @@ Candidates still to verify:
 Every slice follows the same authoring rules: file each card once under its **first printing's set module** (`managym/cards/src/<set>.rs`) with its Scryfall printing ID, register via `cards()` and `cards/src/lib.rs`, snapshot shell + Oracle text in `managym/tests/fixtures/scryfall_cards.json`, update `fdn.jsonl` (`status: "source definition found"`, exact source path), and add directed set tests covering normal paths and counterexamples.
 
 ### Slice 2 — Triage + Token/Static/Lifegain Model Proof (run next)
-Begin with the Arahbo and Helpful Hunter position. Audit those two definitions, then exercise both trigger orders before extending the batch. Complete the cohort partition across the remaining slices.
+Arahbo and Helpful Hunter are registered. A token copy of Arahbo also triggers on its own entry, so the single entry ability needs a distinct self alternative. Matching an entering Cat needs its live token status and effective subtype. Complete the cohort partition across the remaining slices.
 1. **Step 0 audit & ledger sync:** Three existing definitions are reconciled and eleven deferrals documented. Audit each group against native rules before authoring it. Start the targeting group with Drakuseth, Maw of Flames. The token group can proceed independently. Record the A / B / C partition in `scratch/questions.md` and the exact missing authority for each deferral in `fdn.jsonl`.
 2. **Tokens + `StaticAbility::Continuous` proof:** Add `token.cat_1_1_w` and `token.cat_1_1_w_lifelink` in `tokens.rs`. Author **Arahbo, the First Fang**, **Helpful Hunter**, **Prideful Parent**, **Regal Caracal**, and **Anthem of Champions** using `StaticAbility::Continuous`. Verify:
    - Arahbo + Helpful Hunter: Hunter draws 1, Arahbo creates 1 ordinary Cat (`token.cat_1_1_w`) that gets Arahbo's lord bonus and does *not* recursively trigger Arahbo; test both trigger orders.

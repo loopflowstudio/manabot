@@ -231,6 +231,9 @@ fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
 /// controller.
 fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) -> String {
     match subject {
+        TriggerSubject::ThisOr(other) => {
+            format!("this or {}", subject_phrase(other, quantity, objects))
+        }
         TriggerSubject::This => "this".into(),
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
         TriggerSubject::Matching {

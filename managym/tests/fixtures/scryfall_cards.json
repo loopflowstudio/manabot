@@ -209,6 +209,18 @@
       "W"
     ]
   },
+  "Arahbo, the First Fang": {
+    "name": "Arahbo, the First Fang",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Creature — Cat Avatar",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.",
+    "colors": [
+      "W"
+    ]
+  },
   "Avatar Destiny": {
     "name": "Avatar Destiny",
     "mana_cost": "{2}{G}{G}",
@@ -1756,6 +1768,18 @@
     "oracle_text": "Whenever Hei Bai enters or attacks, you may sacrifice another creature or artifact. If you do, put two +1/+1 counters on Hei Bai.\nWhen Hei Bai leaves the battlefield, put its counters on target creature you control.",
     "colors": [
       "B",
+      "W"
+    ]
+  },
+  "Helpful Hunter": {
+    "name": "Helpful Hunter",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Cat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, draw a card.",
+    "colors": [
       "W"
     ]
   },
