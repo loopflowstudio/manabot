@@ -214,10 +214,11 @@ silently skips a step. Logits, values, log-softmax and sampled action log probab
 are float32 for both behavior and learner evaluation. Both paths use
 `rl.policy_logs` and `rl.action_logs`, promoting before normalization.
 
-Public forwards select precision automatically. A fixed-weight inference loop
-may hold `with policy.forward_precision():` across calls to reuse cast weights;
-close it before differentiating or stepping. `Learner.loss` clears inference
-catalog caches before differentiation, so catalog parameters still learn.
+Public forwards select precision automatically. Collection holds
+`policy.forward_precision()` across all draws from the frozen policy and
+reuses its encoded catalog. Leaving collection restores the master weights
+and clears the catalog before learning. Custom inference loops can use the
+same context manager while their weights are fixed.
 
 Check a checkpoint and real capture with the selected dtype:
 

@@ -23,6 +23,7 @@ from etude.train.records import CheckpointRecord
 import numpy as np
 import torch
 
+from manabot.backends.torch import arrays, learner, rl
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import (
@@ -279,6 +280,9 @@ def save_checkpoint(
 
 class TorchBackend:
     name = "torch"
+    arrays = arrays
+    learner = learner
+    rl = rl
 
     @property
     def runtime(self) -> ModuleType:
@@ -307,18 +311,6 @@ class TorchBackend:
         ):
             torch.manual_seed(seed)
             yield
-
-    @property
-    def rl(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.rl")
-
-    @property
-    def arrays(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.arrays")
-
-    @property
-    def learner(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.learner")
 
     @property
     def rollout(self) -> ModuleType:

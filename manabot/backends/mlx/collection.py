@@ -46,7 +46,7 @@ class CollectionSession:
         return draw
 
     def snapshot_rng(self) -> object:
-        return np.array(self._key).copy()
+        return np.array(self._key)
 
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
@@ -57,7 +57,13 @@ class CollectionSession:
                 f"MLX collection requires {self.device_name}/{expected}, "
                 f"policy uses {mlx_agent.device_type}/{mlx_agent.precision}"
             )
-        with PolicyInference(mlx_agent) as inference:
+        # All draws in this collection use the same frozen weights and catalog.
+        with (
+            PolicyInference(mlx_agent) as inference,
+            mx.stream(self.device),
+            mlx_agent.forward_precision(),
+        ):
+            inference.cache_programs()
             yield CollectionScope(self, inference)
 
 
@@ -101,36 +107,33 @@ class CollectionScope:
         value_parts: list[mx.array] = []
         needs_parts: list[np.ndarray] = []
         agent = self.inference.agent
-        with mx.stream(self.session.device), agent.forward_precision():
-            self.inference.cache_programs()
-            for start in range(0, count, width):
-                with profiler.track("Observation preparation"):
-                    obs = self.inference.prepare(
-                        select_rows(
-                            observation, np.arange(start, min(start + width, count))
-                        )
+        for start in range(0, count, width):
+            with profiler.track("Observation preparation"):
+                obs = self.inference.prepare(
+                    select_rows(
+                        observation, np.arange(start, min(start + width, count))
                     )
-                with profiler.track("Policy inference and action selection"):
-                    logits, value = agent.forward_distribution(obs)
-                    logits = logits.astype(mx.float32)
-                    value = value.astype(mx.float32)
-                    logs_parts.append(self._policy_logs(logits, obs))
-                    require(
-                        mx.isfinite(value),
-                        "nonfinite_collection_values",
-                        values=value,
-                        valid=mx.array(obs.legal),
-                    )
-                    value_parts.append(value.reshape(-1))
-                    if obs.bucket_needs is not None:
-                        needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
-                del obs, logits, value
-            # Draw once for the original group, independent of execution chunk size.
-            logs = mx.concatenate(logs_parts)
-            values = mx.concatenate(value_parts)
-            actions = mx.random.categorical(logs, key=self.session.next_key())
-            selected = action_logs(logs, actions)
-            mx.eval(actions, selected, values, logs)
+                )
+            with profiler.track("Policy inference and action selection"):
+                logits, value = agent.forward_distribution(obs)
+                logs_parts.append(self._policy_logs(logits, obs))
+                value = value.astype(mx.float32)
+                require(
+                    mx.isfinite(value),
+                    "nonfinite_collection_values",
+                    values=value,
+                    valid=mx.array(obs.legal),
+                )
+                value_parts.append(value.reshape(-1))
+                if obs.bucket_needs is not None:
+                    needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+            del obs, logits, value
+        # Draw once for the original group, independent of execution chunk size.
+        logs = mx.concatenate(logs_parts)
+        values = mx.concatenate(value_parts)
+        actions = mx.random.categorical(logs, key=self.session.next_key())
+        selected = action_logs(logs, actions)
+        mx.eval(actions, selected, values, logs)
         return SampledRows(
             to_numpy(actions).astype(np.int64),
             to_numpy(selected),
@@ -151,9 +154,12 @@ class SelectionPredictor:
     def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
         batch = {key: value[None] for key, value in encoded.items()}
         prepared = self.agent.prepare(batch, inference=True)
-        logits_np, value_np = self.agent.evaluate(prepared)
-        logits = mx.array(logits_np)
-        probabilities = mx.softmax(logits, axis=-1)
+        with mx.stream(self.agent.inference_device):
+            logits, value = self.agent(prepared)
+        # Sample and normalize the same float32 logits reported by evaluate().
+        scores = logits[0].astype(mx.float32)
+        probabilities = mx.softmax(scores)
         self._key, draw = mx.random.split(self._key)
-        action = int(mx.random.categorical(logits[0], key=draw))
-        return SelectionDraw(action, float(value_np[0]), to_numpy(probabilities[0]))
+        action = mx.random.categorical(scores, key=draw)
+        mx.eval(action, probabilities, value)
+        return SelectionDraw(int(action), float(value.item()), to_numpy(probabilities))

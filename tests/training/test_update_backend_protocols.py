@@ -23,14 +23,10 @@ from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
 from manabot.policy.checkpoint import PolicyCheckpoint
 from manabot.policy.protocol import Backend
-from manabot.training.rollout.collection import (
-    RolloutBatch,
-)
-from manabot.training.rollout.numerics import CollectionSession
-from manabot.training.rollout.selection_data import SelectionPredictor
+from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.state.backend import (
     Continuation,
-    SelectionPredictors,
+    SelectionBackend,
     SelfPlayBackend,
     VerificationBackend,
 )
@@ -110,11 +106,7 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
         if not hasattr(value, name):
             found.append(f"{where}: missing")
             continue
-        actual = (
-            value
-            if name == "__call__" and isinstance(value, type)
-            else getattr(value, name)
-        )
+        actual = getattr(value, name)
         declared = inspect.getattr_static(protocol, name, None)
         if name == "NumericalError":
             if not (isinstance(actual, type) and issubclass(actual, Exception)):
@@ -122,11 +114,7 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
         elif isinstance(declared, property):
             returned = get_type_hints(
                 declared.fget,
-                localns={
-                    "RolloutBatch": RolloutBatch,
-                    "CollectionSession": CollectionSession,
-                    "SelectionPredictor": SelectionPredictor,
-                },
+                localns={"RolloutBatch": RolloutBatch},
             ).get("return")
             if isinstance(returned, type) and getattr(returned, "_is_protocol", False):
                 found += _violations(actual, returned, where)
@@ -308,6 +296,4 @@ def test_backends_provide_runtime_and_collection_contracts(name: str) -> None:
     assert _violations(backend.state, Continuation, name) == []
     assert _violations(backend, VerificationBackend, name) == []
     assert _violations(backend, ParityBackend, name) == []
-    assert (
-        _violations(backend.collection, SelectionPredictors, f"{name}.collection") == []
-    )
+    assert _violations(backend, SelectionBackend, name) == []

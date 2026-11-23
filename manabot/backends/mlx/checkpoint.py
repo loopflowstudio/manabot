@@ -28,6 +28,7 @@ import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
+from manabot.backends.mlx import arrays, learner, rl
 from manabot.backends.mlx.arrays import flat_numpy, precision_dtype, to_mlx
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
@@ -225,6 +226,9 @@ class MLXBackend:
     """
 
     name = "mlx"
+    arrays = arrays
+    learner = learner
+    rl = rl
 
     @property
     def runtime(self) -> "Runtime":
@@ -251,18 +255,6 @@ class MLXBackend:
         with preserve_rng("cpu" if cpu_only else "mps"), mx.stream(stream):
             mx.random.seed(seed)
             yield
-
-    @property
-    def rl(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.rl")
-
-    @property
-    def arrays(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.arrays")
-
-    @property
-    def learner(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.learner")
 
     @property
     def rollout(self) -> ModuleType:

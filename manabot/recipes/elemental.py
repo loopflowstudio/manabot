@@ -1,19 +1,17 @@
 """The current recipe: damped-policy self-play on the ten Elemental decks.
 
 `train(config)` opens the Etude run and calls the self-play loop once.
-Etude restores registered learner objects when another attempt carries it on.
+Etude restores the learner from its committed save on the next attempt.
 """
 
 from pathlib import Path
 import time
-from typing import Literal
 
 from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field, model_validator
 
-from manabot.infra.run_settings import RunSettings
-from manabot.recipes.builders import elemental_self_play, require_backend_device
+from manabot.recipes.builders import SelfPlayRecipe, elemental_self_play
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import self_play_report
 
@@ -21,19 +19,14 @@ from manabot.training.panels import self_play_report
 NUMERICS_SECONDS = 1800
 
 
-class ElementalConfig(RunSettings):
-    backend: Literal["torch", "mlx"] = Field(
-        default="torch", exclude_if=lambda value: value == "torch"
-    )
+class ElementalConfig(SelfPlayRecipe):
     updates: int = Field(default=3200, ge=1)
-    device: Literal["cpu", "mps", "cuda"] = "cpu"
     # Run the CUDA numerics gate before the first update; refuse to train on failure.
     validate_numerics: bool = False
     streams: int = Field(default=256, ge=2)
 
     @model_validator(mode="after")
-    def backend_runs_on_device(self) -> "ElementalConfig":
-        require_backend_device(self.backend, self.device)
+    def numerics_gate_uses_torch(self) -> "ElementalConfig":
         if self.validate_numerics and self.backend != "torch":
             raise ValueError("the CUDA numerics gate requires backend 'torch'")
         return self

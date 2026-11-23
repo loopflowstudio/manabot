@@ -79,22 +79,16 @@ class FreshPolicies(Protocol):
     def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
 
 
-class SessionFactory(Protocol):
-    def __call__(
+class CollectionSessions(Protocol):
+    def CollectionSession(
         self, *, device: str, seed: int, precision: Precision = "float32"
     ) -> CollectionSession: ...
 
 
-class CollectionSessions(Protocol):
-    @property
-    def CollectionSession(self) -> SessionFactory: ...
-
-
 class SelectionPredictors(Protocol):
-    @property
     def SelectionPredictor(
-        self,
-    ) -> Callable[[BackendPolicy, int], SelectionPredictor]: ...
+        self, agent: BackendPolicy, seed: int, /
+    ) -> SelectionPredictor: ...
 
 
 class SelectionBackend(PolicyLoader, Protocol):

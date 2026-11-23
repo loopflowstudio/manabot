@@ -408,6 +408,33 @@ def test_bfloat16_host_arrays_widen_to_float32() -> None:
     np.testing.assert_array_equal(widened, [1.25, -0.5])
 
 
+def test_mlx_selection_draw_uses_reported_logits_and_private_seed(
+    baseline_model: ModelConfig,
+) -> None:
+    backend = resolve("mlx", precision="bfloat16")
+    space = ObservationSpace()
+    policy = backend.runtime.create_policy(space, baseline_model)
+    env = managym.Env(seed=7)
+    env.reset(lesson_match().to_rust())
+    obs = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
+    logits, values = policy.evaluate(
+        policy.prepare({key: row[None] for key, row in obs.items()}, inference=True)
+    )
+    scores = mx.array(logits[0])
+    predictor = backend.collection.SelectionPredictor(policy, seed=17)
+    key = mx.random.key(17)
+    for _ in range(2):
+        key, draw = mx.random.split(key)
+        result = predictor.predict(obs)
+        assert result.action == int(mx.random.categorical(scores, key=draw))
+        assert result.value == float(values[0])
+        np.testing.assert_array_equal(
+            result.probabilities, to_numpy(mx.softmax(scores))
+        )
+
+
 @pytest.mark.parametrize("recipe", ["baseline", "elemental"])
 def test_mlx_fresh_recipe_exports_both_live_policies(
     tmp_path: Path, recipe: str
