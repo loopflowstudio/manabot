@@ -15,7 +15,6 @@ from manabot.policy.prepare import (
     object_ownership,
     record_key,
 )
-from manabot.policy.readings import Readings
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -166,32 +165,54 @@ def name_definitions(candidates: Sequence[managym.NameCandidate]) -> np.ndarray:
     )
 
 
-def fresh_policy_tables(
-    space: ObservationSpace, model: ModelConfig, readings: Readings
-) -> tuple[Tables, int, int]:
-    """Build host lookup `Tables` and embedding row counts for a fresh policy."""
-    buffers: dict[str, np.ndarray] = {}
-    token_rows = 0
-    definition_rows: np.ndarray | None = None
-    if model.world is not None:
-        catalog = catalog_tables(
+@dataclass(frozen=True)
+class PolicyBuffers:
+    """Fresh lookup arrays before a backend registers them as model buffers."""
+
+    catalog: CatalogTables | None
+    definitions: np.ndarray
+    program_rows: np.ndarray | None
+    ownership: np.ndarray
+
+    @property
+    def token_rows(self) -> int:
+        return self.catalog.embedding_rows if self.catalog is not None else 0
+
+    def preparation_tables(self, layout: Layout) -> Tables:
+        buffers = {
+            "_is_agent_template": self.ownership,
+            "name_candidates.definitions": self.definitions,
+        }
+        if self.catalog is not None:
+            buffers.update(
+                {
+                    f"semantic_cards.{name}": value
+                    for name, value in self.catalog.buffers.items()
+                }
+            )
+        if self.program_rows is not None:
+            buffers["name_candidates.program_rows"] = self.program_rows
+        return Tables.from_buffers(buffers, layout)
+
+
+def fresh_policy_tables(space: ObservationSpace, model: ModelConfig) -> PolicyBuffers:
+    catalog = (
+        catalog_tables(
             model.world,
             records=model.catalog_records(),
             decision_memory=bool(space.config.max_decision_records),
         )
-        for name, value in catalog.buffers.items():
-            buffers[f"semantic_cards.{name}"] = value
-        token_rows = catalog.embedding_rows
-        definition_rows = catalog.buffers["definition_rows"]
+        if model.world is not None
+        else None
+    )
     definitions = name_definitions(managym.naming_catalog())
-    buffers["name_candidates.definitions"] = definitions
-    if definition_rows is not None:
-        buffers["name_candidates.program_rows"] = definition_rows[definitions]
-    buffers["_is_agent_template"] = object_ownership(
-        space.config.max_cards_per_player, space.config.max_permanents_per_player
-    )[None]
-    return (
-        Tables.from_buffers(buffers, Layout(readings)),
-        token_rows,
-        len(definitions),
+    return PolicyBuffers(
+        catalog,
+        definitions,
+        catalog.buffers["definition_rows"][definitions]
+        if catalog is not None
+        else None,
+        object_ownership(
+            space.config.max_cards_per_player, space.config.max_permanents_per_player
+        )[None],
     )

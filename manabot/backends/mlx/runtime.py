@@ -17,6 +17,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
+from manabot.policy.prepare import Layout
 from manabot.policy.protocol import Precision as MLXPrecision
 from manabot.policy.readings import fresh_readings
 from manabot.training.learning import Precision
@@ -126,14 +127,18 @@ class Runtime:
             ):
                 raise ValueError("pretrained policy contains nonfinite tensors")
             return pretrained
-        chosen = fresh_readings(space)
-        tables, token_rows, name_rows = fresh_policy_tables(space, config, chosen)
+        layout = Layout(fresh_readings(space))
+        tables = fresh_policy_tables(space, config)
         dims = Dimensions.from_layout(
-            config, space, tables.layout, token_rows=token_rows, name_rows=name_rows
+            config,
+            space,
+            layout,
+            token_rows=tables.token_rows,
+            name_rows=len(tables.definitions),
         )
         policy = MLXActorCritic(
             dims,
-            tables,
+            tables.preparation_tables(layout),
             config,
             space,
             precision=self.precision,

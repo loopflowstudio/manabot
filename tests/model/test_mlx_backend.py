@@ -82,6 +82,7 @@ from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     canonical_parameters,
     read_safetensors,
+    read_saved_container,
     write_safetensors,
 )
 from manabot.policy.prepare import Tables, pack, reference_distribution
@@ -195,6 +196,33 @@ def baseline_model() -> ModelConfig:
         focus_film=True,
         stream_norm=True,
     )
+
+
+def test_fresh_backends_export_the_same_input_contract(
+    baseline_model: ModelConfig, tmp_path: Path
+) -> None:
+    space = ObservationSpace()
+    for backend in (resolve("torch"), resolve("mlx")):
+        policy = backend.runtime.create_policy(space, baseline_model)
+        backend.save_policy(
+            policy,
+            space,
+            tmp_path / backend.name,
+            player_configs=lesson_match().to_rust(),
+        )
+    torch_file, mlx_file = (
+        read_saved_container(tmp_path / name) for name in ("torch", "mlx")
+    )
+    assert mlx_file.readings == torch_file.readings
+    assert mlx_file.dimensions() == torch_file.dimensions()
+    assert {name: p.shape for name, p in mlx_file.parameters.items()} == {
+        name: p.shape for name, p in torch_file.parameters.items()
+    }
+    assert mlx_file.buffers.keys() == torch_file.buffers.keys()
+    for name, expected in torch_file.buffers.items():
+        np.testing.assert_array_equal(
+            mlx_file.buffers[name], expected, strict=True, err_msg=name
+        )
 
 
 def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:

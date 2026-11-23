@@ -144,8 +144,7 @@ def pretrained_memory_branch(
 
 @dataclass(frozen=True)
 class Dimensions:
-    """Numeric input widths (columns each projection receives) and architecture
-    of one checkpoint."""
+    """Architecture and projection widths for a policy with the given input readings."""
 
     hidden: int
     heads: int
@@ -194,7 +193,7 @@ class Dimensions:
             focus=space.config.max_focus_objects,
             relation=columns.numeric_width("relations"),
             effect=columns.numeric_width("effects"),
-            fact=columns.fact_width(catalog_ids=True),
+            fact=columns.fact_width(catalog_ids=model.catalog_records()),
             fact_kinds=FACT_KINDS,
             token_rows=token_rows,
             name_rows=name_rows,
@@ -292,13 +291,17 @@ class PolicyCheckpoint:
         return Tables.from_buffers(self.buffers, Layout(self.readings))
 
     def dimensions(self) -> Dimensions:
-        tokens = self.parameters["semantic_cards.token_embedding.weight"]
+        token_rows = (
+            self.parameters["semantic_cards.token_embedding.weight"].shape[0]
+            if self.model.world is not None
+            else 0
+        )
         names = self.parameters["name_candidates.embedding.weight"]
         return Dimensions.from_layout(
             self.model,
             self.space,
             Layout(self.readings),
-            token_rows=tokens.shape[0],
+            token_rows=token_rows,
             name_rows=names.shape[0],
         )
 
@@ -537,18 +540,13 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
     interface = model_interface(record, checkpoint.space)
     if record.get("architecture") is not None:
         validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
-    columns = Layout(checkpoint.readings)
     width = len(checkpoint.readings["agent_player"])
     projection = checkpoint.parameters.get("player_embedding.projection.0.weight")
     if projection is None:
         raise ValueError(
             f"checkpoint has no player projection weights; {written_at(record)}"
         )
-    projected = projection.shape[1]
-    extra = (
-        columns.numeric_width("player_turn_state") if checkpoint.space.turn_state else 0
-    )
-    if projected != columns.numeric_width("agent_player") + extra:
+    if projection.shape[1] != checkpoint.dimensions().player:
         raise ValueError("checkpoint player columns differ from its projection")
     if interface is None:
         return checkpoint
