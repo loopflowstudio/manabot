@@ -47,7 +47,6 @@ pub enum FrameCompletion {
     StateBased {
         next: Box<FrameCompletion>,
     },
-    CombatNormal,
     /// The spell's whole cost is paid; `payment.receipt` is what it actually
     /// took (CR 601.2h).
     Paid {
@@ -887,7 +886,6 @@ impl SuspendedResolution {
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
                 FrameCompletion::Paid { .. }
                 | FrameCompletion::Activated { .. }
-                | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
                 | FrameCompletion::Continue
                 | FrameCompletion::Spell { .. } => {}
@@ -1312,32 +1310,6 @@ impl Game {
                     FrameCompletion::StateBased { next } => {
                         self.finish_state_based_batch();
                         frame.completion = *next;
-                        continue;
-                    }
-                    FrameCompletion::CombatNormal => {
-                        match self.perform_state_based_actions() {
-                            crate::flow::sba::SbaProgress::Changed => continue,
-                            crate::flow::sba::SbaProgress::Pending => {
-                                self.state
-                                    .suspended_decision_mut()
-                                    .as_mut()
-                                    .expect("pending SBA")
-                                    .frame
-                                    .completion
-                                    .then(FrameCompletion::CombatNormal);
-                                return;
-                            }
-                            crate::flow::sba::SbaProgress::Stable => {}
-                        }
-                        frame.completion = FrameCompletion::Continue;
-                        if !self.is_game_over() {
-                            self.assign_combat_damage(
-                                frame,
-                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
-                                Vec::new(),
-                            );
-                            return;
-                        }
                         continue;
                     }
                     FrameCompletion::Paid { player, payment } => {

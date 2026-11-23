@@ -4,6 +4,12 @@ use crate::state::game_object::PermanentId;
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct CombatState {
+    /// CR 510.4 remembers which combatants had first or double strike
+    /// when the first damage step began, even if their abilities change.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub first_strikers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub regular_damage_step: bool,
     pub attackers: Vec<PermanentId>,
     pub attacker_to_blockers: BTreeMap<PermanentId, Vec<PermanentId>>,
     pub attackers_to_declare: Vec<PermanentId>,

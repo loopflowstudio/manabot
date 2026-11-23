@@ -396,10 +396,6 @@ impl<'a> Projection<'a> {
         match completion {
             FrameCompletion::Priority => {}
             FrameCompletion::Continue => self.field("return", &"turn action"),
-            FrameCompletion::CombatNormal => {
-                self.summary(|| "Normal combat damage follows these choices.".into());
-                self.field("return", &"normal combat damage");
-            }
             FrameCompletion::StateBased { next } => {
                 self.summary(|| "Finish the pending state-based actions before priority.".into());
                 self.field("return", &"finish state-based actions");

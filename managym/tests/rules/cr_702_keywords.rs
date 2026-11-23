@@ -557,6 +557,9 @@ fn cr_702_double_strike_deals_damage_twice() {
     let life_before = s.life(1);
     s.advance_to_active_step(0, StepKind::CombatDamage);
 
+    assert_eq!(s.life(1), life_before - 1);
+    s.pass_priority();
+    s.pass_priority();
     assert_eq!(s.life(1), life_before - 2);
 }
 
@@ -586,6 +589,9 @@ fn cr_702_double_strike_with_trample_interaction() {
     let life_before = s.life(1);
     s.advance_to_active_step(0, StepKind::CombatDamage);
 
+    assert_eq!(s.life(1), life_before);
+    s.pass_priority();
+    s.pass_priority();
     assert_eq!(s.life(1), life_before - 1);
 }
 

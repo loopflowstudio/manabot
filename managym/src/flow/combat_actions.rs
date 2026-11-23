@@ -5,7 +5,6 @@ use crate::state::card::Keyword;
 use crate::{
     agent::action::AgentError,
     flow::{
-        combat::CombatState,
         decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
@@ -105,18 +104,28 @@ impl Game {
         let Some(combat) = &self.state.combat else {
             return;
         };
-        let first_strike = self.combat_has_first_or_double_strike(combat);
-        let pass = if first_strike {
-            CombatDamagePass::FirstStrike
+        let pass = if combat.regular_damage_step {
+            CombatDamagePass::NormalWithFirstStrike
         } else {
-            CombatDamagePass::Normal
+            let first_strikers: Vec<_> = combat
+                .attackers
+                .iter()
+                .chain(combat.attacker_to_blockers.values().flatten())
+                .copied()
+                .filter(|id| {
+                    self.still_in_combat(*id)
+                        && self.creature_deals_damage_in_pass(*id, CombatDamagePass::FirstStrike)
+                })
+                .collect();
+            if first_strikers.is_empty() {
+                CombatDamagePass::Normal
+            } else {
+                self.state.combat.as_mut().unwrap().first_strikers = first_strikers;
+                CombatDamagePass::FirstStrike
+            }
         };
         let mut frame = EffectFrame::new(self.active_player(), Vec::new());
-        frame.completion = if first_strike {
-            FrameCompletion::CombatNormal
-        } else {
-            FrameCompletion::Continue
-        };
+        frame.completion = FrameCompletion::Continue;
         self.assign_combat_damage(frame, pass, Vec::new());
     }
 
@@ -145,30 +154,6 @@ impl Game {
     /// attacker it blocked stays blocked (CR 506.4).
     fn still_in_combat(&self, permanent_id: PermanentId) -> bool {
         self.state.permanents[permanent_id].is_some() && !self.is_phased_out(permanent_id)
-    }
-
-    fn combat_has_first_or_double_strike(&self, combat: &CombatState) -> bool {
-        for attacker_id in &combat.attackers {
-            if !self.still_in_combat(*attacker_id) {
-                continue;
-            }
-            let keywords = self.characteristics(*attacker_id).keywords;
-            if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
-                return true;
-            }
-        }
-        for blockers in combat.attacker_to_blockers.values() {
-            for blocker_id in blockers {
-                if !self.still_in_combat(*blocker_id) {
-                    continue;
-                }
-                let keywords = self.characteristics(*blocker_id).keywords;
-                if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     /// One combat damage step (CR 510.2): every assignment is dealt, then
@@ -306,7 +291,16 @@ impl Game {
         let has_double = keywords.has(Keyword::DoubleStrike);
         match pass {
             CombatDamagePass::FirstStrike => has_first || has_double,
-            CombatDamagePass::NormalWithFirstStrike => !has_first || has_double,
+            CombatDamagePass::NormalWithFirstStrike => {
+                has_double
+                    || !self
+                        .state
+                        .combat
+                        .as_ref()
+                        .unwrap()
+                        .first_strikers
+                        .contains(&permanent_id)
+            }
             CombatDamagePass::Normal => true,
         }
     }

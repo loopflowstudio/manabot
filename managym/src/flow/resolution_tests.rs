@@ -2879,10 +2879,10 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         let object = root.state.permanents[id].as_ref().unwrap().object;
         root.state[object].replacement_effects = vec![effect];
     }
-    root.state.combat = Some(CombatState {
+    root.state.combat = Some(Box::new(CombatState {
         attackers: vec![first, second],
         ..Default::default()
-    });
+    }));
     root.resolve_combat_damage();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
     for (mode, life) in [(0, 16), (1, 14)] {

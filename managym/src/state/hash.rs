@@ -130,6 +130,10 @@ impl From<&TurnState> for CanonicalTurn {
 
 #[derive(Serialize)]
 struct CanonicalCombat {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    first_strikers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    regular_damage_step: bool,
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     attackers_to_declare: Vec<PermanentId>,
@@ -139,6 +143,8 @@ struct CanonicalCombat {
 impl From<&CombatState> for CanonicalCombat {
     fn from(combat: &CombatState) -> Self {
         Self {
+            first_strikers: combat.first_strikers.clone(),
+            regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
@@ -265,7 +271,7 @@ impl<'a> CanonicalMatchState<'a> {
             turn: CanonicalTurn::from(turn),
             priority,
             stack_objects,
-            combat: combat.as_ref().map(CanonicalCombat::from),
+            combat: combat.as_deref().map(CanonicalCombat::from),
             mana_cache,
             events,
             pending_events,

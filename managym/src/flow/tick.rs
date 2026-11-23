@@ -4,7 +4,6 @@
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
-        combat::CombatState,
         event::GameEvent,
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
@@ -181,6 +180,16 @@ impl Game {
         self.clear_mana_pools();
         self.on_step_end(step);
         self.remember_controlled_hands();
+        if step == StepKind::CombatDamage {
+            if let Some(combat) = self.state.combat.as_mut() {
+                if !combat.first_strikers.is_empty() && !combat.regular_damage_step {
+                    combat.regular_damage_step = true;
+                    self.state.turn.step_initialized = false;
+                    self.state.turn.turn_based_actions_complete = false;
+                    return None;
+                }
+            }
+        }
         self.state.advance_step();
         self.skip_combat_phases_if_required();
 
@@ -259,20 +268,20 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
-                self.state.combat = Some(CombatState::default());
+                self.state.combat = Some(Box::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_with(Box::default);
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_with(Box::default);
                 combat.blockers_to_declare = eligible;
             }
             _ => {}
@@ -357,7 +366,7 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_with(Box::default);
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
@@ -401,7 +410,7 @@ impl Game {
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_with(Box::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
                     let assignments: Vec<_> = self

@@ -59,7 +59,7 @@ pub struct GameState {
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
-    pub combat: Option<CombatState>,
+    pub combat: Option<Box<CombatState>>,
     pub mana_cache: [Option<Mana>; 2],
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,

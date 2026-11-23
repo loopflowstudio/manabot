@@ -4441,14 +4441,14 @@ fn declare(
             .unwrap()
             .attacking = true;
     }
-    s.game_mut().state.combat = Some(managym::flow::combat::CombatState {
+    s.game_mut().state.combat = Some(Box::new(managym::flow::combat::CombatState {
         attackers: attackers.to_vec(),
         attacker_to_blockers: blocks
             .map(|(attacker, blocker)| (attacker, vec![blocker]))
             .into_iter()
             .collect(),
         ..Default::default()
-    });
+    }));
 }
 
 /// Attacking has been a permanent column since v4 (column 27).

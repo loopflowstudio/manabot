@@ -1,5 +1,11 @@
-at: e3dc630e758da48549ead966bac995ad100cc432
+at: 17b09632cf5dbd97d2a5ef675fa39f8788067f62
 first:
+  - path: managym/cards/src/dka.rs
+    why: Reaver draws for each committed gain
+  - path: managym/cards/tests/cards/dka.rs
+    why: Resolve each draw between damage steps
+  - path: managym/src/flow/tick.rs
+    why: Give players priority after first strike
   - path: managym/cards/tests/cards/tla.rs
     why: Compare replacement order with and without Giant Cindermaw
   - path: managym/tests/support/play.rs

@@ -1,4 +1,21 @@
 {
+  "Drogskol Reaver": {
+    "name": "Drogskol Reaver",
+    "mana_cost": "{5}{W}{U}",
+    "type_line": "Creature — Spirit",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Lifelink",
+      "Double strike"
+    ],
+    "oracle_text": "Flying\nDouble strike (This creature deals both first-strike and regular combat damage.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhenever you gain life, draw a card.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
   "Aang's Iceberg": {
     "name": "Aang's Iceberg",
     "mana_cost": "{2}{W}",

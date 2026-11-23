@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions and Ajani's Pridemate. Twelve cards have documented deferrals and 200 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (Kellan, Planar Trailblazer, Imprisoned in the Moon and Doubling Season). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate and Drogskol Reaver. Twelve cards have documented deferrals and 199 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -113,8 +113,8 @@ Every slice follows the same authoring rules: file each card once under its **fi
 
 ### Slice 2 — Per-source life gain
 
-- **Combat timing blocks Reaver.** At `e0a2a0e2`, a directed native probe attacked unblocked with Foggy Swamp Spirit Keeper granted double strike and Ajani's Pridemate watching. On first reaching a decision in `StepKind::CombatDamage`, the committed attacker gains were already `[2, 2]`; the expected first-step witness was `[2]`. In `flow/combat_actions.rs`, first-strike damage installs `FrameCompletion::CombatNormal`. In `flow/decision.rs`, that completion checks state-based actions then immediately assigns regular damage. A card definition cannot make the first draw resolve between those passes.
-- Repair native combat step progression first. Preserve the additional damage step through priority, trigger resolution and forks. Check that removing the attacker after the first hit prevents its second hit. Then resume Drogskol Reaver. Its two combat damage steps distinguish batch-local aggregation from a per-combat tally. Check the committed gain, pending draw trigger and resolved draw in each step. Then author Marauding Blight-Priest. Implement both using the shared trigger. Exercise the Priest’s opponent life loss and Reaver’s draw. For an unblocked Reaver, verify a gain and draw in each of the first-strike and normal combat damage steps.
+- At `e0a2a0e2`, both damage passes had committed before the first priority window. The native Reaver fixture now observes a gain of 3, one pending trigger and one resolved draw in each step. Removing Reaver on a fork after the first draw leaves the players at 23 and 17 with only one card drawn.
+- Next, author Marauding Blight-Priest with the shared life-gain trigger and exercise the opponent’s life loss.
 - Check the life-gain condition in the catalog learning tokens and its viewer text. Keep the consumer and conformance suites at gate.
 
 ### Slice 3 — Composable Replacements & Token-Multiplier Proof
