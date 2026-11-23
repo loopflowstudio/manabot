@@ -64,19 +64,23 @@ The catalog adds `fdn.cat_collector`, `snc.venom_connoisseur` and `token.cat` (t
 
 Hash v19 includes the gain ordinal and exact resolution keys. The stack retains the captured public source, and the stack and live permanent report counts for their respective abilities. The policy encodes two new v11 fact kinds and one appended stack column. The v9 and v11 pinned pilots reproduced their recorded games; the optional frontier checkpoint was unavailable.
 
-Next slice: Lunar Convocation for simultaneous gain and loss history. The remaining 77 primary rows, integrated replay/privacy and Engine Budget measurements are open. The catalog and hash
-changed. Once the cohort stabilizes, integrated validation needs new current
-conformance receipts, including the semantic kernel, authored-match and Academy
-parity witnesses listed in `conformance/README.md`. The v17 historical witnesses
-do not match the new digest.
+## Implemented slice · exact source and legal target
+
+The catalog adds `fdn.fiendish_panda` and `m21.heartfire_immolator`. Panda and Sandbender use the same graveyard mana-value bound. A target requirement now uses the spell or ability's captured source at announcement, retargeting and resolution. The spell and activation menus also read the requirement's “another” restriction. Immolator can target itself at announcement.
+
+- `agent/env/snapshot.rs::panda_snapshot_replays_source_and_target_reentry` restores the pending target choice. One gain of three grew Panda to power four. Only Gray Ogre and Hill Giant were offered, with a second Panda and Serra Angel also in the graveyard. The same Hill Giant Command replayed twice per branch. After Panda returned at power three, Hill Giant entered. After Hill Giant left the graveyard and returned, it stayed there. Both viewer projections, complete decision frames and witnesses matched across repeated restores, and the root stayed intact.
+- `flow/target_authority_tests.rs::graveyard_target_rechecks_live_source_power_for_retarget_and_resolution` selected a three-mana creature at power three. Removing the source's counter removed the alternative retarget and left the announced creature in its graveyard.
+- `cards/tests/cards/m21.rs::heartfire_immolator_deals_its_power_at_sacrifice_after_returning` cast Lightning Bolt for prowess, activated Immolator targeting Craw Wurm, and returned Immolator before resolution. Craw Wurm took three damage. Sandbender's existing sacrifice-and-reanimation control also passed.
+
+At `73f608af`, retargeting reads the announced clause for each slot directly. Sibling distinctness and combined mana-value bounds stay scoped to that clause. Panda and Immolator close the two additional object-lifetime witnesses. Four of 81 primary FDN rows are delivered.
+
+## Next slice · Lunar Convocation
+
+Use Cat Collector’s Food and Lunar Convocation’s life payment to exercise the two end-step conditions in the [BLB ledger](../.lf/wave/coverage/research/standard-2026-11/sets/blb.jsonl). Compare gain alone, loss alone, and equal gain and loss on the controller’s turn. Check opponent life loss and Bat creation separately, then cross the turn boundary. The existing `PlayerTurnHistory.life_gains` and `life_lost` in `managym/src/flow/turn.rs` already answer both occurrence questions. Reuse those fields in the conditions and viewer projections.
 
 ## Evidence to carry forward
 
-**Working review at `a8154c78`: continue implementation.** The directed debug rerun passed for Fumigate, Exsanguinate, Collector's Food, both Voyager cases, Venom's forked Commands, two gains queued before matching, countered and resolved Venom triggers, and two printed abilities on one source. The Voyager blink defect is closed. Venom's original and returned sources finish at two and one resolutions respectively. Hash v19 and the viewer's live and stacked ability counts read the captured incarnation, definition and ability index. The observation-column and catalog-token reference checks passed. The Python `combat_lost_abilities_used_activations_and_player_state_text` fixture passed for both tensor and text readings from its constructed viewer payload.
-
-At the working review, Sandbender's original fixture passed at announcement while resolution omitted the source-relative bound. The exact-source slice below closes this gap. Four of 81 primary rows are delivered; Panda and Immolator are additional witnesses under object lifetime.
-
-The earlier Voyager probe at `73516216` observed hand size 0 → 1 on its first resolution after returning. The retained regression in `managym/cards/tests/cards/tla.rs` now covers that return. At `965cc919`, resolution uses the captured object incarnation, printed definition and ability index. Only effects that read the resolution count need a counter. The queued-gain and countered-trigger cases live in `managym/src/flow/resolution_tests.rs`, with forked Commands in `managym/cards/tests/cards/snc.rs`.
+The 77 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
 
 Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Expend and Unravel still need the cast and counter interactions below.
 
@@ -88,14 +92,6 @@ Checkpoint construction at `7334e781` uses the saved fact embedding width. The m
 2. **Use one vocabulary at each query site.** Extend `managym/state/src/ability.rs` (`EffectValue`, `Condition`, selectors and target clauses) and `predicate.rs::CardPredicate` with composable subjects, filters and aggregates. Bind controller, exact source, trigger object/player, announced target, paid contribution or scoped result in the calling context. Share characteristic lookup and comparison across `flow/resolution.rs`, `statics.rs`, `trigger.rs` and `triggers.rs`. Use live layered characteristics or the exact departed object's last-known information (LKI) as the instruction requires. Target offers evaluate at announcement and recheck on resolution. A snapshot or a committed result retains its original value. Lunar Insight exercises distinct mana values over controlled nonlands, including zero and duplicates.
 3. **Read actual payment.** `managym/state/src/payment.rs::PaymentReceipt` already owns mana units, colors, life and contributing objects. Read the receipt of the spell or ability identified by the question. Expend accumulates committed mana spent casting spells by that player. Mana floated, ability costs, rolled-back spends and uncast copies contribute zero. Unravel compares the target spell's own spend and stack mana value (including X) even after the counter instruction. Preserve manual source/pip/unit alternatives, automatic restricted-mana priority, native chooser and ordinary forced-action skipping.
 4. **Project the rules state once per viewer.** Include decision-relevant facts and pending result bindings in native observations, exact forks/search and the canonical state witness (`src/state/hash.rs`, with its hash-version contract). Project observable scalars/relations through `agent/observation*.rs`, `src/python/*bindings.rs`, named v11 buffers or typed fact rows, `manabot/semantic/text_observation.py`, and Academy's native decision projection. Extend `src/cards/tokens.rs`, `agent/ability_description.rs` and `record_vocabulary.rs` for new authored expressions and record kinds. Keep saved learning-token meanings, column prefixes, v9/v10 and frozen checkpoints intact. Use public object joins for visible relations. Keep hidden identities and raw storage IDs out of both text and tensors.
-
-### Implemented slice · exact source and legal target
-
-The catalog adds `fdn.fiendish_panda` and `m21.heartfire_immolator`. Panda and Sandbender use the same graveyard mana-value bound. A target requirement now uses the spell or ability's captured source at announcement, retargeting and resolution. The spell and activation menus also read the requirement's “another” restriction. Immolator can target itself at announcement.
-
-- `agent/env/snapshot.rs::panda_snapshot_replays_source_and_target_reentry` restores the pending target choice. One gain of three grew Panda to power four. Only Gray Ogre and Hill Giant were offered, with a second Panda and Serra Angel also in the graveyard. The same Hill Giant Command replayed twice per branch. After Panda returned at power three, Hill Giant entered. After Hill Giant left the graveyard and returned, it stayed there. Both viewer projections, complete decision frames and witnesses matched across repeated restores, and the root stayed intact.
-- `flow/target_authority_tests.rs::graveyard_target_rechecks_live_source_power_for_retarget_and_resolution` selected a three-mana creature at power three. Removing the source's counter removed the alternative retarget and left the announced creature in its graveyard.
-- `cards/tests/cards/m21.rs::heartfire_immolator_deals_its_power_at_sacrifice_after_returning` cast Lightning Bolt for prowess, activated Immolator targeting Craw Wurm, and returned Immolator before resolution. Craw Wurm took three damage. Sandbender's existing sacrifice-and-reanimation control also passed.
 
 ### Delete when the shared reader takes over
 
