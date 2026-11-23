@@ -37,6 +37,11 @@ python = ["dep:pyo3"]
 benchmark = []
 
 [[example]]
+name = "bench_footprint"
+required-features = ["benchmark"]
+test = true
+
+[[example]]
 name = "bench_observation"
 required-features = ["benchmark"]
 

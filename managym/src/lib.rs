@@ -2,6 +2,8 @@ pub mod agent;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_allocations;
 #[cfg(feature = "benchmark")]
+pub mod benchmark_footprint;
+#[cfg(feature = "benchmark")]
 pub mod benchmark_layers;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_payments;

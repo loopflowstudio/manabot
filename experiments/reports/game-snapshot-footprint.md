@@ -15,6 +15,16 @@ Both roots came from `match_fixtures::build_fixture`. The 48-decision fixture dr
 | `interactive-midgame-48-w4-v1` | 15 | 340 | `bc54c4159f3c61d5dbb368fc25f05eec4a5ec1a5efec46b6c94164dbad387ccc` | `17b492e4c9efe30cf461ec097739ea7e7eb723948b07a28c8a0539f36684f600` |
 | `interactive-heavy-80-w4-v1` | 28 | 499 | `f27e14b7bea2dc858a0a8e84c564bc75f4f1438bf848fa5cc371182c2dd918a8` | `fc4d7757b6b9116dd61252ead2bfff9c5a86f9c5ad1603faff63bd332f9829fb` |
 
+To reproduce the footprint from the repository root, build once and run each cache mode in a fresh process. The example writes JSON Lines. It always measures the two fixtures. On a host with at least 1 GiB available for the bank, the commands below also sample live RSS at 0, 1,000 and 10,000 forks using `ps` (macOS or Linux).
+
+```sh
+cargo build --locked --release --manifest-path managym/Cargo.toml --features benchmark --example bench_footprint
+managym/target/release/examples/bench_footprint exact --bank-mib 1024
+managym/target/release/examples/bench_footprint cold --bank-mib 1024
+```
+
+Omit `--bank-mib` to measure only sizes and clone traffic. The example checks inline bytes plus requested heap bytes against the supplied bank allowance and a 1.5 GiB ceiling before reserving the vector. Allow headroom for allocator overhead.
+
 ## Inline and heap bytes
 
 | Rust type | Release inline bytes |
@@ -87,11 +97,17 @@ The checkout's CPython 3.13.15 extension ran four persistent `ShardedVectorEnv` 
 
 The 2,048 decisions produced SHA-256 `6e1db496eca5346db1aa0546fa9145767bf20a5e28116361e3eb93b9211224c1` over the action rows, masks, chosen indices, terminations and rewards on every batch. The standalone baseline was 36,470 steps/s. This measures the CPU producer prefix; model inference and training updates are outside its scope.
 
+Reproduce the prefix with the checkout's release extension in a fresh process.
+
+```sh
+uv run --extra play python scripts/bench_sharded_collection.py
+```
+
 ## Allocation candidates
 
 The two widest optional continuation fields occupy 1,280 bytes for `suspended_decision` and 424 for `trigger_placement`. Both were absent at the two bank roots. A separate probe read the two fields before each of 160 ordinary decisions on curated seeds 0–7, using the budget's legal choice sampler. Across 1,280 decisions, 106 held a suspended resolution, 17 held trigger placement, and zero held both (count/choice digest `7640719225026218502`). Replacing both inline options with pointers would save up to about 16.1 MiB over 10,000 absent pairs before padding. Populated decisions would acquire a heap allocation each, and both field types are public to Rust callers. Measure occupied branches, actual bank RSS and step/search throughput before accepting that trade. The sampled cast-permission and effect tables requested zero heap bytes at both roots. Boxing them has little measured upside.
 
-Keep guardrails for inline size separate from heap budgets. An upper bound on the 96-byte `Object` applies to every row in the game. A bound on the 4,040-byte `GameState` applies once per game. Debug builds also hold a live scan count inside the derived cache.
+On 64-bit targets the engine checks six inline sizes at compile time. The ceilings are 96 bytes per `Object`, 168 per `Permanent`, 4,096 each for `GameState` and `TrackedState`, and 5,248 for `Game`. The `DerivedCache` ceiling is 96 bytes in release and 104 with debug assertions. The debug scan count brings the observed `Game` size to 5,160 bytes. The clone probe measures heap costs separately.
 
 ## Matched allocator trial on macOS
 
