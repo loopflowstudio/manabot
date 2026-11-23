@@ -2402,6 +2402,10 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
     fn damaged_permanents(&self) -> Vec<i32> {
         self.data.damaged_permanents.clone()
     }
@@ -2778,6 +2782,10 @@ impl PyStackObject {
     #[setter]
     fn set_description(&mut self, value: Option<String>) {
         self.data.description = value;
+    }
+    #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
     }
     #[getter]
     fn source_power(&self) -> Option<i32> {

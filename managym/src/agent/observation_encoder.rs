@@ -1137,6 +1137,18 @@ fn encode_into_memory(
         (&obs.opponent_permanents, &mut *out.opponent_permanents),
     ] {
         for (row, permanent) in out.chunks_mut(config.permanent_dim()).zip(permanents) {
+            if config.layout == InputLayout::OneToken {
+                row[permanent::COMBAT_DAMAGE_TO_ME] = bool_to_f32(
+                    permanent
+                        .combat_damage_to_players
+                        .contains(&(obs.agent.player_index as usize)),
+                );
+                row[permanent::COMBAT_DAMAGE_TO_OPPONENT] = bool_to_f32(
+                    permanent
+                        .combat_damage_to_players
+                        .contains(&(obs.opponent.player_index as usize)),
+                );
+            }
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
             row[permanent::TIMESTAMP] = ranks[&permanent.timestamp()];
@@ -1149,6 +1161,16 @@ fn encode_into_memory(
         .iter_mut()
         .zip(&obs.stack_objects)
     {
+        row[stack::COMBAT_DAMAGE_TO_ME] = bool_to_f32(
+            object
+                .combat_damage_to_players
+                .contains(&(obs.agent.player_index as usize)),
+        );
+        row[stack::COMBAT_DAMAGE_TO_OPPONENT] = bool_to_f32(
+            object
+                .combat_damage_to_players
+                .contains(&(obs.opponent.player_index as usize)),
+        );
         row[stack::SOURCE_POWER] = object.source_power.unwrap_or_default() as f32 / 10.0;
         row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);
@@ -1708,7 +1730,12 @@ fn encode_permanent_features(
         out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
     }
-    out[out.len() - 1] = 1.0;
+    let valid = if layout == InputLayout::OneToken {
+        permanent::VALID
+    } else {
+        out.len() - 1
+    };
+    out[valid] = 1.0;
 }
 
 /// Stack rows, top first, each indexed by its stack object id; a spell's card
@@ -2250,9 +2277,9 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
-        PLAYER_DIM, ZONE_DIM,
+        action, encode, encode_into, fact, permanent, EncodedObservationMut,
+        ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
+        FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
@@ -2646,9 +2673,9 @@ mod tests {
         // object is its permanent row only.
         assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
         assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
         assert_eq!(
-            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
             0.0
         );
 
@@ -2692,6 +2719,7 @@ mod tests {
         let spell = make_card(555, ZoneType::Stack, false, 0, 0, 3);
         obs.stack_objects = vec![
             StackObjectData {
+                combat_damage_to_players: Vec::new(),
                 source_power: None,
                 ability_resolutions: 0,
                 description: None,
@@ -2711,6 +2739,7 @@ mod tests {
                 )),
             },
             StackObjectData {
+                combat_damage_to_players: Vec::new(),
                 source_power: None,
                 ability_resolutions: 0,
                 description: None,

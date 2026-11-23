@@ -461,6 +461,8 @@ pub struct LegacyPermanentView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub damaged_permanents: Vec<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ability_resolutions: Vec<(u32, u32)>,
@@ -606,6 +608,8 @@ pub struct DecisionTargetView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackEntryView {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub ability_resolutions: u32,
     pub id: u64,

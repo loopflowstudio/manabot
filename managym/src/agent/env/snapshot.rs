@@ -352,6 +352,123 @@ mod card_history_tests {
     };
 
     #[test]
+    fn steel_hellkite_pending_snapshot_retains_combat_seat_after_source_departure() {
+        use crate::agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::stack,
+        };
+        use crate::flow::proposed_event::ProposedDamageTarget;
+        let mut env = Env::new(418, true, false, false);
+        let deck = [("Steel Hellkite".to_owned(), 12), ("Forest".to_owned(), 28)]
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+        env.reset(vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        let actor = game.state.priority.holder;
+        let victim = PlayerId(1 - actor.0);
+        let hit = game
+            .scenario_force_battlefield(actor, "Steel Hellkite", true)
+            .unwrap();
+        let other = game
+            .scenario_force_battlefield(actor, "Steel Hellkite", true)
+            .unwrap();
+        let source = game.permanent_object(hit).unwrap();
+        let token = game.create_token("token.food", actor, false).unwrap();
+        for (permanent, combat) in [(other, false), (hit, true)] {
+            assert!(game.commit_damage(
+                game.permanent_object(permanent),
+                ProposedDamageTarget::Player(victim),
+                1,
+                combat
+            ));
+        }
+        game.state.players[actor.0].mana_pool = crate::state::mana::Mana::parse("2").into();
+        game.publish_action_space(game.priority_action_space(actor));
+        let command = |env: &Env, index: usize| {
+            let frame = env.semantic_decision_frame().unwrap();
+            Command {
+                command_id: format!("hellkite-{}-{index}", frame.revision),
+                expected_revision: frame.revision,
+                offer_id: frame.offers[index].id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            }
+        };
+        let root = env.snapshot().unwrap();
+        let root_witness = env.selected_witness().unwrap();
+        for permanent in [hit, other] {
+            let mut branch = root.restore(RestoreOptions::default()).unwrap();
+            let index = env.game.as_ref().unwrap().action_space().unwrap().actions.iter().position(|action| matches!(action, Action::ActivateAbility {permanent: source, ability_index: 1, ..} if *source == permanent)).unwrap();
+            branch
+                .execute_semantic_command(&command(&env, index))
+                .unwrap();
+            let zero = branch
+                .game
+                .as_ref()
+                .unwrap()
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::ChooseMode { mode: 0, .. }))
+                .unwrap();
+            branch
+                .execute_semantic_command(&command(&branch, zero))
+                .unwrap();
+            let game = branch.game.as_mut().unwrap();
+            game.move_object(source, ZoneType::Graveyard);
+            game.change_control(token, victim);
+            let pending = branch.snapshot().unwrap();
+            let mut restored = pending.restore(RestoreOptions::default()).unwrap();
+            assert_eq!(
+                restored.selected_witness().unwrap(),
+                branch.selected_witness().unwrap()
+            );
+            let game = restored.game.as_mut().unwrap();
+            for viewer in [actor, victim] {
+                let obs = Observation::for_player(game, viewer);
+                let eligible = &obs.stack_objects[0].combat_damage_to_players;
+                assert_eq!(
+                    eligible.as_slice(),
+                    if permanent == hit {
+                        std::slice::from_ref(&victim.0)
+                    } else {
+                        &[]
+                    }
+                );
+                let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+                assert_eq!(
+                    encoded.stack[stack::COMBAT_DAMAGE_TO_ME],
+                    f32::from(permanent == hit && viewer == victim)
+                );
+                assert_eq!(
+                    encoded.stack[stack::COMBAT_DAMAGE_TO_OPPONENT],
+                    f32::from(permanent == hit && viewer == actor)
+                );
+            }
+            game.resolve_top_of_stack();
+            assert_eq!(game.state.permanents[token].is_none(), permanent == hit);
+            if permanent == other {
+                let mut countered = pending.restore(RestoreOptions::default()).unwrap();
+                let g = countered.game.as_mut().unwrap();
+                let id = g.state.stack_objects.last().unwrap().id();
+                g.counter_ability(id, None);
+                assert!(g.state.permanents[other]
+                    .as_ref()
+                    .unwrap()
+                    .activated_this_turn
+                    .contains(&1));
+            }
+        }
+        assert_eq!(env.selected_witness().unwrap(), root_witness);
+    }
+
+    #[test]
     fn predator_ooze_remembers_only_the_exact_damage_pair_this_turn() {
         use crate::agent::{
             observation::Observation,

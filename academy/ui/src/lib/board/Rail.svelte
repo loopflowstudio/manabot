@@ -140,17 +140,20 @@
     {:else}
       <ol>
         {#each view.stack as item, index (item.entry.id)}
+          {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
+          {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
                 <span class="truncate entry-name">{stackName(item.entry)}</span>
+                {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>

@@ -300,6 +300,9 @@ impl Serialize for StackObjectJson<'_> {
             map.serialize_entry("card", &CardJson(&card))?;
         }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
+        if !value.combat_damage_to_players.is_empty() {
+            map.serialize_entry("combat_damage_to_players", &value.combat_damage_to_players)?;
+        }
         map.serialize_entry("controller_id", &value.controller_id)?;
         map.serialize_entry("description", &value.description)?;
         if let Some(keywords) = &value.granted_keywords {
@@ -784,6 +787,8 @@ pub(super) struct WirePermanentData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub damaged_permanents: Vec<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ability_resolutions: Vec<(usize, u32)>,
@@ -816,6 +821,8 @@ pub(super) struct WirePermanentData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireStackObjectData {
+    #[serde(default)]
+    pub combat_damage_to_players: Vec<usize>,
     pub source_power: Option<i32>,
     #[serde(default)]
     pub ability_resolutions: u32,
@@ -909,6 +916,7 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            combat_damage_to_players: w.combat_damage_to_players,
             damaged_permanents: w.damaged_permanents,
             ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
@@ -978,6 +986,7 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            combat_damage_to_players: self.combat_damage_to_players.clone(),
             damaged_permanents: self.damaged_permanents.clone(),
             ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
@@ -997,6 +1006,7 @@ impl Serialize for PermanentData {
 impl From<WireStackObjectData> for StackObjectData {
     fn from(w: WireStackObjectData) -> Self {
         Self {
+            combat_damage_to_players: w.combat_damage_to_players,
             source_power: w.source_power,
             description: w.description,
             ability_resolutions: w.ability_resolutions,

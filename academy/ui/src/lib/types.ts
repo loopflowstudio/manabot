@@ -122,6 +122,7 @@ export interface PermanentState {
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  combat_damage_to_players?: number[];
   damaged_permanents?: number[];
   ability_resolutions?: [number, number][];
   /** It was dealt damage this turn. */
@@ -248,6 +249,7 @@ export interface DecisionContextView {
 }
 
 export interface StackEntryView {
+  combat_damage_to_players?: number[];
   ability_resolutions?: number;
   id: number;
   kind: string;

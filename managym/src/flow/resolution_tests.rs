@@ -2591,6 +2591,7 @@ fn retained_batch_counter_order_is_affected_players_choice_and_commits_once() {
                         },
                         except: None,
                         max_mana_value: None,
+                        exact_mana_value: None,
                     },
                     CounterKind::PlusOnePlusOne,
                     1,

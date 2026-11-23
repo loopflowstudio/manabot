@@ -460,6 +460,8 @@ pub struct StackTargetData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
+    /// Seats dealt combat damage this turn by the activated ability’s exact source.
+    pub combat_damage_to_players: Vec<usize>,
     /// Effective power read by a pending source-power damage instruction.
     pub source_power: Option<i32>,
     pub ability_resolutions: u32,
@@ -814,6 +816,7 @@ pub struct PermanentData {
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
+    pub combat_damage_to_players: Vec<usize>,
     pub damaged_permanents: Vec<i32>,
     pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
@@ -1570,6 +1573,13 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            combat_damage_to_players: game
+                .state
+                .turn
+                .damage_pairs
+                .combat_players(permanent.object)
+                .map(|p| p.0)
+                .collect(),
             damaged_permanents: {
                 let mut targets: Vec<_> = game
                     .state
@@ -1721,6 +1731,16 @@ impl Observation {
             _ => None,
         };
         StackObjectData {
+            combat_damage_to_players: match stack_object {
+                StackObject::ActivatedAbility(a) => game
+                    .state
+                    .turn
+                    .damage_pairs
+                    .combat_players(a.source_object())
+                    .map(|p| p.0)
+                    .collect(),
+                _ => Vec::new(),
+            },
             source_power,
             ability_resolutions: match stack_object {
                 StackObject::TriggeredAbility(a) => game

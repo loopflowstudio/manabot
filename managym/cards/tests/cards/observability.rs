@@ -517,6 +517,7 @@ fn selector_witnesses() -> [ObjectSelector; 16] {
             predicate: CardPredicate::creature(),
             except: None,
             max_mana_value: Some(Box::new(EffectValue::X)),
+            exact_mana_value: None,
         },
     ]
 }
@@ -527,6 +528,7 @@ fn scope_token(scope: Scope) -> &'static str {
         Scope::YouControl => "Scope::YouControl",
         Scope::OpponentsControl => "Scope::OpponentsControl",
         Scope::Battlefield => "Scope::Battlefield",
+        Scope::DamagedBySourceInCombat => "Scope::DamagedBySourceInCombat",
         Scope::TargetPlayerControls => "Scope::TargetPlayerControls",
     }
 }
@@ -909,6 +911,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 predicate: CardPredicate::creature(),
                 except: Some(Except::Target),
                 max_mana_value: None,
+                exact_mana_value: None,
             },
         },
         Effect::OpponentsCastOnlyFromHand,
@@ -2259,7 +2262,7 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
     let player = &game.state.players[0];
     let fields = permanent_fields(permanent)
         .into_iter()
-        .map(|(field, seen)| (field, seen, PERMANENT_DIM - 1))
+        .map(|(field, seen)| (field, seen, PERMANENT_DIM))
         .chain(
             player_fields(player)
                 .into_iter()
@@ -2268,7 +2271,9 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
         );
     for (field, seen, width) in fields {
         match seen {
-            Seen::Permanent(column) => assert!(column < width, "{field}"),
+            Seen::Permanent(column) => {
+                assert!(column < width && column != permanent::VALID, "{field}")
+            }
             Seen::Player(start, end) => assert!(start < end && end <= width, "{field}"),
             Seen::Card(column) => assert!(column < CARD_DIM, "{field}"),
             Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
@@ -2331,6 +2336,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         Scope::OpponentsControl,
         Scope::Battlefield,
         Scope::TargetPlayerControls,
+        Scope::DamagedBySourceInCombat,
     ];
     let excepts = [None, Some(Except::This), Some(Except::Target)];
     for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
@@ -2339,6 +2345,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
             predicate: CardPredicate::creature(),
             except,
             max_mana_value: None,
+            exact_mana_value: None,
         };
         let effect = Effect::ApplyContinuous {
             affected,
@@ -2727,7 +2734,11 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
                 });
         assert!(runs_card, "{} does not run {}", row.test, row.card);
         match row.seen {
-            Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
+            Seen::Permanent(column) => assert!(
+                column < PERMANENT_DIM && column != permanent::VALID,
+                "{}",
+                row.token
+            ),
             Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
             Seen::Player(start, end) => assert!(start < end && end <= PLAYER_DIM, "{}", row.token),
             Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
@@ -3006,7 +3017,8 @@ impl Buffer {
             Buffer::Relation => Some(relation::VALID),
             Buffer::Facts => Some(fact::VALID),
             Buffer::Action => Some(action::VALID),
-            _ => Some(self.width() - 1),
+            Buffer::Permanent => Some(permanent::VALID),
+            Buffer::Card => Some(card::VALID),
         }
     }
 }
@@ -3316,6 +3328,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
+        combat_damage_to_players => [column(Permanent, permanent::COMBAT_DAMAGE_TO_ME), column(Permanent, permanent::COMBAT_DAMAGE_TO_OPPONENT)],
         damaged_permanents => [Rows("Damage source and recipient relation")],
         ability_resolutions => [Fact(FactKind::AbilityResolution)],
         used_abilities => [Fact(FactKind::UsedAbility)],
@@ -3351,6 +3364,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         timestamp => [column(Facts, fact::TIMESTAMP)],
     }));
     fields.extend(encoding!(StackObjectData {
+        combat_damage_to_players => [column(Stack, stack::COMBAT_DAMAGE_TO_ME), column(Stack, stack::COMBAT_DAMAGE_TO_OPPONENT)],
         source_power => [column(Stack, stack::SOURCE_POWER)],
         ability_resolutions => [column(Stack, stack::ABILITY_RESOLUTIONS)],
         description => [Definition],

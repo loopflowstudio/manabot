@@ -673,18 +673,24 @@ fn selector_description(selector: &ObjectSelector) -> String {
             predicate,
             except,
             max_mana_value,
+            exact_mana_value,
         } => format!(
             "each {}{}{}{}",
             if except.is_some() { "other " } else { "" },
             predicate_description(predicate, "permanent"),
             match max_mana_value {
                 Some(value) => format!(" with mana value {} or less", value_description(value)),
-                None => String::new(),
+                None => exact_mana_value
+                    .as_ref()
+                    .map(|value| format!(" with mana value {}", value_description(value)))
+                    .unwrap_or_default(),
             },
             match of {
                 Scope::YouControl => " you control",
                 Scope::OpponentsControl => " your opponents control",
                 Scope::Battlefield => "",
+                Scope::DamagedBySourceInCombat =>
+                    " controlled by a player dealt combat damage by this source this turn",
                 Scope::TargetPlayerControls => " target player controls",
             }
         ),

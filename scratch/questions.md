@@ -20,3 +20,5 @@ For Predator Ooze, use membership per exact source and recipient. Repeated hits 
 For the policy projection, use one v11 relation per live damage pair so both endpoints join the padded permanent table. Steel Hellkite is the next planned source-history witness.
 Damage history uses a sorted vector for the typically small set of distinct hits in one turn. Insertion shifts later pairs, and lookup starts at the source’s first pair.
 For Hellkite, use a pending activation after source departure to test whether eligible seats remain visible without a live source row.
+
+Hellkite shares the sorted damage history with Ooze. The two player seats fit in two viewer-relative flags on each v11 permanent or pending activation.

@@ -710,6 +710,12 @@ to this turn. Multiple hits on one recipient give one entry. Either permanent
 leaving and returning breaks the relation. Both viewers get the public
 permanent IDs in the observation and Academy frame. Policy input v11 joins
 their permanent rows in relation kind 11, including with policy history off.
+For combat damage to a player, `combat_damage_to_players` lists the seats hit
+by that exact source this turn. An activated ability on the stack retains
+this information when its source leaves. V11 encodes each seat relative to
+the viewer on the permanent and stack rows. Steel Hellkite checks those
+players’ current nonlands and their mana values when its ability resolves.
+Each Hellkite can activate once per turn, including for X=0 before any hit.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with

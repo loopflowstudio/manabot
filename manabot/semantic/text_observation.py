@@ -91,6 +91,7 @@ _STAGES = frozenset(
     (
         "priority",
         "targets",
+        "announcement",
         "additional_cost",
         "payment",
         "mode",
@@ -1014,6 +1015,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        for seat in permanent.combat_damage_to_players:
+            parts.append(f"dealt combat damage to seat {seat} this turn")
         for target in permanent.damaged_permanents:
             parts.append(f"dealt damage to {self.name(target)} this turn")
         if permanent.dealt_damage_this_turn:
@@ -1212,6 +1215,8 @@ class _Renderer:
                 details.append(
                     f"prior resolutions this turn: {item.ability_resolutions}"
                 )
+            for seat in item.combat_damage_to_players:
+                details.append(f"source dealt combat damage to seat {seat} this turn")
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))

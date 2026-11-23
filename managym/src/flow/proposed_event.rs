@@ -799,6 +799,12 @@ impl Game {
         let controllers = match scope {
             crate::state::ability::Scope::YouControl => vec![player],
             crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
+            crate::state::ability::Scope::DamagedBySourceInCombat => self
+                .state
+                .turn
+                .damage_pairs
+                .combat_players(*object)
+                .collect(),
             _ => vec![PlayerId(0), PlayerId(1)],
         };
         let candidates: Vec<PermanentId> = controllers

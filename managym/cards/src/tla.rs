@@ -1325,6 +1325,7 @@ fn avatar_s_wrath() -> CardDefinition {
                             },
                             except: Some(Except::Target),
                             max_mana_value: None,
+                            exact_mana_value: None,
                         },
                     }],
                 },
@@ -2749,6 +2750,7 @@ fn day_of_black_sun() -> CardDefinition {
                     predicate: CardPredicate::creature(),
                     except: None,
                     max_mana_value: Some(Box::new(EffectValue::X)),
+                    exact_mana_value: None,
                 };
                 vec![
                     Effect::until_end_of_turn(creatures.clone(), Modification::LoseAllAbilities),
@@ -9817,6 +9819,7 @@ fn the_rise_of_sozin() -> CardDefinition {
                         predicate: CardPredicate::creature(),
                         except: None,
                         max_mana_value: None,
+                        exact_mana_value: None,
                     })],
                 ),
                 chapter(

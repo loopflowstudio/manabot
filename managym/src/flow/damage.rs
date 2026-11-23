@@ -86,6 +86,12 @@ impl Game {
                     *life = life.saturating_sub(amount);
                 }
                 let new_life = *life;
+                if let Some(source) = source.filter(|_| combat) {
+                    self.state
+                        .turn
+                        .damage_pairs
+                        .record_combat_player(source, player);
+                }
 
                 self.emit(GameEvent::DamageDealt {
                     source,

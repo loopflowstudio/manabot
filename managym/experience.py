@@ -437,6 +437,9 @@ class LegacyPermanentView(ProtocolModel):
     keywords: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     damaged_permanents: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -564,6 +567,9 @@ class LegacyTurnView(ProtocolModel):
 
 
 class StackEntryView(ProtocolModel):
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     ability_resolutions: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     id: UInt64
     kind: str

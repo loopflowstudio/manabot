@@ -777,6 +777,8 @@ pub enum ObjectSelector {
         except: Option<Except>,
         #[serde(skip_serializing_if = "Option::is_none")]
         max_mana_value: Option<Box<EffectValue>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exact_mana_value: Option<Box<EffectValue>>,
     },
 }
 
@@ -792,6 +794,8 @@ pub enum Scope {
     /// Permanents the frame's primary target player controls ("creatures
     /// target player controls").
     TargetPlayerControls,
+    /// Permanents controlled by a player the exact source hit in combat this turn.
+    DamagedBySourceInCombat,
 }
 
 /// The one permanent a `Chosen` or `Each` selector leaves out.
@@ -824,6 +828,7 @@ impl ObjectSelector {
             predicate,
             except: None,
             max_mana_value: None,
+            exact_mana_value: None,
         }
     }
 
@@ -834,6 +839,7 @@ impl ObjectSelector {
             predicate,
             except: Some(Except::This),
             max_mana_value: None,
+            exact_mana_value: None,
         }
     }
 

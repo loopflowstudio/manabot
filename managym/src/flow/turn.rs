@@ -129,12 +129,19 @@ impl Bending {
     pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
 }
 
-/// Both appearances belong to the hit (CR 400.7). Hash each in full.
+/// Each object in a hit names its exact battlefield appearance (CR 400.7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 struct DamagePair(
     #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
-    #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+    DamageRecipient,
 );
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(untagged)]
+enum DamageRecipient {
+    Permanent(#[serde(serialize_with = "crate::state::game_object::exact")] ObjectId),
+    CombatPlayer(PlayerId),
+}
 
 /// Sorted by source then recipient, so each source's hits form one slice.
 #[derive(Clone, Debug, Default, serde::Serialize)]
@@ -142,14 +149,33 @@ pub struct DamageHistory(Vec<DamagePair>);
 
 impl DamageHistory {
     pub fn record(&mut self, source: ObjectId, recipient: ObjectId) {
-        let pair = DamagePair(source, recipient);
+        self.insert(DamagePair(source, DamageRecipient::Permanent(recipient)));
+    }
+
+    pub fn record_combat_player(&mut self, source: ObjectId, player: PlayerId) {
+        self.insert(DamagePair(source, DamageRecipient::CombatPlayer(player)));
+    }
+
+    pub fn combat_players(&self, source: ObjectId) -> impl Iterator<Item = PlayerId> + '_ {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .filter(move |player| {
+                self.0
+                    .binary_search(&DamagePair(source, DamageRecipient::CombatPlayer(*player)))
+                    .is_ok()
+            })
+    }
+
+    fn insert(&mut self, pair: DamagePair) {
         if let Err(index) = self.0.binary_search(&pair) {
             self.0.insert(index, pair);
         }
     }
 
     pub fn contains(&self, source: ObjectId, recipient: ObjectId) -> bool {
-        self.0.binary_search(&DamagePair(source, recipient)).is_ok()
+        self.0
+            .binary_search(&DamagePair(source, DamageRecipient::Permanent(recipient)))
+            .is_ok()
     }
 
     pub fn recipients(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
@@ -157,7 +183,10 @@ impl DamageHistory {
         self.0[start..]
             .iter()
             .take_while(move |pair| pair.0 == source)
-            .map(|pair| pair.1)
+            .filter_map(|pair| match pair.1 {
+                DamageRecipient::Permanent(object) => Some(object),
+                DamageRecipient::CombatPlayer(_) => None,
+            })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -181,7 +210,7 @@ pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub graveyard_from_battlefield: Vec<ObjectId>,
-    /// Exact source and recipient of positive damage to a permanent this turn.
+    /// Positive damage to permanents and combat damage to players this turn.
     #[serde(skip_serializing_if = "DamageHistory::is_empty")]
     pub damage_pairs: DamageHistory,
     /// Once-each-turn uses by exact source object and ability index: a

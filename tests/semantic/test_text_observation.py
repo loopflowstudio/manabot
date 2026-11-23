@@ -20,6 +20,7 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
@@ -428,6 +429,42 @@ def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
     return stack.split("\n", 1)[0], continuation.splitlines()
 
 
+def test_steel_hellkite_announces_x_and_shows_its_combat_hit_on_the_stack() -> None:
+    env = priority_root((), ("Steel Hellkite", "Mountain"))
+    for _ in range(20):
+        obs = env.observation_for_player(0)
+        if obs.opponent.life < 20:
+            break
+        decision = capture_text_decision(env, history_capacity=0)
+        attack = next(
+            (a for a in decision.actions if a.description.startswith("Attack with")),
+            None,
+        )
+        action = attack or next(
+            a for a in decision.actions if a.description == "Pass priority"
+        )
+        submit_response(env, decision, action.reference)
+    assert obs.opponent.life == 15
+    _choose(env, "Activate ability")
+    announcement = capture_text_decision(env, history_capacity=0)
+    assert any("X = 1" in a.description for a in announcement.actions)
+    zero = next(a for a in announcement.actions if "X = 0" in a.description)
+    submit_response(env, announcement, zero.reference)
+
+    assert (
+        "source dealt combat damage to seat 1 this turn"
+        in capture_text_decision(env, history_capacity=0).text
+    )
+    for viewer in (0, 1):
+        obs = env.observation_for_player(viewer)
+        restored = managym.Observation.from_json(obs.toJSON())
+        assert restored.stack_objects[0].combat_damage_to_players == [1]
+        (entry,) = decision_surface_view(env, viewer)["stack_objects"]
+        assert entry["combat_damage_to_players"] == [1]
+        row = encode_observation(ObservationSpace(), restored)["stack"][0]
+        assert row[column("stack", "combat_damage_to_me")] == (viewer == 1)
+
+
 def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
     """`kicked` records bargain too; the text says which cost was taken."""
     env = priority_root(("Archon's Glory",), ("Gray Ogre", "Prophetic Prism", "Plains"))
@@ -630,6 +667,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
         "ability_resolutions": "ability N resolved",
+        "combat_damage_to_players": "seats dealt combat damage by the source this turn",
         "damaged_permanents": "dealt damage to each named permanent this turn",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
@@ -662,6 +700,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
+        "combat_damage_to_players": "seats dealt combat damage by the source this turn",
         "source_power": "source power in the ability description",
         "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
@@ -790,7 +829,11 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "used_abilities": [0],
         "dealt_damage_this_turn": True,
     }
-    mountain |= {"blocking": ogre["id"], "damaged_permanents": [ogre["id"]]}
+    mountain |= {
+        "blocking": ogre["id"],
+        "damaged_permanents": [ogre["id"]],
+        "combat_damage_to_players": [1],
+    }
     state["agent"] |= {
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
@@ -811,6 +854,8 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     decision = render_decision(_redigest(payload))
     observation = _viewer_observation(decision)
     battlefield = serialize_observation(observation)["agent"]["battlefield"]
+    assert battlefield[0]["combat_damage_to_players"] == [1]
+    assert "dealt combat damage to seat 1 this turn" in decision.text
     assert battlefield[0]["damaged_permanents"] == [ogre["id"]]
     facts = encode_observation(ObservationSpace(ObservationConfig()), observation)[
         "facts"

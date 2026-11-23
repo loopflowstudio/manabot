@@ -210,6 +210,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
+        "combat_damage_to_players": list(permanent.combat_damage_to_players) or None,
         "damaged_permanents": list(permanent.damaged_permanents) or None,
         "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
@@ -518,6 +519,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     }
     data["stack_objects"] = [
         {
+            "combat_damage_to_players": list(entry.combat_damage_to_players),
             "ability_resolutions": entry.ability_resolutions,
             "id": int(entry.stack_object_id),
             "kind": {0: "spell", 1: "activated_ability", 2: "triggered_ability"}[

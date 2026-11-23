@@ -2192,10 +2192,16 @@ impl Game {
                 predicate,
                 except,
                 max_mana_value,
+                exact_mana_value,
             } => {
                 let players: Vec<PlayerId> = match of {
                     Scope::YouControl => vec![frame.controller],
                     Scope::OpponentsControl => vec![PlayerId(1 - frame.controller.0)],
+                    Scope::DamagedBySourceInCombat => frame
+                        .source()
+                        .into_iter()
+                        .flat_map(|source| self.state.turn.damage_pairs.combat_players(source))
+                        .collect(),
                     Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
                     Scope::TargetPlayerControls => match self.present_primary_target(frame) {
                         Some(Target::Player(player)) => vec![player],
@@ -2203,6 +2209,9 @@ impl Game {
                     },
                 };
                 let excepted = self.excepted_permanent(*except, frame);
+                let exact = exact_mana_value
+                    .as_ref()
+                    .map(|value| self.effect_value(value, frame));
                 let max_mana_value = max_mana_value
                     .as_ref()
                     .map(|value| self.effect_value(value, frame));
@@ -2212,7 +2221,9 @@ impl Game {
                     .filter(|id| Some(*id) != excepted)
                     .filter(|id| self.permanent_matches_predicate(*id, predicate))
                     .filter(|id| {
-                        max_mana_value.is_none_or(|max| self.permanent_mana_value(*id) <= max)
+                        exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
+                            && max_mana_value
+                                .is_none_or(|max| self.permanent_mana_value(*id) <= max)
                     })
                     .filter_map(|id| self.permanent_object(id))
                     .collect()
@@ -2241,7 +2252,7 @@ impl Game {
     fn permanent_mana_value(&self, id: PermanentId) -> i32 {
         self.state.permanents[id]
             .as_ref()
-            .and_then(|permanent| self.state[permanent.object].mana_cost.as_ref())
+            .and_then(|permanent| self.state[permanent.object].mana_value_cost())
             .map_or(0, |cost| i32::from(cost.mana_value))
     }
 

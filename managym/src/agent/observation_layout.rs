@@ -403,6 +403,8 @@ columns! { permanent {
     48: HAS_WARD => ("has_ward", ValueLayout::FLAG),
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
+    51: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
+    52: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -448,6 +450,8 @@ columns! { stack {
     36: VALID => ("valid", ValueLayout::FLAG),
     37: ABILITY_RESOLUTIONS => ("ability_resolutions", ValueLayout::COUNT),
     38: SOURCE_POWER => ("source_power", ValueLayout::NUMBER_TENTHS),
+    39: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
+    40: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
 } }
 
 columns! { action {

@@ -1395,6 +1395,15 @@
           "format": "uint32",
           "minimum": 0
         },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
         "controller_id": {
           "type": "integer",
           "format": "uint32",
@@ -2333,6 +2342,15 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller": {
           "type": "integer",

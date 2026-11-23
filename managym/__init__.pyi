@@ -1070,6 +1070,7 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    combat_damage_to_players: list[int]
     damaged_permanents: list[int]
     ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
@@ -1124,6 +1125,7 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    combat_damage_to_players: list[int]
     source_power: int | None
     ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.

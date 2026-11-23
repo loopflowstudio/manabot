@@ -2660,6 +2660,15 @@
           "default": null,
           "title": "Blocking"
         },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
         "controller_id": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -4171,6 +4180,15 @@
           ],
           "default": null,
           "title": "Chosen Mode"
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller": {
           "maximum": 255,

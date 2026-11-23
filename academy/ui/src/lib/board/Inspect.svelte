@@ -34,6 +34,7 @@
     permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
+    ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
     permanent.damage ? `${permanent.damage} damage marked` : '',
     ...Object.entries(permanent.counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${kind.replace(/_/g, ' ')} counter${n === 1 ? '' : 's'}`),
     permanent.abilities_lost ? 'has lost all abilities' : '',
