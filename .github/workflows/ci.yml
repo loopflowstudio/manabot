@@ -87,7 +87,9 @@ jobs:
       # kills any single test after 5 minutes. The suite has no doctests.
       - name: Rust tests
         working-directory: managym
-        run: cargo nextest run --profile ci
+        run: |
+          cargo nextest run --profile ci
+          cargo test --locked --features benchmark --test content_pack_clone_allocations
 
       - name: Upload Rust test timings
         if: always()

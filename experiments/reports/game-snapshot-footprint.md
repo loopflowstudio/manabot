@@ -126,6 +126,23 @@ Total search times in execution order were 53.886, 64.565, 64.937 and 54.855 s. 
 
 Routing the counting allocator through mimalloc reproduced every inline size, per-field request count, requested byte total and fixture witness. Its ordinary bank read 15,344 / 56,464 / 460,528 KiB at 0 / 1,000 / 10,000 clones (increases of 40.16 / 434.75 MiB). The cold bank read 14,784 / 56,112 / 456,768 KiB (40.36 / 431.62 MiB). Each RSS point has one reading per mode. At this bank size the throughput gain came with a small observed reduction in resident memory.
 
-The native Cargo feature `mimalloc` retains the allocator used in this trial. The system allocator remains the default. Build the Rust budget examples with `--features mimalloc` for timing, or build `bench_footprint` with `--features benchmark,mimalloc` for request counts. Its opening JSON line identifies the backing allocator.
+The native Cargo feature `mimalloc` is enabled by default (`default = ["mimalloc"]`), selecting `mimalloc::MiMalloc` on both Rust binaries and Python wheels. Pass `--no-default-features` to Cargo (or `--no-default-features --features python` to maturin) to build against the system allocator instead. Build `bench_footprint` with `--features benchmark` (or `--no-default-features --features benchmark`) for request counts; its opening JSON line identifies the backing allocator.
 
-Both release wheels reported the expected allocator with counting disabled and reproduced the 2,048-decision digest above. Requesting mimalloc with the system wheel loaded stopped the script before timing. These short macOS samples support the opt-in feature. A Linux training default needs matched Linux measurements. CI compares the default engine with the committed Engine Budget reference. [Allocator build and collection commands](../../managym/README.md#native-allocator)
+Both macOS release wheels reported the expected allocator with counting disabled and reproduced the 2,048-decision digest above. Requesting `mimalloc` with the system wheel loaded stopped the script before timing.
+
+## Matched allocator trial on Linux
+
+A matched ABBA run on RunPod (`linux_mimalloc_trial/linux-mimalloc-trial@3`, ~$0.22) tested the same builds on `Ubuntu 24.04.3 LTS` (`Linux 6.8.0-147-generic`, `x86_64`, `AMD EPYC 9655P`, 32 vCPUs, `glibc 2.39`, `rustc 1.98.1`, CPython `3.13.8`). Both `bench_steps`/`bench_search` and four-worker `ShardedVectorEnv` ran in `mimalloc`, `system`, `system`, `mimalloc` order with separate optimized binaries and CPython wheels built from the same source.
+
+| Measure | System (`glibc 2.39`) | `mimalloc` | Change |
+|---|---:|---:|---:|
+| Headless decisions/s | 26,160 | 31,075 | +18.8% |
+| Total search reply time | 98.488 s | 88.436 s | −10.2% |
+| Worst search reply | 3.224 s | 2.869 s | −11.0% |
+| Four-worker buffered decisions/s | 17,892 | 26,441 | +47.8% |
+
+Raw `bench_steps` durations in execution order were 4.022, 4.772, 4.722 and 3.971 s; `bench_search` totals were 88.503, 98.372, 98.678 and 88.478 s. Every step and search digest matched the committed budget. Four-worker durations were 84.27, 146.76, 82.17 and 70.65 ms (all four matching digest `6e1db496…24c1`); because each four-worker run takes under 150 ms on a shared cloud host, the 146.76 ms system spike inflates the median ratio, while the steady-state rust benchmarks (`bench_steps` +18.8%, `bench_search` −10.2%) had under 1.3% run-to-run spread. All 11 debug `match_state_hash_tests` passed on Linux with `mimalloc`.
+
+On Linux `x86_64`, inline sizes were 5,168 B for `Game`, 4,080 B for `TrackedState`, and 4,048 B for `GameState` (all within the compile-time ceilings), and per-field clone request counts and bytes matched macOS identically. Live 10,000-clone RSS on `glibc` read 13,620 / 54,352 / 427,572 KiB exact (+404.25 MiB) and 13,536 / 53,924 / 423,912 KiB cold (+400.76 MiB). Under `mimalloc`, RSS read 29,036 / 65,912 / 469,408 KiB exact (+430.05 MiB) and 29,012 / 67,932 / 465,288 KiB cold (+426.05 MiB) — about 15 MiB baseline reservation plus ~25 MiB (+6%) at 10,000 retained clones.
+
+Because `mimalloc` delivered consistent double-digit throughput gains on both macOS (`libmalloc`) and Linux (`glibc 2.39`) with identical digests and a small RSS trade-off, `mimalloc` is the default native allocator. CI runs `content_pack_clone_allocations` with `--features benchmark` so clone allocation counting stays covered under the default allocator, and compares the default engine with the committed Engine Budget reference. [Allocator build and collection commands](../../managym/README.md#native-allocator)

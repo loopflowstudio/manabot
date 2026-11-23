@@ -8,12 +8,9 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
-#[cfg(all(feature = "mimalloc", target_family = "wasm"))]
-compile_error!("the mimalloc feature requires a native target");
-
-#[cfg(all(feature = "mimalloc", not(target_family = "wasm")))]
+#[cfg(feature = "mimalloc")]
 use mimalloc::MiMalloc as Backing;
-#[cfg(any(not(feature = "mimalloc"), target_family = "wasm"))]
+#[cfg(not(feature = "mimalloc"))]
 use std::alloc::System as Backing;
 
 pub const NAME: &str = if cfg!(feature = "mimalloc") {

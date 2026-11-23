@@ -3,8 +3,8 @@ use std::hint::black_box;
 use managym::{match_fixtures::build_fixture, Game};
 use serde::Serialize;
 
-// In the default build the library leaves allocator selection to the binary,
-// so this test installs and reads its own counting wrapper.
+// Under `--no-default-features` the library leaves allocator selection to the
+// binary, so this test installs and reads its own counting wrapper.
 #[cfg(not(any(feature = "benchmark", feature = "mimalloc")))]
 #[global_allocator]
 static ALLOCATOR: managym::allocator::CountingAllocator =
@@ -33,7 +33,7 @@ fn stop_counting() -> (u64, u64) {
 // The library installed mimalloc without a counter; refuse rather than report zero.
 #[cfg(all(feature = "mimalloc", not(feature = "benchmark")))]
 fn start_counting() {
-    panic!("run with --features benchmark,mimalloc to count allocations under mimalloc");
+    panic!("run with --features benchmark to count allocations under mimalloc");
 }
 
 #[cfg(all(feature = "mimalloc", not(feature = "benchmark")))]
@@ -120,7 +120,7 @@ fn definition_text_bytes(game: &Game) -> usize {
 #[test]
 #[cfg_attr(
     all(feature = "mimalloc", not(feature = "benchmark")),
-    ignore = "run with --features benchmark,mimalloc to count allocations under mimalloc"
+    ignore = "run with --features benchmark to count allocations under mimalloc"
 )]
 fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
     let baseline_game = build_fixture(FIXTURE_ID).expect("deterministic fixture");
