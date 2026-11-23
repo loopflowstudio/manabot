@@ -1,5 +1,7 @@
-at: 04fbb56aa6410c165fbe9cbe202110f0e52cd9ae
+at: 80f6dce526b31a880347f44fbf6647f8c20e3bf3
 first:
+  - path: docs/engine.md
+    why: Start with casting profiles and stack mana values
   - path: managym/cards/src/tdm.rs
     why: Read the Dragon and its X-cost Omen
   - path: managym/src/flow/decision.rs

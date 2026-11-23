@@ -33,6 +33,15 @@ def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
     )
 
 
+def cold_restore(env: managym.Env) -> managym.Env:
+    replay = env.snapshot().to_replay_json()
+    return managym.GameSnapshot.from_replay_json(replay).restore()
+
+
+def decision_frame(env: managym.Env) -> DecisionFrame:
+    return DecisionFrame.from_json(env.semantic_decision_frame_json())
+
+
 def test_reseeded_replay_preserves_the_reset_seed_and_both_reseeds() -> None:
     source = managym.Env(seed=42, decision_memory_include_own=True)
     source.reset(setup())
@@ -80,9 +89,7 @@ def test_snapshot_replays_commands_with_issued_object_bindings() -> None:
         assert isinstance(action, int)
         unissued.step(action)
     assert unissued.state_digest() == source.state_digest()
-    unissued_cold = managym.GameSnapshot.from_replay_json(
-        unissued.snapshot().to_replay_json()
-    ).restore()
+    unissued_cold = cold_restore(unissued)
     with pytest.raises(managym.AgentError, match="unknown_object_candidate"):
         unissued_cold.execute_semantic_command_json(command)
     # Execute the already-issued address without asking the branch for a frame.
@@ -366,7 +373,7 @@ def test_snapshot_walk_reissues_historical_command_precondition() -> None:
     previous, _ = record_until_object_candidate(env, capture)
     capture.close()
     env.step(0)
-    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    frame = decision_frame(env)
     env.execute_semantic_command_json(
         Command(
             "later",
@@ -663,13 +670,11 @@ def test_pending_cast_payment_command_survives_save_and_reload() -> None:
         env.step(index)
     else:
         pytest.fail("Gray Ogre never reached manual mana payment")
-    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    frame = decision_frame(env)
     command = Command(
         "tap-source", frame.revision, frame.offers[taps[0]]["id"]
     ).to_json()
-    restored = managym.GameSnapshot.from_replay_json(
-        env.snapshot().to_replay_json()
-    ).restore()
+    restored = cold_restore(env)
     for branch in (env, restored):
         branch.execute_semantic_command_json(command)
     assert restored.search_witness_json() == env.search_witness_json()
@@ -687,7 +692,7 @@ def test_pending_adventure_target_command_survives_cold_restore() -> None:
         managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")])
     )
     for _ in range(320):
-        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        frame = decision_frame(env)
         adventure = next(
             (offer for offer in frame.offers if "Spew Flame" in offer["label"]), None
         )
@@ -702,9 +707,7 @@ def test_pending_adventure_target_command_survives_cold_restore() -> None:
                 env.execute_semantic_command_json(
                     Command("adventure", frame.revision, adventure["id"]).to_json()
                 )
-                target_frame = DecisionFrame.from_json(
-                    env.semantic_decision_frame_json()
-                )
+                target_frame = decision_frame(env)
                 assert all(
                     offer["verb"] == "choose_target" for offer in target_frame.offers
                 )
@@ -728,9 +731,7 @@ def test_pending_adventure_target_command_survives_cold_restore() -> None:
     command = Command(
         "target", target_frame.revision, target_frame.offers[0]["id"]
     ).to_json()
-    restored = managym.GameSnapshot.from_replay_json(
-        env.snapshot().to_replay_json()
-    ).restore()
+    restored = cold_restore(env)
     assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
     before_payment = {
         p.id
@@ -767,7 +768,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
         )
     )
     for _ in range(160):
-        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        frame = decision_frame(env)
         obs = env.observation_for_player(0)
         toxin = next((o for o in frame.offers if "Exude Toxin" in o["label"]), None)
         if toxin and sum(not p.tapped for p in obs.agent_permanents) >= 3:
@@ -795,7 +796,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
     zero_branch.execute_semantic_command_json(
         Command("announce-zero", frame.revision, zero["id"]).to_json()
     )
-    payment = DecisionFrame.from_json(zero_branch.semantic_decision_frame_json())
+    payment = decision_frame(zero_branch)
     pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
     zero_branch.execute_semantic_command_json(
         Command("pay-two", payment.revision, pay["id"]).to_json()
@@ -810,9 +811,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
 
     [one] = [offer for offer in frame.offers if "X = 1" in offer["label"]]
     command = Command("announce-one", frame.revision, one["id"]).to_json()
-    restored = managym.GameSnapshot.from_replay_json(
-        env.snapshot().to_replay_json()
-    ).restore()
+    restored = cold_restore(env)
     assert restored.execute_semantic_command_json(
         command
     ) == env.execute_semantic_command_json(command)
@@ -835,7 +834,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
             == 3
         )
     for _ in range(2):
-        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        frame = decision_frame(env)
         passed = next(o for o in frame.offers if o["verb"] == "pass_priority")
         command = Command(
             f"pass-{frame.revision}", frame.revision, passed["id"]
