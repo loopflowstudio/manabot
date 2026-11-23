@@ -8,9 +8,11 @@ prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
-from collections.abc import Callable, Iterator, Mapping
+from collections import defaultdict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 import hashlib
+from itertools import chain
 import json
 from pathlib import Path
 import subprocess
@@ -27,6 +29,7 @@ from managym.recording import (
     DecisionAnnotation,
     GameInputs,
     GameRecord,
+    Intervention,
     read_record,
     read_records,
     runtime_identities,
@@ -79,6 +82,25 @@ def _build_name(identities: Mapping[str, object]) -> str:
     )
 
 
+def interventions_by_offset(game: GameInputs) -> dict[int, list[Intervention]]:
+    boundaries: dict[int, list[Intervention]] = defaultdict(list)
+    for op in game.interventions:
+        boundaries[op.at_action].append(op)
+    return boundaries
+
+
+def apply_boundary(
+    env: managym.Env, operations: Sequence[Intervention], remaining_frames: set[str]
+) -> None:
+    """Consume issued fingerprints on both sides of each live intervention."""
+    for op in operations:
+        if remaining_frames:
+            env._restore_frame_candidates(remaining_frames)
+        env._apply_intervention_json(op.model_dump_json(exclude={"at_action"}))
+    if remaining_frames:
+        env._restore_frame_candidates(remaining_frames)
+
+
 class RecordWalker:
     """One verified traversal, optionally applying through a consumer authority.
 
@@ -108,7 +130,12 @@ class RecordWalker:
             )
         self.build_differs = any(
             record.identities.get(key) != current[key]
-            for key in ("engine_recording_source_sha256", "engine_extension_sha256")
+            for key in (
+                "managym_version",
+                "engine_recording_source_sha256",
+                "engine_extension_sha256",
+            )
+            if key in record.identities
         )
         self.record = record
         self.game = record.games[0]
@@ -118,6 +145,8 @@ class RecordWalker:
             seed=self.game.seed,
             skip_trivial=record.skip_trivial,
             player_policies=record.resolved_player_policies,
+            decision_memory=self.game.decision_memory,
+            decision_memory_include_own=self.game.decision_memory_include_own,
         )
         self._capture_cards = capture_cards
         if capture_cards:
@@ -138,7 +167,8 @@ class RecordWalker:
         return self.run()
 
     def run(
-        self, apply: Callable[[RecordedDecision], None] | None = None
+        self,
+        apply: Callable[[RecordedDecision], None] | None = None,
     ) -> Iterator[RecordedDecision]:
         if self._used:
             raise ValueError("a record walker can only be consumed once")
@@ -157,9 +187,21 @@ class RecordWalker:
             and self.record.execution_outcome != "last_command_succeeded"
         ):
             count = max(0, count - 1)
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
+
         index = 0
         try:
-            for index, action in enumerate(game.actions[:count]):
+            # The final boundary can contain interventions after the last action.
+            for index, action in enumerate(chain(game.actions[:count], (None,))):
+                operations = boundaries.get(index, ())
+                apply_boundary(self.env, operations, remaining_frames)
+                if operations:
+                    self.observation = self.env.observation_for_player(
+                        self.env.current_agent_index() or 0
+                    )
+                if action is None:
+                    break
                 if (
                     index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
@@ -209,13 +251,21 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
-                if after is not None and target.state_digest() != after:
-                    raise ValueError("transition digest differs")
+                # Compare the consumer immediately after its action. The retained
+                # next digest includes any interventions before the next decision.
+                expected = target.state_digest() if apply is not None else None
+                if after is not None:
+                    # Only rules interventions affect the digest. Bind issued
+                    # frames on the live timeline when it reaches that boundary.
+                    if operations := boundaries.get(index + 1):
+                        apply_boundary(target, operations, set())
+                    if target.state_digest() != after:
+                        raise ValueError("transition digest differs")
                 if apply is None:
                     self.observation = decision.apply(self.env)
                 else:
                     apply(decision)
-                    if self.env.state_digest() != target.state_digest():
+                    if self.env.state_digest() != expected:
                         raise RuntimeError(
                             "consumer transition differs from verified native commitment"
                         )
@@ -223,15 +273,20 @@ class RecordWalker:
                         self.env.current_agent_index() or 0
                     )
                 yield decision
-            index = count
+            if count == len(game.actions) and remaining_frames:
+                raise ValueError("snapshot object candidate frame missing")
             end = game.end
+            if (
+                end is not None
+                and end.digest is not None
+                and self.env.state_digest() != end.digest
+            ):
+                raise ValueError("final digest differs")
             if end is not None and end.status == "complete":
                 if not self.env.is_game_over() or (
                     end.winner_retained and self.env.winner_index() != end.winner
                 ):
                     raise ValueError("recorded result differs")
-                if end.digest is not None and self.env.state_digest() != end.digest:
-                    raise ValueError("final digest differs")
                 self.stop = ReplayStop(
                     "complete", count, winner=self.env.winner_index()
                 )
@@ -333,7 +388,7 @@ def require_replay_runtime(
     """
     native = hashlib.sha256(Path(managym._managym.__file__).read_bytes()).hexdigest()
     if not allow_changed_runtime:
-        if native != identities["engine_extension_sha256"]:
+        if native != identities.get("engine_extension_sha256"):
             raise ValueError(
                 "native bytes differ; explicit --allow-changed-runtime required"
             )
@@ -478,6 +533,7 @@ def _replay_game_inputs(
         )
         if evidence.mode == "vector"
         else managym.Env(
+            player_policies=evidence.resolved_player_policies,
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
             decision_memory=game.decision_memory,
@@ -502,7 +558,23 @@ def _replay_game_inputs(
         else:
             reached = env.reset(setup)[0]
         phase = "prefix"
-        for index, action in enumerate(game.actions):
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
+        for offset, action in enumerate(chain(game.actions, (None,))):
+            operations = boundaries.get(offset, ())
+            if operations or remaining_frames:
+                index, phase = offset, "intervention"
+                agreement.at_retained_failure = False
+                if not isinstance(env, managym.Env):
+                    raise ValueError("branch interventions require a scalar replay")
+                apply_boundary(env, operations, remaining_frames)
+                if operations:
+                    reached = env.observation_for_player(env.current_agent_index() or 0)
+            if action is None:
+                if remaining_frames:
+                    raise ValueError("snapshot object candidate frame missing")
+                break
+            index, phase = offset, "prefix"
             if (
                 index == len(game.actions) - 1
                 and game.frame is not None
@@ -619,12 +691,20 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        evidence = next(read_records(args.path))
-    except (OSError, ValueError, StopIteration) as error:
+        records = read_records(args.path)
+        evidence = next(records)
+    except StopIteration:
+        if not args.path.is_dir():
+            parser.error(f"cannot read journal {args.path}: no game records")
+        parser.error(
+            f"no game records in {args.path}: a directory is read for its .jsonl"
+            " records; pass a snapshot replay .json file directly"
+        )
+    except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
     if not evidence.needs_reproduction:
         results = []
-        for record in read_records(args.path):
+        for record in chain((evidence,), records):
             try:
                 replay = walk(record, capture_cards=args.statistics)
             except ValueError as error:

@@ -23,6 +23,9 @@ from managym.disclosure import DecklistDisclosure, DecklistSampling
 from . import format as format
 from .statistics import GameStatistics
 
+NATIVE_ALLOCATOR: Literal["system", "mimalloc"]
+ALLOCATION_COUNTING: bool
+
 ManaPayment = Literal["auto", "manual"]
 ManaFloats = Literal["off", "usable", "all"]
 
@@ -210,7 +213,62 @@ class PreparedPossibleWorldMaterializer:
 class DecisionCapture:
     def to_json(self) -> str: ...
 
+class GameSnapshot:
+    def restore(self, options: RestoreOptions | None = None) -> Env: ...
+    def metadata(self) -> SnapshotMetadata: ...
+    def to_replay_json(self) -> str: ...
+    @staticmethod
+    def from_replay_json(raw: str) -> GameSnapshot: ...
+
+class RestoreOptions:
+    def __init__(self) -> None: ...
+    @staticmethod
+    def exact(
+        *,
+        reseed: int | None = None,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
+    @staticmethod
+    def shuffle_libraries(
+        seed: int,
+        *,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
+    @staticmethod
+    def determinize(
+        viewer: int,
+        seed: int,
+        *,
+        enable_decision_memory: bool | None = None,
+        forced_first_action: int | None = None,
+    ) -> RestoreOptions: ...
+
+class SnapshotMetadata:
+    @property
+    def turn(self) -> int: ...
+    @property
+    def phase(self) -> PhaseEnum: ...
+    @property
+    def life(self) -> list[int]: ...
+    @property
+    def board_counts(self) -> list[int]: ...
+    @property
+    def stack_len(self) -> int: ...
+    @property
+    def action_count(self) -> int: ...
+    @property
+    def action_kind(self) -> ActionSpaceEnum | None: ...
+    @property
+    def acting_player(self) -> int | None: ...
+    @property
+    def terminal(self) -> bool: ...
+    @property
+    def active_card_defs(self) -> list[int]: ...
+
 class Env:
+    def snapshot(self) -> GameSnapshot: ...
     def __init__(
         self,
         seed: int = 0,

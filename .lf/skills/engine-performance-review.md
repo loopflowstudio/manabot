@@ -10,13 +10,15 @@ Judge measured gains against preserved semantics and the remaining useful opport
    beside the ordinary workloads: a cell whose work grows much faster than its
    size is a finding even when the curated decks are no slower.
 2. Inspect debug invariant checks and affected behavior evidence. If semantics
-   changed, invalidate the speed comparison and repair the working contract before
-   accepting dependent results. Never accept narrower choices or lost observations
-   as an optimization.
+   changed, invalidate the speed comparison and record the required contract fix
+   before dependent results can stand. Never accept narrower choices or lost
+   observations as an optimization.
 3. Record supported gains, negative results, worthwhile remaining bottlenecks and
    justified stopping tradeoffs. Do not claim an absolute optimum or treat the
    regression threshold as proof that optimization is complete. Missing capable
    hardware is a named gate/CI check, not fabricated measurement.
 
-Update existing findings for the navigation decision. Preserve performance budget
-reference adoption as its existing reviewed operation, not automatic regeneration.
+Update existing findings and `scratch/plan.md` for the navigation decision.
+Don't change code; leave fixes for `implement` so the loop re-reviews the final
+diff. Preserve performance budget reference adoption as its existing reviewed
+operation, not automatic regeneration.

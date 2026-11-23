@@ -15,3 +15,6 @@ pub mod layout_bindings;
 
 #[cfg(feature = "python")]
 pub mod observation_extents;
+
+#[cfg(feature = "python")]
+mod snapshot_bindings;

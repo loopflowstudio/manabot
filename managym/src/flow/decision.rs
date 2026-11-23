@@ -3458,6 +3458,7 @@ impl Game {
         object: ObjectId,
         index: usize,
     ) {
+        self.state.library_order_pins_mut(owner).insert(object);
         self.state.known_library_mut(owner).forget_order();
         self.state
             .zones
