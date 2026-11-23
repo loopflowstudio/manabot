@@ -5,11 +5,14 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Literal
+from unittest.mock import Mock
 
 from blake3 import blake3
 import pytest
 
 import managym
+from manabot.sim import sim
+from manabot.verify.text_observation import reset_to_first_main
 from managym.decision import Command, DecisionFrame
 from managym.recording import (
     ScalarCapture,
@@ -667,9 +670,52 @@ def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
             else:
                 _, reward, terminated, truncated, info = branch.step(3)
             assert (reward, terminated, truncated) == (-1.0, True, False)
+            assert sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
             assert info["winner_index"] == 1
             assert info["winner_name"] == "Opponent"
             assert info["p0_loss_reason"] == "instructed_loss"
             successors.append(branch.search_witness_json())
     assert all(successor == successors[0] for successor in successors)
     assert env.search_witness_json() == before
+
+
+def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
+    records = []
+    deck = {"Plains": 20, "Herald of Eternal Dawn": 4}
+    player = sim.DefaultPlayer("first action")
+    for losses, protected, expected in (
+        ((1,), False, sim.GameOutcome.HERO_WIN),
+        ((0,), False, sim.GameOutcome.VILLAIN_WIN),
+        ((0, 1), False, sim.GameOutcome.DRAW),
+        ((0,), True, sim.GameOutcome.TIMEOUT),
+    ):
+        native = managym.Env(seed=23)
+        reset_to_first_main(native, managym.GameSetup([
+            managym.PlayerConfig(str(seat), deck) for seat in (0, 1)
+        ]))
+        if protected:
+            native.scenario_force_battlefield(0, "Herald of Eternal Dawn")
+        for seat in losses:
+            native.scenario_set_life(seat, 0)
+        obs = native.scenario_refresh()
+        env = Mock(spec=sim.Env)
+        env.last_raw_obs = obs
+        env.reset.return_value = (obs, {})
+        env.step.side_effect = native.step
+        outcome, steps, duration, _ = sim._simulate_game(env, player, player, 1)
+        assert steps == 1
+        assert outcome == expected
+        assert native.is_game_over() == (not protected)
+        records.append(sim.GameRecord(outcome, steps, duration))
+
+    summary = sim.simulation_summary(records)
+    assert summary["total_games"] == 4
+    assert summary["draws"] == summary["timeouts"] == 1
+    assert summary["hero_wins"] == summary["villain_wins"] == 1
+    assert summary["hero_win_rate"] == summary["villain_win_rate"] == 0.25
+
+
+@pytest.mark.parametrize("info", [{}, {"winner_index": 2, "winner_name": "draw"}])
+def test_simulation_rejects_unknown_terminal_result(info: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="native winner or draw"):
+        sim.determine_outcome(True, info)

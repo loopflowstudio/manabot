@@ -6,11 +6,9 @@ The implemented cohort covers six Foundations primary rows and the cross-set wit
 
 ## Next slice
 
-First close the terminal-result path through the simulation CLI. At `218b67af`, `manabot/sim/sim.py::_simulate_game` combines termination and truncation, then `determine_outcome` checks the step limit, reads an absent `winner` key and falls back to viewer-relative life. The seed-23 Pact result supplies `winner_index=1`. At positive life the report would record a timeout. A simultaneous loss can be counted as a win.
+Simulation parity is complete. The simulation records the absolute winning seat or native draw, including on the final permitted step. A live protected game at the cap counts as a timeout. Five focused checks passed, including seed-23 Pact Command replay, both winning seats, simultaneous loss and the four-game win-rate denominator.
 
-Start with a bounded Pact terminal step from the retained snapshot through the simulation result reader and summary. Replaying the bound Command must credit the same seat. Map a terminated step to its absolute winning seat or the native draw result. Treat an unrecognized terminal payload as a contract failure. Use timeout for external truncation or a live game at the caller’s limit. A committed result takes precedence on the last allowed step. Remove the life reconstruction. Carry draw through GameRecord, summary counts and CLI output, retaining the existing win-rate denominator over all games. Exercise both seat assignments, a simultaneous draw and a still-live protected branch at the cap. Existing saved evidence keeps its original classifications.
-
-After simulation parity, run the paired Engine Budget. Build the candidate and reference on the dedicated runner, run the sample and compare commands below, and reconcile the changed ordinary-game decision digests against real opening choices before judging the 10% limit. The local candidate measurements justify carrying the current implementation into review. A relative performance result is still missing.
+Run the paired Engine Budget. Build the candidate and reference on the dedicated runner, run the sample and compare commands below, and reconcile the changed ordinary-game decision digests against real opening choices before judging the 10% limit. The local candidate measurements justify carrying the current implementation into review. A relative performance result is still missing.
 
 Gate also owns the complete suite, schema and package checks, representative Academy play, model compatibility and restored mid-game self-play. The sync at `a3f33b18` brought in MLX tracked self-play training and resume. Include the affected snapshot consumer in that check.
 
