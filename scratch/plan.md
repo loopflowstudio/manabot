@@ -410,8 +410,8 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 46 of 81 primary rows with definitions and native
-fixture evidence. The 35 pending primary rows are in the later batches below.
+The FDN ledger has 54 of 81 primary rows with definitions and native
+fixture evidence. The 27 pending primary rows are in the later batches below.
 Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
 witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
 witnesses. Daggers identify pending cost candidates whose full ledger
@@ -494,49 +494,24 @@ The working phase for the death batch is satisfied except Finding 7, a text-only
 
 Keep `GameOutcome::Draw` and zero-choice CR 104.4b mandatory-loop detection (`flow/tick.rs`, `winner_index`, Env rewards, Academy game-over rendering) as its own slice paired with a loop partner such as *Vito, Thorn of the Dusk Rose* so *Bloodthirsty Conqueror*’s remaining pending obligation closes cleanly without mixing loop-outcome API churn into the Death batch.
 
-### Next slice · Draw listeners, cast triggers, and spell LKI / counter results
+### Implemented slice · Draw listeners, cast triggers, and spell LKI / counter results
 
-Concept review at `ac8add3da2` (see `scratch/concept-review.html`) widened across the remaining 35 primary FDN rows, 11 cost-primary candidates and cross-set witnesses, and merged the two-card Draw-listener batch, the Filtered-cast batch, and the two-card Stack/Counter batch into one cohesive 12-card slice on hash contract **v28**.
+Built in `d061f9a14a`, `5d840eeb12` and `7cdf10646c` on hash contract **v28**. Eight primary FDN rows (Scrawling Crawler, Dictate of Kruphix `jou`, Brineborn Cutthroat `m20`, Mindsparker `m14` (new module), Gnarlback Rhino `m20`, Mold Adder `m10` (new module), Firespitter Whelp, An Offer You Can't Refuse `snc`), the cost-primary Archmage of Runes, Painful Quandary `som` and Ramos, Dragon Engine `c17`, and EOE Unravel link to their first-printing modules and directed tests. The FDN ledger has 54 of 81 primary rows; Unravel's EOE row carries the same implementation record.
 
-#### Shared unifications (build in order)
+Shared changes:
 
-1. **Multi-player `PlayerSelector::EachPlayer` and looping `Effect::ForPlayer`.**
-   - Add `PlayerSelector::EachPlayer` resolving in APNAP order (`[self.active_player(), self.non_active_player()]`, CR 101.4 / 121.2c).
-   - Fix `Effect::ForPlayer` (`flow/resolution.rs`) so multi-player selectors no longer silently return `None`: when `selected_players` yields players `[p_0, p_1, ...]`, restore the original controller after the last player and prepend each player's block separated by `Effect::RestoreController(p_i)`. Because the existing `RestoreController` cursor lives in `frame.queue`, suspended choices inside `ForPlayer` (such as *Painful Quandary*'s discard choice) project and restore through `effect_execution` with no new frame state.
-2. **One `SpellLki` authority (`GameState::spell_lki`, hash contract v28).**
-   - Add `SpellLki { object, definition_id, controller, mana_value, spent, colors }` (mirroring `ObjectLki` in `state/src/game_object.rs`) stored in `GameState::spell_lki` (omitted from hash when empty). Record it at the sole spell stack-departure site in `flow/zones.rs::commit_zone_move` whenever a `StackObject::Spell` is removed from `stack_objects` (resolved, countered, fizzled, bounced, or exiled by `EndTheTurn`).
-   - Delete `ResolutionTarget.spell: Option<SpellPayment>` (`flow/decision.rs`) and add one `Game::spell_info(object: ObjectId) -> Option<SpellInfo>` reader that checks live `StackObject::Spell` first and falls back to `self.state.spell_lki`.
-   - Extend `PlayerSelector::TargetController` (`flow/resolution.rs`) to answer `Target::StackSpell(object)` through `spell_info` (works for countered, uncounterable, stolen, and copied spells alike).
-   - Add `ObjectProperty::Colors` (distinct color count, `0..=5`) and route `target_property` / `object_property_or_lki` / `EffectValue::SpellManaSpent` / `EffectValue::SpellManaValue` / legacy `EffectValue::TriggeringManaValue` / `Condition::TriggeringSpellMatches` through `spell_info` for `Target::StackSpell`, fixing the CR 608.2h departed-X and spell-copy mana-value gap.
-3. **Unified `ContextRead::TriggeringObject` and departed-spell stack projection.**
-   - Replace the stale hardcoded `Effect::asks_triggering_spell` (`state/src/ability.rs`) with `ContextRead::TriggeringObject` in the recursive `Effect::reads` / `Ability::reads` walker (covering `ObjectSelector::Triggering`, `TriggeringManaValue`, `TriggeringSpellMatches`, `TriggeringHadCounters`, `TriggeringMatches`, `CopyTriggeringObject`, `CopyTriggeringSpellForEach`, `MayExileTriggeringWithSource`, `SpellManaSpent(Triggering)`, and `SpellManaValue(Triggering)` across every effect, `If`, `ForPlayer`, `TriggerModes`, and `intervening_if`).
-   - Update `continuation.rs::target_reference(Target::StackSpell)` to fall back to `spell_lki.definition_id`, and update `effect_execution::project_stack_object` / `project_pending_trigger` to project departed `SpellLki` (definition, mana value, colors, spent) onto the existing `effect_execution` token channel so both viewers and the policy see what a pending cast trigger will read after its triggering spell leaves the stack (no new v11 tensor columns).
-4. **Cast-target filtering and negated conditions.**
-   - Add `#[serde(default, skip_serializing_if = "SpellTargetFilter::is_any")] targets: SpellTargetFilter` (`Any | TargetsThis | TargetsOnlyThis`) to `TriggerCondition::Casts`, matching against `GameEvent::SpellCast.targets` directly; keep legacy `SpellTargetsOnlyThis` for `emn` / pinned pilots.
-   - Add `Condition::Not(Box<Condition>)` to `Condition` (`state/src/ability.rs`, `flow/statics.rs`, `flow/layers.rs::ReadSet`, `agent/ability_description.rs`) so *"during an opponent's turn"* is `Condition::not(Condition::YourTurn)` without card-shaped negated variants.
+- `PlayerSelector::EachPlayer` (APNAP, CR 101.4). `Effect::ForPlayer` runs once per selected player, each run ending with a `RestoreController` cursor naming the next player; a suspended choice inside one run restores with no other frame state.
+- `SpellLki` (`state/src/stack_object.rs`) is written to `GameState::spell_lki` where a spell leaves the stack (`zones.rs::commit_zone_move`), copies included. `Game::spell_info` answers live and departed spells and replaced `ResolutionTarget.spell` / `SpellPayment`. `TargetController` answers spells; `SpellManaSpent`/`SpellManaValue` (target or triggering), `target_property` and the legacy `TriggeringManaValue` read it, so a departed X spell keeps its stack mana value (previously the card it became). `ObjectProperty::Colors` reads live, departed and spell colors. `TriggeringSpellMatches` still uses `recorded_object_matches_predicate`, which already answers departed spells.
+- `ContextRead::TriggeringObject` (renamed from `TriggeringPermanent`) covers spell readers (`TriggeringManaValue`, `TriggeringSpellMatches`, `CopyTriggeringObject`, `CopyTriggeringSpellForEach`); `asks_triggering_spell` is deleted. A cast trigger that reads its triggering object binds `Target::StackSpell`. Departed spells project through `effect_execution` (`last known spell`: mana value, colors, spent) and `continuation::target_reference` keeps their definition.
+- `TriggerCondition::Casts { targets: SpellTargetFilter }` (`Any`, omitted when serialized, or `TargetsThis`); legacy `SpellTargetsOnlyThis` stays. `Condition::Not` with `Condition::not`.
+- A mana ability's `remove_counters` cost is now paid (`complete_mana_upfront`), checked before it is offered, planned as one activation, and counts as a side effect. Before, Ramos added mana without removing counters.
+- `Fungus` and `Merfolk` joined the subtype table. Search-state authority covers `spell_lki`; the Clone hash in `lea.rs` moved to v28.
 
-#### Cards to author (12 total: 8 primary FDN + EOE Unravel + 3 cost-primary FDN)
+Checks, all debug: cards target (912), `managym` lib (359), rules (188), `match_state_hash_tests`, `search_state_contract`, `canonical_replay_tests`, content pack, engine, scenario. After rebuilding and atomically installing the cp313 extension, the focused Python selection passed (116 passed, 1 skipped). Both viewers' departed-spell projection is checked natively (`som::a_countered_x_spell_keeps_its_stack_mana_value_for_its_cast_trigger`, `c17::ramos_…`): equal, nonempty, and the acting text reads "Last known spell Exsanguinate: mana value 5".
 
-Author each card in its first-printing set module with directed debug tests in its first-printing test module under `managym/cards/tests/cards/`, register any missing tokens through `token_catalog()`, and record verified rows in `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl` (expected primary count: **54 of 81**) and `eoe.jsonl` if present:
+Not covered (see `scratch/questions.md`): a noncreature Dragon for Firespitter's overlap, a multi-target spell for Rhino, spell copies for Unravel and An Offer, and a stolen spell for An Offer.
 
-- **Primary FDN (8):**
-  - *Scrawling Crawler* (`fdn`) — upkeep `EachPlayer` draw in APNAP order (including two Crawlers queuing both opponent-draw triggers) + opponent draw loses 1 life.
-  - *Dictate of Kruphix* (`jou`) — Flash + `BeginningOf(Draw, AnyPlayer)` `ForPlayer(TriggeringPlayer, Draw(1))` (test on Turn 2+ draw steps, preserving `tick.rs`'s Turn-1 step schedule for pinned pilot compatibility).
-  - *Brineborn Cutthroat* (`m20`) — Flash + `ActiveIf(Not(YourTurn), Casts(You))` counter (fires on opponent's turn, not on own turn).
-  - *Mindsparker* (`m14`, new set module) — First strike + opponent casts white or blue instant/sorcery deals 2 to `TriggeringPlayer`.
-  - *Gnarlback Rhino* (`m20`) — Trample + `Casts { who: You, targets: TargetsThis }` draws a card (fires on single-target and multi-target spells targeting Rhino; does not fire on untargeted or opponent-cast spells).
-  - *Mold Adder* (`m10`, new set module) — opponent casts blue or black spell -> optional +1/+1 counter (both accept and decline forks; fires once on a UB spell).
-  - *Firespitter Whelp* (`fdn`) — Flying + `Casts(You, any_of: [noncreature, Dragon])` deals 1 to each opponent (verify single trigger on overlapping noncreature Dragon / separate triggers on instant and Dragon).
-  - *An Offer You Can't Refuse* (`snc`) — counter target noncreature spell; `TargetController` creates two Treasures both when the spell is countered AND when the spell has `CantBeCountered`, plus when countering a spell copy / stolen spell.
-- **Cross-set witness (1):**
-  - *Unravel* (`eoe`) — counter target spell; if `SpellManaSpent(Target) < SpellManaValue(Target)`, draw a card. Test discounted *Tolarian Terror*, full-price *Tolarian Terror* after an intervening cast, announced-`X` spell, and a spell copy (`spent = 0`).
-- **Cost-primary FDN unblocked by this slice (3):**
-  - *Archmage of Runes* (`fdn`) — instant/sorcery `{1}` cost reduction + separate per-cast draw trigger.
-  - *Painful Quandary* (`som`) — opponent casts a spell -> `ForPlayer(TriggeringPlayer, ...)` optional discard (1) or lose 5 life (test discard branch, decline branch, empty-hand forced life loss, and snapshot restore mid-choice).
-  - *Ramos, Dragon Engine* (`c17`) — Flying + `Casts(You)` -> put `ObjectProperty::Colors` +1/+1 counters on Ramos (including after the triggering spell is countered, checking both viewers' stack projection!) + remove five +1/+1 counters once each turn for `{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}`.
-- **Native rule witness for *Ovika*-style departed-X MV:** *Ovika, Enigma Goliath*† stays pending composite `PaymentCost` (`Ward—{3}, Pay 3 life`), so add a directed native test verifying `ObjectProperty::ManaValue` on a countered `X = 4` triggering spell (MV = 5, visible in both viewers' stack projections).
-
-Rebuild the cp313 extension and run the focused Python checks (including stack-projection visibility for departed triggering spells).
+Next: the behavior review of this batch, then **Damage recipients, amounts and results** below, whose `source_controller` fix now reads `spell_info`.
 
 ### Later slices
 
