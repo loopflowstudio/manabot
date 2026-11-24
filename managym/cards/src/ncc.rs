@@ -31,7 +31,7 @@ fn extravagant_replication() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
                 intervening_if: None,
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement { another: true, ..TargetRequirement::one(target.clone()) },
+                    requirement: TargetRequirement::another(target.clone()),
                     effects: vec![Effect::create_token_copies(ObjectSelector::Target(target), 1)],
                 }],
             }],

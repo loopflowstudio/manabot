@@ -993,15 +993,12 @@ fn appa_loyal_sky_bison() -> CardDefinition {
                 Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
             )],
             vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    another: true,
-                    ..TargetRequirement::one(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
-                    })
-                },
+                requirement: TargetRequirement::another(TargetSpec::PermanentYouControl {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    },
+                }),
                 effects: vec![Effect::Airbend {
                     what: ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
@@ -2814,10 +2811,7 @@ fn deserter_s_disciple() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(target.clone())
-                    },
+                    requirement: TargetRequirement::another(target.clone()),
                     effects: vec![Effect::until_end_of_turn(
                         ObjectSelector::Target(target),
                         Modification::CantBeBlocked,
@@ -3032,10 +3026,7 @@ fn earth_kingdom_protectors() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 sacrifice_source: true,
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(target.clone())
-                    },
+                    requirement: TargetRequirement::another(target.clone()),
                     effects: vec![Effect::until_end_of_turn(
                         ObjectSelector::Target(target),
                         Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
@@ -3814,12 +3805,9 @@ fn fire_nation_engineer() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::AttackedThisTurn),
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(TargetSpec::PermanentYouControl {
-                            predicate: creature_or_vehicle.clone(),
-                        })
-                    },
+                    requirement: TargetRequirement::another(TargetSpec::PermanentYouControl {
+                        predicate: creature_or_vehicle.clone(),
+                    }),
                     effects: vec![Effect::put_counters(
                         ObjectSelector::Target(TargetSpec::PermanentYouControl {
                             predicate: creature_or_vehicle,
@@ -4754,10 +4742,7 @@ fn guru_pathik() -> CardDefinition {
                     condition: TriggerCondition::casts(Actor::You, lesson_saga_or_shrine),
                     intervening_if: None,
                     effects: vec![Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            another: true,
-                            ..TargetRequirement::one(TargetSpec::CreatureYouControl)
-                        },
+                        requirement: TargetRequirement::another(TargetSpec::CreatureYouControl),
                         effects: vec![Effect::put_counters(
                             ObjectSelector::Target(TargetSpec::CreatureYouControl),
                             CounterKind::PlusOnePlusOne,
@@ -6854,6 +6839,9 @@ fn north_pole_gates() -> CardDefinition {
 
 fn north_pole_patrol() -> CardDefinition {
     let text_box = "{T}: Untap another target permanent you control.\nWaterbend {3}, {T}: Tap target creature an opponent controls. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+    let yours = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::default(),
+    };
 
     CardDefinition {
         key: "tla.north_pole_patrol",
@@ -6878,17 +6866,8 @@ fn north_pole_patrol() -> CardDefinition {
                 ActivatedAbilityDefinition {
                     tap_source: true,
                     effects: vec![Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            another: true,
-                            ..TargetRequirement::one(TargetSpec::PermanentYouControl {
-                                predicate: CardPredicate::default(),
-                            })
-                        },
-                        effects: vec![Effect::untap(ObjectSelector::Target(
-                            TargetSpec::PermanentYouControl {
-                                predicate: CardPredicate::default(),
-                            },
-                        ))],
+                        requirement: TargetRequirement::another(yours.clone()),
+                        effects: vec![Effect::untap(ObjectSelector::Target(yours))],
                     }],
                     ..Default::default()
                 },

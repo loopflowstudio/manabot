@@ -1669,6 +1669,14 @@ impl TargetRequirement {
         }
     }
 
+    /// "another target [spec]": one target other than the ability's source.
+    pub fn another(spec: TargetSpec) -> Self {
+        Self {
+            another: true,
+            ..Self::one(spec)
+        }
+    }
+
     /// Whether X must equal the number of targets ("X targets").
     pub fn exact_x(&self) -> bool {
         self.max_x && self.min > 0

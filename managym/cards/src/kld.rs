@@ -98,10 +98,7 @@ fn noxious_gearhulk() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(TargetSpec::Creature)
-                    },
+                    requirement: TargetRequirement::another(TargetSpec::Creature),
                     effects: vec![Effect::OptionalPayment {
                         cost: PaymentCost::Mana(ManaCost::default()),
                         if_paid: vec![

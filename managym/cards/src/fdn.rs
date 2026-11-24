@@ -74,10 +74,7 @@ fn fiendish_panda() -> CardDefinition {
                     },
                     intervening_if: None,
                     effects: vec![Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            another: true,
-                            ..TargetRequirement::one(target.clone())
-                        },
+                        requirement: TargetRequirement::another(target.clone()),
                         effects: vec![Effect::return_to_battlefield(
                             ObjectSelector::Target(target),
                             false,
@@ -589,10 +586,7 @@ fn kykar_zephyr_awakener() -> CardDefinition {
                     up_to: None,
                     modes: vec![
                         vec![Effect::TargetClause {
-                            requirement: TargetRequirement {
-                                another: true,
-                                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
-                            },
+                            requirement: TargetRequirement::another(TargetSpec::CreatureYouControl),
                             effects: vec![
                                 Effect::exile(ObjectSelector::Target(
                                     TargetSpec::CreatureYouControl,
