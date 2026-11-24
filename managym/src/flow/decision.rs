@@ -7,7 +7,7 @@
 use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use rand::seq::SliceRandom;
 
@@ -364,6 +364,7 @@ pub enum ResolutionCastOffer {
     Exiled {
         #[serde(rename = "card")]
         object: ObjectId,
+        below: i32,
     },
     /// The top card of the deciding player's library, which they have looked
     /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
@@ -2999,7 +3000,9 @@ impl Game {
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
-                    ResolutionCastOffer::Exiled { object: object_id } => {
+                    ResolutionCastOffer::Exiled {
+                        object: object_id, ..
+                    } => {
                         self.reveal_object_to_hand(*object_id, *player);
                     }
                     ResolutionCastOffer::Cascade { exiled, .. } => {
@@ -3341,47 +3344,37 @@ impl Game {
                 .state
                 .zone_cards(ZoneType::Graveyard, *player)
                 .collect(),
-            ResolutionCastOffer::Hand { predicate } => self
-                .state
-                .zone_cards(ZoneType::Hand, *player)
-                .filter(|card| {
-                    self.state[self.state.object_of(*card)].types.is_castable()
-                        && self.object_matches_predicate(self.state.object_of(*card), predicate)
-                })
-                .collect(),
+            ResolutionCastOffer::Hand { .. } => {
+                self.state.zone_cards(ZoneType::Hand, *player).collect()
+            }
             ResolutionCastOffer::AmongExiled { objects } => objects
                 .iter()
                 .filter(|object| self.state.zones.zone_of(**object) == Some(ZoneType::Exile))
                 .filter_map(|object| self.state.card_of(*object))
                 .collect(),
-            ResolutionCastOffer::Exiled { object }
+            ResolutionCastOffer::Exiled { object, .. }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
                 .card_of(*object)
                 .filter(|_| self.state.zones.contains(*object, ZoneType::Exile, *player))
                 .into_iter()
                 .collect(),
-            ResolutionCastOffer::ExiledWith { source, predicate } => self
+            ResolutionCastOffer::ExiledWith { source, .. } => self
                 .state
                 .exile_links
                 .iter()
-                .filter(|link| link.source == *source)
-                .filter_map(|link| self.state.card_of(link.exiled_object))
-                .filter(|card| {
-                    let definition = &self.state[self.state.object_of(*card)];
-                    self.state
-                        .zones
-                        .contains(self.state.object_of(*card), ZoneType::Exile, *player)
-                        && definition.types.is_castable()
-                        && self.object_matches_predicate(self.state.object_of(*card), predicate)
+                .filter(|link| {
+                    link.source == *source
+                        && self
+                            .state
+                            .zones
+                            .contains(link.exiled_object, ZoneType::Exile, *player)
                 })
+                .filter_map(|link| self.state.card_of(link.exiled_object))
                 .collect(),
             ResolutionCastOffer::LibraryTop { object } => self
                 .library_top_card(*player)
-                .filter(|card| {
-                    self.state.object_of(*card) == *object
-                        && self.state[self.state.object_of(*card)].types.is_castable()
-                })
+                .filter(|card| self.state.object_of(*card) == *object)
                 .into_iter()
                 .collect(),
         };
@@ -3394,16 +3387,6 @@ impl Game {
             let object = self.state.object_of(card);
             let definition = &self.state[object];
             for profile in definition.spell_profiles() {
-                if !profile.is_front()
-                    && !matches!(
-                        offer,
-                        ResolutionCastOffer::Graveyard { .. }
-                            | ResolutionCastOffer::AmongExiled { .. }
-                            | ResolutionCastOffer::Cascade { .. }
-                    )
-                {
-                    break;
-                }
                 let cast = decision
                     .resolution_cast_choices(definition, profile)
                     .expect("cast decision");
@@ -3411,22 +3394,31 @@ impl Game {
                 if !spell.types.is_castable() {
                     continue;
                 }
-                if let ResolutionCastOffer::Cascade { below, .. } = offer {
-                    if spell
-                        .mana_cost
-                        .as_ref()
-                        .map_or(0, |cost| cost.mana_value_at(0))
-                        >= *below
-                    {
-                        continue;
+                let eligible = match offer {
+                    ResolutionCastOffer::Graveyard { predicate, .. }
+                    | ResolutionCastOffer::Hand { predicate }
+                    | ResolutionCastOffer::ExiledWith { predicate, .. } => {
+                        cast.matches_spell(self, object, predicate)
                     }
-                }
-                if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
-                    if !predicate.matches_printed_spell(spell, definition.kind()) {
-                        continue;
+                    ResolutionCastOffer::Exiled { below, .. } => {
+                        i32::from(
+                            spell
+                                .mana_cost
+                                .as_ref()
+                                .map_or(0, |cost| cost.mana_value_at(0)),
+                        ) < *below
                     }
-                }
-                if self.castable_mana_value(*player, object, cast).is_some() {
+                    ResolutionCastOffer::Cascade { below, .. } => {
+                        spell
+                            .mana_cost
+                            .as_ref()
+                            .map_or(0, |cost| cost.mana_value_at(0))
+                            < *below
+                    }
+                    ResolutionCastOffer::AmongExiled { .. }
+                    | ResolutionCastOffer::LibraryTop { .. } => true,
+                };
+                if eligible && self.castable_mana_value(*player, object, cast).is_some() {
                     candidates.push((card, profile));
                 }
             }
@@ -3435,11 +3427,12 @@ impl Game {
             offer,
             ResolutionCastOffer::Graveyard { .. } | ResolutionCastOffer::AmongExiled { .. }
         ) {
-            candidates.dedup_by_key(|(card, profile)| {
-                (
+            let mut offered = HashSet::new();
+            candidates.retain(|(card, profile)| {
+                offered.insert((
                     self.state[self.state.object_of(*card)].definition_id,
                     *profile,
-                )
+                ))
             });
         }
         candidates

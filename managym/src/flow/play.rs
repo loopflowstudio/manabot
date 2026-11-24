@@ -68,7 +68,12 @@ impl CastChoices {
             .expect("offered spell profile")
     }
 
-    fn matches_spell(self, game: &Game, object: ObjectId, predicate: &CardPredicate) -> bool {
+    pub(super) fn matches_spell(
+        self,
+        game: &Game,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
         if self.profile.is_front() {
             return game.object_matches_predicate(object, predicate);
         }

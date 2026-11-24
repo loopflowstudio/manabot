@@ -1339,16 +1339,17 @@ impl Game {
                     }
                 }
                 let object_id = nonland?;
-                let limit = self.effect_value(below, frame);
+                let below = self.effect_value(below, frame);
                 let decision = Decision::CastDuringResolution {
                     player,
                     paid: false,
-                    offer: ResolutionCastOffer::Exiled { object: object_id },
+                    offer: ResolutionCastOffer::Exiled {
+                        object: object_id,
+                        below,
+                    },
                     spends: None,
                 };
-                if i32::from(self.object_mana_value(object_id)) < limit
-                    && !self.resolution_cast_candidates(&decision).is_empty()
-                {
+                if !self.resolution_cast_candidates(&decision).is_empty() {
                     return Some(decision);
                 }
                 self.reveal_object_to_hand(object_id, player);

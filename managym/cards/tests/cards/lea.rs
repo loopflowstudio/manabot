@@ -308,7 +308,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     // state. Definition ids depend on the name-ordered catalog.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v19:d868c71742679dfa0b474c0b5d99b0700b46ef3f8a1a9704c4bff5e9b06dd61d"
+        "v19:6ad724bd4507839ef469caa210e3ef4a67b3d65f33b63303a6f2413e2dd03bcc"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();

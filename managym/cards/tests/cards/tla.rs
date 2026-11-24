@@ -43,7 +43,7 @@ use managym::{
     possible_worlds::{viewer_observation, PossibleWorldSpace},
     search_state::witness,
     state::{
-        card::{Keyword, Keywords, StaticAbility},
+        card::{Keyword, Keywords, SpellProfile, StaticAbility},
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
@@ -2453,11 +2453,13 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == strike),
     );
-    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Graveyard));
+    // CR 608.2: Solstice finishes resolving only after Strike is cast.
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Stack));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Graveyard));
     settle(&mut s);
     s.assert_life(1, 17);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
@@ -2470,6 +2472,37 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
     assert_eq!(zone_of(&s, solstice), Some(ZoneType::Exile));
+}
+
+#[test]
+fn solstice_revelations_offers_charring_bite_from_exile() {
+    let mut s = five_color_setup(&["Solstice Revelations", "Twinmaw Stormbrood", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let target = card_of(&s, ogre);
+    let dragon = library_card(&s, 0, "Twinmaw Stormbrood");
+    put_on_top(&mut s, dragon);
+    force_lands(&mut s, 0, "Mountain", 3);
+    cast(&mut s, "Solstice Revelations");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let exiled = now(&s, dragon);
+    assert_eq!(zone_of(&s, dragon), Some(ZoneType::Exile));
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == exiled)
+    ));
+    let mut decline =
+        crate::support::play::fork_choosing(&s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut decline);
+    assert_eq!(zone_of(&decline, dragon), Some(ZoneType::Hand));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == exiled),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, dragon), Some(ZoneType::Library));
 }
 
 /// ...nor when an opponent's Ally enters...
@@ -10626,6 +10659,39 @@ fn yue_casts_a_noncreature_spell_from_hand_for_free() {
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Stack));
     settle(&mut s);
     s.assert_life(1, 17);
+}
+
+#[test]
+fn yue_offers_spew_flame_from_hand() {
+    let mut s = five_color_setup(&[
+        "Yue, the Moon Spirit",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+    ]);
+    let yue = s.force_permanent_on_battlefield(0, "Yue, the Moon Spirit");
+    clear_summoning_sickness(&mut s, yue);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let target = card_of(&s, ogre);
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Hand);
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, yue, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    resolve_top(&mut s);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == smaug)
+    ));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == smaug),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, smaug), Some(ZoneType::Exile));
+    s.set_player_mana_pool(0, "5RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, smaug));
 }
 
 #[test]

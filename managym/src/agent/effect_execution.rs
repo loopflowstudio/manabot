@@ -52,6 +52,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "captured activation",
     "cascade exiled",
     "cascade mana value limit",
+    "spell mana value limit",
     "cast choices",
     "quota type",
     "cast from exile",
@@ -1401,7 +1402,11 @@ pub(crate) fn project_decision(
                     out.field("exile instants and sorceries", exile_instants_and_sorceries);
                 }
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { object: object_id } => {
+                ResolutionCastOffer::Exiled {
+                    object: object_id,
+                    below,
+                } => {
+                    out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
                 }
                 ResolutionCastOffer::AmongExiled { objects } => {

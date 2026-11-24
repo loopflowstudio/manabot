@@ -1083,7 +1083,7 @@ pub enum AdditionalCost {
 }
 
 /// The printed spell chosen at announcement and retained through resolution.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SpellProfile {
     #[default]
     Front,

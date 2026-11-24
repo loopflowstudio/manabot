@@ -3436,7 +3436,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         chosen_mode => [column(Stack, stack::MODE), column(Relation, relation::MODE)],
         ability_index => [column(Stack, stack::ABILITY), column(Relation, relation::ABILITY)],
         targets => [Rows("relations")],
-        x => [Columns(Stack, stack::HAS_X, 2), column(Relation, relation::X)],
+        x => [
+            Columns(Stack, stack::HAS_X, 2),
+            column(Stack, stack::EFFECTIVE_MANA_VALUE),
+            column(Relation, relation::X),
+        ],
         granted_keywords => [
             Columns(Stack, stack::FLYING, KEYWORD_COUNT),
             Columns(Relation, relation::FLYING, KEYWORD_COUNT),
