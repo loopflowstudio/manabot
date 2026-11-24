@@ -42,3 +42,5 @@ Use two friendly Gray Ogres and one opposing Gray Ogre for the six unconditional
 Batch 5e follows Scryfall's earliest non-digital printing for each set file (Opt in INV, Offer Immortality in a new ONE module). Planeswalker target legality uses a permanent retyped in the test, since no planeswalker card is defined.
 
 Mode labels now come from `effects_description` when no idiomatic label exists. Some generated text is rough ("Draw 1 cards", Bushwhack's empty first clause, Crawling Barrens' "This object"); improving the shared description templates is left for a text pass.
+
+Use the verified Batch 5e checkout for compression. Compare the rebuilt extension's full definition JSON and catalog token table against a62143faef to check the shared pump constructor.
