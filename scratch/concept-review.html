@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Whole-Branch Alignment &amp; RemoveCounters Continuation</title>
+  <title>MTG-419 Concept Review — Whole-Branch Sign-Off Before Gate</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -21,6 +21,8 @@
       --exist-ink: #3c3a35;
       --prop-bg: #e5effd;
       --prop-ink: #124891;
+      --warn-bg: #fdf3dc;
+      --warn-ink: #7a4b1e;
       --accent: #7a4b1e;
       font: 15.5px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
@@ -40,6 +42,8 @@
         --exist-ink: #d0cbc0;
         --prop-bg: #162a45;
         --prop-ink: #8fc0ff;
+        --warn-bg: #352915;
+        --warn-ink: #e8b574;
         --accent: #dfa066;
       }
     }
@@ -67,7 +71,7 @@
     .scope {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--accent);
+      border-left: 4px solid var(--yes-ink);
       padding: 0.95rem 1.15rem;
       border-radius: 6px;
       margin: 1rem 0 1.6rem;
@@ -86,6 +90,7 @@
     .no { background: var(--no-bg); color: var(--no-ink); }
     .existing { background: var(--exist-bg); color: var(--exist-ink); }
     .proposed { background: var(--prop-bg); color: var(--prop-ink); }
+    .outside-badge { background: var(--warn-bg); color: var(--warn-ink); }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -110,7 +115,6 @@
       color: var(--muted);
     }
     tr:last-child td { border-bottom: none; }
-    tr.biggest td { background: color-mix(in srgb, var(--no-bg) 34%, var(--surface)); }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
@@ -123,7 +127,7 @@
       border-radius: 6px;
       padding: 0.95rem 1.05rem;
     }
-    .card.proposed-box { border-color: var(--prop-ink); }
+    .card.aligned-box { border-color: var(--yes-ink); }
     pre {
       margin: 0.5rem 0;
       padding: 0.7rem 0.85rem;
@@ -157,219 +161,165 @@
     .callout {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--no-ink);
-      padding: 0.8rem 1rem;
+      border-left: 4px solid var(--yes-ink);
+      padding: 0.85rem 1rem;
       border-radius: 6px;
       margin: 0.9rem 0 1.2rem;
     }
-    .compare {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      margin: 0.5rem 0;
-    }
-    .compare th, .compare td {
-      padding: 0.45rem 0.55rem;
-      border: 1px solid var(--border);
-    }
-    .compare td.bad { background: color-mix(in srgb, var(--no-bg) 42%, var(--surface)); }
-    .compare td.good { background: color-mix(in srgb, var(--prop-bg) 52%, var(--surface)); font-weight: 650; color: var(--prop-ink); }
     .outside {
       background: var(--surface-alt);
       border: 1px solid var(--border);
+      border-left: 4px solid var(--warn-ink);
       border-radius: 6px;
-      padding: 0.85rem 1.05rem;
+      padding: 0.9rem 1.05rem;
       margin: 1rem 0;
     }
   </style>
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Post-Slice-5 Whole-Branch Concept Review (bb2fb68c0d vs. main 88ce96bd6b)</p>
-  <h1>Do the shared casting-profile, play-permission, and payment-continuation concepts line up across the whole branch?</h1>
+  <p class="kicker">Managym · MTG-419 · Pre-Gate Whole-Branch Concept Review (6d60273fd6 vs. main 88ce96bd6b)</p>
+  <h1>Do the shared casting-profile, play-permission, payment-continuation, and stack-trigger concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The entire MTG-419 casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and combat-damage trigger area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, proposed_event.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, continuation.rs, effect_execution.rs, structured_offer.rs, record_vocabulary.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, Board.svelte, Rail.svelte, Inspect.svelte}</code>).<br>
-    <strong>Why this area:</strong> Slice 5 items 4–5 landed (<code>13f4c8d60c..bb2fb68c0d</code>), closing resolution-vs-priority route isolation, Land//Spell MDFC grant pricing, non-hand stack announcement in Academy, and Quilled Greatwurm. Reading the complete branch fresh before gate shows the core casting/permission architecture is coherent and aligned, while exposing <strong>one live conceptual mismatch</strong> introduced in Slice 5 item 5 plus <strong>two small boundary/metadata gaps</strong> in the same slice:
-    (1) <strong>biggest</strong> — <code>CostComponent::RemoveCounters { remaining }</code> stuffs its counter countdown into <code>ContinuationFrame.mode</code> on the announcement frame (<code>continuation.rs:725-727</code>), turning 6 counters left to remove into <code>chosen_mode: 6</code> on <code>DecisionContextView</code>, <code>"Chosen mode: 7."</code> and <code>"mode 7"</code> in LLM text, and leaving no readable remaining count anywhere in Academy or LLM prompts;
-    (2) <code>observation_layout.rs:488</code> still documents <code>action::PLAY_ROUTE</code> as <code>1..8</code>, omitting code <code>9</code> (<code>PrintedGraveyard</code>);
-    (3) <code>resolved_play_route</code> and <code>Decision::CastDuringResolution</code> still accept a forged <code>route: Some(...)</code> on non-front resolution casts.
+    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and per-creature combat-damage trigger area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>experience.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, prompt.ts, Board.svelte, Rail.svelte, Inspect.svelte}</code>, <code>academy/ui/src/lib/projection.ts</code>).<br>
+    <strong>Why this area:</strong> The pre-gate alignment pass (<code>db3f8e6738..6d60273fd6</code>) closed all three open repairs from the prior review plus D6 (stacked trigger X and event context). Reviewing the whole branch fresh before gate confirms <strong>all MTG-419 concepts now align</strong> — zero remaining mismatches inside this Task’s model, so <code>scratch/plan.md</code> needs no changes before gate. Two pre-existing, orthogonal UI/continuation items spotted while walking the full stack are recorded plainly below as outside MTG-419 scope.
   </div>
 
-  <h2>1. Product concepts vs. code concepts (whole branch)</h2>
+  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>6d60273fd6</code>)</h2>
   <table>
     <thead>
       <tr>
         <th style="width:23%">Product concept<br><span class="muted">What a player, policy, LLM, or Academy knows and does</span></th>
         <th style="width:27%">Code concept<br><span class="muted">Types, records, and APIs behind it</span></th>
         <th style="width:10%">Aligned?</th>
-        <th style="width:40%">What is wrong (where No)</th>
+        <th style="width:40%">Verification &amp; invariants</th>
       </tr>
     </thead>
     <tbody>
-      <tr class="biggest">
-        <td><strong>Multi-step counter-removal cost vs. chosen spell mode</strong><br>When casting Quilled Greatwurm from the graveyard by removing 6 counters one at a time, the player, LLM, and policy see <em>how many counters remain to remove</em> (6 &rarr; 1), never a bogus “chosen mode”.</td>
-        <td><code>CostComponent::RemoveCounters { remaining, choosing_from }</code> (<code>payment.rs:109</code>), <code>announcement_frame</code> (<code>continuation.rs:724-727</code>), <code>decision_context.rs:378, 465-468</code>, <code>text_observation.py:729-730, 1316-1317</code>, <code>effect_execution.rs:77, 1282</code>.</td>
-        <td><span class="badge no">No</span><br><span class="muted">Biggest mismatch</span></td>
-        <td><strong>One field for two incompatible ideas:</strong> <code>ContinuationFrame.mode</code> on <code>kind == 4</code> (announcement) owns <code>Operation::Spell.mode</code> and feeds <code>DecisionContextView.chosen_mode</code> directly. Writing <code>frame.mode = Some(*remaining)</code> for <code>RemoveCounters</code> publishes <code>chosen_mode: 6</code> on a non-modal creature, prints <code>"Chosen mode: 7."</code> and <code>"mode 7"</code> in LLM text, fails to state the remaining count in Academy/LLM (even though <code>instruction</code> says <em>“once the stated number of counters are removed”</em>), and would clobber a modal spell’s chosen mode. Meanwhile <code>effect_execution.rs:77, 1282</code> already models remaining counters cleanly via <code>"counters remaining"</code> for <code>Decision::DistributeCounters</code>.</td>
-      </tr>
       <tr>
-        <td><strong>Play-route vocabulary metadata</strong><br>Every consumer reading <code>ObservationSpace.layout</code> sees the same 9 route codes that <code>play_route_code</code> and <code>docs/observation-and-model.md</code> publish.</td>
-        <td><code>cast_permission::play_route_code</code> (codes <code>1..=9</code>) vs. <code>action::PLAY_ROUTE</code> column descriptor (<code>observation_layout.rs:488</code>).</td>
-        <td><span class="badge no">No</span><br><span class="muted">Stale layout doc</span></td>
-        <td><strong>Native schema metadata lags code 9:</strong> <code>action::PLAY_ROUTE</code>’s description and range string still read <code>"1 hand ... 8 exile counter"</code> and <code>"0 ordinary hand play or not a play; 1..8"</code>, omitting <code>9 printed graveyard</code> even though <code>Category { size: 10 }</code> and <code>play_route_code</code> emit <code>9</code>.</td>
+        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play names one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions.</td>
+        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>Game::cast_choices</code>, <code>Game::priority_play</code>, <code>permits_spell</code>, <code>permitted_play_routes</code>, <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code> (<code>observation_layout.rs:488</code>).</td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Single authority across priority casts, land plays, resolution casts, and payment preview; per-face disambiguation keeps lone-route <code>route: None</code> on the wire; <code>action::PLAY_ROUTE</code> metadata lists all <code>1..9</code> codes including <code>9 printed graveyard</code>; <code>test_pinned_pilot</code> unchanged.</td>
       </tr>
       <tr>
         <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into or is accepted by it.</td>
-        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Game::resolved_play_route</code> (<code>play.rs:437-470</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2905-2910</code>), <code>action_description</code> (<code>action.rs:58</code>).</td>
-        <td><span class="badge no">No</span><br><span class="muted">Forged-route hole</span></td>
-        <td><strong>Guard order allows forged priority route during resolution:</strong> Legal resolution offers always carry <code>route: None</code> and are clean, but <code>resolved_play_route</code> checks <code>if route.is_some()</code> <em>before</em> <code>suspended_decision.is_some()</code>, and <code>decision.rs:2905</code> matches <code>Action::CastSpell { .. }</code> without requiring <code>route: None</code>. Putting the <code>suspended_decision</code> check first and matching <code>route: None</code> seals the invariant completely.</td>
-      </tr>
-      <tr>
-        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play selects one object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions.</td>
-        <td><code>SpellProfile</code>, <code>PlayRoute</code>, <code>Game::cast_choices</code>, <code>Game::priority_play</code>, <code>permits_spell</code>, <code>permitted_play_routes</code>, <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code>.</td>
+        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:456</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2909</code>), <code>action_description</code> (<code>action.rs:58</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>One authority across priority casts, land plays, resolution casts, and payment preview; single-route wire compatibility preserved; <code>test_pinned_pilot</code> unchanged.</td>
+        <td><code>resolved_play_route</code> checks <code>suspended_decision.is_some()</code> before <code>route.is_some()</code>; <code>CastDuringResolution</code> requires <code>route: None</code> on non-front <code>Action::CastSpell</code> and rejects forged <code>Some(PlayRoute::Grant(0))</code> (<code>identity_tests::a_resolution_cast_never_inherits_a_priority_route</code>).</td>
       </tr>
       <tr>
         <td><strong>Exact grants (“may play” vs. “may cast”), multi-face pricing &amp; CR 601.2h</strong><br>Grants distinguish play vs. cast, price Land//Spell MDFCs by their castable face, and apply <code>any_mana</code> once after reductions and additional costs.</td>
-        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code>, <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code>, <code>PlayGrantExtension</code>.</td>
+        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code>, <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code>, <code>PlayGrantTerms</code> / <code>PlayGrantExtension</code>, Academy <code>permissionTerms</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned across native rules, v11 learning tokens, LLM text, and Academy <code>permissionTerms</code>.</td>
+        <td>Aligned across native rules, v11 learning tokens (preserving legacy TLA grant tuples), LLM text, and Academy inspection.</td>
       </tr>
       <tr>
         <td><strong>Two-seat face-down exile privacy &amp; determinization</strong><br>Foretold and conditional face-down exiled cards (Flameshape) stay private to authorized viewers across observations, search determinization, and possible worlds.</td>
-        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code>, atomic <code>refill_hidden_exile_slots</code> / <code>ZoneManager::exchange_face_down_exile</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
+        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code>, atomic <code>refill_hidden_exile_slots</code> / <code>ZoneManager::exchange_face_down_exile</code>, <code>shuffle_known_library</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection.</td>
+        <td>Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection and owner-seat resampling.</td>
       </tr>
       <tr>
-        <td><strong>Prepared spell copies, stack provenance, cast history &amp; off-battlefield counters</strong><br>Prepared copies follow source control and vanish when unlinked; stack flags distinguish prepared/flashback casts from copies; cast history keeps cast profiles; exile counters persist until zone change; non-column mana restrictions use facts.</td>
-        <td><code>prepare_inset</code> / <code>unprepare_inset</code> / <code>sba.rs:289</code>, <code>StackObjectData.{from_prepared, flashback}</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>.</td>
+        <td><strong>Prepared spell copies, stack provenance, cast history, off-battlefield counters &amp; open-ended pooled mana</strong><br>Prepared copies follow source control and vanish when unlinked; stack flags separate prepared/flashback casts from copies; cast history keeps cast profiles; exile counters persist until zone change; non-column mana restrictions use facts.</td>
+        <td><code>prepare_inset</code> / <code>unprepare_inset</code> / <code>sba.rs</code>, <code>StackObjectData.{from_prepared, flashback}</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>, Academy <code>Rail.svelte</code> &amp; <code>inspectableCards</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned across rules, state hashing, policy encoding, LLM text, and Academy UI.</td>
+        <td>One representation per concept across rules, state hashing, v11 tensors, LLM text, and Academy stack/board views (including spells announced from graveyard/exile).</td>
       </tr>
       <tr>
-        <td><strong>Per-creature aggregated combat-damage trigger &amp; Academy non-hand announcement</strong><br>Each creature dealing combat damage during your turn triggers once with its own step total (including trample splits); Academy renders announced non-hand spells and tray cards with full permissions and counters.</td>
-        <td><code>DealsCombatDamage.to: Option&lt;Actor&gt;</code>, <code>GameEvent::CombatDamageTotals</code> (<code>emit_trigger_event</code>), <code>FiredTrigger.occurrence</code>, <code>inspectableCards</code>, <code>stackItems</code> (<code>view.ts:258</code>).</td>
+        <td><strong>Multi-step counter-removal cost vs. chosen spell mode</strong><br>Casting Quilled Greatwurm from the graveyard by removing 6 counters one at a time reports remaining counters owed (6 &rarr; 1), never a phantom chosen mode.</td>
+        <td><code>PlayRoute::PrintedGraveyard</code>, <code>CostComponent::RemoveCounters { remaining, choosing_from }</code>, <code>effect_execution::project_pending_payment</code> (<code>effect_execution.rs:1051</code>), <code>continuation.rs:730, 885</code>, <code>DecisionContextView.pending</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Preserves existing combat-damage state hashes and learning tokens while binding each creature and its step total cleanly.</td>
+        <td><code>frame.mode</code> stays strictly for spell modes (<code>chosen_mode == None</code>); both policy tokens and text passes share <code>project_pending_payment</code>, reusing <code>"counters remaining"</code> with zero new vocabulary or columns and emitting <code>"6 counters left to remove."</code> &rarr; <code>"1 counter left to remove."</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Per-creature combat-damage triggers &amp; stacked trigger identity</strong><br>Each creature dealing combat damage during your turn triggers once with its own step total; every consumer distinguishes stacked triggers by their creature and “that many” amount.</td>
+        <td><code>DealsCombatDamage.to: Option&lt;Actor&gt;</code>, trigger-only <code>GameEvent::CombatDamageTotals</code>, <code>FiredTrigger.occurrence</code>, <code>StackObjectData.x</code> (<code>observation.rs:1874</code>), <code>trigger_description(.., x)</code>, <code>Game::trigger_event_label</code> (<code>flow/action.rs:450</code>), kind-3 continuation frame <code>context</code> + <code>x</code>.</td>
+        <td><span class="badge yes">Yes</span></td>
+        <td><code>StackObjectData.x</code> and kind-3 frames project each trigger’s X and event creature to policy tensors; <code>trigger_description</code> + shared <code>trigger_event_label</code> render <code>"Put that many (7) +1/+1 counters ... — event: Quilled Greatwurm (object ...)"</code> on both placement offers and stack entries (and <code>"X (N)"</code> for an entering permanent’s own trigger).</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Biggest mismatch — <code>RemoveCounters.remaining</code> masquerades as <code>chosen_mode</code></h2>
+  <h2>2. Pre-gate alignment verified (before &rarr; after)</h2>
   <div class="callout">
-    <strong>Why this is the biggest mismatch:</strong> Every consumer in the stack shares one contract: on an announcement frame (<code>kind == 4</code>), <code>frame.mode</code> is the spell’s chosen mode (<code>Operation::Spell.mode</code>), copied directly to <code>DecisionContextView.chosen_mode</code> and rendered as <code>"Chosen mode: N."</code>. Reusing <code>frame.mode</code> for Quilled Greatwurm’s counter countdown corrupts the human and LLM prompt with a phantom <code>"Chosen mode: 7."</code> while hiding the actual remaining counter count that <code>decision_context.instruction</code> tells the player to look at.
+    <strong>Outcome:</strong> Nothing left to change in <code>scratch/plan.md</code>. All three conceptual mismatches from the prior review (<code>4bd8f23023</code>) plus D6 (<code>a4e8269362</code>) are cleanly resolved at HEAD <code>6d60273fd6</code> without adding columns, vocabulary churn, or wire breaks.
   </div>
 
   <div class="grid">
     <div class="card">
-      <p><span class="badge existing">Existing · HEAD bb2fb68c0d</span></p>
-      <h3><code>continuation.rs:724-727</code> writes <code>remaining</code> into <code>frame.mode</code></h3>
-      <pre>// managym/src/agent/continuation.rs:724-742
-CostComponent::RemoveCounters { remaining, .. } =&gt; {
-    frame.mode = Some(usize::from(*remaining)); // ❌ overwrites spell mode
-}
-...
-if !payment.receipt.is_empty() {
-    project_receipt(self, &amp;payment.receipt, None, viewer, &amp;mut frame, false);
-}
+      <p><span class="badge existing">Before · bb2fb68c0d</span></p>
+      <h3>Four seams misaligned</h3>
+      <pre>1. continuation.rs:725
+   CostComponent::RemoveCounters { remaining, .. } =&gt;
+       frame.mode = Some(usize::from(*remaining)); // ❌ chosen_mode: 6
+   DecisionContextView.pending = []                // ❌ count absent
 
-// What the player / LLM / Academy actually sees at remaining = 6:
-//   DecisionContextView.chosen_mode = Some(6)       ❌ non-modal creature!
-//   DecisionContextView.pending     = []            ❌ count never stated!
-//   text_observation.py:
-//     Stage: additional cost. ... completes once the stated number of
-//     counters, of any kinds, are removed from among your creatures.
-//     Source: Quilled Greatwurm.
-//     Chosen mode: 7.                               ❌ off-by-one + wrong concept!
-//     R1: announcement; controller Hero; source C3 (Quilled Greatwurm); mode 7. ❌</pre>
+2. observation_layout.rs:488
+   action::PLAY_ROUTE: "1..8"                      // ❌ omitted 9
+
+3. play.rs:453 &amp; decision.rs:2905
+   resolved_play_route checked route.is_some() first;
+   CastDuringResolution accepted route: Some(..).  // ❌ forged route
+
+4. observation.rs:1862 (D6)
+   StackObject::TriggeredAbility(_) =&gt; 0           // ❌ X=0, no event
+   "...the announced value of X +1/+1 counters..." // ❌ wrong wording</pre>
     </div>
 
-    <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed · Project <code>"counters remaining"</code> via <code>effect_execution</code></span></p>
-      <h3>Keep <code>frame.mode</code> for spell modes; reuse <code>DistributeCounters</code>’s vocabulary</h3>
-      <pre>// managym/src/agent/effect_execution.rs (reuses existing EXECUTION_TEXT[77])
-pub(crate) fn project_pending_payment(
-    game: &amp;Game, payment: &amp;Payment, viewer: PlayerId,
-    frame: &amp;mut ContinuationFrame, text: bool,
-) {
-    let mut out = Projection::new(game, viewer, text);
-    if let CostComponent::RemoveCounters { remaining, .. } = payment.owed[0] {
-        out.field("counters remaining", &amp;remaining);
-        out.summary(|| format!(
-            "{remaining} counter{} left to remove.",
-            if remaining == 1 { "" } else { "s" }
-        ));
-    }
-    if !payment.receipt.is_empty() {
-        out.receipt(&amp;payment.receipt, None);
-    }
-    out.finish(frame);
-}
+    <div class="card aligned-box">
+      <p><span class="badge yes">Verified · HEAD 6d60273fd6</span></p>
+      <h3>Single-owner alignment across consumers</h3>
+      <pre>1. effect_execution::project_pending_payment (continuation.rs:730,885)
+   frame.mode = None                               // ✓ spell modes only
+   policy:  "counters remaining": 6 -&gt; 1           // ✓ existing token
+   pending: ["6 counters left to remove."]         // ✓ 6 -&gt; 5 -&gt; 1
 
-// Result at remaining = 6 (then 5 .. 1):
-//   DecisionContextView.chosen_mode = None                          ✓
-//   DecisionContextView.pending     = ["6 counters left to remove."] ✓
-//   policy effect_execution tokens  = "counters remaining": 6        ✓ (zero new vocab!)
-//   text_observation.py:
-//     (no "Chosen mode: 7.")                                         ✓
-//     R1: announcement; ... effect execution: counters remaining: 6. ✓</pre>
+2. observation_layout.rs:488
+   action::PLAY_ROUTE: "...9 printed graveyard", "1..9" // ✓ matches code
+
+3. play.rs:456 &amp; decision.rs:2909
+   suspended_decision checked first; route: None required // ✓ rejects forged
+
+4. observation.rs:1836,1874 &amp; ability_description.rs:25
+   StackObjectData.x = ability.x                   // ✓ tensor + Academy
+   "Put that many (7) +1/+1 counters... — event: Quilled Greatwurm"</pre>
     </div>
   </div>
 
-  <h3>Concrete interaction walkthrough — Casting Quilled Greatwurm from graveyard</h3>
+  <h2>3. End-to-end walkthrough — Normal path, failure, and recovery</h2>
   <div class="trace">
-    <div class="trace-label">Normal path, failure, and recovery</div>
+    <div class="trace-label">Quilled Greatwurm graveyard cast, forged resolution route, and stacked combat-damage triggers</div>
     <ol>
-      <li><strong>Normal start:</strong> P0 controls Gray Ogre (1 <code>+1/+1</code> counter) and Muldrotha (4 <code>+1/+1</code> counters, 1 <code>stun</code> counter), with Quilled Greatwurm in graveyard and <code>{4}{G}{G}</code> available. P0 selects <em>“Cast Quilled Greatwurm from graveyard by removing 6 counters”</em> (<code>play_route = 9</code>).</li>
-      <li><strong>Failure at HEAD <code>bb2fb68c0d</code>:</strong> At step 1 (choose creature, 6 remaining) and step 3 (choose counter kind on Muldrotha, 5 remaining), <code>continuation.rs:726</code> sets <code>frame.mode = Some(remaining)</code>. <code>DecisionContextView</code> publishes <code>chosen_mode = 6</code> / <code>5</code> and <code>pending = []</code>; LLM text prints <code>Chosen mode: 7.</code> / <code>Chosen mode: 6.</code> and <code>mode 7</code> / <code>mode 6</code> on <code>R1: announcement</code> while never stating how many counters remain. If a future modal spell carries a counter-removal cost, its chosen mode is overwritten.</li>
-      <li><strong>Normal &amp; recovery after fix:</strong> <code>frame.mode</code> stays <code>None</code> (or the spell’s own <code>Operation::Spell.mode</code>). Both <code>announcement_frame</code> (<code>text = false</code>) and <code>describe_effect_execution</code> (<code>text = true</code>) call <code>effect_execution::project_pending_payment</code> when <code>matches!(payment.owed[0], CostComponent::RemoveCounters { .. }) || !payment.receipt.is_empty()</code>. Policy gets <code>"counters remaining": 6..1</code> using the existing <code>EXECUTION_TEXT</code> token; Academy’s <code>decision_context.pending</code> shows <code>"6 counters left to remove."</code> down to <code>"1 counter left to remove."</code>; LLM text shows <code>effect execution: counters remaining: 6</code> with no phantom mode. Removing the last counter pops <code>RemoveCounters</code> cleanly and transitions to <code>CostComponent::Mana</code> with zero stale summary left behind.</li>
+      <li><strong>Overlapping graveyard routes (normal):</strong> P0 controls Gray Ogre (1 <code>+1/+1</code>) and Muldrotha (4 <code>+1/+1</code>, 1 <code>stun</code>), with Quilled Greatwurm in graveyard holding an exact grant plus Muldrotha’s permission plus its own printed ability. Priority emits three distinct <code>CastSpell</code> offers with <code>play_route</code> codes <code>6</code>, <code>7</code>, and <code>9</code>; choosing route <code>9</code> enters <code>CostComponent::RemoveCounters { remaining: 6, choosing_from: None }</code> with <code>chosen_mode: None</code> and <code>pending: ["6 counters left to remove."]</code>.</li>
+      <li><strong>Multi-kind removal &amp; recovery:</strong> Removing 1 counter from Gray Ogre drops <code>pending</code> to <code>"5 counters left to remove."</code>; choosing Muldrotha opens <code>Action::ChooseMode</code> for <code>+1/+1</code> vs. <code>stun</code> with Muldrotha focused; removing a non-existent kind or choosing a counterless creature is rejected before state mutation. After the 6th removal, <code>RemoveCounters</code> pops cleanly into <code>CostComponent::Mana</code> with zero stale summary. Dropping to 5 total counters closes only route <code>9</code>, leaving routes <code>6</code> and <code>7</code> intact.</li>
+      <li><strong>Forged resolution route (failure &amp; guard):</strong> During <code>Decision::CastDuringResolution</code> on an exiled Adventure that also holds a priority grant, legal offers emit <code>route: None</code> and <code>play_route: None</code>; submitting a forged <code>Action::CastSpell { route: Some(Grant(0)), profile: Adventure }</code> yields <code>resolved_play_route == None</code> and returns <code>Err</code> without consuming the suspended decision.</li>
+      <li><strong>Stacked combat-damage triggers (both viewers):</strong> Quilled Greatwurm (7) and Gray Ogre (2) deal unblocked combat damage during P0’s turn. <code>OrderTriggers</code> and both viewers’ stack observations distinguish the two triggers by <code>StackObjectData.x</code> (7 vs. 2), <code>"Put that many (7/2) +1/+1 counters ... — event: ..."</code>, and distinct kind-3 continuation frame <code>context</code> + <code>x</code> joins.</li>
     </ol>
   </div>
 
-  <h2>3. Secondary alignment fixes (same pre-gate pass)</h2>
-  <table class="compare">
-    <thead>
-      <tr>
-        <th>Area</th>
-        <th><span class="badge existing">Existing · HEAD bb2fb68c0d</span></th>
-        <th><span class="badge proposed">Proposed</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong><code>action::PLAY_ROUTE</code> layout metadata</strong><br><code>managym/src/agent/observation_layout.rs:488</code></td>
-        <td class="bad">Documents only codes <code>1..8</code> (omits <code>9 printed graveyard</code>), contradicting <code>play_route_code</code> and <code>docs/observation-and-model.md</code>.</td>
-        <td class="good">Update description and range to list <code>9 printed graveyard</code> and <code>0 ordinary hand play or not a play; 1..9</code>.</td>
-      </tr>
-      <tr>
-        <td><strong>Forged priority route during <code>CastDuringResolution</code></strong><br><code>play.rs:453-460</code>, <code>decision.rs:2905-2910</code></td>
-        <td class="bad"><code>resolved_play_route</code> returns <code>*route</code> before checking <code>suspended_decision.is_some()</code>; <code>CastDuringResolution</code> accepts <code>Action::CastSpell { route: Some(..), profile }</code>.</td>
-        <td class="good">Guard <code>suspended_decision.is_some()</code> first in <code>resolved_play_route</code> and require <code>route: None</code> in <code>Decision::CastDuringResolution</code>.</td>
-      </tr>
-    </tbody>
-  </table>
-
+  <h2>4. Outside MTG-419 scope (observed during review, not changed here)</h2>
   <div class="outside">
-    <strong>Outside MTG-419 scope (noted, not changed here):</strong> Pre-existing <code>CostComponent::Tap(cost, _)</code> for multi-tap activated abilities (<code>continuation.rs:714-723</code>) carries the same <code>frame.mode = Some(cost.count)</code> pattern from before this branch. Migrating it to <code>effect_execution</code> belongs in a small payment-continuation cleanup task so MTG-419 does not churn unrelated retained activation captures.
+    <p><span class="badge outside-badge">Outside MTG-419 · Academy prompt surface</span> <strong>Academy <code>Rail.svelte</code> &amp; <code>prompt.ts</code> do not yet render <code>decision_context.pending</code> or distinguish <code>stage === 'additional_cost'</code>:</strong></p>
+    <ul>
+      <li><code>DecisionContextView.pending</code> now carries plain-language progress (<code>"6 counters left to remove."</code>, plus pre-existing <code>SelectCards</code>/<code>DistributeCounters</code> summaries), and the rail exposes every exact legal offer (<code>"Remove a counter from Gray Ogre"</code>, <code>"Remove a stun counter from Muldrotha"</code>) and the full engine instruction under <em>Rules detail</em>. However, <code>academy/ui/src/lib/board/Rail.svelte</code> never displays <code>context.pending</code>, and <code>prompt.ts:61-67</code> maps <code>LOOK_AND_SELECT</code> to <code>"Choose from the revealed cards (Source)"</code> and non-<code>payment</code> <code>MODAL</code> to <code>"Choose a mode for Source"</code> for every <code>additional_cost</code> step (Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, and now RemoveCounters).</li>
+      <li>Similarly, <code>academy/ui/src/lib/projection.ts:4-10</code> (<code>exposesOtherPrivateContext</code>) does not yet check <code>(context.pending?.length ?? 0) &gt; 0</code>, lagging Rust’s <code>experience.rs:771</code>.</li>
+      <li><strong>What it would take:</strong> A small Game/Academy UI task (~30 lines across <code>Rail.svelte</code>, <code>prompt.ts</code>, <code>projection.ts</code>, plus vitest) to render <code>context.pending</code> in the prompt block, branch <code>promptLine</code> on <code>stage === 'additional_cost'</code>, and add <code>context.pending</code> to <code>exposesOtherPrivateContext</code>.</li>
+    </ul>
+    <p><span class="badge outside-badge">Outside MTG-419 · Payment continuation cleanup</span> <strong>Pre-existing multi-tap <code>CostComponent::Tap</code> in <code>continuation.rs:714-723</code>:</strong> Still writes remaining tap count into <code>frame.mode</code> (same pattern removed from <code>RemoveCounters</code>). Migrating it into <code>project_pending_payment</code> belongs in a dedicated cleanup task so MTG-419 does not churn unrelated retained activation fixtures (already noted in <code>scratch/plan.md</code>).</p>
   </div>
 
-  <h2>4. Choices made for review (headless Graph run)</h2>
-  <p class="muted">All three choices are reversible and written into <code>scratch/plan.md</code>. Reply with e.g. <code>1b</code> or <code>2b</code> to reverse any choice.</p>
+  <h2>5. Questions for review</h2>
+  <p class="muted">No plan change was needed; MTG-419 is ready for gate. Reply with e.g. <code>1b</code> or <code>2b</code> if you want a different disposition.</p>
   <ol class="q-list">
-    <li><strong>Representing remaining counter removals during Quilled Greatwurm’s payment:</strong>
-      <br><span class="chosen">1a (chosen):</span> Remove <code>frame.mode = Some(*remaining)</code> for <code>CostComponent::RemoveCounters</code> and project <code>"counters remaining"</code> (reusing existing <code>EXECUTION_TEXT</code>) plus a plain summary (<code>"N counter(s) left to remove."</code>) through <code>effect_execution::project_pending_payment</code>, keeping <code>frame.mode</code> / <code>chosen_mode</code> strictly for spell modes with zero new vocabulary or columns.
-      <br>1b: Keep <code>remaining</code> in <code>frame.mode</code> and add special-case decoding for <code>kind == 4</code> in <code>decision_context.rs</code> and <code>text_observation.py</code> (leaves the modal-spell collision in place and still requires consumers to guess whether <code>mode</code> means mode or count).
+    <li><strong>Proceed to gate with the current casting/permission model unchanged?</strong>
+      <br><span class="chosen">1a (chosen):</span> Proceed straight to gate — all MTG-419 concepts align across rules, v11 tensors, LLM text, and Academy projection; leave <code>scratch/plan.md</code> unchanged.
+      <br>1b: Hold gate to revisit another casting/permission boundary first (name which).
     </li>
-    <li><strong><code>action::PLAY_ROUTE</code> layout metadata:</strong>
-      <br><span class="chosen">2a (chosen):</span> Update <code>observation_layout.rs:488</code> to document code <code>9 printed graveyard</code> and range <code>1..9</code> so runtime <code>ObservationSpace.layout</code> matches <code>play_route_code</code> and docs.
-      <br>2b: Leave <code>observation_layout.rs:488</code> at <code>1..8</code> until a later doc sweep.
-    </li>
-    <li><strong>Hardening <code>CastDuringResolution</code> against forged priority routes:</strong>
-      <br><span class="chosen">3a (chosen):</span> Check <code>self.state.suspended_decision.is_some()</code> before <code>if route.is_some()</code> in <code>resolved_play_route</code> and match <code>route: None</code> in <code>Decision::CastDuringResolution</code> (<code>decision.rs:2905</code>).
-      <br>3b: Rely on legal offer construction never emitting <code>route: Some(_)</code> during resolution.
+    <li><strong>Disposition of the pre-existing Academy <code>additional_cost</code> prompt / <code>decision_context.pending</code> display gap (plus <code>projection.ts</code> parity):</strong>
+      <br><span class="chosen">2a (chosen):</span> Keep outside MTG-419 and file as a small Game/Academy UI follow-up task at gate (it predates MTG-419 across Crew/Saddle/Station/Sacrifice/Forage/ExileFromHand and touches <code>prompt.ts</code> / <code>Rail.svelte</code> / <code>projection.ts</code>).
+      <br>2b: Pull that ~30-line Academy UI update into MTG-419 before gate.
     </li>
   </ol>
 </main>
