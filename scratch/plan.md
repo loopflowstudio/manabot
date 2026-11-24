@@ -1,158 +1,62 @@
-# Plan: remove eager auto-reset and unify slot loading (Task a2da47)
-
-Concept review record: `scratch/concept-review.html`.
+# Remove eager auto-reset from vector collection (Task a2da47)
 
 ## Outcome
 
-Every vector has one explicit slot lifecycle and one transactional slot loader:
+The Task brief calls for “one explicit slot lifecycle: `step` leaves
+finished/failed slots in `Terminal`/`Poisoned`, and
+`load_slots_into_buffers` refills them (with fresh games or snapshots).”
 
-- `step`, `step_into_buffers`, and `step_isolated_into_buffers` report a
-  finished game's terminal observation, reward, flags, and winner once and park
-  the slot in `Terminal` (or `Poisoned` on an isolated failure), reporting
-  chooser `-1`. Nothing constructs a game inside a step.
-- `load_slots_into_buffers(requests)` is the single sparse, atomic slot loader
-  across `managym.VectorEnv`, `RecordedVectorEnv`, `BufferedStreams`,
-  `ShardedVectorEnv`, and `TargetPracticeVector`:
-  - `SlotLoad.fresh(slot, player_configs=None)` installs a fresh game using the
-    slot's `next_seeds[slot]` (advancing by `stride`) and, when `player_configs`
-    is given, updates `player_configs[slot]` atomically on commit (rejected if a
-    roster is configured). Works uniformly on `FreshOpening`, `Playing`,
-    `Terminal`, and `Poisoned` slots.
-  - `SlotLoad.snapshot(slot, snapshot, options=None)` restores a detached
-    branch without spending a fresh seed (rewinding `next_seeds[slot]` and
-    discarding untouched recording when replacing `FreshOpening`).
-- `auto_reset`, `with_auto_reset`, `replace_failed_into*`, and
-  `reassign_roots_into*` are deleted everywhere.
-- `open_native_streams` always returns `BufferedStreams` (single-shard or
-  `ShardedVectorEnv`), and `Collector` uses one lazy batch-bounded refill model
-  with zero wasted `Game::construct` on batch-end terminals.
+The terminal step reports its observation, reward, flags and winner once.
+Parked slots report chooser `-1`. One atomic sparse load spans native,
+recorded and sharded vectors, preserving seed order, roster selection,
+recordings, statistics and exposure. A fresh load spends the next seed and
+can update the slot's setup. A snapshot load spends no fresh seed and refunds
+an untouched opening's seed. Failed loads leave slots and buffers intact.
 
-Who notices: callers passing `auto_reset=...` get `TypeError`; callers calling
-`replace_failed_into_buffers` or `reassign_roots_into_buffers` get
-`AttributeError` and move to `load_slots_into_buffers([SlotLoad.fresh(...)])`;
-loops stepping a finished slot without refilling get the existing
-`"cannot step Terminal slot N before reset or replacement"` error. Pre-1.0, so
-no deprecated shims.
+Collection refills a finished game only when its stream needs another
+decision, including after a Python `action_limit` leaves the native slot live.
+The Torch Gym-vector wrapper keeps its automatic reset behavior by explicitly
+loading fresh games after saving the step outputs. User docs landed in
+`d498d114ae`. Design choices are in `scratch/questions.md` and the concept
+review is in `scratch/concept-review.html`.
 
-## Choices made for review
+## Completed slices
 
-1. **Fold `reassign_roots_into*` into `SlotLoad.fresh(slot, player_configs=None)`
-   and delete `reassign_roots_into*`.**
-   *Passed over:* Patching `reassign_roots_into` to accept parked slots.
-   *Why:* Patching `reassign_roots_into` fails three concrete counterexamples:
-   (a) mixed `FreshOpening` vs `Terminal`/`Poisoned` gives one method two
-   opposite seed rules (rewind vs advance); (b) `RecordedVectorEnv.reassign_roots_into_buffers`
-   reads `current_game_seeds()` before native runs, which is the *old* finished
-   game's seed on a parked slot (corrupting journal proposals and `mixed`
-   disclosure retention); (c) `action_limit` under `game_errors` leaves a slot
-   `Playing`, which `reassign_roots_into` rejects (`"cannot reassign a live game"`).
-   Folding into `SlotLoad.fresh(slot, player_configs=None)` removes a duplicate
-   transactional loader, preserves exact adaptive seed parity (one construction
-   instead of two), and brings uniform buffer validation, typed
-   `ObservationCapacity`, `SlotLoadResult`, and sharded support.
-2. **Expose `load_slots_into_buffers` on `BufferedStreams` / `ShardedVectorEnv`
-   and make `open_native_streams` always return `BufferedStreams`.**
-   *Passed over:* Returning bare `RecordedVectorEnv` for `workers == 1` and
-   leaving `BufferedStreams` without `load_slots_into_buffers`.
-   *Why:* One uniform transport type and slot-loading method across 1-worker and
-   N-worker native streams (`BufferedStreams.install_slots` delegates to
-   `load_slots_into_buffers`; `bench_sharded_collection.py` uses it directly).
-   Keep the existing `workers != 1` check on adaptive collection in
-   `open_collector` out of scope for this PR.
-3. **Convert `TargetPracticeVector` to park terminal rows and implement
-   `load_slots_into_buffers`.**
-   *Passed over:* Keeping eager auto-reset in `TargetPracticeVector` behind a
-   branch in `Collector`.
-   *Why:* Eliminates the last dual-lifecycle branch in `Collector` in ~12 lines.
-4. **Keep Torch `manabot.env.vector_env.VectorEnv`'s Gym-vector auto-reset
-   contract explicitly inside the wrapper** (saving step-state buffers and
-   terminal `last_info` *before* calling `load_slots_into_buffers`).
-5. **Park readable `VectorEnv.step` terminals too**; readable callers restart
-   with `reset_all`. No readable `load_slots` is added.
+1. `7ce9093dab` parks native slots and unifies fresh, failed and snapshot loads across native, recorded and sharded vectors.
+2. `6d3cf02810` refills only active ended collector streams, parks target-practice terminals and supplies empty memory prefixes for parked bootstrap rows.
+3. `3d27339e7a` retains terminal winners in batched evaluation, retires filled seat quotas and times benchmark refills after hashing the finished batch.
 
-## Source of truth & invariants
+Snapshot dependency #581 merged into main at `82c5d1d1b7`. The branch
+integrates the incoming collector continuation in `a6b50cd8bd`. A save
+opens the fresh roots it needs for replay. The next snapshot allocation can
+reuse one of those openings or replace it and recover the seed. The batch
+boundary itself still leaves ended slots parked. The save/restore regression
+is `test_collector_resumes_after_snapshot_branch` in
+`tests/training/test_snapshot_rollouts.py`.
 
-- Native `SlotState` (`Unset`, `FreshOpening`, `Playing`, `Terminal`,
-  `Poisoned`) in `managym/src/agent/vector_env.rs` is the sole authority for
-  slot state. `FreshOpening` now has one job: permitting seed/recording rewind
-  when an untouched fresh opening is replaced by `SlotLoad::Snapshot`.
-- `finish_step` loses its `auto_reset` and `reset` parameters (if `terminated ||
-  truncated`, set `*self = Self::Terminal`).
-- `SlotLoad::Fresh(usize, Option<GameSetup>)` always draws `next_seeds[slot]`,
-  advances it by `seed_stride`, validates `player_configs` length (`== 2`) and
-  rejects `Some(setup)` when `!self.uniform_roster.is_empty()`, and updates
-  `self.player_configs[slot]` only in the post-validation commit loop.
-- `SlotLoad` exposes `.slot` (getter) and `.with_slot(slot: int) -> SlotLoad`,
-  and `SlotLoadResult` exposes `.with_slot(slot: int) -> SlotLoadResult`, so
-  `BufferedStreams.load_slots_into_buffers` remaps global ↔ local shard slots
-  preserving exact native types and caller order.
-- **Fresh load ≡ eager terminal reset** and **Fresh load on `Poisoned` ≡
-  `replace_failed_into`** (verified in `vector_env/slots.rs`: same
-  `replacement_root(next_seed)`, `reset_env_on_env`, roster sampler, and
-  `GameRecording::default()` when `slots[slot] == Poisoned`).
-- **Adaptive seed parity:** when a slot terminates under deferred reset,
-  `next_seeds[slot]` is unspent (equal to the seed old eager reset + rewind
-  used); `SlotLoad.fresh(slot, setup)` constructs the drawn setup once at that
-  exact seed and advances `next_seeds[slot]` by `stride`.
-- **Journal boundaries:** `RecordedVectorEnv.load_slots_into_buffers` records
-  `self._begin_boundary(self._snapshot("reset"), "load_slots", setup_known=False)`
-  before native execution and publishes `phase="ready"` after `_synchronize`
-  reads exact native setups and seeds. Old journals keep their historical
-  `"replace_failed"` / `"reassign_roots"` strings (`managym.replay` treats all
-  non-step operations uniformly as plain labels).
+## Acceptance evidence
 
-## Critical edge cases verified by counterexample
+The initial Python acceptance run passed 401 cases, skipped five and failed
+ten. Three failures came from a frozen scalar replay whose first recorded
+action was out of range at the opening-hand choice added by `d12eb496b3`.
+Adding two explicit Keeps still diverged at action 34. `669615a0e9` keeps the
+frozen replay as a rejection case and records a current five-action replay
+to test stale binding and typed capacity failure. `fc86c0536e` corrects six
+journal expectations about the opening-hand turn and explicitly resets a
+finished statistics game. All eleven cases covering these fixes passed on
+focused reruns. Six rollout, benchmark and failure-capture checks passed.
+The native filter passed all 26 tests, and the removed API grep returned no
+matches. Results are recorded in `1eac5b227a`.
 
-1. **`MemoryStore` on parked `next_obs` rows (`collection.py` + `memory_store.py`):**
-   In `complete-games` (and `exact-quota` when a stream hits quota on a terminal
-   step), `_build_batch` calls `_retain_obs_rows(collector, np.arange(shape[1]))`
-   while parked slots report `current_agent_indices()[row] == -1`.
-   `MemoryStore.capture_live_rows` previously indexed `cursors[rows, -1]`
-   (silently wrapping to seat 1!) against cleared terminal memory buffers.
-   *Fix:* Reject negative seats in `MemoryStore.capture_live_rows`, and in
-   `collection._capture_memory` only pass rows with `seat in (0, 1)` to
-   `capture_live_rows`, returning an empty `Prefix(PrefixIdentity(f"terminal-{row}", 0, "terminal"), None)`
-   for parked rows (`next_done` is True on those rows so their values never
-   enter bootstrapping, while `next_obs` keeps its `(shape[1], ...)` shape).
-3. **`action_limit` under `game_errors`:**
-   `action_limit` is detected in Python while the native slot is still `Playing`
-   (`acting >= 0`). Because `Collector` tracks ended rows in `_needs_refill` (or
-   `snapshots.ready` for a snapshot allocation) rather than inferring only from
-   `acting < 0`, and `SlotLoad.fresh` accepts `Playing` slots, `action_limit`
-   reloads cleanly in plain, adaptive, and snapshot modes.
-4. **`exact-quota` terminal on the last step of a batch:**
-   If stream `s` ends on its `num_steps`-th learner transition, `_settle_step`
-   records `s` in `_needs_refill` and leaves it parked (zero batch-end waste);
-   at the top of the next `collect`, active streams in `_needs_refill` are
-   refilled while paused mid-game `Playing` streams continue undisturbed.
+The documented mimalloc benchmark completed 2,048 decisions with digest
+`abd73687fa664633fec80c624d75723e8669ad9fec85a41bd30c95243d2934b9`.
 
-## Slices
+## Next at Gate
 
-1. **Done (7ce9093dab):** native/recorded/sharded parking and atomic
-   `load_slots_into_buffers` with `SlotLoad.fresh(slot, setup)`, `with_slot`,
-   `open_native_streams` always `BufferedStreams`, Torch `VectorEnv` retaining
-   step outcomes across reload, eager-reset APIs deleted from managym and
-   producers. Collector already uses the loader for adaptive `_reassign`,
-   failed-game replacement (immediately, inside `_settle_step`) and snapshot
-   installs.
-
-2. **Done (6d3cf02810):** Collector refills only active ended rows at the top
-   of each round (`_needs_refill`), adaptive commit draws after score updates,
-   target practice parks and loads explicitly, parked bootstrap rows get empty
-   memory prefixes; seed-parity, batch-end and `action_limit` tests added.
-
-3. **Done (3d27339e7a).** Batched evaluation counts active decisions, saves
-   winners and retires streams when their seat fills its quota. The sharded
-   benchmark hashes outcomes before refilling for the next batch.
-
-Acceptance exposed a stale scalar replay fixture. Opening-hand choices from
-`d12eb496b3` reject its first recorded action (3 of two offers). Even two
-explicit Keep actions diverged at action 34. The regression now checks the
-frozen prefix fails before its recorded boundary. A five-action game recorded
-with a one-permanent buffer covers stale binding rejection and typed replay
-of the current capacity failure.
-
-## Acceptance check at gate
+All implementation slices are complete. Reuse the focused results above.
+The combined Python acceptance suite still needs a green run with the fixes
+on the integrated branch. Include the continuation and collector checks from
+[validation by change area](../docs/development.md#validation-by-change-area).
 
 ```bash
 uv run --extra dev pytest \
@@ -177,30 +81,10 @@ CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --test-t
 git grep -nE "auto_reset|with_auto_reset|replace_failed_into|reassign_roots_into" -- managym manabot docs tests scripts
 ```
 
-Expected: all tests green; grep returns nothing outside `release/`.
-
-### Local results
-
-The acceptance run passed 401 Python cases, skipped five and failed ten.
-Three failures exercised the historical replay above, six expected turn one
-at the opening-hand choice, and one stepped a completed statistics game.
-All eleven cases covering those fixes passed on focused reruns. The six
-rollout, benchmark and failure-capture checks passed. The native filter
-passed all 26 tests and the removed-name grep found no matches.
-
-The documented mimalloc benchmark completed 2,048 decisions with digest
-`abd73687fa664633fec80c624d75723e8669ad9fec85a41bd30c95243d2934b9`.
-Gate and CI remain.
-
-## Docs
-
-User docs were updated before implementation (d498d114ae).
-
 ## Demo
 
 `uv run --extra dev pytest tests/env/test_vector_snapshot_slots.py -q -k lifecycle`
-— a two-slot vector steps slot 0 to its terminal: the buffer shows the terminal
-row with `terminated=1`, chooser `-1`, and `CONSTRUCTIONS` unchanged; stepping
-again raises; `load_slots_into_buffers([SlotLoad.fresh(0, alt_setup)])` installs
-seed 44 (`= 42 + stride`) with `alt_setup`, updates slot 0's setup for future
-loads, and the game record file holds the finished game once.
+steps one of two streams to a terminal with chooser `-1`. The completed game
+and winner appear in the recording. An explicit fresh load installs seed 44
+with the replacement setup, leaves the neighboring stream alone and clears
+the terminal buffer. The next fresh load keeps that setup at seed 46.
