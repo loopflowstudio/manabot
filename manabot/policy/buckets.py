@@ -166,7 +166,10 @@ def sizes_of(
 def bucket_sizes(
     obs: ObservationBuffers, space: ObservationSpace, *, objects: bool
 ) -> BucketSizes | None:
-    """Measure one batch's buckets; None leaves it untouched (`row_needs`)."""
+    """Measure one dense batch's buckets; None leaves it untouched (`row_needs`).
+
+    Dense extent helper (`axis_extents`); removed in 0.3.0.
+    """
     needs = row_needs(obs, space)
     return None if needs is None else sizes_of(needs, space, objects=objects)
 
@@ -178,7 +181,10 @@ def bucket_observation(
     *,
     objects: bool,
 ) -> BucketedObservation | None:
-    """Select views in original coordinates using measured or supplied row extents."""
+    """Select dense views in original coordinates using measured or supplied row extents.
+
+    Dense dict bucketing (`BucketedObservation` / `row_needs`); removed in 0.3.0.
+    """
     if needs is None:
         needs = row_needs(obs, space)
     if needs is None:

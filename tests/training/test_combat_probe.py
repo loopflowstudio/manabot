@@ -158,7 +158,12 @@ def test_no_combat_or_legacy_layout_omits_metrics(
     packed = batch.action_data
     noncombat = replace(
         packed,
-        fields={**packed.fields, "actions": np.zeros_like(packed.fields["actions"])},
+        fields={
+            "actions": np.zeros(
+                (len(packed.slots), space.shapes["actions"][-1]), np.float32
+            )
+        },
+        native=None,
     )
     empty = replace(batch, action_data=noncombat)
     assert combat_probe(Mock(observation_space=space), empty) == {}

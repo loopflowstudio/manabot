@@ -85,6 +85,14 @@ of rows and `A` for padded legal offers.
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
 | `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
 
+In v11 the collector retains immutable native observations. Legal offers,
+focus and naming joins live in those spans. Behavior probabilities refer to
+the original legal slots. Learner minibatches gather the selected rows across
+shards in training order, including repeats. At a snapshot horizon the collector
+freezes each contributing seat's view before assigning that stream another
+root. Decision-memory rows share their captured prefixes across the rollout.
+Use `batch.observations(indexes)` for editable NumPy projections.
+
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
 the learner's seat learns) or `"random"`. `batch_closure="complete-games"` is
@@ -210,7 +218,7 @@ Save this recipe as `snapshot_recipe.py`. Plain and snapshot collection support
 `1 <= workers <= streams`. Adaptive collection uses one worker. Single-worker
 snapshot collection also accepts a buffered `SnapshotVector` or a factory taking
 `(observation_space, match, num_envs, seed)`. The deprecated
-`InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
+`InMemorySnapshotVector.factory` alias will be removed in 0.3.0.
 
 ```python
 from typing import Literal
@@ -391,15 +399,21 @@ workers without replaying the prefix; with `decision_memory`, siblings restored
 at the same boundary share their immutable pre-fork `MemoryStore` chunks while
 diverging independently afterwards.
 
-Etude saves the generation and cold recipes in `Counts.snapshot_bank` alongside
-the learner under `out/state/save-*/state.json`. New captures store
+Etude saves the generation and cold recipes as `Counts.snapshot_bank` in
+`out/state/save-*/state.json`, beside `learner.safetensors`. New captures store
 `managym-snapshot-v1` (`replay_json`) as cold authority (preserving
 interventions when `fresh_only=False`), while earlier exact recipes retain
-their schema and `root_id`s. Resume restores them with an empty hot cache and
-new fresh-game and policy sampling seeds; supply runtime predicates and scorers
-again. On a cold miss, `SnapshotBank` reconstructs each distinct root once,
+their schema and `root_id`s. Resume restores the bank with an empty hot cache.
+On a cold miss, `SnapshotBank` reconstructs each distinct root once,
 verifies its digest and chooser, and promotes the `GameSnapshot` into the hot
-cache for all siblings and later draws.
+cache for all siblings and later draws. Supply runtime predicates and scorers
+again when resuming.
+
+At a save boundary, the collector opens the fresh game that the next allocation
+would install in each slot awaiting a fresh root. Portable resume reconstructs
+those live streams and restores the host RNGs from `continuation.json`. Policy
+sampling RNGs restore within the same sampling domain and reseed when it
+changes. A legacy Torch `.pt` save starts fresh games and sampling streams.
 
 Native vectors leave finished and failed slots parked until the collector
 refills active streams via `load_slots_into_buffers`, avoiding unused

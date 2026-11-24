@@ -31,7 +31,7 @@ from managym.disclosure import DecklistDisclosure
 # thing one object row (cards outside the battlefield and stack, permanents
 # with their characteristics, a stack segment) and carries v10's turn state.
 # Inputs v9 and v10 (v9 plus turn state) are deprecated and read only by
-# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.4.0);
+# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.3.0);
 # earlier inputs run from the revision that recorded them.
 PolicyInputVersion = Literal[9, 10, 11]
 POLICY_INPUT_VERSION: PolicyInputVersion = 11

@@ -44,6 +44,7 @@ from manabot.belief.range import BeliefError
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
+    PolicyObservation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
@@ -59,6 +60,11 @@ from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
 import managym
 
 if TYPE_CHECKING:
@@ -515,7 +521,7 @@ class ActorCritic(nn.Module):
 
     def prepare(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         memory_roots: Mapping[str, int] | None = None,
@@ -524,14 +530,19 @@ class ActorCritic(nn.Module):
         bucketed, tables = self._admit_observation(obs)
         return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
-    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
+    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
         bucketed, _ = self._admit_observation(obs)
         return None if bucketed is None else bucketed.needs
 
     def _admit_observation(
-        self, obs: ObservationBuffers
-    ) -> tuple[BucketedObservation | None, Tables]:
+        self, obs: PolicyObservation
+    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
+        spec = self._admission_spec()
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            return admission.admit_native(
+                obs, spec, bucketed=self.bucketed_shapes
+            ), spec.tables
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -540,16 +551,18 @@ class ActorCritic(nn.Module):
             failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
             raise NumericalError(
                 "invalid_action_mask",
-                {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
+                {
+                    "mask": torch.from_numpy(mask.copy()),
+                    "failed": torch.from_numpy(failed),
+                },
             ) from error
-        spec = self._admission_spec()
         return admission.admit(
             obs, spec, legal, bucketed=self.bucketed_shapes
         ), spec.tables
 
     def prepare_admitted(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
@@ -561,6 +574,17 @@ class ActorCritic(nn.Module):
         autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
         MPS routes only live fact rows; CPU and CUDA keep padded fact routes.
         """
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            rows = observation_spans(
+                obs,
+                self.observation_space,
+                bucketed=self.bucketed_shapes,
+                objects=self.object_trimming(),
+                minimum_needs=needs,
+            )
+            return self._prepare_rows(
+                rows, self._admission_spec().tables, inference, memory_roots
+            )
         bucketed = (
             bucket_observation(
                 obs, self.observation_space, needs, objects=self.object_trimming()
@@ -574,7 +598,7 @@ class ActorCritic(nn.Module):
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
         tables: Tables,
         inference: bool,
         memory_roots: Mapping[str, int] | None,
@@ -1307,7 +1331,7 @@ class PolicyInference:
     @torch.no_grad()
     def infer(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         span: Callable[[str], AbstractContextManager[object]] | None = None,
     ) -> InferenceResult:
@@ -1322,9 +1346,11 @@ class PolicyInference:
             )
 
     @torch.no_grad()
-    def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
+    def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if any(not isinstance(value, np.ndarray) for value in obs.values()):
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
+            not isinstance(value, np.ndarray) for value in obs.values()
+        ):
             raise TypeError("inference preparation requires NumPy observation buffers")
         batch = self.agent.prepare(
             obs,

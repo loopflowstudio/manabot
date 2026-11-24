@@ -199,7 +199,7 @@ class TrainingGames:
 
     def __init__(self, source: Path) -> None:
         warnings.warn(
-            "TrainingGames is deprecated; use managym.recording.read_records; removal in 0.4.0",
+            "TrainingGames is deprecated; use managym.recording.read_records; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -270,7 +270,7 @@ def record_games(
     `players` and `context()` are retained in each record's context.
     """
     warnings.warn(
-        "record_games is deprecated; use managym recording games_path; removal in 0.4.0",
+        "record_games is deprecated; use managym recording games_path; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )

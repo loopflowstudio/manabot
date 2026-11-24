@@ -32,11 +32,18 @@ class _ReadSnapshot:
     def __init__(self, storage: "Storage") -> None:
         self.storage = storage
         self.name = storage.name
-        self.listed = storage.keys("")
+        self.listed = storage.versions("")
         self.cache: dict[tuple[str, int | None, int | None], bytes] = {}
 
     def keys(self, prefix: str) -> list[str]:
         return [key for key in self.listed if key.startswith(prefix)]
+
+    def versions(self, prefix: str) -> dict[str, str]:
+        return {
+            key: version
+            for key, version in self.listed.items()
+            if key.startswith(prefix)
+        }
 
     def uri(self, key: str) -> str:
         return self.storage.uri(key)

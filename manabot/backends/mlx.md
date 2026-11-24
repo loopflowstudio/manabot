@@ -89,8 +89,8 @@ reads them on MLX using the NumPy corpus and its offer and object permutations.
 
 ### Tracked training and recovery
 
-Run the bounded local recipe through one update, then continue the same run from
-the saved update boundary:
+Run the bounded local recipe through one update on MLX, then continue the same
+run from its saved update boundary:
 
 ```sh
 uv run --extra mlx etude train manabot/recipes/local.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
@@ -100,40 +100,78 @@ uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates
 Each attempt writes raw and EMA policy exports under `out/policies/`
 (`00000001-raw.safetensors`, `00000001-ema.safetensors`, and after resume
 `00000002-raw.safetensors`, `00000002-ema.safetensors`) and commits an atomic
-update save under `out/state/current.json` (including after update 0).
+update save selected by `out/state/current.json`. A stop before the first update
+saves update 0. Both backends write the following files under
+`out/state/save-NNNNNNNN/`.
 
-A schema-2 MLX save pairs two files alongside Etude's `state.json`:
+```text
+out/state/save-00000001/
+  state.json            Etude clocks, seed, commit, file inventory and Counts
+  continuation.json     framework-free host state (stream roots/prefixes, host and minibatch RNGs)
+  learner.safetensors   canonical float32 raw/EMA weights, Adam state and integrity manifest
+  sampling.safetensors  backend sampling RNG arrays keyed by sampling_domain
+```
 
-- `continuation.json` (framework-free host state): global-slot stream state
-  (0-action roots for `complete-games`, committed action prefixes for
-  `exact-quota`, parked fresh roots for snapshot vectors), `learned_game_rows`,
+- `continuation.json` (framework-free host state, schema 2): global-slot stream
+  state (0-action roots for `complete-games`, committed action prefixes for
+  `exact-quota`, opened fresh roots for snapshot collectors), `learned_game_rows`,
   the opponent RNG when `behavior="random"`, the minibatch RNG, and Python/NumPy
   RNGs;
-- `training.safetensors` (backend state): raw and EMA weights, Adam moments and
-  step, the collector's private sampling RNG, the MLX RNG, and a SHA-256 digest
-  binding the save to `continuation.json` (`schema="2"`).
+- `learner.safetensors` (`schema="canonical-v1"`): canonical float32 raw and
+  optional EMA weights, Adam `step` and moments, per-parameter `param_steps`,
+  `precision`, `has_ema`, observation config, lookup-buffer digests,
+  and SHA-256 digests binding `Counts`, `continuation.json` and
+  `sampling.safetensors`;
+- `sampling.safetensors`: backend sampling RNG arrays (`rng.collector`,
+  `rng.mlx` for `sampling_domain="mlx"`; `rng.collector`, `rng.torch.cpu`, and
+  optional `rng.torch.cuda` / `rng.torch.mps` for Torch domains).
+
+Because both backends write this layout, a launched Torch run can continue on
+MLX when the model and precision match and the parent's worker pool can run
+MLX on the requested device.
+
+```sh
+uv run --extra mlx etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'
+```
 
 Before mutating weights or opening native streams, resume validates model
-settings, saved column readings, lookup tables, backend, schema, the
-`continuation.json` digest, and array names, dtypes and shapes. It restores
-weights, EMA and Adam state, reopens streams directly into their committed roots
-or replayed action prefixes (verifying every slot's native state digest, chooser
-and decision-memory cursors, including across changed worker counts), and
-installs host and backend RNGs last. Prefix replay rebuilds native game statistics
+settings, saved column readings, precision, EMA presence, lookup-buffer digests,
+schema, the `Counts`/`continuation.json`/`sampling.safetensors` digests,
+parameter and Adam names, dtypes, shapes, finiteness and `param_steps` bounds.
+It restores weights, EMA and Adam state, reopens streams directly into their
+committed roots or replayed action prefixes (verifying every slot's native state
+digest, chooser and decision-memory cursors, including across changed worker
+counts), and installs host RNGs. Prefix replay rebuilds native game statistics
 and preserves any recorded policy probabilities and values. Policy cutoff counts
 and durable game records resume with live play.
 
-On CPU float32, stopping between updates (via `--until` or `ETUDE_STOP_FILE`)
-and resuming reproduces the next update's native decisions, counts, weights, EMA
-and Adam arrays identically. On Metal, stream keys, slots, action traces, state
-digests and restored arrays match identically, while subsequent GPU arithmetic
-follows Metal's float32 repeatability. Existing schema-1 MLX saves (without
-`continuation.json`) remain readable and start fresh game and sampling streams
-at the saved update. A schema-2 save with a missing or tampered
-`continuation.json`, digest mismatch, nonfinite Adam state, corrupt action
-prefix or incompatible stream geometry fails admission without advancing or
-modifying `state/current.json` or milestones. Portable policy exports can start
-a fresh learner on either backend.
+Within the same `sampling_domain` (`"mlx"` across CPU/MPS), `sampling.safetensors`
+restores collector and MLX RNGs too: on CPU float32, stopping between updates
+(via `--until` or `ETUDE_STOP_FILE`) and resuming reproduces the next update's
+native decisions, work counters, weights, EMA and Adam arrays identically. Each
+attempt measures its own elapsed time. On Metal, stream keys, slots, action
+traces, state digests and restored arrays match
+identically, while subsequent GPU arithmetic follows Metal's float32/bf16
+repeatability.
+
+Across sampling domains (Torch → MLX or MLX → Torch), resume still verifies
+`sampling_sha256` (tampering fails closed), ignores the incompatible generator
+arrays, reseeds sampling deterministically from `(run.seed, counts.updates)`,
+and logs `run/sampling_reseeded=1` on the first resumed update. On Torch → MLX,
+a conditional parameter can have fewer Adam updates than the global step.
+MLX restores its original moments and uses its own update count for bias
+correction, including on its first gradient. The first resumed update reports
+the number of these parameters in `run/adam_steps_aligned`.
+
+Legacy Torch saves (`learner.pt` / `optimizer.pt` / `ema.pt`) are refused on MLX
+with `"this save was written by Torch object registration; resume once on Torch
+to write a portable save"`. Pre-unification MLX `training.safetensors` saves are
+refused explicitly on both backends. A missing file, digest mismatch or
+nonfinite Adam state fails admission before the loop installs learner tensors.
+A corrupt action prefix or incompatible stream geometry fails during collector
+reconstruction, before the loop can update `state/current.json` or publish a
+milestone. Portable policy exports under `out/policies/`
+remain separate and can start a fresh learner on either backend.
 
 A numerical failure ends the attempt. Under `numerical-incident/`, the JSON
 record names the invariant (`nonfinite_gradients` before Adam,
@@ -305,8 +343,8 @@ shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
 below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
 precision always wins. Fresh and tracked self-play use `SelfPlay.precision`,
 including when starting from a portable checkpoint. An explicit precision on
-`resolve("mlx", precision=...)` must agree with the recipe. Resuming a tracked
-MLX run requires the precision in its training save.
+`resolve("mlx", precision=...)` must agree with the recipe. Resuming any tracked
+run requires the precision recorded in `learner.safetensors`.
 
 ```python
 from manabot.backends import resolve

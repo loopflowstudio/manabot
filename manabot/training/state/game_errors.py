@@ -336,9 +336,15 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
         if space is not None:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
-                managym.encode_observation_into(
-                    observation, space.layout, buffers, space.config.action_overflow
-                )
+                if space.one_token:
+                    managym.encode_observation_batch(
+                        [observation], space.layout, space.config.action_overflow
+                    )
+                else:
+                    # Deprecated v9/v10 dense path; removed in 0.3.0.
+                    managym.encode_observation_into(
+                        observation, space.layout, buffers, space.config.action_overflow
+                    )
             except managym.ObservationCapacity as error:
                 retained = matches_retained_error(
                     error, attempt.error_class, attempt.error
