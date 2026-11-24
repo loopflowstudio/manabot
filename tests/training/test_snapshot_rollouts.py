@@ -481,6 +481,10 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
         vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
         seeds = [701, 49, 33]
         vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
+        generations = vector.current_game_generations()
+        with pytest.raises(ValueError, match="native seed must fit uint64"):
+            vector.reset_each_into_buffers([setup] * 3, seeds=[800, 900, -1])
+        assert vector.current_game_generations() == generations
         frozen = space.allocate(3)
         players = [1, 0, 1]
         reads = vector.write_observations_for_players(
@@ -492,7 +496,7 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
                 slot,
                 players[slot],
                 seeds[slot],
-                vector.current_game_generations()[slot],
+                generations[slot],
             )
             scalar = managym.Env(seed=seeds[slot])
             scalar.reset(setup)
