@@ -882,6 +882,7 @@ impl Game {
             );
             permanent.manifested = entry.manifested;
             permanent.controller = holder;
+            permanent.entry_turn = self.state.turn.turn_number;
             // CR 400.7d: the permanent remembers how its spell was cast.
             if let Some(StackObject::Spell(cast)) = cast_spell {
                 permanent.was_cast = true;

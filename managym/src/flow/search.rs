@@ -266,7 +266,9 @@ impl Game {
                     .is_some_and(|a| a.player() == opponent)
                 && !self.shares_information(perspective, opponent)
         });
-        let space = if refresh {
+        let space = if self.state.opening().is_some() {
+            self.opening_actions()
+        } else if refresh {
             self.suspended_decision_action_space()
         } else if priority {
             Some(self.priority_action_space(opponent))

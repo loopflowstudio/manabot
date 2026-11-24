@@ -302,6 +302,16 @@ impl Game {
             announcing: None,
             paid: Vec::new(),
         };
+        if let Some(opening) = self.state.opening() {
+            let (stage, instruction) = opening.instruction();
+            view.stage = stage.into();
+            view.instruction = if viewer == actor {
+                instruction.into()
+            } else {
+                format!("Waiting for Seat {}.", actor.0 + 1)
+            };
+            return Some(view);
+        }
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
@@ -429,7 +439,7 @@ impl Game {
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
                 CostComponent::TapPays { .. } =>
                     ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
-                CostComponent::Life(_) | CostComponent::Source(_) =>
+                CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) =>
                     unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { toward: Toward::Saddle, .. } =>
                     ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),

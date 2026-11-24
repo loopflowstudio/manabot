@@ -1,6 +1,6 @@
 //! Champions of Kamigawa.
 use managym_state::{
-    ability::Actor,
+    ability::{Actor, Effect},
     card::{
         CardDefinition, CardType, CardTypes, PrintedCharacteristics, TriggeredManaAbility,
         TriggeredManaOutput,
@@ -10,7 +10,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![heartbeat_of_spring()]
+    vec![heartbeat_of_spring(), time_stop()]
 }
 
 fn heartbeat_of_spring() -> CardDefinition {
@@ -30,6 +30,23 @@ fn heartbeat_of_spring() -> CardDefinition {
                 },
                 output: TriggeredManaOutput::OneProducedType,
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn time_stop() -> CardDefinition {
+    let text_box = "End the turn. (Exile all spells and abilities, including this spell. The player whose turn it is discards down to their maximum hand size. Damage heals and \"this turn\" and \"until end of turn\" effects end.)";
+    CardDefinition {
+        key: "chk.time_stop",
+        scryfall_id: "f968c5e9-12a8-4542-90b4-84e0238fa375",
+        printed: PrintedCharacteristics {
+            name: "Time Stop".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::EndTheTurn],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -441,6 +441,7 @@ mod tests {
             165,
             true,
         );
+        game.keep_opening_hands();
         game.scenario_force_card_in_hand(PlayerId(0), "Ancestral Recall")
             .unwrap();
         for _ in 0..2 {
@@ -524,6 +525,7 @@ mod tests {
                 165,
                 true,
             );
+            game.keep_opening_hands();
             let payer = PlayerId(0);
             game.scenario_force_card_in_hand(payer, "Guardian of Vitu-Ghazi")
                 .unwrap();
@@ -644,6 +646,7 @@ mod tests {
             165,
             true,
         );
+        game.keep_opening_hands();
         game.scenario_force_card_in_hand(payer, "Spectral Sailor")
             .unwrap();
         let blue = [0, 1, 0, 0, 0, 0];

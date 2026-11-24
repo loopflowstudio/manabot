@@ -43,6 +43,7 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
         115_2026,
         false,
     );
+    game.keep_opening_hands();
     let ogre = game
         .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
         .unwrap();
@@ -463,14 +464,14 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
         assert!(game.flush_triggers().is_none());
         game.resolve_top_of_stack();
         game.perform_state_based_actions();
-        if game.state.players[0].alive {
+        if game.state.loss(0).is_none() {
             game.resolve_top_of_stack();
             game.perform_state_based_actions();
         }
         // CR 405.2: last placed resolves first. CR 704.5a: lose at zero
         // before the next ability resolves. Both placements must be choices.
         assert_eq!(game.state.players[0].life, expected_life);
-        assert_eq!(game.state.players[0].alive, expected_alive);
+        assert_eq!(game.state.loss(0).is_none(), expected_alive);
     }
 }
 
@@ -721,12 +722,12 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
                 batch.push(t);
             }
         }
-        game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+        game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
             remaining: batch,
             active,
             group: 0,
             placing: None,
-        });
+        }));
         game.state
             .pending_triggers
             .push(trigger(source, vec![Effect::gain_life(9)], 99));
@@ -1049,12 +1050,12 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     game.state[current].become_copy_of(&template, &[]);
     assert_eq!(game.unchosen_trigger_modes(&pending).unwrap().len(), 1);
     assert!(game.trigger_requirements(&pending).is_some());
-    game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+    game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
         remaining: vec![pending.clone()],
         active: PlayerId(0),
         group: 0,
         placing: None,
-    });
+    }));
     let label = game
         .action_description(&crate::agent::action::Action::ChooseTrigger {
             player: PlayerId(0),

@@ -13,7 +13,11 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![koma_cosmos_serpent(), seize_the_spoils()]
+    vec![
+        fynn_the_fangbearer(),
+        koma_cosmos_serpent(),
+        seize_the_spoils(),
+    ]
 }
 
 fn koma_cosmos_serpent() -> CardDefinition {
@@ -92,6 +96,38 @@ fn seize_the_spoils() -> CardDefinition {
                 Effect::create_tokens("token.treasure", 1),
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fynn_the_fangbearer() -> CardDefinition {
+    CardDefinition {
+        key: "khm.fynn_the_fangbearer",
+        scryfall_id: "7d7a8a90-13c1-4b0c-ab2e-fc8d91ccefd9",
+        printed: PrintedCharacteristics {
+            name: "Fynn, the Fangbearer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(1),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            supertypes: vec!["Legendary".into()],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: managym_state::ability::TriggerSubject::you_control(CardPredicate { deathtouch: true, ..CardPredicate::creature() }),
+                    to: Actor::Opponent,
+                    per: managym_state::ability::Per::Object,
+                },
+                effects: vec![Effect::GivePlayerCounters {
+                    player: managym_state::ability::PlayerSelector::EachOpponent,
+                    kind: managym_state::permanent::CounterKind::Poison, count: 2,
+                }],
+            }],
+            text_box: "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhenever a creature you control with deathtouch deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)".into(),
             ..Default::default()
         },
         ..Default::default()

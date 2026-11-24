@@ -38,10 +38,10 @@ def write_example_trace(path: Path) -> None:
             ),
         ],
     )
-    # Tiny decks lose to the first draw after their opening hand.
+    # Both players keep, then the first player takes the first legal action.
     game = record_actions(
         setup,
-        [0],
+        [0, 0, 0],
         players=("first-legal-a", "first-legal-b"),
         source={"kind": "evaluation"},
     )

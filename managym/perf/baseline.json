@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "932a1bb9cd77e597978891cd9df0ff38268b3529",
-    "date": "2026-11-19",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/44633569736",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "MTG-394 moves search and step digests on purpose: the automatic payer spends the most specific mana first, and mana made during a payment commits to the cost. The worst search reply moved to a different position (seed 1, decision 36) with one more legal choice and 28.5% more playout steps; per-step cost rose about 6.5% (local measurement on an M4 Max). Accepted."
+    "commit": "a451f8f5960db80cc861e0fdda81860c9516a38e",
+    "date": "2026-11-23",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45289204258",
+    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
+    "reason": "Native opening-hand choices change the legal decision stream in both benchmark workloads. The paired run passes all timing limits."
   },
   "bench_search": {
-    "worst_s": 5.5442340235,
-    "total_s": 168.17,
+    "worst_s": 3.0937932185,
+    "total_s": 120.097,
     "seeds": {
       "1": {
-        "worst_s": 5.5442340235,
-        "total_s": 74.483976655,
-        "digest": 12271650047222149123
+        "worst_s": 3.0937932185,
+        "total_s": 38.153207392,
+        "digest": 9802435900664878732
       },
       "2": {
-        "worst_s": 4.738681553,
-        "total_s": 45.8933968365,
-        "digest": 10117444071094495583
+        "worst_s": 2.377878399,
+        "total_s": 44.751872356499995,
+        "digest": 16681168173759266580
       },
       "3": {
-        "worst_s": 2.5897762255,
-        "total_s": 47.792656794,
-        "digest": 4954990117603543659
+        "worst_s": 2.4137772885,
+        "total_s": 37.19217464799999,
+        "digest": 10971803445708699009
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 14009.177063807614,
-    "steps": 123517,
+    "steps_per_s": 25270.17810789741,
+    "steps": 118255,
     "games": 512,
-    "digest": 6877553498864102521
+    "digest": 17942664948341206392
   }
 }

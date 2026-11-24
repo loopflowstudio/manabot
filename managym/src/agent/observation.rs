@@ -43,6 +43,8 @@ pub struct PlayerData {
     pub is_agent: bool,
     pub is_active: bool,
     pub life: i32,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
     pub zone_counts: [i32; 7],
     /// Lesson cards in this player's graveyard.
     pub graveyard_lessons: i32,
@@ -821,6 +823,7 @@ pub struct PermanentData {
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     pub dealt_damage_this_turn: bool,
+    pub entered_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     pub effects: Vec<ContinuousEffectData>,
@@ -1241,6 +1244,11 @@ impl Observation {
             is_agent,
             is_active: game.active_player() == player,
             life: p.life,
+            counters: p
+                .counters
+                .iter()
+                .map(|(k, n)| (k.name().into(), n))
+                .collect(),
             zone_counts,
             graveyard_lessons: game.count_graveyard_matching(
                 player,
@@ -1582,6 +1590,7 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -2100,8 +2109,28 @@ impl Observation {
                 .card_id(*object)
                 .map(|card| vec![game.state.cards[card].public_id])
                 .unwrap_or_default(),
-            Action::ActivateAbility { permanent, .. }
-            | Action::DeclareAttacker { permanent, .. }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let Some(source) = game.state.permanents[*permanent].as_ref() else {
+                    return vec![];
+                };
+                let mut focus = vec![source.id];
+                let view = game.characteristics(*permanent);
+                if let Some(grantor) = view
+                    .activated_abilities
+                    .get(*ability_index)
+                    .filter(|ability| ability.exile_grantor)
+                    .and_then(|ability| ability.granted_by)
+                    .and_then(|grant| game.state.permanent_of(grant.grantor))
+                {
+                    focus.push(game.state.permanents[grantor].as_ref().unwrap().id);
+                }
+                focus
+            }
+            Action::DeclareAttacker { permanent, .. }
             | Action::WaterbendTap { permanent, .. }
             | Action::TapForMana { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()

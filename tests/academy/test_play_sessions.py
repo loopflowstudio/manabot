@@ -136,6 +136,11 @@ def test_mana_tap_survives_reconnect_and_records_source(
             assert start["play_session"]["draft"]["mana_floats"] == mode
             assert start["play_session"]["draft"]["mana_payment"] == "auto"
             frame = start["recovery"]["frame"]
+            keep = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
+            ws.send_json({"type": "command", "command": _command(frame, keep, "keep")})
+            opening = settled_message(ws)
+            assert opening["status"] == "accepted"
+            frame = opening["update"]["frame"]
             land = _offer(frame, action_type="PRIORITY_PLAY_LAND")
             ws.send_json({"type": "command", "command": _command(frame, land, "land")})
             pending = settled_message(ws)["update"]["frame"]
@@ -518,7 +523,9 @@ def test_shared_watch_setup_admits_imports_and_keeps_private_sources(
 
 def test_native_draw_is_recorded_as_a_draw(tmp_path: Path) -> None:
     game = server.GameSession(tmp_path)
-    game.new_game(CONFIG)
+    frame = game.new_game(CONFIG)["frame"]
+    keep = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
+    assert game.hero_command(_command(frame, keep, "keep"))["status"] == "accepted"
     assert game.env is not None
     # A constructed simultaneous-loss position, never a game for a policy or person.
     game.env.scenario_set_life(0, 0)

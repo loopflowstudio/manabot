@@ -663,6 +663,10 @@ impl HiddenHandConstraints {
                 .map(|action| action.player())
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             match kind {
+                _ if branch.state.opening().is_some() => {
+                    let space = branch.opening_actions().unwrap();
+                    branch.publish_action_space(space);
+                }
                 ActionSpaceKind::Priority => branch.refresh_priority_actions(subject),
                 ActionSpaceKind::Modal
                     if branch

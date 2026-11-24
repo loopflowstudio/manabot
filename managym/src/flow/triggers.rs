@@ -131,9 +131,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             EventKinds::of(EventKind::AbilityTriggered)
         }
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
-        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
-            EventKinds::of(EventKind::CountersPut)
-        }
+        TriggerCondition::NthCounter { .. }
+        | TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
     }
 }
 
@@ -361,12 +361,12 @@ impl Game {
             if self.state.pending_triggers.is_empty() {
                 return None;
             }
-            *self.state.trigger_placement_mut() = Some(TriggerPlacement {
+            *self.state.trigger_placement_mut() = Some(Box::new(TriggerPlacement {
                 remaining: std::mem::take(self.state.pending_triggers_mut()),
                 active: self.active_player(),
                 group: 0,
                 placing: None,
-            });
+            }));
         }
         loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();
@@ -874,6 +874,12 @@ impl Game {
         }
         candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
         candidates
+    }
+
+    /// Collect occurrences in order without placing them on the stack.
+    pub(crate) fn collect_waiting_triggers(&mut self) {
+        self.process_game_events();
+        self.check_state_triggers();
     }
 
     /// Match pending committed events against the applicable exact sources.
@@ -1491,7 +1497,7 @@ impl Game {
 
     /// State triggers (CR 603.8) of battlefield sources whose state holds,
     /// unless that exact source's occurrence is still waiting or on the stack.
-    pub(crate) fn check_state_triggers(&mut self) {
+    fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
         for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
             let Some(permanent) = self
@@ -2025,6 +2031,22 @@ impl Game {
                     && self.state.permanents[*attacker]
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
+            }
+            (
+                TriggerCondition::NthCounter { kind, nth },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    count,
+                    total,
+                    ..
+                },
+            ) => {
+                let threshold = i32::from(*nth);
+                kind == put
+                    && self.state.permanent_of(source_object) == Some(*permanent)
+                    && total - count < threshold
+                    && threshold <= *total
             }
             (
                 TriggerCondition::Chapter { chapter },

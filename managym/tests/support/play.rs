@@ -382,9 +382,7 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
 /// A copy of the scenario in which the offered action at `index` was taken:
 /// one line of play from a choice, leaving `s` at the choice.
 pub fn fork_stepping(s: &Scenario, index: usize) -> Scenario {
-    let mut fork = Scenario {
-        game: s.game().clone(),
-    };
+    let mut fork = s.clone();
     fork.step_action(index);
     fork
 }
@@ -885,4 +883,28 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
         witness(&fork),
         "stale Command changed state"
     );
+}
+
+/// Answer the sole stacked ability with a scenario permanent's counter ability.
+pub fn counter_stacked_ability(s: &mut Scenario) {
+    use managym::state::{
+        ability::{Effect, ObjectSelector, TargetSpec},
+        card::ActivatedAbilityDefinition,
+    };
+    let seat = s.action_space().player.unwrap().0;
+    let source = s.force_permanent_on_battlefield(seat, "Gray Ogre");
+    let object = card_of(s, source);
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            effects: vec![Effect::CounterAbility {
+                what: ObjectSelector::Target(TargetSpec::Ability),
+            }],
+            ..Default::default()
+        });
+    activate(s, source, 0);
+    let targets = crate::support::inspect::offered_targets(s);
+    assert!(matches!(targets.as_slice(), [Target::StackAbility(_)]));
+    assert!(s.choose_target(targets[0]));
+    settle(s);
 }

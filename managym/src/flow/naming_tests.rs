@@ -37,6 +37,7 @@ fn naming_game() -> Game {
         243,
         false,
     );
+    game.keep_opening_hands();
     game.run_frame(EffectFrame {
         context_target: Some(Target::Player(PlayerId(1))),
         ..EffectFrame::new(

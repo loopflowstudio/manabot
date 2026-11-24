@@ -82,6 +82,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "distinct name search",
     "effect execution",
     "end batch",
+    "end the turn",
     "entering card",
     "entering definition",
     "enters face down",
@@ -396,6 +397,12 @@ impl<'a> Projection<'a> {
             FrameCompletion::Priority => {}
             FrameCompletion::TurnFaceUp(object) => self.object_id("turn face up", *object),
             FrameCompletion::Continue => self.field("return", &"turn action"),
+            FrameCompletion::EndTurn => {
+                self.summary(|| {
+                    "The turn is ending. Cleanup follows the state-based actions.".into()
+                });
+                self.field("return", &"end the turn");
+            }
             FrameCompletion::CombatNormal => {
                 self.summary(|| "Normal combat damage follows these choices.".into());
                 self.field("return", &"normal combat damage");
@@ -921,6 +928,7 @@ pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribu
         How::Sacrificed => "sacrificed",
         How::Exiled => "exiled",
         How::Discarded => "discarded",
+        How::Returned => "returned",
     };
     let toward = match paid.toward {
         Toward::Printed => "",

@@ -62,6 +62,9 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.getByRole('button', { name: 'Start game', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('action-option').first()).toContainText('Keep hand');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'PRIORITY');
 
   // Tab visits the regions in reading order, each once, one stop per region,
   // and leaves them only for the top bar's controls and the stop bar (one
@@ -81,7 +84,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   }
 
   // Tab enters the hand at the playable Mountain. Both arrows move one card.
-  expect(await reach(page, /^Your hand/, /./)).toBe(true);
+  expect(await reach(page, /^Your hand/, /^Mountain .*Play Mountain/)).toBe(true);
   const hand = page.getByRole('region', { name: /^Your hand/ });
   const mountain = hand.getByRole('button', { name: /^Mountain/ });
   await expect(mountain).toBeFocused();

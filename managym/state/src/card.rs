@@ -624,7 +624,7 @@ impl ActivatedAbilityDefinition {
     /// Whether paying the cost removes the source permanent from the
     /// battlefield (sacrificed or exiled).
     pub fn source_leaves(&self) -> bool {
-        self.sacrifice_source || self.exile_source
+        self.sacrifice_source || self.exile_source || self.return_source
     }
 
     /// For a known mana ability, does activation change anything besides
@@ -770,12 +770,18 @@ pub struct ActivatedAbilityDefinition {
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub power_up: bool,
     /// "Activate only once each turn" (CR 602.5b); counted per object.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub once_each_turn: bool,
     /// "Costs {1} less to activate for each [predicate] you control."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_reduction_per: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub reduce_by_source_power: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_grantor: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -799,6 +805,9 @@ pub struct ActivatedAbilityDefinition {
     /// artifact: ...").
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exile_source: bool,
+    /// Return the source to its owner’s hand as an activation cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub return_source: bool,
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
@@ -860,6 +869,7 @@ pub struct StaticContinuous {
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    BeginOnBattlefield,
     /// One continuous effect whose parts may apply in different layers.
     Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's
@@ -917,6 +927,7 @@ pub enum StaticAbility {
     AdditionalLandPlayEachPlayer,
     /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
     LegendRuleDoesntApply,
+    CantLoseAndOpponentsCantWin,
     /// "Activated abilities of [predicate] you control cost {generic} less to
     /// activate. This effect can't reduce the mana in that cost to less than
     /// one mana" (Training Grounds); applies to the generic part, mana

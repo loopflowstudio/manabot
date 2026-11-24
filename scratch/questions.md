@@ -24,3 +24,4 @@
 - Use Cecil and Ember Island Production on both sides of the same reveal. Use Gray Ogre for distinguishable generic mana choices and Llanowar Elves for the seeded Academy reconnect and replay.
 - Use flashback for Electroduplicate, ordinary Rite under Doubling Season and kicked Rite on the Fire Crystal token. Four same-name graveyard cards distinguish exact death targets in both trigger orders.
 - Keep constructed snapshot helpers in the card test binary. It enables benchmark access and owns all current callers.
+- The merged GameState exceeded its 4096-byte inline budget. Keep the budget and allocate trigger placement only while a trigger batch is being placed.

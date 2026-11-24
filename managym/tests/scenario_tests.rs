@@ -37,13 +37,20 @@ fn make_env(seed: u64) -> Env {
     let p0 = PlayerConfig::new("hero", hero_counter_deck());
     let p1 = PlayerConfig::new("villain", villain_bomb_deck());
     env.reset(vec![p0, p1]).expect("reset should succeed");
+    for _ in 0..2 {
+        env.step(0).unwrap(); // Both seats keep.
+    }
     env
 }
 
 fn make_game(seed: u64) -> Game {
     let p0 = PlayerConfig::new("hero", hero_counter_deck());
     let p1 = PlayerConfig::new("villain", villain_bomb_deck());
-    Game::new(vec![p0, p1], seed, true)
+    let mut game = Game::new(vec![p0, p1], seed, true);
+    for _ in 0..2 {
+        game.step(0).unwrap(); // Both seats keep.
+    }
+    game
 }
 
 #[test]

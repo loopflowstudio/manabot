@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 17;
+pub const MATCH_STATE_HASH_VERSION: u32 = 19;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -153,6 +153,7 @@ impl From<&CombatState> for CanonicalCombat {
 
 #[derive(Serialize)]
 struct CanonicalMatchState<'a> {
+    procedure: &'a crate::flow::game::GameProcedure,
     #[serde(skip_serializing_if = "crate::state::player::DecklistDisclosure::is_open")]
     disclosure: crate::state::player::DecklistDisclosure,
     hash_contract_version: u32,
@@ -177,7 +178,7 @@ struct CanonicalMatchState<'a> {
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],
-    trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
+    trigger_placement: Option<&'a crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
     effects: &'a [crate::state::effect::ContinuousEffect],
@@ -199,6 +200,7 @@ impl<'a> CanonicalMatchState<'a> {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
+            procedure,
             disclosure,
             // Immutable roster facts already occur in the v16 object rows.
             cards: _,
@@ -251,6 +253,7 @@ impl<'a> CanonicalMatchState<'a> {
         }
 
         Self {
+            procedure,
             disclosure: *disclosure,
             hash_contract_version: MATCH_STATE_HASH_VERSION,
             content_schema_version: content.schema_version,
@@ -265,13 +268,13 @@ impl<'a> CanonicalMatchState<'a> {
             turn: CanonicalTurn::from(turn),
             priority,
             stack_objects,
-            combat: combat.as_ref().map(CanonicalCombat::from),
+            combat: combat.as_deref().map(CanonicalCombat::from),
             mana_cache,
             events,
             pending_events,
             observation_events,
             pending_triggers,
-            trigger_placement,
+            trigger_placement: trigger_placement.as_deref(),
             delayed_triggers,
             exile_links,
             effects: effects.as_slice(),

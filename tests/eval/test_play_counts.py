@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from manabot.eval.behaviour import Play, PlayCounts, checkpoint_counts
+from manabot.verify.text_observation import keep_opening_index
 import managym
 from managym.card_capture import CapturedCards
 from managym.enums import ActionEnum as Action, ActionSpaceEnum as Space
@@ -153,6 +154,8 @@ def test_replayed_chump_blocks_count_committed_assignments(
     env = managym.Env(seed=3)
     recording = ScalarCapture(seed=3, games_path=path)
     obs, _ = recording.reset(env, setup)
+    while obs.turn.turn_number == 0:
+        obs, *_ = recording.step(env, keep_opening_index(obs))
     while not env.is_game_over():
         actions = obs.action_space.actions
         turn = obs.turn.turn_number

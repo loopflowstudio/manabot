@@ -38,8 +38,54 @@ use crate::{
     },
 };
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum GameProcedure {
+    OpeningHands(crate::flow::opening::OpeningHands),
+    Playing,
+    Finished(GameOutcome),
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+#[serde(untagged)]
+pub enum GameOutcome {
+    Losses { losses: [LossCauses; 2] },
+    Victory { winner: PlayerId },
+}
+
+/// Loss conditions committed for one seat.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+pub struct LossCauses {
+    pub life_total: bool,
+    pub deck_empty: bool,
+    pub poison: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub instructed: bool,
+}
+
+impl LossCauses {
+    pub fn any(self) -> bool {
+        self.life_total || self.deck_empty || self.poison || self.instructed
+    }
+
+    /// Single-reason projection for Env clients, preserving empty-draw precedence.
+    pub fn reason(self) -> Option<&'static str> {
+        if self.deck_empty {
+            Some("deck_empty")
+        } else if self.life_total {
+            Some("life_total")
+        } else if self.poison {
+            Some("poison")
+        } else if self.instructed {
+            Some("instructed_loss")
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub procedure: GameProcedure,
     pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,
@@ -59,14 +105,14 @@ pub struct GameState {
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
-    pub combat: Option<CombatState>,
+    pub combat: Option<Box<CombatState>>,
     pub mana_cache: [Option<Mana>; 2],
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
-    pub trigger_placement: Option<TriggerPlacement>,
+    pub trigger_placement: Option<Box<TriggerPlacement>>,
     /// Delayed triggered abilities (CR 603.7) waiting for their events, in
     /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
@@ -85,8 +131,24 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn opening(&self) -> Option<&crate::flow::opening::OpeningHands> {
+        match &self.procedure {
+            GameProcedure::OpeningHands(opening) => Some(opening),
+            _ => None,
+        }
+    }
+
+    pub fn loss(&self, seat: usize) -> Option<LossCauses> {
+        match self.procedure {
+            GameProcedure::Finished(GameOutcome::Losses { losses }) if losses[seat].any() => {
+                Some(losses[seat])
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn is_game_over(&self) -> bool {
-        self.players.iter().any(|player| !player.alive)
+        matches!(self.procedure, GameProcedure::Finished(_))
     }
 
     /// Put the same appearance in a zone without a zone change. Callers own
@@ -450,7 +512,7 @@ impl TrackedState {
         &mut self.state.pending_triggers
     }
 
-    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<TriggerPlacement> {
+    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<Box<TriggerPlacement>> {
         &mut self.state.trigger_placement
     }
 

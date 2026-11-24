@@ -45,6 +45,7 @@ pub enum How {
     Sacrificed,
     Exiled,
     Discarded,
+    Returned,
 }
 
 /// The part of the cost an object paid.

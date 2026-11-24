@@ -112,6 +112,8 @@ pub enum TriggerCondition {
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
     Chapter { chapter: u8 },
+    /// Triggers once when a placement crosses this count on the source.
+    NthCounter { kind: CounterKind, nth: u8 },
     /// "Whenever [who] puts one or more [kind] counters on a [on]
     /// permanent": once per permanent an instruction that player controls
     /// puts them on. The trigger's X is how many were put ("that much").
@@ -209,6 +211,8 @@ pub enum Condition {
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        distinct_names: bool,
         count: usize,
         predicate: CardPredicate,
     },
@@ -1085,6 +1089,8 @@ pub enum Effect {
     /// waiting triggered abilities cease to exist, and the turn skips to its
     /// cleanup step, which proceeds as usual.
     EndTheTurn,
+    LoseGame,
+    WinGame,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -1229,6 +1235,11 @@ pub enum Effect {
     LoseLife {
         player: PlayerSelector,
         amount: EffectValue,
+    },
+    GivePlayerCounters {
+        player: PlayerSelector,
+        kind: CounterKind,
+        count: i32,
     },
     /// The source deals `amount` damage to the selected players.
     DealDamageToPlayer {
@@ -1798,9 +1809,9 @@ impl Effect {
             return Some(spec);
         }
         match self {
-            Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } => {
-                player.target_spec()
-            }
+            Effect::GivePlayerCounters { player, .. }
+            | Effect::LoseLife { player, .. }
+            | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
@@ -1869,6 +1880,8 @@ impl Effect {
             | Effect::MeldExiled { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::WinGame
+            | Effect::LoseGame
             | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }

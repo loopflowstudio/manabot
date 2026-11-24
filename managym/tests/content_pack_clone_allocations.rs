@@ -41,7 +41,7 @@ fn stop_counting() -> (u64, u64) {
     unreachable!("start_counting refuses this build")
 }
 
-const FIXTURE_ID: &str = "interactive-heavy-80-w4-v1";
+const FIXTURE_ID: &str = "interactive-heavy-80-opening-v1";
 const WARMUP_CLONE_COUNT: usize = 64;
 const MEASURED_CLONE_COUNT: usize = 1_024;
 const SYNTHETIC_TEXT_BYTES: usize = 64 * 1_024;

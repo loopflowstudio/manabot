@@ -48,6 +48,7 @@ fn fixture(controller: PlayerId) -> (Game, PermanentId, PermanentId) {
         608_2026,
         false,
     );
+    game.keep_opening_hands();
     let opponent = PlayerId(1 - controller.0);
     let first = game
         .scenario_force_battlefield(opponent, "Gray Ogre", true)
@@ -2881,10 +2882,10 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         let object = root.state.permanents[id].as_ref().unwrap().object;
         root.state[object].replacement_effects = vec![effect];
     }
-    root.state.combat = Some(CombatState {
+    root.state.combat = Some(Box::new(CombatState {
         attackers: vec![first, second],
         ..Default::default()
-    });
+    }));
     root.resolve_combat_damage();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
     for (mode, life) in [(0, 16), (1, 14)] {
@@ -3330,6 +3331,7 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         241,
         false,
     );
+    game.keep_opening_hands();
     let merchant = game
         .scenario_force_battlefield(player, "Unlucky Cabbage Merchant", true)
         .unwrap();
@@ -4449,6 +4451,117 @@ fn hidden_knowledge_search_reveals_do_not_displace_a_known_top() {
         space
             .materialize_index(&game, 0, 7, MaterializeMode::RefreshOpponentCommitment)
             .unwrap();
+    }
+}
+
+/// CR 725.1a-f. A loss-of-toughness or lethal-damage SBA must happen
+/// before cleanup can clear damage, even when a legend choice interrupts
+/// that batch. Only the second of these identical death triggers survives.
+#[test]
+fn end_turn_resumes_its_state_based_check_before_cleanup() {
+    use crate::agent::action::ActionSpaceKind;
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Curious Farm Animals".into(), 4),
+        ("Fire Lord Azula".into(), 4),
+        ("Lightning Bolt".into(), 4),
+        ("Time Stop".into(), 4),
+        ("Mountain".into(), 24),
+    ]);
+    let config = PlayerConfig::new("player", deck);
+    let mut game = Game::new(vec![config.clone(), config], 725, false);
+    for seat in [PlayerId(0), PlayerId(1)] {
+        checked_command(
+            &mut game,
+            Action::ChooseMode {
+                player: seat,
+                mode: 0,
+            },
+        );
+    }
+    assert!(matches!(
+        game.state.procedure,
+        crate::flow::game::GameProcedure::Playing
+    ));
+    let step = game.state.turn.current_step_kind();
+    let first = game
+        .scenario_force_battlefield(player, "Curious Farm Animals", true)
+        .unwrap();
+    let second = game
+        .scenario_force_battlefield(player, "Curious Farm Animals", true)
+        .unwrap();
+    let first_object = game.permanent_object(first).unwrap();
+    game.move_object(first_object, ZoneType::Graveyard);
+    assert_eq!(game.state.pending_triggers.len(), 1);
+    game.state.permanents[second].as_mut().unwrap().damage = 1;
+
+    let legends = [0, 1].map(|_| {
+        game.scenario_force_battlefield(player, "Fire Lord Azula", true)
+            .unwrap()
+    });
+    let spell = |game: &mut Game, name: &str| {
+        let object = game
+            .state
+            .latest_objects()
+            .find(|(_, o)| o.owner == player && o.name == name)
+            .unwrap()
+            .0;
+        game.push_spell_to_stack(object, player, vec![], vec![], Default::default())
+    };
+    let bolt = spell(&mut game, "Lightning Bolt");
+    let Some(Target::StackSpell(copy)) = game.copy_stack_object(Target::StackSpell(bolt), player)
+    else {
+        panic!("expected a spell copy");
+    };
+    spell(&mut game, "Time Stop");
+    game.exile_top_cards_to_play(player, 1, crate::state::ability::PlayWindow::ThisTurn);
+    let playable = game.state.cast_permissions.exile_grants[0].object;
+    game.resolve_top_of_stack();
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(
+        game.action_space().unwrap().kind,
+        ActionSpaceKind::LegendRule
+    );
+    assert_eq!(game.state.turn.current_step_kind(), step);
+    assert!(game.state.stack_objects.is_empty());
+    assert!(game.state.pending_triggers.is_empty());
+    assert!(game
+        .decision_context(player)
+        .unwrap()
+        .pending
+        .iter()
+        .any(|line| line.contains("turn is ending")));
+    assert!(game.exile_grant_on(playable).is_some());
+    let copy_in_exile = game.state.zones.successor(copy).unwrap();
+    assert_eq!(
+        game.state.zones.zone_of(copy_in_exile),
+        Some(ZoneType::Exile)
+    );
+
+    let root = game.state.deterministic_hash();
+    for keep in legends {
+        let mut fork = game.clone();
+        let keep_object = fork.permanent_object(keep).unwrap();
+        checked_command(
+            &mut fork,
+            Action::SelectCard {
+                player,
+                object: keep_object,
+            },
+        );
+        assert_eq!(fork.state.turn.current_step_kind(), StepKind::Cleanup);
+        assert!(fork.state.permanents[keep].is_some());
+        assert!(fork.state.permanents[second].is_none());
+        assert_eq!(fork.state.zones.zone_of(copy_in_exile), None);
+        assert!(
+            fork.exile_grant_on(playable).is_none(),
+            "this-turn play permission expires before cleanup priority"
+        );
+        assert_eq!(fork.state.stack_objects.len(), 1);
+        assert_eq!(fork.action_space().unwrap().kind, ActionSpaceKind::Priority);
+        fork.resolve_top_of_stack();
+        assert_eq!(fork.state.players[player.0].life, 23);
+        assert_eq!(game.state.deterministic_hash(), root);
     }
 }
 

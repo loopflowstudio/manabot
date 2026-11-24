@@ -30,6 +30,8 @@ pub struct CardPredicate {
     pub namesake: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub deathtouch: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -183,6 +185,7 @@ impl CardPredicate {
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
+            || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
             || (self.flying && !object.keywords.has(Keyword::Flying))
         {
             return false;

@@ -26,6 +26,8 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
             managym.PlayerConfig("b", {"Forest": 10, "Llanowar Elves": 20}),
         ]
     )
+    env.step(0)
+    env.step(0)
     env.scenario_force_battlefield(0, "Gray Ogre")
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()

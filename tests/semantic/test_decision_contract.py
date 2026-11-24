@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from manabot.semantic.decision_contract import (
+    SemanticContractError,
+    SemanticDecisionContract,
+)
+from manabot.verify.text_observation import reset_to_first_main
+import managym
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     DecisionFrame,
@@ -9,23 +17,19 @@ from managym.decision import (
     PublicCommitment,
     TransitionReceipt,
 )
-import pytest
-
-from manabot.semantic.decision_contract import (
-    SemanticContractError,
-    SemanticDecisionContract,
-)
-import managym
 
 
 def _env() -> managym.Env:
     env = managym.Env(seed=23, skip_trivial=True)
     deck = {"Mountain": 10, "Gray Ogre": 20, "Lightning Bolt": 4}
-    env.reset(
-        [
-            managym.PlayerConfig("hero", dict(deck)),
-            managym.PlayerConfig("villain", dict(deck)),
-        ]
+    reset_to_first_main(
+        env,
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("hero", dict(deck)),
+                managym.PlayerConfig("villain", dict(deck)),
+            ]
+        ),
     )
     return env
 

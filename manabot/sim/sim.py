@@ -54,6 +54,7 @@ class GameOutcome(Enum):
 
     HERO_WIN = "hero_win"
     VILLAIN_WIN = "villain_win"
+    DRAW = "draw"
     TIMEOUT = "timeout"
 
 
@@ -72,7 +73,7 @@ class GameRecord:
 
 
 def simulation_summary(games: Sequence[GameRecord]) -> dict[str, Any]:
-    """Win, timeout and length rates over every recorded game."""
+    """Outcome counts, win rates and average lengths over every recorded game."""
     total_games = len(games)
     if total_games == 0:
         return {"total_games": 0}
@@ -83,7 +84,8 @@ def simulation_summary(games: Sequence[GameRecord]) -> dict[str, Any]:
         "total_games": total_games,
         "hero_wins": hero_wins,
         "villain_wins": villain_wins,
-        "timeouts": total_games - hero_wins - villain_wins,
+        "draws": sum(g.outcome == GameOutcome.DRAW for g in games),
+        "timeouts": sum(g.outcome == GameOutcome.TIMEOUT for g in games),
         "hero_win_rate": hero_wins / total_games,
         "villain_win_rate": villain_wins / total_games,
         "avg_steps": sum(g.steps for g in games) / total_games,
@@ -186,39 +188,17 @@ def _log_profiler(games: Sequence[GameRecord], logger: logging.Logger) -> None:
 # -----------------------------------------------------------------------------
 
 
-def determine_outcome(
-    info: dict, raw_obs, turn_count: int, max_steps: int
-) -> GameOutcome:
-    """
-    Determine the outcome of a game with robust fallback logic.
-
-    Args:
-        info: Information dictionary from environment step
-        raw_obs: Raw managym.Observation (not encoded)
-        turn_count: Current turn count
-        max_steps: Maximum steps before timeout
-
-    Returns:
-        Game outcome (HERO_WIN, VILLAIN_WIN, or TIMEOUT)
-    """
-    # Check for timeout first
-    if turn_count >= max_steps:
+def determine_outcome(terminated: bool, info: Mapping[str, object]) -> GameOutcome:
+    """Read the committed native result when simulation stops."""
+    if not terminated:
         return GameOutcome.TIMEOUT
-
-    # Primary source: winner field in info dict
-    if "winner" in info:
-        return GameOutcome.HERO_WIN if info["winner"] == 0 else GameOutcome.VILLAIN_WIN
-
-    # Fallback: life totals from the raw observation
-    hero_life = raw_obs.agent.life
-    villain_life = raw_obs.opponent.life
-
-    if hero_life <= 0:
-        return GameOutcome.VILLAIN_WIN
-    if villain_life <= 0:
-        return GameOutcome.HERO_WIN
-
-    return GameOutcome.TIMEOUT
+    if "winner_index" in info:
+        seat = info["winner_index"]
+        if type(seat) is int and seat in (0, 1):
+            return (GameOutcome.HERO_WIN, GameOutcome.VILLAIN_WIN)[seat]
+    elif info.get("winner_name") == "draw":
+        return GameOutcome.DRAW
+    raise ValueError("Terminated game lacks a valid native winner or draw")
 
 
 # -----------------------------------------------------------------------------
@@ -313,11 +293,11 @@ def simulate_models(
                     completed_games += 1
 
                 # Simulate a single game
-                outcome, steps, duration, profiler_data = _simulate_game(
-                    env, hero_player, villain_player, sim_config.max_steps
+                record = _simulate_game(
+                    env, hero_player, villain_player, sim_config.max_steps,
+                    thread_id=thread_id,
                 )
 
-                record = GameRecord(outcome, steps, duration, thread_id, profiler_data)
                 with games_lock:
                     games.append(record)
 
@@ -388,6 +368,7 @@ def simulate_models(
     logger.info(
         f"Villain wins: {summary['villain_wins']} ({summary['villain_win_rate']:.2%})"
     )
+    logger.info(f"Draws: {summary['draws']} ({summary['draws'] / summary['total_games']:.2%})")
     logger.info(
         f"Timeouts: {summary['timeouts']} ({summary['timeouts'] / summary['total_games']:.2%})"
     )
@@ -405,56 +386,33 @@ def simulate_models(
 
 
 def _simulate_game(
-    env: Env, hero_player: Player, villain_player: Player, max_steps: int
-) -> tuple[GameOutcome, int, float, dict[str, dict[str, float | int]]]:
-    """
-    Simulate a single game between two players.
-
-    Args:
-        env: Game environment
-        hero_player: Player for hero position
-        villain_player: Player for villain position
-        max_steps: Maximum steps before timeout
-
-    Returns:
-        Tuple of (outcome, steps, duration, profiler_data)
-    """
+    env: Env,
+    hero_player: Player,
+    villain_player: Player,
+    max_steps: int,
+    *,
+    thread_id: int | None = None,
+) -> GameRecord:
+    """Play until the environment stops or the step budget runs out."""
     logger = getLogger("manabot.sim.sim").getChild("simulate_game")
     # Reset environment
     start_time = time.time()
     obs, info = env.reset()
-    done = False
-    turn_count = 0
+    terminated = truncated = False
+    steps = 0
+    while steps < max_steps and not (terminated or truncated):
+        seat = env.last_raw_obs.agent.player_index
+        player = hero_player if seat == 0 else villain_player
+        obs, _, terminated, truncated, info = env.step(player.get_action(obs))
+        steps += 1
 
-    # Track game state
-    last_info = info
-
-    # Main game loop
-    while not done and turn_count < max_steps:
-        # Get active player index from the raw observation.
-        active_player_index = int(env.last_raw_obs.agent.player_index)
-
-        # Select the appropriate player
-        player = hero_player if active_player_index == 0 else villain_player
-
-        action = player.get_action(obs)
-        new_obs, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        last_info = info
-        turn_count += 1
-        obs = new_obs
-
-    # Calculate duration
-    if not done:
+    outcome = determine_outcome(terminated, info)
+    if outcome == GameOutcome.TIMEOUT:
         logger.warning("Game did not complete")
 
-    duration = time.time() - start_time
-
-    # Determine outcome
-    outcome = determine_outcome(last_info, env.last_raw_obs, turn_count, max_steps)
-
-    profiler_data = last_info.get("profiler", {})
-    return outcome, turn_count, duration, profiler_data
+    return GameRecord(
+        outcome, steps, time.time() - start_time, thread_id, info.get("profiler", {})
+    )
 
 
 def load_player(model_str: str, *, backend: PolicyLoader | None = None) -> Player:
