@@ -274,6 +274,14 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         assert hot_infos == compat_infos
 
         last_compat_step = [(obs, info) for obs, _, _, _, info in compat_step]
+        if expected_terminated.any() or expected_truncated.any():
+            # Finished slots stay parked; deal fresh games on both paths.
+            last_compat_step = compat.reset_all(player_configs)
+            hot.reset_all_into_buffers(player_configs)
+            for env_index, (obs, _) in enumerate(last_compat_step):
+                assert_buffer_observation_equal(
+                    buffers, env_index, encode_observation(space, obs)
+                )
 
 
 def test_vector_env_set_buffers_validates_contract() -> None:

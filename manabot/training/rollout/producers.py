@@ -30,7 +30,7 @@ from manabot.training.rollout.snapshot_vector import (
     bind_cold_start,
 )
 import managym
-from managym.recording import GameInputs
+from managym.recording import GameInputs, load_recorded_slots
 
 Array = NDArray[np.generic]
 
@@ -57,12 +57,12 @@ class ObservationRead:
     revision: int
 
 
-def native_slot_load(request: SlotInstall, local_slot: int) -> managym.SlotLoad:
+def native_slot_load(request: SlotInstall) -> managym.SlotLoad:
     source, recipe = request.hot_handle, request.recipe
     if recipe is None:
         if source is not None or request.restore_options is not None:
             raise ValueError("fresh slot cannot carry a snapshot or restore options")
-        return managym.SlotLoad.fresh(local_slot)
+        return managym.SlotLoad.fresh(request.slot)
     if not isinstance(source, managym.GameSnapshot) or (
         source.state_digest,
         source.seed,
@@ -71,7 +71,7 @@ def native_slot_load(request: SlotInstall, local_slot: int) -> managym.SlotLoad:
         raise ValueError(
             f"snapshot {request.snapshot_id} root identity mismatch in slot {request.slot}"
         )
-    return managym.SlotLoad.snapshot(local_slot, source, request.restore_options)
+    return managym.SlotLoad.snapshot(request.slot, source, request.restore_options)
 
 
 class BufferedStreams:
@@ -82,6 +82,9 @@ class BufferedStreams:
     def __init__(self, num_envs: int, shards: list[StreamShard]) -> None:
         self.num_envs = num_envs
         self._shards = shards
+        self._shard_by_slot = [
+            shard for shard in shards for _ in range(shard.start, shard.stop)
+        ]
         self._closed = False
 
     def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
@@ -316,18 +319,6 @@ class BufferedStreams:
             ]
         )
 
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
-        self._rows(len(failed))
-        self._run(
-            [
-                partial(
-                    shard.native.replace_failed_into_buffers,
-                    failed[shard.rows],
-                )
-                for shard in self._shards
-            ]
-        )
-
     def current_game_seeds(self) -> list[int]:
         return self._read_rows(lambda native: native.current_game_seeds())
 
@@ -367,7 +358,7 @@ class BufferedStreams:
         if len(selected) != len(slots) or any(
             slot < 0 or slot >= self.num_envs for slot in slots
         ):
-            raise ValueError("invalid or duplicate snapshot slots")
+            raise ValueError("invalid or duplicate slots")
         return selected
 
     def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]:
@@ -390,34 +381,47 @@ class BufferedStreams:
     def release_handles(self, handles: Sequence[object]) -> None:
         """Detached native snapshots are released by their last Python owner."""
 
-    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
-        """Validate global source bindings, then submit one mixed load per active shard."""
-        slots = [r.slot for r in installs]
+    def load_slots_into_buffers(
+        self, requests: Sequence[managym.SlotLoad]
+    ) -> list[managym.SlotLoadResult]:
+        """Load sparse global slots as one native transaction, in request order."""
+        slots = [request.slot for request in requests]
         self._validate_slots(slots)
-        replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]] = {}
-        calls = []
-        offsets = []
-        for shard in self._shards:
-            loads = [
-                native_slot_load(
-                    bind_cold_start(request, replayed), request.slot - shard.start
-                )
-                for request in installs
-                if shard.start <= request.slot < shard.stop
-            ]
-            if loads:
-                calls.append(partial(shard.native.load_slots_into_buffers, loads))
-                offsets.append(shard.start)
-        results = {
-            offset + result.slot: InstalledSlot(
-                offset + result.slot,
-                result.source_digest or "",
-                result.acting_player if result.acting_player is not None else -1,
+        if not slots:
+            return []
+        grouped: dict[StreamShard, list[managym.SlotLoad]] = {}
+        for request in requests:
+            shard = self._shard_by_slot[request.slot]
+            grouped.setdefault(shard, []).append(
+                request.with_slot(request.slot - shard.start)
             )
-            for offset, batch in zip(offsets, self._run(calls), strict=True)
+        # This coordinated call runs on the owner thread, with live run coordinates.
+        for shard in grouped:
+            shard.native.frozen_context = None
+        loaded = load_recorded_slots(
+            [(shard.native, loads) for shard, loads in grouped.items()]
+        )
+        results = {
+            shard.start + result.slot: result.with_slot(shard.start + result.slot)
+            for shard, batch in zip(grouped, loaded, strict=True)
             for result in batch
         }
         return [results[slot] for slot in slots]
+
+    def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]:
+        """Bind cold roots once, then load fresh games and snapshots together."""
+        replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]] = {}
+        loads = [
+            native_slot_load(bind_cold_start(request, replayed)) for request in installs
+        ]
+        return [
+            InstalledSlot(
+                result.slot,
+                result.source_digest or "",
+                result.acting_player if result.acting_player is not None else -1,
+            )
+            for result in self.load_slots_into_buffers(loads)
+        ]
 
     def state_digests(self, active: list[bool] | None = None) -> list[str | None]:
         """Hash selected games in global slot order, leaving masked slots empty."""
@@ -428,7 +432,7 @@ class BufferedStreams:
             digest
             for shard in self._shards
             for digest in shard.native.state_digests(
-                None if active is None else active[shard.start : shard.stop]
+                None if active is None else active[shard.rows]
             )
         ]
 
@@ -452,16 +456,12 @@ class BufferedStreams:
             sum(encoding for _, encoding in shards) / len(shards),
         )
 
-    @property
-    def auto_reset(self) -> bool:
-        return self._shards[0].native.auto_reset
-
     def game_inputs(self, slot: int) -> GameInputs:
         """Materialize one failed game's replay on the producer that owns it."""
-        for shard in self._shards:
-            if shard.start <= slot < shard.stop:
-                return shard.native.game_inputs(slot - shard.start)
-        raise IndexError(slot)
+        if not 0 <= slot < len(self._shard_by_slot):
+            raise IndexError(slot)
+        shard = self._shard_by_slot[slot]
+        return shard.native.game_inputs(slot - shard.start)
 
     def capture_failure(self, error: BaseException) -> None:
         # Capture from the owning thread so live run coordinates remain available.
@@ -474,6 +474,7 @@ class BufferedStreams:
             for shard in self._shards:
                 shard.native.close()
             self._shards.clear()
+            self._shard_by_slot.clear()
 
 
 class ShardedVectorEnv(BufferedStreams):
@@ -492,7 +493,6 @@ class ShardedVectorEnv(BufferedStreams):
         seed: int,
         workers: int,
         *,
-        auto_reset: bool = True,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
         games_path: Path | None = None,
@@ -515,7 +515,6 @@ class ShardedVectorEnv(BufferedStreams):
                 seed_stride=num_envs,
                 stream_offset=start,
                 skip_trivial=self.skip_trivial,
-                auto_reset=auto_reset,
                 decision_memory=decision_memory,
                 decision_memory_include_own=decision_memory_include_own,
                 player_policies=("agent", "agent"),
@@ -561,19 +560,17 @@ def open_native_streams(
     seed: int,
     workers: int,
     *,
-    auto_reset: bool,
     decision_memory: bool,
     decision_memory_include_own: bool,
     games_path: Path | None = None,
     record_fraction: float = 1.0,
-) -> BufferedStreams | RecordedVectorEnv:
+) -> BufferedStreams:
     """Select the collector transport while keeping fresh recording on its native slots."""
     if workers != 1:
         return ShardedVectorEnv(
             num_envs,
             seed,
             workers,
-            auto_reset=auto_reset,
             decision_memory=decision_memory,
             decision_memory_include_own=decision_memory_include_own,
             games_path=games_path,
@@ -582,7 +579,6 @@ def open_native_streams(
     native = RecordedVectorEnv(
         num_envs=num_envs,
         seed=seed,
-        auto_reset=auto_reset,
         decision_memory=decision_memory,
         decision_memory_include_own=decision_memory_include_own,
         skip_trivial=True,
@@ -593,8 +589,4 @@ def open_native_streams(
             else {}
         ),
     )
-    return (
-        native
-        if auto_reset
-        else BufferedStreams(num_envs, [StreamShard(0, num_envs, native)])
-    )
+    return BufferedStreams(num_envs, [StreamShard(0, num_envs, native)])
