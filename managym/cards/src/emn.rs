@@ -32,10 +32,7 @@ fn mirrorwing_dragon() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::SpellTargetsOnlyThis {
-                    predicate: CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
+                    predicate: CardPredicate::instant_or_sorcery(),
                 },
                 intervening_if: None,
                 effects: vec![Effect::ForPlayer {

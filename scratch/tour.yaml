@@ -1,7 +1,11 @@
-at: 1677261e506c6f85692004c902d2a3928ad4ed6c
+at: 2927a386c9432f6be7ff79754d9e00986cc930d4
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Find each card’s definition and directed outcome.
+  - path: managym/state/src/predicate.rs
+    why: Shares graveyard and spell type filters across sets.
+  - path: managym/cards/src/m21.rs
+    why: Shipwreck Dowser applies that filter to graveyard targets.
   - path: managym/cards/src/ons.rs
     why: Follow Arcanis’s return through battlefield identity.
   - path: managym/cards/src/thb.rs

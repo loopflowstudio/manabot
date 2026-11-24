@@ -137,13 +137,7 @@ fn guttersnipe() -> CardDefinition {
             power: Some(2),
             toughness: Some(2),
             abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::instant_or_sorcery()),
                 intervening_if: None,
                 effects: vec![Effect::DealDamageToPlayer {
                     player: PlayerSelector::EachOpponent,

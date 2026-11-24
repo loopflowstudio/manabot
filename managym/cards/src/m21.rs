@@ -28,10 +28,7 @@ fn shipwreck_dowser() -> CardDefinition {
                     TriggerSubject::This,
                     vec![Effect::return_to_hand(ObjectSelector::Target(
                         TargetSpec::GraveyardCardYouOwn {
-                            predicate: CardPredicate {
-                                card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                                ..Default::default()
-                            },
+                            predicate: CardPredicate::instant_or_sorcery(),
                         },
                     ))],
                 ),

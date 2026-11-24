@@ -95,16 +95,8 @@ fn brought_back() -> CardDefinition {
     let text_box = "Choose up to two target permanent cards in your graveyard that were put there from the battlefield this turn. Return them to the battlefield tapped.";
     let spec = TargetSpec::GraveyardCardYouOwn {
         predicate: CardPredicate {
-            card_types_any: vec![
-                CardType::Artifact,
-                CardType::Battle,
-                CardType::Creature,
-                CardType::Enchantment,
-                CardType::Land,
-                CardType::Planeswalker,
-            ],
             from_battlefield_this_turn: true,
-            ..Default::default()
+            ..CardPredicate::permanent()
         },
     };
     CardDefinition {

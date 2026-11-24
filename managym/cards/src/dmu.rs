@@ -35,10 +35,7 @@ fn tolarian_terror() -> CardDefinition {
             power: Some(5),
             toughness: Some(5),
             statics: vec![
-                StaticAbility::CostsLessPerGraveyardCard(CardPredicate {
-                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                    ..Default::default()
-                }),
+                StaticAbility::CostsLessPerGraveyardCard(CardPredicate::instant_or_sorcery()),
                 StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{2}"))),
             ],
             text_box: text_box.into(),
@@ -107,13 +104,7 @@ fn balmor_battlemage_captain() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::instant_or_sorcery()),
                 intervening_if: None,
                 effects: vec![
                     Effect::until_end_of_turn(

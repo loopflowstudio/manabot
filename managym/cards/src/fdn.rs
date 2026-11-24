@@ -481,13 +481,7 @@ fn rite_of_the_dragoncaller() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
-                ),
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::instant_or_sorcery()),
                 effects: vec![Effect::create_tokens("token.dragon_5_5_r_flying", 1)],
             }],
             text_box: text_box.into(),
@@ -779,17 +773,7 @@ fn elvish_regrower() -> CardDefinition {
                 TriggerSubject::This,
                 vec![Effect::return_to_hand(ObjectSelector::Target(
                     TargetSpec::GraveyardCardYouOwn {
-                        predicate: CardPredicate {
-                            card_types_any: vec![
-                                CardType::Artifact,
-                                CardType::Battle,
-                                CardType::Creature,
-                                CardType::Enchantment,
-                                CardType::Land,
-                                CardType::Planeswalker,
-                            ],
-                            ..Default::default()
-                        },
+                        predicate: CardPredicate::permanent(),
                     },
                 ))],
             )],

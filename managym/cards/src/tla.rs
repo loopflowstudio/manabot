@@ -7503,10 +7503,7 @@ fn professor_zei_anthropologist() -> CardDefinition {
                     sacrifice_source: true,
                     effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                         TargetSpec::GraveyardCardYouOwn {
-                            predicate: CardPredicate {
-                                card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                                ..Default::default()
-                            },
+                            predicate: CardPredicate::instant_or_sorcery(),
                         },
                     ))],
                     ..Default::default()
@@ -10012,10 +10009,7 @@ fn tolls_of_war() -> CardDefinition {
 fn toph_hardheaded_teacher() -> CardDefinition {
     let text_box = "When Toph enters, you may discard a card. If you do, return target instant or sorcery card from your graveyard to your hand.\nWhenever you cast a spell, earthbend 1. If that spell is a Lesson, put an additional +1/+1 counter on that land. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)";
     let instant_or_sorcery = || TargetSpec::GraveyardCardYouOwn {
-        predicate: CardPredicate {
-            card_types_any: vec![CardType::Instant, CardType::Sorcery],
-            ..Default::default()
-        },
+        predicate: CardPredicate::instant_or_sorcery(),
     };
 
     CardDefinition {

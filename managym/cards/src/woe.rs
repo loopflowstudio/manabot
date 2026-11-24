@@ -87,10 +87,7 @@ fn mocking_sprite() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: false,
-                predicate: CardPredicate {
-                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                    ..Default::default()
-                },
+                predicate: CardPredicate::instant_or_sorcery(),
                 condition: Condition::Always,
                 generic: 1,
             })],

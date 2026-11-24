@@ -78,8 +78,7 @@ fn pyromancers_goggles() -> CardDefinition {
     let effect = SpendEffect::CopySpell {
         spell: Arc::new(CardPredicate {
             colors_any: vec![Color::Red],
-            card_types_any: vec![CardType::Instant, CardType::Sorcery],
-            ..Default::default()
+            ..CardPredicate::instant_or_sorcery()
         }),
     };
     CardDefinition {

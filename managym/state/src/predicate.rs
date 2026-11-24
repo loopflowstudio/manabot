@@ -103,6 +103,27 @@ impl CardPredicate {
         }
     }
 
+    pub fn permanent() -> Self {
+        Self {
+            card_types_any: vec![
+                CardType::Artifact,
+                CardType::Battle,
+                CardType::Creature,
+                CardType::Enchantment,
+                CardType::Land,
+                CardType::Planeswalker,
+            ],
+            ..Self::default()
+        }
+    }
+
+    pub fn instant_or_sorcery() -> Self {
+        Self {
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Self::default()
+        }
+    }
+
     pub fn noncreature() -> Self {
         Self {
             not_card_types: vec![CardType::Creature],
