@@ -239,18 +239,15 @@ current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.
 
-Inside the network, fact ids are looked up at the fact axis's shape instead of
-for selected rows, and learning encodes the complete card catalog instead of
-the definitions a batch references. Shared-effect routing, fact programs and
-legal-action selection keep their packed, data-dependent layouts. A forward
-therefore takes one of a few shapes per input axis instead of a new shape for
-nearly every batch, and does much less work than padding everything to
-capacity. The complete catalog is more work than the padded path's
-referenced definitions: captured Elemental learner batches referenced 65 to
-154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
-tokens. On CPU, where the recurrent catalog encoder dominates learning, a
-learner forward and backward is therefore slower than on the padded path,
-most of all for small decks.
+On CUDA, Torch looks up fact ids at the bucketed fact axis's shape and
+encodes the complete card catalog to keep the recurrent encoder's schedule
+fixed across learner batches. This adds work for small decks. Captured
+Elemental learner batches referenced 65 to 154 of 360 definitions, so the
+full schedule encoded 2.3 to 5.8 times as many catalog tokens. Torch learners
+on CPU and MPS and MLX learners encode only the referenced definitions in
+both layouts. Inference uses the full catalog so it can cache the encoded
+programs across calls. Shared-effect routing, fact programs and legal-action
+selection keep their packed, data-dependent layouts.
 
 A loop's settings choose it, with
 [live-token attention](#live-token-attention). Both are plain `SelfPlay`
@@ -271,8 +268,7 @@ The baseline recipe does this when its `device` is `cuda` and
 `--config '{"device": "cuda", "padded_shapes": true}'`
 ([run training](training.md#run-training)). Nothing resolves the switches
 from the device: `live_tokens=True` off CUDA fails validation, and bucketed
-shapes may be written explicitly on CPU or MPS, where they are slower to
-learn, as described above.
+shapes may be written explicitly on CPU or MPS.
 
 The loop's collection and learner policies use the settings' layout. Code
 that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
@@ -291,9 +287,9 @@ The setting changes how a forward is computed, not the model. It changes no
 `ModelConfig` field, checkpoint, binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the padded path
-up to the order of floating-point sums. A batch that references no card
-definition is the one difference in gradient support: the catalog encoder then
-receives exactly zero gradients instead of none. Capacity overflow and
+up to the order of floating-point sums. On CUDA, when a batch references no
+card definition, the bucketed learner's full catalog receives exactly zero
+gradients while the padded learner skips the encoder. Capacity overflow and
 malformed inputs are rejected with the same error and message as on the
 padded path.
 

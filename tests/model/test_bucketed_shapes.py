@@ -260,8 +260,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
         reference.named_parameters(), agent.parameters(), strict=True
     ):
         if a.grad is None:
-            # The complete catalog may add exactly-zero program gradients.
-            assert b.grad is None or not b.grad.any(), name
+            assert b.grad is None, name
         else:
             assert b.grad is not None, name
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)

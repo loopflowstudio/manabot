@@ -558,7 +558,7 @@ class ActorCritic(nn.Module):
         """Prepare unchanged admitted rows for learning or inference.
 
         `inference` selects compaction and catalog coverage independently of
-        autograd mode; bucketed batches always use the full catalog schedule.
+        autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
         """
         bucketed = (
             bucket_observation(
@@ -578,10 +578,12 @@ class ActorCritic(nn.Module):
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
+        device = self.device_type
+        full_catalog = inference or (self.bucketed_shapes and device == "cuda")
         return prepare(
             obs,
             tables,
-            inference=inference and device_of(self).type == "cpu",
+            inference=inference and device == "cpu",
             bucketed=self.bucketed_shapes,
             live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.value_token is not None,
@@ -589,7 +591,7 @@ class ActorCritic(nn.Module):
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
             binding=self._binding(),
-            select_programs=not inference and not self.bucketed_shapes,
+            select_programs=not full_catalog,
         )
 
     def _evaluate_outputs(

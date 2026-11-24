@@ -348,7 +348,8 @@ catalog program schedule, and on CPU drops the fact and object columns no
 row in the batch uses. Simulation and search prepare this way. Column
 compaction changes floating-point summation order, so learner rows use the
 default `inference=False`: they retain those columns and select only referenced
-catalog programs unless bucketed shapes require the full schedule. The argument
+catalog programs. Bucketed CUDA learners use the full schedule to keep the
+catalog encoder's shape fixed across batches. The argument
 chooses preparation purpose independently of autograd mode; `no_grad` does not
 change a default learner batch into an inference batch. Torch rollout `rows`
 and `minibatches` always prepare learner rows; `next_observation` always
