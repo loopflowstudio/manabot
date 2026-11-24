@@ -61,6 +61,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         scrawling_crawler(),
         firespitter_whelp(),
         archmage_of_runes(),
+        goblin_negotiation(),
+        niv_mizzet_visionary(),
     ]
 }
 
@@ -1512,6 +1514,61 @@ fn archmage_of_runes() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_negotiation() -> CardDefinition {
+    let text_box = "Goblin Negotiation deals X damage to target creature. Create a number of 1/1 red Goblin creature tokens equal to the amount of excess damage dealt to that creature this way.";
+    CardDefinition {
+        key: "fdn.goblin_negotiation",
+        scryfall_id: "f2016585-e26c-4d13-b09f-af6383c192f7",
+        printed: PrintedCharacteristics {
+            name: "Goblin Negotiation".into(),
+            mana_cost: Some(ManaCost::parse("{X}{R}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![
+                Effect::deal_damage(EffectValue::X, ObjectSelector::Target(TargetSpec::Creature)),
+                // Excess is measured as the damage is dealt (CR 120.4a):
+                // prevented damage leaves none.
+                Effect::create_tokens("token.goblin", EffectValue::ExcessDamage),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn niv_mizzet_visionary() -> CardDefinition {
+    let text_box = "Flying\nYou have no maximum hand size.\nWhenever a source you control deals noncombat damage to an opponent, you draw that many cards.";
+    CardDefinition {
+        key: "fdn.niv_mizzet_visionary",
+        scryfall_id: "7a69a618-d588-4745-8ede-0ff0a9f356f1",
+        printed: PrintedCharacteristics {
+            name: "Niv-Mizzet, Visionary".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Dragon".into(), "Wizard".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::NoMaximumHandSize],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::DealsNoncombatDamage {
+                    source: Actor::You,
+                    to: Actor::Opponent,
+                },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::TriggeringAmount,
                 }],
             }],
             text_box: text_box.into(),

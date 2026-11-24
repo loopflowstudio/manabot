@@ -1942,6 +1942,7 @@ impl Observation {
                 source,
                 target,
                 amount,
+                ..
             } => {
                 let source_entity = source.map(EventEntity::Card);
                 let target_entity = Some(match *target {

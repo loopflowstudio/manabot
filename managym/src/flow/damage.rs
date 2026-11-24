@@ -134,6 +134,7 @@ impl Game {
                     source,
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
+                    combat,
                 });
                 if let Some(source) = combat_source {
                     self.emit_observation_event(GameEvent::CombatDamageDealt {
@@ -179,6 +180,7 @@ impl Game {
                     source,
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
+                    combat,
                 });
                 if let (Some(source), Some(target)) = (combat_source, event_target) {
                     self.emit_observation_event(GameEvent::CombatDamageDealt {
@@ -257,7 +259,11 @@ impl Game {
         Some(self.state.source_base(source).1.keywords)
     }
 
-    fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
+    /// Who controls a damage source: a permanent's controller, the
+    /// controller it had when it left, or a live or departed spell's
+    /// controller (a stolen spell's damage is its new controller's); owner
+    /// provenance only for anything else.
+    pub(crate) fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return self.state.permanents[permanent_id]
                 .as_ref()
@@ -265,6 +271,12 @@ impl Game {
         }
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
+        }
+        if let Some(spell) = self.spell_on_stack(source) {
+            return Some(spell.controller);
+        }
+        if let Some(spell) = self.state.spell_lki.get(&source) {
+            return Some(spell.controller);
         }
         self.state
             .objects

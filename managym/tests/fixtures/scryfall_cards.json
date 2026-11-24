@@ -7780,5 +7780,74 @@
     ],
     "oracle_text": "Flying\nWhenever you cast a spell, put a +1/+1 counter on Ramos for each of that spell's colors.\nRemove five +1/+1 counters from Ramos: Add {W}{W}{U}{U}{B}{B}{R}{R}{G}{G}. Activate only once each turn.",
     "colors": []
+  },
+  "Goblin Negotiation": {
+    "name": "Goblin Negotiation",
+    "mana_cost": "{X}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Goblin Negotiation deals X damage to target creature. Create a number of 1/1 red Goblin creature tokens equal to the amount of excess damage dealt to that creature this way.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Niv-Mizzet, Visionary": {
+    "name": "Niv-Mizzet, Visionary",
+    "mana_cost": "{4}{U}{R}",
+    "type_line": "Legendary Creature — Dragon Wizard",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nYou have no maximum hand size.\nWhenever a source you control deals noncombat damage to an opponent, you draw that many cards.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Gateway Sneak": {
+    "name": "Gateway Sneak",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Vedalken Rogue",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever a Gate you control enters, this creature can't be blocked this turn.\nWhenever this creature deals combat damage to a player, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Trygon Predator": {
+    "name": "Trygon Predator",
+    "mana_cost": "{1}{G}{U}",
+    "type_line": "Creature — Beast",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature deals combat damage to a player, you may destroy target artifact or enchantment that player controls.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Lathril, Blade of the Elves": {
+    "name": "Lathril, Blade of the Elves",
+    "mana_cost": "{2}{B}{G}",
+    "type_line": "Legendary Creature — Elf Noble",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nWhenever Lathril deals combat damage to a player, create that many 1/1 green Elf Warrior creature tokens.\n{T}, Tap ten untapped Elves you control: Each opponent loses 10 life and you gain 10 life.",
+    "colors": [
+      "B",
+      "G"
+    ]
   }
 }

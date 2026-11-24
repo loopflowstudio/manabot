@@ -67,7 +67,8 @@ impl Game {
                 .cloned()
                 .collect(),
             keywords: characteristics.keywords,
-            name: characteristics.name.clone(),
+            renamed: (characteristics.name != definition.name)
+                .then(|| characteristics.name.clone()),
             types: characteristics.types.clone(),
             subtypes: characteristics.subtypes.clone(),
             colors: characteristics.colors.clone(),

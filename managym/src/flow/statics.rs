@@ -537,16 +537,45 @@ impl Game {
         lki: &crate::state::game_object::ObjectLki,
         predicate: &CardPredicate,
     ) -> bool {
-        let (_, printing) = self.state.source_base(lki.object);
         let kind = self.state.objects.provenance(lki.object).map_or(
             crate::state::game_object::ObjectKind::Card,
             |(_, _, kind)| kind,
         );
         super::layers::matches_permanent_facts(
             predicate,
-            &super::layers::PermanentFacts::departed(lki, printing, kind),
+            &super::layers::PermanentFacts::departed(
+                lki,
+                self.lki_face_printing(lki),
+                self.lki_mana_printing(lki),
+                kind,
+            ),
             None,
         )
+    }
+
+    /// The copiable face a departed permanent last showed: a copy's or back
+    /// face's values when they changed, otherwise its retained printing.
+    /// Its name and supertypes come from here.
+    pub(crate) fn lki_face_printing<'a>(
+        &'a self,
+        lki: &'a crate::state::game_object::ObjectLki,
+    ) -> &'a crate::state::card::PrintedCharacteristics {
+        lki.copiable.as_ref().map_or_else(
+            || self.state.source_base(lki.object).1,
+            |changed| &*changed.printed,
+        )
+    }
+
+    /// The printing whose mana cost a departed permanent had: a transformed
+    /// permanent's front face (CR 712.8e), otherwise its face.
+    pub(crate) fn lki_mana_printing<'a>(
+        &'a self,
+        lki: &'a crate::state::game_object::ObjectLki,
+    ) -> &'a crate::state::card::PrintedCharacteristics {
+        lki.copiable
+            .as_ref()
+            .and_then(|changed| changed.front.as_ref())
+            .map_or_else(|| self.lki_face_printing(lki), |(_, front)| &**front)
     }
 
     /// A recorded event can still ask what its departed card was. Read the

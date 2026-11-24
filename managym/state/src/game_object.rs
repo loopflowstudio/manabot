@@ -301,10 +301,14 @@ pub struct ObjectLki {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
     pub keywords: crate::card::Keywords,
-    /// Its layered name, card types, subtypes, colors and legendary
-    /// supertype as it last existed (CR 603.10a, 608.2h): the same view a
-    /// live permanent's predicates read.
-    pub name: String,
+    /// Its layered name when an effect changed it from its copiable values
+    /// (a face-down permanent's empty name, an effect that names it);
+    /// otherwise its name is its copiable printing's
+    /// (`Game::lki_face_printing`). Its card types, subtypes, colors and
+    /// legendary supertype are as it last existed (CR 603.10a, 608.2h): the
+    /// same view a live permanent's predicates read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub renamed: Option<String>,
     pub types: crate::card::CardTypes,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes: Vec<String>,

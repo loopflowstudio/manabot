@@ -28,6 +28,7 @@ mod cmr;
 mod csp;
 mod dft;
 mod dgm;
+mod dis;
 mod dka;
 mod dmu;
 mod dom;
@@ -51,6 +52,7 @@ mod inv;
 mod isd;
 mod j22;
 mod jou;
+mod khc;
 mod khm;
 mod kld;
 mod ktk;
@@ -80,6 +82,7 @@ mod psal;
 mod ptk;
 mod rav;
 mod rix;
+mod rna;
 mod roe;
 mod rtr;
 mod shm;
@@ -151,6 +154,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     csp::cards,
     dft::cards,
     dgm::cards,
+    dis::cards,
     dka::cards,
     dmu::cards,
     dom::cards,
@@ -174,6 +178,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     isd::cards,
     j22::cards,
     jou::cards,
+    khc::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
@@ -204,6 +209,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     rav::cards,
     roe::cards,
     rix::cards,
+    rna::cards,
     rtr::cards,
     shm::cards,
     snc::cards,

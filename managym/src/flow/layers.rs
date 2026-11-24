@@ -1483,25 +1483,25 @@ impl<'a> PermanentFacts<'a> {
     }
 
     /// A departed permanent's facts: its last known view and status, with
-    /// mana value and supertypes from its retained printing.
+    /// name and supertypes from its copiable face and mana value from its
+    /// front face (CR 712.8e), as `Game::lki_face_printing` and
+    /// `Game::lki_mana_printing` read them.
     pub(crate) fn departed(
         lki: &'a crate::state::game_object::ObjectLki,
-        printing: &'a crate::state::card::PrintedCharacteristics,
+        face: &'a crate::state::card::PrintedCharacteristics,
+        mana: &'a crate::state::card::PrintedCharacteristics,
         kind: ObjectKind,
     ) -> Self {
         Self {
-            name: &lki.name,
+            name: lki.renamed.as_deref().unwrap_or(&face.name),
             keywords: lki.keywords,
             types: &lki.types,
             subtypes: &lki.subtypes,
             colors: &lki.colors,
             is_legendary: lki.is_legendary,
             power: lki.power,
-            supertypes: &printing.supertypes,
-            mana_value: printing
-                .mana_cost
-                .as_ref()
-                .map_or(0, |cost| cost.mana_value),
+            supertypes: &face.supertypes,
+            mana_value: mana.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
             token: kind == ObjectKind::Token,
             counters: &lki.counters,
             attacking: lki.was_attacking,
@@ -1520,7 +1520,8 @@ pub(crate) fn matches_permanent_facts(
 ) -> bool {
     // A permanent is on the battlefield, never a graveyard card.
     !p.from_battlefield_this_turn
-        && (!p.namesake || source_name == Some(facts.name))
+        // CR 201.2a: an empty name (a face-down permanent's) names nothing.
+        && (!p.namesake || source_name.is_some_and(|name| !name.is_empty() && name == facts.name))
         && (!p.deathtouch || facts.keywords.has(Keyword::Deathtouch))
         && (!p.flying || facts.keywords.has(Keyword::Flying))
         && (!p.no_counters || facts.counters.is_empty())

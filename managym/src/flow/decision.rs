@@ -1513,16 +1513,16 @@ impl Game {
                 }
             }
             EventBinding::Damage { result: measured } => {
-                if let Some(excess) = batch
+                // Each damage instruction measures its own excess: prevented
+                // or redirected damage leaves none, never an earlier one's.
+                frame.excess_damage = batch
                     .events
                     .iter()
                     .zip(results)
                     .filter(|(pending, _)| measured.is_none_or(|index| index == pending.ordinal))
                     .filter_map(|(_, result)| result.excess_damage)
                     .next_back()
-                {
-                    frame.excess_damage = excess;
-                }
+                    .unwrap_or(0);
             }
             EventBinding::Moved { shuffle, .. } => {
                 let is_discard = |event: &crate::flow::proposed_event::PendingEvent| {

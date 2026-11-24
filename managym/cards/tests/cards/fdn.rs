@@ -830,6 +830,7 @@ fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
                     source,
                     target,
                     amount,
+                    ..
                 } => Some((*source, target, *amount)),
                 _ => None,
             });
@@ -3166,4 +3167,119 @@ fn archmage_of_runes_discounts_and_draws_for_instants_and_sorceries() {
     assert_eq!(top_spell(&s).spent.total(), 4);
     settle(&mut s);
     assert_eq!(hand(&s, 0).len(), 1);
+}
+
+/// Goblin Negotiation makes a Goblin for each excess damage its own damage
+/// dealt (CR 120.4a): X = 5 at a 2/2 makes three, X = 2 none. A later damage
+/// instruction with no excess (damage to a player) leaves none, never the
+/// earlier instruction's excess.
+#[test]
+fn goblin_negotiation_creates_a_goblin_for_each_excess_damage() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, choose_mode},
+    };
+    use managym::state::{
+        ability::{Effect, ObjectSelector},
+        game_object::Target,
+    };
+    for (x, later_player_damage, goblins) in [(5, false, 3), (2, false, 0), (5, true, 0)] {
+        let mut s = five_color_setup(&["Goblin Negotiation", "Gray Ogre"]);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        s.set_player_mana_pool(0, &format!("{x}RR"));
+        let spell = force_new_card_in_hand(&mut s, 0, "Goblin Negotiation");
+        if later_player_damage {
+            s.game_mut().state[spell]
+                .spell_effects
+                .insert(1, Effect::deal_damage(1, ObjectSelector::You));
+        }
+        cast_card(&mut s, spell);
+        choose_mode(&mut s, x);
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        settle(&mut s);
+        let made = s.battlefield_permanents_named(0, "Goblin");
+        assert_eq!(made.len(), goblins, "X = {x}");
+        assert!(s.game().state.permanents[ogre].is_none(), "X = {x}");
+        if later_player_damage {
+            s.assert_life(0, 19);
+        }
+    }
+}
+
+/// Niv-Mizzet, Visionary draws the noncombat damage a source its controller
+/// controls deals to an opponent: a resolving spell, a source sacrificed to
+/// pay for its ability (its last controller), and not a spell the opponent
+/// now controls, damage to its controller or a creature, or combat damage.
+#[test]
+fn niv_mizzet_draws_noncombat_damage_its_controllers_sources_deal_to_an_opponent() {
+    use crate::support::{
+        game::{clear_summoning_sickness, force_new_card_in_hand, Scenario},
+        inspect::hand,
+        play::{cast_card, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{game_object::Target, stack_object::StackObject},
+    };
+    let mut s = five_color_setup(&[
+        "Niv-Mizzet, Visionary",
+        "Lightning Bolt",
+        "Fanatical Firebrand",
+        "Gray Ogre",
+    ]);
+    let niv = s.force_permanent_on_battlefield(0, "Niv-Mizzet, Visionary");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let cards = |s: &Scenario| hand(s, 0).len();
+    let bolt = |s: &mut Scenario, target: Target, stolen: bool| {
+        s.set_player_mana_pool(0, "R");
+        let bolt = force_new_card_in_hand(s, 0, "Lightning Bolt");
+        cast_card(s, bolt);
+        assert!(s.choose_target(target));
+        if stolen {
+            for object in s.game_mut().state.stack_objects.iter_mut() {
+                if let StackObject::Spell(spell) = object {
+                    spell.controller = PlayerId(1);
+                }
+            }
+        }
+        let before = cards(s);
+        settle(s);
+        cards(s) - before
+    };
+    assert_eq!(bolt(&mut s, Target::Player(PlayerId(1)), false), 3);
+    s.assert_life(1, 17);
+    assert_eq!(bolt(&mut s, Target::Player(PlayerId(1)), true), 0, "stolen");
+    s.assert_life(1, 14);
+    assert_eq!(
+        bolt(&mut s, Target::Player(PlayerId(0)), false),
+        0,
+        "to you"
+    );
+    assert_eq!(
+        bolt(&mut s, Target::Permanent(ogre), false),
+        0,
+        "to a creature"
+    );
+
+    let firebrand = s.force_permanent_on_battlefield(0, "Fanatical Firebrand");
+    let before = cards(&s);
+    activate(&mut s, firebrand, 0);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.game().state.permanents[firebrand].is_none(), "sacrificed");
+    settle(&mut s);
+    assert_eq!(cards(&s), before + 1, "departed source");
+    s.assert_life(1, 13);
+
+    clear_summoning_sickness(&mut s, niv);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, niv);
+    let before = cards(&s);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 8);
+    assert_eq!(cards(&s), before, "combat damage");
+    assert!(s
+        .game()
+        .characteristics(niv)
+        .static_abilities
+        .contains(&managym::state::card::StaticAbility::NoMaximumHandSize));
 }

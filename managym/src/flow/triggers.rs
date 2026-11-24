@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
-        event::{CombatPlayerHit, EventKind, GameEvent},
+        event::{CombatPlayerHit, DamageTarget, EventKind, GameEvent},
         game::Game,
         trigger::{
             DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
@@ -136,6 +136,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
+        TriggerCondition::DealsNoncombatDamage { .. } => EventKinds::of(EventKind::DamageDealt),
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
@@ -156,11 +157,21 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
 }
 
 /// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
-/// the damage of its own combat hit, or the life a player actually lost.
+/// the damage of its own combat hit, noncombat damage dealt to a player, or
+/// the life a player actually lost.
 fn event_amount(event: &GameEvent, hit: Option<CombatPlayerHit>) -> i32 {
     match (event, hit) {
         (_, Some(hit)) => hit.amount,
         (GameEvent::LifeChanged { old, new, .. }, None) if new < old => old - new,
+        (
+            GameEvent::DamageDealt {
+                target: DamageTarget::Player(_),
+                amount,
+                combat: false,
+                ..
+            },
+            None,
+        ) => *amount as i32,
         _ => 0,
     }
 }
@@ -1231,6 +1242,10 @@ impl Game {
             GameEvent::SpellCast { caster, .. } => Some(*caster),
             GameEvent::CardDrawn { player, .. } => Some(*player),
             GameEvent::LifeChanged { player, .. } => Some(*player),
+            GameEvent::DamageDealt {
+                target: DamageTarget::Player(player),
+                ..
+            } => Some(*player),
             GameEvent::PermanentSacrificed { controller, .. } => Some(*controller),
             GameEvent::CardMoved { controller, .. }
                 if matches!(
@@ -2063,6 +2078,20 @@ impl Game {
                 *gain_ordinal > 0
                     && who.includes(source_controller, *player)
                     && nth.is_none_or(|n| n == *gain_ordinal)
+            }
+            (
+                TriggerCondition::DealsNoncombatDamage { source, to },
+                GameEvent::DamageDealt {
+                    source: Some(damage_source),
+                    target: DamageTarget::Player(player),
+                    combat: false,
+                    ..
+                },
+            ) => {
+                to.includes(source_controller, *player)
+                    && self
+                        .source_controller(*damage_source)
+                        .is_some_and(|controller| source.includes(source_controller, controller))
             }
             (
                 TriggerCondition::LosesLife { who },

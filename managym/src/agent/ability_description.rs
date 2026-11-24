@@ -78,11 +78,39 @@ pub(crate) fn trigger_description(
         }
         _ => effects_description(effects),
     };
+    let program = name_triggering_object(program, condition);
     format!(
         "{} — {}{intervening}: {program}",
         object.name,
         condition_description(condition),
     )
+}
+
+/// What a trigger's event calls its triggering object: a cast's spell, a
+/// graveyard arrival's card, otherwise a permanent.
+fn triggering_noun(condition: &TriggerCondition) -> &'static str {
+    match condition {
+        TriggerCondition::WasCast { condition }
+        | TriggerCondition::OnceEachTurn { condition }
+        | TriggerCondition::FromZone { condition, .. }
+        | TriggerCondition::InGraveyard { condition }
+        | TriggerCondition::WhileSourceAttacking { condition }
+        | TriggerCondition::ActiveIf { condition, .. } => triggering_noun(condition),
+        TriggerCondition::Casts { .. }
+        | TriggerCondition::YouCastThis
+        | TriggerCondition::SpellTargetsOnlyThis { .. } => "spell",
+        TriggerCondition::PutIntoGraveyard { .. } => "card",
+        _ => "permanent",
+    }
+}
+
+/// Effect text names `ObjectSelector::Triggering` "that permanent"; a
+/// trigger whose event is about a spell or card says so instead.
+fn name_triggering_object(program: String, condition: &TriggerCondition) -> String {
+    match triggering_noun(condition) {
+        "permanent" => program,
+        noun => program.replace("that permanent", &format!("that {noun}")),
+    }
 }
 
 fn condition_description(condition: &TriggerCondition) -> String {
@@ -256,6 +284,15 @@ fn condition_description(condition: &TriggerCondition) -> String {
                 ),
             }
         }
+        TriggerCondition::DealsNoncombatDamage { source, to } => format!(
+            "Whenever {} deals noncombat damage to {}",
+            match source {
+                Actor::You => "a source you control",
+                Actor::Opponent => "a source an opponent controls",
+                Actor::AnyPlayer => "a source",
+            },
+            actor_noun(*to)
+        ),
         TriggerCondition::InGraveyard { condition } => {
             format!(
                 "{} (while this is in your graveyard)",
@@ -1319,7 +1356,7 @@ pub(super) fn continuous_description(
             format!(
                 "{subject} gains ‘{}{intervening}, {}’{until}",
                 condition_description(condition),
-                effects_description(effects)
+                name_triggering_object(effects_description(effects), condition)
             )
         }
         Modification::GrantStatic(ability) => {

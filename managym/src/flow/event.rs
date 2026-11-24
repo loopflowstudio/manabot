@@ -74,6 +74,9 @@ pub enum GameEvent {
         source: Option<ObjectId>,
         target: DamageTarget,
         amount: u32,
+        /// Combat damage (CR 510.2); everything else is noncombat damage.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        combat: bool,
     },
     LifeChanged {
         player: PlayerId,

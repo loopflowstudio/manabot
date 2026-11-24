@@ -954,7 +954,10 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
   (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
   or bending (`Performs { who, any_of }`), cards reaching a graveyard
   (`PutIntoGraveyard { whose, predicate }`) and putting counters
-  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
+  (`PutsCounters { who, kind, on }`). Noncombat damage to a player is
+  `DealsNoncombatDamage { source, to }`, both `Actor`s: the source's
+  controller is read as it is or last was, a spell's included, and the
+  damage dealt is "that many". Object events name a `TriggerSubject`
   instead, whose controller is the same kind of `Actor` ("a creature an
   opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
   `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
@@ -1151,7 +1154,11 @@ the id for what its rules text means:
   after it has already moved** is a `CardId`; `object_of` finds where it is.
 - **What something was when it left** (power when it died, its controller,
   its counters) is `Game::object_lki(old_id)`, the `ObjectLkiLog` entry
-  recorded as the object departs.
+  recorded as the object departs. Its name and supertypes come from the face
+  it last showed (`Game::lki_face_printing`, a copy's or back face's when they
+  changed) and its mana value from its front face
+  (`Game::lki_mana_printing`, CR 712.8e); the entry stores a name only when an
+  effect changed it (`renamed`).
 
 An `ObjectId` is opaque. It cannot be built from a number, and tests take ids
 from the game (a permanent's `object`, a zone list, a move's return value)

@@ -702,7 +702,7 @@ impl<'a> Projection<'a> {
             inherited_from,
             granted_abilities,
             keywords,
-            name: _,
+            renamed: _,
             types,
             subtypes,
             colors,

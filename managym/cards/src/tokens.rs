@@ -27,6 +27,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dragon(),
         drake(),
         elf_warrior(),
+        green_elf_warrior(),
         faerie(),
         food(),
         goblin(),
@@ -219,6 +220,16 @@ fn elf_warrior() -> TokenDefinition {
         "token.elf_warrior",
         "49180301-f72f-48ca-8be1-df295e89cdd7",
         creature(base, 1, 1, [Color::Green, Color::White]),
+    )
+}
+
+/// The plain green Elf Warrior (Lathril), beside TLA's green-white one.
+fn green_elf_warrior() -> TokenDefinition {
+    let base = face("Elf Warrior", [CardType::Creature], &["Elf", "Warrior"], "");
+    token(
+        "token.green_elf_warrior",
+        "27b171ac-b2ef-4a80-92d1-6d9e71f3e3ca",
+        creature(base, 1, 1, [Color::Green]),
     )
 }
 

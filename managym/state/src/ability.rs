@@ -252,6 +252,16 @@ pub enum TriggerCondition {
         to: Actor,
         per: Per,
     },
+    /// "Whenever a source [source] controls deals noncombat damage to
+    /// [to]" (CR 120.2b): once per damage event to a player, prevented
+    /// damage excluded. The source's controller is read as it is or last
+    /// was, a spell's included. The damage dealt is the trigger's amount
+    /// (`EffectValue::TriggeringAmount`, "that many") and the damaged player
+    /// is "that player".
+    DealsNoncombatDamage {
+        source: Actor,
+        to: Actor,
+    },
     /// The inner condition, for an ability that functions only while its
     /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
     /// the ability's source is that graveyard object.

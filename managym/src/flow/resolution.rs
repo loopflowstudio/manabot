@@ -89,19 +89,11 @@ impl Game {
         match property {
             ObjectProperty::Power => lki.power,
             ObjectProperty::Toughness => lki.toughness,
-            ObjectProperty::ManaValue => {
-                let printed = match &lki.copiable {
-                    Some(changed) => changed
-                        .front
-                        .as_ref()
-                        .map_or(&*changed.printed, |(_, front)| front),
-                    None => self.state.source_base(lki.object).1,
-                };
-                printed
-                    .mana_cost
-                    .as_ref()
-                    .map_or(0, |cost| i32::from(cost.mana_value))
-            }
+            ObjectProperty::ManaValue => self
+                .lki_mana_printing(lki)
+                .mana_cost
+                .as_ref()
+                .map_or(0, |cost| i32::from(cost.mana_value)),
             ObjectProperty::Colors => lki.colors.len() as i32,
         }
     }

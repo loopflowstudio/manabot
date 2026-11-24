@@ -174,6 +174,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             source,
             target,
             amount,
+            ..
         } => {
             let target = match target {
                 DamageTarget::Player(id) => Target::Player(*id),
@@ -483,6 +484,7 @@ mod tests {
             source: Some(token),
             target: DamageTarget::Permanent(permanent),
             amount: 1,
+            combat: false,
         });
         let root = game.policy_history.clone();
         for _ in 0..2048 {

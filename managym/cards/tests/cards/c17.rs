@@ -174,6 +174,21 @@ fn ramos_counts_spell_colors_even_when_countered_and_pays_ten_mana_once_a_turn()
     let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
     cast_card(&mut s, bolt);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    // A cast trigger names its triggering object a spell, not a permanent.
+    let text: Vec<String> = Observation::for_player(s.game(), PlayerId(1))
+        .stack_objects
+        .into_iter()
+        .filter_map(|object| object.description)
+        .collect();
+    assert!(
+        text.iter()
+            .any(|text| text.contains("number of colors of that spell +1/+1 counters")),
+        "{text:?}"
+    );
+    assert!(
+        text.iter().all(|text| !text.contains("that permanent")),
+        "{text:?}"
+    );
     settle(&mut s);
     assert_eq!(counters(&s), 1);
     let keeper = force_new_card_in_hand(&mut s, 0, "Foggy Swamp Spirit Keeper");

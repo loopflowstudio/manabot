@@ -167,6 +167,7 @@ fn combat_damage_emits_damage_and_life_change_events() {
         source: Some(attacker_card),
         target: DamageTarget::Player(PlayerId(1)),
         amount: 1,
+        combat: true,
     }));
     assert!(events.contains(&GameEvent::LifeChanged {
         player: PlayerId(1),

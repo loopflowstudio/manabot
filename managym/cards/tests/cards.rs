@@ -40,6 +40,8 @@ mod definitions;
 mod dft;
 #[path = "cards/dgm.rs"]
 mod dgm;
+#[path = "cards/dis.rs"]
+mod dis;
 #[path = "cards/dka.rs"]
 mod dka;
 #[path = "cards/dmu.rs"]
@@ -82,6 +84,8 @@ mod isd;
 mod j22;
 #[path = "cards/jou.rs"]
 mod jou;
+#[path = "cards/khc.rs"]
+mod khc;
 #[path = "cards/khm.rs"]
 mod khm;
 #[path = "cards/kld.rs"]
@@ -140,6 +144,8 @@ mod ptk;
 mod rav;
 #[path = "cards/rix.rs"]
 mod rix;
+#[path = "cards/rna.rs"]
+mod rna;
 #[path = "cards/roe.rs"]
 mod roe;
 #[path = "cards/rtr.rs"]

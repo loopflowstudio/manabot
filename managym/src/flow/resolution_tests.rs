@@ -5077,3 +5077,45 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
         );
     }
 }
+
+/// A departed copy is the face it copied (CR 603.10a, 707.2): a Clone that
+/// left as a Gray Ogre matches mana value 3, not Clone's 4, and its last
+/// known name is the copy's without a separate record.
+#[test]
+fn departed_copy_matches_predicates_as_the_copied_face() {
+    let deck = BTreeMap::from([
+        ("Gray Ogre".into(), 12),
+        ("Clone".into(), 4),
+        ("Mountain".into(), 24),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        707_2026,
+        false,
+    );
+    game.keep_opening_hands();
+    let ogre = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let clone = game
+        .scenario_force_battlefield(PlayerId(0), "Clone", true)
+        .unwrap();
+    let ogre = game.permanent_object(ogre).unwrap();
+    let clone = game.permanent_object(clone).unwrap();
+    let copied = game.state[ogre].clone();
+    game.state[clone].become_copy_of(&copied, &[]);
+    game.move_object(clone, ZoneType::Graveyard);
+    let lki = game.object_lki(clone).expect("departed copy").clone();
+    assert_eq!(lki.renamed, None);
+    assert_eq!(game.lki_face_printing(&lki).name, "Gray Ogre");
+    let mana_value = |min: u8, max: u8| CardPredicate {
+        min_mana_value: Some(min),
+        max_mana_value: Some(max),
+        ..CardPredicate::creature()
+    };
+    assert!(game.lki_matches_predicate(&lki, &mana_value(3, 3)));
+    assert!(!game.lki_matches_predicate(&lki, &mana_value(4, 4)));
+}
