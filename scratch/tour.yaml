@@ -1,48 +1,15 @@
-at: f17cec7ae0c9ac16a011693ce526db3d598c9883
+at: f9d37056f136340bbbaf227c57b49c996b6e2051
 first:
-  - path: scratch/plan.md
-    why: Locate the movement evidence and remaining probes.
-  - path: docs/engine.md
-    why: Read the private choice and both library edge cases.
-  - path: managym/cards/src/dsk.rs
-    why: Find the sorcery and its resolving effect.
   - path: managym/cards/tests/cards/dsk.rs
-    why: Check exact card movement and the shared anonymous projection.
-  - path: managym/src/agent/observation.rs
-    why: Read the viewer-specific permanent projection.
-  - path: managym/cards/tests/cards/fin.rs
-    why: Trace both physical fronts through restored order choices.
-  - path: managym/src/flow/resolution.rs
-    why: Inspect the top two before suspending resolution.
-  - path: managym/src/flow/cast_permission.rs
-    why: Bind each permission to its exact exile arrival.
-  - path: managym/cards/src/fin.rs
-    why: Follow Vanille’s payment into Ragnarok.
-  - path: managym/state/src/zone.rs
-    why: Find both physical cards behind one permanent.
-  - path: managym/src/flow/proposed_event.rs
-    why: Suspend a replaced move before committing the batch.
-  - path: managym/src/flow/zones.rs
-    why: Follow one departure into two arrivals.
-  - path: managym/src/flow/decision.rs
-    why: Bind each private Command to its selected card.
-  - path: managym/tests/rules/cr_400_identity.rs
-    why: Check that separated exile identities stay stale.
-  - path: managym/state/src/ability.rs
-    why: See the source, event quantity and life condition.
-  - path: managym/src/flow/triggers.rs
-    why: Match graveyard departures and collect simultaneous damage.
-  - path: managym/src/agent/continuation.rs
-    why: Follow the quantity into the viewer’s stack frame.
-  - path: managym/tests/support/play.rs
-    why: Declare the chosen attackers through native actions.
+    why: Follow two Clone Legions across the original’s departure.
   - path: managym/state/src/game_object.rs
-    why: Inspect copiable values retained on departure.
-  - path: managym/src/agent/effect_execution.rs
-    why: Project pending copies from their captured values.
-  - path: managym/src/flow/stabilization.rs
-    why: Release unused forms after the stack clears.
-  - path: managym/cards/tests/cards/lea.rs
-    why: Play the departed, returned and token Clone cases.
-  - path: tests/semantic/test_text_observation.py
-    why: Inspect public stack and spell information in text.
+    why: Inspect the definition carried by a copiable face.
+  - path: managym/src/flow/zones.rs
+    why: Trace manifest entry and token creation.
+  - path: managym/src/flow/identity.rs
+    why: Find each viewer’s permitted printing and public identity.
+  - path: managym/src/decision_capture.rs
+    why: Bind the public alias in a decision capture.
+  - path: tests/semantic/test_manifest_text.py
+    why: Target the same nameless creature from both seats.
+hide: []
