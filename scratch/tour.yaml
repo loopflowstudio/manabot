@@ -1,4 +1,4 @@
-at: cdfd651ff5a9e74615531600bc3ff8f2c775aaa4
+at: 31588d944d771ef3fcae1c17f6171989e008d866
 first:
   - path: docs/engine.md
     why: When a mandatory chain ends in a draw
@@ -19,11 +19,15 @@ first:
   - path: managym/src/flow/action.rs
     why: Clear the watch when a priority action succeeds
   - path: managym/src/flow/triggers.rs
-    why: Bind each trigger's event object once
+    why: Trigger matching, modal placement and event object binding
   - path: managym/src/flow/layers.rs
-    why: Compare characteristics on the partially evaluated battlefield
+    why: Layer read sets, static scopes and characteristic comparisons
+  - path: managym/src/flow/statics.rs
+    why: Live-or-LKI permanent reads and condition evaluation
   - path: managym/src/flow/resolution.rs
-    why: Read current or last-known characteristics for each appearance
+    why: Read current or last-known characteristics and scope players
+  - path: managym/src/agent/effect_execution.rs
+    why: Shared stack/trigger read checks and departed LKI projection
   - path: managym/src/agent/observation.rs
     why: Project source power and amounts from payment receipts
   - path: academy/ui/src/lib/types.ts
