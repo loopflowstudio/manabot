@@ -355,7 +355,7 @@ class VectorEnv:
         )
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
-        """Privileged CPU hand snapshots of the current games, including autoresets."""
+        """Privileged CPU hand snapshots of the current games, including refilled slots."""
         return self._rust_env.hand_snapshots(players)
 
     def current_agent_indices(self) -> list[int]:
