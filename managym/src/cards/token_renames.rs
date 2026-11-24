@@ -106,6 +106,7 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Field, "opponent_picks", Some("picks")),
     (Field, "restricted", None),
     (Field, "spells", None),
+    (Text, "attached at activation", None),
     (Text, "land choices remaining", None),
     (Text, "selected lands", None),
     // Split into `contribution` facts naming how and toward what each paid.
@@ -135,6 +136,7 @@ pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
         "execution/3/ReplacementEffect::PreventDamageToController",
         None,
     ),
+    ("token", "execution/6/attached at activation", None),
     ("token", "execution/6/land choices remaining", None),
     ("token", "execution/6/selected lands", None),
     ("token", "execution/6/waterbend contributions", None),

@@ -287,11 +287,13 @@ change already touches it; do not rewrite a module only for style. Rust in
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
   `managym/src/cards/token_renames.rs`; a name is never reused with a new
-  meaning. Never learn a `CardDefId`: tables indexed by card or name bind by
-  definition key or name. A change that alters what a stored pilot computes
-  fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
-  or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
-  bump the input version for a layout change.
+  meaning. When removing a registered execution label, retire its token and
+  its `execution/<kind>/<name>` record name there. Never learn a `CardDefId`.
+  Bind tables indexed by card or name by definition key or name. A change that
+  alters what a stored pilot computes fails `tests/model/test_pinned_pilot.py`
+  until it adds the rename or column or declares the break with
+  `scripts/pinned_pilot.py record --reason`. Do not bump the input version for
+  a layout change.
 - The engine has no world label. New checkpoints, recordings, decision captures
   (v6) and evaluation records write none; a reader ignores one in an older file
   (`manabot.model.world.current_binding_form`, optional `world` fields omitted
