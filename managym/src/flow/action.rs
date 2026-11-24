@@ -45,6 +45,9 @@ impl Game {
     }
 
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
+        if let Some(opening) = self.state.opening() {
+            return opening.action_description(self, action);
+        }
         use crate::flow::decision::Decision;
         match action {
             Action::CastSpell {
@@ -105,6 +108,26 @@ impl Game {
                 Some(format!(
                     "Cast {} from {} (object {})",
                     self.state[*object].name, self.state[source].name, self.state[source].id.0
+                ))
+            }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let view = self.characteristics(*permanent);
+                let ability = view.activated_abilities.get(*ability_index)?;
+                if !ability.exile_grantor {
+                    return None;
+                }
+                let grantor = self.state.permanent_of(ability.granted_by?.grantor)?;
+                Some(format!(
+                    "Activate ability of {}: pay {} and exile {} (permanent {}) — {}",
+                    view.name,
+                    crate::agent::ability_description::cost_description(&ability.mana_cost),
+                    self.characteristics(grantor).name,
+                    self.state.permanents[grantor].as_ref()?.id.0,
+                    crate::agent::ability_description::effects_description(&ability.effects)
                 ))
             }
             Action::ChooseTrigger { trigger_id, player } => {
@@ -316,7 +339,8 @@ impl Game {
                     | CostComponent::Mana { .. }
                     | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
-                    | CostComponent::Source(_) => None,
+                    | CostComponent::Source(_)
+                    | CostComponent::ExileGrantor(_) => None,
                 });
                 if paying.is_some() {
                     paying
@@ -1012,7 +1036,7 @@ impl Game {
                     .collect(),
                 vec![self.state[*tapped].id],
             ),
-            CostComponent::Life(_) | CostComponent::Source(_) => {
+            CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         };
@@ -1032,6 +1056,9 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
+        if self.state.opening().is_some() {
+            return self.choose_opening(action);
+        }
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)
@@ -1307,6 +1334,7 @@ mod identity_tests {
             400_715,
             false,
         );
+        game.keep_opening_hands();
         let player = game.active_player();
         game.state.turn.current_phase = 1;
         game.state.turn.current_step = 0;

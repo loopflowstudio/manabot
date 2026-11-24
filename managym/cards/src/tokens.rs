@@ -35,6 +35,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         soldier(),
         spirit(),
         treasure(),
+        villain(),
         zeppelin(),
         cadet(),
         fractal(),
@@ -473,5 +474,17 @@ fn fractal() -> TokenDefinition {
             0,
             [Color::Green, Color::Blue],
         ),
+    )
+}
+
+fn villain() -> TokenDefinition {
+    let base = face("Villain", [CardType::Creature], &["Villain"], "Menace");
+    token(
+        "token.villain",
+        "cd76092f-0f5e-4890-996c-33f4f47c659c",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Menace]),
+            ..creature(base, 2, 1, [Color::Black])
+        },
     )
 }

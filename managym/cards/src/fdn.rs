@@ -19,8 +19,10 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         claws_out(),
         hungry_ghoul(),
+        herald_of_eternal_dawn(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
+        leyline_axe(),
         sire_of_seven_deaths(),
         zul_ashur_lich_lord(),
     ]
@@ -273,6 +275,67 @@ fn zul_ashur_lich_lord() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn leyline_axe() -> CardDefinition {
+    use managym_state::card::{StaticKeywordGrant, StaticPtBuff, StaticScope};
+    CardDefinition {
+        key: "fdn.leyline_axe",
+        scryfall_id: "b9c03336-a321-4c06-94d1-809f328fabd8",
+        printed: PrintedCharacteristics {
+            name: "Leyline Axe".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::BeginOnBattlefield,
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: 1,
+                    toughness: 1,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::DoubleStrike, Keyword::Trample]),
+                }),
+            ],
+            text_box: "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3}".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn herald_of_eternal_dawn() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.herald_of_eternal_dawn",
+        scryfall_id: "c9fdfebf-98e0-4718-bac3-6eee1cd0623d",
+        printed: PrintedCharacteristics {
+            name: "Herald of Eternal Dawn".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
+            statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
+            text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
             ..Default::default()
         },
         ..Default::default()

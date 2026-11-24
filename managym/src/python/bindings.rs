@@ -1106,6 +1106,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub life: i32,
     #[pyo3(get, set)]
+    pub counters: BTreeMap<String, i32>,
+    #[pyo3(get, set)]
     pub zone_counts: Vec<i32>,
     #[pyo3(get, set)]
     pub graveyard_lessons: i32,
@@ -1449,6 +1451,7 @@ impl From<PlayerData> for PyPlayer {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
@@ -1493,6 +1496,7 @@ impl From<PyPlayer> for PlayerData {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
@@ -2437,6 +2441,10 @@ impl PyPermanent {
     #[setter]
     fn set_used_abilities(&mut self, value: Vec<usize>) {
         self.data.used_abilities = value;
+    }
+    #[getter]
+    fn entered_this_turn(&self) -> bool {
+        self.data.entered_this_turn
     }
     #[getter]
     fn dealt_damage_this_turn(&self) -> bool {
@@ -5365,7 +5373,15 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=14).contains(&frame.kind)
+        !(1..=15).contains(&frame.kind)
+            || (frame.kind == 15
+                && (!(1..=5).contains(&frame.decision)
+                    || frame.parent.is_some()
+                    || !frame.mode.is_some_and(|mulligans| mulligans <= 7)
+                    || (frame.decision == 4) != frame.active_clause.is_some()
+                    || frame.active_clause.is_some_and(|remaining| {
+                        remaining == 0 || remaining > frame.mode.unwrap()
+                    })))
             || (frame.kind == 10
                 && (!(1..=crate::agent::continuation::MAX_DELAYED_EVENT_CODE)
                     .contains(&frame.decision)

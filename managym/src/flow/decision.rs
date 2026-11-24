@@ -23,6 +23,7 @@ use crate::{
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
+        sba::SbaProgress,
         turn::OnceEachTurnKey,
     },
     state::{
@@ -49,6 +50,8 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
+    /// After stack exile, finish state-based actions before starting cleanup.
+    EndTurn,
     /// The spell's whole cost is paid; `payment.receipt` is what it actually
     /// took (CR 601.2h).
     Paid {
@@ -907,6 +910,7 @@ impl SuspendedResolution {
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
                 FrameCompletion::Paid { .. }
                 | FrameCompletion::Activated { .. }
+                | FrameCompletion::EndTurn
                 | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
                 | FrameCompletion::Continue
@@ -1261,10 +1265,35 @@ impl Game {
         self.run_frame(child);
     }
 
+    /// Reach a stable board without granting priority. If an SBA needs a
+    /// decision, its frame inherits the interrupted rule's return point.
+    fn finish_sbas_before(&mut self, resume: FrameCompletion) -> bool {
+        while !self.is_game_over() {
+            if matches!(resume, FrameCompletion::EndTurn) {
+                self.collect_waiting_triggers();
+            }
+            match self.perform_state_based_actions() {
+                SbaProgress::Stable => return true,
+                SbaProgress::Changed => continue,
+                SbaProgress::Pending => {
+                    self.state
+                        .suspended_decision_mut()
+                        .as_mut()
+                        .expect("pending SBA")
+                        .frame
+                        .completion
+                        .then(resume);
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
-        loop {
+        while !self.is_game_over() {
             if let Some(mut batch) = frame.batch.take() {
                 match self.advance_event_batch(&mut batch) {
                     BatchProgress::Choice { player, candidates } => {
@@ -1334,26 +1363,19 @@ impl Game {
                         frame.completion = *next;
                         continue;
                     }
+                    FrameCompletion::EndTurn => {
+                        if self.finish_sbas_before(FrameCompletion::EndTurn) {
+                            self.end_step_for_cleanup();
+                        }
+                        return;
+                    }
                     FrameCompletion::CombatNormal => {
-                        match self.perform_state_based_actions() {
-                            crate::flow::sba::SbaProgress::Changed => continue,
-                            crate::flow::sba::SbaProgress::Pending => {
-                                self.state
-                                    .suspended_decision_mut()
-                                    .as_mut()
-                                    .expect("pending SBA")
-                                    .frame
-                                    .completion
-                                    .then(FrameCompletion::CombatNormal);
-                                return;
-                            }
-                            crate::flow::sba::SbaProgress::Stable => {}
+                        if !self.finish_sbas_before(FrameCompletion::CombatNormal) {
+                            return;
                         }
-                        if !self.is_game_over() {
-                            frame.batch = self.combat_damage_batch(
-                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
-                            );
-                        }
+                        frame.batch = self.combat_damage_batch(
+                            crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
+                        );
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }
@@ -3670,7 +3692,7 @@ mod learn_tests {
     }
 
     fn game(sideboard: &[(&str, usize)]) -> Game {
-        Game::new(
+        let mut game = Game::new(
             vec![
                 PlayerConfig::new("learner", counts(&[("Island", 40)]))
                     .with_sideboard(counts(sideboard)),
@@ -3679,7 +3701,9 @@ mod learn_tests {
             ],
             17,
             false,
-        )
+        );
+        game.keep_opening_hands();
+        game
     }
 
     #[test]
@@ -4164,6 +4188,7 @@ mod learn_tests {
             17,
             false,
         );
+        game.keep_opening_hands();
         // One unknown hand slot, a residual pool of two Lessons and two Islands.
         let deck = game.state.players[0].deck.clone();
         for card in deck {
@@ -4445,6 +4470,7 @@ mod payment_tests {
             165,
             false,
         );
+        game.keep_opening_hands();
         game.run_frame(EffectFrame::new(
             PlayerId(0),
             vec![

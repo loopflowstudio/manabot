@@ -403,6 +403,7 @@ columns! { permanent {
     48: HAS_WARD => ("has_ward", ValueLayout::FLAG),
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
+    51: ENTERED_THIS_TURN => ("entered_this_turn", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -701,7 +702,7 @@ columns! { relation {
     0: KIND => ("kind", ValueLayout::new(ValueKind::Category { size: 10 }, "Relation row kind; see row_kinds", "1..10; 0 padding")),
     1: FRAME => ("frame", ValueLayout::FRAME),
     2: PARENT => ("parent", ValueLayout::FRAME),
-    3: FRAME_KIND => ("frame_kind", ValueLayout::new(ValueKind::Category { size: 14 }, "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor, 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation", "1..14; 0 padding")),
+    3: FRAME_KIND => ("frame_kind", ValueLayout::new(ValueKind::Category { size: 15 }, "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor, 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation, 15 opening hands", "1..15; 0 padding")),
     4: CONTROLLER => ("controller", ValueLayout::new(ValueKind::Category { size: 2 }, "1 agent, 2 opponent", "0..2")),
     5: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
     6: SOURCE => ("source", ValueLayout::OBJECT_REFERENCE),
@@ -1119,7 +1120,7 @@ mod tests {
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 51 } else { 38 },
+                    if one_token { 52 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1165,7 +1166,16 @@ mod tests {
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-            for key in ["agent_cards", "agent_permanents", "facts", "effects"] {
+            assert_eq!(
+                layout["agent_permanents"].columns[if one_token {
+                    permanent::VALID
+                } else {
+                    super::super::legacy_input::PERMANENT_VALID
+                }]
+                .name,
+                "valid"
+            );
+            for key in ["agent_cards", "facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

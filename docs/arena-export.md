@@ -35,7 +35,7 @@ this reader establishes that subset, not general Arena protocol conformance.
 The output starts with an explicit synthetic marker and retains own deck and
 hand, public card-zone objects, movement turn numbers, opening phase/step and
 result messages. It contains neither the opponent's private cards nor hidden
-object identities. No mulligan prompt exists in this recorded native setup;
+object identities. The exporter does not emit Arena mulligan prompts;
 the reader reports its unavailable count, `-1`. It requires more than five
 state messages; shorter captures are refused instead of padded.
 

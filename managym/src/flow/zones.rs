@@ -757,6 +757,7 @@ impl Game {
                 &self.state[object_id],
             );
             permanent.controller = holder;
+            permanent.entry_turn = self.state.turn.turn_number;
             permanent.was_cast = carry.cast.is_some();
             if let Some(cast) = carry.cast {
                 permanent.cast_x = cast.x;

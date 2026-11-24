@@ -62,6 +62,7 @@ fn beorn_the_fierce() -> CardDefinition {
                         ),
                         Effect::If {
                             condition: Condition::ControlsAtLeast {
+                                distinct_names: false,
                                 count: 3,
                                 predicate: CardPredicate::subtype("Bear"),
                             },

@@ -6795,5 +6795,129 @@
       "G",
       "U"
     ]
+  },
+  "Demonic Pact": {
+    "name": "Demonic Pact",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, choose one that hasn't been chosen —\n• This enchantment deals 4 damage to any target and you gain 4 life.\n• Target opponent discards two cards.\n• Draw two cards.\n• You lose the game.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fynn, the Fangbearer": {
+    "name": "Fynn, the Fangbearer",
+    "mana_cost": "{1}{G}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhenever a creature you control with deathtouch deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Herald of Eternal Dawn": {
+    "name": "Herald of Eternal Dawn",
+    "mana_cost": "{4}{W}{W}{W}",
+    "type_line": "Creature — Angel",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Leyline Axe": {
+    "name": "Leyline Axe",
+    "mana_cost": "{4}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Maze's End": {
+    "name": "Maze's End",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{3}, {T}, Return this land to its owner's hand: Search your library for a Gate card, put it onto the battlefield, then shuffle. If you control ten or more Gates with different names, you win the game.",
+    "colors": []
+  },
+  "Quicksilver, Brash Blur": {
+    "name": "Quicksilver, Brash Blur",
+    "mana_cost": "{R}",
+    "type_line": "Legendary Creature — Mutant Hero",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Power-up",
+      "Haste"
+    ],
+    "oracle_text": "If Quicksilver, Brash Blur is in your opening hand, you may begin the game with him on the battlefield.\nHaste\nPower-up — {4}{R}: Put a +1/+1 counter and a double strike counter on Quicksilver. (Activate each power-up ability only once. Reduce the cost by his mana cost if he entered this turn.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Time Stop": {
+    "name": "Time Stop",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "End the turn. (Exile all spells and abilities, including this spell. The player whose turn it is discards down to their maximum hand size. Damage heals and \"this turn\" and \"until end of turn\" effects end.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Virulent Silencer": {
+    "name": "Virulent Silencer",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Robot Assassin",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever a nontoken artifact creature you control deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)",
+    "colors": []
+  },
+  "Construct a Cosmic Cube": {
+    "name": "Construct a Cosmic Cube",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment — Plan",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, create a 2/1 black Villain creature token with menace and put a plan counter on this enchantment.\nWhen the seventh plan counter is put on this enchantment, sacrifice it. When you do, you control target opponent during their next turn. (You see all cards that player could see and make all decisions for them.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "The Dominion Bracelet": {
+    "name": "The Dominion Bracelet",
+    "mana_cost": "{2}",
+    "type_line": "Legendary Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature gets +1/+1 and has \"{15}, Exile The Dominion Bracelet: You control target opponent during their next turn. This ability costs {X} less to activate, where X is this creature's power. Activate only as a sorcery.\" (You see all cards that player could see and make all decisions for them.)\nEquip {1}",
+    "colors": []
   }
 }

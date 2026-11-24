@@ -73,6 +73,11 @@ fn finish_game_step(
     let events = game.take_observation_events();
     let observation = Observation::new(game, &events);
 
+    let (reward, info) = game_step_outcome(game, agent, done);
+    (observation, reward, done, false, info)
+}
+
+fn game_step_outcome(game: &Game, agent: PlayerId, done: bool) -> (f64, InfoDict) {
     let mut reward = 0.0;
     let mut info = empty_info_dict();
     if done {
@@ -91,13 +96,8 @@ fn finish_game_step(
                 InfoValue::String("draw".to_string()),
             );
         }
-        for (i, player) in game.state.players.iter().enumerate() {
-            if !player.alive {
-                let reason = if player.drew_when_empty {
-                    "deck_empty"
-                } else {
-                    "life_total"
-                };
+        for i in 0..2 {
+            if let Some(reason) = game.state.loss(i).and_then(|loss| loss.reason()) {
                 insert_info(
                     &mut info,
                     format!("p{i}_loss_reason"),
@@ -107,7 +107,7 @@ fn finish_game_step(
         }
     }
 
-    (observation, reward, done, false, info)
+    (reward, info)
 }
 
 /// Result of a flat Monte Carlo evaluation of the current action space.
@@ -1178,21 +1178,9 @@ impl Env {
             .ok_or_else(|| AgentError("env.step_semantic_command called before reset".into()))?;
         let actor = current_agent(game)?;
         let (transition, observation, done) = self.commit_command(command)?;
-        let reward = if done {
-            self.winner_index()
-                .map(|winner| if winner == actor.0 { 1.0 } else { -1.0 })
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-        Ok((
-            transition,
-            observation,
-            reward,
-            done,
-            false,
-            empty_info_dict(),
-        ))
+        let game = self.game.as_ref().expect("committed game");
+        let (reward, info) = game_step_outcome(game, actor, done);
+        Ok((transition, observation, reward, done, false, info))
     }
 
     /// Transport-only counts for both viewer logs. Pair with capture_generation;
@@ -1857,6 +1845,90 @@ impl Env {
             }
         }
         insert_info(info, "profiler", InfoValue::Map(out));
+    }
+}
+
+#[cfg(test)]
+mod terminal_tests {
+    use super::*;
+
+    #[test]
+    fn instructed_outcomes_pay_both_seats() {
+        let root =
+            crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1").unwrap();
+        for winner in [0, 1] {
+            for explicit_win in [false, true] {
+                let mut game = root.clone();
+                let loser = 1 - winner;
+                if explicit_win {
+                    game.win_game(PlayerId(winner));
+                } else {
+                    game.lose_game(PlayerId(loser));
+                }
+                for seat in 0..2 {
+                    let done = game.is_game_over();
+                    let (_, reward, done, _, info) =
+                        finish_game_step(&mut game, PlayerId(seat), done);
+                    assert!(done);
+                    assert_eq!(reward, if seat == winner { 1.0 } else { -1.0 });
+                    assert_eq!(info["winner_index"], InfoValue::Int(winner as i64));
+                    if !explicit_win {
+                        assert_eq!(
+                            info[&format!("p{loser}_loss_reason")],
+                            InfoValue::String("instructed_loss".into())
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_rewards_and_reasons_read_the_committed_batch() {
+        let root =
+            crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1").unwrap();
+        for simultaneous in [false, true] {
+            let mut game = root.clone();
+            game.state.players[1]
+                .counters
+                .change(crate::state::permanent::CounterKind::Poison, 10);
+            if simultaneous {
+                game.state.players[0].life = 0;
+                game.state.players[0].drew_when_empty = true;
+            }
+            let mut fork = game.clone();
+            for position in [&mut game, &mut fork] {
+                position.perform_state_based_actions();
+                for seat in 0..2 {
+                    let (_, reward, done, _, info) =
+                        finish_game_step(position, PlayerId(seat), position.is_game_over());
+                    assert!(done);
+                    assert_eq!(
+                        reward,
+                        if simultaneous {
+                            0.0
+                        } else if seat == 0 {
+                            1.0
+                        } else {
+                            -1.0
+                        }
+                    );
+                    assert_eq!(info["p1_loss_reason"], InfoValue::String("poison".into()));
+                    if simultaneous {
+                        let causes = position.state.loss(0).unwrap();
+                        assert!(causes.life_total && causes.deck_empty);
+                        assert_eq!(
+                            info["p0_loss_reason"],
+                            InfoValue::String("deck_empty".into())
+                        );
+                    }
+                }
+            }
+            assert_eq!(
+                game.state.deterministic_hash(),
+                fork.state.deterministic_hash()
+            );
+        }
     }
 }
 

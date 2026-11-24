@@ -103,6 +103,8 @@ pub enum TriggerCondition {
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
     Chapter { chapter: u8 },
+    /// Triggers once when a placement crosses this count on the source.
+    NthCounter { kind: CounterKind, nth: u8 },
     /// "Whenever [who] puts one or more [kind] counters on a [on]
     /// permanent": once per permanent an instruction that player controls
     /// puts them on. The trigger's X is how many were put ("that much").
@@ -192,6 +194,8 @@ pub enum Condition {
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        distinct_names: bool,
         count: usize,
         predicate: CardPredicate,
     },
@@ -923,11 +927,17 @@ pub enum Effect {
         linked: Option<LinkedExile>,
     },
     /// Tap each permanent `what` names.
-    Tap { what: ObjectSelector },
+    Tap {
+        what: ObjectSelector,
+    },
     /// Untap each permanent `what` names.
-    Untap { what: ObjectSelector },
+    Untap {
+        what: ObjectSelector,
+    },
     /// Remove every counter from each permanent `from` names.
-    RemoveAllCounters { from: ObjectSelector },
+    RemoveAllCounters {
+        from: ObjectSelector,
+    },
     /// Create a token that's a copy of each object `of` names (CR 707.2,
     /// 111.1): the source (`This`), the target, or every permanent of an
     /// `Each` ("for each creature target player controls, create a token
@@ -953,9 +963,13 @@ pub enum Effect {
     /// Cumulative upkeep's payment (CR 702.24a): sacrifice this unless you
     /// pay `each` for each age counter on it. The age counter is put on by a
     /// preceding instruction.
-    CumulativeUpkeep { each: ManaCost },
+    CumulativeUpkeep {
+        each: ManaCost,
+    },
     /// Each opponent loses `amount` life and you gain that much.
-    DrainLife { amount: EffectValue },
+    DrainLife {
+        amount: EffectValue,
+    },
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
@@ -979,7 +993,9 @@ pub enum Effect {
         effects: Vec<Effect>,
     },
     /// Internal cursor emitted when clauses are lowered into a frame queue.
-    SelectTargetRequirement { index: usize },
+    SelectTargetRequirement {
+        index: usize,
+    },
     /// The player `what` names discards `count` cards, chosen by them.
     Discard {
         what: ObjectSelector,
@@ -989,10 +1005,14 @@ pub enum Effect {
     /// Destroy each permanent `what` names (CR 701.7), as one simultaneous
     /// event: leave-the-battlefield abilities look back at the permanents
     /// as they all were before (CR 603.10a).
-    Destroy { what: ObjectSelector },
+    Destroy {
+        what: ObjectSelector,
+    },
     /// Airbend (CR 701.65) each permanent `what` names: exile it; its owner
     /// may cast that exact exiled card for {2} rather than its mana cost.
-    Airbend { what: ObjectSelector },
+    Airbend {
+        what: ObjectSelector,
+    },
     /// "After this phase, there is an additional combat phase [in which
     /// only `attackers` can attack]" (CR 500.8).
     AdditionalCombatPhase {
@@ -1002,27 +1022,40 @@ pub enum Effect {
     /// "Starting with you, each player chooses up to one [predicate]
     /// permanent from among permanents your opponents control. Exile those
     /// permanents."
-    EachPlayerChoosesToExile { predicate: CardPredicate },
+    EachPlayerChoosesToExile {
+        predicate: CardPredicate,
+    },
     /// "Choose a card name. Search [the target player]'s graveyard, hand and
     /// library for up to `count` cards with that name and exile them. Then
     /// that player shuffles." The name is a resolution choice among the
     /// world's card names (one mode each, `ExileNamed`).
-    NameAndExileFromTargetPlayer { count: usize },
+    NameAndExileFromTargetPlayer {
+        count: usize,
+    },
     /// Privately search the target player's graveyard, hand and library,
     /// choosing zero through `count` cards named `name` to exile; then shuffle.
-    ExileNamed { name: String, count: usize },
+    ExileNamed {
+        name: String,
+        count: usize,
+    },
     /// Choose X and optionally pay that much generic mana during resolution.
     /// The paid branch reads X from the frame; `WhenYouDo` retains it.
-    OptionalManaPaymentX { if_paid: Vec<Effect> },
+    OptionalManaPaymentX {
+        if_paid: Vec<Effect>,
+    },
     /// "You may exile it": the card the triggering creature became in its
     /// graveyard, exiled with this ability's source (CR 607.2a).
     MayExileTriggeringWithSource,
     /// "Choose a [predicate] card exiled with [this]": one mode per such
     /// card, each `HaveAbilitiesOf` it.
-    ChooseExiledWithSource { predicate: CardPredicate },
+    ChooseExiledWithSource {
+        predicate: CardPredicate,
+    },
     /// The source permanent has all activated and triggered abilities of
     /// `definition` from now on, until a later choice (CR 613.1f).
-    HaveAbilitiesOf { definition: crate::card::CardDefId },
+    HaveAbilitiesOf {
+        definition: crate::card::CardDefId,
+    },
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
@@ -1030,6 +1063,8 @@ pub enum Effect {
     /// waiting triggered abilities cease to exist, and the turn skips to its
     /// cleanup step, which proceeds as usual.
     EndTheTurn,
+    LoseGame,
+    WinGame,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -1050,10 +1085,15 @@ pub enum Effect {
     /// their hands.
     OpponentsCastOnlyFromHand,
     /// The controller may cast the targeted graveyard card this turn at its normal cost and timing.
-    GrantGraveyardCastThisTurn { target: TargetSpec },
+    GrantGraveyardCastThisTurn {
+        target: TargetSpec,
+    },
     /// "Exile the top `count` cards of your library. You may play them
     /// [`until`]."
-    ExileTopCardsToPlay { count: usize, until: PlayWindow },
+    ExileTopCardsToPlay {
+        count: usize,
+        until: PlayWindow,
+    },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -1066,7 +1106,9 @@ pub enum Effect {
     /// Exile cards from the top of your library until you exile a nonland
     /// card; you may cast it without paying its mana cost if its mana value
     /// is less than `below`, otherwise put it into your hand.
-    ExileUntilNonlandCastFree { below: EffectValue },
+    ExileUntilNonlandCastFree {
+        below: EffectValue,
+    },
     /// Cascade (CR 702.85a): exile cards from the top of your library until
     /// you exile a nonland card with lesser mana value than the source spell;
     /// you may cast it without paying its mana cost. Every other card exiled
@@ -1079,7 +1121,9 @@ pub enum Effect {
     /// option.
     CastLibraryTopFree,
     /// You may cast a matching spell from your hand without paying its mana cost.
-    CastFromHandFree { predicate: CardPredicate },
+    CastFromHandFree {
+        predicate: CardPredicate,
+    },
     CastFromGraveyard {
         predicate: CardPredicate,
         exile_instants_and_sorceries: bool,
@@ -1088,7 +1132,9 @@ pub enum Effect {
     ShuffleGraveyardIntoLibrary,
     /// The target's owner chooses second from the top of their library or
     /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
-    OwnerPutsIntoLibrary { target: TargetSpec },
+    OwnerPutsIntoLibrary {
+        target: TargetSpec,
+    },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
     /// discards it.
@@ -1106,15 +1152,21 @@ pub enum Effect {
     },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
-    PlaceTargetInLibrary { second_from_top: bool },
+    PlaceTargetInLibrary {
+        second_from_top: bool,
+    },
     /// "You may [effects]. Do this only once each turn." Offered only while
     /// the exact source has not taken this ability's option this turn; only
     /// accepting spends it (the ability itself triggers every time).
-    MayOnceEachTurn { effects: Vec<Effect> },
+    MayOnceEachTurn {
+        effects: Vec<Effect>,
+    },
     /// A reflexive trigger (CR 603.12): "When you do, [effects]." It
     /// triggers where it appears, so it only runs if the instruction before
     /// it happened; its targets are chosen as it is put on the stack.
-    WhenYouDo { effects: Vec<Effect> },
+    WhenYouDo {
+        effects: Vec<Effect>,
+    },
     /// "If [condition], [then]; otherwise, [otherwise]", asked as this
     /// instruction resolves (CR 608.2c), of the resolving player and frame.
     If {
@@ -1148,13 +1200,22 @@ pub enum Effect {
     /// ability leaves the stack and does nothing; spells are not affected.
     /// A stack ability is no card object, so the clause's chosen target is
     /// read directly.
-    CounterAbility { what: ObjectSelector },
+    CounterAbility {
+        what: ObjectSelector,
+    },
     /// Resolving player draws `count` cards, read at resolution. No target.
-    DrawCards { count: EffectValue },
+    DrawCards {
+        count: EffectValue,
+    },
     /// The selected players lose `amount` life (not damage, CR 119.3).
     LoseLife {
         player: PlayerSelector,
         amount: EffectValue,
+    },
+    GivePlayerCounters {
+        player: PlayerSelector,
+        kind: CounterKind,
+        count: i32,
     },
     /// The source deals `amount` damage to the selected players.
     DealDamageToPlayer {
@@ -1177,11 +1238,16 @@ pub enum Effect {
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
-    AttachSourceTo { what: ObjectSelector },
+    AttachSourceTo {
+        what: ObjectSelector,
+    },
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
-    DistributeCountersToTappedOpponentCreatures { kind: CounterKind, count: usize },
+    DistributeCountersToTappedOpponentCreatures {
+        kind: CounterKind,
+        count: usize,
+    },
     /// "[player] [effects]": the effects resolve with that player as "you"
     /// ("Its controller may search their library"), then the controller
     /// returns to the resolving one.
@@ -1195,11 +1261,15 @@ pub enum Effect {
     /// power `max_total_power` or less, then sacrifices all other creatures
     /// they control": the active player chooses first (CR 101.4), and the
     /// sacrifices are one event.
-    EachPlayerKeepsCreatures { max_total_power: i32 },
+    EachPlayerKeepsCreatures {
+        max_total_power: i32,
+    },
     /// "Each player sacrifices `count` creatures of their choice": the active
     /// player chooses first (CR 101.4), a player with no more than `count`
     /// sacrifices them all, and the sacrifices are one event.
-    EachPlayerSacrificesCreatures { count: usize },
+    EachPlayerSacrificesCreatures {
+        count: usize,
+    },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
     /// `effects` trigger from this spell or ability's source. Their targets
     /// are chosen as the delayed ability is put on the stack.
@@ -1215,16 +1285,25 @@ pub enum Effect {
     },
     /// Resolving player gains `amount` life, read as the instruction
     /// resolves.
-    GainLife { amount: EffectValue },
+    GainLife {
+        amount: EffectValue,
+    },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
     /// ability has resolved this turn, ...").
-    OnNthResolutionThisTurn { n: u32, effect: Box<Effect> },
+    OnNthResolutionThisTurn {
+        n: u32,
+        effect: Box<Effect>,
+    },
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
-    Scry { count: usize },
+    Scry {
+        count: usize,
+    },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
     /// number of them into the graveyard, then order the kept cards on top.
-    Surveil { count: usize },
+    Surveil {
+        count: usize,
+    },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
     /// hand and the rest on the bottom of your library."
@@ -1244,7 +1323,9 @@ pub enum Effect {
     },
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
-    PutTopCardsInHand { count: usize },
+    PutTopCardsInHand {
+        count: usize,
+    },
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
@@ -1253,10 +1334,14 @@ pub enum Effect {
     /// spell is copied under the resolving player once per selected
     /// permanent that is a legal new target for it, and each copy's targets
     /// become that permanent; nobody chooses.
-    CopyTriggeringSpellForEach { each: ObjectSelector },
+    CopyTriggeringSpellForEach {
+        each: ObjectSelector,
+    },
     /// "Change the target of target spell or ability with a single target"
     /// (CR 115.7): to another legal target, if there is one.
-    ChangeTarget { target: TargetSpec },
+    ChangeTarget {
+        target: TargetSpec,
+    },
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
@@ -1278,14 +1363,18 @@ pub enum Effect {
     },
     /// Spell-level modes are selected during casting. Within a resolving
     /// ability this remains a resolution-time choice.
-    Modal { modes: Vec<Vec<Effect>> },
+    Modal {
+        modes: Vec<Vec<Effect>>,
+    },
     /// "Counter [the spell or ability] unless its controller pays [cost]."
     /// It is the frame's primary target: either a chosen `TargetSpec::Spell`
     /// target (It'll Quench Ya!) or the trigger-context spell or ability
     /// (ward).
     /// Reports no target spec of its own — targeting is declared on the
     /// card (`PrintedCharacteristics::targeting`) when a choice is required.
-    CounterUnlessPays { cost: PaymentCost },
+    CounterUnlessPays {
+        cost: PaymentCost,
+    },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on
     /// the card (`PrintedCharacteristics::targeting`).
@@ -1300,7 +1389,9 @@ pub enum Effect {
     },
     /// "You may cast a [predicate] spell from among cards you own exiled
     /// with this creature", paying its costs, as the effect resolves.
-    CastExiledWithSource { predicate: CardPredicate },
+    CastExiledWithSource {
+        predicate: CardPredicate,
+    },
     /// Add `mana` to the resolving player's pool `amount` times, `amount`
     /// read at resolution (firebending X). `until_end_of_combat` routes it
     /// to the combat pool (firebending — persists across combat steps,
@@ -1313,7 +1404,9 @@ pub enum Effect {
         until_end_of_combat: bool,
     },
     /// "Add X mana of any one color", X read as the mana ability resolves.
-    AddOneColorManaValue { amount: EffectValue },
+    AddOneColorManaValue {
+        amount: EffectValue,
+    },
 
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
@@ -1331,7 +1424,9 @@ pub enum Effect {
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
     /// creatures; they each get +2/+2"). Children may suspend.
-    ForEachTarget { effects: Vec<Effect> },
+    ForEachTarget {
+        effects: Vec<Effect>,
+    },
 }
 
 /// How long a player may play cards an effect exiled.
@@ -1687,9 +1782,9 @@ impl Effect {
             return Some(spec);
         }
         match self {
-            Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } => {
-                player.target_spec()
-            }
+            Effect::GivePlayerCounters { player, .. }
+            | Effect::LoseLife { player, .. }
+            | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::GrantGraveyardCastThisTurn { target } | Effect::ExileLinked { target, .. } => {
@@ -1760,6 +1855,8 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::WinGame
+            | Effect::LoseGame
             | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }

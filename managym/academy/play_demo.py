@@ -4,6 +4,8 @@ The fixture pins content and state digests. Every prefix step uses the public
 Command path; final recovery is built by GameSession at the resulting revision.
 """
 
+from hashlib import sha256
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +23,7 @@ class DemoStep(BaseModel):
 
 class PlayDemo(BaseModel):
     config: dict[str, Any]
-    manifest: dict[str, Any]
+    manifest_digest: str
     prefix: list[DemoStep]
     decision_digest: str
     decision_revision: int
@@ -30,10 +32,10 @@ class PlayDemo(BaseModel):
 
 # Each play demo's fixture under `fixtures/`, by the name `?demo=` selects.
 DEMO_FILES: dict[str, str] = {
-    "learn": "learn-demo-w17-token-cards.json",
-    "precision": "precision-demo-w17-manual-payment.json",
-    "precision-mana": "precision-mana-demo-w17-manual-payment.json",
-    "convoke": "convoke-demo-w17-manual-payment.json",
+    "learn": "learn-demo-opening-v1.json",
+    "precision": "precision-demo-opening-v1.json",
+    "precision-mana": "precision-mana-demo-opening-v1.json",
+    "convoke": "convoke-demo-opening-v1.json",
 }
 
 
@@ -45,12 +47,16 @@ def load_play_demo(name: str) -> PlayDemo:
     )
 
 
+def manifest_digest(manifest: dict[str, Any]) -> str:
+    return sha256(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def replay_checked_prefix(
     session: "GameSession", update: dict[str, Any], demo: PlayDemo, name: str
 ) -> dict[str, Any]:
-    # A fixture written before the world label was removed carries it.
-    recorded = {k: v for k, v in demo.manifest.items() if k != "world_version"}
-    if session.env.content_pack_manifest() != recorded:
+    if manifest_digest(session.env.content_pack_manifest()) != demo.manifest_digest:
         raise ValueError(
             f"{name} demo content/setup identity differs from this runtime"
         )

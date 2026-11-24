@@ -1136,3 +1136,48 @@ fn muldrotha_spends_the_chosen_type_for_this_incarnation_and_turn() {
         }
     }
 }
+
+#[test]
+fn leyline_axe_moves_its_grants_when_equipped_again() {
+    use crate::support::game::enters_battlefield_with_triggers;
+    use managym::state::target::Target;
+    let mut s = five_color_setup(&["Leyline Axe", "Gray Ogre"]);
+    let axe = enters_battlefield_with_triggers(&mut s, 0, "Leyline Axe");
+    let ogres = [0, 1].map(|_| enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre"));
+    assert!(s.game().state.permanents[axe]
+        .as_ref()
+        .unwrap()
+        .attached_to
+        .is_none());
+    for ogre in ogres {
+        s.set_player_mana_pool(0, "3");
+        activate(&mut s, axe, 0);
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        settle(&mut s);
+        for id in ogres {
+            let view = s.game().characteristics(id);
+            assert_eq!(view.pt(), if ogre == id { (3, 3) } else { (2, 2) });
+            for keyword in [Keyword::DoubleStrike, Keyword::Trample] {
+                assert_eq!(view.keywords.has(keyword), ogre == id);
+            }
+        }
+    }
+}
+
+#[test]
+fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
+    let mut s = five_color_setup(&["Herald of Eternal Dawn"]);
+    let herald = s.force_permanent_on_battlefield(0, "Herald of Eternal Dawn");
+    s.game_mut().state.permanents[herald]
+        .as_mut()
+        .unwrap()
+        .damage = 6;
+    s.game_mut().state.players[0].drew_when_empty = true;
+    s.pass_priority();
+    assert!(s.game().state.permanents[herald].is_none());
+    assert!(!s.game().is_game_over());
+    assert!(!s.game().state.players[0].drew_when_empty);
+    s.game_mut().state.players[0].drew_when_empty = true;
+    s.pass_priority();
+    assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
+}

@@ -215,7 +215,10 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // What a payment made during resolution still owes.
         ("CostComponent", &["Mana", "Life"][..]),
         // What a payment's contributing objects did and paid for.
-        ("How", &["Tapped", "Sacrificed", "Exiled", "Discarded"][..]),
+        (
+            "How",
+            &["Tapped", "Sacrificed", "Exiled", "Discarded", "Returned"][..],
+        ),
         (
             "Toward",
             &[

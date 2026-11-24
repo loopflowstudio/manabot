@@ -2711,6 +2711,10 @@
           "title": "Effects",
           "type": "array"
         },
+        "entered_this_turn": {
+          "description": "It entered the battlefield during this turn.",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "default": 0,
           "maximum": 4294967295,
@@ -2897,6 +2901,13 @@
           ],
           "default": null,
           "title": "Combat Mana"
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "effects": {
           "items": {

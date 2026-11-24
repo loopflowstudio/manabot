@@ -1502,7 +1502,7 @@ impl Game {
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) {
-        if !ability.exhaust && !ability.once_each_turn {
+        if !ability.exhaust && !ability.power_up && !ability.once_each_turn {
             return;
         }
         self.state

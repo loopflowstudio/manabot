@@ -33,6 +33,7 @@ from manabot.model.world import (
     validate_checkpoint_world,
 )
 from manabot.semantic.learning import BoundSemanticPack
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from managym.academy.server import GameSession, _parse_game_config
@@ -187,6 +188,7 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
             for key in ("elemental_gw", "elemental_ug")
         ]
     )
+    obs = keep_opening_hands(engine, obs)
     for _ in range(20):
         if int(obs.turn.step) == 3:
             break
@@ -360,6 +362,7 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
             mana_floats=("usable", "usable"),
         )
         obs, _ = env.reset(setup)
+        obs = keep_opening_hands(env, obs)
         for action in prefix:
             obs, _, _, _, _ = env.step(action)
         root = env.state_digest()

@@ -83,26 +83,19 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
     session = GameSession(tmp_path, capture_authority_evidence=True)
     session.new_game(
         {
-            "hero_deck": "elemental_ur",
-            "villain_deck": "elemental_gw",
+            "hero_deck": {"Mountain": 32, "Lightning Bolt": 8},
+            "villain_deck": {"Forest": 40},
             "villain_type": "passive",
-            "seed": 0,
+            "seed": 1,
         }
     )
     frame = ExperienceFrame.model_validate(
         session.current_recovery("reconnect")["frame"]
     )
     log: list[LogEntry] = []
-    for index in range(6):
+    for index, label in enumerate(("Keep hand", "Play Mountain", "Pass priority")):
         assert frame.prompt is not None
-        offer = next(
-            (row for row in frame.offers if row.action_type == "PRIORITY_PLAY_LAND"),
-            next(
-                row
-                for row in frame.offers
-                if row.action_type == "PRIORITY_PASS_PRIORITY"
-            ),
-        )
+        offer = next(row for row in frame.offers if row.label == label)
         command = Command(
             command_id=f"automation-log.{index}",
             match_id=frame.match_id,
@@ -119,7 +112,11 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
     automatic = [row for row in session.authority_transitions if row.automatic]
     assert automatic
     # Each line names the turn its action was taken in, never a later one.
-    assert all(1 <= entry["turn"] <= frame.projection.turn.turn_number for entry in log)
+    assert all(
+        1 <= entry["turn"] <= frame.projection.turn.turn_number
+        for entry in log
+        if entry["actor"] == "auto"
+    )
     assert [entry["text"] for entry in log if entry["actor"] == "auto"].count(
         "Pass priority"
     ) == len(automatic)

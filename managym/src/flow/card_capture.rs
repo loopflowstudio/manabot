@@ -421,7 +421,7 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{game_object::Target, player::PlayerConfig};
+    use crate::state::{ability::Effect, game_object::Target, player::PlayerConfig};
     use std::collections::BTreeMap;
 
     fn configs_with_card(card: &str) -> Vec<PlayerConfig> {
@@ -505,7 +505,8 @@ mod tests {
     #[test]
     fn capture_matches_the_final_snapshot_of_an_unresolved_spell_copy() {
         let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
-        game.lose_game(PlayerId(0));
+        game.state.players[0].life = 0;
+        game.perform_state_based_actions();
         assert!(game.is_game_over());
 
         let mut moves = copy_moves(&game, copy);
@@ -577,6 +578,7 @@ mod tests {
             Some(CaptureMode::Exposure),
             false,
         );
+        game.keep_opening_hands();
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
         game.create_token("token.treasure", payer, false).unwrap();
@@ -623,6 +625,7 @@ mod tests {
             Some(CaptureMode::Exposure),
             false,
         );
+        game.keep_opening_hands();
         game.state.turn.current_phase = PhaseKind::Combat as usize;
         game.state.turn.current_step = 3; // combat damage
         game.state.turn.step_initialized = false;
@@ -648,7 +651,7 @@ mod tests {
         }
         // Ending the turn during combat also settles the ledger.
         let mut surviving = game.rollback_snapshot();
-        surviving.end_the_turn();
+        surviving.run_frame(EffectFrame::new(active, vec![Effect::EndTheTurn]));
         let facts = surviving.exposure_mut().unwrap();
         assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
         assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
@@ -735,6 +738,7 @@ mod tests {
                 17,
                 false,
             );
+            game.keep_opening_hands();
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
             let object_id = *game
