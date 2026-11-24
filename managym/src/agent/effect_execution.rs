@@ -916,6 +916,23 @@ impl<'a> Projection<'a> {
                     self.field("linked return", returns);
                 }
             }
+            EventBinding::ExileLinked {
+                actor,
+                grantee,
+                source,
+                grant,
+            } => {
+                let rules = EventBinding::ExileLinked {
+                    actor: *actor,
+                    grantee: *grantee,
+                    source: None,
+                    grant: *grant,
+                };
+                self.field("bind result", &rules);
+                if let Some(source) = source {
+                    self.object("linked source", *source);
+                }
+            }
             // These variants contain only rules values and player identities.
             binding => self.field("bind result", binding),
         }

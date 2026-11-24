@@ -254,22 +254,18 @@ impl Game {
             .filter(|card| self.is_foretold(self.state.object_of(*card)))
     }
 
-    /// Exile `card` linked to `source`: while `player` controls `source`,
-    /// they may cast it during their turn as `linked` allows (Hama, Azula).
-    /// Without a source the card is only exiled.
-    pub(crate) fn exile_linked(
+    /// Link the exiled arrival `exiled` to `source`: while `player` controls
+    /// `source`, they may cast it during their turn as `linked` allows (Hama,
+    /// Azula). Each arrival of a melded pair costs its own mana value.
+    pub(crate) fn grant_exile_linked(
         &mut self,
-        object_id: ObjectId,
+        exiled: ObjectId,
         player: PlayerId,
-        source: Option<ObjectId>,
+        source: ObjectId,
         linked: LinkedGrant,
     ) {
-        let Some(source) = source else {
-            self.move_object(object_id, ZoneType::Exile);
-            return;
-        };
-        let mana_value = self.object_mana_value(object_id);
-        self.exile_with_play_grant(object_id, |object| {
+        let mana_value = self.object_mana_value(exiled);
+        self.grant_if_exiled(exiled, |object| {
             let base = ExileCastGrant {
                 source: Some(source),
                 own_turn_only: true,

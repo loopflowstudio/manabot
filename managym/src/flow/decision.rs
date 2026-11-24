@@ -1302,7 +1302,8 @@ impl Game {
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while !self.is_game_over() {
             if let Some(mut batch) = frame.batch.take() {
-                match self.advance_event_batch(&mut batch, Some(frame.controller)) {
+                let actor = batch.binding.actor().unwrap_or(frame.controller);
+                match self.advance_event_batch(&mut batch, Some(actor)) {
                     BatchProgress::Decision(decision) => {
                         frame.batch = Some(batch);
                         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
@@ -1570,6 +1571,18 @@ impl Game {
                 }
             }
             EventBinding::ThisWay => frame.this_way = moved.collect(),
+            EventBinding::ExileLinked {
+                grantee,
+                source,
+                grant,
+                ..
+            } => {
+                if let Some(source) = source {
+                    for object in moved {
+                        self.grant_exile_linked(object, grantee, source, grant);
+                    }
+                }
+            }
         }
     }
 
@@ -2868,6 +2881,7 @@ impl Game {
             }
             (
                 Decision::ExileLinked {
+                    player,
                     grant,
                     grantee,
                     source,
@@ -2877,7 +2891,12 @@ impl Game {
                     object: object_id, ..
                 },
             ) => {
-                let (grant, grantee, source) = (*grant, *grantee, *source);
+                let binding = EventBinding::ExileLinked {
+                    actor: *player,
+                    grantee: *grantee,
+                    source: *source,
+                    grant: *grant,
+                };
                 if !self
                     .linked_exile_candidates(&suspended.decision)
                     .iter()
@@ -2886,7 +2905,13 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not an offered card to exile".into()));
                 }
-                self.exile_linked(*object_id, grantee, source, grant);
+                let mut batch = self.event_batch(vec![self.zone_move_proposal(
+                    *object_id,
+                    ZoneType::Exile,
+                    Default::default(),
+                )]);
+                batch.binding = binding;
+                suspended.frame.batch = Some(batch);
                 self.run_frame(suspended.frame);
                 Ok(())
             }

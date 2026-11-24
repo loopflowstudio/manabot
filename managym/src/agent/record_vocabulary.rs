@@ -198,6 +198,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Shuffle",
                 "Bending",
                 "Created",
+                "ExileLinked",
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
@@ -270,6 +271,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "cost",
         "help",
         "waterbend",
+        "actor",
+        "grantee",
+        "source",
     ] {
         add(TokenKind::Field, field);
     }
@@ -377,6 +381,12 @@ mod tests {
                         kind: Bending::Earth,
                     },
                     EventBinding::Created { attacking: true },
+                    EventBinding::ExileLinked {
+                        actor: PlayerId(0),
+                        grantee: PlayerId(1),
+                        source: None,
+                        grant: crate::state::ability::LinkedGrant::FlashAnyMana,
+                    },
                 ],
                 pack,
             )

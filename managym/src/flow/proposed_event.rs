@@ -422,6 +422,27 @@ pub(crate) enum EventBinding {
     Created {
         attacking: bool,
     },
+    /// A linked exile (Hama, Azula): `actor` exiles, so orders a melded pair
+    /// (CR 713.8); `grantee` may cast each exiled arrival as `grant` allows
+    /// while controlling `source`. Without a source the cards are only exiled.
+    ExileLinked {
+        actor: PlayerId,
+        grantee: PlayerId,
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        source: Option<ObjectId>,
+        grant: crate::state::ability::LinkedGrant,
+    },
+}
+
+impl EventBinding {
+    /// The player performing the batch's instruction, when it is not the
+    /// effect's controller.
+    pub(crate) fn actor(&self) -> Option<PlayerId> {
+        match self {
+            EventBinding::ExileLinked { actor, .. } => Some(*actor),
+            _ => None,
+        }
+    }
 }
 
 /// One member's outcome, in the order of the batch's events.

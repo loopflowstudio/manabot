@@ -949,3 +949,74 @@ fn copied_cecil_tokens_transform_with_their_exceptions_once() {
     }
     assert_eq!(permanent(&s, token).transforms, 3);
 }
+
+/// Azula's opponent exiles Ragnarok, so they order its two cards (CR 713.8)
+/// while Azula's controller receives a cast grant for each arrival before
+/// the graveyard choice. Ragnarok stays assembled and ungranted while the
+/// order is pending, and the spent order Command is rejected.
+#[test]
+fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() {
+    use crate::support::game::force_new_card_in_hand;
+    use managym::{
+        agent::action::ActionSpaceKind,
+        search_state::witness,
+        state::{mana::ManaCost, target::Target},
+    };
+
+    const AZULA: &str = "Azula, Cunning Usurper";
+    let mut s = form_ragnarok(&[AZULA, "Lost Days"]);
+    let (permanent, object, cards) = ragnarok_parts(&s);
+    let (owner, caster) = (PlayerId(0), PlayerId(1));
+    let spell = plant_in_graveyard(&mut s, 0, "Lost Days");
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2UBB");
+    let azula = force_new_card_in_hand(&mut s, 1, AZULA);
+    cast_card(&mut s, azula);
+    spend_colorless(&mut s);
+    for _ in 0..10 {
+        match s.action_space().kind {
+            ActionSpaceKind::LookAndSelect => break,
+            ActionSpaceKind::ChooseTarget => {
+                assert!(s.choose_target(Target::Player(owner)));
+            }
+            _ => s.pass_priority(),
+        }
+    }
+    assert_eq!(s.action_space().player, Some(owner));
+    command(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object: o, .. } if *o == object),
+    );
+    assert_eq!(s.action_space().player, Some(owner));
+    for (first, mut env, cmd) in restored_meld_orders(&s) {
+        *s.game_mut() = env.benchmark_game_mut().clone();
+        assert_eq!(s.game().permanent_object(permanent), Some(object));
+        assert!(s.game().state.cast_permissions.exile_grants.is_empty());
+        s.game_mut().execute_semantic_command(&cmd).unwrap();
+        let state = &s.game().state;
+        let arrivals = [first, 1 - first].map(|i| state.object_of(cards[i]));
+        assert_eq!(
+            state.zones.zone_objects(ZoneType::Exile, owner).to_vec(),
+            arrivals
+        );
+        // Both grants precede the graveyard choice, which the owner makes.
+        assert_eq!(s.action_space().player, Some(owner));
+        assert!(offered_cards(&s).contains(&now(&s, spell)));
+        let grants = state.cast_permissions.clone();
+        assert_eq!(grants.exile_grants.len(), 2);
+        for arrival in arrivals {
+            let grant = grants
+                .exile_grants
+                .iter()
+                .find(|g| g.object == arrival)
+                .expect("granted arrival");
+            assert_eq!(grant.player, caster);
+            assert!(grant.flash && grant.any_mana);
+            assert_eq!(grant.cost, None::<ManaCost>);
+        }
+        let before = witness(s.game());
+        assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
+        assert_eq!(witness(s.game()), before);
+        assert_eq!(s.game().state.cast_permissions, grants);
+    }
+}
