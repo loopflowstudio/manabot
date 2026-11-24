@@ -491,12 +491,10 @@ shows the top seat’s hand count. Branch seeds stay on the server.
 
 ### Batched slot loading and snapshots
 
-Native `VectorEnv` and `RecordedVectorEnv` never auto-reset during a step. A
-step reports each finished game's terminal observation, reward, flags and
-winner once, then parks the slot with chooser `-1` until you reload it with
-`load_slots_into_buffers` or reset the vector. Both classes accept a mix of
-restored branches and fresh games (with optional per-slot setups) in one sparse
-call:
+A terminal step on `VectorEnv` or `RecordedVectorEnv` reports the finished
+game's observation, reward, flags and winner. The slot then parks with chooser
+`-1`. Reset the whole vector (`reset_all_into_buffers` for buffered callers),
+or load individual slots as in this example.
 
 ```python
 import numpy as np
@@ -522,7 +520,7 @@ games.reset_all_into_buffers(players)
 [snap, _] = games.snapshot_slots([True, False])
 assert meta is not None and snap is not None
 
-# Mix restored branches and fresh games (with optional setup replacement) in one call.
+# Restore slot 0 and deal slot 1 with a different setup.
 alt_players = [
     managym.PlayerConfig(f"alt{seat}", {"Forest": 8, "Llanowar Elves": 4})
     for seat in (0, 1)
@@ -545,34 +543,28 @@ print(games.next_fresh_seeds())
 its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
 for skipped slots and reject requests to read an unset or poisoned slot.
 
-`load_slots_into_buffers(requests)` is the single sparse, transactional loader
-for finished, live, untouched or poisoned slots:
+`load_slots_into_buffers(requests)` accepts live, finished and poisoned slots.
 
-- `SlotLoad.fresh(slot, player_configs=None)` installs a fresh game at the
-  slot's next scheduled seed (advancing `next_fresh_seeds()[slot]` by
-  `seed_stride`). When `player_configs` is supplied, it atomically replaces
-  that slot's stored setup for this and later fresh loads (rejected when a
-  uniform or training roster is configured).
-- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a detached branch
-  without spending a fresh seed. Replacing an untouched opening with a branch
-  returns its seed to the fresh sequence.
-- `SlotLoad.slot`, `SlotLoad.with_slot(slot)` and
-  `SlotLoadResult.with_slot(slot)` support slot remapping across sharded
-  vectors (`BufferedStreams.load_slots_into_buffers`).
+- `SlotLoad.fresh(slot, player_configs=None)` deals the slot's next scheduled
+  seed and advances it by `seed_stride`, saturating at the maximum u64.
+  An explicit setup becomes the default for subsequent fresh loads. With a
+  uniform or training roster, omit the setup so the roster can draw the decks.
+- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch.
+  Replacing an untouched fresh opening with a snapshot refunds that opening's
+  seed. Other snapshot loads leave the seed sequence unchanged.
+- `SlotLoad.slot`, `SlotLoad.with_slot(slot)` and `SlotLoadResult.with_slot(slot)`
+  map requests and results between local and global shard coordinates.
 
-`load_slots_into_buffers` checks slot bounds and uniqueness, per-slot setups,
-restore options and encoding capacity for the entire request before changing
-any row. Each `SlotLoadResult` gives the slot, new generation, seed, acting
-player, terminal flag and source digest in request order. `next_fresh_seeds()`
-reports the next unspent seed for each slot. A sharded load admits every
-selected shard before it writes any buffer or advances a seed. A rejected
-load can be corrected and retried on the same vector.
+The loader checks distinct slot indices, setups, restore options and encoding
+capacity across all participating shards before writing any row or spending a
+seed. You can correct a rejected request and retry it. Results follow request
+order and carry the slot, generation, seed, acting player, terminal flag and
+source digest. `next_fresh_seeds()` gives each slot's next unspent seed.
 
-Stepping a parked terminal or poisoned slot raises until it is reloaded with
-`load_slots_into_buffers` or reset (`reset_all` for readable `VectorEnv.step`).
-A forced opening can itself end a restored game: its load result has
-`terminal=True` and `acting_player=None`, the buffer has `terminated=1`, and
-the slot's last info carries the winner when there is one.
+Mask parked slots out of steps until you reset or reload them. A forced action
+can finish a restored game during the load itself. Its result then has
+`terminal=True` and `acting_player=None`, its buffer has `terminated=1`, and
+its last info carries the winner when there is one.
 
 Game recordings, statistics and exposure count fresh games. Replacing a played
 fresh game retains its evidence. Replacing an untouched opening with a branch

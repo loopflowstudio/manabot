@@ -451,32 +451,24 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
 | Torch observation/reward tensors on a selected device with Gym-style automatic reset | `manabot.env.vector_env.VectorEnv` |
 
-Scalar native `Env.step`, Gymnasium `manabot.env.env.Env.step`, native
-`managym.VectorEnv` and `RecordedVectorEnv` all share one explicit lifecycle: a
-terminal step returns the terminal observation, reward, flags and winner once,
-and parks the slot (chooser `-1` on vectors) without constructing a replacement
-game. Stepping a parked slot again raises until you reload it with
-`load_slots_into_buffers([SlotLoad.fresh(slot, player_configs=...)])` or reset
-the vector (`reset_all` for readable `VectorEnv.step`). Poisoned and
-reassigned slots reload through the same call.
+Scalar `Env.step` returns the terminal observation and waits for `reset`.
+Native `VectorEnv` and `RecordedVectorEnv` return the terminal observation,
+reward, flags and winner, then park that slot with chooser `-1`. Restart
+all slots with the matching readable or buffered reset, or use
+`load_slots_into_buffers` to replace individual slots.
 
-The Torch wrapper `manabot.env.vector_env.VectorEnv` is the only
-automatic-reset contract: its `step` preserves the terminal step's rewards,
-done flags and `get_last_info()`, reloads finished slots via
-`load_slots_into_buffers`, and returns the replacement games' observations in
-reused tensors (clone anything retained across steps).
+Torch `VectorEnv.step` saves the rewards, flags and diagnostics before
+refilling finished slots. Its observation tensors then show the replacement
+games. Clone tensors you need to retain across steps.
 
 Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
 explicit seed, including the current one, so equal seeds reproduce deals.
 `reset()` without a seed continues native seed succession. Its
 `current_agent_indices()` names each slot's chooser.
 
-`RecordedVectorEnv` delegates only native reads (seeds, generations, choosers,
-frames, setups, diagnostics). Readable `reset_all` / `step` and other native
-mutators raise `AttributeError`; use its `reset_*_into_buffers` and
-`step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
-new prefix whenever the native game generation changes, so a same-seed reset
-or a replacement at the saturated maximum seed never extends the old game.
+`RecordedVectorEnv` records both readable and buffered steps and resets. Each
+reset or successful slot load starts a new replay prefix, including when the
+seed repeats or saturates at its maximum value.
 
 Native buffered stepping and `RecordedVectorEnv.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;

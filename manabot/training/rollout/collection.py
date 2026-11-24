@@ -653,7 +653,7 @@ class Collector:
     # The calling loop owns enablement and resets this timer. Only the
     # collecting thread records host intervals; workers never share it.
     profiler: Profiler
-    # ShardedVectorEnv, RecordedVectorEnv or a diagnostic root's Python vector.
+    # Native streams, an injected snapshot vector, or a diagnostic root.
     _env: Any
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
@@ -1106,9 +1106,7 @@ def open_collector(
             _ordinals=[0] * num_envs,
             _reverse_cells=reverse_cells,
             capture_predicate=capture_predicate,
-            _episodes=[
-                _EpisodeAssignment(fresh_ready=True) for _ in range(num_envs)
-            ]
+            _episodes=[_EpisodeAssignment(fresh_ready=True) for _ in range(num_envs)]
             if snapshots
             else [],
         )
@@ -1117,7 +1115,11 @@ def open_collector(
             action_overflow=observation_space.config.action_overflow,
             layout=observation_space.layout,
         )
-        if not uniform_roster:
+        if sampler is not None:
+            collector.stream_matches = [
+                _assigned_match(collector, a) for a in assignments
+            ]
+        elif not uniform_roster:
             collector.stream_matches = stream_matches(
                 match, num_envs, matchup_curriculum
             )
@@ -1139,12 +1141,7 @@ def open_collector(
             )
         if snapshot is not None:
             reconstruct_collector(collector, snapshot, deck_source)
-        elif sampler is not None:
-            collector.stream_matches = [
-                _assigned_match(collector, a) for a in assignments
-            ]
-            env.reset_each_into_buffers([m.to_rust() for m in collector.stream_matches])
-        elif matchup_curriculum in ("fixed", "elemental-uniform"):
+        elif sampler is None and matchup_curriculum in ("fixed", "elemental-uniform"):
             setup = match.to_rust()
             if deck_source is not None:
                 setup = GameSetup(setup, decklists=deck_source.decklists)
@@ -1184,11 +1181,6 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
 
     Only `rows` hold new games: a stream's setup is fixed until it resets.
     """
-    if collector._sampler is not None:
-        for row in rows:
-            collector.stream_matches[row] = _assigned_match(
-                collector, collector._assignments[row]
-            )
     if collector.uniform_roster:
         # Actual native setups, not indices: they remain exact for any deck
         # the run submitted, even one outside the supply it began with.
@@ -1278,20 +1270,18 @@ def _capture_memory(
             else [p if p is not None else -1 for p in players]
         )
         live = np.asarray(seats)[rows] != -1
-        all_live = live.all()
-        prefixes = (
-            collector._memory_store.capture_live_rows(
+        live_rows = rows if live.all() else rows[live]
+        prefixes: tuple[Prefix, ...] = ()
+        if live_rows.size:
+            prefixes = collector._memory_store.capture_live_rows(
                 buffers,
-                rows if all_live else rows[live],
+                live_rows,
                 env.current_game_seeds(),
                 seats,
                 env.current_game_generations(),
                 env.decision_memory_cursors(),
             )
-            if live.any()
-            else ()
-        )
-        if all_live:
+        if live_rows.size == rows.size:
             return prefixes
         # Terminal bootstrap rows have no viewer. Keep their place in next_obs.
         captured = iter(prefixes)
@@ -1716,22 +1706,26 @@ def _role_cell(collector: Collector, row: int, seat: int) -> int:
 
 def _refill(collector: Collector, rows: list[int]) -> None:
     """Install active streams' next roots in stream order, then count their starts."""
+    if not rows:
+        return
     if collector._sampler is None:
-        chosen = {}
-        loads = [SlotLoad.fresh(row) for row in rows]
+        collector._env.load_slots_into_buffers([SlotLoad.fresh(row) for row in rows])
     else:
-        chosen = {row: collector._sampler.draw() for row in rows}
-        loads = [
-            SlotLoad.fresh(row, _assigned_match(collector, assignment).to_rust())
-            for row, assignment in chosen.items()
-        ]
-    collector._env.load_slots_into_buffers(loads)
+        assignments = [collector._sampler.draw() for _ in rows]
+        matches = [_assigned_match(collector, assignment) for assignment in assignments]
+        collector._env.load_slots_into_buffers(
+            [
+                SlotLoad.fresh(row, match.to_rust())
+                for row, match in zip(rows, matches, strict=True)
+            ]
+        )
+        for row, assignment, match in zip(rows, assignments, matches, strict=True):
+            collector._assignments[row] = assignment
+            collector.stream_matches[row] = match
     collector._needs_refill.difference_update(rows)
-    for row, assignment in chosen.items():
-        collector._assignments[row] = assignment
     _refresh_roots(collector, np.asarray(rows))
     for row in rows:
-        if chosen:
+        if collector._sampler is not None:
             _record_assignment(collector, row)
         _expose(collector, row, "game_roots")
         if collector.game_errors:

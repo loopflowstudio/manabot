@@ -106,6 +106,19 @@ enum SlotState {
 }
 
 impl SlotState {
+    fn gameplay_failure(&mut self, class: &str, message: String, frame: String) -> InfoDict {
+        *self = Self::Poisoned;
+        InfoDict::from([
+            ("game_error".into(), InfoValue::String(message)),
+            ("game_error_class".into(), InfoValue::String(class.into())),
+            ("game_error_frame".into(), InfoValue::String(frame)),
+            (
+                "game_error_trace".into(),
+                InfoValue::String(std::backtrace::Backtrace::force_capture().to_string()),
+            ),
+        ])
+    }
+
     fn readable(self) -> Result<(), AgentError> {
         match self {
             Self::Unset => Err(AgentError(
@@ -658,15 +671,11 @@ impl VectorEnv {
     }
 
     pub fn step(&mut self, actions: &[i64]) -> Result<Vec<StepResult>, AgentError> {
-        self.validate_actions_len(actions.len())?;
-        self.validate_ready_for_step()?;
-
-        self.validate_active_slots(None)?;
-        self.envs
-            .iter_mut()
-            .zip(&mut self.slots)
+        self.validate_step(actions, None)?;
+        actions
+            .iter()
             .enumerate()
-            .map(|(slot, (env, state))| Self::step_one_on_env(env, state, actions[slot]))
+            .map(|(slot, &action)| self.step_slot(slot, action))
             .collect()
     }
 
@@ -732,24 +741,17 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.validate_actions_len(actions.len())?;
-        self.validate_ready_for_step()?;
-
-        if let Some(mask) = active {
-            self.validate_actions_len(mask.len())?;
-        }
-        self.validate_active_slots(active)?;
-        self.envs
-            .iter_mut()
-            .zip(&mut self.slots)
+        self.validate_step(actions, active)?;
+        actions
+            .iter()
             .enumerate()
-            .map(|(env_index, (env, state))| {
-                if active.is_some_and(|mask| !mask[env_index]) {
+            .map(|(slot, &action)| {
+                if active.is_some_and(|mask| !mask[slot]) {
                     return Ok(InfoDict::new());
                 }
-                let result = Self::step_one_on_env(env, state, actions[env_index])?;
+                let result = self.step_slot(slot, action)?;
                 write(
-                    env_index,
+                    slot,
                     &result.obs,
                     result.reward,
                     result.terminated,
@@ -774,82 +776,64 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
-        self.validate_actions_len(actions.len())?;
-        self.validate_actions_len(active.len())?;
-        self.validate_ready_for_step()?;
-        self.validate_active_slots(Some(active))?;
-        self.envs
-            .iter_mut()
-            .zip(&mut self.slots)
+        self.validate_step(actions, Some(active))?;
+        actions
+            .iter()
             .enumerate()
-            .map(|(index, (env, state))| {
+            .map(|(index, &action)| {
                 if !active[index] {
                     return Ok(InfoDict::new());
                 }
-                let frame = serde_json::to_string(&env.semantic_decision_frame()?)
+                let frame = serde_json::to_string(&self.envs[index].semantic_decision_frame()?)
                     .map_err(|error| AgentError(error.to_string()))?;
                 // A Rust unwind is contained only around gameplay of a disposable
                 // stream. Buffer errors and invalid setup must never be tolerated.
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    Self::step_one_on_env(env, state, actions[index])
+                    self.step_slot(index, action)
                 }));
                 let out = match result {
                     Ok(Ok(out)) => out,
-                    failure => {
-                        let (class, message) = match failure {
-                            Ok(Err(error)) => ("AgentError", error.to_string()),
-                            Err(payload) => (
-                                "NativePanic",
-                                payload
-                                    .downcast_ref::<String>()
-                                    .cloned()
-                                    .or_else(|| {
-                                        payload.downcast_ref::<&str>().map(|s| s.to_string())
-                                    })
-                                    .unwrap_or_else(|| "native gameplay panic".into()),
-                            ),
-                            Ok(Ok(_)) => unreachable!(),
-                        };
-                        *state = SlotState::Poisoned;
-                        return Ok(InfoDict::from([
-                            ("game_error".into(), InfoValue::String(message)),
-                            ("game_error_class".into(), InfoValue::String(class.into())),
-                            ("game_error_frame".into(), InfoValue::String(frame)),
-                            (
-                                "game_error_trace".into(),
-                                InfoValue::String(
-                                    std::backtrace::Backtrace::force_capture().to_string(),
-                                ),
-                            ),
-                        ]));
+                    Ok(Err(error)) => {
+                        return Ok(self.slots[index].gameplay_failure(
+                            "AgentError",
+                            error.to_string(),
+                            frame,
+                        ))
+                    }
+                    Err(payload) => {
+                        let message = payload
+                            .downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                            .unwrap_or_else(|| "native gameplay panic".into());
+                        return Ok(self.slots[index].gameplay_failure(
+                            "NativePanic",
+                            message,
+                            frame,
+                        ));
                     }
                 };
-                if let Err(error) =
-                    write(index, &out.obs, out.reward, out.terminated, out.truncated)
-                {
-                    if recover_capacity && !out.terminated && !out.truncated {
-                        if let ObservationWriteError::Encoding(
-                            error @ ObservationEncodeError::Capacity { .. },
-                        ) = &error
-                        {
-                            *state = SlotState::Poisoned;
-                            return Ok(InfoDict::from([
-                                ("game_error".into(), InfoValue::String(error.to_string())),
-                                (
-                                    "game_error_class".into(),
-                                    InfoValue::String("ObservationCapacity".into()),
-                                ),
-                                (
-                                    "game_error_kind".into(),
-                                    InfoValue::String("resource_limit".into()),
-                                ),
-                                ("game_error_frame".into(), InfoValue::String(frame)),
-                            ]));
-                        }
+                match write(index, &out.obs, out.reward, out.terminated, out.truncated) {
+                    Ok(()) => Ok(out.info),
+                    Err(ObservationWriteError::Encoding(
+                        error @ ObservationEncodeError::Capacity { .. },
+                    )) if recover_capacity && !out.terminated && !out.truncated => {
+                        self.slots[index] = SlotState::Poisoned;
+                        Ok(InfoDict::from([
+                            ("game_error".into(), InfoValue::String(error.to_string())),
+                            (
+                                "game_error_class".into(),
+                                InfoValue::String("ObservationCapacity".into()),
+                            ),
+                            (
+                                "game_error_kind".into(),
+                                InfoValue::String("resource_limit".into()),
+                            ),
+                            ("game_error_frame".into(), InfoValue::String(frame)),
+                        ]))
                     }
-                    return Err(error.into());
+                    Err(error) => Err(error.into()),
                 }
-                Ok(out.info)
             })
             .collect()
     }
@@ -882,7 +866,12 @@ impl VectorEnv {
         Ok(())
     }
 
-    fn validate_active_slots(&self, active: Option<&[bool]>) -> Result<(), AgentError> {
+    fn validate_step(&self, actions: &[i64], active: Option<&[bool]>) -> Result<(), AgentError> {
+        self.validate_actions_len(actions.len())?;
+        self.validate_ready_for_step()?;
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
         for (slot, state) in self.slots.iter().enumerate() {
             if active.is_none_or(|mask| mask[slot])
                 && matches!(
@@ -898,12 +887,9 @@ impl VectorEnv {
         Ok(())
     }
 
-    fn step_one_on_env(
-        env: &mut Env,
-        state: &mut SlotState,
-        action: i64,
-    ) -> Result<StepResult, AgentError> {
-        *state = SlotState::Playing;
+    fn step_slot(&mut self, slot: usize, action: i64) -> Result<StepResult, AgentError> {
+        self.slots[slot] = SlotState::Playing;
+        let env = &mut self.envs[slot];
         let (obs, reward, terminated, truncated, mut info) = env.step(action).map_err(|error| {
             AgentError(format!(
                 "{}; native_failure={}",
@@ -912,17 +898,17 @@ impl VectorEnv {
             ))
         })?;
         if terminated || truncated {
-            *state = SlotState::Terminal;
+            self.slots[slot] = SlotState::Terminal;
             info.insert(
                 "skipped_decisions".into(),
                 InfoValue::Int(env.skip_trivial_count() as i64),
             );
-        }
-        if env.record_terminal && (terminated || truncated) {
-            info.insert(
-                "record_terminal_digest".into(),
-                InfoValue::String(env.state_digest()?),
-            );
+            if env.record_terminal {
+                info.insert(
+                    "record_terminal_digest".into(),
+                    InfoValue::String(env.state_digest()?),
+                );
+            }
         }
         Ok(StepResult {
             obs,
@@ -939,7 +925,7 @@ impl VectorEnv {
         if self.slots[slot] == SlotState::Poisoned {
             env.replace_slot(env.replacement_root(*next_seed), Default::default());
         }
-        let opening = Self::reset_env_on_env(
+        let opening = Self::deal_fresh_game(
             &self.uniform_roster,
             env,
             next_seed,
@@ -954,7 +940,7 @@ impl VectorEnv {
         Ok(opening)
     }
 
-    fn reset_env_on_env(
+    fn deal_fresh_game(
         roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,

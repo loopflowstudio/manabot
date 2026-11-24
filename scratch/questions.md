@@ -47,3 +47,10 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
   pending fresh roots at capture time. Snapshot allocation reuses the opening or
   replaces it with a branch and refunds its seed. Collection itself leaves
   finished slots parked at the batch boundary.
+
+- **Torch profiling:** The breakdown times the same step and refill used by
+  the wrapper, then measures observation sync and reward shaping separately.
+  Its timing keys are `step_and_refill` and `sync_observations`. Historical
+  receipts keep their original keys. Matched fixtures use a two-agent vector and
+  load their scalar snapshots before each timed step. Both seats keep the seeded
+  opening hand before the fixture installs its board.

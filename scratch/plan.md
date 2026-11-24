@@ -51,6 +51,19 @@ matches. Results are recorded in `1eac5b227a`.
 The documented mimalloc benchmark completed 2,048 decisions with digest
 `abd73687fa664633fec80c624d75723e8669ad9fec85a41bd30c95243d2934b9`.
 
+## Compression checks
+
+All 26 native vector tests passed after consolidating step validation and slot
+transitions. Focused Python checks covered recorded roots and reducers, the
+durable return boundary, adaptive refills, snapshot resume, parked memory
+prefixes, Torch device views and terminal reward shaping. The mixed-load
+documentation example printed seeds 42 and 45, then next seeds 42 and 47.
+
+Both profiling entry points ran with one stream. The matched corpus loaded
+each fixture by snapshot, verified scalar and vector results, and reported
+2, 4, 6, 2 and 33 output actions across its five cases. These were functional
+checks with a single sample per case.
+
 ## Next at Gate
 
 All implementation slices are complete. Reuse the focused results above.

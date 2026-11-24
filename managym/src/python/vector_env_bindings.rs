@@ -190,15 +190,6 @@ thread_local! {
 #[pymethods]
 impl PyVectorEnv {
     #[cfg(feature = "benchmark")]
-    fn _benchmark_load_root(&mut self, root: &crate::python::bindings::PyEnv) -> PyResult<()> {
-        let env = root
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        self.inner.benchmark_load_root(&env).map_err(map_agent_err)
-    }
-
-    #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_start(&self) {
         crate::allocator::start();
     }

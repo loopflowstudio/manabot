@@ -458,10 +458,10 @@ class BufferedStreams:
 
     def game_inputs(self, slot: int) -> GameInputs:
         """Materialize one failed game's replay on the producer that owns it."""
-        for shard in self._shards:
-            if shard.start <= slot < shard.stop:
-                return shard.native.game_inputs(slot - shard.start)
-        raise IndexError(slot)
+        if not 0 <= slot < len(self._shard_by_slot):
+            raise IndexError(slot)
+        shard = self._shard_by_slot[slot]
+        return shard.native.game_inputs(slot - shard.start)
 
     def capture_failure(self, error: BaseException) -> None:
         # Capture from the owning thread so live run coordinates remain available.

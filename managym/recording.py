@@ -5,7 +5,7 @@ supply destinations and context; no training run or phase is discovered here.
 Journals publish intent before native reads, then acknowledge observed returns.
 """
 
-from collections.abc import Callable, Collection, Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
@@ -1606,7 +1606,7 @@ class RecordedVectorEnv(_Capture):
             self._executing()
             result = call()
         self._returned()
-        self._synchronize(dict.fromkeys(range(len(players))))
+        self._record_roots(dict.fromkeys(range(len(players))))
         return result
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
@@ -1626,7 +1626,7 @@ class RecordedVectorEnv(_Capture):
             self._executing()
             self.native.reset_seeds_into_buffers(seeds)
         self._returned()
-        self._synchronize(dict.fromkeys(range(len(seeds))))
+        self._record_roots(dict.fromkeys(range(len(seeds))))
 
     def load_slots_into_buffers(
         self, requests: Sequence[managym.SlotLoad]
@@ -1636,19 +1636,12 @@ class RecordedVectorEnv(_Capture):
             return []
         return load_recorded_slots([(self, requests)])[0]
 
-    def _synchronize(
-        self,
-        roots: dict[int, BranchRoot | None],
-        *,
-        finished: Collection[int] = (),
-        infos: Sequence[dict[str, Any]] = (),
+    def _finish_games(
+        self, finished: set[int], infos: Sequence[dict[str, Any]]
     ) -> None:
-        """Settle completed games before publishing the roots the native call replaced."""
-        if finished or roots:
-            self._flush_statistics()
-        if roots:
-            self.next_seeds = self.native.next_fresh_seeds()
-        if finished and not infos and (self._recording or self._reductions):
+        """Settle terminal evidence while the finished games still own their exposure."""
+        self._flush_statistics()
+        if not infos and (self._recording or self._reductions):
             infos = self.native.get_last_info()
         for index in sorted(finished):
             game = self.games[index]
@@ -1661,32 +1654,32 @@ class RecordedVectorEnv(_Capture):
                     digest=info.get("record_terminal_digest"),
                 ),
             )
-        if self._reductions and finished:
-            # Deferred terminals still own their exposure until replaced.
+        if self._reductions:
             mask = [
                 active and i in finished
                 for i, active in enumerate(self._analysis_active)
             ]
             self._end_current_analysis(mask, infos)
-        if roots and self._reductions:
+
+    def _record_roots(self, roots: dict[int, BranchRoot | None]) -> None:
+        """Bind replay inputs and reducers to admitted replacement games."""
+        self._flush_statistics()
+        self.next_seeds = self.native.next_fresh_seeds()
+        if self._reductions:
             for index, receipts in enumerate(self.native.take_exposure()):
                 for raw in receipts:
-                    self._end_analysis(
-                        index,
-                        raw,
-                        reason="root replaced",
-                    )
+                    self._end_analysis(index, raw, reason="root replaced")
         # Branches carry their own immutable setup. Read native deck draws only
         # when a fresh root is installed.
         players = self.native.current_player_configs() if None in roots.values() else []
-        seeds = self.native.current_game_seeds() if roots else []
-        for index in sorted(roots):
+        seeds = self.native.current_game_seeds()
+        for index, root in sorted(roots.items()):
             game = self.games[index]
-            self._branch_roots[index] = roots[index]
+            self._branch_roots[index] = root
             game.restart(seeds[index])
             if self._reductions:
                 self._analysis_active[index] = False
-            if self._branch_roots[index] is not None:
+            if root is not None:
                 game.players = []
                 if self._game_journal is not None:
                     self.games[index] = self.game_inputs(index)
@@ -1699,9 +1692,12 @@ class RecordedVectorEnv(_Capture):
                 self._reductions[index].start(game.players)
                 if self._reductions[index].error is not None:
                     self._reduction.fail(self._reductions[index].error)
-        if self._boundary is not None:
-            self._boundary.setup_known = True
+        self._publish_ready()
+
+    def _publish_ready(self) -> None:
         if self._game_journal is not None:
+            assert self._boundary is not None
+            self._boundary.setup_known = True
             self._publish(self._snapshot(), "ready")
 
     def enable_statistics(self) -> None:
@@ -1932,7 +1928,9 @@ class RecordedVectorEnv(_Capture):
                     self._analysis_indices[index] += 1
                     if reduction.error is not None:
                         self._reduction.fail(reduction.error)
-        self._synchronize({}, finished=finished, infos=infos)
+        if finished:
+            self._finish_games(finished, infos)
+        self._publish_ready()
         return result
 
 
@@ -1967,7 +1965,7 @@ def load_recorded_slots(
                 vector._write_game(
                     game, GameEnd(status="interrupted", reason="root replaced")
                 )
-        vector._synchronize(roots)
+        vector._record_roots(roots)
     return loaded
 
 

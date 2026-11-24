@@ -163,7 +163,7 @@ impl VectorEnv {
                     Self::validate_player_configs(setup.len())?;
                 }
                 let mut env = previous.replacement_root(next_seed);
-                let (obs, info) = Self::reset_env_on_env(
+                let (obs, info) = Self::deal_fresh_game(
                     &self.uniform_roster,
                     &mut env,
                     &mut next_seed,

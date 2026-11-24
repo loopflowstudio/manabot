@@ -115,9 +115,9 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
             if phase == "executing":
                 vector.step_into_buffers([0, 0])
             if phase == "synchronizing":
-                # The returned call is durable before Python settles its games.
+                # The return is durable before the journal publishes the ready state.
                 with patch.object(
-                    vector, "_synchronize", side_effect=lambda *a, **kw: os._exit(73)
+                    vector, "_publish_ready", side_effect=lambda: os._exit(73)
                 ):
                     vector.step_into_buffers([0, 0], [True, False])
             method = {
