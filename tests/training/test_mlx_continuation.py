@@ -91,7 +91,7 @@ def exercise_continuation(root: Path) -> None:
 
     milestone = attempt(1, resume=False)
     original = milestone.read_bytes()
-    with pytest.raises(ValueError, match="learner.safetensors: incompatible precision"):
+    with pytest.raises(ValueError, match="learner.safetensors: saved precision"):
         attempt(2, recipe=settings.model_copy(update={"precision": "float32"}))
     # A portable policy can start a fresh learner in the recipe's precision.
     portable, _ = backend.load_policy(milestone)

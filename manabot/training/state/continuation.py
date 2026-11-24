@@ -36,6 +36,12 @@ if TYPE_CHECKING:
 LEARNER_FILE = "learner.safetensors"
 SAMPLING_FILE = "sampling.safetensors"
 HOST_FILE = "continuation.json"
+# The learner header binds the save's other files by these digests.
+DIGESTED_FILES = {
+    "counts_sha256": "state.json counts",
+    "continuation_sha256": HOST_FILE,
+    "sampling_sha256": SAMPLING_FILE,
+}
 
 
 class HostContinuation(BaseModel):
@@ -259,8 +265,18 @@ def restore_continuation(
             f"{LEARNER_FILE}: incompatible header keys {sorted(differing)}"
         )
     for key, value in expected_header.items():
-        if header[key] != value:
-            raise ValueError(f"{LEARNER_FILE}: incompatible {key}")
+        if header[key] == value:
+            continue
+        if key in DIGESTED_FILES:
+            raise ValueError(
+                f"{DIGESTED_FILES[key]} differs from the {key} that "
+                f"{LEARNER_FILE} recorded; the save is damaged or mixed"
+            )
+        if key == "observation":
+            raise ValueError(f"{LEARNER_FILE}: saved observation config differs")
+        raise ValueError(
+            f"{LEARNER_FILE}: saved {key} {header[key]!r}, this run {value!r}"
+        )
     try:
         if counts.model is None or counts.readings is None:
             raise ValueError("state.json: missing saved model or readings")
