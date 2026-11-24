@@ -315,5 +315,6 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   of 18 minutes, so choose moves with the 64-wide trained policy and keep the
   wide model for the comparison. Timing in this script orders
   bucketed before padded and includes first-shape compiles: it is no
-  benchmark (see `scratch/plan.md` pass 2).
+  benchmark. Measure speed with alternating, warmed collection calls on a
+  quiet machine.
 
