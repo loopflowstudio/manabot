@@ -3572,3 +3572,67 @@ fn fishing_pole_baits_by_tapping_itself_and_fishes_when_its_creature_untaps() {
     assert!(!tapped(&s, ogre));
     assert!(s.battlefield_permanents_named(0, "Fish").is_empty());
 }
+
+/// Conqueror gains whatever the opponent loses, and a drain answers every
+/// gain. Against Herald of Eternal Dawn the loop can never end, so the game
+/// is a draw (CR 104.4b); against a large but finite life total it drains
+/// to a win.
+#[test]
+fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() {
+    use crate::support::{
+        game::{clear_hand, force_new_card_in_hand, inject_ability},
+        play::{cast_card, target_opponent},
+    };
+    use managym::state::ability::{
+        Ability, Actor, Effect, EffectValue, PlayerSelector, TriggerCondition,
+    };
+
+    for herald in [true, false] {
+        let mut s = five_color_setup(&[
+            "Bloodthirsty Conqueror",
+            "Gray Ogre",
+            "Herald of Eternal Dawn",
+            "Lightning Bolt",
+        ]);
+        s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+        let drain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let drain = card_of(&s, drain);
+        inject_ability(
+            &mut s,
+            drain,
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::GainsLife {
+                    who: Actor::You,
+                    nth: None,
+                },
+                effects: vec![Effect::LoseLife {
+                    player: PlayerSelector::EachOpponent,
+                    amount: EffectValue::Fixed(1),
+                }],
+            },
+        );
+        if herald {
+            s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn");
+        } else {
+            s.game_mut().state.players[1].life = 200;
+        }
+        clear_hand(&mut s, 0);
+        clear_hand(&mut s, 1);
+        s.set_player_mana_pool(0, "R");
+        let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+        cast_card(&mut s, bolt);
+        target_opponent(&mut s);
+        s.game_mut().skip_trivial = true;
+        s.pass_priority();
+        assert!(s.game().is_game_over());
+        assert_eq!(s.game().state.mandatory_loop_draw(), herald);
+        if herald {
+            assert_eq!(s.game().winner_index(), None);
+            assert!(s.life(1) < 0);
+        } else {
+            assert_eq!(s.game().winner_index(), Some(0));
+            assert_eq!(s.life(1), 0);
+        }
+    }
+}

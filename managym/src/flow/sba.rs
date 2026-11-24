@@ -53,7 +53,7 @@ impl Game {
         groups
     }
 
-    fn protected_from_loss(&self, player: PlayerId) -> bool {
+    pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
         self.layer_views(self.iter_battlefield_permanents(player))
             .any(|(_, view)| {
                 view.static_abilities

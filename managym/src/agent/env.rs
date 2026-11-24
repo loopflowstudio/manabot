@@ -95,6 +95,13 @@ fn game_step_outcome(game: &Game, agent: PlayerId, done: bool) -> (f64, InfoDict
                 "winner_name",
                 InfoValue::String("draw".to_string()),
             );
+            if game.state.mandatory_loop_draw() {
+                insert_info(
+                    &mut info,
+                    "draw_reason",
+                    InfoValue::String("mandatory_loop".to_string()),
+                );
+            }
         }
         for i in 0..2 {
             if let Some(reason) = game.state.loss(i).and_then(|loss| loss.reason()) {

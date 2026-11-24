@@ -50,6 +50,9 @@ pub enum GameProcedure {
 pub enum GameOutcome {
     Losses { losses: [LossCauses; 2] },
     Victory { winner: PlayerId },
+    /// Neither player won. `mandatory_loop`: the game repeated mandatory
+    /// actions with no way to stop (CR 104.4b).
+    Draw { mandatory_loop: bool },
 }
 
 /// Loss conditions committed for one seat.
@@ -151,6 +154,16 @@ impl GameState {
 
     pub(crate) fn is_game_over(&self) -> bool {
         matches!(self.procedure, GameProcedure::Finished(_))
+    }
+
+    /// The game ended in a draw by a mandatory loop (CR 104.4b).
+    pub fn mandatory_loop_draw(&self) -> bool {
+        matches!(
+            self.procedure,
+            GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true
+            })
+        )
     }
 
     /// Put the same appearance in a zone without a zone change. Callers own
