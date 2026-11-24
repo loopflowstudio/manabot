@@ -262,15 +262,123 @@ text, and 0.3 in the v11 stack row. The native cases and Python text
 fixtures are in `cards/tests/cards/fdn.rs` and
 `tests/semantic/test_text_observation.py`.
 
-The latest merge `074bc49a64` adds main’s shared Torch/MLX host admission
-and native extent measurement from `b9b09bc6d9`. The evidence above predates
-that merge. Check the history rows and saved v9/v11 prefixes on the merged
-preparation path with the next extension rebuild. Recorded Watch playback
-of partial declaration remains open. The heuristic’s block map still
-populates empty entries from `CombatAttackersDeclared`, so an unblocked
-creature already attacking before declaration is absent from that map.
-Exercise this case with a live attacker projection if the cohort makes it
-reachable; keep declaration events scoped to the declared attackers.
+### Behavior review at `54b4c6042c`
+
+MTG-422's `d12eb496b3` and the host-preparation merge `074bc49a64` are
+ancestors of the reviewed head. All eight `attack_batch_` fixtures and 44
+selected debug cards controls passed, including Linden/Chart, TLA firebending,
+target authority, token coverage and payment. All 12 debug cases in
+`search_state_contract` and `canonical_replay_tests` also passed. The earlier
+bare per-attacker doubler failure is closed. Two declared members each retain
+their own two triggers. The previous Linden formatting and hash-version
+findings are closed.
+
+- The 0/2/3 attacker fork produces one Armasaur trigger at three and one
+  Battlesong trigger for each nonempty declaration. Both place their target
+  through ordinary `ChooseTarget` offers. Existing attackers join Ancestor
+  Dragon's and Jazal's resolution-time counts through the live attacking
+  predicate. Raid reads the turn's committed declaration regardless of who
+  remains in combat. Aurelia reads the exact object's first declaration, so
+  becoming an attacker by entering combat and regaining a lost ability have
+  different outcomes. These checks agree with CR 506.5, 508.3–4, 603.2d and
+  608.2h. [Comprehensive Rules](https://magic.wizards.com/en/rules)
+- Alesha's native target offers exclude Serra Angel at power three, and the
+  pending trigger retains power three after Alesha leaves. Both native views
+  and v11 stack rows show it. The Panda and Immolator witnesses above exercise
+  the same exact source across reentry. Midnight Snack reads the five life
+  gained from two events, including after sacrificing the Snack. Food and
+  Goblin creation use the catalog's existing token path. The distinct gain
+  and amount columns and text checked out on the rebuilt extension.
+  [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+- The Tolarian Terror branches retain six or seven spent mana in the native
+  spell and both v11 rows. The comparison still sees the chosen spell after
+  Counterspell moves it off the stack. The counted mana ability produces one
+  or two green in the live-board fork. The payment controls confirmed the
+  restricted Ally pool pays before ordinary mana, Animal Attendant offers
+  both spends for the green pip, and Uncle's Musings offers meaningful spends
+  for its generic pips with different receipts. Waterbend taps and leftover
+  floating mana stay distinct from the committed contributions. Bakersbane's
+  two viewers also read the caster's committed turn spend in text and v11.
+
+The installed CPython 3.13 extension predated `axis_buffers` from the host
+preparation merge. After rebuilding and atomically replacing it, the focused
+Python selection reported 39 passes and the six Academy fixture failures
+below. Five additional checks for v11 prepared joins and Torch host admission
+passed. The passing controls include named layout and v10 model ingress,
+text and tensors for public spend and draws, manual Commands and stale
+rejection, hidden-hand permutation, and a serialized snapshot that replays a
+Command with issued object bindings.
+
+Two in-memory restores per offer replayed the yes and no Commands from one
+partial Linden/Savannah Lions declaration. Each duplicate returned
+`stale_revision` with its witness intact, and both branches preserved the
+root. Finishing the declaration produced one or two committed attackers in
+both viewer JSON round trips, v11 permanent rows, history-free LLM text and
+the Academy Python projection. A separate pending Serra Angel cast showed
+five spent mana to both choosers through the same surfaces.
+
+**Open findings for the next working pass**
+
+1. `flow/triggers.rs::collect_occurrences` only expands bare per-object
+   event conditions. Wrap the passing two-attacker Katara fixture in
+   `ActiveIf(Always)` and the boolean matcher will produce two batch
+   occurrences without either attacker binding, where four bound occurrences
+   are required. An intervening-if on a member is also evaluated against the
+   whole event before expansion, with no triggering permanent for two
+   attackers. Recursively match wrappers before expansion, check the
+   intervening-if for each bound member, and keep that context through
+   resolution. Cover both declaration and combat-hit members.
+2. `OnceEachTurn` is checked only for an outer printed wrapper and consumed
+   after the collector has already expanded duplicates. In a constructed
+   position with Katara, the Fearless and Suki, Courageous Rescuer, Lightning
+   Bolt killing the controller's Gray Ogre on their turn exposes two Suki
+   order offers for that single departure. Suki may trigger once under CR
+   101.2. Cap the collected occurrences for the exact ability before
+   placement, including nested wrappers and granted abilities, and keep the
+   ordinary turn reset. [Comprehensive Rules](https://magic.wizards.com/en/rules)
+3. `granted_firebending_triggers` still bypasses the shared occurrence path.
+   Cast Sozin's Comet with Katara, the Fearless and declare Katara as the
+   only attacker. One and two Comet casts each produce one native stack
+   entry labeled delayed, with five and ten mana respectively. Katara
+   should have two and four ordinary firebending triggers, each for five
+   mana. Keep each grant as an ability occurrence and apply the same
+   doublers, ordering and source binding as printed attack abilities.
+   Counter one entry to distinguish separate grants from a summed output.
+   [Avatar release notes](https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes)
+4. A static `Condition::Compare` over a live creature count can re-enter
+   `layer_board()` while the first board is still being built. `Context` falls
+   through to `layer_state_condition`, and the `Each` selector needs layered
+   characteristics. Evaluate board queries using the in-progress layer
+   context and record the predicate, power and tap dependencies. A count
+   gated by a power threshold and tap state isolates both the recursion and
+   invalidation requirements.
+5. A printed trigger that reads source power only in its intervening-if
+   omits the pending power in text, the stack tensor and the Academy label.
+   `stack_object_data` checks only the printed effects. Include the
+   condition in the same source-power reader. Academy's `types.ts` also
+   omits `life_gained`, `creatures_died`, both departures, `warped_this_turn`,
+   `attacked_this_turn` and stack `mana_spent` from its typed viewer surface.
+   Align the frontend contract with the viewer-safe Python projection.
+6. The heuristic seeds its unblocked-attacker map from
+   `CombatAttackersDeclared`. An unblocked token already attacking before
+   declaration has no entry. Seed the map from the live attacking permanents
+   while keeping the declaration event scoped to actual declarations.
+7. Six Academy fixtures still assume reset starts in priority. Two cases in
+   `test_semantic_boundary.py` ask for `pass_priority` at the opening Keep
+   offer. `test_combat_preview.py` and all three Blast cases inject a board
+   and refresh while the action space is `Modal`. Keep both opening hands
+   through native offers before reaching the fixture position, and rerun
+   the offer, stale-command, recovery and privacy assertions. Both boundary
+   assertions passed when rerun with opening keeps injected in memory. The
+   four other failures occur before the interactions under test.
+
+The working phase should iterate. The eight attack fixtures establish the
+authored outcomes they exercise, with shared trigger defects and 56 primary
+rows still open. The power batch remains next. Recorded Watch playback of a
+partial declaration, the full debug and browser gate, frozen pilot
+compatibility on the merged preparation path, and Engine Budget comparisons
+remain open. This review used constructed positions and focused boundary
+controls.
 
 ## Remaining mechanic batches
 
