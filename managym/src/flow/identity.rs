@@ -15,6 +15,9 @@ use crate::{
     },
 };
 
+/// How a permanent showing no name is called in human labels.
+pub(crate) const FACE_DOWN_NAME: &str = "a face-down permanent";
+
 impl Game {
     /// The object a live battlefield permanent is.
     pub fn permanent_object(&self, permanent_id: PermanentId) -> Option<ObjectId> {
@@ -78,9 +81,9 @@ impl Game {
                     .is_some_and(|permanent| permanent.manifested)
                     || self.state[object].is_face_down()
             }
-            Err(_) => self
-                .object_lki(object)
-                .is_some_and(|lki| lki.definition_id == CardDefId::ANONYMOUS),
+            Err(_) => self.object_lki(object).is_some_and(|lki| {
+                lki.battlefield.manifested || lki.definition_id == CardDefId::ANONYMOUS
+            }),
         }
     }
 
@@ -112,26 +115,28 @@ impl Game {
         }
     }
 
-    /// The name a viewer may read for an object in event prose: its last
-    /// effective battlefield name once departed, else the name of the
-    /// definition it shows. An object showing no definition (face down, live
-    /// or as it last existed) is named only as a face-down permanent.
+    /// The name a viewer may read for an object: its live effective name,
+    /// else its last effective battlefield name once departed, else the name
+    /// of the definition it shows. A face-down permanent has no name unless an
+    /// effect gives it one (Witness Protection), so it reads as a face-down
+    /// permanent.
     pub(crate) fn observed_object_name(&self, object: ObjectId) -> String {
-        const FACE_DOWN: &str = "a face-down permanent";
-        let Some(definition) = self.observed_source_definition(object) else {
-            return FACE_DOWN.to_owned();
+        let name = if let Ok(permanent) = self.lookup_current_permanent(object) {
+            Some(self.characteristics(permanent).name.clone())
+        } else if self.state.live(object).is_none() {
+            self.object_lki(object)
+                .map(|lki| lki.battlefield.name.clone())
+        } else {
+            None
         };
-        if let Ok(permanent) = self.lookup_current_permanent(object) {
-            return self.characteristics(permanent).name.clone();
-        }
-        match self.object_lki(object) {
-            Some(lki) if self.state.live(object).is_none() && !lki.battlefield.name.is_empty() => {
-                lki.battlefield.name.clone()
-            }
-            _ => default_content_pack()
-                .definition(definition)
-                .map_or_else(|| FACE_DOWN.to_owned(), |row| row.printed.name.clone()),
-        }
+        name.filter(|name| !name.is_empty())
+            .or_else(|| {
+                let definition = self.observed_source_definition(object)?;
+                default_content_pack()
+                    .definition(definition)
+                    .map(|row| row.printed.name.clone())
+            })
+            .unwrap_or_else(|| FACE_DOWN_NAME.to_owned())
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.
@@ -169,6 +174,7 @@ impl Game {
                 attacking: permanent.attacking,
                 in_combat: self.permanent_in_combat(permanent_id),
                 tapped: permanent.tapped,
+                manifested: permanent.manifested,
             }),
             attached_to: permanent.attached_to,
             meld_partner: None,
@@ -196,7 +202,11 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// Capture the stable viewer identity for a current or departed object.
+    /// The one viewer identity of a current or departed object: its
+    /// permanent alias while on (or last on) the battlefield, else its public
+    /// id, with the appearance's incarnation. An object hiding its physical
+    /// card reports incarnation 0: the alias is minted per entry, and the
+    /// card's generation counts zone moves a viewer may not have seen.
     pub(crate) fn object_event_ref(&self, object_ref: ObjectId) -> Option<ObjectEventRef> {
         let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
             self.state.permanents[permanent_id].as_ref()?.id
@@ -205,9 +215,14 @@ impl Game {
         } else {
             self.state.objects.provenance(object_ref)?.0
         };
+        let incarnation = if self.hides_physical_card(object_ref) {
+            0
+        } else {
+            object_ref.generation()
+        };
         Some(ObjectEventRef {
             entity,
-            incarnation: object_ref.generation(),
+            incarnation,
         })
     }
 

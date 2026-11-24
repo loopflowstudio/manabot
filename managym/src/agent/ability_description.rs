@@ -50,12 +50,13 @@ fn trigger_description(
     inline: bool,
     effects: &[Effect],
 ) -> String {
+    let name = if object.name.is_empty() {
+        crate::flow::identity::FACE_DOWN_NAME
+    } else {
+        &object.name
+    };
     if inline {
-        return format!(
-            "{} — delayed ability: {}",
-            object.name,
-            effects_description(effects)
-        );
+        return format!("{name} — delayed ability: {}", effects_description(effects));
     }
     let Ability::Triggered {
         condition,
@@ -67,8 +68,7 @@ fn trigger_description(
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
     format!(
-        "{} — {}{intervening}: {}",
-        object.name,
+        "{name} — {}{intervening}: {}",
         condition_description(condition),
         effects_description(effects)
     )

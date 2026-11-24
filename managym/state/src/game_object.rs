@@ -307,6 +307,10 @@ pub struct BattlefieldFacts {
     pub attacking: bool,
     pub in_combat: bool,
     pub tapped: bool,
+    /// It entered as a manifest (CR 701.40), so references to it keep the
+    /// permanent alias after it was turned face up and left.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manifested: bool,
 }
 
 /// Battlefield facts retained for a departed exact object.

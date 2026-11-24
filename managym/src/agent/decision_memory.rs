@@ -819,7 +819,7 @@ fn own_projection(
                 || reference.appearance.is_some_and(|appearance| {
                     game.state
                         .latest_objects()
-                        .find(|(_, row)| row.id.0 == appearance)
+                        .find(|(object, _)| game.observed_object_id(*object).0 == appearance)
                         .is_some_and(|(object, _)| {
                             game.visible_reference(object, actor).definition.is_some()
                         })

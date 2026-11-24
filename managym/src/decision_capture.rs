@@ -83,9 +83,13 @@ impl Game {
                 .permanent_of(reference)
                 .and_then(|id| self.state.permanents[id].as_ref())
                 .map(|permanent| permanent.id.0);
+            let incarnation = self
+                .object_event_ref(reference)
+                .ok_or(SemanticError::ViewerSafetyViolation)?
+                .incarnation;
             objects.insert(
                 visible.id,
-                json!({"permanent_id": permanent, "incarnation": reference.generation()}),
+                json!({"permanent_id": permanent, "incarnation": incarnation}),
             );
         }
         let mut ids = BTreeSet::new();
@@ -303,13 +307,27 @@ mod tests {
         );
     }
 
-    /// Player 0 manifests `hidden` and `other`, grants its face-down
-    /// permanent flying, bounces the other manifest after one of its
-    /// abilities is countered, and player 1 must choose a creature to
-    /// destroy. Returns the four projections player 1 sees.
-    fn manifest_root(hidden: &str, other: &str) -> [Value; 4] {
+    /// Which library card backs the face-down manifest.
+    #[derive(Clone, Copy)]
+    enum Backing {
+        /// The first library card of that name, never moved this game.
+        Untouched(&'static str),
+        /// The Gray Ogre that went to hand and back to the library twice
+        /// first, so its card is four zone moves older.
+        Churned,
+    }
+
+    /// Player 0 cycles a Gray Ogre through its hand, manifests `hidden` and
+    /// `other`, grants its face-down permanent flying, lets it deal damage
+    /// to player 1, bounces the other manifest after one of its abilities is
+    /// countered, and player 1 must choose a creature to destroy. Returns
+    /// what player 1 sees: offer subjects, decision context, presentation
+    /// subjects, capture, observation (shared effects included) and the
+    /// event rows of those events.
+    fn manifest_root(hidden: Backing, other: &str) -> [Value; 6] {
         use crate::{
-            flow::decision::EffectFrame,
+            agent::observation::Observation,
+            flow::{decision::EffectFrame, event::DamageTarget},
             state::{
                 ability::{Effect, ObjectSelector},
                 card::{CardType, Keyword, Keywords},
@@ -345,7 +363,28 @@ mod tests {
                 .find(|object| game.state[**object].name == name)
                 .unwrap()
         };
-        let face_down = game.manifest(library(&game, hidden), owner);
+        // Both roots churn the same Gray Ogre; only `Churned` manifests it.
+        let mut churned = library(&game, "Gray Ogre");
+        for zone in [
+            ZoneType::Hand,
+            ZoneType::Library,
+            ZoneType::Hand,
+            ZoneType::Library,
+        ] {
+            churned = game.move_object(churned, zone);
+        }
+        let backing = match hidden {
+            Backing::Churned => churned,
+            Backing::Untouched(name) => *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, owner)
+                .iter()
+                .find(|object| game.state[**object].name == name && **object != churned)
+                .unwrap(),
+        };
+        game.take_observation_events();
+        let face_down = game.manifest(backing, owner);
         let bounced = game.manifest(library(&game, other), owner);
         game.apply_continuous(
             Some(face_down),
@@ -354,6 +393,12 @@ mod tests {
             Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
             EffectDuration::EndOfTurn,
         );
+        game.emit(GameEvent::DamageDealt {
+            source: Some(face_down),
+            target: DamageTarget::Player(PlayerId(1)),
+            amount: 2,
+            combat: false,
+        });
         game.emit(GameEvent::AbilityCountered {
             ability: PublicId(0),
             source_object: bounced,
@@ -377,11 +422,21 @@ mod tests {
             .iter()
             .any(|fact| fact == "An ability of a face-down permanent was countered."));
         let capture = serde_json::to_value(game.capture_decision(viewer, 8).unwrap()).unwrap();
+        let events: Vec<_> = game
+            .take_observation_events()
+            .iter()
+            .flat_map(|event| Observation::event_data(&game, event))
+            .collect();
+        assert!(events
+            .iter()
+            .any(|row| row.source_id >= 0 && row.amount == 2));
         [
             serde_json::to_value(game.decision_offer_subjects(viewer)).unwrap(),
             serde_json::to_value(context).unwrap(),
             serde_json::to_value(game.presentation_subjects()).unwrap(),
             capture,
+            Value::String(Observation::for_player(&game, viewer).to_json()),
+            Value::String(format!("{events:?}")),
         ]
     }
 
@@ -390,9 +445,21 @@ mod tests {
     /// subjects and capture (CR 708.2).
     #[test]
     fn swapped_manifests_project_alike_to_the_choosing_opponent() {
-        let ogre_first = manifest_root("Gray Ogre", "Forest");
-        let forest_first = manifest_root("Forest", "Gray Ogre");
+        let ogre_first = manifest_root(Backing::Untouched("Gray Ogre"), "Forest");
+        let forest_first = manifest_root(Backing::Untouched("Forest"), "Gray Ogre");
         for (index, (left, right)) in ogre_first.iter().zip(&forest_first).enumerate() {
+            assert_eq!(left, right, "projection {index}");
+        }
+    }
+
+    /// A manifest backed by a card that already changed zones four times
+    /// looks to the opponent exactly like one backed by an untouched card:
+    /// the hidden card's zone-move count is not its incarnation (CR 708.2).
+    #[test]
+    fn a_churned_manifest_projects_like_an_untouched_one() {
+        let untouched = manifest_root(Backing::Untouched("Gray Ogre"), "Forest");
+        let churned = manifest_root(Backing::Churned, "Forest");
+        for (index, (left, right)) in untouched.iter().zip(&churned).enumerate() {
             assert_eq!(left, right, "projection {index}");
         }
     }

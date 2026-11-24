@@ -107,7 +107,7 @@ impl Game {
                 if options.iter().all(|paid| paid.toward == Toward::Waterbend) {
                     return None;
                 }
-                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
             }
             // A fixed source tapped while an announced cost is paid: its mana
@@ -116,7 +116,7 @@ impl Game {
                 if self.state.suspended_decision.is_none()
                     && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
             {
-                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
                 Some(format!("Tap {name} for {}", mana_description(&output)))
             }
@@ -140,7 +140,7 @@ impl Game {
                 };
                 Some(format!(
                     "{} pays {}",
-                    self.state[*tapped].name,
+                    self.observed_object_name(*tapped),
                     tap_payments_text(std::slice::from_ref(
                         options.iter().find(|paid| paid.mode() == *mode)?
                     ))
@@ -169,7 +169,7 @@ impl Game {
                         let object_id = candidate.source();
                         Some(format!(
                             "{}: {}",
-                            self.state[object_id].name,
+                            self.observed_object_name(object_id),
                             candidate.description()
                         ))
                     }

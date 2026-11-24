@@ -249,7 +249,8 @@ impl Game {
     }
 
     fn label(&self, permanent: PermanentId) -> String {
-        self.characteristics(permanent).name.clone()
+        self.permanent_object(permanent)
+            .map_or_else(String::new, |object| self.observed_object_name(object))
     }
 
     /// The attackers `blocker` may block now, and whether it must block.

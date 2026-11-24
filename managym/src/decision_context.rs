@@ -34,19 +34,10 @@ impl Game {
         self.state.live(object)?;
         // A face-down permanent is named by its permanent alias, never by the
         // card's public id or the storage slot that holds it.
-        let hidden = self.hides_physical_card(object);
-        let display_id = if hidden {
-            self.observed_object_id(object).0
-        } else {
-            self.state
-                .object_to_permanent
-                .get(object.slot())
-                .and_then(|permanent| *permanent)
-                .and_then(|permanent| self.state.permanents[permanent].as_ref())
-                .map_or(self.state[object].id.0, |permanent| permanent.id.0)
-        };
+        let event = self.object_event_ref(object)?;
+        let display_id = event.entity.0;
         Some(DecisionObjectView {
-            entity_id: if hidden {
+            entity_id: if self.hides_physical_card(object) {
                 display_id
             } else {
                 object.slot() as u32
@@ -54,11 +45,11 @@ impl Game {
             subject: SubjectRef::Object {
                 id: ObjectRenderId {
                     entity: display_id,
-                    incarnation: object.generation(),
+                    incarnation: event.incarnation,
                 },
             },
             display_id,
-            label: self.state[object].name.clone(),
+            label: self.observed_object_name(object),
         })
     }
 
@@ -201,21 +192,19 @@ impl Game {
                 },
             );
         }
-        for (index, permanent) in self.state.permanents.iter().enumerate() {
-            if let Some(permanent) = permanent {
-                if let Some(reference) =
-                    self.permanent_object(crate::state::game_object::PermanentId(index))
-                {
-                    subjects.insert(
-                        format!("permanent:{index}"),
-                        SubjectRef::Object {
-                            id: ObjectRenderId {
-                                entity: permanent.id.0,
-                                incarnation: reference.generation(),
-                            },
+        for index in 0..self.state.permanents.len() {
+            if let Some(event) =
+                self.permanent_event_ref(crate::state::game_object::PermanentId(index))
+            {
+                subjects.insert(
+                    format!("permanent:{index}"),
+                    SubjectRef::Object {
+                        id: ObjectRenderId {
+                            entity: event.entity.0,
+                            incarnation: event.incarnation,
                         },
-                    );
-                }
+                    },
+                );
             }
         }
         for (index, _) in self.state.players.iter().enumerate() {

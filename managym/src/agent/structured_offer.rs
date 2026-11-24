@@ -952,6 +952,14 @@ impl Game {
         }))
     }
 
+    /// The render id a viewer knows `object` by (`Game::object_event_ref`).
+    fn object_render_ref(&self, object: ObjectId) -> Result<ObjectRenderId, StructuredOfferError> {
+        let event = self
+            .object_event_ref(object)
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        Ok(object_render_id(event.entity, event.incarnation))
+    }
+
     fn compound_permanent_candidate(
         &self,
         permanent: PermanentId,
@@ -960,17 +968,14 @@ impl Game {
         let object = self
             .permanent_object(permanent)
             .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
-        let permanent = self.state.permanents[permanent]
-            .as_ref()
-            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
         Ok(Candidate {
             id,
             value: CandidateValue::Subject {
                 subject: SubjectRef::Object {
-                    id: object_render_id(permanent.id, object.generation()),
+                    id: self.object_render_ref(object)?,
                 },
             },
-            label: self.state[permanent.object].name.clone(),
+            label: self.observed_object_name(object),
             help: None,
             preview: None,
         })
@@ -1171,8 +1176,7 @@ impl Game {
         let mut candidates = Vec::with_capacity(declaration_order.len());
         let mut attacker_by_candidate = BTreeMap::new();
         for attacker in &declaration_order {
-            let permanent = self
-                .state
+            self.state
                 .permanents
                 .get(attacker.0)
                 .and_then(|permanent| permanent.as_ref())
@@ -1189,10 +1193,10 @@ impl Game {
                 id: candidate_id,
                 value: CandidateValue::Subject {
                     subject: SubjectRef::Object {
-                        id: object_render_id(permanent.id, object_ref.generation()),
+                        id: self.object_render_ref(object_ref)?,
                     },
                 },
-                label: self.state[permanent.object].name.clone(),
+                label: self.observed_object_name(object_ref),
                 help: None,
                 preview: None,
             });
@@ -1742,20 +1746,13 @@ impl Game {
                 self.state.players[player.0].name.clone(),
             )),
             BoundTarget::Permanent(object_ref) => {
-                let permanent = self
-                    .lookup_current_permanent(object_ref)
+                self.lookup_current_permanent(object_ref)
                     .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?;
-                let permanent_ref = self
-                    .state
-                    .permanents
-                    .get(permanent.0)
-                    .and_then(|permanent| permanent.as_ref())
-                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(permanent_ref.id, object_ref.generation()),
+                        id: self.object_render_ref(object_ref)?,
                     },
-                    self.state[permanent_ref.object].name.clone(),
+                    self.observed_object_name(object_ref),
                 ))
             }
             BoundTarget::GraveyardCard(object) => {
