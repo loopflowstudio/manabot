@@ -402,6 +402,7 @@ fn condition_text(condition: &Condition) -> String {
         Condition::SourceMatches(predicate) => {
             format!("this is {}", predicate_description(predicate, "permanent"))
         }
+        Condition::SourceUnprepared => "this is unprepared".into(),
         Condition::SourceTapped => "this is tapped".into(),
         Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
@@ -942,6 +943,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
             if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(what), format!("{end:?}").to_lowercase()) }
             else { move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
         },
+        Prepare { what } => format!("Prepare {}", selector_description(what)),
+        Unprepare { what } => format!("Unprepare {}", selector_description(what)),
         Tap { what } => format!("Tap {}", selector_description(what)),
         Untap { what } => format!("Untap {}", selector_description(what)),
         RemoveAllCounters { from } => format!("Remove all counters from {}", selector_description(from)),

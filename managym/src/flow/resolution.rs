@@ -872,6 +872,17 @@ impl Game {
                 frame.batch = Some(batch);
                 None
             }
+            Effect::Prepare { what } | Effect::Unprepare { what } => {
+                for id in self.selected_permanents(what, frame) {
+                    let source = self.state.permanents[id].as_ref().unwrap().object;
+                    if matches!(effect, Effect::Prepare { .. }) {
+                        self.prepare_inset(source);
+                    } else {
+                        self.unprepare_inset(source);
+                    }
+                }
+                None
+            }
             Effect::Tap { what } => {
                 for id in self.selected_permanents(what, frame) {
                     self.tap_permanent(id, false);

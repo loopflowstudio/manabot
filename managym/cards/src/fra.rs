@@ -2,12 +2,13 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, KeywordAction, ObjectSelector, Per, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, KeywordAction, LibraryEnd, ObjectSelector, Per,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        LayerValue, PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
+        Keywords, LayerValue, PrintedCharacteristics, Restriction, StaticAbility, StaticContinuous,
+        StaticRestriction, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -18,6 +19,10 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        infinite_coursework(),
+        paradox_shaper(),
+        woodwork_prodigy(),
+        stingerquill_voxmancer(),
         prudent_fateseer(),
         diviner_of_victory(),
         CardDefinition {
@@ -59,6 +64,129 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         vigorbloom_vanguard(),
         void_extrapolator(),
     ]
+}
+
+fn infinite_coursework() -> CardDefinition {
+    let text = "Enchant creature\nWhen this Aura enters, tap enchanted creature. It becomes unprepared.\nEnchanted creature loses all abilities and doesn't untap during its controller's untap step.";
+    CardDefinition {
+        key: "fra.infinite_coursework",
+        scryfall_id: "2f967954-9cf1-5dcc-8792-8007c9652cb6",
+        printed: PrintedCharacteristics {
+            name: "Infinite Coursework".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            text_box: text.into(),
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::tap(ObjectSelector::Attached),
+                    Effect::Unprepare {
+                        what: ObjectSelector::Attached,
+                    },
+                ],
+            }],
+            statics: vec![
+                StaticAbility::Restriction(StaticRestriction {
+                    scope: StaticScope::Attached,
+                    kind: Restriction::DoesntUntap,
+                    unless: None,
+                }),
+                StaticAbility::Continuous(StaticContinuous {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    characteristic_defining: false,
+                    modifications: vec![Modification::LoseAllAbilities],
+                }),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+fn prepares_at_upkeep(spell: PrintedCharacteristics) -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        types: CardTypes::new([CardType::Creature]),
+        inset: Some(InsetSpell::Prepared(spell.into())),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+            intervening_if: Some(Condition::SourceUnprepared),
+            effects: vec![Effect::Prepare {
+                what: ObjectSelector::This,
+            }],
+        }],
+        ..Default::default()
+    }
+}
+fn paradox_shaper() -> CardDefinition {
+    let text = "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared.\n{2}: Put target card from your graveyard on the bottom of your library.";
+    CardDefinition {
+        key: "fra.paradox_shaper",
+        scryfall_id: "e61b9d48-0ace-4453-afe0-a1024444bac0",
+        printed: PrintedCharacteristics {
+            name: "Paradox Shaper".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U/B}")),
+            subtypes: vec!["Octopus".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(3),
+            text_box: text.into(),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::put_in_library(
+                    ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate::default(),
+                    }),
+                    LibraryEnd::Bottom,
+                )],
+                ..Default::default()
+            }],
+            ..prepares_at_upkeep(omit_variables())
+        },
+        ..Default::default()
+    }
+}
+fn stingerquill_voxmancer() -> CardDefinition {
+    let text = "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    CardDefinition {
+        key: "fra.stingerquill_voxmancer",
+        scryfall_id: "84b1c268-3b8a-41b6-92e3-a2ce0cc3d738",
+        printed: PrintedCharacteristics {
+            name: "Stingerquill Voxmancer".into(),
+            mana_cost: Some(ManaCost::parse("{B/R}")),
+            subtypes: vec!["Goblin".into(), "Sorcerer".into()],
+            power: Some(1),
+            toughness: Some(2),
+            text_box: text.into(),
+
+            ..prepares_at_upkeep(vicious_verse())
+        },
+        ..Default::default()
+    }
+}
+fn woodwork_prodigy() -> CardDefinition {
+    let text = "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    CardDefinition {
+        key: "fra.woodwork_prodigy",
+        scryfall_id: "7d17f7e3-7b63-4674-9024-4fd1827f40ec",
+        printed: PrintedCharacteristics {
+            name: "Woodwork Prodigy".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R/G}")),
+            subtypes: vec!["Cat".into(), "Druid".into()],
+            power: Some(3),
+            toughness: Some(3),
+            text_box: text.into(),
+
+            ..prepares_at_upkeep(soul_tether())
+        },
+        ..Default::default()
+    }
 }
 
 fn carnivorous_cultivator() -> CardDefinition {

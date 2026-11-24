@@ -2,12 +2,13 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        ObjectSelector, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect,
+        EffectValue, ObjectSelector, PaymentCost, Per, PlayerSelector, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        StaticAbility,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
+        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -17,6 +18,14 @@ use managym_state::{
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        biblioplex_tomekeeper(),
+        abigale_poet_laureate(),
+        emeritus_of_abundance(),
+        emeritus_of_conflict(),
+        encouraging_aviator(),
+        scathing_shadelock(),
+        tam_observant_sequencer(),
+        skycoach_waypoint(),
         adventurous_eater(),
         vastlands_scavenger(),
         pigment_wrangler(),
@@ -36,6 +45,32 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         strife_scholar(),
         studious_first_year(),
     ]
+}
+
+fn skycoach_waypoint() -> CardDefinition {
+    let text = "{T}: Add {C}.\n{3}, {T}: Target creature becomes prepared. (Only creatures with prepare spells can become prepared.)";
+    CardDefinition {
+        key: "sos.skycoach_waypoint",
+        scryfall_id: "6747657b-5ce4-4dbd-b924-ca1f7119faf7",
+        printed: PrintedCharacteristics {
+            name: "Skycoach Waypoint".into(),
+            types: CardTypes::new([CardType::Land]),
+            text_box: text.into(),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::Target(TargetSpec::Creature),
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn adventurous_eater() -> CardDefinition {
@@ -703,6 +738,313 @@ fn vastlands_scavenger() -> CardDefinition {
                 ],
                 ..Default::default()
             })
+        },
+        ..Default::default()
+    }
+}
+
+fn abigale_poet_laureate() -> CardDefinition {
+    let text = "Flying\nWhenever you cast a creature spell, Abigale becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let spell_text = "Put a +1/+1 counter on target creature.";
+    CardDefinition {
+        key: "sos.abigale_poet_laureate",
+        scryfall_id: "77285d12-e658-4eb3-ba13-ff202afab9c8",
+        printed: PrintedCharacteristics {
+            name: "Abigale, Poet Laureate".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Bard".into()],
+            power: Some(2),
+            toughness: Some(3),
+            text_box: text.into(),
+            supertypes: vec!["Legendary".into()],
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: CardPredicate::creature(),
+                    nth: None,
+                },
+                intervening_if: None,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (PrintedCharacteristics {
+                    name: "Heroic Stanza".into(),
+                    mana_cost: Some(ManaCost::parse("{1}{W/B}")),
+                    types: CardTypes::new([CardType::Sorcery]),
+                    text_box: spell_text.into(),
+                    spell_effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                    ..Default::default()
+                })
+                .into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn emeritus_of_abundance() -> CardDefinition {
+    let text = "Vigilance\nThis creature enters prepared.\nWhenever this creature attacks, if you control eight or more lands, this creature becomes prepared.";
+    let spell_text = "Return target card from your graveyard to your hand.";
+    CardDefinition {
+        key: "sos.emeritus_of_abundance",
+        scryfall_id: "ac095763-6f4e-4d4e-9c99-414646368f8d",
+        printed: PrintedCharacteristics {
+            name: "Emeritus of Abundance".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Druid".into()],
+            power: Some(3),
+            toughness: Some(4),
+            text_box: text.into(),
+            replacement_effects: vec![ReplacementEffect::EntersPrepared],
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: Some(Condition::ControlsAtLeast {
+                    count: 8,
+                    distinct_names: false,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                }),
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (PrintedCharacteristics {
+                    name: "Regrowth".into(),
+                    mana_cost: Some(ManaCost::parse("{1}{G}")),
+                    types: CardTypes::new([CardType::Sorcery]),
+                    text_box: spell_text.into(),
+                    spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::GraveyardCardYouOwn {
+                            predicate: Default::default(),
+                        },
+                    ))],
+                    ..Default::default()
+                })
+                .into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn emeritus_of_conflict() -> CardDefinition {
+    let text = "First strike\nWhenever you cast your third spell each turn, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    CardDefinition {
+        key: "sos.emeritus_of_conflict",
+        scryfall_id: "f58dba4f-1abb-47a3-a684-29c32bab95c0",
+        printed: PrintedCharacteristics {
+            name: "Emeritus of Conflict".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(2),
+            text_box: text.into(),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: Default::default(),
+                    nth: Some(3),
+                },
+                intervening_if: None,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (super::lea::lightning_bolt().printed).into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn encouraging_aviator() -> CardDefinition {
+    let text = "Flying\nWhenever this creature attacks, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let spell_text = "Target creature gains flying until end of turn.";
+    CardDefinition {
+        key: "sos.encouraging_aviator",
+        scryfall_id: "72654b84-9902-41db-92ab-a3499c31221c",
+        printed: PrintedCharacteristics {
+            name: "Encouraging Aviator".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(3),
+            text_box: text.into(),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (PrintedCharacteristics {
+                    name: "Jump".into(),
+                    mana_cost: Some(ManaCost::parse("{U}")),
+                    types: CardTypes::new([CardType::Instant]),
+                    text_box: spell_text.into(),
+                    spell_effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                    )],
+                    ..Default::default()
+                })
+                .into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn scathing_shadelock() -> CardDefinition {
+    let text = "At the beginning of your first main phase, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let spell_text =
+        "Target creature you control gets +2/+0 and gains deathtouch until end of turn.";
+    CardDefinition {
+        key: "sos.scathing_shadelock",
+        scryfall_id: "03e664cd-c3a6-4263-b2d8-dd99058fb8ec",
+        printed: PrintedCharacteristics {
+            name: "Scathing Shadelock".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Snake".into(), "Warlock".into()],
+            power: Some(4),
+            toughness: Some(6),
+            text_box: text.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::FirstMain, Actor::You),
+                intervening_if: None,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (PrintedCharacteristics {
+                    name: "Venomous Words".into(),
+                    mana_cost: Some(ManaCost::parse("{B}")),
+                    types: CardTypes::new([CardType::Sorcery]),
+                    text_box: spell_text.into(),
+                    spell_effects: vec![
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::pump(2, 0),
+                        ),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
+                        ),
+                    ],
+                    ..Default::default()
+                })
+                .into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tam_observant_sequencer() -> CardDefinition {
+    let text = "Landfall — Whenever a land you control enters, Tam becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let spell_text = "You draw a card and gain 1 life.";
+    CardDefinition {
+        key: "sos.tam_observant_sequencer",
+        scryfall_id: "7120e71b-2976-451b-89a7-a1665dc6fb6b",
+        printed: PrintedCharacteristics {
+            name: "Tam, Observant Sequencer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Gorgon".into(), "Wizard".into()],
+            power: Some(4),
+            toughness: Some(3),
+            text_box: text.into(),
+            supertypes: vec!["Legendary".into()],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(
+                (PrintedCharacteristics {
+                    name: "Deep Sight".into(),
+                    mana_cost: Some(ManaCost::parse("{G}{U}")),
+                    types: CardTypes::new([CardType::Sorcery]),
+                    text_box: spell_text.into(),
+                    spell_effects: vec![
+                        Effect::DrawCards { count: 1.into() },
+                        Effect::gain_life(1),
+                    ],
+                    ..Default::default()
+                })
+                .into(),
+            )),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn biblioplex_tomekeeper() -> CardDefinition {
+    let text = "When this creature enters, choose up to one —\n• Target creature becomes prepared. (Only creatures with prepare spells can become prepared.)\n• Target creature becomes unprepared.";
+    CardDefinition {
+        key: "sos.biblioplex_tomekeeper",
+        scryfall_id: "bf2efdd9-d2b4-4bea-a5b9-dbb2eee4dfba",
+        printed: PrintedCharacteristics {
+            name: "Biblioplex Tomekeeper".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Construct".into()],
+            power: Some(3),
+            toughness: Some(4),
+            text_box: text.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    up_to: Some(1.into()),
+                    unchosen: false,
+                    modes: vec![
+                        vec![Effect::Prepare {
+                            what: ObjectSelector::Target(TargetSpec::Creature),
+                        }],
+                        vec![Effect::Unprepare {
+                            what: ObjectSelector::Target(TargetSpec::Creature),
+                        }],
+                    ],
+                }],
+            }],
+            ..Default::default()
         },
         ..Default::default()
     }

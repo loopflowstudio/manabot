@@ -5096,3 +5096,282 @@ fn returning_prepared_angel_rejects_departed_object_at_current_revision() {
     game.execute_semantic_command(&target).unwrap();
     assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
 }
+
+fn preparation_position(names: &[&str]) -> Game {
+    let mut deck = BTreeMap::from([("Plains".into(), 24)]);
+    deck.extend(names.iter().map(|name| ((*name).to_owned(), 1)));
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        419,
+        false,
+    );
+    game.keep_opening_hands();
+    game.state.turn.current_phase = 1;
+    game.state.turn.current_step = 0;
+    game.state.priority.holder = game.active_player();
+    game
+}
+
+#[test]
+fn preparation_resolution_waypoint_preserves_existing_link_after_payment() {
+    use crate::state::mana::Mana;
+    let mut root = preparation_position(&["Skycoach Waypoint", "Blossom-Blessed Angel"]);
+    let player = root.active_player();
+    let waypoint = root
+        .scenario_force_battlefield(player, "Skycoach Waypoint", true)
+        .unwrap();
+    let angel = root
+        .scenario_force_battlefield(player, "Blossom-Blessed Angel", true)
+        .unwrap();
+    let source = root.permanent_object(angel).unwrap();
+    root.skip_trivial = false;
+    root.state.players[player.0].mana_pool = Mana::parse("CCC").into();
+    root.publish_action_space(root.priority_action_space(player));
+    checked_command(
+        &mut root,
+        Action::ActivateAbility {
+            player,
+            permanent: waypoint,
+            ability_index: 0,
+        },
+    );
+    checked_command(
+        &mut root,
+        Action::ChooseTarget {
+            player,
+            target: Target::Permanent(angel),
+        },
+    );
+    assert_eq!(root.state.stack_objects.len(), 1);
+    assert!(root.state.permanents[waypoint].as_ref().unwrap().tapped);
+    assert_eq!(root.pooled_mana(player).total(), 0);
+    assert_eq!(root.prepared_copy(source), None);
+    let mut fork = root.clone();
+    use crate::flow::card_capture::{snapshots, CaptureMode, CardCapture};
+    fork.card_capture = Some(CardCapture::new(
+        &fork,
+        snapshots(&fork),
+        CaptureMode::Cards,
+    ));
+    fork.prepare_inset(source);
+    assert_eq!(fork.card_capture.as_ref().unwrap().moves.len(), 1);
+    let grants = fork.state.cast_permissions.grants.clone();
+    let exile = fork
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, player)
+        .to_vec();
+    fork.resolve_top_of_stack();
+    assert_eq!(fork.card_capture.as_ref().unwrap().moves.len(), 1);
+    assert_eq!(fork.state.cast_permissions.grants, grants);
+    assert_eq!(
+        fork.state
+            .zones
+            .zone_objects(ZoneType::Exile, player)
+            .to_vec(),
+        exile
+    );
+    root.resolve_top_of_stack();
+    assert_eq!(root.state.cast_permissions.grants.len(), 1);
+    assert_eq!(
+        root.preparation_source(root.prepared_copy(source).unwrap()),
+        Some(source)
+    );
+}
+
+#[test]
+fn preparation_resolution_coursework_unprepares_only_the_attached_creature() {
+    let mut game = preparation_position(&[
+        "Blossom-Blessed Angel",
+        "Emergency Phytomedic",
+        "Infinite Coursework",
+    ]);
+    let player = game.active_player();
+    let [angel, medic] = ["Blossom-Blessed Angel", "Emergency Phytomedic"].map(|name| {
+        let object = game
+            .state
+            .latest_objects()
+            .find(|(_, o)| o.owner == player && o.name == name)
+            .unwrap()
+            .0;
+        game.move_object(object, ZoneType::Battlefield)
+    });
+    let copies = [angel, medic].map(|source| game.prepared_copy(source).unwrap());
+    let permanent = game.lookup_current_permanent(angel).unwrap();
+    let aura = game
+        .state
+        .latest_objects()
+        .find(|(_, o)| o.owner == player && o.name == "Infinite Coursework")
+        .unwrap()
+        .0;
+    game.push_spell_to_stack(
+        aura,
+        player,
+        vec![Target::Permanent(permanent)],
+        vec![0],
+        Default::default(),
+    );
+    game.resolve_top_of_stack();
+    assert_eq!(game.prepared_copy(angel), Some(copies[0]));
+    game.collect_waiting_triggers();
+    game.flush_triggers();
+    assert_eq!(game.state.stack_objects.len(), 1);
+    game.resolve_top_of_stack();
+    assert!(game.characteristics(permanent).abilities_lost);
+    assert_eq!(game.prepared_copy(angel), None);
+    assert_eq!(game.state.zones.zone_of(copies[0]), None);
+    assert_eq!(game.prepared_copy(medic), Some(copies[1]));
+    game.untap_all_permanents(player);
+    assert!(game.state.permanents[permanent].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn preparation_resolution_upkeep_checks_each_sources_live_link_twice() {
+    for name in [
+        "Paradox Shaper",
+        "Stingerquill Voxmancer",
+        "Woodwork Prodigy",
+    ] {
+        let mut game = preparation_position(&[name]);
+        let player = game.active_player();
+        let permanent = game.scenario_force_battlefield(player, name, true).unwrap();
+        let source = game.permanent_object(permanent).unwrap();
+        game.emit(GameEvent::StepStarted {
+            step: StepKind::Upkeep,
+        });
+        game.collect_waiting_triggers();
+        assert_eq!(game.state.pending_triggers.len(), 1, "{name}");
+        game.flush_triggers();
+        let mut prepared = game.clone();
+        prepared.prepare_inset(source);
+        let grants = prepared.state.cast_permissions.grants.clone();
+        prepared.resolve_top_of_stack();
+        assert_eq!(prepared.state.cast_permissions.grants, grants);
+        // Idempotent preparation alone would also preserve the grant. The
+        // rules count a resolution only on the branch passing the second check.
+        let ability = (source.slot(), 0);
+        assert!(!prepared
+            .state
+            .turn
+            .ability_resolutions_this_turn
+            .contains_key(&ability));
+        game.resolve_top_of_stack();
+        assert_eq!(
+            game.state.turn.ability_resolutions_this_turn.get(&ability),
+            Some(&1)
+        );
+        assert_eq!(
+            game.preparation_source(game.prepared_copy(source).unwrap()),
+            Some(source)
+        );
+        game.emit(GameEvent::StepStarted {
+            step: StepKind::Upkeep,
+        });
+        game.collect_waiting_triggers();
+        assert!(game.state.pending_triggers.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn preparation_resolution_triggered_sources_create_their_printed_spells() {
+    for (name, spell) in [
+        ("Encouraging Aviator", "Jump"),
+        ("Emeritus of Abundance", "Regrowth"),
+        ("Abigale, Poet Laureate", "Heroic Stanza"),
+        ("Emeritus of Conflict", "Lightning Bolt"),
+        ("Scathing Shadelock", "Venomous Words"),
+        ("Tam, Observant Sequencer", "Deep Sight"),
+    ] {
+        let mut game = preparation_position(&[name, "Gray Ogre", "Counterspell", "Lightning Bolt"]);
+        let player = game.active_player();
+        let permanent = game.scenario_force_battlefield(player, name, true).unwrap();
+        let source = game.permanent_object(permanent).unwrap();
+        match name {
+            "Encouraging Aviator" | "Emeritus of Abundance" => {
+                if name == "Emeritus of Abundance" {
+                    for _ in 0..8 {
+                        game.scenario_force_battlefield(player, "Plains", true)
+                            .unwrap();
+                    }
+                }
+                game.emit(GameEvent::AttackersDeclared {
+                    player,
+                    attackers: vec![permanent],
+                });
+            }
+            "Scathing Shadelock" => game.emit(GameEvent::StepStarted {
+                step: StepKind::Main,
+            }),
+            "Tam, Observant Sequencer" => {
+                let land = game
+                    .state
+                    .latest_objects()
+                    .find(|(_, o)| o.owner == player && o.name == "Plains")
+                    .unwrap()
+                    .0;
+                game.move_object(land, ZoneType::Battlefield);
+            }
+            _ => {
+                let casts: &[&str] = if name == "Emeritus of Conflict" {
+                    &["Lightning Bolt", "Counterspell", "Gray Ogre"]
+                } else {
+                    &["Gray Ogre"]
+                };
+                for card in casts {
+                    let object = game
+                        .state
+                        .latest_objects()
+                        .find(|(_, o)| o.owner == player && o.name == *card)
+                        .unwrap()
+                        .0;
+                    game.cast_spell(player, object, vec![], vec![], Default::default())
+                        .unwrap();
+                    game.collect_waiting_triggers();
+                }
+            }
+        }
+        game.collect_waiting_triggers();
+        assert_eq!(game.state.pending_triggers.len(), 1, "{name}");
+        game.flush_triggers();
+        game.resolve_top_of_stack();
+        let copy = game.prepared_copy(source).expect(name);
+        assert_eq!(game.state[copy].name, spell);
+    }
+}
+
+#[test]
+fn preparation_resolution_tomekeeper_modes_target_a_creature_before_resolution() {
+    let mut root = preparation_position(&["Biblioplex Tomekeeper", "Blossom-Blessed Angel"]);
+    let player = root.active_player();
+    let angel = root
+        .scenario_force_battlefield(player, "Blossom-Blessed Angel", true)
+        .unwrap();
+    let source = root.permanent_object(angel).unwrap();
+    let tome = root
+        .state
+        .latest_objects()
+        .find(|(_, o)| o.owner == player && o.name == "Biblioplex Tomekeeper")
+        .unwrap()
+        .0;
+    root.move_object(tome, ZoneType::Battlefield);
+    root.collect_waiting_triggers();
+    let modes = root.flush_triggers().unwrap();
+    assert_eq!(modes.actions.len(), 3);
+    for mode in [0, 1] {
+        let mut game = root.clone();
+        if mode == 1 {
+            game.prepare_inset(source);
+        }
+        game.choose_trigger_mode(player, mode).unwrap();
+        assert!(game.flush_triggers().is_some());
+        game.choose_trigger_target(player, Target::Permanent(angel))
+            .unwrap();
+        game.flush_triggers();
+        assert_eq!(game.state.stack_objects.len(), 1);
+        game.resolve_top_of_stack();
+        assert_eq!(game.prepared_copy(source).is_some(), mode == 0);
+    }
+}

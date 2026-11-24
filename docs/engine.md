@@ -1306,6 +1306,13 @@ battlefield loses its link, and the next state-based check removes the exile cop
 A returning Angel creates a fresh copy. A Command bound to the departed Angel
 is stale even when submitted at the current decision revision.
 
+Skycoach Waypoint can target any creature. When its ability resolves, a creature
+with a prepare spell and no linked copy gains one. Preparing it again keeps the
+same copy and permission. The three FRA creatures that prepare during upkeep
+check the link both when upkeep begins and when their trigger resolves.
+Infinite Coursework taps and unprepares its attached creature when the Aura’s
+entry trigger resolves. Only that creature’s linked copy ceases to exist.
+
 An ordinary token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and

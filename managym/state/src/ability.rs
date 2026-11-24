@@ -257,6 +257,7 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    SourceUnprepared,
     /// "while saddled": the source Mount is saddled (CR 702.171b).
     SourceSaddled,
     /// The exact ability source has these current characteristics.
@@ -317,6 +318,7 @@ impl Condition {
     pub fn reads_source(&self) -> bool {
         match self {
             Condition::SourceCountersAtLeast { .. }
+            | Condition::SourceUnprepared
             | Condition::SourceTapped
             | Condition::SourceSaddled
             | Condition::SourceMatches(_)
@@ -352,6 +354,7 @@ impl Condition {
             | Condition::TargetControlledByYou => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
+            | Condition::SourceUnprepared
             | Condition::SourceTapped
             | Condition::SourceSaddled
             | Condition::SourceMatches(_)
@@ -928,6 +931,12 @@ pub enum Effect {
     },
     /// Tap each permanent `what` names.
     Tap {
+        what: ObjectSelector,
+    },
+    Prepare {
+        what: ObjectSelector,
+    },
+    Unprepare {
         what: ObjectSelector,
     },
     /// Untap each permanent `what` names.
@@ -1676,6 +1685,8 @@ impl Effect {
             | Effect::Sacrifice { what, .. }
             | Effect::Move { what, .. }
             | Effect::Tap { what }
+            | Effect::Prepare { what }
+            | Effect::Unprepare { what }
             | Effect::Untap { what }
             | Effect::Destroy { what }
             | Effect::Airbend { what }
@@ -1822,6 +1833,8 @@ impl Effect {
             | Effect::Sacrifice { .. }
             | Effect::Move { .. }
             | Effect::Tap { .. }
+            | Effect::Prepare { .. }
+            | Effect::Unprepare { .. }
             | Effect::Untap { .. }
             | Effect::RemoveCounters { .. }
             | Effect::RemoveAllCounters { .. }

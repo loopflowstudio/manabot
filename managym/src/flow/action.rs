@@ -1303,6 +1303,8 @@ pub(crate) fn cost_label(cost: &ManaCost) -> String {
 fn choice_verb(effect: &Effect) -> &'static str {
     match effect {
         Effect::Sacrifice { .. } => "Sacrifice",
+        Effect::Prepare { .. } => "Prepare",
+        Effect::Unprepare { .. } => "Unprepare",
         Effect::Tap { .. } => "Tap",
         Effect::Untap { .. } => "Untap",
         Effect::Destroy { .. } => "Destroy",

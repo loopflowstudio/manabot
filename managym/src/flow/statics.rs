@@ -876,6 +876,9 @@ impl Game {
             Condition::SourceMatches(predicate) => source
                 .and_then(|r| self.lookup_current_permanent(r).ok())
                 .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
+            Condition::SourceUnprepared => {
+                source_permanent().is_some_and(|p| self.prepared_copy(p.object).is_none())
+            }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::SourceSaddled => source
                 .and_then(|source| self.lookup_current_permanent(source).ok())

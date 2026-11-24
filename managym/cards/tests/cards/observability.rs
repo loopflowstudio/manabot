@@ -720,6 +720,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::PutCounters { .. } => "Effect::PutCounters",
         Effect::PutCountersFrom { .. } => "Effect::PutCountersFrom",
         Effect::Move { .. } => "Effect::Move",
+        Effect::Prepare { .. } => "Effect::Prepare",
+        Effect::Unprepare { .. } => "Effect::Unprepare",
         Effect::Tap { .. } => "Effect::Tap",
         Effect::Untap { .. } => "Effect::Untap",
         Effect::RemoveAllCounters { .. } => "Effect::RemoveAllCounters",
@@ -782,7 +784,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 91;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -817,6 +819,12 @@ fn effect_witnesses() -> Vec<Effect> {
         ),
         Effect::tap(ObjectSelector::Attached),
         Effect::untap(ObjectSelector::This),
+        Effect::Prepare {
+            what: ObjectSelector::This,
+        },
+        Effect::Unprepare {
+            what: ObjectSelector::Attached,
+        },
         Effect::RemoveAllCounters {
             from: ObjectSelector::Attached,
         },
@@ -1224,6 +1232,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
+        Condition::SourceUnprepared => "Condition::SourceUnprepared",
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::SourceSaddled => "Condition::SourceSaddled",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
@@ -1271,6 +1280,7 @@ fn condition_witnesses() -> Vec<Condition> {
             kind: CounterKind::Quest,
             count: 4,
         },
+        Condition::SourceUnprepared,
         Condition::SourceTapped,
         Condition::SourceSaddled,
         Condition::SourceMatches(CardPredicate::subtype("Scout")),

@@ -1133,3 +1133,107 @@ def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
 def test_simulation_rejects_unknown_terminal_result(info: dict[str, object]) -> None:
     with pytest.raises(ValueError, match="native winner or draw"):
         sim.determine_outcome(True, info)
+
+
+def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
+    waypoint = "Skycoach Waypoint"
+    creature = "Stingerquill Voxmancer"
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig(
+                    "caster", {waypoint: 12, "Swamp": 20, creature: 10}
+                ),
+                managym.PlayerConfig("opponent", {"Mountain": 20, "Wall of Stone": 10}),
+            ],
+            mana_payment=("auto", "auto"),
+        )
+    )
+    for _ in range(350):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(frame.actor)
+        lands = [p for p in obs.agent_permanents if p.characteristics.name == waypoint]
+        linked = {
+            grant.source_permanent_id
+            for card in obs.agent_cards
+            for grant in card.cast_permissions
+        }
+        unprepared = {
+            p.id
+            for p in obs.agent_permanents
+            if p.characteristics.name == creature and p.id not in linked
+        }
+        activation = next(
+            (
+                i
+                for i, offer in enumerate(frame.offers)
+                if offer["verb"] == "activate_ability"
+                and {p.id for p in lands}.intersection(
+                    obs.action_space.actions[i].focus
+                )
+            ),
+            None,
+        )
+        if frame.actor == 0 and activation is not None and unprepared:
+            env.step(activation)
+            target = decision_frame(env)
+            choices = env.observation_for_player(0).action_space.actions
+            index = next(
+                i
+                for i, action in enumerate(choices)
+                if unprepared.intersection(action.focus)
+            )
+            source = next(iter(unprepared.intersection(choices[index].focus)))
+            ready = {p.id for p in obs.agent_permanents if not p.tapped}
+            break
+
+        def preference(index: int) -> int:
+            offer = frame.offers[index]
+            name = (offer.get("public_commitment") or {}).get("card")
+            if offer["verb"] == "play_land":
+                return 0 if (name == waypoint) == (not lands) else 1
+            if offer["verb"] == "cast" and name in {creature, "Wall of Stone"}:
+                return 2
+            if offer["verb"] == "cast" and name == "Vicious Verse":
+                return 3
+            return 4 if offer["verb"] == "pass_priority" else 5
+
+        env.step(min(range(len(frame.offers)), key=preference))
+    else:
+        pytest.fail("no Waypoint activation with an unprepared Voxmancer")
+
+    restored = cold_restore(env)
+    assert decision_frame(restored) == target
+    command = Command("prepare", target.revision, target.offers[index]["id"]).to_json()
+    assert_replayed_command(env, restored, command)
+    paid = [
+        p
+        for p in env.observation_for_player(0).agent_permanents
+        if p.id in ready and p.tapped
+    ]
+    assert len(paid) == 4
+    assert any(p.characteristics.name == waypoint for p in paid)
+    for _ in range(8):
+        obs = env.observation_for_player(0)
+        if not obs.stack_objects:
+            break
+        response = decision_frame(env)
+        offer = next(o for o in response.offers if o["verb"] == "pass_priority")
+        assert_replayed_command(
+            env, restored, Command("pass", response.revision, offer["id"]).to_json()
+        )
+    for viewer in (0, 1):
+
+        def linked_copy(branch: managym.Env) -> int:
+            observation = branch.observation_for_player(viewer)
+            [copy] = [
+                c
+                for c in [*observation.agent_cards, *observation.opponent_cards]
+                if any(g.source_permanent_id == source for g in c.cast_permissions)
+                and c.characteristics.name == "Vicious Verse"
+            ]
+            return copy.id
+
+        assert linked_copy(env) == linked_copy(restored)
+    assert env.search_witness_json() == restored.search_witness_json()

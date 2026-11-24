@@ -448,11 +448,44 @@ impl Game {
         object
     }
 
-    fn prepare_inset(&mut self, source: ObjectId, controller: PlayerId) {
+    pub(super) fn prepared_copy(&self, source: ObjectId) -> Option<ObjectId> {
+        self.state
+            .cast_permissions
+            .grants
+            .iter()
+            .find(|grant| {
+                grant.prepared
+                    && grant.source == Some(source)
+                    && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
+            })
+            .map(|grant| grant.object)
+    }
+
+    pub(super) fn unprepare_inset(&mut self, source: ObjectId) {
+        let Some(copy) = self.prepared_copy(source) else {
+            return;
+        };
+        let owner = self.state[copy].owner;
+        self.state.zones.remove_object(copy);
+        self.capture_object_move(copy, Some(ZoneType::Exile), None, owner);
+        self.state
+            .cast_permissions
+            .grants
+            .retain(|grant| !(grant.prepared && grant.source == Some(source)));
+    }
+
+    pub(super) fn prepare_inset(&mut self, source: ObjectId) {
         use crate::{flow::cast_permission::PlayGrant, state::card::InsetSpell};
         let Some(InsetSpell::Prepared(program)) = &self.state[source].inset else {
             return;
         };
+        if self.prepared_copy(source).is_some() {
+            return;
+        }
+        let Ok(id) = self.lookup_current_permanent(source) else {
+            return;
+        };
+        let controller = self.state.permanents[id].as_ref().unwrap().controller;
         let program = program.clone();
         let id = self.state.id_gen.next_id();
         let copy = Object::from_definition(
@@ -772,7 +805,7 @@ impl Game {
             }
             self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
             if entry.prepared {
-                self.prepare_inset(object_id, holder);
+                self.prepare_inset(object_id);
             }
         }
 

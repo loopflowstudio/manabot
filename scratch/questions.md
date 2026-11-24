@@ -48,3 +48,5 @@ Project the caster rule on visible permissions so a policy can distinguish the e
 Use a castable Lightning Bolt to issue a public target address for the Angel before it leaves. Use a controlled non-Pilot creature as the positive target for All Aboard.
 
 Use the pending Waypoint activation as the first fork for repeat preparation. Compare exact links and copy movements before adding a stored reverse index.
+
+Use an ordinary-play Voxmancer alongside the constructed Angel for the Waypoint replay. Its upkeep can renew its spell between activations.
