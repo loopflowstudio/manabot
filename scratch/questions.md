@@ -70,6 +70,6 @@ Concept-review (`49cc87c7`) choices folded into Batch 5g:
 
 ## Batch 5g choices
 
-- A resolved shield's `ReplacementId` reuses the existing fields: `source` is the protected object, `definition_index` the effect timestamp and `static_ability: true`. That keeps the serialized identity shape unchanged and cannot collide within one damage event (no static ability replaces damage), but it overloads "static". A dedicated namespace enum would be clearer if more record-backed replacements arrive.
+- A resolved shield's `ReplacementId` carries the record's timestamp in an optional `effect` field (skipped when absent, so printed identities serialize unchanged); `8068a268d7` replaced the first form that overloaded `static_ability: true`.
 - Fleeting Flight's effect description reads "Prevent all combat damage that would be dealt to target creature until end of turn" (the shared `until` suffix), where the Oracle says "this turn".
 - The curated decision-memory witness moved from seed 197 to 208, the only seed in 190–259 still live at step 600 with more than 250 distinct contexts; it is a fixture choice, not a property of the seed.
