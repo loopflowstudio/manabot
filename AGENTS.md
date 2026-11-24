@@ -37,14 +37,18 @@ addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
-`record_vocabulary` in `managym`; consumer-specific names in `manabot`), keep
-the wrapped interface's noun on wrappers (`RecordedVectorEnv`), and qualify
-generic roles with their domain unit (`decision_weights`, `SnapshotScorer`). Do
-not reuse established terms (`recipe` for training recipes, `manifest` for
-content packs, `replay` for seed-and-action replays) for unrelated concepts,
-even internally. Rename published names via a deprecated alias stating the
-removal release; serialized keys, checkpoint fields and frozen evidence keep
-their spelling.
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`), for
+the steady state where it is the only path (no transition qualifiers like
+`native_` contrasting with a deprecated path), keeping the wrapped interface's
+noun on wrappers (`RecordedVectorEnv`) and qualifying generic roles with their
+domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
+terms (`recipe` for training recipes, `manifest` for content packs, `replay`
+for seed-and-action replays) for unrelated concepts, even internally, and avoid
+duplicating module filenames across packages. When renaming or replacing a
+published API, convert remaining callers, emit a `DeprecationWarning` targeting
+the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
+compatibility graph with that version so rollover finds it; serialized keys,
+checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
@@ -92,10 +96,8 @@ checkpoints or experiment evidence.
 - Etude evaluation source identity reads `git ls-files`. Mark a new source file
   with `git add -N <path>` before running an evaluation fixture that fingerprints
   it; untracked files fail admission with `identity_path_without_files`.
-- Package style guides live in each package README (`manabot/README.md`,
-  `managym/README.md`). Avoid transient comments that denote changes; pay
-  attention to file headers and README content; propose small, iterative
-  changes.
+- Package style guides live in `manabot/README.md` and `managym/README.md`.
+  Avoid transient comments that denote changes.
 - Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
   Compose builtin graphs; use narrowly named forks for domain review placement.
   Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
@@ -146,9 +148,8 @@ checkpoints or experiment evidence.
   beside the code that depends on them. Training code should explain what an
   estimator measures, where gradients flow, and which samples a loss uses.
   Cite a method when claiming to implement it; document meaningful departures.
-- Keep docstrings concise, but include non-obvious contracts, side effects,
-  and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
-  boilerplate or narrate obvious statements. Update comments with behavior.
+- Keep docstrings concise: state non-obvious contracts, side effects and
+  failure behavior; omit `Args:`/`Returns:` boilerplate and obvious narration.
 - Put imports at the top; use explicit imports. Do not prefix a function with
   an underscore merely because it is used only within its module.
   Keep one implementation and one owner for each fact; use git for
@@ -177,19 +178,18 @@ checkpoints or experiment evidence.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
-For dense observation dictionaries, `historical_mean` includes masked
-object slots. Preserve their supplied numeric features when skipping zero
-padding. Relation features use the relation validity column. V11 native
-`ObservationBatch` offsets certify live rows and native joins. Keep model layout
-and vocabulary admission on that path. Read packed fields from
-`layout.csr_fields` and fact units from `layout.csr_fact_divisors`. Use full
-int32 words for lookups and saved logical columns for numeric readings.
-Read-only NumPy dictionaries get full
-admission because their origin and writable aliases are unknown. The entire
-dense observation transport and dense dict admission graph (`VectorEnv.set_buffers`,
+For dense observation dicts, `historical_mean` includes masked object slots
+(preserve supplied numeric features when skipping zero padding) and relation
+features use the relation validity column. Read-only NumPy dicts get full
+admission because their origin and writable aliases are unknown. V11
+`ObservationBatch` offsets certify live rows and native joins; keep model
+layout and vocabulary admission on that path, read packed fields from
+`layout.csr_fields` and fact units from `layout.csr_fact_divisors`, and use
+full int32 words for lookups with saved logical columns for readings. The
+dense observation transport and dict admission graph (`VectorEnv.set_buffers`,
 `RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
 `ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
-`EncodedObservation`, dense `ObservationRows`, and dense dict admission/bucketing)
+`EncodedObservation`, dense `ObservationRows`, dense admission/bucketing)
 is scheduled for removal in 0.3.0 alongside v9/v10.
 
 Execution row limits bound prefix materialization before preparation, independently
