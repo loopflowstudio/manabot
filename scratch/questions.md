@@ -46,3 +46,7 @@ Mode labels now come from `effects_description` when no idiomatic label exists. 
 Use the verified Batch 5e checkout for compression. Compare the rebuilt extension's full definition JSON and catalog token table against a62143faef to check the shared pump constructor.
 
 Audit the remaining 57 rows in three passes. Put the 28 triggered creatures first so they can share entry, death and attack fixtures. Keep the 24 activation, characteristic, combat and choice rows together for the follow-up, and the five replacement rows together for the event audit.
+
+Alignment 3 removes whole-combat prohibitions at `can_block` and leaves the declaration tick alone. A blocker that can block none of the current attackers (a ground creature against a lone flyer) is still asked with only `Decline` when `skip_trivial` is off. With `skip_trivial` on it is skipped. Changing the tick would also move the structured blocker offers, combat previews and the semantic corpus.
+
+The compound attacker offer still selects attackers with `min: 0`. A submission leaving out a Juggernaut that must attack fails as stale or illegal at the legacy `DeclareAttacker` step instead of being prevented by the offer. Expressing a required candidate in `ChoiceStep::Select` is a protocol change.
