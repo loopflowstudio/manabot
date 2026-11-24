@@ -120,8 +120,7 @@ impl Game {
                         amount,
                     });
                     self.state
-                        .turn
-                        .damage_pairs
+                        .damage_history_mut()
                         .record_combat_player(source, player);
                 }
 
@@ -162,7 +161,7 @@ impl Game {
                 ));
                 let event_target = self.object_event_ref(object_ref);
                 if let Some(source) = source {
-                    self.state.turn.damage_pairs.record(source, object_ref);
+                    self.state.damage_history_mut().record(source, object_ref);
                 }
                 if view.is_creature() {
                     self.state

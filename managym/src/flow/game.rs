@@ -23,7 +23,7 @@ use crate::{
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        turn::TurnState,
+        turn::{DamageHistory, TurnState},
     },
     state::{
         card::{ActivatedAbilityDefinition, CardDefId},
@@ -657,6 +657,12 @@ impl TrackedState {
             self.revisions.characteristics += 1;
         }
         untapped
+    }
+
+    /// Trigger matching and resolution read hits directly. Neither the layer
+    /// board nor the index of potential trigger sources depends on them.
+    pub(crate) fn damage_history_mut(&mut self) -> &mut DamageHistory {
+        &mut self.state.turn.damage_pairs
     }
 
     pub(crate) fn mark_damage(&mut self, permanent_id: PermanentId, amount: i32, deathtouch: bool) {

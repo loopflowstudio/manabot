@@ -1417,6 +1417,39 @@ mod cache_tests {
     }
 
     #[test]
+    fn recording_creature_damage_reuses_the_layer_board() {
+        use crate::flow::proposed_event::ProposedDamageTarget;
+
+        let player = PlayerId(0);
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            418,
+            true,
+        );
+        game.play();
+        let source = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let target = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let source = game.permanent_object(source).unwrap();
+        let target = game.permanent_object(target).unwrap();
+        let board = game.layer_board();
+
+        assert!(
+            game.commit_damage(Some(source), ProposedDamageTarget::Object(target), 1, true)
+                .committed
+        );
+        assert!(game.state.turn.damage_pairs.contains(source, target));
+        assert!(Arc::ptr_eq(&board, &game.layer_board()));
+    }
+
+    #[test]
     fn mana_revision_reuses_independent_board_but_reprices_dynamic_outputs() {
         let deck = [("Mountain".into(), 24), ("Gray Ogre".into(), 16)].into();
         let mut game = Game::new(
