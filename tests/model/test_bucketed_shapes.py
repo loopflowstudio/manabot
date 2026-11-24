@@ -412,24 +412,26 @@ def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
     batch = collect(case.collector, case.agent, 1)
     needs = batch.recorded.needs
     assert needs is not None
-    first, second = batch.recorded.index[:2]
-    assert needs[first, AXES.index("relations")] == 64
+    positions = [
+        int(np.flatnonzero(batch.recorded.index == row).item()) for row in (0, 1)
+    ]
+    assert needs[0, AXES.index("relations")] == 64
     if recorded:
-        needs[second] = -1
+        needs[1] = -1
     else:
         batch.recorded = replace(batch.recorded, needs=None)
 
-    indexes = np.array([0, 1])
+    indexes = np.array(positions)
     separate = AdmittedRollout(case.agent, batch)
     grouped = AdmittedRollout(case.agent, batch)
     separate.admit_rows(indexes, 1)
     grouped.admit_rows(indexes, 2)
 
-    for index, slots in enumerate(legal_slots):
-        selection = np.array([index])
+    for row, (position, slots) in enumerate(zip(positions, legal_slots, strict=True)):
+        selection = np.array([position])
         single, _ = separate.prepare_rows(selection)
         together, _ = grouped.prepare_rows(selection)
-        expected_relations = 64 if recorded and index == 0 else 8
+        expected_relations = 64 if recorded and row == 0 else 8
         assert single.relation_features.shape[1] == expected_relations
         np.testing.assert_array_equal(single.legal_slots, slots)
         np.testing.assert_equal(asdict(single), asdict(together))
