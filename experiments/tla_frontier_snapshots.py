@@ -83,7 +83,7 @@ class WarmArm:
 WARM_ARMS: tuple[WarmArm, ...] = (
     WarmArm("warm-h20", "Warm u400: H=20 (80/20)", 20, 0.8, 0.2),
     WarmArm("warm-h60", "Warm u400: H=60 (75/25)", 60, 0.75, 0.25),
-    WarmArm("warm-terminal", "Warm u400: H=None terminal (65/35)", None, 0.65, 0.35),
+    WarmArm("warm-full", "Warm u400: H=None terminal (65/35)", None, 0.65, 0.35),
 )
 ALL_JOBS: tuple[str, ...] = (JOB, *(arm.name for arm in WARM_ARMS))
 
