@@ -59,7 +59,6 @@ Batch 5f follow-up choices:
 - `Revisions` gained `life` for `Condition::LifeAtLeast`; the `TrackedState` and `DerivedCache` size ceilings rose by 8 bytes for the fifth counter.
 - Reveal-until with exactly one passed card reuses `place_entrant_on_bottom`, which keeps the facts below it but records no public fact for the revealed card now on the bottom (lossy, never wrong).
 - The blocker compound offer also falls back to exact atomic offers when an attacker must be blocked by every able creature, since a later blocker's decline is then illegal.
-- Academy's `combat.ts`/`Board.svelte` change was not checked here: this checkout has no `node_modules`. Gate runs `npm run check` and the Vitest suite.
 
 Concept-review (`49cc87c7`) choices folded into Batch 5g:
 
