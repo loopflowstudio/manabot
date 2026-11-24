@@ -517,7 +517,9 @@ def test_batch_inputs_match_python_at_selected_capacities(
         actual: managym.ObservationBatch, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
         assert type(actual) is managym.ObservationBatch
-        decoded = observation_spans(actual, teacher.space, bucketed=False, objects=False)
+        decoded = observation_spans(
+            actual, teacher.space, bucketed=False, objects=False
+        )
         for key, tensor in tensors.items():
             np.testing.assert_array_equal(
                 decoded.dense(key), tensor.numpy(), err_msg=key

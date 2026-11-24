@@ -379,4 +379,6 @@ def observation_spans(
         for axis, fields in space.axis_buffers.items():
             for key, _ in fields:
                 capacities[key] = buckets.sizes[axis]
-    return ObservationSpans(schema.fact_divisors, tables, capacities, buckets, needs, memory)
+    return ObservationSpans(
+        schema.fact_divisors, tables, capacities, buckets, needs, memory
+    )

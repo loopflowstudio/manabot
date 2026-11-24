@@ -64,7 +64,10 @@ class ValueScorer:
             assert rows is not None
             count = len(rows)
             obs = self.agent.prepare(
-                {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
+                {
+                    key: buffers[key][rows]
+                    for key in self.agent.observation_space.shapes
+                },
                 inference=True,
             )
         probs = self.agent.win_probabilities(obs)

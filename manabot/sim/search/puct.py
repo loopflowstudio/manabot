@@ -213,7 +213,9 @@ class AgentLeafEvaluator:
                 self.observation_space.config.action_overflow,
             )
             if action_count < 1 or encoded_batch.action_counts[0] != action_count:
-                raise ValueError("PUCT policy cannot represent the complete legal offers")
+                raise ValueError(
+                    "PUCT policy cannot represent the complete legal offers"
+                )
             batch = self.agent.prepare(encoded_batch, inference=True)
         else:
             # Deprecated dense dict / v9/v10 path; removed in 0.3.0.

@@ -397,22 +397,16 @@ def test_public_history_round_trips_for_both_viewers() -> None:
 def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
     space = ObservationSpace()
     vector = managym.VectorEnv(1)
-    with pytest.warns(
-        DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"
-    ):
+    with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
         vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
 
     env = managym.Env(seed=7)
     obs, _ = env.reset(
         [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     )
-    with pytest.warns(
-        DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"
-    ):
+    with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
         managym.encode_observation_into(obs, space.layout, space.allocate())
-    with pytest.warns(
-        DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"
-    ):
+    with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
         managym.encode_observations_into([env], space.layout, space.allocate(1), 1)
     # Standalone Observation items encode directly into an ObservationBatch.
     batch = managym.encode_observation_batch([obs, env], space.layout)
@@ -420,9 +414,7 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
     assert batch.action_counts[0] == batch.action_counts[1]
 
     pool = env.rollout_pool(1, 1, 7, 100)
-    with pytest.warns(
-        DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"
-    ):
+    with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
         pool.set_buffers(
             allocate_vector_buffers(space, pool.num_slots),
             pool.num_slots,

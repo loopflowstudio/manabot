@@ -1046,7 +1046,10 @@ def prepare_memory(
 
 
 def _prepare_memory_rows(
-    obs: "ObservationBuffers", tables: "Tables", *, native: "ObservationSpans | None" = None
+    obs: "ObservationBuffers",
+    tables: "Tables",
+    *,
+    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
     from manabot.policy.prepare import pack, record_word
     from manabot.policy.spans import full_word
