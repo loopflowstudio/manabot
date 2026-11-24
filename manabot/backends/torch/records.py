@@ -6,8 +6,8 @@ record independently with a GRU; no temporal state survives a forward.
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import PackedSequence
 
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.policy.prepare import Packed
 
 
@@ -34,6 +34,6 @@ class RecordReducer(nn.Module):
     ) -> torch.Tensor:
         """Reduce prepared sequences without rediscovering their routes on device."""
         data = tokens[schedule.gather]
-        _, hidden = self.gru(PackedSequence(data, torch.tensor(schedule.sizes)))
-        pooled = hidden[-1][schedule.restore]
+        _, hidden = packed_gru(self.gru, data, schedule.sizes)
+        pooled = hidden[schedule.restore]
         return self.output(torch.tanh(pooled))
