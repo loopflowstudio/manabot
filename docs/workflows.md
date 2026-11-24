@@ -28,8 +28,10 @@ checkout with Loopflow installed:
 lf graph experiment-performance
 ```
 
-The workflow measures the update, selects a bottleneck, then loops through
-implementation, compression, refresh, concept review and performance review.
+The workflow measures the update and plans each improvement as a slice. It
+implements slice after slice, syncing and realigning after each, then
+compresses and lets the performance review decide whether another bottleneck
+is worth a pass.
 It retains the publish, demo, delivery and verification boundaries of
 `engine-performance`. Its result is a software change with supported timing
 evidence, or a documented reason to stop when no useful improvement is supported.
@@ -120,15 +122,24 @@ observation versions and recipes remain unchanged.
 
 ## Coverage
 
-`coverage` is a narrow fork of the builtin code lifecycle. Three distinct phases
-compose implementation, compression, builtin refresh, concept review, a domain
-review and a backward edge to that phase's implementation:
+`coverage` is a narrow fork of the builtin code lifecycle. Each of three phases
+plans its work as slices, then runs like builtin `build`: an inner loop
+implements one slice, syncs and realigns (realign names the next slice or moves
+on), and once the slices are built, compress and the phase's domain review
+read the whole batch. The review sends the phase back to implementation or
+advances it.
 
-1. `coverage-working`: complete shared rules behavior and directed debug evidence.
-2. `coverage-scalable`: remove special paths; demonstrate that real cards compose
-   from shared rules types and one owner for each fact.
+1. `coverage-working`: complete shared rules behavior and directed debug
+   checks. Concept review runs here, once per pass.
+2. `coverage-scalable`: remove special paths; real cards compose from shared
+   rules types with one owner for each fact.
 3. `engine-optimization`: measure bounded representative workloads, improve
-   worthwhile bottlenecks, retain debug invariants and behavior digests.
+   worthwhile bottlenecks, keep debug invariants and behavior digests.
+
+A slice is a cohort, not a card: a shared primitive with every card in the
+batch it unlocks, or a group of cards that already compose. `card-batch` cuts
+the batch that way, so the review loop runs once per batch rather than once
+per card.
 
 The whole batch then has one publish/demo/gate/delivery/verify boundary. These are
 three code loops, not three required PRs. A semantic counterexample invalidates
@@ -184,9 +195,9 @@ prove execution while leaving learning inconclusive.
 
 Repository graphs live in `.lf/graphs/` and domain skills in `.lf/skills/`.
 Builtin `code`, `pursue`, `refresh` and `deliver` are composed, never shadowed.
-The legacy `.lf/flows/` files are historical Task-specific definitions and are not
-part of the installed graph catalog. They are not a second implementation of the
-new workflows and are not silently converted into new live Tasks.
+QA notes on reaching each surface live in `.lf/qa/<surface>.md`, read by the
+builtin `qa` skill. Earlier Task-specific `.lf/flows/` definitions and their
+skills are in git history; Loopflow never read them as Graphs.
 
 Shared defaults use `graph:` in each Wave's `config.yaml`. Personal `lf set`
 values override them. Tasks already holding captured graphs retain those graphs;
