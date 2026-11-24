@@ -26,7 +26,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, admit_native, check
-from manabot.policy.buckets import MIN_BUCKET, bucket_observation
+from manabot.policy.buckets import MIN_BUCKET, bucket, bucket_observation
 from manabot.policy.prepare import (
     OBJECT_VALIDITY_KEYS,
     AttentionLayout,
@@ -61,6 +61,24 @@ def _observations(
         rows.append(encode_observation(space, obs))
         env.step(0)
     return space, {key: np.stack([row[key] for row in rows]) for key in rows[0]}
+
+
+def _belief_observations() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+    space, original = _observations(9, False)
+    obs = dict(original)
+    obs.update(
+        {
+            "belief_card_def_ids": np.array([[1, 2]] * 3),
+            "belief_owner_role_ids": np.array([[0, 1]] * 3),
+            "belief_hidden_zone_ids": np.array([[1, 2]] * 3),
+            "belief_count_probabilities": np.array(
+                [[[0.2, 0.8], [1, 0]]] * 3, np.float32
+            ),
+            "belief_validity": np.array([[1, 0]] * 3, np.float32),
+            "belief_globals": np.zeros((3, 2), np.float32),
+        }
+    )
+    return space, obs
 
 
 def _tables(agent: ActorCritic) -> Tables:
@@ -293,20 +311,7 @@ def test_padded_numeric_features_match_dense_readings_at_each_slot() -> None:
 
 
 def test_belief_rows_extend_all_flat_object_coordinates() -> None:
-    space, original = _observations(9, False)
-    obs = dict(original)
-    obs.update(
-        {
-            "belief_card_def_ids": np.array([[1, 2]] * 3),
-            "belief_owner_role_ids": np.array([[0, 1]] * 3),
-            "belief_hidden_zone_ids": np.array([[1, 2]] * 3),
-            "belief_count_probabilities": np.array(
-                [[[0.2, 0.8], [1, 0]]] * 3, np.float32
-            ),
-            "belief_validity": np.array([[1, 0]] * 3, np.float32),
-            "belief_globals": np.zeros((3, 2), np.float32),
-        }
-    )
+    space, obs = _belief_observations()
     config = ModelConfig(
         hidden_dim=8,
         num_attention_heads=2,
@@ -319,7 +324,7 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     check(obs, spec, obs["actions_valid"].astype(bool))
     batch = prepare(obs, tables, attention="live_tokens", value_token=True)
     assert batch.belief is not None
-    visible_objects = sum(original[key].shape[1] for key in OBJECT_VALIDITY_KEYS)
+    visible_objects = sum(obs[key].shape[1] for key in OBJECT_VALIDITY_KEYS)
     assert batch.validity.shape[1] == visible_objects + 3
     np.testing.assert_array_equal(batch.validity[:, -3:], [[1, 0, 1]] * 3)
     np.testing.assert_array_equal(batch.is_agent[:, -3:], [[True, False, False]] * 3)
@@ -615,7 +620,12 @@ def test_bucketed_attention_columns_pad_used_columns_to_a_bucket() -> None:
     assert set(used) <= set(columns)
     assert (np.diff(columns) > 0).all()
     many = np.arange(0, 2 * 40, 2)
-    assert len(select_attention_columns(many, 234, bucketed=True)) == 64
+    many_columns = select_attention_columns(many, 234, bucketed=True)
+    assert many_columns is not None and len(many_columns) == 64
+    exact = np.arange(0, 32, 2)
+    np.testing.assert_array_equal(
+        select_attention_columns(exact, 234, bucketed=True), exact
+    )
     np.testing.assert_array_equal(
         select_attention_columns(used, 234, bucketed=False), used
     )
@@ -667,33 +677,20 @@ def test_torch_learners_and_dense_attention_prepare_no_columns() -> None:
     config = ModelConfig(hidden_dim=8, num_attention_heads=2)
     agent = ActorCritic(space, config)
     assert agent.prepare(obs).attention_columns is None
-    assert agent.prepare(obs, inference=True).attention_columns is not None
+    cpu_batch = agent.prepare(obs, inference=True)
+    assert cpu_batch.attention_columns is not None
     off = ActorCritic(space, config.model_copy(update={"attention_on": False}))
     assert off.prepare(obs, inference=True).attention_columns is None
     live = ActorCritic(space, config, live_tokens=True).prepare(obs, inference=True)
     assert live.attention_columns is None and live.live_index is not None
     if torch.backends.mps.is_available():
         columns = agent.to("mps").prepare(obs, inference=True).attention_columns
-        assert columns is not None and len(columns) & (len(columns) - 1) == 0
+        assert columns is not None
+        assert len(columns) == bucket(
+            len(cpu_batch.attention_columns), cpu_batch.validity.shape[1]
+        )
+        assert set(cpu_batch.attention_columns) <= set(columns)
         assert agent.prepare(obs).attention_columns is None
-
-
-def _belief_observations() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
-    space, original = _observations(9, False)
-    obs = dict(original)
-    obs.update(
-        {
-            "belief_card_def_ids": np.array([[1, 2]] * 3),
-            "belief_owner_role_ids": np.array([[0, 1]] * 3),
-            "belief_hidden_zone_ids": np.array([[1, 2]] * 3),
-            "belief_count_probabilities": np.array(
-                [[[0.2, 0.8], [1, 0]]] * 3, np.float32
-            ),
-            "belief_validity": np.array([[1, 0]] * 3, np.float32),
-            "belief_globals": np.zeros((3, 2), np.float32),
-        }
-    )
-    return space, obs
 
 
 DEVICES = ["cpu", *(["mps"] if torch.backends.mps.is_available() else [])]
@@ -713,19 +710,17 @@ DEVICES = ["cpu", *(["mps"] if torch.backends.mps.is_available() else [])]
 )
 def test_bucketed_columns_keep_logits_and_values(kind: str, device: str) -> None:
     torch.manual_seed(0)
-    if kind == "belief":
-        space, obs = _belief_observations()
-        extra = {"belief_count_buckets": 2, "belief_card_vocab_size": 3}
-    else:
-        space, obs = _observations(11, False)
-        extra = {}
+    space, obs = (
+        _belief_observations() if kind == "belief" else _observations(11, False)
+    )
     aggregations = ("masked_mean", "value_token", "attention_readout")
     config = ModelConfig(
         hidden_dim=16,
         num_attention_heads=2,
         attention_layers=2,
         value_aggregation=kind if kind in aggregations else "historical_mean",
-        **extra,
+        belief_count_buckets=2 if kind == "belief" else 0,
+        belief_card_vocab_size=3 if kind == "belief" else 0,
     )
     agent = ActorCritic(space, config, bucketed_shapes=kind == "bucketed_shapes")
     tables = _tables(agent)
@@ -737,7 +732,9 @@ def test_bucketed_columns_keep_logits_and_values(kind: str, device: str) -> None
     )
     assert rows is not None
 
-    def run(attention: AttentionLayout) -> tuple[np.ndarray, np.ndarray, Prepared]:
+    def run(
+        attention: AttentionLayout,
+    ) -> tuple[np.ndarray, np.ndarray, Prepared[np.ndarray]]:
         batch = prepare(
             rows,
             tables,

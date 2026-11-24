@@ -623,6 +623,8 @@ def select_attention_columns(
     target = bucket(len(used), width)
     if target >= width:
         return None
+    if target == len(used):
+        return used
     keep = np.zeros(width, dtype=bool)
     keep[used] = True
     keep[np.flatnonzero(~keep)[: target - len(used)]] = True
@@ -842,8 +844,8 @@ def prepare(
     columns = None
     packed_attention = None
     if attention in ("used_columns", "bucketed_columns", "packed_groups"):
-        valid = validity != 0
         if native is None:
+            valid = validity != 0
             used = np.flatnonzero(valid.any(0))
         else:
             start = 0
@@ -856,7 +858,9 @@ def prepare(
             used = np.concatenate(segments)
         # Row groups carry no per-row value token or memory summaries.
         if attention == "packed_groups" and not value_token and not memory_summaries:
-            packed_attention = pack_attention(valid, len(used))
+            packed_attention = pack_attention(
+                valid if native is None else validity != 0, len(used)
+            )
         if packed_attention is None:
             columns = select_attention_columns(
                 used, validity.shape[1], bucketed=attention == "bucketed_columns"

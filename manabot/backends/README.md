@@ -421,10 +421,9 @@ catalog program schedule and selects the device's inference layout
 
 - **CPU:** drops unused object columns (`attention="used_columns"`) and, unless
   `bucketed_shapes=True`, unused fact columns (`facts="used_columns"`).
-- **MPS:** keeps every object column used by the batch and pads with empty
-  columns to the next power of two (at least 8, collapsing to the full object
-  table when that reaches capacity, `attention="bucketed_columns"`), bounding
-  distinct Metal attention shapes while leaving fact columns padded.
+- **MPS:** pads used object columns with empty columns to a power of two
+  (`attention="bucketed_columns"`), bounding distinct Metal attention shapes
+  while leaving fact columns padded.
 - **CUDA:** keeps padded object and fact columns.
 
 When `attention_on` is false, object column compaction is skipped; when

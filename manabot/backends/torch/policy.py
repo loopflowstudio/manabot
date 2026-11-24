@@ -568,12 +568,13 @@ class ActorCritic(nn.Module):
         # Learners and CUDA inference keep padded attention; power-of-two
         # column counts on MPS bound the distinct Metal attention graphs.
         attention: AttentionLayout = "padded"
-        if self.config.attention_on and self.live_tokens:
-            attention = "live_tokens"
-        elif self.config.attention_on and inference and device == "cpu":
-            attention = "used_columns"
-        elif self.config.attention_on and inference and device == "mps":
-            attention = "bucketed_columns"
+        if self.config.attention_on:
+            if self.live_tokens:
+                attention = "live_tokens"
+            elif inference and device == "cpu":
+                attention = "used_columns"
+            elif inference and device == "mps":
+                attention = "bucketed_columns"
         compact_facts = inference and device == "cpu" and not self.bucketed_shapes
         return prepare(
             obs,

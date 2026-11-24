@@ -59,23 +59,18 @@ the full action width.
   ```
 
   - `attention: AttentionLayout`: `"padded"` (default, full object table),
-    `"used_columns"` (only object columns valid in at least one row; Torch CPU
-    and MLX inference), `"bucketed_columns"` (used object columns padded with
-    empty columns via `buckets.bucket` to the next power of two, at least
-    `MIN_BUCKET = 8`, collapsing to `None` when empty, when width ≤ 8, or when
-    the bucket reaches the object width; Torch MPS inference),
-    `"packed_groups"` (groups sorted by live count in `packed_attention`, with
-    used columns as the fallback for groups that cannot be packed), or
-    `"live_tokens"` (flat `live_index` and `live_offsets` for Torch CUDA and
-    MLX, plus `compact_attention` coordinates and a key mask for MLX).
-  - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (only fact
-    columns valid in at least one row; unbucketed CPU and MLX inference), or
-    `"live_rows"` (live fact rows only). MLX learner compaction requires
-    bucketed shapes and inert object padding.
+    `"used_columns"` (columns valid in at least one row; Torch CPU and MLX
+    inference), `"bucketed_columns"` (used columns padded with empty columns
+    via `buckets.bucket` to a power of two; Torch MPS inference),
+    `"packed_groups"` (rows sorted by live count in `packed_attention`, falling
+    back to `used_columns`), or `"live_tokens"` (flat `live_index` /
+    `live_offsets`, plus MLX's `compact_attention`).
+  - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (columns valid
+    in at least one row; unbucketed CPU and MLX inference), or `"live_rows"`
+    (live fact rows only; MLX learner compaction).
 
-  Unknown `attention` or `facts` values raise `ValueError`. Both
-  `ObservationSpans` and dense buffers share `select_attention_columns` and
-  produce identical column selections
+  Unknown layouts raise `ValueError`. Both `ObservationSpans` and dense buffers
+  share `select_attention_columns`
   ([inference column compaction](../../docs/observation-and-model.md#inference-column-compaction)).
   Optional groups are `None` when unused: a fact
   table's `programs` holds its indexes together, and each `Packed` schedule
