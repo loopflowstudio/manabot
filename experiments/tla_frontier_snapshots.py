@@ -345,7 +345,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
                         tags=(HEAD_TO_HEAD_TAG,),
                         players=(cand, base_player),
                         configs=deals,
-                        games=1,
+                        games=4,
                         seeds="one",
                     )
                 )
