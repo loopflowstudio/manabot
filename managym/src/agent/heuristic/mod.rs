@@ -562,7 +562,7 @@ impl Heuristic {
         if self.attack_pool.is_none() {
             self.attack_pool = Some(
                 b.creatures(true)
-                    .filter(|p| !p.tapped && (!p.is_summoning_sick || p.keywords.haste))
+                    .filter(|p| !p.tapped && !p.is_summoning_sick)
                     .map(|p| p.id)
                     .collect(),
             );
