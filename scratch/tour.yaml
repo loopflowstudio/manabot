@@ -1,19 +1,27 @@
-at: fa2c52e493067ecce3bf60a66d849086b9b3e146
+at: bb0c7267b67a008362ba982f3d4b2dcb33a47ac1
 first:
-  - path: scratch/plan.md
-    why: Completed slice and remaining tracked recovery work
   - path: manabot/backends/README.md
-    why: Portable training contract and sampling domains
+    why: Four-file save contract and sampling domains
   - path: manabot/training/state/optimizer.py
-    why: Canonical moments, parameter clocks and admission
+    why: Canonical Adam moments and per-parameter clocks
+  - path: manabot/training/state/continuation.py
+    why: Bind all four files and admit a save
+  - path: manabot/training/state/backend.py
+    why: Framework hooks for weights, Adam and sampling
+  - path: manabot/training/loops/self_play.py
+    why: Restore before collection and export at completed updates
   - path: manabot/backends/torch/state.py
-    why: Restore optimizer history on live Torch parameters
+    why: Torch sampling domains and historical object saves
   - path: manabot/backends/mlx/checkpoint.py
-    why: Map packed weights and moments to MLX leaves
+    why: Map packed parameters to MLX leaves
   - path: manabot/backends/mlx/state.py
-    why: Transfer exact moments and clocks
+    why: Restore MLX moments, parameter ages and sampling keys
   - path: manabot/backends/mlx/learner.py
     why: Apply bias correction at each parameter's age
+  - path: tests/training/test_mlx_continuation.py
+    why: Tracked backend switches, corruption refusal and safe stops
   - path: tests/training/test_portable_adam.py
-    why: Compare resumed and uninterrupted optimizer steps
-hide: []
+    why: Compare the next optimizer update after transfer
+hide:
+  - path: uv.lock
+    why: Generated from the pinned Etude revision in pyproject.toml
