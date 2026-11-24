@@ -104,6 +104,11 @@ impl MandatoryLoopWatch {
     /// Resolutions without any other action that make a loop regardless.
     pub const CAP: u32 = 10_000;
 
+    /// Resolutions counted since the watch began.
+    pub fn resolutions(&self) -> u32 {
+        self.resolutions
+    }
+
     /// Record one resolution; true once the loop is established. `sample`
     /// runs only once the chain has outlasted [`Self::UNWATCHED`].
     pub fn repeats(&mut self, sample: impl FnOnce() -> LoopSample) -> bool {
@@ -128,14 +133,13 @@ impl MandatoryLoopWatch {
             life_low: self.life_low,
             poison_high: self.poison_high,
         };
-        let repeated = self.seen.insert(fingerprint, mark).is_some_and(|before| {
+        self.seen.insert(fingerprint, mark).is_some_and(|before| {
             (0..2).all(|seat| {
                 !now.can_lose[seat]
                     || (before.life_low[seat] == mark.life_low[seat]
                         && before.poison_high[seat] == mark.poison_high[seat])
             })
-        });
-        repeated
+        })
     }
 }
 

@@ -991,6 +991,7 @@ impl Game {
         if self.state.opening().is_some() {
             return self.choose_opening(action);
         }
+        self.dispatch_action(action)?;
         if matches!(
             action,
             Action::PlayLand { .. }
@@ -1000,8 +1001,13 @@ impl Game {
                 | Action::Foretell { .. }
         ) {
             // CR 104.4b: a player who acts at priority has broken any loop.
+            // A rejected action changed nothing, so it leaves the watch.
             self.state.priority_mut().loop_watch = None;
         }
+        Ok(())
+    }
+
+    fn dispatch_action(&mut self, action: &Action) -> Result<(), AgentError> {
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)

@@ -355,11 +355,11 @@ const LOOP_COUNT_SATURATION: u64 = 16;
 impl GameState {
     /// CR 104.4b: the rules-relevant state a mandatory loop returns to. The
     /// canonical match state, without what every repetition advances on its
-    /// own: life totals (the loop watch tracks their progress itself), the
-    /// event logs, priority bookkeeping, identity and timestamp allocation,
-    /// waiting triggers' enqueue ids, and turn-history counts past
-    /// [`LOOP_COUNT_SATURATION`]. Anything a
-    /// finite chain uses up (counters, objects, cards, mana) stays in.
+    /// own: life and poison totals (the loop watch tracks their progress
+    /// itself), the event logs, priority bookkeeping, identity and timestamp
+    /// allocation, waiting triggers' and stack objects' ids, and turn-history
+    /// counts past [`LOOP_COUNT_SATURATION`]. Anything a finite chain uses up
+    /// (other counters, objects, cards, mana) stays in.
     pub(crate) fn loop_fingerprint(&self) -> u64 {
         use serde_json::Value;
 
@@ -392,12 +392,22 @@ impl GameState {
         }
         if let Some(Value::Array(players)) = state.get_mut("players") {
             for player in players {
-                if let Some(player) = player.as_object_mut() {
-                    player.remove("life");
+                let Some(player) = player.as_object_mut() else {
+                    continue;
+                };
+                player.remove("life");
+                // Poison is a total the watch tracks itself, like life; any
+                // other player counter is used up and stays.
+                if let Some(Value::Object(counters)) = player.get_mut("counters") {
+                    counters.remove("poison");
+                    if counters.is_empty() {
+                        player.remove("counters");
+                    }
                 }
             }
         }
-        // A waiting trigger's id is its enqueue order, renumbered each cycle.
+        // A waiting trigger's or stack object's id is its allocation order,
+        // renumbered each cycle.
         fn forget_id(trigger: &mut Value) {
             if let Some(trigger) = trigger.as_object_mut() {
                 trigger.remove("id");
@@ -405,6 +415,14 @@ impl GameState {
         }
         if let Some(Value::Array(pending)) = state.get_mut("pending_triggers") {
             pending.iter_mut().for_each(forget_id);
+        }
+        if let Some(Value::Array(stack)) = state.get_mut("stack_objects") {
+            // Each entry is `{variant: body}`; the id lives in the body.
+            for entry in stack {
+                if let Some(variant) = entry.as_object_mut() {
+                    variant.values_mut().for_each(forget_id);
+                }
+            }
         }
         if let Some(Value::Object(placement)) = state.get_mut("trigger_placement") {
             if let Some(Value::Array(remaining)) = placement.get_mut("remaining") {
@@ -415,13 +433,21 @@ impl GameState {
             }
         }
         if let Some(Value::Object(turn)) = state.get_mut("turn") {
+            if let Some(history) = turn.get_mut("history") {
+                saturate(history);
+            }
+            // Entries are `[object, [definition, ability], count]`: only the
+            // count saturates, so distinct sources never compare alike.
             for key in [
-                "history",
                 "ability_triggers_this_turn",
                 "ability_resolutions_this_turn",
             ] {
-                if let Some(value) = turn.get_mut(key) {
-                    saturate(value);
+                if let Some(Value::Array(entries)) = turn.get_mut(key) {
+                    for entry in entries {
+                        if let Some(count) = entry.get_mut(2) {
+                            saturate(count);
+                        }
+                    }
                 }
             }
         }

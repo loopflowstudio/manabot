@@ -1880,10 +1880,12 @@ impl Game {
             .map(|object| (object, false));
         for (object, tap) in sacrificed.chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
+                // A permanent owed for tapping cannot leave to pay another
+                // cost either.
                 model.reserve(SourceReservation {
                     permanent,
                     tap,
-                    sacrifice: !tap,
+                    sacrifice: true,
                 });
             }
         }
@@ -1911,7 +1913,7 @@ impl Game {
                 model.reserve(SourceReservation {
                     permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
                     tap: ability.tap_grantor,
-                    sacrifice: ability.exile_grantor,
+                    sacrifice: true,
                 });
             }
             model.life = model.life.checked_sub(ability.life_cost)?;

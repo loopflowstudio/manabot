@@ -497,6 +497,11 @@ impl Game {
                         // A turn-ending resolution leaves this priority round.
                         return None;
                     }
+                    if self.state.suspended_decision.is_some() {
+                        // CR 608.2m: the spell is still resolving, so no
+                        // resolution has finished for the watch to count.
+                        continue;
+                    }
                     if self.watch_for_mandatory_loop() {
                         self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
                             mandatory_loop: true,

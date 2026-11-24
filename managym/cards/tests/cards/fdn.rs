@@ -7,8 +7,8 @@ use crate::support::{
     play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
-    flow::turn::StepKind,
-    state::{card::Keyword, game_object::PlayerId, zone::ZoneType},
+    flow::{priority::MandatoryLoopWatch, turn::StepKind},
+    state::{card::Keyword, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
 };
 
 #[test]
@@ -3380,14 +3380,16 @@ fn two_fishing_poles_on_one_creature_offer_activations_naming_each_pole() {
 }
 
 /// Bloodthirsty Conqueror beside a Gray Ogre that drains each opponent 1
-/// whenever its controller gains life: every loss is gained back and every
-/// gain is a loss. The opponent has Herald of Eternal Dawn (can't lose) or
+/// whenever its controller gains life (and, with `poison`, gives each
+/// opponent a poison counter): every loss is gained back and every gain is a
+/// loss. The opponent has Herald of Eternal Dawn (can't lose) or
 /// `opponent_life`. Hands are empty; Lightning Bolt is on the stack at the
 /// opponent, and player 0 holds `spare_bolts` more with mana for them.
 fn conqueror_drain_loop(
     herald: bool,
     opponent_life: i32,
     spare_bolts: usize,
+    poison: bool,
 ) -> (
     crate::support::game::Scenario,
     managym::state::game_object::PermanentId,
@@ -3396,8 +3398,9 @@ fn conqueror_drain_loop(
         game::{clear_hand, force_new_card_in_hand, inject_ability},
         play::{cast_card, target_opponent},
     };
-    use managym::state::ability::{
-        Ability, Actor, Effect, EffectValue, PlayerSelector, TriggerCondition,
+    use managym::state::{
+        ability::{Ability, Actor, Effect, EffectValue, PlayerSelector, TriggerCondition},
+        permanent::CounterKind,
     };
 
     let mut s = five_color_setup(&[
@@ -3418,10 +3421,17 @@ fn conqueror_drain_loop(
                 who: Actor::You,
                 nth: None,
             },
-            effects: vec![Effect::LoseLife {
+            effects: [Effect::LoseLife {
                 player: PlayerSelector::EachOpponent,
                 amount: EffectValue::Fixed(1),
-            }],
+            }]
+            .into_iter()
+            .chain(poison.then_some(Effect::GivePlayerCounters {
+                player: PlayerSelector::EachOpponent,
+                kind: CounterKind::Poison,
+                count: 1,
+            }))
+            .collect(),
         },
     );
     if herald {
@@ -3456,7 +3466,7 @@ fn pass_until_over(s: &mut crate::support::game::Scenario, passes: usize) {
 #[test]
 fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() {
     for herald in [true, false] {
-        let (mut s, _) = conqueror_drain_loop(herald, if herald { 20 } else { 200 }, 0);
+        let (mut s, _) = conqueror_drain_loop(herald, if herald { 20 } else { 200 }, 0, false);
         s.game_mut().skip_trivial = true;
         s.pass_priority();
         assert!(s.game().is_game_over());
@@ -3476,12 +3486,12 @@ fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() 
 /// cast, players who only pass are still in the loop.
 #[test]
 fn bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices() {
-    let (mut s, _) = conqueror_drain_loop(true, 20, 0);
+    let (mut s, _) = conqueror_drain_loop(true, 20, 0, false);
     s.game_mut().skip_trivial = false;
     pass_until_over(&mut s, 2_000);
     assert!(s.game().state.mandatory_loop_draw());
 
-    let (mut s, _) = conqueror_drain_loop(true, 20, 1);
+    let (mut s, _) = conqueror_drain_loop(true, 20, 1, false);
     s.game_mut().skip_trivial = true;
     pass_until_over(&mut s, 2_000);
     assert!(s.game().state.mandatory_loop_draw());
@@ -3496,7 +3506,7 @@ fn bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain() {
     use managym::agent::action::Action;
     use managym::state::game_object::Target;
 
-    let (mut s, drain) = conqueror_drain_loop(true, 20, 1);
+    let (mut s, drain) = conqueror_drain_loop(true, 20, 1, false);
     s.game_mut().skip_trivial = true;
     pass_until_over(&mut s, 40);
     assert!(!s.game().is_game_over());
@@ -3512,6 +3522,105 @@ fn bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain() {
     assert!(s.game().state.permanents[drain].is_none());
     assert!(s.game().state.stack_objects.is_empty());
     assert!(s.game().state.priority.loop_watch.is_none());
+}
+
+/// Resolutions the watch may take past its unwatched prefix to recognize a
+/// loop of a few resolutions per cycle.
+const LOOP_RECOGNIZED_WITHIN: u32 = MandatoryLoopWatch::UNWATCHED + 64;
+
+/// Poison is a total the watch tracks, like life: a drain that also poisons
+/// Herald of Eternal Dawn's controller repeats its state and draws soon after
+/// the watch starts, instead of running to the cap.
+#[test]
+fn a_poison_loop_against_a_protected_player_draws_promptly() {
+    let (mut s, _) = conqueror_drain_loop(true, 20, 0, true);
+    s.game_mut().skip_trivial = true;
+    s.pass_priority();
+    assert!(s.game().state.mandatory_loop_draw());
+    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
+    assert!(
+        watch.resolutions() <= LOOP_RECOGNIZED_WITHIN,
+        "{}",
+        watch.resolutions()
+    );
+    assert!(s.game().state.players[1].counters.get(CounterKind::Poison) >= 10);
+}
+
+/// A rejected action at priority changes nothing, the loop watch included.
+#[test]
+fn a_rejected_action_leaves_the_loop_watch() {
+    use managym::agent::action::Action;
+    use managym::search_state::witness;
+
+    let (mut s, _) = conqueror_drain_loop(true, 20, 1, false);
+    s.game_mut().skip_trivial = true;
+    pass_until_over(&mut s, 40);
+    while s.action_space().player != Some(PlayerId(0)) {
+        s.pass_priority();
+    }
+    assert!(s.game().state.priority.loop_watch.is_some());
+    // Casting the Conqueror from the battlefield is refused at execution.
+    let conqueror = permanent_named(&s, "Bloodthirsty Conqueror");
+    let object = s.game().state.permanents[conqueror]
+        .as_ref()
+        .unwrap()
+        .object;
+    s.game_mut().current_action_space.as_mut().unwrap().actions = vec![Action::CastSpell {
+        player: PlayerId(0),
+        object,
+    }];
+    let before = witness(s.game());
+    assert!(s.game_mut().step(0).is_err());
+    assert_eq!(witness(s.game()), before);
+}
+
+/// A spell or ability that stops for a decision is still resolving (CR
+/// 608.2m): the watch counts no resolution for it. Bolt sets off the
+/// Conqueror, whose gain sets off the Ogre's discard of the one card in hand.
+#[test]
+fn a_suspended_resolution_is_not_counted_toward_a_loop() {
+    use crate::support::{
+        game::{clear_hand, force_new_card_in_hand, inject_ability},
+        play::{cast_card, target_opponent},
+    };
+    use managym::state::ability::{Ability, Actor, Effect, TriggerCondition};
+
+    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        ogre_card,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::GainsLife {
+                who: Actor::You,
+                nth: None,
+            },
+            effects: vec![Effect::discard()],
+        },
+    );
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.set_player_mana_pool(0, "R");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    // Offer the one-card discard rather than skipping it.
+    s.game_mut().skip_trivial = false;
+    for _ in 0..20 {
+        if s.game().state.suspended_decision.is_some() {
+            break;
+        }
+        s.pass_priority();
+    }
+    assert!(s.game().state.suspended_decision.is_some());
+    assert_eq!(s.action_space().actions.len(), 1);
+    // Bolt and the Conqueror's trigger resolved; the Ogre's has not.
+    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
+    assert_eq!(watch.resolutions(), 2);
 }
 
 /// A long chain that uses something up is no loop (CR 104.4b asks for "no
