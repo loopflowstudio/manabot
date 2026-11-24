@@ -26,25 +26,35 @@ pre{overflow-x:auto;padding:.65rem .8rem;border-radius:.35rem;background:color-m
 </style>
 <main>
 <h1>Do the product’s concepts and the code’s concepts line up?</h1>
-<p><strong>Area reviewed:</strong> The complete MTG-421 branch against <code>main</code> (<code>main..e539326b</code>) — all 222 cohort rows (207 defined, 15 explicitly deferred, 0 awaiting audit) and every shared native rules, v11 observation/encoder, possible-world search, LLM text, structured-offer, combat-preview, recording, and Academy UI authority touched on the branch, reviewed as a whole after Alignment 5 (<code>57c18aa9</code>) and compression (<code>c791c157</code>). <strong>Why:</strong> Every planned cohort batch and all five concept alignments have now landed; walking the whole branch end-to-end as a fresh reader checks whether any multi-layer concept mismatch remains before gate.</p>
+<p><strong>Area reviewed:</strong> The complete MTG-421 branch against its base (<code>88ce96bd..ffbd50d5</code>) — all 222 Foundations cohort rows (207 defined, 15 explicitly deferred, 0 awaiting audit), the decomposition phase (<code>68ecc906</code>, <code>430cd595</code>), and every shared native rules, CR 613 layer, v11 observation/encoder, possible-world search, heuristic knowledge, LLM text, structured-offer, combat-preview, recording, and Academy UI authority touched on the branch. <strong>Why:</strong> Both the full card cohort (including Alignments 1–5) and the decomposition phase have now landed; reviewing the whole branch against its base as a fresh reader verifies whether any conceptual mismatch remains before gate.</p>
 
 <div class="callout">
 <strong>Verdict · Aligned (nothing to change in <code>scratch/plan.md</code>).</strong><br>
-Every product concept introduced or changed on MTG-421 now lines up with its native state, v11 tensor encoding, possible-world search, LLM text, recording narration, and Academy UI across normal, failure, and recovery paths. No remaining conceptual mismatch blocks gate.
+Every product concept introduced or reshaped on MTG-421 — including the decomposition phase’s single Aura enchant clause and unified continuous static-grant spelling — lines up with its native state, CR 613 evaluation, v11 tensor encoding, possible-world search, LLM text, recording narration, and Academy UI across normal, failure, and recovery paths. No conceptual mismatch blocks gate.
 </div>
 
 <h2>Whole-area concept alignment <span class="tag existing">Existing</span></h2>
 <table>
-<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>e539326b</code></caption>
+<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>ffbd50d5</code></caption>
 <tr><th>Product concept</th><th>Code concept</th><th>Aligned?</th></tr>
 <tr>
-  <td><strong>Combat damage assignment</strong> (CR 510.1c / 702.19b). Assigning combat damage is a numeric quantity choice (<code>minimum..=remaining</code>) for a specific attacker → blocker pair on public battlefield state; single-option assignments auto-assign; multi-blocker assignments for one attacker are one move.</td>
-  <td><code>Decision::AssignCombatDamage</code> in <code>combat_actions.rs</code> and <code>decision.rs</code>. <code>Game::announces_x</code> includes it, writing <code>action::HAS_X = 1</code> and <code>action::X = amount / 10</code> in v11 (amounts 15 vs. 16+ stay numerically distinct without a layout change), while <code>mode_description</code> keeps <code>"{attacker} assigns {n} to {blocker}, {rest} ..."</code> ahead of <code>"X = {mode}"</code>. <code>Observation::action_focus</code> returns <code>[attacker_perm_id, blocker_perm_id]</code> (matching <code>DeclareBlocker</code>), joining to both permanent rows in v11 and both subjects in Academy. <code>possible_worlds.rs</code> admits it in the Modal refresh arm. Academy’s <code>view.ts:anchorOf</code> keeps offers as prompt rail buttons with both combatants in <code>view.asked</code>; <code>prompt.ts</code> reads <code>"Assign combat damage"</code>; <code>recording.py</code> groups multi-blocker steps in <code>RESOLVING_STAGES</code> and preserves card-name capitalization.</td>
+  <td><strong>Aura “Enchant [quality]”</strong> (CR 702.5 / 303.4a / 704.5m). An Aura states what it enchants once; that single restriction governs cast targeting, attachment legality on the battlefield, and heuristic target extraction.</td>
+  <td><code>Effect::enchant(spec)</code> (constructs <code>Effect::AttachSourceTo { what: ObjectSelector::Target(spec) }</code>). <code>Object::enchant</code> reads it for CR 704.5m state-based actions; <code>Object::target_requirements_for_mode</code> derives cast targeting from it when <code>targeting</code> is omitted; <code>heuristic/knowledge.rs:first_spec</code> reads <code>AttachSourceTo.what.Target</code>. All 5 branch Auras (plus <code>Pacifism</code>) state only <code>Effect::enchant(spec)</code>. The 6 pre-existing base/TLA Auras also use <code>Effect::enchant(spec)</code> and keep their duplicate <code>targeting</code> solely to preserve pinned TLA checkpoint token programs.</td>
+  <td><span class="yes">Yes</span> · Decomposition phase landed (<code>68ecc906</code>, <code>430cd595</code>).</td>
+</tr>
+<tr>
+  <td><strong>Continuous static characteristic effects</strong> (CR 613). A static ability that modifies characteristics (name, types, colors, abilities/keywords, P/T) has one spelling; putting a non-layered rules effect in a continuous static fails loudly rather than silently doing nothing.</td>
+  <td><code>StaticAbility::continuous(scope, condition, modifications)</code> is used by every new branch static grant (<code>Kitesail Corsair</code>, <code>Kargan Dragonrider</code>, <code>Twinblade Paladin</code>, <code>Goblin Oriflamme</code>, <code>Pirate’s Cutlass</code>, plus all branch characteristic Auras and lords). <code>flow/layers.rs::node</code> lowers every static spelling into one <code>SourcePlan</code> and <code>debug_assert!(layer(m).is_some())</code> refuses a layerless modification in debug (<code>cr_613_continuous_static_without_a_layer_is_refused</code>). Legacy <code>KeywordGrant</code>/<code>PtBuff</code>/<code>TypeGrant</code> remain only on base-existing definitions and <code>StaticScope::SpellsYouControl</code>.</td>
+  <td><span class="yes">Yes</span> · Decomposition phase landed (<code>68ecc906</code>).</td>
+</tr>
+<tr>
+  <td><strong>Combat damage assignment</strong> (CR 510.1c / 702.19b). Assigning combat damage is a numeric quantity choice (<code>minimum..=remaining</code>) for an attacker → blocker pair on public battlefield state; single-option assignments auto-assign; multi-blocker assignments for one attacker are one move.</td>
+  <td><code>Decision::AssignCombatDamage</code> in <code>combat_actions.rs</code> and <code>decision.rs</code>. <code>Game::announces_x</code> includes it, writing <code>action::HAS_X = 1</code> and <code>action::X = amount / 10</code> in v11 (amounts 15 vs. 16+ stay numerically distinct without a layout change), while <code>mode_description</code> keeps <code>"{attacker} assigns {n} to {blocker}, {rest} ..."</code> ahead of <code>"X = {mode}"</code>. <code>Observation::action_focus</code> returns <code>[attacker_perm_id, blocker_perm_id]</code>, joining to both permanent rows in v11 and both subjects in Academy. <code>possible_worlds.rs</code> admits it in the Modal refresh arm. Academy’s <code>view.ts</code> routes offers to prompt rail buttons with both combatants in <code>view.asked</code>; <code>prompt.ts</code> reads <code>"Assign combat damage"</code>; <code>recording.py</code> groups consecutive steps in <code>RESOLVING_STAGES</code> and preserves card-name capitalization.</td>
   <td><span class="yes">Yes</span> · Alignment 5 landed and compressed (<code>57c18aa9</code>, <code>c791c157</code>).</td>
 </tr>
 <tr>
   <td><strong>Spell-created combat-damage prevention shield &amp; replacement ordering</strong> (<code>Fleeting Flight</code>, <code>Fog Bank</code>, <code>Twinflame Tyrant</code>, CR 615.1 / 616.1). A resolved shield protects one creature from combat damage even if it loses abilities, competes distinctly against a second shield or a printed replacement, and names its source spell when ordered.</td>
-  <td><code>Modification::PreventCombatDamage</code> lives on the protected permanent; combat damage offers <code>ReplacementEffect::PreventCombatDamage</code> (distinct from <code>Fog Bank</code>’s two-way <code>PreventCombatDamageToOrFromSelf</code>), keyed by <code>ReplacementId { source: object, effect: Some(timestamp), .. }</code> (<code>ReplacementCandidate::shield</code>), labelled via <code>source_definition</code> (<code>"Fleeting Flight: Prevent all combat damage"</code>) while keeping <code>source()</code> on the protected permanent. Wired across all 5 observability/text layers (<code>MODIFICATION_NAMES</code>/<code>MODIFICATION_VARIANTS</code> = 39). <code>OrderReplacement</code> focuses the source permanent (joining in v11 and direct-manipulating on the board in Academy), is admitted in <code>possible_worlds.rs</code>, reads <code>"Choose which replacement applies next"</code> in <code>prompt.ts</code>, and groups in <code>recording.py</code>.</td>
+  <td><code>Modification::PreventCombatDamage</code> lives on the protected permanent; combat damage offers <code>ReplacementEffect::PreventCombatDamage</code> (distinct from <code>Fog Bank</code>’s two-way <code>PreventCombatDamageToOrFromSelf</code>), keyed by <code>ReplacementId { source: object, effect: Some(timestamp), .. }</code> (<code>ReplacementCandidate::shield</code>), labelled via <code>source_definition</code> (<code>"Fleeting Flight: Prevent all combat damage"</code>) while keeping <code>source()</code> on the protected permanent. Wired across all 5 observability/text layers (<code>MODIFICATION_NAMES</code>/<code>MODIFICATION_VARIANTS</code> = 39). <code>OrderReplacement</code> focuses the source permanent, is admitted in <code>possible_worlds.rs</code>, reads <code>"Choose which replacement applies next"</code> in <code>prompt.ts</code>, and groups in <code>recording.py</code>.</td>
   <td><span class="yes">Yes</span> · Alignments 4 &amp; 5 landed (<code>14fc8277</code>, <code>8068a268</code>, <code>57c18aa9</code>).</td>
 </tr>
 <tr>
@@ -54,12 +64,12 @@ Every product concept introduced or changed on MTG-421 now lines up with its nat
 </tr>
 <tr>
   <td><strong>In-library reveal &amp; bottom-placement knowledge</strong> (<code>Spinner of Souls</code>, <code>Campus Guide</code>, <code>Uncharted Voyage</code>, <code>Cruel Tutor</code>). Revealed library cards never pass through Exile; top/bottom choices say <code>On top</code> / <code>On the bottom</code>; bottom placement keeps known top positions and remembers a single revealed bottom card.</td>
-  <td><code>place_entrant_on_bottom</code> → <code>LibraryKnowledge::move_top_to(bottom)</code> preserves upper facts; <code>Effect::Reveal</code> + <code>selected_revealed</code> + <code>remember_placed_top</code> records public vs. owner-only top knowledge; in-library <code>Effect::RevealUntilToHand</code> uses <code>inspected_library_departure</code> and records <code>public[0]</code>/<code>own[0]</code> before moving a single passed card to the bottom. Optional search/reveal uses <code>Effect::Modal</code> with an empty second mode (matching <code>Solemn Simulacrum</code>).</td>
+  <td><code>place_entrant_on_bottom</code> → <code>LibraryKnowledge::move_top_to(bottom)</code> preserves upper facts; <code>Effect::Reveal</code> + <code>selected_revealed</code> + <code>remember_placed_top</code> records public vs. owner-only top knowledge; in-library <code>Effect::RevealUntilToHand</code> uses <code>inspected_library_departure</code> and records <code>public[0]</code>/<code>own[0]</code> before moving a single passed card to the bottom (<code>shuffle_unseen_libraries</code> pins ranks present in <code>public</code>/<code>own</code> directly). Optional search/reveal uses <code>Effect::Modal</code> with an empty second mode (matching <code>Solemn Simulacrum</code>).</td>
   <td><span class="yes">Yes</span> · Alignments 2 &amp; 2b landed (<code>6a35dbaf</code>, <code>51b89332</code>, <code>ee88092e</code>).</td>
 </tr>
 <tr>
   <td><strong>Layered names, life-gated statics, attachments, and activation targeting</strong> (<code>Witness Protection</code>, <code>Eaten by Piranhas</code>, <code>Twinblade Paladin</code>, <code>Treetop Snarespinner</code>, <code>Honest Work</code>, <code>Pirate’s Cutlass</code>, <code>Arcanis</code>). One name-setting layer operation; independent name/subtype flags; cache invalidation on life change; Auras and Equipment share one attachment subject; activated abilities can target their own source unless restricted by “another”.</td>
-  <td><code>Modification::SetName</code> is the sole name operation (folded <code>Operation::Name</code>); <code>name_set</code> and <code>creature_types_set</code> gate observation rows separately; <code>Revisions.life</code> / <code>ReadSet.life</code> invalidates <code>Condition::LifeAtLeast</code>; <code>TriggerSubject::Attached</code> unifies Auras and Equipment (with token rename from <code>EnchantedCreature</code>); <code>ActivatedAbilityOnStack.attached</code> removed; <code>ObjectSelector::ExactSource</code> binds exact battlefield identity; <code>TargetRequirement::another</code> governs activated self-targeting.</td>
+  <td><code>Modification::SetName</code> is the sole name operation (folded <code>Operation::Name</code>); <code>name_set</code> and <code>creature_types_set</code> gate observation rows separately; <code>Revisions.life</code> / <code>ReadSet.life</code> invalidates <code>Condition::LifeAtLeast</code>; <code>ReadSet::predicate</code> tracks <code>min_toughness</code> under <code>POWER</code>; <code>TriggerSubject::Attached</code> unifies Auras and Equipment (with token rename from <code>EnchantedCreature</code>); <code>ActivatedAbilityOnStack.attached</code> removed; <code>ObjectSelector::ExactSource</code> binds exact battlefield identity; <code>TargetRequirement::another</code> governs activated self-targeting.</td>
   <td><span class="yes">Yes</span> · Alignment 3 landed (<code>51b89332</code>, <code>1759e827</code>).</td>
 </tr>
 <tr>
@@ -74,7 +84,43 @@ Every product concept introduced or changed on MTG-421 now lines up with its nat
 </tr>
 </table>
 
-<h2>End-to-end walkthrough of the final alignment <span class="tag existing">Existing</span></h2>
+<h2>End-to-end walkthroughs <span class="tag existing">Existing</span></h2>
+
+<h3>1 · Authoring &amp; layer evaluation (decomposition phase, <code>68ecc906</code> / <code>430cd595</code>)</h3>
+<div class="compare">
+<div class="panel">
+<h3>Before decomposition (<code>6f9a3b31</code>)</h3>
+<pre>Unflinching Courage (Aura):
+  targeting:     [TargetRequirement::one(Creature)]
+  spell_effects: [AttachSourceTo { what: Target(Creature) }]
+  // cast target &amp; CR 704.5m recheck stated twice
+
+Pirate's Cutlass / Kargan Dragonrider:
+  statics: [PtBuff { .. }] / [KeywordGrant { .. }]
+  // three parallel static grant spellings
+
+layers.rs::node(StaticAbility::Continuous):
+  if let Some(l) = layer(m) { add(l, m); }
+  // layerless Modification::CantBlock silently ignored</pre>
+</div>
+<div class="panel">
+<h3>Delivered on HEAD (<code>ffbd50d5</code>)</h3>
+<pre>Unflinching Courage (Aura):
+  spell_effects: [Effect::enchant(TargetSpec::Creature)]
+  // one source for Object::enchant, target_requirements,
+  // and heuristic::knowledge::first_spec
+
+Pirate's Cutlass / Kargan Dragonrider:
+  statics: [StaticAbility::continuous(scope, cond, mods)]
+  // one continuous spelling for every new grant
+
+layers.rs::node(StaticAbility::Continuous):
+  debug_assert!(layer(m).is_some(), ".. has no layer");
+  // fails immediately on first characteristic read</pre>
+</div>
+</div>
+
+<h3>2 · Combat damage assignment &amp; modal consumers (Alignment 5, <code>57c18aa9</code> / <code>c791c157</code>)</h3>
 <div class="compare">
 <div class="panel">
 <h3>Before Alignment 5 (<code>6a572f60</code>)</h3>
@@ -91,7 +137,7 @@ Every product concept introduced or changed on MTG-421 now lines up with its nat
     recording.py -&gt; multi-blocker steps split into separate moves</pre>
 </div>
 <div class="panel">
-<h3>Delivered on HEAD (<code>e539326b</code>)</h3>
+<h3>Delivered on HEAD (<code>ffbd50d5</code>)</h3>
 <pre>17/3 trampling War Mammoth blocked by 1/1 Llanowar Elves:
   v11 actions (no layout/width change):
     action::HAS_X = 1.0, action::X = amount / 10.0  (1.5 vs 1.6 vs 1.7)
@@ -108,16 +154,18 @@ Every product concept introduced or changed on MTG-421 now lines up with its nat
 
 <h3>Normal, failure, and recovery checks</h3>
 <ul>
-  <li><strong>Normal path:</strong> 17/3 trampling <code>War Mammoth</code> blocked by <code>Llanowar Elves</code> produces 17 offers with distinct <code>has_x = 1.0</code>, <code>x = 0.1..1.7</code>, exact <code>[mammoth, elves]</code> permanent focus rows, preserved <code>"assigns"</code> descriptions, admitted possible worlds, prompt rail buttons highlighting both combatants, and single-move narration across multi-blockers.</li>
-  <li><strong>Failure &amp; recovery:</strong> Out-of-range modes fail with <code>AgentError("illegal combat damage assignment")</code> leaving <code>suspended_decision</code> intact; stale revisions fail Command binding; single-option assignments auto-assign before a prompt opens; stored v11 TLA pilots and curated records are unchanged (zero layout or vocabulary break).</li>
-  <li><strong>Minor non-blocking observation:</strong> <code>ActionSpace.focus</code> at <code>decision.rs:1612</code> still holds card object IDs while per-action <code>Observation::action_focus</code> holds permanent IDs (matching <code>DeclareBlocker</code>). No consumer reads <code>ActionSpace.focus</code> for <code>Modal</code> spaces (only <code>search.rs</code> compares it for equality), so nothing disagrees at runtime. Similarly, <code>OrderReplacement</code> offers anchor directly onto their replacement-source permanent on the board (direct manipulation, with every offer also listed in the rail), which is distinct from <code>AssignCombatDamage</code>’s 2..N identical-subject numeric rail buttons.</li>
+  <li><strong>Normal paths:</strong> Branch Auras cast, attach, and recheck CR 704.5m from their single <code>Effect::enchant(spec)</code> clause; all new continuous static grants evaluate through <code>StaticAbility::continuous</code>; 17/3 trampling <code>War Mammoth</code> blocked by <code>Llanowar Elves</code> produces 17 offers with distinct <code>has_x = 1.0</code>, <code>x = 0.1..1.7</code>, exact <code>[mammoth, elves]</code> permanent focus rows, admitted possible worlds, prompt rail buttons highlighting both combatants, and single-move narration across multi-blockers.</li>
+  <li><strong>Failure &amp; recovery:</strong> A layerless <code>Modification</code> placed inside <code>StaticAbility::Continuous</code> trips the <code>debug_assert!</code> on first evaluation instead of silently no-oping; out-of-range combat damage modes fail with <code>AgentError("illegal combat damage assignment")</code> leaving <code>suspended_decision</code> intact; stale revisions fail Command binding; pre-existing base/TLA card definitions keep identical serialized values so stored v11 TLA pilots are unchanged (gate’s release-extension rebuild re-verifies <code>430cd595</code> against <code>test_pinned_pilot.py</code>, <code>test_record_vocabulary.py</code>, and <code>test_static_ability_tokens.py</code>).</li>
+  <li><strong>Minor non-blocking observations:</strong> <code>ActionSpace.focus</code> at <code>decision.rs:1612</code> still holds card object IDs while per-action <code>Observation::action_focus</code> holds permanent IDs (matching <code>DeclareBlocker</code>); no consumer reads <code>ActionSpace.focus</code> for <code>Modal</code> spaces. Similarly, <code>OrderReplacement</code> offers anchor directly onto their replacement-source permanent on the board (with every offer also listed in the rail), distinct from <code>AssignCombatDamage</code>’s numeric rail buttons.</li>
 </ul>
 
 <h2>Outside this work (noted plainly, not part of MTG-421)</h2>
 <ul>
-  <li><strong>Expressing required candidates inside compound <code>ChoiceStep::Select</code>:</strong> Extending the structured-offer wire schema with per-candidate required flags (so <code>compound_offers</code> can keep a single multi-select even when <code>Juggernaut</code> or lure effects are active) is a protocol change. Falling back to exact atomic offers matches the existing <code>Menace</code> pattern and keeps every surface sound today.</li>
+  <li><strong>Unifying static and record prohibitions:</strong> Static prohibitions (<code>Restriction::{CantAttackOrBlock, DoesntUntap}</code>, <code>BlockRestriction::CantBlock</code>, <code>CantBeBlockedIf</code>) and resolved record prohibitions (<code>Modification::{CantBlock, DoesntUntap, CantBeBlocked}</code>) are two vocabularies for one rules fact. Folding them into one vocabulary changes TLA card token programs and requires a declared pinned-pilot break; tracked in <code>scratch/plan.md</code> as a candidate coverage-wave Task.</li>
+  <li><strong>Retiring duplicate <code>targeting</code> and legacy static grant variants on pre-existing TLA/base definitions:</strong> Removing <code>targeting</code> from the 6 pre-existing Auras and migrating TLA’s <code>KeywordGrant</code>/<code>PtBuff</code>/<code>TypeGrant</code> definitions to <code>StaticAbility::Continuous</code> also changes TLA token programs and requires a declared pinned-pilot break.</li>
+  <li><strong>Expressing required candidates inside compound <code>ChoiceStep::Select</code>:</strong> Extending the structured-offer wire schema with per-candidate required flags (so <code>compound_offers</code> keeps one multi-select when <code>Juggernaut</code> or lure effects are active) is a protocol change. Falling back to exact atomic offers matches <code>Menace</code> and keeps every surface sound today.</li>
   <li><strong><code>CardPredicate</code> inline size (<code>min_toughness: Option&lt;u8&gt;</code>) &amp; competing death-exile replacements:</strong> Boxing cold <code>CardPredicate</code> fields and moving <code>ExileIfWouldDie</code> / <code>Finality</code> into <code>collect_replacements</code> (needed once any-origin replacements like <code>Dryad Militant</code> / <code>Darksteel Colossus</code> enter) remain separate engine tracks outside MTG-421.</li>
-  <li><strong>Preserving known cards below <code>k &gt;= 2</code> passed cards in <code>reveal_until_to_hand</code>:</strong> Shifting untouched facts below <code>k &gt;= 2</code> randomly bottomed cards requires a targeted top-prefix removal helper on <code>LibraryKnowledge</code> rather than <code>reposition_library_object</code>’s <code>forget_order()</code>; lossy forgetting is always sound and outside MTG-421.</li>
+  <li><strong>Preserving known cards below <code>k &gt;= 2</code> passed cards in <code>reveal_until_to_hand</code>:</strong> Shifting untouched facts below <code>k &gt;= 2</code> randomly bottomed cards requires a targeted top-prefix removal helper on <code>LibraryKnowledge</code>; lossy forgetting is always sound and outside MTG-421.</li>
 </ul>
 
 <h2>Questions for review</h2>
@@ -126,6 +174,7 @@ Every product concept introduced or changed on MTG-421 now lines up with its nat
   <li><strong>Combat damage numeric encoding in v11:</strong> <strong>1a · Reuse <code>announces_x</code> → <code>action::HAS_X</code> / <code>action::X</code> (no v11 layout change), keeping <code>AssignCombatDamage</code>’s custom description ahead of <code>"X = {mode}"</code> (built).</strong> 1b · Add a dedicated numeric column to the <code>actions</code> v11 buffer for assigned damage.</li>
   <li><strong>Academy placement of <code>assign_combat_damage</code> offers:</strong> <strong>2a · Keep them as prompt rail buttons via <code>view.ts:anchorOf</code> and highlight <code>[attacker, blocker]</code> via <code>askedObjects</code> so 2..N damage choices never hide in a card popup menu (built).</strong> 2b · Anchor them on the attacker card via the default object-anchor path.</li>
   <li><strong>Academy placement of <code>order_replacement</code> offers:</strong> <strong>3a · Keep direct-manipulation anchoring on each replacement source’s permanent (with every offer also in the rail’s “All legal choices”) (built).</strong> 3b · Route <code>order_replacement</code> to prompt rail buttons like <code>assign_combat_damage</code> so competing replacements sit directly under <code>"Choose which replacement applies next"</code> even when two shields share one permanent.</li>
+  <li><strong>Pre-existing Aura duplicate <code>targeting</code> &amp; legacy static grants:</strong> <strong>4a · Keep base/TLA definitions byte-identical on MTG-421 (using <code>Effect::enchant</code> everywhere, dropping duplicate <code>targeting</code> and legacy grant variants on new cards only) and fold TLA + prohibition vocabularies in a separate pinned-pilot break Task (built).</strong> 4b · Declare a pinned-pilot break on MTG-421 to remove duplicate <code>targeting</code> and legacy grant variants from TLA now.</li>
 </ol>
 </main>
 </html>
