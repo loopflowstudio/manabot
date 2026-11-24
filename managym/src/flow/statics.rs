@@ -1098,11 +1098,7 @@ impl Game {
             source.as_ref().map(|s| s.name.as_str()),
         )
     }
-    /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
-    /// untapped, and a creature under its controller's control since the
-    /// turn began or with haste, as its characteristics report it. A
-    /// temporary grant must not erase the restriction that applies again when
-    /// the grant expires (CR 702.10).
+
     /// Whether an ability's "tap [its grantor]" cost can be paid: the
     /// granting permanent is untapped. Summoning sickness doesn't matter
     /// (CR 302.6). True for an ability without that cost.
@@ -1115,6 +1111,11 @@ impl Game {
                 .is_some_and(|grantor| !grantor.tapped)
     }
 
+    /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
+    /// untapped, and a creature under its controller's control since the
+    /// turn began or with haste, as its characteristics report it. A
+    /// temporary grant must not erase the restriction that applies again when
+    /// the grant expires (CR 702.10).
     pub(crate) fn permanent_can_tap(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;

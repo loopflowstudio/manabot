@@ -280,9 +280,8 @@ impl Permanent {
 
     /// CR 122.1d: a tapped permanent with a stun counter that would become
     /// untapped stays tapped and loses one stun counter instead. Every untap
-    /// path (untap step, effects, costs) goes through here.
-    /// Untap it, unless a stun counter is removed instead (CR 122.1d).
-    /// Returns whether it went from tapped to untapped.
+    /// path (untap step, effects, costs) goes through here. Returns whether
+    /// it went from tapped to untapped.
     pub fn untap(&mut self) -> bool {
         if self.tapped && self.counters.get(CounterKind::Stun) > 0 {
             self.counters.change(CounterKind::Stun, -1);

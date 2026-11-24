@@ -572,33 +572,28 @@ impl MandatoryLoopWatch {
     /// Herald of Eternal Dawn), asked only when that life reaches a new low.
     fn repeats(&mut self, now: LoopProgress, can_lose: impl Fn(usize) -> bool) -> bool {
         self.resolutions += 1;
-        let progressed = match &mut self.extremes {
-            None => true,
-            Some(extremes) => {
-                let mut progressed = false;
-                if now.stack < extremes.stack {
-                    extremes.stack = now.stack;
-                    progressed = true;
-                }
-                for seat in 0..2 {
-                    if now.libraries[seat] < extremes.libraries[seat] {
-                        extremes.libraries[seat] = now.libraries[seat];
-                        progressed = true;
-                    }
-                    if now.poison[seat] > extremes.poison[seat] {
-                        extremes.poison[seat] = now.poison[seat];
-                        progressed = true;
-                    }
-                    if now.life[seat] < extremes.life[seat] {
-                        extremes.life[seat] = now.life[seat];
-                        progressed |= can_lose(seat);
-                    }
-                }
-                progressed
-            }
-        };
-        if self.extremes.is_none() {
+        let Some(extremes) = &mut self.extremes else {
             self.extremes = Some(now);
+            return false;
+        };
+        let mut progressed = false;
+        if now.stack < extremes.stack {
+            extremes.stack = now.stack;
+            progressed = true;
+        }
+        for seat in 0..2 {
+            if now.libraries[seat] < extremes.libraries[seat] {
+                extremes.libraries[seat] = now.libraries[seat];
+                progressed = true;
+            }
+            if now.poison[seat] > extremes.poison[seat] {
+                extremes.poison[seat] = now.poison[seat];
+                progressed = true;
+            }
+            if now.life[seat] < extremes.life[seat] {
+                extremes.life[seat] = now.life[seat];
+                progressed |= can_lose(seat);
+            }
         }
         self.without_progress = if progressed {
             0
