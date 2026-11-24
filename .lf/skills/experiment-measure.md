@@ -1,53 +1,47 @@
 ---
 requires: a training or evaluation speed question and its workloads
-produces: the measured bottleneck and comparison plan in `scratch/plan.md`
+produces: a measured bottleneck and comparison plan in `scratch/plan.md`
+action_style: procedural
 ---
-Measure what training and evaluation spend time on, then choose a software improvement worth making.
+Measure where training and evaluation spend time, then plan only a software speedup backed by numbers.
 
 1. Read [training and evaluation performance](../../docs/workflows.md#training-and-evaluation-performance),
-   `experiments/reports/training-update-time.md` and the retained receipts
-   first. Keep observations apart from suspected causes. Use this Task's
-   workload and model sizes: a speed question is not a campaign, and this
-   skill grants no resource or spending authority. Frozen worlds, observation
-   versions and recipes don't change. Never induce load.
-2. Declare the comparison before running it, on one machine: revisions,
-   build, CPU and quota, device, world, input version and capacities,
-   vocabulary, precision, model size, recipe or checkpoint, seeds, streams,
-   batch and serving settings, warmup, included updates, repetitions and
-   limits. Read `TrainingRun.host`; a GPU label isn't host identity.
-   Interleave baseline and candidate runs to expose drift. Say whether the
-   goal is one seed's progress or aggregate throughput or cost; for packed
-   runs keep per-seed latency and aggregate throughput apart, from overlapping
+   `experiments/reports/training-update-time.md` and the relevant run
+   receipts first. Separate observations from suspected causes. Stay on this
+   Task's workload and model sizes—this is not a campaign and grants no
+   spending authority. Frozen worlds, observation versions and recipes don't
+   change. Never induce load.
+2. Fix the comparison on one machine before running: `TrainingRun.host` (not
+   just the GPU label), revisions, build, device, model size, precision,
+   input capacities, vocabulary, recipe or checkpoint, seeds, warmup,
+   included updates and repetitions. Interleave baseline and candidate runs
+   to expose host drift. State whether the goal is one seed's progress or
+   aggregate throughput; for packed runs measure both from overlapping
    post-warmup samples and matched solo ordinals.
-3. Start from the **Update time** Perf series and its per-update rows. Split
-   collection (native stepping, encoding, preparation, inference and action
-   selection, recording, assembly) from learner work, with inference calls and
-   rows per call beside seconds, decisions and games per update. Nested clocks
-   don't add; missing older series stay missing; across a recovery read
-   per-update rows, not the last attempt's timers. Check complete-game closure
-   and `StageRecord.idle_stream_steps` before blaming small batches on serving
-   (older receipts default it to zero).
-4. Measure with the maintained tools:
-   - Training: `scripts/bench_training_update.py` with explicit `--recipe`,
-     `--seed` and `--device` and separate `--json` paths. A capacity failure
-     stops the reading; don't shrink the workload.
-   - Once Task 855bff's size-ladder benchmark ships, its documented command is
-     the reference; until then measure each size with the current benchmark
-     and build no second ladder.
-   - CUDA: a separate `--device cuda --cuda-counts PATH` run counts kernels
-     for the whole run, not per phase; `scripts/diagnose_training_transfers.py`
-     probes recording and transfers. Neither is throughput.
+3. Read the **Update time** Perf series and per-update rows. Split collection
+   (stepping, encoding, preparation, inference, recording, assembly) from
+   learner work, alongside inference calls and rows per call. Nested clocks
+   don't add; across a recovery read per-update rows, not the last attempt's
+   timers. Check `StageRecord.idle_stream_steps` before blaming small batches
+   on serving (older receipts default it to zero).
+4. Use the maintained tools:
+   - Training: `scripts/bench_training_update.py` with `--recipe`, `--seed`,
+     `--device` and separate `--json` paths (or the size-ladder command once
+     documented in `docs/workflows.md`). Stop on a capacity failure; don't
+     shrink the workload.
+   - CUDA diagnostics: `--device cuda --cuda-counts PATH` (whole-run counts,
+     not per phase) and `scripts/diagnose_training_transfers.py` for transfer
+     probes; neither measures throughput.
    - Evaluation: `manabot.eval.serving_benchmark` with a declared
-     `BenchmarkPlan`, per [performance evidence and calibration](../../docs/evaluation.md#performance-evidence-and-calibration).
-     Keep `performance.json` with its identities; cell, allocation and
-     evaluator intervals overlap and exclude preparation and billing.
-5. Keep behavior digests beside the timings: raw and EMA weights, optimizer
-   state and sampled games for deterministic training; matched decisions and
-   action agreement for evaluation; declared tolerances for what isn't
-   deterministic. Precision, policy-lag or batch-composition changes need
-   learning evidence this workflow doesn't produce.
-6. Write the plan: the bottleneck, the change as slices, the **Delete — do not
-   maintain** list, focused checks and exact commands, with receipt paths and
-   limits beside each claim. When no useful change is supported, say why and
-   plan no slices. Unavailable hardware is a deferred check with its exact
-   command; don't rent, substitute CPU for CUDA or claim a gain.
+     `BenchmarkPlan` ([evaluation performance](../../docs/evaluation.md#performance-evidence-and-calibration)),
+     keeping `performance.json`.
+5. Keep behavior digests beside timings: raw and EMA weights, optimizer state
+   and sampled games for deterministic training; matched decisions for
+   evaluation; declared tolerances for nondeterminism. Precision, policy-lag
+   or batch-composition changes need separate learning runs outside this
+   workflow.
+6. Write the bottleneck, slices, **Delete — do not maintain** list, focused
+   checks and exact commands into `scratch/plan.md`, with receipt paths and
+   limits beside each claim. Plan no slices if no real win is supported.
+   Leave unavailable hardware as a deferred command; don't rent, substitute
+   CPU for CUDA or claim a gain.

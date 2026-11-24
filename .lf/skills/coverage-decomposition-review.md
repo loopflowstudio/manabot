@@ -1,18 +1,23 @@
 ---
-requires: the decomposition plan, the changed consumers and their behavior checks
-produces: scalability findings in `scratch/plan.md` and the phase's loop decision
+requires: a decomposition plan, the changed consumers and their behavior checks
+produces: composability findings in `scratch/plan.md`
+action_style: procedural
 ---
-Judge whether real cards now compose through one rules authority, then decide whether the decomposition phase is done.
+Judge whether real cards compose through one rules authority without card-specific engine logic.
 
 1. Follow at least two distinct representative consumers through the shared
-   mechanism. The planned deletions removed their exclusive predecessors,
-   tests and data paths, and required behavior lives on the surviving owner.
-2. Look for card-specific dispatch, duplicated rules state, adapters and
-   unused abstractions. A smaller diff or a renamed type doesn't show
-   scalability.
-3. Reuse the focused results for the current head; gate owns the suites.
+   mechanism. Confirm the planned deletions removed their exclusive
+   predecessors, tests and data paths while keeping required behavior on the
+   surviving owner.
+2. Flag card-specific dispatch, duplicated rules state, adapters and unused
+   abstractions. A smaller diff or a renamed type doesn't prove cards
+   compose.
+3. Reuse the current head's focused test results; leave full suites to CI.
+   Write concrete findings into `scratch/plan.md` without editing code.
 
-Iterate, naming the remaining duplication or unbuilt slices, while the
-criterion fails. A rules defect found here goes back to the working contract
-and its affected checks before this phase can pass, and voids later
-performance numbers. Advance when the criterion holds.
+When deciding whether to continue:
+
+- **Iterate** with the remaining duplication, unbuilt slices or any rules
+  defect (a rules defect voids dependent numbers and fixes the contract
+  first).
+- **Advance** when the criterion holds.
