@@ -274,6 +274,10 @@ impl Game {
             }
             performed = true;
         }
+        if performed {
+            self.invalidate_mana_cache(PlayerId(0));
+            self.invalidate_mana_cache(PlayerId(1));
+        }
 
         // CR 704.5d-e — A token in a zone other than the battlefield, or a
         // copy of a spell in a zone other than the stack, ceases to exist.

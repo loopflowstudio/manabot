@@ -872,6 +872,32 @@ pub struct StaticContinuous {
     pub modifications: Vec<crate::effect::Modification<LayerValue>>,
 }
 
+impl StaticAbility {
+    /// Whether this can change the mana abilities of a permanent other than
+    /// its source, whoever controls it: grants, losses and type changes that
+    /// add or remove intrinsic land mana abilities.
+    pub fn affects_mana(&self) -> bool {
+        use crate::effect::Modification as M;
+        match self {
+            Self::AttachedSetsCharacteristics(_)
+            | Self::AttachedHas(_)
+            | Self::SetsLandType(_)
+            | Self::GrantsAnyColorManaAbility(_) => true,
+            Self::Continuous(continuous) => continuous.modifications.iter().any(|m| {
+                matches!(
+                    m,
+                    M::LoseAllAbilities
+                        | M::LoseNonManaAbilities
+                        | M::GrantActivated(_)
+                        | M::SetTypes { .. }
+                        | M::AddSubtypes(_)
+                )
+            }),
+            _ => false,
+        }
+    }
+}
+
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
@@ -1478,13 +1504,6 @@ impl PrintedCharacteristics {
     pub fn attached_grants(&self) -> impl Iterator<Item = &ActivatedAbilityDefinition> {
         self.statics.iter().filter_map(|ability| match ability {
             StaticAbility::AttachedHas(granted) => Some(granted),
-            _ => None,
-        })
-    }
-
-    pub fn attached_characteristics(&self) -> Option<&SetCharacteristics> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::AttachedSetsCharacteristics(set) => Some(set),
             _ => None,
         })
     }

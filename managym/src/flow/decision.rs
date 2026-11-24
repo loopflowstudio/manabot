@@ -1433,7 +1433,10 @@ impl Game {
                                 };
                                 (
                                     ZoneType::Battlefield,
-                                    ZoneEntry::from_spell(frame.controller, spell),
+                                    ZoneEntry {
+                                        attached_to: attach_to,
+                                        ..ZoneEntry::from_spell(frame.controller, spell)
+                                    },
                                 )
                             } else {
                                 (ZoneType::Graveyard, Default::default())
@@ -1468,14 +1471,6 @@ impl Game {
                                     crate::state::effect::Modification::AddKeywords(gained),
                                     crate::state::effect::EffectDuration::EndOfTurn,
                                 );
-                            }
-                            if attach_to.is_some() {
-                                self.state.permanents[permanent_id]
-                                    .as_mut()
-                                    .expect("entered")
-                                    .attached_to = attach_to;
-                                self.invalidate_mana_cache(PlayerId(0));
-                                self.invalidate_mana_cache(PlayerId(1));
                             }
                         }
                         self.capture_resolution(&frame);

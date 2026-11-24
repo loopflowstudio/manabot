@@ -826,6 +826,11 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
+        let departing_affects_mana = old_zone == Some(ZoneType::Battlefield)
+            && self.state[object_id]
+                .statics
+                .iter()
+                .any(StaticAbility::affects_mana);
         // From here `object_id` is the appearance this move makes.
         let object_id = self
             .state
@@ -880,6 +885,7 @@ impl Game {
             permanent.spell_entry = entry.spell;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
+            permanent.attached_to = entry.attached_to;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state[object_id].types.is_land() {
@@ -924,16 +930,15 @@ impl Game {
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_object, to_zone, followups);
         }
-        // An attachment that grants or removes abilities changes the mana
-        // its creature's controller, possibly the opponent, can produce.
-        let card_def = &self.state[object_id];
-        if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
-            && (card_def.attached_characteristics().is_some()
-                || card_def.attached_grants().next().is_some()
-                || card_def
+        // A static that grants or removes abilities changes the mana another
+        // permanent's controller, possibly the opponent, can produce. The
+        // departing form's statics are read before the move restores its card.
+        if departing_affects_mana
+            || (to_zone == ZoneType::Battlefield
+                && self.state[object_id]
                     .statics
                     .iter()
-                    .any(|ability| matches!(ability, StaticAbility::SetsLandType(_))))
+                    .any(StaticAbility::affects_mana))
         {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));

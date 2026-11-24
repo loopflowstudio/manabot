@@ -726,6 +726,9 @@ impl<'a> Projection<'a> {
         if entry.transformed {
             self.field("enters transformed", &true);
         }
+        if let Some(object) = entry.attached_to {
+            self.object("enters attached to", object);
+        }
     }
 
     fn batch(&mut self, batch: &EventBatch) {

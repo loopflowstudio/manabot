@@ -50,6 +50,13 @@ pub(crate) struct ZoneEntry {
     /// v16, and `PendingEvent::copy_chosen` records the answered choice.
     #[serde(skip)]
     pub entry_copy: bool,
+    /// Battlefield: an Aura spell enters attached to this object (CR 303.4f),
+    /// so triggers on its entry see it attached (CR 603.6a).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attached_to: Option<ObjectId>,
     /// The instruction removes the publicly identified top position.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub library_top_departure: bool,
