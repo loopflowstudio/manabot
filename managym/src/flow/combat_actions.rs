@@ -312,13 +312,9 @@ impl Game {
     }
 
     pub(crate) fn eligible_attackers(&self, player: PlayerId) -> Vec<PermanentId> {
-        let mut out = Vec::new();
-        for permanent_id in self.battlefield_permanents(player) {
-            if self.permanent_can_attack(permanent_id) {
-                out.push(permanent_id);
-            }
-        }
-        out
+        self.iter_battlefield_permanents(player)
+            .filter(|&permanent_id| self.permanent_can_attack(permanent_id))
+            .collect()
     }
 
     /// Whether a permanent can be declared as an attacker (CR 508.1a):
@@ -345,13 +341,9 @@ impl Game {
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
-        let mut out = Vec::new();
-        for permanent_id in self.battlefield_permanents(player) {
-            if self.can_block(permanent_id) {
-                out.push(permanent_id);
-            }
-        }
-        out
+        self.iter_battlefield_permanents(player)
+            .filter(|&permanent_id| self.can_block(permanent_id))
+            .collect()
     }
 
     /// Whether the permanent may be declared as a blocker at all (CR
