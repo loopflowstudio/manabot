@@ -21,6 +21,27 @@ At `fac7b31d05`, the rebuilt CPython 3.13 release extension admitted all 36 defi
 
 **Batch 5d compression.** All 36 directed fixtures and 16 controls passed in the debug test profile, including Arcanis, Avatar Destiny and Soul-Guide Lantern. Registered-printing conformance passed. Across all six unconditional Aura and Equipment grants, the second friendly Ogre and the opposing Ogre stayed 2/2 with no keywords. On removal the wearer also returned to 2/2 with no keywords. The pre-change and rebuilt CPython 3.13 extensions produced identical SHA-256 digests for the serialized definitions and the complete 685-row catalog token table.
 
+**Batch 5d behavior review at `8098ca4c`.** This review ran the complete debug cards and engine test targets, not only the filtered set tests. In the cards target, 955 tests passed and two failed. All 36 directed fixtures and the Arcanis, Avatar Destiny and Soul-Guide Lantern controls passed. Five temporary constructed probes also passed; they were removed after the run and are copied in `/tmp/review_5d_probe.rs`:
+- Gray Ogre with Basilisk Collar killed a blocking Hill Giant and gained 2.
+- Fireshrieker's double strike dealt 4 unblocked.
+- Swiftfoot Boots let a summoning-sick wearer attack, and the wearer had layered hexproof.
+- Empyrean Eagle pumped an Ogre after it gained flying until end of turn.
+- Quick-Draw Katana stayed attached to a creature after control returned from Involuntary Employment. The bonus applied only on the Katana controller's turn.
+
+The ledger has a directed outcome for each of the 36 definitions. It names the missing capability for Affectionate Indrik and Dragon Mage: the only fight effect is `FightLastTarget`, and no effect discards whole hands. Batch 5d's rules work is satisfied except for the defects below.
+
+The branch does not pass the full Rust suite:
+1. `definitions::resolution_only_conditions_appear_only_in_effect_if` rejects Skyknight Squire's `SourceCountersAtLeast` condition. The walker in `managym/cards/tests/cards/definitions.rs` treats the conditions of legacy `TypeGrant`/`SetsLandType`/`PtBuff`/`KeywordGrant` statics as source statics, but not those of `Continuous`. The layer pass evaluates this condition on the source (`flow/statics.rs`), and the Squire fixture shows it working. Fix: add `Continuous` to that arm.
+2. `lea::clone_copy_survives_suspended_entry_and_keeps_its_printed_base` pins a state hash that depends on name-ordered definition ids. The pin dates from `d12eb496`, and the cards added since then change it. Re-pin it after confirming that the decision and its payload are unchanged.
+3. Three fixtures in `managym/tests/rules/cr_702_keywords.rs` fail: `trample_excess_hits_player` and `trample_with_deathtouch_assigns_one_lethal` leave the defender at 20, and `multi_blocker_damage_is_split_not_duplicated` panics with "priority pass action should be available". These failures come from the earlier combat-assignment slices (`22109054`, `e4784f29`, `c88cd93d`), not from Batch 5d. Reaching `StepKind::CombatDamage` now stops at the attacker's assignment decision before any damage is dealt. Fix: submit the assignment in each fixture, then assert the intended split (2 trample damage to the player; one Ogre dies).
+4. `semantic_conformance_tests`: all 14 frozen `semantic-kernel-w17-v6` cases and the inventory check (the pinned `content_digest`) fail. The corpus binds the catalog, so every added card moves it. Re-record a staged corpus as described in `conformance/README.md`. Before accepting the new corpus, confirm that commands, action spaces and pending choices match the old one, and attribute any difference to the combat-assignment change. This is gate-owned, but CI fails until it is done.
+
+Two smaller findings:
+- `resolve_activated_ability` still sets `context_target` from `ActivatedAbilityOnStack.attached`. `ObjectSelector::Triggering` and the primary-target fallback can therefore read the wearer at activation, while `ObjectSelector::Attached` reads it at resolution. No Batch 5d card has such an ability. Pre-5e item 2 deletes this field.
+- Some single-target Auras give an explicit `targeting` (Twinblade Blessing, Unflinching Courage, Untamed Hunger; also TLA, BNG, PTK and TLE cards). Others derive it (Pacifism, Starlight Snare). Their spell token programs differ for the same rule; choose one form for new cards.
+
+Gate retains live v11, viewer text and Academy parity, closed-deck privacy for the unrevealed tutors, and Command replay and stale rejection.
+
 **Batch 5c.** All 15 named triggered and activated permanents have first-printing definitions and directed native outcomes linked in the FDN ledger. Golem, Merfolk and Unicorn needed entries in the creature subtype table. Arcanis checks for the same battlefield object when its return ability resolves. Soul-Guide Lantern's untargeted activation uses the opposing seat's graveyard, while its entry chooses one card from either graveyard.
 At `1677261e`, all 15 directed native tests and registered-printing conformance passed. The rebuilt CPython 3.13 extension lists all 15 in the world pool. The follow-up at `d455fb70` consolidated the permanent and instant-or-sorcery type lists in `managym/state/src/predicate.rs`. Use those constructors when a Batch 5d selector has the same meaning.
 
