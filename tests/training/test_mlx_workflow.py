@@ -123,7 +123,9 @@ def verify_run(root: Path, width: int) -> None:
         ETUDE_SEED="197",
         ETUDE_TRACK_DIR=str(root / "track"),
     )
-    deal = baseline.BASELINE_DEALS[0]
+    # This deal's four games against random are short (448 decisions for the
+    # width-256 initial policy), so each 90-second panel fits its game budget.
+    deal = baseline.BASELINE_DEALS[4]
     with (
         patch.object(baseline, "settings", return_value=bounded),
         patch.object(baseline, "BASELINE_DEALS", (deal,)),

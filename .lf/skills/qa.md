@@ -331,7 +331,14 @@ publish, land or choose the next Graph step from here.
   directory holding `torch/__init__.py` (`raise ImportError`) on `PYTHONPATH`.
   `manabot.eval.local --backend mlx` writes the same `request.json` as Torch
   but plays different games (each framework samples with its own RNG);
-  `--status`/`--continue` take the `panel` directory.
+  `--status`/`--continue` take the `panel` directory. Per-game `decisions`,
+  `game_seconds` and candidate `latency` are in `<out>/panel/rows.json`; a
+  game that ran out of time names "game wall-clock budget exhausted" in
+  `panel/failures/`. Rules changes merged from main can lengthen a fixed deal's
+  games past `tests/training/test_mlx_workflow.py`'s 90-second panels; measure
+  deal lengths that way before raising a budget. Rebuild the extension after
+  such a merge: saves written before an appended input column refuse `--resume`
+  by naming the changed readings, which is correct.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
