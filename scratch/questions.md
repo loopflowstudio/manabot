@@ -76,3 +76,18 @@
   Learning needs only the packed fold and skips the serving records.
 - Both backends record sampled hand counts and their joint log probability
   together. Torch search uses the conditionals from the draw itself.
+
+## Backend layout cleanup (2026-11-24, steer 4dc7cc46)
+
+- Renamed torch's nine `_*.py` modules to plain names; none was principled as
+  private (each is imported by tests or other backend modules). The shared file
+  set (`arrays`, `runtime`, `policy`, `live_tokens`, `decision_memory`,
+  `collection`, `rl`, `learner`, `rollout`, `state`, `checkpoint`, `belief`,
+  `belief_fit`) already matched; the README table now lists all of it.
+- Did not split MLX `policy.py` into per-encoder files: its encoder classes are
+  parameter containers whose packed forward lives in `MLXActorCritic`, so
+  separate files would be ten-line modules. Revisit if the MLX forward moves
+  into the encoders.
+- `scripts/bench_local_update.py` now reads `facts.py` from its reference
+  revision. A reference older than this rename no longer loads: its
+  `policy.py` imports the underscore modules from the live package.
