@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Battlefield forms, transform backing, face-down privacy, ExileLinked &amp; manifest sampling · MTG-420</title>
+<title>Battlefield forms, LKI copy faces, face-down events, ExileLinked &amp; hidden-slot sampling · MTG-420</title>
 <style>
 :root{color-scheme:light dark;font:16.5px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas)}
 body{max-width:58rem;margin:2.5rem auto;padding:0 1.1rem}
@@ -23,79 +23,77 @@ code{font-size:.9em;overflow-wrap:anywhere}
 @media (max-width:720px){.grid{grid-template-columns:1fr}}
 </style>
 <main>
-<small>MTG-420 · post-Batch 3 / pre-Batch 4 concept review · base <code>88ce96bd</code> → <code>a7dded33</code></small>
-<h1>Do battlefield forms, transformability, face-down privacy and resumable linked exile line up?</h1>
+<small>MTG-420 · post-Batch 4 slice 1 concept review · base <code>88ce96bd</code> → <code>9810d592</code></small>
+<h1>Do battlefield forms, departed copy values, face-down events, resumable exile and hidden-slot sampling line up?</h1>
 
-<p><strong>Area reviewed.</strong> The whole MTG-420 surface from base <code>88ce96bd</code> through <code>a7dded33</code> across battlefield form backing, transform/copy/manifest/meld state, canonical state hashing, viewer-safe identity and event projection, resumable linked exile, and hidden-manifest sampling (<code>managym/state/src/{game_object,permanent,card,effect,zone}.rs</code>, <code>managym/src/flow/{zones,identity,decision,proposed_event,cast_permission,action,selection_sampling,search,game}.rs</code>, <code>managym/src/state/hash.rs</code>, <code>managym/src/cards/content_pack.rs</code>, <code>managym/src/possible_worlds.rs</code>, and <code>managym/src/agent/{observation,observation_encoder,policy_history}.rs</code>). Batch 3’s closing commits (<code>0c0daf56</code>, <code>77a073e5</code>) cleanly closed all three prior Batch 3 mismatches (unified activation limits + Mild-Mannered Librarian, <code>AllCreatureTypes</code> clearing <code>creature_types_set</code> + <code>has_all_creature_types</code>, and CR 303.4d creature-Aura SBA). Stepping back across the entire diff right before building Batch 4 sharpens the <code>BattlefieldForm</code> design — catching a <strong>front-face CR 712.9 transform bug</strong> and a <strong><code>ZoneManager.melded_cards</code> ownership counterexample</strong> — and surfaces <strong>three concrete Batch 4 traps</strong> in face-down privacy, <code>ExileLinked</code> meld-order actor routing, and constrained manifest sampling.</p>
+<p><strong>Area reviewed.</strong> The full MTG-420 battlefield-form, copiable-snapshot, viewer-privacy, resumable-exile and hidden-information sampling surface from base <code>88ce96bd</code> through <code>9810d592</code> (<code>managym/state/src/{game_object,permanent,zone}.rs</code>, <code>managym/src/cards/content_pack.rs</code>, <code>managym/src/state/hash.rs</code>, <code>managym/src/flow/{zones,identity,decision,proposed_event,cast_permission,selection_sampling,search,knowledge,resolution}.rs</code>, <code>managym/src/possible_worlds.rs</code>, and <code>managym/src/agent/{observation,policy_history,effect_execution,record_vocabulary}.rs</code>). Batch 4 slice 1 (<code>80ec9444</code>, <code>fb8bcba2</code>) landed the boxed <code>BattlefieldForm</code> model cleanly: <code>Object</code> is ≤ 40B, <code>ContentPack::transforming_faces</code> fixes both front- and back-face Clone copies of Cecil, <code>Game::turn_over</code> applies copy exceptions once, <code>CanonicalCard</code> separates swapped hidden manifests, and <code>source_focus</code> reads <code>observed_object_id</code>. Walking concrete counterexamples across the built code and the remaining slice-2 design surfaces <strong>four live mismatches</strong>: one biggest mismatch in hidden-slot sampling (affecting both constrained <code>PossibleWorldSpace</code> materialization and joint <code>foretold + manifest</code> uniformity), two slice-1 edge gaps (departed untransformed DFCs losing CR 707.8a faces and face-down event sources leaking slots on departure/bounce), and one slice-2 token-projection trap in <code>EventBinding::ExileLinked</code>.</p>
 
 <section class="callout warn">
-<h2>Biggest mismatch · battlefield form backing, transformability &amp; canonical identity are split across <code>Object</code>, <code>Permanent</code>, <code>zones.rs</code> and <code>hash.rs</code></h2>
-<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> One rules concept — <em>what physical backing a permanent has, whether it can transform, what face/orientation it shows, and how copy exceptions apply to its faces</em> (CR 707, 708, 712) — is split across inline <code>Object.copy</code>, <code>Object.front</code>, <code>Object.printed</code>, <code>Permanent.manifested</code>, and catalog lookups on the shown <code>definition_id</code>, pinning <code>Object</code> at 96 bytes and producing <strong>five live bugs</strong>:</p>
+<h2>Biggest mismatch · hidden battlefield manifests are bolted onto foretold/library sampling instead of sharing one hidden-slot allocation model</h2>
+<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> To a player, the opponent’s unseen cards split into four disjoint buckets: <em>Hand</em>, <em>Library</em>, <em>Foretold exile</em> (foretell-bearers only) and <em>Hidden manifested permanents</em> (any card). In the code, <code>unseen_objects</code> includes all four, but <code>selection_foretold_allocations</code>, <code>PossibleWorldSpace::materialize_validated</code> and <code>fill_manifest_slots</code> treat manifests as an afterthought — producing <strong>three concrete bugs</strong>:</p>
 <ul>
-<li><strong>Non-DFC copies of <em>front-face</em> DFCs also illegally transform (newly surfaced, <code>zones.rs:956</code>, <code>content_pack.rs:358</code>):</strong> <code>show_back_face</code> calls <code>default_content_pack().back_face(self.state[object].definition_id)</code> and <code>object_row</code> does the same. When a single-faced <code>Clone</code> copies <em>front-face</em> <code>Cecil, Dark Knight</code>, its <code>definition_id</code> is Cecil, so Cecil’s trigger transforms Clone into <code>Cecil, Redeemed Paladin</code> — violating CR 712.9 (“Only permanents represented by transforming double-faced cards and transforming tokens can transform”). Transformability is a property of <em>physical backing</em>, never the shown face’s catalog id.</li>
-<li><strong>Non-DFC copies of <em>back-face</em> DFCs keep <code>source.front</code> (<code>game_object.rs:644</code>):</strong> <code>become_copy_of</code> clones <code>source.front</code> onto Clone copying transformed Cecil, giving it MV 1 instead of <strong>0</strong> (CR 712.8e) and letting it flip back (CR 712.9).</li>
-<li><strong>Round-trip flips double-apply copy exceptions (<code>game_object.rs:778, 800-820</code>):</strong> <code>turn_front_face_up</code> (and <code>mint_appearance:708</code>) feeds already-exceptioned <code>Object.front</code> back into <code>show()</code>, running <code>exception.apply(self)</code> twice (duplicating <code>GrantTriggered</code> / <code>GrantStatic</code>) and mutating <code>CopyEffect.of</code> on every flip.</li>
-<li><strong>Canonical hash collision on hidden/overridden forms (<code>hash.rs:59-69, 205, 233-242</code>):</strong> <code>CanonicalCard</code> hashes only <code>definition_id</code> and <code>copy</code> for cards, never retained physical backing or transformed front face. Two authoritative states with swapped manifested cards (e.g. Grizzly Bears ↔ Forest) both emit <code>definition_id: ANONYMOUS, copy: None</code> and produce the <strong>exact same</strong> <code>GameState::deterministic_hash()</code>.</li>
-<li><strong><code>Permanent.manifested</code> conflates face-down status with public-id aliasing, and <code>ZoneManager.melded_cards</code> was misclassified as form state:</strong> Three sites (<code>identity.rs:52</code>, <code>action.rs:454</code>, <code>selection_sampling.rs:212</code>) repeat <code>manifested &amp;&amp; definition_id == ANONYMOUS</code> because <code>manifested</code> stays <code>true</code> after reveal to keep <code>observed_object_id == permanent.id</code>. Meanwhile, testing the prior plan’s “fold <code>ZoneManager.melded_cards</code> into <code>Object.form</code>” against <code>ZoneManager::object_of(second_card)</code> (<code>zone.rs:263</code>) shows a counterexample: <code>ZoneManager</code> is the single O(1) owner of card-to-appearance zone membership without borrowing <code>ObjectVec</code>; moving or duplicating <code>second: CardId</code> onto <code>Object.form</code> would either break O(1) lookup or create split-brain state.</li>
+<li><strong>Constrained library commitments miscount manifests as <code>Library</code> cards (<code>selection_sampling.rs:703-724</code>):</strong> <code>selection_foretold_allocations</code> classifies every non-hand, non-foretold unseen card as <code>ZoneType::Library</code>. When the opponent’s only remaining creature is manifested on the battlefield (<code>0</code> creatures in library), it admits impossible worlds with positive weight.</li>
+<li><strong><code>PossibleWorldSpace::materialize_validated</code> can fail <code>InconsistentWorld</code> on a positive-weight world (<code>possible_worlds.rs:592-638</code>):</strong> Even if <code>selection_foretold_allocations</code> subtracts <code>M</code> slots, <code>prepare_selection_foretell</code> fixes only foretold cards. <code>fill_manifest_slots</code> then blindly consumes the first <code>M</code> cards of shuffled <code>new_library</code>. With pool <code>{Gray Ogre, Forest}</code>, <code>M = 1</code>, <code>L = 1</code> and a library commitment needing a creature, <code>fill_manifest_slots</code> puts <code>Gray Ogre</code> into the manifest slot half the time, leaving <code>{Forest}</code> in library — and <code>materialize_validated</code> has no retry loop, so <code>rebind_commitments</code> returns <code>Err(InconsistentWorld)</code> on a world the space promised was realizable.</li>
+<li><strong>Joint <code>foretold + manifest</code> sampling is biased toward non-foretell cards (<code>selection_sampling.rs:237-252</code>):</strong> <code>fill_manifest_slots</code> protects the first <code>F</code> foretell-bearing cards in-place before picking manifests from the same shuffled prefix. On the 3-card pool <code>[F1, F2, X]</code> (<code>F = 1</code>, <code>M = 1</code>, <code>H = 1</code>), all 6 permutations yield 4/6 = <strong>2/3</strong> probability of manifesting <code>X</code> instead of the uniform 2/4 = <strong>1/2</strong> (the first foretell card can never be manifested).</li>
 </ul>
 
 <div class="grid">
 <div class="panel">
-<h3><span class="tag existing">Existing</span> Before · 96B inline split &amp; shown-face lookups</h3>
+<h3><span class="tag existing">Existing</span> Before · two independent passes over one prefix</h3>
 <ol>
-<li><strong>Clone of front-face Cecil</strong> → <code>show_back_face</code> reads <code>back_face(Cecil)</code> → illegally transforms (CR 712.9).</li>
-<li><strong>Clone of back-face Cecil</strong> → copies <code>source.front</code> → MV 1 (violates CR 712.8e) and flips back.</li>
-<li><strong>Transforming token copy</strong> flips back to front → <code>show()</code> reapplies <code>copy.exceptions</code> twice and mutates <code>copy.of</code>.</li>
-<li><strong>Swapped manifests</strong> → identical <code>deterministic_hash()</code>.</li>
-<li><strong>Every card</strong> pays 96B inline even with no form/copy state.</li>
+<li><code>selection_foretold_allocations</code> enumerates only <code>foretold</code> and dumps <code>L + M</code> residual cards into <code>ZoneType::Library</code>.</li>
+<li><code>prepare_selection_foretell</code> orders only <code>F</code> cards; <code>fill_manifest_slots</code> grabs arbitrary cards from the shuffled remainder, breaking <code>rebind_commitments</code>.</li>
+<li>In unconstrained <code>determinize</code> / <code>materialize</code>, skipping the first <code>F</code> bearers in-place before picking <code>M</code> manifests skews <code>[F1, F2, X]</code> from 1/2 to 2/3.</li>
 </ol>
 </div>
 <div class="panel">
-<h3><span class="tag proposed">Proposed</span> After · boxed <code>BattlefieldForm</code> (~40B <code>Object</code>), backing-owned transformability &amp; clean zone split</h3>
+<h3><span class="tag proposed">Proposed</span> After · one joint hidden-slot allocator &amp; two-step unbiased fill</h3>
 <ol>
-<li>Move rare form/copy state into <code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (~40B <code>Object</code>, zero allocation for ordinary cards). Keep <code>ZoneManager.melded_cards</code> as the sole O(1) owner of melded zone membership.</li>
-<li>Separate raw physical backing and raw transformable faces (<code>DFC card</code> or CR 707.8a <code>TransformingToken</code>) from exceptioned views. Derive transformability (CR 712.9/712.10), front-face MV (CR 712.8e) and <code>content_pack::object_row().back_face</code> strictly from backing — never <code>back_face(object.definition_id)</code>. Reapply <code>CopyEffect.exceptions</code> once from the raw face on every transition without mutating <code>copy.of</code>.</li>
-<li>Route <code>transform_permanent</code> and <code>FrameCompletion::TurnFaceUp</code> through one transition helper; share one <code>is_face_down()</code> on <code>Object</code>; narrow <code>Permanent.manifested</code> to its public-id alias role.</li>
-<li>Emit optional <code>backing_definition_id</code> (when distinct from <code>definition_id</code>) and <code>front_definition_id</code> (when transformed) in <code>CanonicalCard</code>, eliminating manifest/clone hash collisions with zero byte change on ordinary cards.</li>
+<li>Generalize <code>selection_foretold_allocations</code> / <code>prepare_selection_foretell</code> to hidden non-hand slots <code>(foretold_counts, manifest_counts)</code>, checking <code>complete_assignment</code> against the true <code>L</code> residual library slots. When <code>M == 0</code> it degenerates identically with zero extra work.</li>
+<li>Compute <code>PossibleWorldSpace::for_viewer</code> constrained weights from feasible ordered <code>(F, M)</code> fills, and pass the chosen manifest printings to <code>materialize_validated</code> so every positive-weight world materializes on the first try.</li>
+<li>Separate pure slot selection (pick <code>F</code> bearers uniformly, then <code>M</code> manifests uniformly from the remainder — or from the constrained draw) from mutation (<code>fill_manifest_slots</code> swaps backings and rebinds <code>pool</code>, <code>hand</code>, <code>reserved</code> and chosen foretold objects before <code>fill_foretold_slots</code> moves exile slots).</li>
 </ol>
 </div>
 </div>
 </section>
 
 <section class="callout">
-<h2>Newly surfaced Batch 4 traps · face-down privacy leaks, <code>ExileLinked</code> meld-order actor &amp; constrained manifest sampling</h2>
+<h2>Three additional mismatches · departed DFC copies, departed/bounced face-down events &amp; <code>EventBinding::ExileLinked</code> tokens</h2>
 <ul>
-<li><strong>Face-down manifested permanents leak physical identity in decision focus and event rows (<code>decision.rs:1580-1591</code>, <code>observation.rs:1861-1919, 2077</code>).</strong>
+<li><strong>Departed untransformed DFCs lose CR 707.8a transformability when copied via LKI (<code>content_pack.rs:386-411</code>).</strong>
   <span class="tag existing">Existing</span><span class="tag no">No fit</span>
-  (1) <code>decision.rs:1580-1591</code> computes <code>source_focus</code> via raw <code>objects.provenance(object_id).0</code> (the physical card’s deck-order <code>PublicId</code>) instead of <code>self.observed_object_id(object_id)</code> (<code>permanent.id</code>) — leaking deck position if a manifested permanent is a suspended decision’s source and failing to join with <code>PermanentData.object_id</code> in v11 focus (unlike <code>object_focus</code> at line 1221).
-  (2) <code>Observation::event_data</code> (<code>observation.rs:1861-1919, 2077</code>) encodes <code>EventEntity::Card(object)</code> as raw <code>object.slot() as i32</code>. When a still-face-down manifested permanent attacks and deals damage (<code>DamageDealt</code>) or triggers a granted ability (<code>AbilityTriggered</code> / <code>AbilityCountered</code>), <code>Observation.events</code> leaks its physical deck-creation slot to the opponent.
-  <br><span class="tag proposed">Proposed</span> Route <code>source_focus</code> through <code>self.observed_object_id(object_id)</code>, and project face-down battlefield event sources in <code>Observation::event_data</code> without raw <code>object.slot()</code> (matching <code>CardMoved</code>’s face-down masking or using the permanent’s public id), verified by a two-root combat/trigger privacy check.</li>
+  An untransformed front-face <code>Cecil, Dark Knight</code> has <code>form: None</code>. If Cecil dies in response to <code>Electroduplicate</code>, <code>retain_copiable_values</code> returns <code>None</code> (ordinary catalog card), and <code>departed_copiable_values</code> reconstructs <code>CopiableValues</code> with <code>faces: None</code> hardcoded. The resulting token copy gets <code>BattlefieldForm { faces: None, copy: Some(..) }</code> and <strong>cannot transform</strong>, violating CR 707.8a + 608.2h. (Unused <code>Object::token_copy</code> at <code>game_object.rs:826</code> is also dead code.)
+  <br><span class="tag proposed">Proposed</span> Share one catalog-DFC face helper on <code>ContentPack</code> between <code>transforming_faces</code> (when <code>form.is_none()</code>) and <code>departed_copiable_values</code> (when <code>lki.copiable.is_none() &amp;&amp; !lki.battlefield.token</code>). A departed non-DFC Clone of Cecil has <code>lki.copiable = Some(faces: None)</code> and stays non-transforming. Delete unused <code>Object::token_copy</code>.</li>
 
-<li><strong>Routing <code>Decision::ExileLinked</code> onto <code>EffectFrame.batch</code> would ask the wrong player to order melded Ragnarok (<code>decision.rs:1305</code>, <code>zones.rs:569</code>, <code>cast_permission.rs:271</code>).</strong>
+<li><strong><code>Observation::event_data</code> leaks physical card slots when a face-down permanent departs, bounces or turns face up in the same window (<code>observation.rs:1834-1886</code>).</strong>
   <span class="tag existing">Existing</span><span class="tag no">No fit</span>
-  <code>run_frame</code> (<code>decision.rs:1305</code>) passes <code>Some(frame.controller)</code> unconditionally to <code>advance_event_batch</code>, and <code>meld_order_choice</code> (<code>zones.rs:569</code>) assigns <code>ZoneType::Exile</code> ordering to <code>effect_controller?</code>. For <strong>Azula, Cunning Usurper</strong>, <code>frame.controller</code> is Azula’s controller, whereas the player performing the exile (<code>Decision::ExileLinked { player, .. }</code>) is <code>TargetPlayer</code> (Ragnarok’s controller). Furthermore, <code>cast_permission::exile_linked</code> (<code>271</code>) reads <code>object_mana_value(object_id)</code> once pre-move and grants permission only to a single returned <code>ObjectId</code>, dropping Ragnarok’s second exiled card and mispricing per-card <code>WaterbendManaValue</code>.
-  <br><span class="tag proposed">Proposed</span> Add <code>EventBinding::ExileLinked { actor, grantee, source, grant }</code> (or carry the exile actor on <code>EventBatch</code>). Have <code>advance_event_batch</code> / <code>meld_order_choice</code> ask <code>actor</code> (defaulting to <code>frame.controller</code>), and have <code>bind_event_results</code> iterate every surviving arrival in <code>results</code> to issue <code>ExileCastGrant</code> per exiled card (reading each arrival’s own mana value for <code>WaterbendManaValue</code>).</li>
+  (1) <code>event_data</code> only aliases <code>DamageDealt</code> / <code>AbilityTriggered</code> / <code>AbilityCountered</code> when <code>game.state.object(*object).is_ok_and(|row| row.is_face_down())</code>. If a manifested 2/2 deals combat damage and dies (e.g. trades with a 2/2) or is returned to hand before the observation window drains, <code>state.object(M)</code> is <code>Err(Stale)</code>; if it turns face up in the same window, <code>is_face_down()</code> is <code>false</code> (even though <code>Permanent.manifested</code> still aliases <code>observed_object_id</code> to <code>permanent.id</code>). All three fall back to raw <code>object.slot() as i32</code>.
+  (2) When a manifested permanent is bounced to <code>Hand</code> or tucked into <code>Library</code>, <code>GameEvent::CardMoved</code> has <code>face_down: false</code> and <code>from: Some(Battlefield)</code>. <code>decision.rs::CanonicalEventIdentity</code> masks moves to <code>Hand | Library</code>, but <code>Observation::event_rows</code> leaves raw <code>object_id.slot()</code> in <code>Observation.recent_events</code>.
+  <br><span class="tag proposed">Proposed</span> In <code>Observation::event_data</code>, alias via <code>game.object_event_ref</code> (which already reads <code>lki.presentation_id</code> after departure) whenever the live permanent is <code>manifested</code> / <code>is_face_down()</code> OR the departed LKI has <code>definition_id == CardDefId::ANONYMOUS</code>. Mask <code>CardMoved</code> whose <code>departed</code> LKI is <code>ANONYMOUS</code> moving into <code>Hand | Library</code> to <code>(EventEntityKind::None, -1)</code>, matching <code>CanonicalEventIdentity</code>.</li>
 
-<li><strong>Hidden manifests break constrained selection weights in <code>selection_foretold_allocations</code> (<code>selection_sampling.rs:703-724</code>).</strong>
+<li><strong><code>EventBinding::ExileLinked</code> would serialize raw storage <code>ObjectId</code> through <code>effect_execution.rs</code>’s catch-all arm (<code>effect_execution.rs:906-921</code>, <code>record_vocabulary.rs:364</code>).</strong>
   <span class="tag existing">Existing</span><span class="tag no">No fit</span>
-  <code>unseen_objects</code> (<code>145</code>) includes <code>hidden_manifests(owner, viewer)</code>, and <code>fill_manifest_slots</code> (<code>225</code>) removes <code>M</code> cards from <code>new_library</code> to fill those battlefield slots. Yet <code>selection_foretold_allocations</code> (<code>703-724</code>) treats every non-hand, non-foretold unseen card (<code>pinned_hand..objects.len() - foretold</code>) as sitting in <code>ZoneType::Library</code>. When a hidden manifest coexists with a pending library selection (e.g. opponent’s only remaining creature is manifested on the battlefield, leaving 0 creatures in library), <code>selection_foretold_allocations</code> overcounts library slots and admits impossible worlds.
-  <br><span class="tag proposed">Proposed</span> Account for the <code>M = hidden_manifests(owner, viewer).count()</code> battlefield manifest slots alongside foretold slots in <code>selection_foretold_allocations</code> (only <code>library_size</code> residual slots are <code>ZoneType::Library</code>), and witness it with a constrained-sampling manifest test.</li>
+  <code>effect_execution.rs:920</code> has <code>binding =&gt; self.field("bind result", binding)</code> under the invariant that non-<code>Moved</code> bindings hold only rules values and player ids. Adding <code>EventBinding::ExileLinked { actor, grantee, source: Option&lt;ObjectId&gt;, grant }</code> without its own match arm would emit raw storage <code>ObjectId</code> tokens into policy observations.
+  <br><span class="tag proposed">Proposed</span> Add an explicit <code>EventBinding::ExileLinked</code> arm in <code>effect_execution.rs</code> routing <code>source</code> through <code>self.object("linked source", source)</code> (mirroring <code>EventBinding::Moved</code>), register it in <code>record_vocabulary.rs</code>, and delete single-arrival <code>cast_permission::exile_linked</code> in favor of per-arrival <code>grant_exile_linked</code>.</li>
 </ul>
 </section>
 
 <h2>Concrete walks · normal path, counterexample and recovery</h2>
 <table>
-<thead><tr><th>Step</th><th>Clone of front/back Cecil &amp; Electroduplicate token copy</th><th>Swapped manifests + combat/constrained sampling &amp; Azula exiling Ragnarok</th></tr></thead>
+<thead><tr><th>Step</th><th>Constrained manifest sampling &amp; <code>foretold + manifest</code></th><th>Departed Cecil copy &amp; face-down trade/bounce</th><th>Azula exiling melded Ragnarok</th></tr></thead>
 <tbody>
 <tr><th>Normal path</th>
-<td>Clone enters copying front-face Cecil (or back-face Cecil); Electroduplicate creates a hasty transforming token copy of Cecil that transforms to Redeemed Paladin and back.</td>
-<td>Two roots differ only in which hidden card is manifested, then the 2/2 attacks for damage and a private selection runs; separately, Azula makes Ragnarok’s controller exile melded Ragnarok.</td></tr>
+<td>Opponent has 1 hidden manifest and a pending library creature selection (or 1 foretold + 1 hidden manifest).</td>
+<td>Player casts Electroduplicate on front-face Cecil; separately, a manifested 2/2 attacks, trades in combat or gets bounced to hand.</td>
+<td>Azula enters; opponent chooses melded Ragnarok to exile, orders Fang/Vanille, then exiles a graveyard card.</td></tr>
 <tr><th>Counterexample / failure</th>
-<td><strong>Existing fails in 3 places:</strong> (1) Clone copying front-face Cecil triggers Cecil’s ability → <code>show_back_face</code> reads <code>back_face(Cecil)</code> and illegally transforms Clone (CR 712.9); (2) Clone copying back-face Cecil keeps <code>source.front</code> (MV 1, flips back); (3) Electroduplicate’s token copy flipping back to front runs <code>show()</code> on already-exceptioned <code>Object.front</code>, duplicating grants and mutating <code>copy.of</code>.</td>
-<td><strong>Existing fails in 4 places:</strong> (1) Swapping two hidden manifests yields the same <code>deterministic_hash()</code>; (2) when the face-down 2/2 deals damage or becomes <code>source_focus</code>, <code>EventData</code> leaks <code>object.slot()</code> and <code>source_focus</code> leaks raw <code>provenance().0</code>; (3) <code>selection_foretold_allocations</code> puts manifested cards in <code>Library</code>; (4) naive <code>EffectFrame.batch</code> routing for Azula hands <code>OrderMeldedCards</code> to Azula’s controller instead of Ragnarok’s controller.</td></tr>
+<td><strong>Existing fails 3 ways:</strong> (1) <code>selection_foretold_allocations</code> puts the manifested creature in <code>Library</code>; (2) <code>materialize_validated</code> grabs the library creature into the manifest slot and fails <code>InconsistentWorld</code> on a positive-weight world; (3) <code>[F1, F2, X]</code> manifests <code>X</code> 2/3 of the time instead of 1/2.</td>
+<td><strong>Existing fails 2 ways:</strong> (1) Opponent kills Cecil in response → <code>departed_copiable_values</code> sets <code>faces: None</code> → Electroduplicate’s token cannot transform (CR 707.8a); (2) manifested 2/2 trades or bounces in the same step → <code>state.object(M)</code> is <code>Stale</code> → <code>event_data</code> emits raw <code>M.slot()</code> in <code>DamageDealt</code> and <code>CardMoved(Battlefield→Hand)</code>.</td>
+<td><strong>Existing fails 2 ways:</strong> (1) <code>cast_permission::exile_linked</code> bypasses <code>EffectFrame.batch</code> (no meld order, grants only 1 card, wrong <code>actor</code> under naive batch routing); (2) naive <code>EventBinding::ExileLinked</code> falls into <code>effect_execution.rs:920</code> and leaks raw <code>ObjectId</code> into learning tokens.</td></tr>
 <tr><th>Recovery / fork</th>
-<td><strong>Proposed:</strong> Boxed <code>BattlefieldForm</code> stores physical backing and raw transformable faces separately from exceptioned views; single transition helper enforces CR 712.9/712.10; <code>object_row().back_face</code> reads backing; every flip applies <code>copy.exceptions</code> once from raw faces.</td>
-<td><strong>Proposed:</strong> <code>CanonicalCard</code> hashes overridden backing/front ids; <code>source_focus</code> and <code>EventData</code> never expose hidden slots/provenance; <code>selection_foretold_allocations</code> reserves manifest slots; <code>EventBinding::ExileLinked</code> carries the exiling <code>actor</code> and grants every surviving arrival after the ordering Command.</td></tr>
+<td><strong>Proposed:</strong> Joint <code>(foretold, manifest)</code> hidden-slot allocator validates true library slots and supplies compatible manifest printings to <code>materialize_validated</code>; unbiased two-step fill preserves uniform 1/2 split on <code>[F1, F2, X]</code> and zero extra work when <code>M == 0</code>.</td>
+<td><strong>Proposed:</strong> Shared <code>ContentPack</code> catalog-DFC helper restores <code>TransformingFaces</code> on departed untransformed DFCs; <code>event_data</code> checks live <code>manifested</code> and departed <code>ANONYMOUS</code> LKI, routing through <code>object_event_ref</code> and masking hidden-zone bounces.</td>
+<td><strong>Proposed:</strong> <code>EventBinding::ExileLinked { actor, grantee, source, grant }</code> asks <code>actor</code> for meld order, grants every surviving exile arrival per-card, projects <code>source</code> through <code>self.object</code> in <code>effect_execution.rs</code>, and rejects stale Commands cleanly.</td></tr>
 </tbody>
 </table>
 
@@ -103,33 +101,33 @@ code{font-size:.9em;overflow-wrap:anywhere}
 <table>
 <thead><tr><th>Product concept (rules &amp; player view)</th><th>Code concept (types &amp; owners)</th><th>Fit &amp; diagnosis</th></tr></thead>
 <tbody>
-<tr><td><strong>Exact departures, linked returns, spell entries, clause targets &amp; public-zone moves</strong><br>Batches 1–2 (CR 400.7, 603.10a, 601.2c, 608.2b, 610.3).</td>
+<tr><td><strong>Exact departures, linked returns, spell entries, clause targets &amp; public-zone moves</strong><br>Batches 1–2 (CR 400.7, 601.2c, 603.10a, 608.2b, 610.3).</td>
 <td><code>ObjectLki</code>, <code>CharacteristicView</code>, <code>ExileLink</code>, <code>SpellEntry</code>, <code>target_fits_clause</code>, <code>ZoneMatching</code>, <code>object_mana_value</code>, <code>EffectFrame.attached</code>.</td>
 <td><span class="tag yes">Yes</span> Settled in Batches 1–2.</td></tr>
 
-<tr><td><strong>Stack trigger projections, Layer 3–7 characteristics, activation limits, summoning sickness, derived mana &amp; layered SBAs</strong><br>Batch 3 (<code>d93b4c19</code>–<code>77a073e5</code>; CR 205.3d/m, 302.6, 303.4d, 602.5b, 704.5m/n/p).</td>
+<tr><td><strong>Stack trigger projections, Layer 3–7 characteristics, activation limits, summoning sickness, derived mana &amp; layered SBAs</strong><br>Batch 3 (CR 205.3d/m, 302.6, 303.4d, 602.5b, 704.5m/n/p).</td>
 <td><code>StackObjectData.chosen_mode/x</code>, <code>catalog_join_misses</code>, <code>SetName</code>, <code>CreatureTypes::All</code> + <code>has_all_creature_types</code>, <code>once_per_object</code>/<code>is_use_limited</code>, <code>restricted_by_summoning_sickness</code>, <code>Game::producible_mana</code>, <code>aura_attachment_illegal</code>.</td>
 <td><span class="tag yes">Yes</span> Closed in Batch 3.</td></tr>
 
-<tr><td><strong>Melded card zone membership</strong><br>Two physical cards occupying one battlefield slot (CR 713).</td>
-<td><code>ZoneManager.melded_cards</code> (<code>object_of</code>, <code>is_latest</code>, <code>join_melded_card</code>, <code>separate_melded_card</code>).</td>
-<td><span class="tag yes">Yes</span> Keep in <code>ZoneManager</code> (sole O(1) owner of zone membership); do not move or duplicate into <code>Object.form</code>.</td></tr>
+<tr><td><strong>Live battlefield forms, transformability, copy exceptions, melded membership &amp; canonical state hash</strong><br>Batch 4 slice 1 (CR 707.8a/9, 708.2, 712.8e/9/10, 713).</td>
+<td><code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (≤ 40B), <code>ContentPack::transforming_faces</code>, <code>Game::turn_over</code>, <code>Object::is_face_down</code>, <code>ZoneManager.melded_cards</code>, <code>CanonicalCard</code> backing/front ids.</td>
+<td><span class="tag yes">Yes</span> Built and verified at <code>fb8bcba2</code>.</td></tr>
 
-<tr><td><strong>Battlefield form backing, transformability, copy exceptions &amp; canonical state hash</strong><br>CR 707.8a/9, 708.2, 712.8e/9/10; Clone, Electroduplicate, Manifest Dread, Ragnarok.</td>
-<td>Inline <code>Object.copy</code> / <code>front</code> / <code>printed</code> (96B); <code>show_back_face</code> &amp; <code>object_row</code> read shown <code>definition_id</code> (front-face Clone transforms); <code>turn_front_face_up</code> double-applies exceptions; <code>CanonicalCard</code> blind to hidden backing.</td>
-<td><span class="tag no">No</span> Biggest mismatch — Batch 4 slice 1 (<code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> + backing-owned transformability + backing-aware <code>CanonicalCard</code>).</td></tr>
+<tr><td><strong>Departed transforming DFC copiable values (LKI)</strong><br>CR 707.8a + 608.2h: copying a just-killed front-face Cecil still makes a transforming token.</td>
+<td><code>departed_copiable_values</code> (<code>content_pack.rs:398</code>) hardcodes <code>faces: None</code> when <code>lki.copiable</code> is <code>None</code>; unused <code>Object::token_copy</code> left behind.</td>
+<td><span class="tag no">No</span> Slice-1 edge gap — fix via shared catalog-DFC helper in slice 2.</td></tr>
 
-<tr><td><strong>Viewer-safe face-down identity across focus &amp; events</strong><br>CR 708.2; opponent cannot distinguish swapped hidden manifests.</td>
-<td><code>decision.rs:1580</code> reads raw <code>provenance().0</code>; <code>observation.rs:2077</code> writes raw <code>object.slot()</code> into <code>EventData</code> for <code>DamageDealt</code> / <code>AbilityTriggered</code>.</td>
-<td><span class="tag no">No</span> Newly surfaced — fix alongside <code>is_face_down()</code> in Batch 4 slice 1.</td></tr>
+<tr><td><strong>Viewer-safe face-down event projection across departure, reveal &amp; bounce</strong><br>CR 708.2: opponent cannot learn deck slot when a manifested 2/2 trades, turns up or bounces to hand.</td>
+<td><code>Observation::event_data</code> (<code>observation.rs:1842, 1882</code>) checks only live <code>row.is_face_down()</code> and leaves <code>CardMoved(Battlefield→Hand/Library)</code> unmasked.</td>
+<td><span class="tag no">No</span> Slice-1 edge gap — check live <code>manifested</code> + departed <code>ANONYMOUS</code> LKI and mask hidden-zone departures in slice 2.</td></tr>
 
-<tr><td><strong>Resumable linked exile &amp; meld-order chooser</strong><br>CR 713.8; Azula / Hama exiling Ragnarok.</td>
-<td><code>cast_permission::exile_linked</code> bypasses <code>EffectFrame.batch</code>; <code>advance_event_batch</code> assumes <code>frame.controller</code> is always the exiling player and <code>exile_linked</code> grants only one arrival.</td>
-<td><span class="tag no">No</span> Batch 4 slice 2 (<code>EventBinding::ExileLinked</code> carrying exiling <code>actor</code> + per-arrival grants).</td></tr>
+<tr><td><strong>Hidden-slot sampling &amp; possible-world weights with manifests</strong><br>Opponent unseen pool = Hand ∪ Library ∪ Foretold ∪ Hidden Manifests.</td>
+<td><code>selection_foretold_allocations</code> puts manifests in <code>Library</code>; <code>materialize_validated</code> has no manifest plan and can fail <code>InconsistentWorld</code>; <code>fill_manifest_slots</code> skews joint <code>foretold + manifest</code> deals.</td>
+<td><span class="tag no">No</span> Biggest remaining mismatch — unify behind joint <code>(foretold, manifest)</code> hidden-slot allocation and unbiased two-step fill in slice 2.</td></tr>
 
-<tr><td><strong>Constrained sampling with hidden manifested permanents</strong><br>Opponent unseen pool = Hand ∪ Library ∪ Foretold ∪ Hidden Manifests.</td>
-<td><code>selection_foretold_allocations</code> (<code>selection_sampling.rs:703-724</code>) counts manifested cards as <code>ZoneType::Library</code> slots.</td>
-<td><span class="tag no">No</span> Newly surfaced — fix in Batch 4 slice 2 with a constrained manifest test.</td></tr>
+<tr><td><strong>Resumable linked exile, meld-order actor &amp; viewer-safe continuation tokens</strong><br>CR 713.8; Azula / Hama exiling Ragnarok.</td>
+<td><code>cast_permission::exile_linked</code> bypasses <code>EffectFrame.batch</code>; <code>advance_event_batch</code> assumes <code>frame.controller</code>; <code>effect_execution.rs:920</code> catch-all would leak <code>ObjectId</code> if not matched explicitly.</td>
+<td><span class="tag no">No</span> Planned for slice 2 with explicit <code>effect_execution.rs</code> projection arm and <code>record_vocabulary.rs</code> registration.</td></tr>
 
 <tr><td><strong>Creation-time values frozen into delayed triggers</strong><br>Nine-Lives Familiar’s <code>revival - 1</code>.</td>
 <td><code>EffectValue::DeathCountersMinus</code> frozen in <code>resolution.rs:1966</code>.</td>
@@ -137,45 +135,19 @@ code{font-size:.9em;overflow-wrap:anywhere}
 </tbody>
 </table>
 
-<section class="callout">
-<h2>Recommended Batch 4 execution order <span class="tag proposed">Proposed</span></h2>
-<ol>
-<li><strong>Slice 1 · <code>BattlefieldForm</code>, transform backing, canonical hash &amp; face-down privacy (proves the core model first):</strong>
-  <ul>
-  <li>Replace inline <code>Object.copy</code>, <code>Object.front</code> and <code>Object.printed</code> with <code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (~40B <code>Object</code>, zero allocation for ordinary cards). Keep <code>ZoneManager.melded_cards</code> untouched as the sole O(1) zone-membership owner.</li>
-  <li>Store physical backing, face-down state, transformable raw faces (only for DFC physical cards or CR 707.8a transforming tokens) and <code>CopyEffect</code> separately from materialized exceptioned views. Derive transformability (CR 712.9/712.10), front-face MV (CR 712.8e) and <code>content_pack::object_row().back_face</code> from backing — fixing both front-face and back-face Clone copies of Cecil, plus round-trip exception application on transforming token copies.</li>
-  <li>Route <code>transform_permanent</code> and <code>FrameCompletion::TurnFaceUp</code> through one transition helper; share one <code>is_face_down()</code>; narrow <code>Permanent.manifested</code> to its public-id alias role.</li>
-  <li>Update <code>CanonicalCard</code> (<code>hash.rs</code>) with optional <code>backing_definition_id</code> (when distinct from <code>definition_id</code>) and <code>front_definition_id</code> (when transformed).</li>
-  <li>Fix face-down privacy leaks in <code>decision.rs:1580-1591</code> (<code>source_focus</code> via <code>observed_object_id</code>) and <code>observation.rs:2077</code> (mask/alias face-down battlefield sources in <code>EventData</code>).</li>
-  </ul>
-</li>
-<li><strong>Slice 2 · Resumable <code>ExileLinked</code> &amp; constrained manifest sampling:</strong>
-  <ul>
-  <li>Add <code>EventBinding::ExileLinked { actor, grantee, source, grant }</code>; route <code>Decision::ExileLinked</code> through <code>EffectFrame.batch</code>; pass the batch’s exile <code>actor</code> (defaulting to <code>frame.controller</code>) to <code>meld_order_choice</code> so Ragnarok’s controller chooses order under Azula while Azula’s controller gets cast grants for both exact exile arrivals; reject stale ordering Commands cleanly.</li>
-  <li>Account for <code>hidden_manifests(owner, viewer).count()</code> battlefield slots in <code>selection_foretold_allocations</code> (<code>selection_sampling.rs:703-724</code>) and add the constrained-sampling manifest witness.</li>
-  </ul>
-</li>
-<li><strong>Slice 3 · Representation review, consumer/privacy/replay checks &amp; Engine Budget:</strong>
-  <ul>
-  <li>Run the full witness matrix (Cecil, Clone of front/back Cecil, Esper Origins, Ragnarok, token copy of Ragnarok, copy of manifested permanent, mooned/Angel/Demon/land deaths), two-root manifest comparison across native/Python/v11/text/Academy/replay/search (including face-down combat damage), pinned pilot and Engine Budget measurements.</li>
-  </ul>
-</li>
-</ol>
-</section>
-
 <h2>Review questions (choices recorded for review)</h2>
 <ol>
-<li>Where should the second physical card of a melded permanent live?
-  <strong>1a · Keep <code>ZoneManager.melded_cards</code> as the sole O(1) owner of card-to-appearance zone membership, and put form/copy/transform/face-down characteristics in <code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (selected — passes the <code>ZoneManager::object_of(second_card)</code> counterexample with zero duplication or linear scans).</strong>
-  1b · Move <code>second: CardId</code> into <code>Object.form</code> and scan <code>ObjectVec</code> (or maintain a duplicate reverse map) in <code>ZoneManager::object_of</code>.</li>
-<li>How should CR 712.9 transformability be determined for copied permanents (both front-face and back-face copies)?
-  <strong>2a · From the permanent’s physical backing inside <code>BattlefieldForm</code> (DFC physical card or CR 707.8a transforming token, and not face down), never from <code>content_pack().back_face(object.definition_id)</code> (selected — fixes both front-face and back-face non-DFC Clones copying Cecil, plus <code>object_row().back_face</code>, with one rule).</strong>
-  2b · Keep checking <code>content_pack().back_face(object.definition_id)</code> and add ad-hoc copy guards in <code>transform_permanent</code>.</li>
-<li>How should <code>Decision::ExileLinked</code> pass the exiling player to <code>meld_order_choice</code> when routing through <code>EffectFrame.batch</code>?
-  <strong>3a · Carry the exiling <code>actor</code> (separate from <code>grantee</code> / <code>frame.controller</code>) on <code>EventBinding::ExileLinked</code> and read it in <code>advance_event_batch</code> / <code>meld_order_choice</code>, issuing per-arrival cast grants in <code>bind_event_results</code> (selected — matches CR 713.8 for Azula exiling Ragnarok and fixes multi-arrival grants).</strong>
-  3b · Override <code>frame.controller</code> temporarily during Azula’s exile step.</li>
-<li>Should <code>Observation::event_data</code> stop writing raw <code>object.slot()</code> for face-down battlefield sources alongside fixing <code>decision.rs:1580</code> <code>source_focus</code>?
-  <strong>4a · Yes: project face-down battlefield event sources safely (without physical <code>object.slot()</code>) and route <code>source_focus</code> through <code>observed_object_id</code> (selected — required for the two-root opponent privacy invariant once a manifested permanent attacks or triggers).</strong>
-  4b · Leave <code>EventData</code> writing raw <code>object.slot()</code> and restrict privacy checks to pre-combat boards.</li>
+<li>How should hidden battlefield manifests participate in constrained sampling and <code>PossibleWorldSpace</code>?
+  <strong>1a · Generalize <code>selection_foretold_allocations</code> / <code>prepare_selection_foretell</code> to allocate both <code>foretold</code> and <code>manifest</code> slots jointly (degenerating identically with zero extra work when <code>M == 0</code>), and separate pure uniform slot selection from in-place mutation so <code>materialize_validated</code> never fails on positive-weight worlds and <code>foretold + manifest</code> deals are unbiased (selected — fixes all three counterexamples with one model).</strong>
+  1b · Only subtract <code>M</code> from the library slot count in <code>selection_foretold_allocations</code> and add a retry loop in <code>materialize_validated</code> (leaves constrained weights wrong and joint <code>foretold + manifest</code> draws biased).</li>
+<li>Where should a departed untransformed DFC recover its CR 707.8a <code>TransformingFaces</code>?
+  <strong>2a · From a shared catalog-DFC helper on <code>ContentPack</code> called by both <code>transforming_faces</code> (live, <code>form.is_none()</code>) and <code>departed_copiable_values</code> (departed, <code>lki.copiable.is_none() &amp;&amp; !lki.battlefield.token</code>) (selected — preserves zero snapshot allocation on ordinary DFC departures while keeping one rule).</strong>
+  2b · Retain an <code>Arc&lt;CopiableValues&gt;</code> snapshot on every untransformed DFC departure in <code>retain_copiable_values</code> (allocates unnecessarily on ordinary DFC deaths).</li>
+<li>How should <code>Observation::event_data</code> mask face-down sources that depart or move to hidden zones before the observation window drains?
+  <strong>3a · Alias <code>DamageDealt</code> / <code>AbilityTriggered</code> / <code>AbilityCountered</code> through <code>object_event_ref</code> whenever live <code>manifested</code> / <code>is_face_down()</code> or departed <code>lki.definition_id == CardDefId::ANONYMOUS</code>, and mask <code>CardMoved</code> from an <code>ANONYMOUS</code> departure into <code>Hand | Library</code> to <code>(None, -1)</code> matching <code>CanonicalEventIdentity</code> (selected — closes combat-trade, turn-up and bounce leaks with zero new serialized fields on <code>ObjectLki</code>).</strong>
+  3b · Add a new <code>was_face_down</code> flag to <code>GameEvent</code> variants (changes serialized event shapes unnecessarily when <code>ObjectLki</code> already holds the departing face and <code>presentation_id</code>).</li>
+<li>How should <code>EventBinding::ExileLinked</code> project into learning tokens when suspended on <code>OrderMeldedCards</code>?
+  <strong>4a · Give <code>EventBinding::ExileLinked</code> its own match arm in <code>effect_execution.rs</code> routing <code>source</code> through <code>self.object("linked source", source)</code> and register it in <code>record_vocabulary.rs</code> (selected — preserves the storage-id-free token invariant).</strong>
+  4b · Omit <code>source</code> from token projection when suspended (loses which permanent owns the linked cast grant in continuation observations).</li>
 </ol>
 </main></html>
