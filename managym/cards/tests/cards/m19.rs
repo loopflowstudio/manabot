@@ -59,10 +59,5 @@ fn token_producer_lathliss_dragon_queen() {
 
 #[test]
 fn printed_creature_gigantosaurus() {
-    crate::printed_creature_combat(
-        "Gigantosaurus",
-        10,
-        10,
-        managym::state::card::Keywords::of(&[]),
-    );
+    crate::printed_creature_combat("Gigantosaurus", 10, 10, &[]);
 }

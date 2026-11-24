@@ -106,6 +106,6 @@ fn printed_creature_thornweald_archer() {
         "Thornweald Archer",
         2,
         1,
-        managym::state::card::Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
+        &[Keyword::Reach, Keyword::Deathtouch],
     );
 }

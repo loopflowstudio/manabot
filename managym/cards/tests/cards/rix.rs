@@ -40,16 +40,17 @@ fn token_producer_gleaming_barrier() {
     let mut s = five_color_setup(&["Gleaming Barrier"]);
     let barrier = enter_and_settle(&mut s, "Gleaming Barrier");
     assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
-    crate::support::game::move_card(&mut s, barrier, managym::state::zone::ZoneType::Graveyard);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    s.pass_priority();
-    crate::support::play::settle(&mut s);
+    crate::support::play::move_and_settle(
+        &mut s,
+        barrier,
+        managym::state::zone::ZoneType::Graveyard,
+    );
     assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
 }
 
 #[test]
 fn printed_creature_swab_goblin() {
-    crate::printed_creature_combat("Swab Goblin", 2, 2, managym::state::card::Keywords::of(&[]));
+    crate::printed_creature_combat("Swab Goblin", 2, 2, &[]);
 }
 
 #[test]
@@ -59,12 +60,12 @@ fn printed_creature_zetalpa_primal_dawn() {
         "Zetalpa, Primal Dawn",
         4,
         8,
-        managym::state::card::Keywords::of(&[
+        &[
             Keyword::Flying,
             Keyword::Indestructible,
             Keyword::Vigilance,
             Keyword::Trample,
             Keyword::DoubleStrike,
-        ]),
+        ],
     );
 }

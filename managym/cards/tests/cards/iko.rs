@@ -113,10 +113,5 @@ fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
 
 #[test]
 fn printed_creature_aegis_turtle() {
-    crate::printed_creature_combat(
-        "Aegis Turtle",
-        0,
-        5,
-        managym::state::card::Keywords::of(&[]),
-    );
+    crate::printed_creature_combat("Aegis Turtle", 0, 5, &[]);
 }

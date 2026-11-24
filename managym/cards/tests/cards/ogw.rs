@@ -5,6 +5,6 @@ fn printed_creature_tajuru_pathwarden() {
         "Tajuru Pathwarden",
         5,
         4,
-        managym::state::card::Keywords::of(&[Keyword::Vigilance, Keyword::Trample]),
+        &[Keyword::Vigilance, Keyword::Trample],
     );
 }

@@ -5,10 +5,6 @@ fn printed_creature_swiftblade_vindicator() {
         "Swiftblade Vindicator",
         1,
         1,
-        managym::state::card::Keywords::of(&[
-            Keyword::Vigilance,
-            Keyword::Trample,
-            Keyword::DoubleStrike,
-        ]),
+        &[Keyword::Vigilance, Keyword::Trample, Keyword::DoubleStrike],
     );
 }

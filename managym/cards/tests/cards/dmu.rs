@@ -86,10 +86,5 @@ fn token_producer_resolute_reinforcements() {
 #[test]
 fn printed_creature_magnigoth_sentry() {
     use managym::state::card::Keyword;
-    crate::printed_creature_combat(
-        "Magnigoth Sentry",
-        4,
-        4,
-        managym::state::card::Keywords::of(&[Keyword::Reach]),
-    );
+    crate::printed_creature_combat("Magnigoth Sentry", 4, 4, &[Keyword::Reach]);
 }

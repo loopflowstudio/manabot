@@ -405,10 +405,6 @@ fn printed_creature_vampire_nighthawk() {
         "Vampire Nighthawk",
         2,
         3,
-        managym::state::card::Keywords::of(&[
-            Keyword::Deathtouch,
-            Keyword::Flying,
-            Keyword::Lifelink,
-        ]),
+        &[Keyword::Deathtouch, Keyword::Flying, Keyword::Lifelink],
     );
 }

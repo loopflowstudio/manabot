@@ -30,10 +30,5 @@ fn gilded_lotus_adds_three_mana_of_one_color() {
 #[test]
 fn printed_creature_leonin_skyhunter() {
     use managym::state::card::Keyword;
-    crate::printed_creature_combat(
-        "Leonin Skyhunter",
-        2,
-        2,
-        managym::state::card::Keywords::of(&[Keyword::Flying]),
-    );
+    crate::printed_creature_combat("Leonin Skyhunter", 2, 2, &[Keyword::Flying]);
 }

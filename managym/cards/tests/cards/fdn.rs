@@ -952,16 +952,14 @@ fn token_producer_elfsworn_giant() {
 
 #[test]
 fn token_producer_infestation_sage() {
-    use crate::support::{
-        game::five_color_setup,
-        play::{enter_and_settle, settle},
-    };
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
     let mut s = five_color_setup(&["Infestation Sage"]);
     let source = enter_and_settle(&mut s, "Infestation Sage");
-    crate::support::game::move_card(&mut s, source, managym::state::zone::ZoneType::Graveyard);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    s.pass_priority();
-    settle(&mut s);
+    crate::support::play::move_and_settle(
+        &mut s,
+        source,
+        managym::state::zone::ZoneType::Graveyard,
+    );
     crate::assert_creature_tokens(
         &s,
         "Insect",
@@ -994,10 +992,5 @@ fn token_producer_eager_trufflesnout() {
 
 #[test]
 fn printed_creature_quakestrider_ceratops() {
-    crate::printed_creature_combat(
-        "Quakestrider Ceratops",
-        12,
-        8,
-        managym::state::card::Keywords::of(&[]),
-    );
+    crate::printed_creature_combat("Quakestrider Ceratops", 12, 8, &[]);
 }

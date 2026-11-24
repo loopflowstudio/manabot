@@ -194,7 +194,7 @@ fn printed_creature_combat(
     name: &str,
     power: i32,
     toughness: i32,
-    keywords: managym::state::card::Keywords,
+    keywords: &[managym::state::card::Keyword],
 ) {
     use managym::{flow::turn::StepKind, state::card::Keyword};
     use support::{
@@ -208,6 +208,7 @@ fn printed_creature_combat(
     let id = permanent_named(&s, name);
     let face = s.game().characteristics(id);
     assert_eq!(face.pt(), (power, toughness));
+    let keywords = managym::state::card::Keywords::of(keywords);
     assert_eq!(face.keywords, keywords);
     if !keywords.has(Keyword::Haste) {
         s.advance_to_active_step(1, StepKind::Main);

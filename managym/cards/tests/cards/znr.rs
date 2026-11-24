@@ -55,10 +55,5 @@ fn blight_priest_drains_once_per_reaver_hit() {
 
 #[test]
 fn printed_creature_highborn_vampire() {
-    crate::printed_creature_combat(
-        "Highborn Vampire",
-        4,
-        3,
-        managym::state::card::Keywords::of(&[]),
-    );
+    crate::printed_creature_combat("Highborn Vampire", 4, 3, &[]);
 }

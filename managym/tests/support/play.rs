@@ -741,7 +741,12 @@ pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
 /// authority, pass once if it triggered, and `settle`.
 pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_object(id, ZoneType::Battlefield);
+    move_and_settle(s, id, ZoneType::Battlefield)
+}
+
+/// Resolve any triggers from moving the card to its destination.
+pub fn move_and_settle(s: &mut Scenario, id: ObjectId, zone: ZoneType) -> ObjectId {
+    crate::support::game::move_card(s, id, zone);
     s.game_mut().scenario_refresh_priority().unwrap();
     if !s.game().state.pending_triggers.is_empty() {
         s.pass_priority();
