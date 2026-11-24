@@ -39,3 +39,6 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
 - **Collector refill:** Plain and adaptive games share one pending refill set.
   The collector finalizes pending learner decisions before checking the active
   mask, since finalization can itself satisfy an exact quota.
+
+- **Benchmark timing:** Count explicit slot loads alongside native steps.
+  Hash terminal rewards and flags before loading the next batch.

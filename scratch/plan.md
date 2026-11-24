@@ -141,14 +141,16 @@ no deprecated shims.
    target practice parks and loads explicitly, parked bootstrap rows get empty
    memory prefixes; seed-parity, batch-end and `action_limit` tests added.
 
-3. **Next — `run_vector_games` (`manabot/sim/rollout.py:178-226`) and
-   `scripts/bench_sharded_collection.py:44-62`** step parked slots after a
-   game ends and would raise `cannot step Terminal slot`. Refill done rows
-   with `load_slots_into_buffers([SlotLoad.fresh(s) ...])` after reading
-   `get_last_info()`; in `run_vector_games` refill only streams whose hero
-   seat still needs games and step only live rows (or stop when none). The
-   bench digest changes if refill timing moves; record it if Engine Budget
-   reads this script. Then run the full acceptance check below.
+3. **Done (3d27339e7a).** Batched evaluation counts active decisions, saves
+   winners and retires streams when their seat fills its quota. The sharded
+   benchmark hashes outcomes before refilling for the next batch.
+
+Acceptance exposed a stale scalar replay fixture. Opening-hand choices from
+`d12eb496b3` reject its first recorded action (3 of two offers). Even two
+explicit Keep actions diverged at action 34. The regression now checks the
+frozen prefix fails before its recorded boundary. A five-action game recorded
+with a one-permanent buffer covers stale binding rejection and typed replay
+of the current capacity failure.
 
 ## Acceptance check at gate
 
