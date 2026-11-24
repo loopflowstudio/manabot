@@ -363,6 +363,20 @@
       "G"
     ]
   },
+  "Bakersbane Duo": {
+    "name": "Bakersbane Duo",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Squirrel Raccoon",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "When this creature enters, create a Food token.\nWhenever you expend 4, this creature gets +1/+1 until end of turn. (You expend 4 as you spend your fourth total mana to cast spells during a turn.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Barrels of Blasting Jelly": {
     "name": "Barrels of Blasting Jelly",
     "mana_cost": "{1}",
@@ -1973,6 +1987,18 @@
     "oracle_text": "Flying, vigilance\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
     "colors": [
       "U"
+    ]
+  },
+  "Incinerating Blast": {
+    "name": "Incinerating Blast",
+    "mana_cost": "{4}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Incinerating Blast deals 6 damage to target creature.\nYou may discard a card. If you do, draw a card.",
+    "colors": [
+      "R"
     ]
   },
   "Invasion Reinforcements": {
