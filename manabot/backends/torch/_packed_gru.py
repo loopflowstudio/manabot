@@ -24,8 +24,8 @@ from typing import Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
+import torch.nn.functional as F
 from torch.nn.utils.rnn import PackedSequence
 
 
@@ -57,7 +57,12 @@ def hand_packed_gru(
     initial: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """`packed_gru` with the input projection hoisted and a hand-written backward."""
-    w_ih, w_hh, b_ih, b_hh = gru.weight_ih_l0, gru.weight_hh_l0, gru.bias_ih_l0, gru.bias_hh_l0
+    w_ih, w_hh, b_ih, b_hh = (
+        gru.weight_ih_l0,
+        gru.weight_hh_l0,
+        gru.bias_ih_l0,
+        gru.bias_hh_l0,
+    )
     with torch.autocast(data.device.type, enabled=False):
         projected = F.linear(data.to(w_ih.dtype), w_ih, b_ih)
         state = (
@@ -78,9 +83,7 @@ def hand_packed_gru(
             for step in range(len(sizes))
         ][::-1]
         rows = torch.from_numpy(np.concatenate(previous + final)).to(data.device)
-        outputs = _Recurrence.apply(
-            projected, w_hh, b_hh, state, rows[:total], sizes
-        )
+        outputs = _Recurrence.apply(projected, w_hh, b_hh, state, rows[:total], sizes)
         return outputs, outputs[rows[total:]]
 
 
