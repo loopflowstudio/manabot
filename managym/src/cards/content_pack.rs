@@ -19,11 +19,8 @@ use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
-    card::{
-        CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
-        TokenDefinition,
-    },
-    game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId},
+    card::{CardDefId, CardDefinition, CastOption, ObjectDefinition, TokenDefinition},
+    game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId, TransformingFaces},
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -237,12 +234,6 @@ impl ContentPack {
         self.definitions.push(definition);
     }
 
-    /// The back face's row of the double-faced card whose front is `front`.
-    pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<PrintedCharacteristics>)> {
-        let (id, row) = self.back_face_row(front)?;
-        Some((id, Arc::clone(&row.printed)))
-    }
-
     pub(crate) fn back_face_row(&self, front: CardDefId) -> Option<(CardDefId, &ObjectDefinition)> {
         self.definition(front)?.back_face.as_ref()?;
         let back = CardDefId(front.0 + 1);
@@ -345,10 +336,29 @@ impl ContentPack {
             .map_or(key, |token| token.name.as_str())
     }
 
+    /// The raw faces `object` transforms between (CR 712.9, 712.10): a
+    /// transforming double-faced card's or a transforming token's (CR 707.8a).
+    /// A copy of one face on any other backing, a melded permanent and a
+    /// face-down permanent have none. Physical backing decides, never the
+    /// catalog row of the face it shows.
+    pub fn transforming_faces(&self, object: &Object) -> Option<TransformingFaces> {
+        match object.form.as_deref() {
+            Some(form) => form.faces().cloned(),
+            None => {
+                let (back, row) = self.back_face_row(object.definition_id)?;
+                Some(TransformingFaces {
+                    front: (object.definition_id, object.copiable_definition()),
+                    back: (back, Arc::clone(&row.printed)),
+                    back_up: false,
+                })
+            }
+        }
+    }
+
     /// `card`'s current copiable values in the row shape, with its token
-    /// status and its shown face's back face. Records of a copy (pending
-    /// creations, canonical state) serialize this; the token a copy creates
-    /// takes only `printed`.
+    /// status and, on a transforming object's front face, its back face.
+    /// Records of a copy (pending creations, canonical state) serialize this;
+    /// the token a copy creates takes only `printed`.
     pub fn object_row(&self, card: &Object) -> ObjectDefinition {
         ObjectDefinition {
             key: "",
@@ -356,8 +366,9 @@ impl ContentPack {
             printed: card.copiable_definition(),
             is_token: !card.is_card(),
             back_face: self
-                .definition(card.definition_id)
-                .and_then(|row| row.back_face.clone()),
+                .transforming_faces(card)
+                .filter(|faces| !faces.back_up)
+                .map(|faces| faces.back.1.name.clone()),
         }
     }
 
@@ -365,16 +376,16 @@ impl ContentPack {
         CopiableValues {
             definition_id: object.definition_id.catalog_id(),
             definition: self.object_row(object),
-            front: object.front_face().cloned(),
-            copy: object.copy.clone(),
+            faces: self.transforming_faces(object),
+            copy: object.copy().cloned(),
         }
     }
 
     /// A departed ordinary card needs only its catalog id. Retain a snapshot
     /// when the catalog cannot reconstruct its kind, face, or copy exceptions.
     pub(crate) fn retain_copiable_values(&self, object: &Object) -> Option<Arc<CopiableValues>> {
-        if object.copy.is_none()
-            && object.front_face().is_none()
+        if object.copy().is_none()
+            && object.transforming_faces().is_none()
             && self.definition(object.definition_id).is_some_and(|row| {
                 row.is_token != object.is_card() && &row.printed == object.copiable_face()
             })
@@ -394,7 +405,7 @@ impl ContentPack {
                     .definition(lki.definition_id)
                     .expect("catalog copy source")
                     .clone(),
-                front: None,
+                faces: None,
                 copy: None,
             })
     }

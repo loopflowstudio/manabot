@@ -192,7 +192,9 @@ pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
-    /// Entered by manifest. Keep its public alias through reveal; the anonymous face marks it face down.
+    /// Entered by manifest: the permanent's public id stays its viewer id
+    /// through reveal, never the deck-order id of the card it hid. Whether
+    /// it is face down now is `Object::is_face_down`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub manifested: bool,
     pub id: PublicId,

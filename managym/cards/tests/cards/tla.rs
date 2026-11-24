@@ -7785,8 +7785,8 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
     assert_eq!(object.mana_cost.as_ref().unwrap().mana_value, 2);
     let printed = s.game().state[card_of(&s, joo_dee)].definition_id;
     assert_eq!(
-        object.copy,
-        Some(CopyEffect {
+        object.copy(),
+        Some(&CopyEffect {
             of: printed,
             exceptions: vec![]
         }),
@@ -8457,8 +8457,8 @@ fn phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice()
     let object = &s.game().state[card_of(&s, token)];
     assert!(object.kind() == ObjectKind::Token);
     assert_eq!(
-        object.copy,
-        Some(CopyEffect {
+        object.copy(),
+        Some(&CopyEffect {
             of: s.game().state[card_of(&s, airship)].definition_id,
             exceptions: vec![],
         })
@@ -8616,10 +8616,10 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
         [a, b] => (b, a),
     };
     assert!(objects[source].is_card());
-    assert_eq!(objects[source].copy, None);
+    assert_eq!(objects[source].copy(), None);
     assert_eq!(
-        objects[copy].copy,
-        Some(CopyEffect {
+        objects[copy].copy(),
+        Some(&CopyEffect {
             of: objects[source].definition_id,
             exceptions: vec![CopyException::Nonlegendary],
         })

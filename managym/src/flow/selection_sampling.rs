@@ -209,7 +209,7 @@ impl Game {
                 .filter_map(move |id| {
                     let permanent = self.state.permanents[id].as_ref()?;
                     let object = permanent.object;
-                    (permanent.manifested
+                    (self.state[object].is_face_down()
                         && self.state[object].owner == owner
                         && self
                             .observed_permanent_definition(viewer, permanent)

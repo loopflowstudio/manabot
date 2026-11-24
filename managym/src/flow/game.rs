@@ -830,7 +830,7 @@ const _: () = {
     use crate::state::game_object::Object;
     use std::mem::size_of;
 
-    assert!(size_of::<Object>() <= 96);
+    assert!(size_of::<Object>() <= 40);
     assert!(size_of::<Permanent>() <= 168);
     assert!(size_of::<GameState>() <= 4096);
     assert!(size_of::<TrackedState>() <= 4128);

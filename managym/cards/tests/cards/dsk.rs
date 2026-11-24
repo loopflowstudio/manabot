@@ -506,3 +506,70 @@ fn turn_up_shows_the_creature_while_its_controller_chooses_mana() {
         assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(keep));
     }
 }
+
+#[test]
+fn swapped_hidden_manifests_hash_apart_and_look_alike() {
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let cards = pin_top(&mut s, &["Gray Ogre", "Forest"]);
+    let ogre = s.game_mut().manifest(cards[0], PlayerId(0));
+    let forest = s.game_mut().manifest(cards[1], PlayerId(0));
+    let mut swapped = s.game().clone();
+    let printing = |object: managym::state::game_object::ObjectId| {
+        let (id, row) = s.game().state[object].retained_definition();
+        (id, row.clone())
+    };
+    let ((ogre_id, ogre_row), (forest_id, forest_row)) = (printing(ogre), printing(forest));
+    swapped.state[ogre].assign_hidden_printing(forest_id, forest_row);
+    swapped.state[forest].assign_hidden_printing(ogre_id, ogre_row);
+    assert_eq!(
+        swapped.state[ogre].retained_base().1.name,
+        "Forest",
+        "the hidden printings changed places"
+    );
+    // The authoritative states differ although no opponent can tell them apart.
+    assert_ne!(
+        swapped.state.deterministic_hash(),
+        s.game().state.deterministic_hash()
+    );
+    assert_eq!(
+        Observation::for_player(&swapped, PlayerId(1)).opponent_permanents,
+        Observation::for_player(s.game(), PlayerId(1)).opponent_permanents
+    );
+}
+
+#[test]
+fn a_face_down_attacker_deals_damage_without_naming_its_card() {
+    use crate::support::{game::clear_summoning_sickness, play::attack_with};
+    use managym::{
+        agent::observation::{EventEntityKind, EventType},
+        flow::turn::StepKind,
+    };
+    let rows = [("Gray Ogre", "Forest"), ("Forest", "Gray Ogre")].map(|(hidden, other)| {
+        let mut s = five_color_setup(&["Gray Ogre"]);
+        let cards = pin_top(&mut s, &[hidden, "Plains", other]);
+        let object = s.game_mut().manifest(cards[0], PlayerId(0));
+        let permanent = s.game().lookup_current_permanent(object).unwrap();
+        let public = s.game().state.permanents[permanent].as_ref().unwrap().id;
+        clear_summoning_sickness(&mut s, permanent);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, permanent);
+        s.game_mut().take_observation_events();
+        s.advance_to_active_step(0, StepKind::CombatDamage);
+        assert_eq!(s.life(1), 18);
+        let events = s.game_mut().take_observation_events();
+        let rows = Observation::new(s.game(), &events).recent_events;
+        let damage: Vec<_> = rows
+            .iter()
+            .filter(|row| row.event_type == EventType::DamageDealt as i32)
+            .collect();
+        assert!(!damage.is_empty());
+        for row in damage {
+            assert_eq!(
+                (row.source_kind, row.source_id),
+                (EventEntityKind::Object as i32, public.0 as i32)
+            );
+        }
+        rows
+    });
+    assert_eq!(rows[0], rows[1]);
+}

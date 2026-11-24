@@ -560,7 +560,7 @@ fn cr_400_7_non_battlefield_move_discards_old_copy_values() {
     let new_object = s.game().state.object(current).unwrap();
     assert_eq!(new_object.name, "Gray Ogre");
     assert_eq!(new_object.power, Some(5));
-    assert!(new_object.copy.is_none());
+    assert!(new_object.copy().is_none());
     assert_eq!(
         new_object.definition_id,
         s.game().state.cards[card].definition

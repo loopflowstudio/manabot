@@ -449,9 +449,9 @@ impl Game {
     }
 
     fn manifest_cost(&self, object: ObjectId) -> Option<&ManaCost> {
-        let permanent = self.state.permanents[self.state.permanent_of(object)?].as_ref()?;
+        self.state.permanent_of(object)?;
         let card = &self.state[object];
-        if !permanent.manifested || card.definition_id != crate::state::card::CardDefId::ANONYMOUS {
+        if !card.is_face_down() {
             return None;
         }
         let (_, printing) = card.retained_base();

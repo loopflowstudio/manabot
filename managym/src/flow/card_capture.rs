@@ -834,8 +834,15 @@ mod tests {
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state[object]
-            .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
+        let front = (
+            game.state[object].definition_id,
+            game.state[object].copiable_definition(),
+        );
+        game.state[object].show_transforming_face(crate::state::game_object::TransformingFaces {
+            front,
+            back: (back, Arc::clone(&content.definition(back).unwrap().printed)),
+            back_up: true,
+        });
         let after = snapshot(&game, object);
         assert_eq!(game.state[object].name, "Forest");
         assert_eq!(after.name, before.name);

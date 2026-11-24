@@ -65,6 +65,13 @@ struct CanonicalCard {
     copy: Option<super::effect::CopyEffect>,
     object_id: PublicId,
     definition_id: CardDefId,
+    /// The printing behind a face-down, melded or entry-copy form, which the
+    /// shown `definition_id` does not name. Omitted on ordinary objects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backing_definition_id: Option<CardDefId>,
+    /// A transformed object's front face (CR 712.8). Omitted on its front.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    front_definition_id: Option<CardDefId>,
     owner: PlayerId,
 }
 
@@ -234,9 +241,18 @@ impl<'a> CanonicalMatchState<'a> {
             .iter()
             .map(|object| CanonicalCard {
                 copied_characteristics: (!object.is_card()).then(|| content.object_row(object)),
-                copy: object.copy.clone(),
+                copy: object.copy().cloned(),
                 object_id: object.id,
                 definition_id: object.definition_id,
+                backing_definition_id: object
+                    .form
+                    .as_deref()
+                    .and_then(|form| form.backing())
+                    .map(|(id, _)| *id),
+                front_definition_id: object
+                    .transforming_faces()
+                    .filter(|faces| faces.back_up)
+                    .map(|faces| faces.front.0),
                 owner: object.owner,
             })
             .collect();

@@ -49,7 +49,7 @@ impl Game {
         permanent: &crate::state::permanent::Permanent,
     ) -> Option<CardDefId> {
         let object = &self.state[permanent.object];
-        if permanent.manifested && object.definition_id == CardDefId::ANONYMOUS {
+        if object.is_face_down() {
             // Announcing the special action shows the creature and its cost
             // before the controller chooses which mana to spend.
             use super::decision::{FrameCompletion, ResolutionRef};

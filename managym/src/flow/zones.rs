@@ -35,6 +35,16 @@ static MANIFESTED: std::sync::LazyLock<std::sync::Arc<PrintedCharacteristics>> =
         })
     });
 
+/// A change of the face a battlefield object shows that keeps the object
+/// (CR 701.27a, 708.8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FormTransition {
+    /// Turn a transforming object over (CR 701.27a).
+    Transform,
+    /// Turn a face-down object face up (CR 708.8).
+    TurnFaceUp,
+}
+
 impl Game {
     pub(crate) fn set_known_hand_count(
         &mut self,
@@ -415,18 +425,17 @@ impl Game {
         exceptions: &[CopyException],
     ) -> ObjectId {
         let id = self.state.id_gen.next_id();
-        // Token status is the object's kind, not a copiable value; only an
-        // exception's write detaches the shared definition (`DerefMut`).
-        let mut copy = Object::from_definition(
+        let copy = Object::token_with_copiable_values(
             id,
             controller,
-            values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
-            std::sync::Arc::clone(&values.definition.printed),
-            true,
+            (
+                values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
+                std::sync::Arc::clone(&values.definition.printed),
+            ),
+            values.faces.clone(),
+            values.copy.clone(),
+            exceptions,
         );
-        copy.set_front_face(values.front.clone());
-        copy.copy = values.copy.clone();
-        copy.apply_copy_exceptions(exceptions);
         self.add_object(copy)
     }
 
@@ -729,8 +738,8 @@ impl Game {
         } else if let Some((_, result)) = entry.meld {
             default_content_pack().definition(result)?.printed.as_ref()
         } else if entry.transformed {
-            let (_, back) = default_content_pack().back_face_row(object.definition_id)?;
-            back.printed.as_ref()
+            let back = default_content_pack().transforming_faces(object)?.back.0;
+            default_content_pack().definition(back)?.printed.as_ref()
         } else {
             object
         };
@@ -839,14 +848,13 @@ impl Game {
                 let row = default_content_pack()
                     .definition(result)
                     .expect("meld result");
-                self.state[object_id].show_battlefield_form(result, row.printed.clone());
+                self.state[object_id].show_melded(result, row.printed.clone());
             }
             if entry.manifested {
-                self.state[object_id]
-                    .show_battlefield_form(CardDefId::ANONYMOUS, MANIFESTED.clone());
+                self.state[object_id].turn_face_down(MANIFESTED.clone());
             }
             if entry.transformed {
-                self.show_back_face(object_id);
+                self.turn_over(object_id, FormTransition::Transform);
             }
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent = Permanent::new(
@@ -938,31 +946,36 @@ impl Game {
         let Some(object) = self.state.permanents[permanent].as_ref().map(|p| p.object) else {
             return;
         };
-        if let Some((_, front)) = self.state[object].front_face() {
-            if front.types.is_spell() {
-                return;
-            }
-            self.state[object].turn_front_face_up();
-        } else if !self.show_back_face(object) {
-            return;
+        if self.turn_over(object, FormTransition::Transform) {
+            self.state.permanents[permanent]
+                .as_mut()
+                .unwrap()
+                .transforms += 1;
         }
-        self.state.permanents[permanent]
-            .as_mut()
-            .unwrap()
-            .transforms += 1;
     }
 
-    /// Show a card's back face; false when it has none.
-    fn show_back_face(&mut self, object: ObjectId) -> bool {
-        let definition = self.state[object].definition_id;
-        let Some(back) = default_content_pack().back_face(definition) else {
-            return false;
-        };
-        if back.1.types.is_spell() {
-            return false;
+    /// Change the face a battlefield object shows without making a new
+    /// object; false when it cannot. Transformability comes from its physical
+    /// backing (CR 712.9, 712.10), and an instant or sorcery face is never
+    /// turned up on the battlefield. Copy exceptions apply once to the raw
+    /// face shown (CR 707.9b).
+    pub(crate) fn turn_over(&mut self, object: ObjectId, transition: FormTransition) -> bool {
+        match transition {
+            FormTransition::Transform => {
+                let Some(faces) = default_content_pack()
+                    .transforming_faces(&self.state[object])
+                    .map(|faces| faces.turned_over())
+                else {
+                    return false;
+                };
+                if faces.shown().1.types.is_spell() {
+                    return false;
+                }
+                self.state[object].show_transforming_face(faces);
+                true
+            }
+            FormTransition::TurnFaceUp => self.state[object].turn_face_up(),
         }
-        self.state[object].turn_back_face_up(back);
-        true
     }
 
     /// Give `controller` control of a battlefield permanent (CR 108.4): it

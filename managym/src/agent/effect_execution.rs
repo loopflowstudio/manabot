@@ -843,7 +843,7 @@ impl<'a> Projection<'a> {
                             let CopiableValues {
                                 definition_id,
                                 definition,
-                                front,
+                                faces,
                                 copy,
                             } = values;
                             self.reference(
@@ -856,7 +856,11 @@ impl<'a> Projection<'a> {
                             self.tokens
                                 .append_definition(definition)
                                 .expect("copiable definition tokens");
-                            if let Some((front, _)) = front {
+                            if let Some((front, _)) = faces
+                                .as_ref()
+                                .filter(|faces| faces.back_up)
+                                .map(|faces| &faces.front)
+                            {
                                 self.reference(
                                     "copy front face",
                                     VisibleReference {

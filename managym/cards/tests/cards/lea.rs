@@ -247,7 +247,7 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
 
     let clone = move_card(&mut s, clone, ZoneType::Graveyard);
     assert_eq!(s.game().state[clone].name, "Clone");
-    assert!(s.game().state[clone].copy.is_none());
+    assert!(s.game().state[clone].copy().is_none());
 }
 
 /// The copied creature's own entry replacement applies (CR 614.12): a copy
@@ -310,9 +310,9 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     let hash = s.game().state.deterministic_hash();
     assert_eq!(fork.state.deterministic_hash(), hash);
     let entering = now(&s, clone);
-    let copy = fork.state[entering].copy.take().expect("prospective copy");
+    let form = fork.state[entering].form.take().expect("prospective copy");
     assert_ne!(fork.state.deterministic_hash(), hash);
-    fork.state[entering].copy = Some(copy);
+    fork.state[entering].form = Some(form);
     assert_eq!(fork.state.deterministic_hash(), hash);
     fork.state
         .suspended_decision
@@ -334,7 +334,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert_eq!(s.game().state[clone].name, "Clone");
     assert_eq!(s.game().state[clone].power, Some(3));
     assert_eq!(s.game().state[clone].toughness, Some(3));
-    assert!(s.game().state[clone].copy.is_none());
+    assert!(s.game().state[clone].copy().is_none());
 }
 
 #[test]

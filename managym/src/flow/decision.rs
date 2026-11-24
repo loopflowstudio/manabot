@@ -1412,7 +1412,7 @@ impl Game {
                     }
                     FrameCompletion::TurnFaceUp(object) => {
                         if self.state.permanent_of(object).is_some() {
-                            self.state[object].reveal_manifest();
+                            self.turn_over(object, super::zones::FormTransition::TurnFaceUp);
                         }
                         self.state.priority_mut().start_round(frame.controller);
                         return;
@@ -1580,15 +1580,7 @@ impl Game {
         let source_focus = suspended
             .frame
             .source()
-            .map(|object_id| {
-                vec![
-                    self.state
-                        .objects
-                        .provenance(object_id)
-                        .expect("source provenance")
-                        .0,
-                ]
-            })
+            .map(|object_id| vec![self.observed_object_id(object_id)])
             .unwrap_or_default();
         let space = match &suspended.decision {
             Decision::OrderMeldedCards { player, .. } => ActionSpace {
@@ -3990,7 +3982,7 @@ mod learn_tests {
                 ..
             }
         ));
-        let reveal = Observation::event_data(events[0]);
+        let reveal = Observation::event_data(&game, events[0]);
         assert_eq!(reveal[0].event_type, EventType::CardRevealed as i32);
         assert_eq!(reveal[0].source_kind, EventEntityKind::Definition as i32);
         assert_eq!(reveal[0].source_id, definition.0 as i32);

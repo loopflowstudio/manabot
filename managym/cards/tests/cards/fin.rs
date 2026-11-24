@@ -833,3 +833,119 @@ fn day_of_black_sun_at_zero_reads_manifest_transform_and_meld_mana_values() {
         "Cecil, Redeemed Paladin"
     );
 }
+
+/// The battlefield object of `permanent`.
+fn shown(s: &Scenario, permanent: PermanentId) -> managym::state::game_object::Object {
+    s.game().state[s.game().permanent_object(permanent).unwrap()].clone()
+}
+
+fn mana_value_seen(s: &Scenario, permanent: PermanentId) -> u8 {
+    let id = s.game().state.permanents[permanent].as_ref().unwrap().id.0 as i32;
+    let view = Observation::for_player(s.game(), PlayerId(1));
+    view.agent_permanents
+        .iter()
+        .chain(&view.opponent_permanents)
+        .find(|row| row.id == id)
+        .unwrap()
+        .mana_value()
+}
+
+#[test]
+fn clone_of_either_cecil_face_is_single_faced() {
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Cecil, Dark Knight", "Clone"]);
+    // The opponent's Cecil keeps the legend rule out of the way.
+    let cecil = s.force_permanent_on_battlefield(1, "Cecil, Dark Knight");
+    let clone_cecil = |s: &mut Scenario| {
+        s.set_player_mana_pool(0, "3U");
+        let clone = cast(s, "Clone");
+        spend_colorless(s);
+        resolve_top(s);
+        assert!(s.choose_target(Target::Permanent(cecil)));
+        settle(s);
+        permanent_of(s, clone).expect("entered")
+    };
+    // CR 712.9: a single-faced card copying a front face can't transform.
+    let front = clone_cecil(&mut s);
+    assert_eq!(shown(&s, front).name, "Cecil, Dark Knight");
+    s.game_mut().transform_permanent(front);
+    assert_eq!(shown(&s, front).name, "Cecil, Dark Knight");
+    assert_eq!(permanent(&s, front).transforms, 0);
+    assert_eq!(mana_value_seen(&s, front), 1);
+
+    s.game_mut().transform_permanent(cecil);
+    assert_eq!(shown(&s, cecil).name, "Cecil, Redeemed Paladin");
+    assert_eq!(mana_value_seen(&s, cecil), 1);
+    // Copying the back face copies no front face: mana value 0 (CR 712.8e)
+    // and nothing to transform back to.
+    let back = clone_cecil(&mut s);
+    assert_eq!(shown(&s, back).name, "Cecil, Redeemed Paladin");
+    assert!(!shown(&s, back).is_transformed());
+    assert_eq!(mana_value_seen(&s, back), 0);
+    s.game_mut().transform_permanent(back);
+    assert_eq!(shown(&s, back).name, "Cecil, Redeemed Paladin");
+    assert_eq!(permanent(&s, back).transforms, 0);
+}
+
+#[test]
+fn copied_cecil_tokens_transform_with_their_exceptions_once() {
+    use managym::{cards::content_pack::default_content_pack, state::game_object::Target};
+    let mut s = five_color_setup(&[
+        "Cecil, Dark Knight",
+        "Ember Island Production",
+        "Electroduplicate",
+    ]);
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    let tokens = |s: &Scenario, besides: &[PermanentId]| {
+        s.battlefield_permanents_named(0, "Cecil, Dark Knight")
+            .into_iter()
+            .find(|id| !besides.contains(id))
+            .expect("token copy")
+    };
+    s.set_player_mana_pool(0, "3UU");
+    cast(&mut s, "Ember Island Production");
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert!(s.choose_target(Target::Permanent(cecil)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let hero = tokens(&s, &[cecil]);
+    // A copy of the nonlegendary Hero survives the legend rule and adds
+    // haste and its end-step sacrifice after the Hero's exceptions.
+    s.set_player_mana_pool(0, "2R");
+    cast(&mut s, "Electroduplicate");
+    assert!(s.choose_target(Target::Permanent(hero)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let token = tokens(&s, &[cecil, hero]);
+    let content = default_content_pack();
+    let printed = |name: &str| {
+        let id = content.definition_id(name).unwrap();
+        content.definition(id).unwrap().printed.abilities.len()
+    };
+    let front_id = shown(&s, cecil).definition_id;
+    let check = |s: &Scenario, name: &str| {
+        let object = shown(s, token);
+        assert_eq!(object.name, name);
+        assert_eq!(object.abilities.len(), printed(name) + 1);
+        assert_eq!(object.subtypes.iter().filter(|t| *t == "Hero").count(), 1);
+        assert!(!object.is_legendary());
+        let characteristics = s.game().characteristics(token);
+        assert_eq!(characteristics.pt(), (4, 4));
+        assert!(characteristics.keywords.has(Keyword::Haste));
+        let copy = object.copy().expect("copy effect");
+        assert_eq!((copy.of, copy.exceptions.len()), (front_id, 5));
+        assert_eq!(mana_value_seen(s, token), 1);
+    };
+    check(&s, "Cecil, Dark Knight");
+    // CR 707.8a: a copy of a transforming permanent is a transforming token,
+    // and each face shows the raw face with every exception applied once.
+    for name in [
+        "Cecil, Redeemed Paladin",
+        "Cecil, Dark Knight",
+        "Cecil, Redeemed Paladin",
+    ] {
+        s.game_mut().transform_permanent(token);
+        check(&s, name);
+    }
+    assert_eq!(permanent(&s, token).transforms, 3);
+}

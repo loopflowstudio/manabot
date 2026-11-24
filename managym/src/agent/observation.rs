@@ -1126,7 +1126,7 @@ impl Observation {
             decision_memory: game.decision_memory[agent_player.0].clone(),
             recent_events: recent_events
                 .into_iter()
-                .flat_map(Self::event_data)
+                .flat_map(|event| Self::event_data(game, event))
                 .collect(),
         };
 
@@ -1615,8 +1615,7 @@ impl Observation {
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
             copy: object
-                .copy
-                .as_ref()
+                .copy()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
             object_id: Some(game.observed_object_id(permanent.object).0 as i32),
             owner_id: game.state.players[object.owner.0].id.0 as i32,
@@ -1829,7 +1828,35 @@ impl Observation {
         }
     }
 
-    pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
+    /// Viewer-safe event rows. A source that is face down on the battlefield
+    /// is named by its permanent, never by the storage slot of the physical
+    /// card it hides (CR 708.2).
+    pub(crate) fn event_data(game: &Game, event: &GameEvent) -> Vec<EventData> {
+        let mut rows = Self::event_rows(event);
+        let source = match event {
+            GameEvent::DamageDealt { source, .. } => *source,
+            GameEvent::AbilityCountered { source_object, .. }
+            | GameEvent::AbilityTriggered { source_object, .. } => Some(*source_object),
+            _ => None,
+        };
+        if let Some(face_down) = source
+            .filter(|object| {
+                game.state
+                    .object(*object)
+                    .is_ok_and(|row| row.is_face_down())
+            })
+            .and_then(|object| game.object_event_ref(object))
+        {
+            for row in &mut rows {
+                row.source_kind = EventEntityKind::Object as i32;
+                row.source_id = face_down.entity.0 as i32;
+                row.source_incarnation = face_down.incarnation as i32;
+            }
+        }
+        rows
+    }
+
+    fn event_rows(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
             GameEvent::PermanentSacrificed { .. } | GameEvent::Bent { .. } => Vec::new(),
