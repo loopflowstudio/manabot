@@ -1,11 +1,15 @@
 //! Innistrad: Midnight Hunt.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    ability::{
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility,
     },
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -15,7 +19,78 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         consider(),
         eaten_alive(),
         join_the_dance(),
+        stromkirk_bloodthief(),
+        bloodtithe_collector(),
     ]
+}
+
+/// "if an opponent lost life this turn" (CR 603.4): any loss, damage included.
+fn opponent_lost_life() -> Option<Condition> {
+    Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 1 })
+}
+
+fn stromkirk_bloodthief() -> CardDefinition {
+    let text_box = "At the beginning of your end step, if an opponent lost life this turn, put a +1/+1 counter on target Vampire you control.";
+    let vampire = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::subtype("Vampire"),
+    };
+    CardDefinition {
+        key: "mid.stromkirk_bloodthief",
+        scryfall_id: "fa819123-bf13-44ea-9a6e-06c8ab023e44",
+        printed: PrintedCharacteristics {
+            name: "Stromkirk Bloodthief".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Rogue".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: opponent_lost_life(),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(vampire.clone()),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(vampire),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bloodtithe_collector() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, if an opponent lost life this turn, each opponent discards a card.";
+    CardDefinition {
+        key: "mid.bloodtithe_collector",
+        scryfall_id: "57d5e536-7774-4949-8127-727ae4d8fc80",
+        printed: PrintedCharacteristics {
+            name: "Bloodtithe Collector".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Noble".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: opponent_lost_life(),
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    effects: vec![Effect::discard()],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn consider() -> CardDefinition {

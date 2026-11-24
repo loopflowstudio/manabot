@@ -50,7 +50,112 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         mischievous_mystic(),
         leyline_axe(),
         sire_of_seven_deaths(),
+        vanguard_seraph(),
+        bloodthirsty_conqueror(),
+        exemplar_of_light(),
     ]
+}
+
+fn vanguard_seraph() -> CardDefinition {
+    let text_box = "Flying\nWhenever you gain life for the first time each turn, surveil 1. (Look at the top card of your library. You may put it into your graveyard.)";
+    CardDefinition {
+        key: "fdn.vanguard_seraph",
+        scryfall_id: "4329c861-fc16-4a96-9c03-25af6ac2adc8",
+        printed: PrintedCharacteristics {
+            name: "Vanguard Seraph".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into(), "Warrior".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::GainsLife {
+                    who: Actor::You,
+                    nth: Some(1),
+                },
+                intervening_if: None,
+                effects: vec![Effect::Surveil { count: 1 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bloodthirsty_conqueror() -> CardDefinition {
+    let text_box = "Flying, deathtouch\nWhenever an opponent loses life, you gain that much life. (Damage causes loss of life.)";
+    CardDefinition {
+        key: "fdn.bloodthirsty_conqueror",
+        scryfall_id: "ce860ed4-a5bd-4347-9eab-dd716ea84db1",
+        printed: PrintedCharacteristics {
+            name: "Bloodthirsty Conqueror".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Knight".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::LosesLife {
+                    who: Actor::Opponent,
+                },
+                intervening_if: None,
+                effects: vec![Effect::gain_life(EffectValue::TriggeringAmount)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn exemplar_of_light() -> CardDefinition {
+    let text_box = "Flying\nWhenever you gain life, put a +1/+1 counter on this creature.\nWhenever you put one or more +1/+1 counters on this creature, draw a card. This ability triggers only once each turn.";
+    CardDefinition {
+        key: "fdn.exemplar_of_light",
+        scryfall_id: "920c8fc5-fdd2-446a-a676-5c363f96928f",
+        printed: PrintedCharacteristics {
+            name: "Exemplar of Light".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::GainsLife {
+                        who: Actor::You,
+                        nth: None,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::OnceEachTurn {
+                        condition: Box::new(TriggerCondition::PutsCountersOn {
+                            who: Actor::You,
+                            kind: CounterKind::PlusOnePlusOne,
+                            subject: TriggerSubject::This,
+                        }),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn sire_of_seven_deaths() -> CardDefinition {

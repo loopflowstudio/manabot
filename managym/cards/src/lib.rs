@@ -69,6 +69,7 @@ mod mrd;
 mod msh;
 mod nec;
 mod ody;
+mod ogw;
 mod ons;
 mod ori;
 mod pls;
@@ -82,6 +83,7 @@ mod rtr;
 mod shm;
 mod snc;
 mod soi;
+mod sok;
 mod som;
 mod spm;
 mod sth;
@@ -187,6 +189,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     msh::cards,
     nec::cards,
     ody::cards,
+    ogw::cards,
     ons::cards,
     ori::cards,
     pls::cards,
@@ -200,6 +203,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     shm::cards,
     snc::cards,
     soi::cards,
+    sok::cards,
     som::cards,
     spm::cards,
     sth::cards,

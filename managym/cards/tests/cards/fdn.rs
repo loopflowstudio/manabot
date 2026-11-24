@@ -2576,3 +2576,177 @@ fn power_batch_grantors_with_one_timestamp_have_separate_turn_limits() {
         .unwrap();
     assert_eq!(source.once_each_turn_used, 2);
 }
+
+/// Create a Food for player 0 and eat it: one gain of 3 life.
+fn eat_food(s: &mut crate::support::game::Scenario) {
+    use crate::support::play::command;
+    use managym::agent::action::Action;
+    let food = s
+        .game_mut()
+        .create_token("token.food", PlayerId(0), false)
+        .unwrap();
+    if s.game().state.players[0].mana_pool.total() < 2 {
+        s.set_player_mana_pool(0, "2");
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    command(
+        s,
+        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == food),
+    );
+    spend_colorless(s);
+    settle(s);
+}
+
+fn surveils(s: &mut crate::support::game::Scenario) -> usize {
+    use managym::flow::event::GameEvent;
+    s.drain_events()
+        .iter()
+        .filter(|event| matches!(event, GameEvent::Surveilled { .. }))
+        .count()
+}
+
+#[test]
+fn vanguard_seraph_surveils_on_the_first_gain_of_each_turn_only() {
+    let mut s = five_color_setup(&["Vanguard Seraph"]);
+    s.force_permanent_on_battlefield(0, "Vanguard Seraph");
+    s.drain_events();
+    eat_food(&mut s);
+    assert_eq!(surveils(&mut s), 1, "first gain this turn");
+    eat_food(&mut s);
+    assert_eq!(surveils(&mut s), 0, "second gain this turn");
+
+    // A Seraph arriving after the turn's first gain waits for the next turn.
+    let mut late = five_color_setup(&["Vanguard Seraph"]);
+    eat_food(&mut late);
+    late.force_permanent_on_battlefield(0, "Vanguard Seraph");
+    late.drain_events();
+    eat_food(&mut late);
+    assert_eq!(surveils(&mut late), 0, "late entry");
+    late.advance_to_active_step(1, StepKind::Main);
+    late.advance_to_active_step(0, StepKind::Main);
+    late.drain_events();
+    eat_food(&mut late);
+    assert_eq!(surveils(&mut late), 1, "next turn resets the first gain");
+}
+
+#[test]
+fn bloodthirsty_conqueror_gains_each_actual_loss_with_its_own_amount() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, choose_mode, target_opponent},
+    };
+    use managym::state::stack_object::StackObject;
+
+    let pending_amounts = |s: &crate::support::game::Scenario| -> Vec<i32> {
+        s.game()
+            .state
+            .stack_objects
+            .iter()
+            .filter_map(|object| match object {
+                StackObject::TriggeredAbility(trigger) => Some(trigger.triggering_amount),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Life loss (Exsanguinate) and damage (Lightning Bolt) each trigger with
+    // the amount lost; both wait together and survive the source leaving.
+    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Exsanguinate", "Lightning Bolt"]);
+    let conqueror = s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    s.set_player_mana_pool(0, "2BB");
+    let spell = force_new_card_in_hand(&mut s, 0, "Exsanguinate");
+    cast_card(&mut s, spell);
+    choose_mode(&mut s, 2);
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(pending_amounts(&s), vec![2]);
+    s.set_player_mana_pool(0, "R");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(pending_amounts(&s), vec![2, 3]);
+    let object = card_of(&s, conqueror);
+    move_card(&mut s, object, ZoneType::Hand);
+    settle(&mut s);
+    s.assert_life(1, 15);
+    // Exsanguinate's own gain (2) plus the two triggered gains.
+    s.assert_life(0, 20 + 2 + 2 + 3);
+
+    // Loss its total can't take leaves it unchanged: nothing triggers.
+    let mut s = five_color_setup(&[
+        "Bloodthirsty Conqueror",
+        "Exsanguinate",
+        "Teferi's Protection",
+    ]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2W");
+    let protection = force_new_card_in_hand(&mut s, 1, "Teferi's Protection");
+    cast_card(&mut s, protection);
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "3BB");
+    let spell = force_new_card_in_hand(&mut s, 0, "Exsanguinate");
+    cast_card(&mut s, spell);
+    choose_mode(&mut s, 3);
+    s.pass_priority();
+    s.pass_priority();
+    assert!(pending_amounts(&s).is_empty());
+    settle(&mut s);
+    s.assert_life(1, 20);
+    s.assert_life(0, 20);
+
+    // A finite drain still ends the game at zero life.
+    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    s.game_mut().scenario_set_life(PlayerId(1), 3);
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    s.pass_priority();
+    s.pass_priority();
+    s.assert_game_over();
+    s.assert_winner(0);
+}
+
+#[test]
+fn exemplar_of_light_draws_once_each_turn_for_counters_on_itself() {
+    use crate::support::inspect::{counters, hand};
+
+    let mut s = five_color_setup(&["Exemplar of Light"]);
+    let exemplar = s.force_permanent_on_battlefield(0, "Exemplar of Light");
+    let before = hand(&s, 0).len();
+    eat_food(&mut s);
+    assert_eq!(counters(&s, exemplar), 1);
+    assert_eq!(hand(&s, 0).len(), before + 1, "first placement draws");
+    eat_food(&mut s);
+    assert_eq!(counters(&s, exemplar), 2);
+    assert_eq!(hand(&s, 0).len(), before + 1, "once each turn");
+
+    // A spell's counter on another creature is not a counter on this one;
+    // the same spell on this creature is.
+    for (target, draws) in [("Gray Ogre", 0), ("Exemplar of Light", 1)] {
+        let mut other = five_color_setup(&["Exemplar of Light", "Gray Ogre", "Felling Blow"]);
+        other.force_permanent_on_battlefield(0, "Exemplar of Light");
+        other.force_permanent_on_battlefield(0, "Gray Ogre");
+        other.force_permanent_on_battlefield(1, "Gray Ogre");
+        let before = hand(&other, 0).len();
+        let blow = crate::support::game::force_new_card_in_hand(&mut other, 0, "Felling Blow");
+        crate::support::play::cast_card(&mut other, blow);
+        let mine = other.battlefield_permanents_named(0, target)[0];
+        other.choose_target(managym::state::game_object::Target::Permanent(mine));
+        let theirs = other.battlefield_permanents_named(1, "Gray Ogre")[0];
+        other.choose_target(managym::state::game_object::Target::Permanent(theirs));
+        settle(&mut other);
+        assert_eq!(hand(&other, 0).len(), before + draws, "{target}");
+    }
+    // The next turn's first placement draws again.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let before = hand(&s, 0).len();
+    eat_food(&mut s);
+    assert_eq!(counters(&s, exemplar), 3);
+    assert_eq!(hand(&s, 0).len(), before + 1);
+}

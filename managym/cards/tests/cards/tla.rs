@@ -4556,6 +4556,43 @@ fn sozins_comet_grants_firebending_five_until_end_of_turn() {
     assert_eq!(pool.total(), 5);
 }
 
+/// Each firebending instance a continuous effect grants is its own attack
+/// trigger (CR 702.189b), so Katara doubles each one: one Comet yields two
+/// five-mana triggers and two Comets four. Countering one leaves the rest.
+#[test]
+fn sozins_comet_grants_firebending_as_ordinary_attack_triggers_katara_doubles() {
+    use managym::state::stack_object::StackObject;
+    for (comets, countered, mana) in [(1, false, 10), (2, false, 20), (2, true, 15)] {
+        let mut s = five_color_setup(&["Sozin's Comet", "Katara, the Fearless"]);
+        let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+        clear_summoning_sickness(&mut s, katara);
+        for _ in 0..comets {
+            let comet = force_new_card_in_hand(&mut s, 0, "Sozin's Comet");
+            cast_card(&mut s, comet);
+            settle(&mut s);
+        }
+        s.set_player_mana_pool(0, "");
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, katara);
+        pass_until(&mut s, ActionSpaceKind::Priority);
+        let triggers = s
+            .game()
+            .state
+            .stack_objects
+            .iter()
+            .filter(|object| matches!(object, StackObject::TriggeredAbility(_)))
+            .count();
+        assert_eq!(triggers, 2 * comets, "{comets} comets");
+        if countered {
+            s.game_mut().state.stack_objects.pop();
+        }
+        while !s.game().state.stack_objects.is_empty() {
+            s.pass_priority();
+        }
+        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), mana);
+    }
+}
+
 fn foretell_offered(s: &mut Scenario, object: ObjectId) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
     s.action_space()

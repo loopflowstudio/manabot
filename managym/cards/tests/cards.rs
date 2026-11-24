@@ -116,6 +116,8 @@ mod nec;
 mod observability;
 #[path = "cards/ody.rs"]
 mod ody;
+#[path = "cards/ogw.rs"]
+mod ogw;
 #[path = "cards/ons.rs"]
 mod ons;
 #[path = "cards/ori.rs"]
@@ -144,6 +146,8 @@ mod shm;
 mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/sok.rs"]
+mod sok;
 #[path = "cards/som.rs"]
 mod som;
 #[path = "cards/spm.rs"]

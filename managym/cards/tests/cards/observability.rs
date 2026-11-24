@@ -204,7 +204,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
     let Player {
         id: _,
         index: _,
@@ -214,6 +214,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
         known_library: _,
         name: _,
         life: _,
+        starting_life: _,
         drew_when_empty: _,
         counters: _,
         mana_pool: _,
@@ -234,6 +235,10 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
         ("known_library", Seen::Via("known_library tensor")),
         ("name", Seen::Identity),
         ("life", Seen::Player(player::LIFE, player::IS_ACTIVE)),
+        (
+            "starting_life",
+            Seen::Actions("activations gated on life above it are offered or withheld"),
+        ),
         (
             "drew_when_empty",
             Seen::Transient("the player loses at the next state-based check"),

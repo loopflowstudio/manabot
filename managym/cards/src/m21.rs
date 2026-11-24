@@ -1,15 +1,50 @@
 //! Core Set 2021.
 use managym_state::{
-    ability::{Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition},
+    ability::{
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        StaticAbility,
     },
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![heartfire_immolator()]
+    vec![heartfire_immolator(), sanguine_indulgence()]
+}
+
+fn sanguine_indulgence() -> CardDefinition {
+    let text_box = "This spell costs {3} less to cast if you've gained 3 or more life this turn.\nReturn up to two target creature cards from your graveyard to your hand.";
+    let spec = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate::creature(),
+    };
+    CardDefinition {
+        key: "m21.sanguine_indulgence",
+        scryfall_id: "abfcd08a-cfb5-4d34-b950-f57a88c5cb8e",
+        printed: PrintedCharacteristics {
+            name: "Sanguine Indulgence".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            statics: vec![StaticAbility::CostsLess {
+                amount: EffectValue::Fixed(3),
+                condition: Some(Condition::compare(
+                    EffectValue::LifeGainedThisTurn(PlayerSelector::You),
+                    CompareOp::Ge,
+                    3,
+                )),
+            }],
+            spell_effects: vec![Effect::return_to_hand(ObjectSelector::Targets(
+                spec.clone(),
+            ))],
+            targeting: vec![TargetRequirement::up_to(2, spec)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn heartfire_immolator() -> CardDefinition {
