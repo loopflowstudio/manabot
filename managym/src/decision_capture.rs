@@ -396,4 +396,53 @@ mod tests {
             assert_eq!(left, right, "projection {index}");
         }
     }
+
+    /// A sacrificed transformed Cecil is named in event prose by its last
+    /// effective battlefield name, not its retained front printing (CR 608.2h).
+    #[test]
+    fn a_sacrificed_transformed_cecil_is_named_by_its_shown_face() {
+        use crate::{
+            flow::decision::EffectFrame,
+            state::{
+                ability::{Effect, ObjectSelector},
+                card::CardType,
+                predicate::CardPredicate,
+            },
+        };
+        let deck = BTreeMap::from([("Cecil, Dark Knight".into(), 4), ("Mountain".into(), 36)]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            608_2,
+            false,
+        );
+        game.keep_opening_hands();
+        game.scenario_force_battlefield(PlayerId(1), "Cecil, Dark Knight", true)
+            .unwrap();
+        let cecil = game
+            .scenario_force_battlefield(PlayerId(0), "Cecil, Dark Knight", true)
+            .unwrap();
+        game.transform_permanent(cecil);
+        let object = game.permanent_object(cecil).unwrap();
+        let mut sacrifice = EffectFrame::new(PlayerId(0), vec![Effect::sacrifice_this()]);
+        sacrifice.bind_source(Some(object), Some(object));
+        game.run_frame(sacrifice);
+        game.run_frame(EffectFrame::new(
+            PlayerId(1),
+            vec![Effect::destroy(ObjectSelector::chosen(CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            }))],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let facts = game.decision_context(PlayerId(1)).unwrap().recent_facts;
+        assert!(
+            facts
+                .iter()
+                .any(|fact| fact == "Seat 1 sacrificed Cecil, Redeemed Paladin."),
+            "{facts:?}"
+        );
+    }
 }
