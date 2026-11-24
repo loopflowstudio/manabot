@@ -747,10 +747,9 @@ impl<'a> Projection<'a> {
             self.field("enters face down", &true);
         }
         match entry.face {
-            EntryFace::Front => {}
             EntryFace::Transformed => self.field("enters transformed", &true),
             EntryFace::ModalBack => self.field("enters back face up", &true),
-            EntryFace::Manifested | EntryFace::Melded { .. } => {}
+            EntryFace::Front | EntryFace::Manifested | EntryFace::Melded { .. } => {}
         }
         if let Some(object) = entry.attached_to {
             self.object("enters attached to", object);
@@ -1648,8 +1647,10 @@ mod tests {
         );
         assert!(entry_notes(&game, EntryFace::Front).is_empty());
 
-        let wire = |face| {
-            serde_json::to_value(ZoneEntry {
+        // Each form records only its historical key, where the old fields
+        // sat: between `face_down` and the end of this default entry.
+        let bytes = |face| {
+            serde_json::to_string(&ZoneEntry {
                 face,
                 ..Default::default()
             })
@@ -1660,63 +1661,27 @@ mod tests {
             .zones
             .zone_objects(ZoneType::Library, PlayerId(0));
         let partner = game.state.card_of(library[0]).unwrap();
-        let partner_index = serde_json::to_value(partner).unwrap();
-        let melded = EntryFace::Melded {
-            partner,
-            result: CardDefId(7),
-        };
-        let keys = |face| {
-            let wire = wire(face);
-            ["manifested", "transformed", "modal_back", "meld"]
-                .map(|key| wire.get(key).cloned().unwrap_or(serde_json::Value::Null))
-        };
-        let null = serde_json::Value::Null;
-        assert_eq!(
-            keys(EntryFace::Front),
-            [null.clone(), false.into(), null.clone(), null.clone()]
-        );
-        assert_eq!(
-            keys(EntryFace::Transformed),
-            [null.clone(), true.into(), null.clone(), null.clone()]
-        );
-        assert_eq!(
-            keys(EntryFace::ModalBack),
-            [null.clone(), false.into(), true.into(), null.clone()]
-        );
-        assert_eq!(
-            keys(EntryFace::Manifested),
-            [true.into(), false.into(), null.clone(), null.clone()]
-        );
-        assert_eq!(
-            keys(melded),
-            [
-                null.clone(),
-                false.into(),
-                null,
-                serde_json::json!([partner_index, 7])
-            ]
-        );
-        // Each face's keys sit where the historical fields did, between
-        // `face_down` and `attached_to`.
-        let bytes = |face| {
-            serde_json::to_string(&ZoneEntry {
-                face,
-                ..Default::default()
-            })
-            .unwrap()
-        };
+        let partner_index = serde_json::to_string(&partner).unwrap();
         let front = bytes(EntryFace::Front);
-        assert!(front.contains(r#""face_down":false,"transformed":false}"#));
+        let with = |keys: &str| front.replace(r#""transformed":false"#, keys);
+        assert!(front.ends_with(r#""face_down":false,"transformed":false}"#));
+        assert_eq!(bytes(EntryFace::Transformed), with(r#""transformed":true"#));
+        assert_eq!(
+            bytes(EntryFace::ModalBack),
+            with(r#""transformed":false,"modal_back":true"#)
+        );
         assert_eq!(
             bytes(EntryFace::Manifested),
-            front.replace(r#""transformed""#, r#""manifested":true,"transformed""#)
+            with(r#""manifested":true,"transformed":false"#)
         );
         assert_eq!(
-            bytes(melded),
-            front.replace(
-                r#""transformed":false"#,
-                &format!(r#""transformed":false,"meld":[{partner_index},7]"#)
-            )
+            bytes(EntryFace::Melded {
+                partner,
+                result: CardDefId(7),
+            }),
+            with(&format!(
+                r#""transformed":false,"meld":[{partner_index},7]"#
+            ))
         );
     }
 }
