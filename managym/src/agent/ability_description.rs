@@ -23,6 +23,7 @@ pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,
+    chosen_modes: &[usize],
 ) -> String {
     if let Some(effects) = inline {
         return format!(
@@ -40,11 +41,27 @@ pub(crate) fn trigger_description(
         .as_ref()
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
+    // A chosen modal trigger reads as the modes it will run (CR 700.2).
+    let program = match (effects.as_slice(), chosen_modes) {
+        ([Effect::TriggerModes { .. }], [_, ..]) => {
+            let mut chosen = chosen_modes.to_vec();
+            chosen.sort_unstable();
+            let modes: Vec<_> = chosen.iter().map(|mode| (mode + 1).to_string()).collect();
+            format!(
+                "chosen mode {}: {}",
+                modes.join(", "),
+                effects_description(&crate::state::ability::with_chosen_modes(
+                    effects,
+                    chosen_modes
+                ))
+            )
+        }
+        _ => effects_description(effects),
+    };
     format!(
-        "{} — {}{intervening}: {}",
+        "{} — {}{intervening}: {program}",
         object.name,
         condition_description(condition),
-        effects_description(effects)
     )
 }
 
@@ -432,6 +449,9 @@ fn condition_text(condition: &Condition) -> String {
         Condition::SourceTapped => "this is tapped".into(),
         Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
+        Condition::TriggeringMatches(predicate) => {
+            format!("it was {}", predicate_description(predicate, "permanent"))
+        }
         Condition::CardsThisWayMatch(predicate) => format!(
             "a {} was milled or discarded this way",
             predicate_description(predicate, "card")

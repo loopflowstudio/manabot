@@ -505,7 +505,8 @@ impl Game {
             .as_ref()
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
-        // Inline (delayed or chosen-mode) effects have no printed ability.
+        // Inline (delayed, granted or reflexive) effects have no printed
+        // ability; a printed modal trigger runs its chosen modes.
         let (effects, ability) = if let Some(effects) = triggered.inline_effects {
             (effects, None)
         } else {
@@ -533,7 +534,11 @@ impl Game {
             }) {
                 return;
             }
-            (effects, Some(triggered.ability_index))
+            (
+                crate::state::ability::with_chosen_modes(&effects, &triggered.chosen_modes)
+                    .into_owned(),
+                Some(triggered.ability_index),
+            )
         };
 
         let requirements = crate::state::ability::effect_target_requirements(&effects);
@@ -662,7 +667,7 @@ impl Game {
             }
             Target::Permanent(id) => self
                 .departed_permanent_lki(id)
-                .map(|lki| lki.creature_types.clone())
+                .map(|lki| lki.creature_types())
                 .unwrap_or_default(),
             _ => Vec::new(),
         }

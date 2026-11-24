@@ -372,6 +372,10 @@ pub enum Condition {
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
+    /// Triggering question: the permanent whose event fired the trigger
+    /// matches [predicate] now, or, once it has left, matched it as it last
+    /// existed ("if it was attacking", CR 603.10a).
+    TriggeringMatches(CardPredicate),
     /// Resolution only: a card the scope's latest mill or discard moved matches
     /// [predicate] ("When you discard a nonland card this way").
     CardsThisWayMatch(CardPredicate),
@@ -470,7 +474,9 @@ impl Condition {
         match self {
             Self::Compare { left, right, .. } => left.reads(read) || right.reads(read),
             Self::AllOf(items) | Self::AnyOf(items) => items.iter().any(|item| item.reads(read)),
-            Self::TriggeringHadCounters => read == ContextRead::TriggeringPermanent,
+            Self::TriggeringHadCounters | Self::TriggeringMatches(_) => {
+                read == ContextRead::TriggeringPermanent
+            }
             _ => false,
         }
     }
@@ -484,7 +490,8 @@ impl Condition {
             | Condition::SourceTapped
             | Condition::SourceSaddled
             | Condition::SourceMatches(_)
-            | Condition::TriggeringHadCounters => true,
+            | Condition::TriggeringHadCounters
+            | Condition::TriggeringMatches(_) => true,
             Condition::ControlsAtLeast { predicate, .. }
             | Condition::BattlefieldAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
@@ -532,6 +539,7 @@ impl Condition {
             | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
+            | Condition::TriggeringMatches(_)
             | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
@@ -2606,6 +2614,30 @@ impl From<i32> for EffectValue {
     }
 }
 
+/// The effects a printed triggered ability runs: a modal trigger's chosen
+/// modes in printed order (CR 700.2d), else its effects unchanged. The
+/// stacked ability keeps its printed identity and only its mode choice.
+pub fn with_chosen_modes<'a>(
+    effects: &'a [Effect],
+    chosen_modes: &[usize],
+) -> std::borrow::Cow<'a, [Effect]> {
+    match effects {
+        [Effect::TriggerModes { modes, .. }] => {
+            let mut chosen = chosen_modes.to_vec();
+            chosen.sort_unstable();
+            std::borrow::Cow::Owned(
+                chosen
+                    .into_iter()
+                    .filter_map(|mode| modes.get(mode))
+                    .flatten()
+                    .cloned()
+                    .collect(),
+            )
+        }
+        _ => std::borrow::Cow::Borrowed(effects),
+    }
+}
+
 /// Explicit clauses preserve independent targets, including repeated specs.
 /// Unwrapped effects retain the shared "that target" convention.
 pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> {
@@ -2680,6 +2712,20 @@ pub struct GrantClock {
 }
 
 impl TriggerCondition {
+    /// The event this condition listens for, inside its limit and zone
+    /// wrappers.
+    pub fn event(&self) -> &TriggerCondition {
+        match self {
+            Self::WasCast { condition }
+            | Self::OnceEachTurn { condition }
+            | Self::FromZone { condition, .. }
+            | Self::InGraveyard { condition }
+            | Self::ActiveIf { condition, .. }
+            | Self::WhileSourceAttacking { condition } => condition.event(),
+            _ => self,
+        }
+    }
+
     pub fn once_each_turn(&self) -> bool {
         match self {
             Self::OnceEachTurn { .. } => true,

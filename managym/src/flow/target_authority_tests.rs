@@ -88,6 +88,7 @@ fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger
         context: None,
         player: None,
         chosen_modes: Vec::new(),
+        modes_chosen: false,
         attacker: None,
         inline_effects: Some(effects),
         x: 0,
@@ -982,10 +983,11 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     );
 }
 
-/// The identity cut preserves the historical departed-source base predicate,
-/// even if the same physical card later enters as a different copy.
+/// A departed source is matched as it last existed (CR 603.10a): an Ogre
+/// copying a land left as a land, whatever its printing, and a later copy
+/// of the same physical card does not change that.
 #[test]
-fn retained_departure_predicate_uses_base_after_copy_reentry() {
+fn retained_departure_predicate_uses_last_known_copy_after_reentry() {
     use crate::flow::triggers::TriggerSourceSnapshot;
     use crate::state::card::{CardType, StaticAbility};
     let (mut game, bolt, _, Target::Permanent(ogre), Target::Permanent(land)) = fixture() else {
@@ -996,7 +998,7 @@ fn retained_departure_predicate_uses_base_after_copy_reentry() {
     game.state[grantor]
         .statics
         .push(StaticAbility::TriggersAdditionalTime(CardPredicate {
-            card_type: Some(CardType::Creature),
+            card_type: Some(CardType::Land),
             ..Default::default()
         }));
     let template = game.state[grantor].clone();

@@ -19,7 +19,6 @@ use crate::{
             Ability, Actor, DelayedFrequency, Effect, EffectiveTrigger, KeywordAction, Per,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
-        card::CardType,
         effect::{EffectDuration, Modification},
         game_object::{AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -238,9 +237,9 @@ impl Game {
         trigger: &PendingTrigger,
     ) -> Option<Vec<crate::state::ability::TargetRequirement>> {
         let effects = match &trigger.inline_effects {
-            Some(effects) => effects.as_slice(),
-            None => self
-                .source_face(
+            Some(effects) => std::borrow::Cow::Borrowed(effects.as_slice()),
+            None => crate::state::ability::with_chosen_modes(
+                self.source_face(
                     trigger.source_object(),
                     trigger
                         .source_lki
@@ -252,8 +251,10 @@ impl Game {
                 .abilities
                 .get(trigger.ability_index)?
                 .effects(),
+                &trigger.chosen_modes,
+            ),
         };
-        Some(crate::state::ability::effect_target_requirements(effects))
+        Some(crate::state::ability::effect_target_requirements(&effects))
     }
 
     /// Clause-wide mana-value budget; paid X belongs to this occurrence,
@@ -412,7 +413,7 @@ impl Game {
                 );
                 if up_to && (legal.is_empty() || self.trigger_modes_left(&trigger) == 0) {
                     // "Choose up to": the chosen modes, in printed order.
-                    trigger.inline_effects = Some(self.chosen_mode_effects(&trigger, &modes));
+                    trigger.modes_chosen = true;
                 } else if legal.is_empty() {
                     continue;
                 } else {
@@ -494,7 +495,7 @@ impl Game {
         &self,
         trigger: &PendingTrigger,
     ) -> Option<Vec<Vec<Effect>>> {
-        if trigger.inline_effects.is_some() {
+        if trigger.inline_effects.is_some() || trigger.modes_chosen {
             return None;
         }
         match self.trigger_mode_rule(trigger)? {
@@ -613,7 +614,8 @@ impl Game {
         match rule {
             Some(Effect::TriggerModes { up_to: Some(_), .. }) => trigger.chosen_modes.push(mode),
             Some(Effect::TriggerModes { unchosen, .. }) => {
-                trigger.inline_effects = Some(modes[mode].clone());
+                trigger.chosen_modes.push(mode);
+                trigger.modes_chosen = true;
                 if let (true, Some(source)) = (unchosen, source) {
                     let affected = self.affected_permanent(source);
                     let controller = player;
@@ -634,16 +636,6 @@ impl Game {
         Ok(())
     }
 
-    /// The effects of the placing trigger's chosen modes, in printed order.
-    fn chosen_mode_effects(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
-        let mut chosen = trigger.chosen_modes.clone();
-        chosen.sort_unstable();
-        chosen
-            .into_iter()
-            .flat_map(|mode| modes[mode].iter().cloned())
-            .collect()
-    }
-
     /// Stop choosing an "up to" trigger's modes.
     fn stop_choosing_trigger_modes(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let trigger = self
@@ -652,19 +644,17 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
+        self.unchosen_trigger_modes(trigger)
             .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
         if trigger.controller != player {
             return Err(AgentError("not the trigger's controller".into()));
         }
-        let effects = self.chosen_mode_effects(trigger, &modes);
         self.state
             .trigger_placement
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger")
-            .inline_effects = Some(effects);
+            .modes_chosen = true;
         Ok(())
     }
 
@@ -678,7 +668,7 @@ impl Game {
         if matches!(
             self.trigger_mode_rule(trigger),
             Some(Effect::TriggerModes { up_to: Some(_), .. })
-        ) && trigger.inline_effects.is_none()
+        ) && !trigger.modes_chosen
         {
             return self.stop_choosing_trigger_modes(player);
         }
@@ -756,6 +746,7 @@ impl Game {
             player: trigger.player,
             x: trigger.x,
             spent: trigger.spent.clone(),
+            chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -1083,22 +1074,8 @@ impl Game {
             } else {
                 self.trigger_context_for_event(event)
             };
-            let player = match event {
-                GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
-                GameEvent::SpellCast { caster, .. } => Some(*caster),
-                GameEvent::CardDrawn { player, .. } => Some(*player),
-                GameEvent::LifeChanged { player, .. } => Some(*player),
-                // "that player": whose graveyard the card was put into.
-                GameEvent::CardMoved {
-                    object_id: object,
-                    to: ZoneType::Graveyard,
-                    ..
-                } => Some(self.state[*object].owner),
-                // "that player": whose step it is.
-                GameEvent::StepStarted { .. } => Some(self.active_player()),
-                // "that player": who searched, scried, surveilled or bent.
-                _ => performed_action(event).map(|(player, _)| player),
-            };
+            let Ability::Triggered { condition, .. } = trigger;
+            let player = self.event_player(condition.event(), event, hit);
             // CR 107.3m: an entering permanent's own trigger sees its spell's
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
@@ -1161,6 +1138,7 @@ impl Game {
                 x,
                 spent,
                 chosen_modes: Vec::new(),
+                modes_chosen: false,
                 attacker,
                 inline_effects: granted,
                 program,
@@ -1262,12 +1240,50 @@ impl Game {
         }
     }
 
+    /// "That player" for a trigger whose event `leaf` matched `event`: the
+    /// recipient of a combat hit, the caster, drawer or performer, whose
+    /// graveyard a card was put into, or whose step it is. A permanent that
+    /// dies, leaves, enters or is sacrificed binds its controller as it
+    /// last existed, which an owner's graveyard need not share (Massacre
+    /// Wurm and a stolen creature).
+    fn event_player(
+        &self,
+        leaf: &TriggerCondition,
+        event: &GameEvent,
+        hit: Option<CombatPlayerHit>,
+    ) -> Option<PlayerId> {
+        match event {
+            GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
+            GameEvent::SpellCast { caster, .. } => Some(*caster),
+            GameEvent::CardDrawn { player, .. } => Some(*player),
+            GameEvent::LifeChanged { player, .. } => Some(*player),
+            GameEvent::PermanentSacrificed { controller, .. } => Some(*controller),
+            GameEvent::CardMoved { controller, .. }
+                if matches!(
+                    leaf,
+                    TriggerCondition::Dies { .. }
+                        | TriggerCondition::LeavesTheBattlefield { .. }
+                        | TriggerCondition::EntersTheBattlefield { .. }
+                        | TriggerCondition::Sacrificed { .. }
+                ) =>
+            {
+                Some(*controller)
+            }
+            GameEvent::CardMoved {
+                object_id: object,
+                to: ZoneType::Graveyard,
+                ..
+            } => Some(self.state[*object].owner),
+            GameEvent::StepStarted { .. } => Some(self.active_player()),
+            _ => performed_action(event).map(|(player, _)| player),
+        }
+    }
+
     /// Extra occurrences of one of `source`'s triggered abilities: one for
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
         let current = self.lookup_current_permanent(source.lki.object).ok();
-        let (_, object) = self.state.source_base(source.lki.object);
         self.static_sources()
             .filter(|(_, controller, _)| *controller == source.lki.controller)
             .map(|(_, _, grantor)| {
@@ -1282,17 +1298,7 @@ impl Game {
                     })
                     .filter(|predicate| match current {
                         Some(id) => self.permanent_matches_predicate(id, predicate),
-                        None => predicate.matches_printing(
-                            object,
-                            self.state
-                                .objects
-                                .provenance(source.lki.object)
-                                .expect("source provenance")
-                                .2,
-                            object.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-                            source.lki.power,
-                            &[],
-                        ),
+                        None => self.lki_matches_predicate(&source.lki, predicate),
                     })
                     .count()
             })
@@ -1323,7 +1329,7 @@ impl Game {
                     let Some(lki) = event
                         .departed_object()
                         .and_then(|object| self.object_lki(object))
-                        .filter(|lki| lki.was_creature)
+                        .filter(|lki| lki.was_creature())
                     else {
                         continue;
                     };
@@ -1434,6 +1440,7 @@ impl Game {
             x: 0,
             spent: Default::default(),
             chosen_modes: Vec::new(),
+            modes_chosen: false,
             attacker: None,
             inline_effects: Some(effects),
         });
@@ -1501,6 +1508,7 @@ impl Game {
                 x: 0,
                 spent: Default::default(),
                 chosen_modes: Vec::new(),
+                modes_chosen: false,
                 attacker: None,
                 inline_effects: None,
             });
@@ -1636,6 +1644,7 @@ impl Game {
                 x: 0,
                 spent: Default::default(),
                 chosen_modes: Vec::new(),
+                modes_chosen: false,
                 attacker: None,
                 inline_effects: None,
             });
@@ -2200,34 +2209,11 @@ impl Game {
         };
         let departed = event.departed_object();
         let lki = departed.and_then(|object| self.object_lki(object));
-        let matches = |predicate: &crate::state::predicate::CardPredicate| {
-            let card = &self.state[moved_object];
-            if let Some(lki) = lki {
-                // Object kind belongs to the physical slot across appearances.
-                return predicate.matches_with_types(
-                    card,
-                    card.kind(),
-                    card.mana_value_cost().map_or(0, |cost| cost.mana_value),
-                    lki.power,
-                    &|ty| {
-                        if ty == CardType::Creature {
-                            lki.was_creature
-                        } else {
-                            card.types.types.contains(&ty)
-                        }
-                    },
-                );
-            }
-            let animated = self
-                .state
-                .permanent_of(moved_object)
-                .filter(|id| self.state.permanents[*id].is_some())
-                .is_some_and(|id| self.characteristics(id).is_animated);
-            predicate.matches(
-                card,
-                self.object_power(moved_object),
-                if animated { &[CardType::Creature] } else { &[] },
-            )
+        // A departed object is what it last was; an arriving one is what it
+        // is now.
+        let matches = |predicate: &crate::state::predicate::CardPredicate| match lki {
+            Some(lki) => self.lki_matches_predicate(lki, predicate),
+            None => self.object_matches_predicate(moved_object, predicate),
         };
         // The source is the moved object as it entered, or as it was before
         // it left (CR 603.10a looks back to the departed object).
@@ -2242,7 +2228,7 @@ impl Game {
                             self.lookup_current_permanent(object)
                                 .is_ok_and(|id| self.characteristics(id).is_creature())
                         },
-                        |lki| lki.was_creature,
+                        |lki| lki.was_creature(),
                     )
             }
             TriggerSubject::This => is_source,

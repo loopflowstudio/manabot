@@ -579,6 +579,9 @@ impl Game {
                 if trigger.program {
                     frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
                 }
+                if trigger.modes_chosen {
+                    frame.mode = super::observation::single_chosen_mode(&trigger.chosen_modes);
+                }
                 frames.push(frame);
             }
         }
@@ -644,6 +647,19 @@ impl Game {
                 frame.triggering_amount = ability.triggering_amount;
                 if ability.program {
                     frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                }
+                frame.mode = super::observation::single_chosen_mode(&ability.chosen_modes);
+                if ability.chosen_modes.len() > 1 {
+                    if let Some(effects) = self
+                        .source_face(ability.source_object(), ability.source_definition_id)
+                        .and_then(|face| face.abilities.get(ability.ability_index))
+                        .map(|printed| printed.effects())
+                    {
+                        frame.program(&crate::state::ability::with_chosen_modes(
+                            effects,
+                            &ability.chosen_modes,
+                        ));
+                    }
                 }
                 frame.inherited_from = ability
                     .source_lki

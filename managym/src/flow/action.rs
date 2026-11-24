@@ -88,7 +88,8 @@ impl Game {
                     trigger_description(
                         record,
                         trigger.ability_index,
-                        trigger.inline_effects.as_deref()
+                        trigger.inline_effects.as_deref(),
+                        &trigger.chosen_modes,
                     )
                 );
                 if let Some(context) = trigger.context {

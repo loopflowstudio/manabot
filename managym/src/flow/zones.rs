@@ -640,8 +640,9 @@ impl Game {
         if let Some(lki) = departing_lki {
             let history = &mut self.state.turn.history[lki.controller.0];
             history.permanents_left += 1;
-            history.nonland_permanents_left += u32::from(!lki.was_land);
-            history.creatures_died += u32::from(to_zone == ZoneType::Graveyard && lki.was_creature);
+            history.nonland_permanents_left += u32::from(!lki.was_land());
+            history.creatures_died +=
+                u32::from(to_zone == ZoneType::Graveyard && lki.was_creature());
             if to_zone == ZoneType::Graveyard && self.state.combat.is_some() {
                 if let Some(exposure) = self.exposure_mut() {
                     exposure.combat.deaths.insert(lki.permanent);

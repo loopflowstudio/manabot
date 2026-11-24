@@ -1287,6 +1287,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceSaddled => "Condition::SourceSaddled",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
+        Condition::TriggeringMatches(_) => "Condition::TriggeringMatches",
         Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
@@ -1344,6 +1345,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
+        Condition::TriggeringMatches(CardPredicate {
+            attacking: true,
+            ..CardPredicate::default()
+        }),
         Condition::CardsThisWayMatch(CardPredicate::creature()),
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,

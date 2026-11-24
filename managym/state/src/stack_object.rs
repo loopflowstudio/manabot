@@ -122,8 +122,12 @@ pub struct TriggeredAbilityOnStack {
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub spent: PaymentReceipt,
-    /// Delayed triggers resolve these effects instead of looking up
-    /// `Object::abilities[ability_index]`.
+    /// A printed modal trigger's chosen modes (CR 700.2), expanded from
+    /// its printed `Effect::TriggerModes` at resolution.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chosen_modes: Vec<usize>,
+    /// Delayed, granted and reflexive triggers resolve these effects
+    /// instead of looking up `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
 }
 

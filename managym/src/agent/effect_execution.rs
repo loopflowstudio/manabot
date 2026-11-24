@@ -112,9 +112,12 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
+    "last known attacking",
     "last known characteristics",
     "last known creature",
+    "last known in combat",
     "last known land",
+    "last known tapped",
     "last known definition",
     "legend group",
     "legends kept",
@@ -617,8 +620,15 @@ impl<'a> Projection<'a> {
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}, toughness {}; counters {:?}.",
+                "Last known {}{}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object, viewer)),
+                if lki.was_attacking {
+                    ", attacking"
+                } else if lki.was_in_combat {
+                    ", blocking"
+                } else {
+                    ""
+                },
                 lki.power,
                 lki.toughness,
                 lki.counters
@@ -630,11 +640,16 @@ impl<'a> Projection<'a> {
             inherited_from,
             granted_abilities,
             keywords,
-            creature_types,
+            name: _,
+            types,
+            subtypes,
+            colors,
+            is_legendary,
             permanent: _,
             animated_creature,
-            was_creature,
-            was_land,
+            was_attacking,
+            was_in_combat,
+            was_tapped,
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -662,11 +677,20 @@ impl<'a> Projection<'a> {
                 );
             }
         }
-        if *was_land {
+        if lki.was_land() {
             self.field("last known land", &true);
         }
-        if *was_creature {
+        if lki.was_creature() {
             self.field("last known creature", &true);
+        }
+        if *was_attacking {
+            self.field("last known attacking", &true);
+        }
+        if *was_in_combat {
+            self.field("last known in combat", &true);
+        }
+        if *was_tapped {
+            self.field("last known tapped", &true);
         }
         self.field("last known definition", definition_id);
         let counter_values: Vec<_> = counters.iter().collect();
@@ -678,7 +702,8 @@ impl<'a> Projection<'a> {
                     inherited_from,
                     granted_abilities,
                     keywords,
-                    creature_types,
+                    lki.creature_types(),
+                    (types, subtypes, colors, is_legendary),
                 ),
                 (
                     animated_creature,

@@ -301,20 +301,31 @@ pub struct ObjectLki {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
     pub keywords: crate::card::Keywords,
-    /// Its creature types as it last existed (CR 608.2h), sorted; read when
-    /// a departed target's partners must share one (Secret Tunnel).
+    /// Its layered name, card types, subtypes, colors and legendary
+    /// supertype as it last existed (CR 603.10a, 608.2h): the same view a
+    /// live permanent's predicates read.
+    pub name: String,
+    pub types: crate::card::CardTypes,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub creature_types: Vec<String>,
+    pub subtypes: Vec<String>,
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub colors: crate::mana::Colors,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_legendary: bool,
     /// The battlefield slot it occupied, so a departed `Target::Permanent`
     /// finds its last known information.
     pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
-    /// Effective creature type immediately before departure (CR 603.10a).
+    /// Combat and tap status immediately before departure: an attacking
+    /// creature that dies "was attacking" (Garna, Bloodfist of Keld).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub was_creature: bool,
+    pub was_attacking: bool,
+    /// Attacking or blocking (CR 506.4).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub was_land: bool,
+    pub was_in_combat: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub was_tapped: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
@@ -338,6 +349,34 @@ pub struct ObjectLki {
     pub controller: PlayerId,
     pub definition_id: CardDefId,
     pub presentation_id: PublicId,
+}
+
+impl ObjectLki {
+    /// Whether it was a creature immediately before departure (CR 603.10a).
+    pub fn was_creature(&self) -> bool {
+        self.types.is_creature()
+    }
+
+    pub fn was_land(&self) -> bool {
+        self.types.is_land()
+    }
+
+    /// Its distinct creature types as it last existed (CR 205.3m), sorted;
+    /// read when a departed target's partners must share one (Secret Tunnel).
+    pub fn creature_types(&self) -> Vec<String> {
+        if !self.was_creature() {
+            return Vec::new();
+        }
+        let mut types: Vec<String> = self
+            .subtypes
+            .iter()
+            .filter(|subtype| crate::subtype::is_creature_type(subtype))
+            .cloned()
+            .collect();
+        types.sort();
+        types.dedup();
+        types
+    }
 }
 
 fn serialize_lki_object<S: serde::Serializer>(

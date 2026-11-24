@@ -1430,8 +1430,140 @@ fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbil
     }
 }
 
-/// Shared predicate semantics for intermediate contexts and the final view.
-/// Printed identity contributes only mana value, token status and supertypes.
+/// What a battlefield predicate reads of one permanent: its layered view,
+/// the printed facts layers leave alone (mana value, token status, other
+/// supertypes) and its battlefield status. A live permanent and a departed
+/// one's last known information (CR 603.10a) supply the same facts, so one
+/// matcher answers both.
+pub(crate) struct PermanentFacts<'a> {
+    pub name: &'a str,
+    pub keywords: Keywords,
+    pub types: &'a crate::state::card::CardTypes,
+    pub subtypes: &'a [String],
+    pub colors: &'a crate::state::mana::Colors,
+    pub is_legendary: bool,
+    pub power: i32,
+    pub supertypes: &'a [String],
+    pub mana_value: u8,
+    pub token: bool,
+    pub counters: &'a crate::state::permanent::Counters,
+    pub attacking: bool,
+    pub tapped: bool,
+    pub in_combat: bool,
+}
+
+impl<'a> PermanentFacts<'a> {
+    /// A live permanent's facts under `view`, its current layered view.
+    fn live(
+        game: &Game,
+        id: PermanentId,
+        permanent: &'a Permanent,
+        object: &'a Object,
+        view: &'a Characteristics,
+    ) -> Self {
+        Self {
+            name: &view.name,
+            keywords: view.keywords,
+            types: &view.types,
+            subtypes: &view.subtypes,
+            colors: &view.colors,
+            is_legendary: view.is_legendary,
+            power: view.power,
+            supertypes: &object.supertypes,
+            mana_value: object.mana_value_cost().map_or(0, |m| m.mana_value),
+            token: object.kind() == ObjectKind::Token,
+            counters: &permanent.counters,
+            attacking: permanent.attacking,
+            tapped: permanent.tapped,
+            in_combat: game.permanent_in_combat(id),
+        }
+    }
+
+    /// A departed permanent's facts: its last known view and status, with
+    /// mana value and supertypes from its retained printing.
+    pub(crate) fn departed(
+        lki: &'a crate::state::game_object::ObjectLki,
+        printing: &'a crate::state::card::PrintedCharacteristics,
+        kind: ObjectKind,
+    ) -> Self {
+        Self {
+            name: &lki.name,
+            keywords: lki.keywords,
+            types: &lki.types,
+            subtypes: &lki.subtypes,
+            colors: &lki.colors,
+            is_legendary: lki.is_legendary,
+            power: lki.power,
+            supertypes: &printing.supertypes,
+            mana_value: printing
+                .mana_cost
+                .as_ref()
+                .map_or(0, |cost| cost.mana_value),
+            token: kind == ObjectKind::Token,
+            counters: &lki.counters,
+            attacking: lki.was_attacking,
+            tapped: lki.was_tapped,
+            in_combat: lki.was_in_combat,
+        }
+    }
+}
+
+/// Shared predicate semantics for live permanents, intermediate layer
+/// contexts and departed permanents' last known information.
+pub(crate) fn matches_permanent_facts(
+    p: &CardPredicate,
+    facts: &PermanentFacts,
+    source_name: Option<&str>,
+) -> bool {
+    // A permanent is on the battlefield, never a graveyard card.
+    !p.from_battlefield_this_turn
+        && (!p.namesake || source_name == Some(facts.name))
+        && (!p.deathtouch || facts.keywords.has(Keyword::Deathtouch))
+        && (!p.flying || facts.keywords.has(Keyword::Flying))
+        && (!p.no_counters || facts.counters.is_empty())
+        && (!p.in_combat || facts.in_combat)
+        && (!p.with_counter || facts.counters.get(CounterKind::PlusOnePlusOne) > 0)
+        && (!p.attacking || facts.attacking)
+        && (!p.tapped || facts.tapped)
+        && p.token.is_none_or(|token| token == facts.token)
+        && (p.any_of.is_empty()
+            || p.any_of
+                .iter()
+                .any(|alternative| matches_permanent_facts(alternative, facts, source_name)))
+        && p.supertype.as_ref().is_none_or(|s| {
+            if s.eq_ignore_ascii_case("legendary") {
+                facts.is_legendary
+            } else {
+                facts.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
+            }
+        })
+        && (!p.nonbasic
+            || !facts
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("basic")))
+        && p.card_type.is_none_or(|t| facts.types.types.contains(&t))
+        && (p.card_types_any.is_empty()
+            || p.card_types_any
+                .iter()
+                .any(|t| facts.types.types.contains(t)))
+        && p.not_card_types
+            .iter()
+            .all(|t| !facts.types.types.contains(t))
+        && p.subtype
+            .as_ref()
+            .is_none_or(|s| facts.subtypes.contains(s))
+        && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| facts.subtypes.contains(s)))
+        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| facts.colors.contains(c)))
+        && p.not_subtypes.iter().all(|s| !facts.subtypes.contains(s))
+        && p.min_power.is_none_or(|min| facts.power >= min)
+        && p.max_power.is_none_or(|max| facts.power <= max)
+        && p.min_mana_value.is_none_or(|min| facts.mana_value >= min)
+        && p.max_mana_value.is_none_or(|max| facts.mana_value <= max)
+}
+
+/// A live permanent under `view` (an intermediate layer context or its
+/// final view).
 pub(super) fn matches_view(
     game: &Game,
     id: PermanentId,
@@ -1443,49 +1575,9 @@ pub(super) fn matches_view(
         return false;
     };
     let object = &game.state[permanent.object];
-    let mana_value = object.mana_value_cost().map_or(0, |m| m.mana_value);
-    // A permanent is on the battlefield, never a graveyard card.
-    !p.from_battlefield_this_turn
-        && (!p.namesake || source_name == Some(view.name.as_str()))
-        && (!p.deathtouch || view.keywords.has(Keyword::Deathtouch))
-        && (!p.flying || view.keywords.has(Keyword::Flying))
-        && (!p.no_counters || !permanent.has_counters())
-        && (!p.in_combat || game.permanent_in_combat(id))
-        && (!p.with_counter || permanent.counter_count(CounterKind::PlusOnePlusOne) > 0)
-        && (!p.attacking || permanent.attacking)
-        && (!p.tapped || permanent.tapped)
-        && p.token
-            .is_none_or(|token| token == (object.kind() == ObjectKind::Token))
-        && (p.any_of.is_empty()
-            || p.any_of
-                .iter()
-                .any(|alternative| matches_view(game, id, alternative, view, source_name)))
-        && p.supertype.as_ref().is_none_or(|s| {
-            if s.eq_ignore_ascii_case("legendary") {
-                view.is_legendary
-            } else {
-                object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
-            }
-        })
-        && (!p.nonbasic
-            || !object
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("basic")))
-        && p.card_type.is_none_or(|t| view.types.types.contains(&t))
-        && (p.card_types_any.is_empty()
-            || p.card_types_any
-                .iter()
-                .any(|t| view.types.types.contains(t)))
-        && p.not_card_types
-            .iter()
-            .all(|t| !view.types.types.contains(t))
-        && p.subtype.as_ref().is_none_or(|s| view.subtypes.contains(s))
-        && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| view.subtypes.contains(s)))
-        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
-        && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
-        && p.min_power.is_none_or(|min| view.power >= min)
-        && p.max_power.is_none_or(|max| view.power <= max)
-        && p.min_mana_value.is_none_or(|min| mana_value >= min)
-        && p.max_mana_value.is_none_or(|max| mana_value <= max)
+    matches_permanent_facts(
+        p,
+        &PermanentFacts::live(game, id, permanent, object, view),
+        source_name,
+    )
 }

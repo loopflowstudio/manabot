@@ -1794,6 +1794,7 @@ impl Observation {
                             .expect("trigger face"),
                         a.ability_index,
                         a.inline_effects.as_deref(),
+                        &a.chosen_modes,
                     ))
                 }
                 _ => None,
@@ -1826,7 +1827,8 @@ impl Observation {
             },
             chosen_mode: match stack_object {
                 StackObject::Spell(spell) => spell.mode,
-                _ => None,
+                StackObject::TriggeredAbility(a) => single_chosen_mode(&a.chosen_modes),
+                StackObject::ActivatedAbility(_) => None,
             },
             ability_index: stack_object.ability_index().map(|index| index as i32),
             x: match stack_object {
@@ -2713,5 +2715,14 @@ mod characteristics_tests {
         assert!(crate::agent::observation_json::parse(&historical.to_json())
             .unwrap_err()
             .contains("ambiguous"));
+    }
+}
+
+/// The mode a stacked modal trigger chose, when it chose exactly one; an
+/// "up to" trigger with several modes projects them in its program.
+pub(crate) fn single_chosen_mode(chosen_modes: &[usize]) -> Option<usize> {
+    match chosen_modes {
+        [mode] => Some(*mode),
+        _ => None,
     }
 }

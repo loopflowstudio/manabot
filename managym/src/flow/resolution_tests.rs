@@ -135,6 +135,7 @@ fn stack(
             target_req_indices: indices,
             context: None,
             player: None,
+            chosen_modes: Vec::new(),
             inline_effects: Some(effects),
             x: 0,
             spent: Default::default(),
@@ -713,6 +714,7 @@ fn counter_spell_cannot_affect_an_ability() {
         target_req_indices: Vec::new(),
         context: Some(Target::StackAbility(ability)),
         player: None,
+        chosen_modes: Vec::new(),
         inline_effects: Some(vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,

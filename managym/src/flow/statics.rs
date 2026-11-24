@@ -526,6 +526,27 @@ impl Game {
         )
     }
 
+    /// A departed permanent's predicate, read from its last known layered
+    /// view and battlefield status (CR 603.10a), with the live matcher's
+    /// semantics: a Clone, a transformed face and granted subtypes, types
+    /// and colors are what it was, never its printing or a later appearance.
+    pub(crate) fn lki_matches_predicate(
+        &self,
+        lki: &crate::state::game_object::ObjectLki,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let (_, printing) = self.state.source_base(lki.object);
+        let kind = self.state.objects.provenance(lki.object).map_or(
+            crate::state::game_object::ObjectKind::Card,
+            |(_, _, kind)| kind,
+        );
+        super::layers::matches_permanent_facts(
+            predicate,
+            &super::layers::PermanentFacts::departed(lki, printing, kind),
+            None,
+        )
+    }
+
     /// A recorded event can still ask what its departed card was. Read the
     /// retained base and LKI, never the later appearance occupying its slot.
     pub(crate) fn recorded_object_matches_predicate(
@@ -930,6 +951,15 @@ impl Game {
                     None => self
                         .departed_permanent_lki(id)
                         .is_some_and(|lki| !lki.counters.is_empty()),
+                },
+                _ => false,
+            },
+            Condition::TriggeringMatches(predicate) => match triggering {
+                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
+                    Some(_) => self.permanent_matches_predicate(id, predicate),
+                    None => self
+                        .departed_permanent_lki(id)
+                        .is_some_and(|lki| self.lki_matches_predicate(lki, predicate)),
                 },
                 _ => false,
             },
