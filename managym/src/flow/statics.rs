@@ -705,6 +705,18 @@ impl Game {
         self.recorded_spell_matches_predicate(object, profile, predicate)
     }
 
+    /// The printed spell `object` was cast as (front face, inset Adventure or
+    /// Omen, or back face) from its retained base.
+    pub(crate) fn recorded_spell_printing(
+        &self,
+        object: ObjectId,
+        profile: SpellProfile,
+    ) -> &crate::state::card::PrintedCharacteristics {
+        let (definition, printing) = self.state.source_base(object);
+        crate::cards::content_pack::default_content_pack()
+            .recorded_spell(definition, printing, profile)
+    }
+
     fn recorded_spell_matches_predicate(
         &self,
         object: ObjectId,
@@ -714,15 +726,12 @@ impl Game {
         if profile.is_front() || self.state.live(object).is_some() {
             return self.recorded_object_matches_predicate(object, predicate);
         }
-        let (definition, printing) = self.state.source_base(object);
         let (_, _, kind) = self
             .state
             .objects
             .provenance(object)
             .expect("recorded provenance");
-        let spell = crate::cards::content_pack::default_content_pack()
-            .recorded_spell(definition, printing, profile);
-        predicate.matches_printed_spell(spell, kind)
+        predicate.matches_printed_spell(self.recorded_spell_printing(object, profile), kind)
     }
 
     /// Entry replacements inspect allocated tokens before placement. This is
@@ -1202,7 +1211,7 @@ impl Game {
                     .any(|object| self.recorded_object_matches_predicate(*object, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
-                frame.and_then(|frame| frame.context_target),
+                triggering,
                 Some(Target::StackSpell(object_id)) if self.spell_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {

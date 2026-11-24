@@ -3086,6 +3086,15 @@ impl TriggerCondition {
         }
     }
 
+    /// The underlying event condition after peeling every wrapper.
+    pub fn leaf(&self) -> &Self {
+        let mut condition = self;
+        while let Some(inner) = condition.inner() {
+            condition = inner;
+        }
+        condition
+    }
+
     pub fn once_each_turn(&self) -> bool {
         matches!(self, Self::OnceEachTurn { .. }) || self.inner().is_some_and(Self::once_each_turn)
     }

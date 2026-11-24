@@ -374,9 +374,7 @@ impl<'a> Projection<'a> {
             let name = if spell.profile.is_front() {
                 Self::label(definition)
             } else {
-                let (id, printing) = game.state.source_base(spell.object);
-                default_content_pack()
-                    .recorded_spell(id, printing, spell.profile)
+                game.recorded_spell_printing(spell.object, spell.profile)
                     .name
                     .clone()
             };

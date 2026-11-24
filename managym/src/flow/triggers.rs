@@ -111,7 +111,7 @@ impl std::ops::BitOr for EventKinds {
 /// fires, that its event's kind is listed here, so the index below never
 /// leaves out a source that would have fired.
 fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
-    match condition {
+    match condition.leaf() {
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
         // `check_state_triggers` asks these, never an event.
         TriggerCondition::NoCounters { .. } | TriggerCondition::State(_) => {
@@ -155,18 +155,19 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::PutsCounters { .. }
         | TriggerCondition::PutsCountersOn { .. }
         | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
-        wrapper => condition_event_kinds(wrapper.inner().expect("trigger wrapper")),
+        wrapper => unreachable!("TriggerCondition::leaf left wrapper {wrapper:?}"),
     }
 }
 
 /// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
-/// the damage of its own combat hit or damage event, or the life a player
-/// actually lost.
-fn event_amount(event: &GameEvent, hit: Option<CombatPlayerHit>) -> i32 {
-    match (event, hit) {
-        (_, Some(hit)) => hit.amount,
-        (GameEvent::LifeChanged { old, new, .. }, None) if new < old => old - new,
-        (GameEvent::DamageDealt { amount, .. }, None) => *amount as i32,
+/// the damage of its own combat hit, combat total, or damage event, or the life
+/// a player actually lost.
+fn event_amount(event: &GameEvent, member: TriggerMember) -> i32 {
+    match (event, member) {
+        (_, TriggerMember::CombatHit(hit)) => hit.amount,
+        (_, TriggerMember::CombatTotal(_, total)) => total as i32,
+        (GameEvent::LifeChanged { old, new, .. }, _) if new < old => old - new,
+        (GameEvent::DamageDealt { amount, .. }, _) => *amount as i32,
         _ => 0,
     }
 }
@@ -928,21 +929,13 @@ impl Game {
                     // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
                     let count =
                         *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
-                    let total = match member {
-                        TriggerMember::CombatTotal(_, total) => Some(total as i32),
-                        _ => None,
-                    };
-                    let hit = match member {
-                        TriggerMember::CombatHit(hit) => Some(hit),
-                        _ => None,
-                    };
                     fired.extend(std::iter::repeat_n(
                         FiredTrigger {
                             source,
                             ability: origin,
                             context,
-                            player: self.event_player(leaf, event, hit),
-                            amount: total.unwrap_or_else(|| event_amount(event, hit)),
+                            player: self.event_player(leaf, event, member),
+                            amount: event_amount(event, member),
                             once,
                         },
                         count,
@@ -1213,10 +1206,13 @@ impl Game {
         &self,
         leaf: &TriggerCondition,
         event: &GameEvent,
-        hit: Option<CombatPlayerHit>,
+        member: TriggerMember,
     ) -> Option<PlayerId> {
         match event {
-            GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
+            GameEvent::CombatDamageToPlayers { .. } => match member {
+                TriggerMember::CombatHit(hit) => Some(hit.recipient),
+                _ => None,
+            },
             GameEvent::SpellCast { caster, .. } => Some(*caster),
             GameEvent::CardDrawn { player, .. } => Some(*player),
             GameEvent::LifeChanged { player, .. } => Some(*player),

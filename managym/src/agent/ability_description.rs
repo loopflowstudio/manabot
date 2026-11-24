@@ -130,10 +130,7 @@ pub(crate) fn trigger_description(
 /// What a trigger's event calls its triggering object: a cast's spell, a
 /// graveyard arrival's card, otherwise a permanent.
 fn triggering_noun(condition: &TriggerCondition) -> &'static str {
-    if let Some(inner) = condition.inner() {
-        return triggering_noun(inner);
-    }
-    match condition {
+    match condition.leaf() {
         TriggerCondition::Casts { .. }
         | TriggerCondition::YouCastThis
         | TriggerCondition::SpellTargetsOnlyThis { .. } => "spell",
@@ -145,10 +142,7 @@ fn triggering_noun(condition: &TriggerCondition) -> &'static str {
 /// An entering permanent reads its spell's X. Counter triggers retain their
 /// printed X binding for existing programs.
 fn bound_x(condition: &TriggerCondition) -> Option<&'static str> {
-    if let Some(inner) = condition.inner() {
-        return bound_x(inner);
-    }
-    match condition {
+    match condition.leaf() {
         TriggerCondition::EntersTheBattlefield {
             subject: TriggerSubject::This,
         } => Some("X"),
