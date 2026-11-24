@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-import hashlib
-import os
-from pathlib import Path
-import tempfile
+import math
 import time
 import tracemalloc
 from typing import Protocol
@@ -177,13 +174,88 @@ def score_sampler_arm(
     )
 
 
-class SamplerEncoder(Protocol):
-    def encode_sampler(
-        self, result: SamplerFitResult, dataset: SamplerDataset
-    ) -> bytes: ...
+def fit_splits(
+    dataset: SamplerDataset,
+    steps: int,
+    batch_size: int,
+    evaluation_samples: int,
+    learning_rate: float,
+) -> dict[str, tuple[SamplerExample, ...]]:
+    """Admit a fit before allocating model state or looking at held-out scores."""
+    if (
+        steps < 1
+        or batch_size < 1
+        or evaluation_samples < 1
+        or not math.isfinite(learning_rate)
+        or learning_rate <= 0
+    ):
+        raise ValueError(
+            "fitting requires positive steps, batch size, evaluation samples and learning rate"
+        )
+    return {
+        split: tuple(
+            example
+            for game in dataset.games
+            if game.split == split
+            for example in game.examples
+        )
+        for split in ("train", "validation", "test")
+    }
 
 
-class BeliefTrainer(SamplerEncoder, Protocol):
+class EvaluateSampler[Model](Protocol):
+    def __call__(
+        self,
+        model: Model,
+        examples: Sequence[SamplerExample],
+        *,
+        samples: int,
+        seed: int,
+        check: Callable[[], None] | None,
+    ) -> SamplerEvaluation: ...
+
+
+def score_fit[Model: LearnedDistribution](
+    model: Model,
+    dataset: SamplerDataset,
+    split_rows: dict[str, tuple[SamplerExample, ...]],
+    evaluate: EvaluateSampler[Model],
+    *,
+    steps: int,
+    batch_size: int,
+    seed: int,
+    evaluation_samples: int,
+    check: Callable[[], None] | None,
+    fit_seconds: float,
+    parameter_bytes: int,
+) -> SamplerFitResult:
+    evaluations = {
+        split: evaluate(
+            model, rows, samples=evaluation_samples, seed=seed + index, check=check
+        )
+        for index, (split, rows) in enumerate(split_rows.items())
+    }
+    metrics = SamplerFitMetrics(
+        train=evaluations["train"],
+        validation=evaluations["validation"],
+        test=evaluations["test"],
+        optimizer_exposures=steps * batch_size,
+        optimizer_steps=steps,
+        history_dropout=model.history_dropout,
+        seed=seed,
+        fit_seconds=fit_seconds,
+        parameter_bytes=parameter_bytes,
+    )
+    return SamplerFitResult(
+        model,
+        metrics,
+        dataset.identity,
+        dataset.policy_identity,
+        dataset.world_identity,
+    )
+
+
+class BeliefTrainer(Protocol):
     def evaluate_physical_sampler(
         self, examples: Sequence[SamplerExample], *, samples: int = 32, seed: int = 0
     ) -> SamplerArmMetrics: ...
@@ -262,37 +334,3 @@ def fit_belief_sampler(
         seed=seed,
         check=check,
     )
-
-
-def save_belief_sampler(
-    path: Path,
-    result: SamplerFitResult,
-    dataset: SamplerDataset,
-    *,
-    codec: SamplerEncoder,
-) -> str:
-    """Create one immutable checkpoint; return SHA-256 of its exact bytes."""
-    if (result.dataset_identity, result.policy_identity, result.world_identity) != (
-        dataset.identity,
-        dataset.policy_identity,
-        dataset.world_identity,
-    ):
-        raise ValueError(
-            "sampler fit is bound to a different dataset or policy/world identity"
-        )
-    if result.model.schema != dataset.schema:
-        raise ValueError("sampler and dataset schemas differ")
-    data = codec.encode_sampler(result, dataset)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        dir=path.parent, prefix=".sampler-", delete=False
-    ) as output:
-        temporary = Path(output.name)
-        try:
-            output.write(data)
-            output.flush()
-            os.fsync(output.fileno())
-            os.link(temporary, path)  # Atomic publication, refusing an existing target.
-        finally:
-            temporary.unlink()
-    return hashlib.sha256(data).hexdigest()

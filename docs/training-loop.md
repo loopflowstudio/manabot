@@ -35,15 +35,16 @@ around it. Its learning record selects the update; both live in
 - **PPO self-play** (`Learning`, `update_iteration` in
   `manabot.training.updates.ppo`): the control. Shuffled minibatches, advantage
   normalization and filtering, scalar value targets and optional reference
-  and collection KL penalties. Torch prepares one host minibatch ahead while
-  the current minibatch trains, with device work on the calling thread; the
-  epoch joins its preparation worker even if an update fails. Use PPO as the
-  baseline a new method must beat.
+  and collection KL penalties. Both backends prepare one host minibatch ahead
+  (`AdmittedRows.prefetch_minibatches`) while the current minibatch trains,
+  with device work on the calling thread; the epoch joins its preparation
+  worker even if an update fails. Use PPO as the baseline a new method must
+  beat.
 
 Both are written once and take the backend as their first argument: a
-configured backend from `manabot.backends.resolve` or the module
-`manabot.backends.torch`. Then come a
-`Learner` (`manabot.backends.torch.learner`), which holds the model, its Adam
+configured backend from `manabot.backends.resolve` or a backend module
+(`manabot.backends.torch` or `manabot.backends.mlx`). Then come a
+`Learner` (`backend.learner.Learner`), which holds the model, its Adam
 optimizer, the precision and a profiler, and a learning record
 (`manabot.training.learning`). Call them directly to reproduce a recipe's
 update exactly:
@@ -61,13 +62,14 @@ update_iteration(backend, learner, batch, Learning(), progress=0.0, rng=np.rando
 diagnostics (`UpdateDiagnostics`, a typed dictionary); EMA and checkpoints
 stay with the caller.
 
-Recipes and the self-play loop pass `manabot.backends.torch`. Inside an update,
+Recipes and the self-play loop pass the resolved backend (defaulting to
+`manabot.backends.torch`). Inside an update,
 array math goes only through `backend.rl`, `backend.learner` and
 `backend.arrays`, and observations come from `backend.rollout`; NumPy keeps
 the host-side bookkeeping and diagnostics (which rows train, minibatch
 indexes, action-type counts, selection groups). Running the same update in
-another framework changes the import, and the learner comes from that
-backend; the damped update runs on torch and on MLX. The
+another framework changes the import or `resolve` name, and the learner comes
+from that backend; both the damped update and PPO run on Torch and on MLX. The
 contract a backend meets is in
 [framework backends](../manabot/backends/README.md#algorithms-are-written-once).
 
@@ -83,7 +85,7 @@ of rows and `A` for padded legal offers.
 | --- | --- |
 | `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`; the required `numerics` session (`backend.collection.CollectionSession(device=..., seed=..., precision=...)`) owns the device, precision and private sampling RNG. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
+| `AdmittedRollout(agent, batch)` (`backend.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched via shared `AdmittedRows.prefetch_minibatches`. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
 
 In v11 the collector retains immutable native observations. Legal offers,
 focus and naming joins live in those spans. Behavior probabilities refer to

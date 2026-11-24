@@ -9,7 +9,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import Layout, Tables, record_key

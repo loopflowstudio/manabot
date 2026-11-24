@@ -64,12 +64,14 @@ the full action width.
     empty columns via `buckets.bucket` to the next power of two, at least
     `MIN_BUCKET = 8`, collapsing to `None` when empty, when width ≤ 8, or when
     the bucket reaches the object width; Torch MPS inference),
-    `"packed_groups"` (row groups sorted by live count in `packed_attention`,
-    falling back to used columns; bucketed MLX learners), or `"live_tokens"`
-    (jagged `live_index` / `live_offsets`; Torch CUDA live-token attention).
+    `"packed_groups"` (groups sorted by live count in `packed_attention`, with
+    used columns as the fallback for groups that cannot be packed), or
+    `"live_tokens"` (flat `live_index` and `live_offsets` for Torch CUDA and
+    MLX, plus `compact_attention` coordinates and a key mask for MLX).
   - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (only fact
     columns valid in at least one row; unbucketed CPU and MLX inference), or
-    `"live_rows"` (live fact rows only; bucketed MLX learners).
+    `"live_rows"` (live fact rows only). MLX learner compaction requires
+    bucketed shapes and inert object padding.
 
   Unknown `attention` or `facts` values raise `ValueError`. Both
   `ObservationSpans` and dense buffers share `select_attention_columns` and

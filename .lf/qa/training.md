@@ -81,6 +81,37 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   deal lengths that way before raising a budget. Rebuild the extension after
   such a merge: saves written before an appended input column refuse `--resume`
   by naming the changed readings, which is correct.
+- MLX architectures, PPO and belief samplers: the two `experiments/belief.py`
+  commands in `manabot/backends/mlx.md` take about 10 s and 25 s with Torch
+  blocked. Compare the job's `out/belief.safetensors` across backends with
+  `load_belief_sampler` on the rows of its own `out/histories.json`
+  (`read_dataset`; targets are `example.target_hand`); 64 rows agreed below
+  2e-7 in both directions. `python -m manabot.reports.belief` needs
+  `--training-dataset` as well as `--dataset`, `--checkpoint` and
+  `--checkpoint-sha256`. For non-default models, copy a single-job recipe
+  into `.runs/` that builds `SelfPlay` over `gray_ogre_match()` with
+  `batch_closure="exact-quota"`, `transitions=16` and `updates=1` (10–20 s an
+  arm). Decision memory needs `policy_film`, a catalog `world`, no
+  `recent_events`, explicit `collection_rows`/`bootstrap_rows`/`learner_rows`
+  and record capacity for the match: 128 `max_decision_records` suits Gray
+  Ogre, while a baseline TLA game passed 128 and ran with 1024. Warm-start
+  with `pretrained=<control policy>`. Torch `live_tokens` off CUDA must refuse
+  with "live tokens require CUDA on the torch backend" before a run exists.
+  `manabot.eval.local` plays its own match, so a Gray Ogre policy is refused
+  with "checkpoint setup differs from the execution match"; train on the
+  baseline match (`fresh_iteration` over `baseline.settings`) to evaluate.
+- Files from before a change: `git worktree add --detach .runs/base-wt
+  <merge-base>`, copy the built `managym/_managym.*.so` in when Rust is
+  unchanged, and run `PYTHONPATH=$PWD ../../.venv/bin/etude train …` from that
+  directory. Without `PYTHONPATH` the editable install imports the current
+  checkout and the files are not old (check `head -c 4`: a legacy sampler
+  starts `PK`). Then `--resume` or load them from the checkout under test.
+- `tests/training/test_mlx_workflow.py::test_mlx_local_evaluation_and_verification`
+  fails with "paired arena evaluation incomplete or from other deals" when
+  another workload shares the Mac: `panel/failures/` names "game wall-clock
+  budget exhausted" and `rows.json` candidate `latency.p50` is 0.3–0.5 s
+  against about 0.055 s on a quieter machine. Run the same test at the merge
+  base before blaming the change; check `uptime` first.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'

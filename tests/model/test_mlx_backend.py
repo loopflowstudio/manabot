@@ -14,8 +14,10 @@ import numpy as np
 import pytest
 import torch
 
+from tests.belief.support import fixture_decision
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.training.backend_fixtures import policy_weights, self_play_batch
+from tests.training.test_memory_chunk_cache import chunk_input
 
 mx = pytest.importorskip("mlx.core")
 
@@ -37,15 +39,11 @@ from manabot.backends.mlx.checkpoint import (
     assemble,
     canonical_from_mlx,
     mlx_parameters,
-    require_supported,
 )
+from manabot.backends.mlx.collection import CollectionSession as MLXCollectionSession
+from manabot.backends.mlx.gru import PackedGRU
 from manabot.backends.mlx.learner import Learner as MLXLearner
-from manabot.backends.mlx.policy import (
-    MLXActorCritic,
-    ObjectAttention,
-    PackedGRU,
-    attend,
-)
+from manabot.backends.mlx.policy import MLXActorCritic, ObjectAttention
 from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
 from manabot.backends.parity import (
     COSINE_TOLERANCE,
@@ -65,7 +63,11 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.belief.encoding import BeliefCheckpointBinding, encode_belief
+from manabot.belief.state import CompatibleDealBeliefModel
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.match import Match
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,
     FACT_DETAIL_INDEX,
@@ -86,7 +88,6 @@ from manabot.infra.config import (
 )
 from manabot.policy.checkpoint import (
     ParameterArrays,
-    UnsupportedPolicy,
     canonical_parameters,
     read_safetensors,
     read_saved_container,
@@ -94,7 +95,10 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.prepare import Prepared, Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
+from manabot.policy.readings import legacy_readings
 from manabot.recipes import baseline, elemental
+from manabot.recipes.builders import gray_ogre_self_play
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops.self_play import (
     Counts,
     create,
@@ -103,9 +107,12 @@ from manabot.training.loops.self_play import (
     learn,
 )
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.ppo import update_iteration
 from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
+from manabot.verify.representation import kellan_upgrade_root
 import managym
 
 
@@ -207,7 +214,8 @@ def test_split_attention_projections_match_packed_multihead_attention() -> None:
     )
 
     mask = mx.where(mx.array(~padding.numpy()), 0.0, -mx.inf)[:, None, None, :]
-    actual = attend(layer.mha, mx.array(objects.numpy()), mask)
+    inputs = mx.array(objects.numpy())
+    actual = layer.mha(inputs, inputs, inputs, mask)
     np.testing.assert_allclose(np.array(actual), expected.detach().numpy(), atol=1e-5)
 
 
@@ -334,36 +342,75 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "pattern"),
+    ("variant", "bucketed"),
     [
-        ({"value_kind": "categorical_wdl"}, "value_kind"),
-        ({"value_aggregation": "value_token"}, "value_aggregation"),
-        ({"attention_on": False}, "attention_on=False"),
-        ({"recent_events": True}, "recent_events"),
+        pytest.param({}, False, id="masked-mean"),
+        pytest.param({}, True, id="masked-mean-bucketed"),
+        *[
+            pytest.param(
+                {
+                    "decision_memory": encoder,
+                    "decision_memory_summaries": summaries,
+                    "value_aggregation": "value_token",
+                },
+                True,
+                id=f"{encoder}-{summaries}",
+            )
+            for encoder in ("gru", "transformer")
+            for summaries in (1, 4)
+        ],
+        pytest.param({"recent_events": True}, True, id="recent-events"),
+        pytest.param(
+            {"belief_count_buckets": 3, "belief_card_vocab_size": 3},
+            True,
+            id="belief-rows",
+        ),
+        pytest.param({"value_kind": "categorical_wdl"}, True, id="categorical-wdl"),
+        pytest.param({"value_aggregation": "value_token"}, True, id="value-token"),
+        pytest.param(
+            {"value_aggregation": "attention_readout"}, True, id="attention-readout"
+        ),
+        pytest.param(
+            {
+                "value_aggregation": "historical_mean",
+                "world": None,
+                "record_vocabulary": "hashed",
+            },
+            True,
+            id="historical-mean-hashed",
+        ),
+        pytest.param(
+            {
+                "attention_on": False,
+                "stream_norm": False,
+                "attention_layers": 1,
+                "value_aggregation": "historical_mean",
+            },
+            True,
+            id="attention-off",
+        ),
     ],
 )
-def test_unimplemented_layouts_are_refused_by_name(
-    kwargs: dict[str, object], pattern: str
-) -> None:
-    model = ModelConfig.model_validate(
-        {"world": "elemental-world-v2", "value_aggregation": "masked_mean", **kwargs}
-    )
-    with pytest.raises(UnsupportedPolicy, match=pattern):
-        require_supported(model, ObservationConfig())
-
-
-@pytest.mark.parametrize("bucketed", [False, True])
-def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
+def test_policy_architecture_matches_torch_forward_gradients_and_step(
+    tmp_path: Path,
+    variant: dict[str, object],
     bucketed: bool,
     baseline_model: ModelConfig,
 ) -> None:
-    """Latest baseline config (v11 + stream_norm + focus_film + policy_film)
-    agrees with PyTorch on forward, loss, every gradient tensor and clipped Adam."""
-
+    """One real board batch through both policies, objectives and clipped Adam steps."""
     torch.manual_seed(11)
-    space = ObservationSpace(ObservationConfig())
-    assert space.one_token
-    agent = ActorCritic(space, baseline_model, bucketed_shapes=bucketed)
+    config = ModelConfig.model_validate(baseline_model.checkpoint_payload() | variant)
+    memory = config.decision_memory != "none"
+    space = ObservationSpace(
+        ObservationConfig(
+            policy_history_version=int(config.recent_events),
+            max_decision_records=128 if memory else 0,
+            max_decision_reference_details=2048 if memory else 0,
+            max_decision_references=256 if memory else 0,
+            max_decision_members=2048 if memory else 0,
+        )
+    )
+    agent = ActorCritic(space, config, bucketed_shapes=bucketed)
     # Give zero-initialized residual/FiLM layers non-zero weights so every
     # branch (stack_source, policy_film, links, focus_film) actually fires.
     with torch.no_grad():
@@ -371,8 +418,11 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
             if param.abs().max() == 0:
                 param.copy_(torch.randn_like(param) * 0.1)
     checkpoint = policy_weights(agent)
+    behavior = (
+        ActorCritic(space, baseline_model) if config.belief_count_buckets else agent
+    )
     rollout = self_play_batch(
-        agent, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
+        behavior, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
     )
     rows = rollout.observations(np.arange(rollout.actions.size))
     obs = rows.observation
@@ -384,7 +434,33 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     obs["player_turn_state"][0, 0, 0] = 1
     obs["card_turn_state"][0, 0, 0] = 1
 
-    policy = assemble(checkpoint, bucketed_shapes=bucketed)
+    policy = assemble(checkpoint, bucketed_shapes=bucketed, live_tokens=memory)
+    if config.belief_count_buckets:
+        decision, schema = fixture_decision()
+        belief = (
+            CompatibleDealBeliefModel()
+            .update(
+                previous=None,
+                world_space=decision.world_space,
+                viewer_history=decision.viewer_history,
+            )
+            .belief
+        )
+        obs.update(
+            encode_belief(belief, schema).observation(batch_size=len(obs["actions"]))
+        )
+        backend = resolve("mlx")
+        path = tmp_path / "policy.safetensors"
+        backend.save_policy(
+            policy,
+            space,
+            path,
+            player_configs=lesson_match().to_rust(),
+            belief_schema=schema,
+        )
+        policy, _ = backend.load_policy(path, bucketed_shapes=bucketed)
+        policy.admit_belief(schema)
+        assert policy.belief_binding == BeliefCheckpointBinding.from_schema(schema)
     round_tripped = canonical_from_mlx(flat_numpy(policy.parameters()))
     assert round_tripped.keys() == checkpoint.parameters.keys()
     for name, expected in checkpoint.parameters.items():
@@ -393,15 +469,44 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     torch_batch = agent.prepare(obs)
     mlx_batch = policy.prepare(obs)
     torch_logits, torch_values = agent.evaluate(torch_batch)
+    if memory:
+        assert mlx_batch.memory is not None and max(mlx_batch.memory.lengths) > 0
+        assert len(set(np.diff(mlx_batch.live_offsets))) > 1
+        padded = assemble(checkpoint, bucketed_shapes=bucketed)
+        live = ActorCritic(space, config, bucketed_shapes=bucketed, live_tokens=True)
+        live.load_state_dict(agent.state_dict())
+        for candidate in (padded, live):
+            for actual, reference in zip(
+                candidate.evaluate(candidate.prepare(obs)),
+                (torch_logits, torch_values),
+                strict=True,
+            ):
+                np.testing.assert_allclose(
+                    actual, reference, atol=LOGIT_TOLERANCE, rtol=0
+                )
+    if config.recent_events:
+        assert mlx_batch.events is not None and mlx_batch.events.validity.any()
     mlx_logits, mlx_values = policy.evaluate(mlx_batch)
     legal = torch_batch.legal
     assert float(np.abs(mlx_logits - torch_logits)[legal].max()) <= LOGIT_TOLERANCE
     assert float(np.abs(mlx_values - torch_values).max()) <= LOGIT_TOLERANCE
 
+    # Collection can trim globally empty columns. The token remains neutral and
+    # every focus index still addresses its original object after attention.
+    probs, values = policy.evaluate_probabilities(policy.prepare(obs, inference=True))
+    ref_probs, ref_values = agent.evaluate_probabilities(
+        agent.prepare(obs, inference=True)
+    )
+    np.testing.assert_allclose(probs, ref_probs, rtol=0, atol=LOGIT_TOLERANCE)
+    np.testing.assert_allclose(values, ref_values, rtol=0, atol=LOGIT_TOLERANCE)
+    value_targets = np.linspace(-0.5, 0.5, rollout.actions.size, dtype=np.float32)
+    if config.value_kind == "categorical_wdl":
+        # Give each logit its own target, including draws.
+        value_targets = np.eye(3, dtype=np.float32)[np.arange(rollout.actions.size) % 3]
     targets = Targets(
         actions=rollout.actions.reshape(-1),
         advantages=np.linspace(-1.0, 1.0, rollout.actions.size, dtype=np.float32),
-        value_targets=np.linspace(-0.5, 0.5, rollout.actions.size, dtype=np.float32),
+        value_targets=value_targets,
         actor_mask=np.ones(rollout.actions.size, dtype=bool),
         behavior_logs=rows.log_probabilities,
         reference=reference_distribution(obs, "action_type_uniform"),
@@ -449,6 +554,310 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
         ), name
 
 
+def test_mlx_gru_reuses_only_stable_records_in_the_same_lifetime() -> None:
+    space, raw = chunk_input()
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
+    policy = (
+        resolve("mlx")
+        .runtime.create_policy(
+            space,
+            ModelConfig(
+                hidden_dim=16,
+                world=managym.WORLD_SETUP,
+                decision_memory="gru",
+                decision_memory_summaries=4,
+                policy_film=True,
+            ),
+            live_tokens=True,
+            bucketed_shapes=True,
+        )
+        .to("cpu")
+    )
+    policy.attention.memory_gate = mx.array(0.5)
+    with policy.inference_scope() as scope:
+        for history, expected_records in (
+            (prefix, 65),
+            (prefix, 1),
+            (replace(prefix, native_epoch=2), 65),
+            (replace(prefix, identity=PrefixIdentity("fork", 1, "branch")), 65),
+        ):
+            selected = PrefixObservation(raw, [history], capacities)
+            prepared = scope.prepare(selected)
+            assert prepared.memory is not None
+            assert len(prepared.memory.numbers) == expected_records
+            actual = policy.evaluate(prepared)
+            dense = policy.evaluate(policy.prepare(raw))
+            for value, expected in zip(actual, dense, strict=True):
+                np.testing.assert_allclose(
+                    value, expected, rtol=0, atol=LOGIT_TOLERANCE
+                )
+        assert len(scope.memory.nodes) == 64
+    with pytest.raises(RuntimeError, match="closed"):
+        policy.evaluate(prepared)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_mlx_live_self_play_branches_from_control_and_trains_memory(
+    tmp_path: Path,
+    baseline_model: ModelConfig,
+    device: str,
+) -> None:
+    backend = resolve("mlx", precision="float32")
+    torch.manual_seed(11)
+    observation = ObservationConfig(
+        max_decision_records=128,
+        max_decision_members=2048,
+        max_decision_reference_details=8192,
+        max_decision_references=512,
+    )
+    space = ObservationSpace(observation)
+    trunk = ActorCritic(space, baseline_model, readings=legacy_readings(space))
+    start = tmp_path / "control.safetensors"
+    save_checkpoint(trunk, space, start, player_configs=lesson_match().to_rust())
+    control, _ = backend.load_policy(start, live_tokens=True, bucketed_shapes=True)
+    config = baseline_model.model_copy(update={"decision_memory": "gru"})
+    arm = backend.runtime.create_policy(
+        space, config, pretrained=control, live_tokens=True, bucketed_shapes=True
+    )
+    assert arm.readings == control.readings
+    assert all(v == 0 for v in arm.memory_gates().values())
+    weights = flat_numpy(arm.parameters())
+    for name, value in flat_numpy(control.parameters()).items():
+        np.testing.assert_array_equal(weights[name], value)
+
+    settings = gray_ogre_self_play(horizon=1).model_copy(
+        update={
+            "pretrained": start,
+            "observation": observation,
+            "model": config,
+            "device": device,
+            "match": lesson_match().config,
+            "batch_closure": "exact-quota",
+            "learning_seats": "one",
+            "collection_rows": 1,
+            "bootstrap_rows": 1,
+            "learner_rows": 4,
+            "live_tokens": True,
+            "bucketed_shapes": True,
+            "transitions": 8,
+        }
+    )
+    result = fresh_iteration(
+        settings, backend=backend, seed=11, out=tmp_path / "trained"
+    )
+    assert result.counts.updates == 1 and result.counts.optimizer_updates > 0
+    assert any(v != 0 for v in result.raw.memory_gates().values())
+    restored, _ = backend.load_policy(result.checkpoint, live_tokens=True)
+    assert restored.memory_gates() == result.raw.memory_gates()
+
+
+@pytest.mark.parametrize("world", [None, managym.WORLD_SETUP])
+def test_hashed_records_match_torch_with_a_live_shared_effect(
+    world: str | None,
+) -> None:
+    torch.manual_seed(23)
+    env = kellan_upgrade_root()
+    space = ObservationSpace()
+    obs = env.observation_for_player(env.current_agent_index())
+    rows = {key: value[None] for key, value in encode_observation(space, obs).items()}
+    assert (rows["effect_details"][..., 0] >= 11).any()
+    config = ModelConfig(hidden_dim=16, world=world, record_vocabulary="hashed")
+    reference = ActorCritic(space, config)
+    with torch.no_grad():
+        # A fresh policy's zero residuals would hide a wrong record embedding.
+        for parameter in (
+            reference.facts.output.weight,
+            reference.shared_effects.reducer.output.weight,
+        ):
+            parameter.normal_(std=0.1)
+    policy = assemble(policy_weights(reference))
+    for actual, expected in zip(
+        policy.evaluate(policy.prepare(rows)),
+        reference.evaluate(reference.prepare(rows)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=LOGIT_TOLERANCE)
+
+
+def test_fresh_attention_readout_preserves_shared_initial_weights(
+    baseline_model: ModelConfig,
+) -> None:
+    backend = resolve("mlx")
+    space = ObservationSpace()
+    with backend.seeded_inference(31, cpu_only=True):
+        masked = backend.runtime.create_policy(space, baseline_model)
+    with backend.seeded_inference(31, cpu_only=True):
+        readout = backend.runtime.create_policy(
+            space,
+            baseline_model.model_copy(
+                update={"value_aggregation": "attention_readout"}
+            ),
+        )
+    expected = flat_numpy(masked.parameters())
+    actual = flat_numpy(readout.parameters())
+    assert set(actual) - set(expected) == {
+        f"value_readout.{key}"
+        for key, _ in tree_flatten(readout.value_readout.parameters())
+    }
+    for name, initial in expected.items():
+        np.testing.assert_array_equal(actual[name], initial, err_msg=name)
+
+
+def test_mlx_wdl_loss_keeps_the_normalizer_for_large_equal_logits() -> None:
+    logits = mx.full((1, 3), 1e8)
+    targets = mx.array([[0.5, 0.25, 0.25]])
+    loss = mlx_backend.rl.categorical_value_loss(logits, targets)
+    np.testing.assert_allclose(to_numpy(loss), [np.log(3)], atol=1e-6)
+
+
+def test_mlx_advantage_selection_preserves_ties_and_row_order() -> None:
+    advantages = mx.array([0.0, -2.0, 3.0, 2.0])
+    rl = mlx_backend.rl
+    assert rl.magnitude_quantile(advantages, 0.5) == 2.0
+    assert rl.selected_rows(advantages, 0.5, 1.0).tolist() == [2, 1]
+    assert rl.selected_rows(advantages, 0.5, 1.0, kind="quantile").tolist() == [1, 2, 3]
+    assert rl.selected_moves(advantages, 0.5, 2.5).tolist() == [
+        False,
+        False,
+        True,
+        False,
+    ]
+
+
+def test_collected_wdl_probabilities_train_one_damped_update(
+    baseline_model: ModelConfig,
+) -> None:
+    config = baseline_model.model_copy(update={"value_kind": "categorical_wdl"})
+    torch.manual_seed(17)
+    reference = ActorCritic(ObservationSpace(), config)
+    policy = assemble(policy_weights(reference))
+    batch = self_play_batch(
+        policy, lesson_match(), MLXCollectionSession(device="mps", seed=17), 4
+    )
+    obs = batch.observations(np.arange(batch.actions.size)).observation
+    prepared = reference.prepare(obs)
+    with torch.no_grad():
+        _, logits = reference.forward_distribution(
+            torch_module.arrays.on_device(prepared, "cpu")
+        )
+    expected = logits.softmax(-1).numpy()
+    assert batch.outcome_probabilities is not None
+    np.testing.assert_allclose(
+        batch.outcome_probabilities.reshape(-1, 3), expected, atol=LOGIT_TOLERANCE
+    )
+    np.testing.assert_allclose(
+        batch.values.ravel(), expected[:, 2] - expected[:, 0], atol=LOGIT_TOLERANCE
+    )
+    assert policy.value_semantic == "signed_outcome"
+    np.testing.assert_allclose(
+        policy.win_probabilities(policy.prepare(obs)),
+        reference.win_probabilities(prepared),
+        atol=LOGIT_TOLERANCE,
+    )
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", min_advantage=0, advantage_quantile=0
+    )
+    size = batch.actions.size
+    mlx_update = update_damped_iteration(
+        mlx_backend, MLXLearner(policy, minibatch_rows=size), batch, learning, 1
+    )
+    torch_update = update_damped_iteration(
+        torch_module,
+        TorchLearner(reference, "cpu", minibatch_rows=size),
+        batch,
+        learning,
+        1,
+    )
+    assert mlx_update["critic_exposures"] == torch_update["critic_exposures"] == size
+    assert mlx_update["value_loss"] == pytest.approx(
+        torch_update["value_loss"], rel=LOSS_TOLERANCE
+    )
+
+
+def test_gray_ogre_ppo_matches_torch_on_one_clipped_step() -> None:
+    torch.manual_seed(17)
+    settings = gray_ogre_self_play(horizon=1)
+    space = ObservationSpace(settings.observation)
+    reference = ActorCritic(space, settings.model)
+    batch = self_play_batch(
+        reference,
+        Match(settings.match),
+        TorchCollectionSession(device="cpu", seed=17),
+        6,
+    )
+    # Exercise both loss terms and distinct actor/critic denominators on a
+    # short nonterminal rollout, independently of when the first game ends.
+    batch = replace(
+        batch,
+        rewards=np.linspace(-1, 1, batch.actions.size, dtype=np.float32).reshape(
+            batch.actions.shape
+        ),
+    )
+    learning = settings.learning.model_copy(
+        update={"filter_scope": "actor", "max_grad_norm": 0.01}
+    )
+    size = batch.actions.size
+    policy = assemble(policy_weights(reference))
+    rows = batch.observations(np.arange(size)).observation
+    for actual, expected in zip(
+        policy.evaluate(policy.prepare(rows)),
+        reference.evaluate(reference.prepare(rows)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=LOGIT_TOLERANCE)
+    torch_learner = TorchLearner(reference, "cpu", minibatch_rows=size)
+    mlx_learner = MLXLearner(policy, minibatch_rows=size, execution_rows=2)
+    expected = update_iteration(
+        torch_module, torch_learner, batch, learning, 0, np.random.default_rng(13)
+    )
+    actual = update_iteration(
+        mlx_backend, mlx_learner, batch, learning, 0, np.random.default_rng(13)
+    )
+
+    assert actual.keys() == expected.keys()
+    assert actual["numerical"].keys() == expected["numerical"].keys()
+    assert (
+        actual["numerical"]["optimizer_steps"]
+        == expected["numerical"]["optimizer_steps"]
+        == 1
+    )
+    assert (
+        0
+        < actual["actor_exposures"]
+        == expected["actor_exposures"]
+        < actual["critic_exposures"]
+        == size
+    )
+    assert expected["gradient_norm"] > learning.max_grad_norm
+    for key in ("gradient_norm", "loss", "value_loss", "policy_loss"):
+        assert actual[key] == pytest.approx(
+            expected[key], rel=LOSS_TOLERANCE, abs=1e-6
+        ), key
+
+    # Adam's first moment after one step is proportional to the complete
+    # clipped gradient, including every execution chunk.
+    moments = {
+        name: state["exp_avg"].numpy()
+        if (state := torch_learner.optimizer.state.get(param))
+        else np.zeros(tuple(param.shape), np.float32)
+        for name, param in reference.named_parameters()
+    }
+    mlx_moments = {
+        key.removesuffix(".m"): value
+        for key, value in flat_numpy(mlx_learner.optimizer.state).items()
+        if key.endswith(".m")
+    }
+    agreement = gradient_agreement(mlx_moments, _mlx_names(moments))
+    assert agreement.min_cosine >= COSINE_TOLERANCE, agreement.worst
+    after = mlx_learner.parameters()
+    for name, value in _mlx_names(torch_learner.parameters()).items():
+        np.testing.assert_allclose(
+            after[name], value, rtol=0, atol=STEP_PARAMETER_TOLERANCE, err_msg=name
+        )
+
+
 @pytest.mark.parametrize("bucketed", [False, True])
 def test_mlx_learner_encodes_only_referenced_catalog_programs(
     baseline_model: ModelConfig, monkeypatch: pytest.MonkeyPatch, bucketed: bool
@@ -474,11 +883,16 @@ def test_mlx_learner_encodes_only_referenced_catalog_programs(
     run = PackedGRU.run
 
     def counted(
-        gru: PackedGRU, table: mx.array, rows: mx.array, sizes: Sequence[int]
+        gru: PackedGRU,
+        table: mx.array,
+        rows: mx.array,
+        sizes: Sequence[int],
+        state: mx.array | None = None,
     ) -> tuple[mx.array, mx.array]:
+        assert policy.semantic_cards is not None
         if gru is policy.semantic_cards.encoder:
             sequences.append(sizes[0])
-        return run(gru, table, rows, sizes)
+        return run(gru, table, rows, sizes, state)
 
     monkeypatch.setattr(PackedGRU, "run", counted)
     actual = policy.evaluate(batch)

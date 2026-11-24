@@ -3,12 +3,17 @@
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
 from manabot.backends import resolve
 from manabot.backends.torch import belief_fit
-from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.checkpoint import (
+    SamplerIdentities,
+    load_belief_sampler,
+    save_belief_sampler,
+)
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -18,22 +23,25 @@ from manabot.belief.sampling_data import (
 from manabot.belief.sampling_fit import (
     evaluate_sampler,
     fit_belief_sampler,
-    save_belief_sampler,
 )
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 
 
-def _dataset() -> SamplerDataset:
-    schema = SamplerSchema("fixture-v1", ("A", "B"), 1, max_count=2)
+def _dataset(card_names: tuple[str, ...] = ("A", "B")) -> SamplerDataset:
+    schema = SamplerSchema("fixture-v1", card_names, 1, max_count=2)
     games: list[SamplerGame] = []
     splits: tuple[Split, ...] = ("train", "validation", "test")
     for index, split in enumerate(splits):
         rows = tuple(
             SamplerExample(
                 SamplerInput(
-                    schema.vocabulary_identity, (2, 2), (0, 0), 1, (float(sign),)
+                    schema.vocabulary_identity,
+                    (2,) * len(card_names),
+                    (0,) * len(card_names),
+                    1,
+                    (float(sign),),
                 ),
-                (1, 0) if sign > 0 else (0, 1),
+                ((1, 0) if sign > 0 else (0, 1)) + (0,) * (len(card_names) - 2),
                 0,
                 position,
                 f"obs-{index}-{position}",
@@ -65,8 +73,10 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
     assert result.metrics.test.learned.sampled_hands == 32
     assert result.metrics.parameter_bytes > 0
     assert result.metrics.test.learned.peak_python_bytes > 0
-    checkpoint = tmp_path / "belief.pt"
-    identity = save_belief_sampler(checkpoint, result, dataset, codec=belief_fit)
+    checkpoint = tmp_path / "belief.safetensors"
+    identity = save_belief_sampler(
+        checkpoint, result, dataset, codec=resolve("torch").belief
+    )
     bindings = {
         "expected_dataset_identity": dataset.identity,
         "expected_policy_identity": dataset.policy_identity,
@@ -92,13 +102,13 @@ def test_fit_generalizes_public_history_and_reloads_bound_bytes(tmp_path: Path) 
                 codec=resolve("torch").belief,
             )
     with pytest.raises(FileExistsError):
-        save_belief_sampler(checkpoint, result, dataset, codec=belief_fit)
+        save_belief_sampler(checkpoint, result, dataset, codec=resolve("torch").belief)
     with pytest.raises(ValueError, match="different dataset"):
         save_belief_sampler(
             tmp_path / "wrong.pt",
             result,
             replace(dataset, policy_identity="foreign"),
-            codec=belief_fit,
+            codec=resolve("torch").belief,
         )
 
 
@@ -191,3 +201,55 @@ def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
     metrics = evaluate_sampler(result.model, bait, samples=8, backend=belief_fit)
     assert metrics.learned.joint_nll > metrics.physical_baseline.joint_nll
     assert metrics.physical_baseline.support_violations == 0
+
+
+@pytest.mark.parametrize("writer", ["torch", "mlx"])
+def test_portable_sampler_preserves_joint_odds_across_backends(
+    tmp_path: Path, writer: str
+) -> None:
+    mx = pytest.importorskip("mlx.core")
+    dataset = _dataset(("A", "B", "C"))
+    backend = resolve(writer)
+    result = backend.belief_fit.fit_belief_sampler(
+        dataset,
+        steps=16,
+        batch_size=8,
+        hidden_size=8,
+        learning_rate=0.03,
+        evaluation_samples=4,
+        seed=7,
+    )
+    assert result.metrics.test.learned.support_violations == 0
+    assert (
+        result.metrics.test.learned.joint_nll
+        < result.metrics.test.physical_baseline.joint_nll
+    )
+    path = tmp_path / "belief.safetensors"
+    digest = save_belief_sampler(path, result, dataset, codec=backend.belief)
+    bindings = SamplerIdentities(
+        expected_dataset_identity=dataset.identity,
+        expected_policy_identity=dataset.policy_identity,
+        expected_schema_identity=dataset.schema.identity,
+        expected_world_identity=dataset.world_identity,
+        expected_checkpoint_identity=digest,
+    )
+    row = replace(
+        dataset.games[0].examples[0].inputs, known_minima=(1, 0, 0), hand_size=2
+    )
+    counts = np.array([[1, 1, 0], [2, 0, 0], [1, 0, 1]])
+    inputs = [row] * len(counts)
+    ref = load_belief_sampler(path, codec=resolve("torch").belief, **bindings)
+    loaded = load_belief_sampler(path, codec=resolve("mlx").belief, **bindings)
+    with torch.no_grad():
+        expected = ref.log_prob(inputs, torch.from_numpy(counts)).numpy()
+    actual = np.asarray(loaded.log_prob(inputs, mx.array(counts)))
+    np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=1e-6)
+    np.testing.assert_allclose(np.exp(actual).sum(), 1.0, atol=1e-6)
+    original = result.model.log_prob(
+        inputs, torch.from_numpy(counts) if writer == "torch" else mx.array(counts)
+    )
+    np.testing.assert_allclose(
+        original.detach().numpy() if writer == "torch" else np.asarray(original),
+        expected,
+        atol=1e-6,
+    )
