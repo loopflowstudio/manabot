@@ -2505,3 +2505,81 @@ fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
     );
     assert_eq!(plus(&s, wurm), Some(7));
 }
+
+/// Tinybones lets its controller spend mana as though it were mana of any
+/// type on a stashed card, and that applies to the total cost after
+/// reductions (CR 601.2f before 601.2h): an opponent's stashed Glamdring's
+/// Gleam of Death, {3}{U} less an equipped Glamdring's 2, is paid with {R}{R}.
+#[test]
+fn glamdring_cast_from_a_tinybones_stash_spends_any_mana_after_its_reduction() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{can_cast, zone_of},
+        play::{cast_profile, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{
+            card::SpellProfile,
+            game_object::Target,
+            permanent::{CounterKind, Counters},
+        },
+    };
+    let mut s = five_color_setup(&[
+        "Tinybones, Bauble Burglar",
+        "Glamdring, Foe-hammer",
+        "Gray Ogre",
+    ]);
+    s.game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let stashed = move_from_library(&mut s, 1, "Glamdring, Foe-hammer", ZoneType::Exile);
+    let mut stash = Counters::default();
+    stash.change(CounterKind::Stash, 1);
+    s.game_mut().state.object_counters.insert(stashed, stash);
+    s.set_player_mana_pool(0, "RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let gleam = |s: &crate::support::game::Scenario| {
+        s.action_space().actions.iter().any(|a| matches!(
+            a,
+            Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == stashed
+        ))
+    };
+    assert!(can_cast(&s, stashed), "Glamdring's own {{2}} with any mana");
+    assert!(!gleam(&s), "{{3}}{{U}} before the reduction");
+
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let equipment = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Glamdring, Foe-hammer", true)
+        .unwrap();
+    s.set_player_mana_pool(0, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, equipment, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(gleam(&s));
+    let library = s.zone_size(0, ZoneType::Library);
+    cast_profile(&mut s, stashed, SpellProfile::Adventure);
+    if s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::PayCost { .. }))
+    {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, stashed),
+        Some(ZoneType::Exile),
+        "on an adventure"
+    );
+    assert_eq!(
+        s.zone_size(0, ZoneType::Library),
+        library - 6,
+        "Gleam of Death milled six"
+    );
+}
