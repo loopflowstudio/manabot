@@ -1,21 +1,29 @@
-at: c9bdc388bac446f4ccb7968b51f6060291ca6fdd
+at: 859878f8e2a213592f3ce4bebdbb40a4e846a094
 first:
   - path: managym/README.md
-    why: What players see during attack declaration
-  - path: managym/src/flow/turn.rs
-    why: Turn history by player and exact battlefield appearance
+    why: When combat triggers read power and keep it
   - path: managym/state/src/ability.rs
-    why: Authored attack conditions, selectors and contextual queries
+    why: Object properties, aggregate queries and trigger conditions
+  - path: managym/src/flow/turn.rs
+    why: Attack history and once-per-turn ability use
   - path: managym/src/flow/tick.rs
-    why: Commit the declaration before matching triggers
+    why: Commit attackers before matching their triggers
   - path: managym/src/flow/triggers.rs
-    why: Bind each occurrence before applying trigger doublers
+    why: Bind each qualifying member before applying trigger limits
+  - path: managym/src/flow/layers.rs
+    why: Compare characteristics on the partially evaluated battlefield
   - path: managym/src/flow/resolution.rs
-    why: Resolve quantities against targets, payments and instruction results
+    why: Read current or last-known characteristics for each appearance
   - path: managym/src/agent/observation.rs
-    why: Project live and departed sources for each viewer
+    why: Expose pending source power to both viewers
+  - path: academy/ui/src/lib/types.ts
+    why: Academy fields for public history and pending abilities
   - path: managym/cards/src/fdn.rs
-    why: Foundations cards using the shared rules
+    why: Foundations definitions using the shared rules
   - path: managym/cards/tests/cards/fdn.rs
-    why: Exercise raid, trigger identity and extra combats
+    why: Replay timing, source departure and trigger-doubling cases
+  - path: tests/verify/test_immolator_source_power.py
+    why: Follow pending power through policy, text and Academy
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Source and directed fixture for each card
 hide: []
