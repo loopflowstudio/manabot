@@ -198,13 +198,9 @@ impl SpendEffect {
             Self::SpellGainsKeyword {
                 spell: predicate, ..
             }
-            | Self::CopySpell { spell: predicate } => predicate.matches_printing(
-                spell,
-                ObjectKind::Card,
-                spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-                spell.power.unwrap_or(0),
-                &[],
-            ),
+            | Self::CopySpell { spell: predicate } => {
+                predicate.matches_printed_spell(spell, ObjectKind::Card)
+            }
         }
     }
 }

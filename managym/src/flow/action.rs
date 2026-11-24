@@ -278,20 +278,20 @@ impl Game {
                 }
             }
             Action::PayCost { .. } => match &self.pending_choice {
-                Some(PendingChoice::KickerChoice {
-                    object: object_id, ..
-                }) => match self.state[*object_id].cast_option()? {
-                    CastOption::ExileFromHand => {
-                        Some("Exile a card from your hand instead of paying the mana cost".into())
+                Some(PendingChoice::KickerChoice { object, cast, .. }) => {
+                    match cast.spell(&self.state[*object]).cast_option()? {
+                        CastOption::ExileFromHand => Some(
+                            "Exile a card from your hand instead of paying the mana cost".into(),
+                        ),
+                        CastOption::AlternativeMana(cost) => {
+                            Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
+                        }
+                        CastOption::Bargain => {
+                            Some("Bargain: sacrifice an artifact, enchantment or token".into())
+                        }
+                        CastOption::Kicker => None,
                     }
-                    CastOption::AlternativeMana(cost) => {
-                        Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
-                    }
-                    CastOption::Bargain => {
-                        Some("Bargain: sacrifice an artifact, enchantment or token".into())
-                    }
-                    CastOption::Kicker => None,
-                },
+                }
                 Some(PendingChoice::Pay { payment, .. }) => {
                     let (or_mana, instead) = match &payment.owed[0] {
                         CostComponent::Sacrifice(cost, _) => {
@@ -392,8 +392,8 @@ impl Game {
             Action::Decline { .. }
                 if matches!(
                     &self.pending_choice,
-                    Some(PendingChoice::KickerChoice { object: object_id, .. })
-                        if self.state[*object_id].cast_option() == Some(CastOption::ExileFromHand)
+                    Some(PendingChoice::KickerChoice { object, cast, .. })
+                        if cast.spell(&self.state[*object]).cast_option() == Some(CastOption::ExileFromHand)
                 ) =>
             {
                 Some("Pay the mana cost".into())
@@ -432,12 +432,13 @@ impl Game {
             self.priority_actions_for_object(player, object, |action, mana_value, cast| {
                 if mode == ManaFloats::Usable && !spell_spends {
                     if let Action::CastSpell { object, .. } = action {
+                        let spell = cast.spell(&self.state[object]);
                         spell_spends = mana_value > 0
                             || self.cast_needs_x_announcement(object, cast)
-                            || self.state[object]
+                            || spell
                                 .optional_cost()
                                 .is_some_and(|cost| cost.mana_value > 0)
-                            || self.state[object]
+                            || spell
                                 .sacrifice_cost()
                                 .and_then(|sac| sac.or_mana.as_ref())
                                 .is_some_and(|cost| cost.mana_value > 0);
@@ -970,14 +971,7 @@ impl Game {
             ),
             CostComponent::ExileFromHand => (
                 ActionSpaceKind::LookAndSelect,
-                select(
-                    self.payment_source_object(&payment.operation)
-                        .map(|object| self.exile_alternative_cards(player, object))
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|card| self.state.object_of(card))
-                        .collect(),
-                ),
+                select(self.exile_payment_objects(player, payment)),
                 Vec::new(),
             ),
             CostComponent::Forage { or_mana, exiled } => {

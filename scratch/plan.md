@@ -11,7 +11,13 @@ The prepared-entry fixture puts each source onto the battlefield, finds its prin
 
 Both directions of the link use the exact-object play grants. Upkeep reads the link at trigger and resolution for all three FRA sources. The same prepare effect handles six additional sources using existing cast, attack, land-entry and first-main triggers. The SOS/FRA ledgers identify these twelve definitions and their directed tests.
 
-**Next slice.** Emeritus of Truce needs a choice of token recipient followed by a comparison of creature counts at resolution. Start with equal creature counts and fork the recipient choice. Check the Inkling under the chosen player’s control and preparation against the counts after entry. On a third branch blink the source after the target is bound. Account separately for the new entry trigger. Resolving the original trigger must still create the recipient’s token and leave the returned permanent’s preparation unchanged. Persist the chosen player and original source appearance in the pending trigger. Derive the count comparison after token entry, without a saved eligibility flag or another policy decision. Restore the pending branch and compare token movements and exact grants. Finish the inset’s exile and power-based life gain as required by the SOS ledger. Carry the same post-effect comparison through every applicable row before review. Grave Researcher first requires a completed surveil choice, and Joined Researchers needs an intervening condition at both trigger and resolution.
+### Remaining work by shared rules fixture
+
+1. **Preparation triggers and resolution choices (SOS/FRA).** Use the same prepared-source, pending-resolution and source-loss forks for Joined Researchers, Grave Researcher, Spiritcall Enthusiast, Emeritus of Woe, Bloodline Recollector, Leech Collector, Scheming Silvertongue, Kirol, Sanar, Whiplash Wordsmith and Hexhaven Dueling Arena. Use the payment and choice forks for Emeritus of Ideation, Harmonized Trio, Lluwen, Variable Chaser, Pyre Rhymer and Heartwood Crafter. Codie combines the mass-prepare and copied-spell controls. The remaining-row table below gives the condition or cost each fork must distinguish. Review the cohort together.
+2. **Printed programs (HOB/TDM).** Run the other 16 Adventures and 11 Omens through the existing hand-profile, target/payment and stack-departure fixtures. Check each front and inset program. Group cards needing a new effect by its implementation owner. Keep the modal casting probe with the profile enumeration checks.
+3. **Zone permissions and alternate costs (FDN).** Use overlapping grants, graveyard abilities, optional payment and land-play fixtures across the 13 open rows selected below. Tinybones needs foreign-owned land execution. Keep its control-transfer and prohibition forks with the shared grant tests.
+
+Advance between batches when the ledger gives each completed row a directed witness. If an engine dependency splits a batch, record the specific missing operation and affected rows.
 
 ## Verified permission behavior
 
@@ -158,7 +164,6 @@ Use the same harness and hardware for comparisons. For new board states that the
 
 | Cards | Owner | Required behavior |
 |---|---|---|
-| Emeritus of Truce | resolution | Target-player Inkling creation followed by a creature-count comparison and preparation of the still-present source. |
 | Joined Researchers | triggers and resolution | Compare opponent hand size at end-step trigger and resolution, then prepare the source. |
 | Spiritcall Enthusiast | entry triggers | Recognize a batch of one or more entering tokens and resolve preparation once. |
 | Emeritus of Ideation | attack payment | Allow declining or exiling eight distinct graveyard cards before preparing the attacker. |
@@ -194,4 +199,8 @@ The cold replay stopped at Waypoint’s target choice in an ordinary game with S
 
 The two prepared-entry set tests, two Seed Suture transfer/counter tests and current-revision returning-Angel rejection passed. Nine learning-token controls, both Zul Ashur text/tensor cases, the foretell privacy/spending control and the manual/automatic/floated receipt control passed. The Waypoint cold replay and Academy navigation evidence above comes from the earlier implementation run.
 
-The 12-definition resolution slice satisfies its directed criteria. The working phase remains open at 43 of 62 preparation rows with directed evidence. First missing behavior is SOS ledger row `e6c41473-2398-4888-9f0c-467dce7c39a4`: from equal creature counts, resolve Emeritus of Truce's entry targeting each player. Create the Inkling before comparing counts, and check the original source appearance on the blink branch described above. The remaining-row table identifies all 19 rows and their owners. Continue implementation before decomposition or performance work. Full debug and consumer suites remain with gate.
+The review at `37be0557` counted 43 of 62 preparation rows with directed evidence. The Emeritus of Truce checkpoint at `3beb79c511` supplied the next row. Both recipient choices created the Inkling before the count comparison. On blink, the new entry trigger resolved separately and the original trigger preserved the returned permanent's exact grants. Swords to Plowshares exiled the opponent's 2/1 Savannah Lions and that player gained two life. The SOS and FRA ledgers now carry directed evidence for 44 of 62 preparation rows.
+
+**Casting and preparation checks on the local Mac.** All 47 focused native tests passed, including registered-card conformance, both prepared-entry cohorts, the Emeritus blink fork, restricted spending, converge, flashback and foretell privacy. Giving Charring Bite an exile alternative in the test position offered both prices. Choosing the alternative exiled Lightning Bolt, left two red mana in the pool and shuffled Twinmaw into its owner's library. The conformance fixture gained 46 registered printings across SOS, FRA, RIX and TDM. Scryfall identifies Infinite Coursework's FRA printing as `a5988272-faaa-463d-a0a1-a8e96b946bad`.
+
+With the rebuilt CPython 3.13 extension, 95 Python checks passed across cold replay, semantic text, both bundled pilots and Academy navigation. The optional frontier checkpoint was unavailable. Four demo sequences and all 252 navigation prefix Commands replayed. The five final offer lists and revisions matched exactly. Their complete viewer projections matched after remapping the two inserted catalog entries, Emeritus of Truce and Inkling.

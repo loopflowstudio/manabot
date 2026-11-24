@@ -3413,7 +3413,8 @@ impl Game {
                 }
                 if let ResolutionCastOffer::Cascade { below, .. } = offer {
                     if spell
-                        .mana_value_cost()
+                        .mana_cost
+                        .as_ref()
                         .map_or(0, |cost| cost.mana_value_at(0))
                         >= *below
                     {
@@ -3421,7 +3422,7 @@ impl Game {
                     }
                 }
                 if let ResolutionCastOffer::Graveyard { predicate, .. } = offer {
-                    if !predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0)) {
+                    if !predicate.matches_printed_spell(spell, definition.kind()) {
                         continue;
                     }
                 }

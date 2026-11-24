@@ -54,12 +54,10 @@ mod eld;
 mod emn;
 #[path = "cards/eoe.rs"]
 mod eoe;
-#[path = "cards/fra.rs"]
-mod fra;
-#[path = "cards/sos.rs"]
-mod sos;
 #[path = "cards/fdn.rs"]
 mod fdn;
+#[path = "cards/fra.rs"]
+mod fra;
 #[path = "cards/frf.rs"]
 mod frf;
 #[path = "cards/fut.rs"]
@@ -142,6 +140,8 @@ mod scryfall;
 mod shm;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/sos.rs"]
+mod sos;
 #[path = "cards/spm.rs"]
 mod spm;
 #[path = "cards/sth.rs"]

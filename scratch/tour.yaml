@@ -1,17 +1,21 @@
-at: cc3df5fc62a4280d8862d377592f54fde0586369
+at: 3beb79c5113d5ffcc6a22c6a4855210b2c26e68d
 first:
   - path: docs/engine.md
-    why: Read the preparation and casting contract
+    why: Read the casting and preparation rules
+  - path: managym/state/src/card.rs
+    why: Find each printed spell and its targeting requirements
   - path: managym/src/flow/cast_permission.rs
-    why: See how grants bind copies to sources
-  - path: managym/src/flow/zones.rs
-    why: Follow copy creation, repeat preparation and removal
+    why: See which player can use each exact grant
+  - path: managym/src/flow/play.rs
+    why: Follow the selected spell through announcement and payment
+  - path: managym/cards/tests/cards/tdm.rs
+    why: Compare Omen costs, targets and departures
   - path: managym/src/flow/resolution_tests.rs
-    why: Compare Waypoint forks, selective unprepare and upkeep
-  - path: tests/env/test_game_snapshot.py
-    why: Replay Waypoint and Exude Toxin through resolution
+    why: Follow the Inkling and original source through blink
   - path: scratch/plan.md
-    why: Find the remaining nineteen preparation rows
+    why: Find remaining ledger rows grouped by mechanism
 hide:
   - path: managym/academy/fixtures/
     why: Regenerated Academy recordings and navigation digests
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Registered printings downloaded from Scryfall

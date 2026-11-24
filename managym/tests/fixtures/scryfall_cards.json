@@ -6919,5 +6919,688 @@
     ],
     "oracle_text": "Equipped creature gets +1/+1 and has \"{15}, Exile The Dominion Bracelet: You control target opponent during their next turn. This ability costs {X} less to activate, where X is this creature's power. Activate only as a sorcery.\" (You see all cards that player could see and make all decisions for them.)\nEquip {1}",
     "colors": []
+  },
+  "Abigale, Poet Laureate": {
+    "name": "Abigale, Poet Laureate",
+    "mana_cost": "{1}{W}{B}",
+    "type_line": "Legendary Creature — Bird Bard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Prepared"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a creature spell, Abigale becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
+  "Adventurous Eater": {
+    "name": "Adventurous Eater",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Warlock",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Biblioplex Tomekeeper": {
+    "name": "Biblioplex Tomekeeper",
+    "mana_cost": "{4}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "When this creature enters, choose up to one —\n• Target creature becomes prepared. (Only creatures with prepare spells can become prepared.)\n• Target creature becomes unprepared.",
+    "colors": []
+  },
+  "Blazing Firesinger": {
+    "name": "Blazing Firesinger",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Dwarf Bard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Blossom-Blessed Angel": {
+    "name": "Blossom-Blessed Angel",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Angel Cleric",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Prepared"
+    ],
+    "oracle_text": "Flying, vigilance\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Campus Composer": {
+    "name": "Campus Composer",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Merfolk Bard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Prepared",
+      "Ward"
+    ],
+    "oracle_text": "Ward {2}\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Carnivorous Cultivator": {
+    "name": "Carnivorous Cultivator",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Elf Warlock",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Prepared",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nThis creature enters prepared.\nWhenever this creature deals combat damage to a player, return target land card from your graveyard to your hand.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Cheerful Osteomancer": {
+    "name": "Cheerful Osteomancer",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Orc Warlock",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Diviner of Victory": {
+    "name": "Diviner of Victory",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Dwarf Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nWhenever you scry or surveil, this creature gets +1/+1 until end of turn.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Elite Interceptor": {
+    "name": "Elite Interceptor",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Wizard",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Emergency Phytomedic": {
+    "name": "Emergency Phytomedic",
+    "mana_cost": "{G/W}",
+    "type_line": "Creature — Dryad Cleric",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Emeritus of Abundance": {
+    "name": "Emeritus of Abundance",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance",
+      "Prepared"
+    ],
+    "oracle_text": "Vigilance\nThis creature enters prepared.\nWhenever this creature attacks, if you control eight or more lands, this creature becomes prepared.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Emeritus of Conflict": {
+    "name": "Emeritus of Conflict",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "First strike",
+      "Prepared"
+    ],
+    "oracle_text": "First strike\nWhenever you cast your third spell each turn, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Emeritus of Truce": {
+    "name": "Emeritus of Truce",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Creature — Cat Cleric",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "When this creature enters, target player creates a 1/1 white and black Inkling creature token with flying. Then if an opponent controls more creatures than you, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Encouraging Aviator": {
+    "name": "Encouraging Aviator",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Bird Wizard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Prepared"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Fatehold Chronologist": {
+    "name": "Fatehold Chronologist",
+    "mana_cost": "{1}{W/U}",
+    "type_line": "Creature — Bird Wizard",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Surveil",
+      "Prepared"
+    ],
+    "oracle_text": "Flying\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Goblin Glasswright": {
+    "name": "Goblin Glasswright",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Sorcerer",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Treasure",
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Hallway Heckler": {
+    "name": "Hallway Heckler",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Elemental Sorcerer",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}, Discard a card: Draw a card.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Honorbound Page": {
+    "name": "Honorbound Page",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Cat Cleric",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "First strike",
+      "Prepared"
+    ],
+    "oracle_text": "First strike\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Infinite Coursework": {
+    "name": "Infinite Coursework",
+    "mana_cost": "{2}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant",
+      "Prepared"
+    ],
+    "oracle_text": "Enchant creature\nWhen this Aura enters, tap enchanted creature. It becomes unprepared.\nEnchanted creature loses all abilities and doesn't untap during its controller's untap step.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Infirmary Healer": {
+    "name": "Infirmary Healer",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Cat Cleric",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Jadzi, Steward of Fate": {
+    "name": "Jadzi, Steward of Fate",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Human Wizard",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "Jadzi enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nWhen Jadzi enters, draw two cards, then discard two cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Konstrari Improviser": {
+    "name": "Konstrari Improviser",
+    "mana_cost": "{1}{R/G}",
+    "type_line": "Creature — Human Artificer",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Landscape Painter": {
+    "name": "Landscape Painter",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Merfolk Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Maelstrom Artisan": {
+    "name": "Maelstrom Artisan",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Minotaur Sorcerer",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Haste",
+      "Prepared"
+    ],
+    "oracle_text": "Haste\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Paradox Shaper": {
+    "name": "Paradox Shaper",
+    "mana_cost": "{1}{U/B}",
+    "type_line": "Creature — Octopus Wizard",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Prepared",
+      "Mill"
+    ],
+    "oracle_text": "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared.\n{2}: Put target card from your graveyard on the bottom of your library.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Pigment Wrangler": {
+    "name": "Pigment Wrangler",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Orc Sorcerer",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Prepared"
+    ],
+    "oracle_text": "Flying\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Pompous Battlemage": {
+    "name": "Pompous Battlemage",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Sorcerer",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prowess",
+      "Prepared"
+    ],
+    "oracle_text": "Prowess\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Prudent Fateseer": {
+    "name": "Prudent Fateseer",
+    "mana_cost": "{1}{W/U}{W/U}",
+    "type_line": "Creature — Dwarf Wizard",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [
+      "Surveil",
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared.\nWhenever you scry or surveil, creatures you control get +1/+0 until end of turn. This ability triggers only once each turn.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Quill-Blade Laureate": {
+    "name": "Quill-Blade Laureate",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prepared",
+      "Double strike"
+    ],
+    "oracle_text": "Double strike\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Scathing Shadelock": {
+    "name": "Scathing Shadelock",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Snake Warlock",
+    "power": "4",
+    "toughness": "6",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "At the beginning of your first main phase, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Semester Foreseer": {
+    "name": "Semester Foreseer",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Surveil",
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nWhen this creature enters, surveil 1.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Skycoach Conductor": {
+    "name": "Skycoach Conductor",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Bird Pilot",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Prepared",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nFlying, vigilance\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Skycoach Waypoint": {
+    "name": "Skycoach Waypoint",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "{T}: Add {C}.\n{3}, {T}: Target creature becomes prepared. (Only creatures with prepare spells can become prepared.)",
+    "colors": []
+  },
+  "Spellbook Seeker": {
+    "name": "Spellbook Seeker",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Bird Wizard",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Prepared"
+    ],
+    "oracle_text": "Flying\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Stingerquill Voxmancer": {
+    "name": "Stingerquill Voxmancer",
+    "mana_cost": "{B/R}",
+    "type_line": "Creature — Goblin Sorcerer",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
+  "Strife Scholar": {
+    "name": "Strife Scholar",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Orc Sorcerer",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Prepared",
+      "Ward"
+    ],
+    "oracle_text": "Ward—Pay 2 life.\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Studious First-Year": {
+    "name": "Studious First-Year",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Bear Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Tam, Observant Sequencer": {
+    "name": "Tam, Observant Sequencer",
+    "mana_cost": "{2}{G}{U}",
+    "type_line": "Legendary Creature — Gorgon Wizard",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Prepared",
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, Tam becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Theorix Metamage": {
+    "name": "Theorix Metamage",
+    "mana_cost": "{2}{U/B}",
+    "type_line": "Creature — Shade Wizard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Threshold",
+      "Prepared",
+      "Mill"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nThreshold — This creature gets +1/+0 and has flying as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Vastlands Scavenger": {
+    "name": "Vastlands Scavenger",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Creature — Bear Druid",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Prepared",
+      "Mill",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nThis creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Vigorbloom Vanguard": {
+    "name": "Vigorbloom Vanguard",
+    "mana_cost": "{1}{G/W}",
+    "type_line": "Creature — Troll Druid",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nEach creature you control with a +1/+1 counter on it has vigilance.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Void Extrapolator": {
+    "name": "Void Extrapolator",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Aetherborn Warlock",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Threshold",
+      "Prepared",
+      "Mill"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\nThreshold — This creature gets +1/+1 as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Woodwork Prodigy": {
+    "name": "Woodwork Prodigy",
+    "mana_cost": "{2}{R/G}",
+    "type_line": "Creature — Cat Druid",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "At the beginning of your upkeep, if this creature isn't prepared, it becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Etali, Primal Storm": {
+    "name": "Etali, Primal Storm",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Legendary Creature — Elder Dinosaur",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "Whenever Etali attacks, exile the top card of each player's library, then you may cast any number of spells from among those cards without paying their mana costs.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Scavenger Regent": {
+    "name": "Scavenger Regent",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying\nWard—Discard a card.",
+    "colors": [
+      "B"
+    ]
   }
 }

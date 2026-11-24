@@ -52,3 +52,5 @@ Use the pending Waypoint activation as the first fork for repeat preparation. Co
 Use an ordinary-play Voxmancer alongside the constructed Angel for the Waypoint replay. Its upkeep can renew its spell between activations.
 
 Use blink for the Emeritus source-loss branch. Resolving the original trigger with the same card back in play distinguishes source appearance from physical card identity.
+
+Group the outstanding rows by preparation, printed spell programs, and zone permissions. Each group shares the native fixtures listed in the plan.

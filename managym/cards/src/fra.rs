@@ -70,7 +70,7 @@ fn infinite_coursework() -> CardDefinition {
     let text = "Enchant creature\nWhen this Aura enters, tap enchanted creature. It becomes unprepared.\nEnchanted creature loses all abilities and doesn't untap during its controller's untap step.";
     CardDefinition {
         key: "fra.infinite_coursework",
-        scryfall_id: "2f967954-9cf1-5dcc-8792-8007c9652cb6",
+        scryfall_id: "a5988272-faaa-463d-a0a1-a8e96b946bad",
         printed: PrintedCharacteristics {
             name: "Infinite Coursework".into(),
             mana_cost: Some(ManaCost::parse("{2}{U}")),

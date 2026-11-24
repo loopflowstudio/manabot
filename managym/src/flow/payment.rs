@@ -403,6 +403,17 @@ impl Game {
             .collect()
     }
 
+    pub(super) fn exile_payment_objects(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+    ) -> Vec<ObjectId> {
+        let Operation::Spell { object, cast, .. } = payment.operation else {
+            unreachable!("an exile alternative pays for a spell")
+        };
+        self.exile_alternative_objects(player, object, cast)
+    }
+
     /// What `player` may choose to forage with for `payment`: a Food to
     /// sacrifice, or a graveyard card to exile while three can be. Once a
     /// card is exiled only cards are offered. A Food whose mana the rest of
@@ -837,13 +848,9 @@ impl Game {
                 payment.owed.remove(0);
             }
             CostComponent::ExileFromHand => {
-                let Operation::Spell { object: spell, .. } = payment.operation else {
-                    unreachable!("an exile alternative pays for a spell")
-                };
                 if !self
-                    .state
-                    .card_of(object)
-                    .is_some_and(|card| self.exile_alternative_cards(player, spell).contains(&card))
+                    .exile_payment_objects(player, &payment)
+                    .contains(&object)
                 {
                     return Err(AgentError(
                         "not a card this alternative cost can exile".into(),

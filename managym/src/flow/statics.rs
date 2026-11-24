@@ -576,6 +576,12 @@ impl Game {
         predicate.matches_object_with_power(row, power)
     }
 
+    fn creature_count(&self, controller: PlayerId) -> usize {
+        self.layer_views(self.iter_battlefield_permanents(controller))
+            .filter(|(_, view)| view.is_creature())
+            .count()
+    }
+
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
@@ -584,10 +590,7 @@ impl Game {
                 .filter_map(|(id, _)| self.state.permanents[id].as_ref())
                 .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
                 .sum(),
-            PowerCda::CreaturesYouControl => self
-                .layer_views(self.iter_battlefield_permanents(controller))
-                .filter(|(_, view)| view.is_creature())
-                .count() as i32,
+            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
             PowerCda::GraveyardMatching(predicate) => {
                 self.count_graveyard_matching(controller, predicate) as i32
             }
@@ -824,12 +827,7 @@ impl Game {
                 })
             }
             Condition::OpponentControlsMoreCreatures => {
-                let count = |player| {
-                    self.layer_views(self.iter_battlefield_permanents(player))
-                        .filter(|(_, view)| view.is_creature())
-                        .count()
-                };
-                count(PlayerId(1 - controller.0)) > count(controller)
+                self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());

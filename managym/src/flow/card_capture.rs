@@ -158,7 +158,7 @@ pub struct CardSnapshot {
     pub origin: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
     #[serde(rename = "card")]

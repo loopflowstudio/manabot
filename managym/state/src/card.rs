@@ -1299,12 +1299,15 @@ impl PrintedCharacteristics {
     pub fn spell_characteristics(&self, profile: SpellProfile) -> Option<&Self> {
         match profile {
             SpellProfile::Front => Some(self),
-            _ => self
-                .inset
-                .as_ref()
-                .filter(|inset| inset.casting_profile() == Some(profile))
-                .map(|inset| inset.characteristics().as_ref()),
+            _ => self.inset_definition(profile).map(Arc::as_ref),
         }
+    }
+
+    pub(crate) fn inset_definition(&self, profile: SpellProfile) -> Option<&Arc<Self>> {
+        self.inset
+            .as_ref()
+            .filter(|inset| inset.casting_profile() == Some(profile))
+            .map(InsetSpell::characteristics)
     }
 
     fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
@@ -1410,6 +1413,51 @@ impl CastOption<'_> {
 }
 
 impl PrintedCharacteristics {
+    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
+    /// `Game::has_instant_timing`.
+    pub fn is_instant_speed(&self) -> bool {
+        self.types.is_instant() || self.keywords.has(Keyword::Flash)
+    }
+
+    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
+    /// modal effects participate; choices inside resolving abilities do not.
+    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
+        self.spell_effects
+            .iter()
+            .flat_map(|effect| match (effect, mode) {
+                (Effect::Modal { modes }, Some(index)) => {
+                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
+                }
+                _ => std::slice::from_ref(effect),
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
+        if !self.targeting.is_empty() {
+            return self.targeting.clone();
+        }
+        match mode {
+            Some(_) => effect_target_requirements(&self.spell_effects_for_mode(mode)),
+            None => effect_target_requirements(&self.spell_effects),
+        }
+    }
+
+    /// Explicit clauses bind distinct targets; repeated effects on "that"
+    /// target share the inferred single clause.
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        self.target_requirements_for_mode(None)
+    }
+
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")

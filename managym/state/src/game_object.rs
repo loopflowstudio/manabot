@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, num::NonZeroU32, sync::Arc};
 
 use super::zone::ZoneType;
 use super::{
-    ability::{Effect, TargetRequirement, TargetSpec},
-    card::{CardDefId, Keyword, PrintedCharacteristics},
+    ability::{Effect, TargetSpec},
+    card::{CardDefId, PrintedCharacteristics, SpellProfile},
     mana::ManaCost,
 };
 
@@ -716,13 +716,11 @@ impl Object {
     }
 
     /// Show the selected spell while retaining the physical card's definition.
-    pub fn show_spell(&mut self, profile: super::card::SpellProfile) {
+    pub fn show_spell(&mut self, profile: SpellProfile) {
         if profile.is_front() {
             return;
         }
-        let inset = self.inset.as_ref().expect("offered inset spell");
-        assert_eq!(inset.casting_profile(), Some(profile));
-        let spell = Arc::clone(inset.characteristics());
+        let spell = Arc::clone(self.spell_definition(profile).expect("offered inset spell"));
         self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
         self.definition = spell;
     }
@@ -750,6 +748,15 @@ impl Object {
         }
     }
 
+    /// The shared characteristics used to announce, pay for and stack a spell.
+    pub fn spell_definition(&self, profile: SpellProfile) -> Option<&Arc<PrintedCharacteristics>> {
+        if profile.is_front() {
+            Some(&self.definition)
+        } else {
+            self.inset_definition(profile)
+        }
+    }
+
     /// Snapshot the current copiable face without copying its ability programs.
     pub fn copiable_definition(&self) -> Arc<PrintedCharacteristics> {
         Arc::clone(&self.definition)
@@ -769,22 +776,6 @@ impl Object {
             .any(|kind| kind.eq_ignore_ascii_case("legendary"))
     }
 
-    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
-    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
-    /// `Game::has_instant_timing`.
-    pub fn is_instant_speed(&self) -> bool {
-        self.types.is_instant() || self.keywords.has(Keyword::Flash)
-    }
-
-    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
-    /// modal effects participate; choices inside resolving abilities do not.
-    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
-        self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::Modal { modes } => Some(modes.as_slice()),
-            _ => None,
-        })
-    }
-
     /// An Aura's enchant restriction (CR 303.4a, 702.5c): what its spell
     /// targets and what its attached object must keep matching (CR 704.5m).
     pub fn enchant(&self) -> Option<&TargetSpec> {
@@ -795,32 +786,6 @@ impl Object {
             Effect::AttachSourceTo { what } => what.target_spec(),
             _ => None,
         })
-    }
-
-    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
-        self.spell_effects
-            .iter()
-            .flat_map(|effect| match (effect, mode) {
-                (Effect::Modal { modes }, Some(index)) => {
-                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
-                }
-                _ => std::slice::from_ref(effect),
-            })
-            .cloned()
-            .collect()
-    }
-
-    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
-        if !self.targeting.is_empty() {
-            return self.targeting.clone();
-        }
-        crate::ability::effect_target_requirements(&self.spell_effects_for_mode(mode))
-    }
-
-    /// Explicit clauses bind distinct targets; repeated effects on "that"
-    /// target share the inferred single clause.
-    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        self.target_requirements_for_mode(None)
     }
 }
 

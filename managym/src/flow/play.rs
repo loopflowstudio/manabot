@@ -11,8 +11,7 @@
 // ability functions from its owner's hand or graveyard (cycling, "return
 // this card from your graveyard").
 
-use crate::state::card::SpellProfile;
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use crate::{
     agent::action::AgentError,
@@ -26,10 +25,14 @@ use crate::{
     },
     state::{
         ability::{EffectValue, TargetRequirement},
-        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        card::{
+            ActivatedAbilityDefinition, ActivationZone, AdditionalCost, PrintedCharacteristics,
+            SpellProfile, StaticAbility,
+        },
+        game_object::{CardId, Object, ObjectId, PermanentId, PlayerId, Target},
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
+        predicate::CardPredicate,
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -59,31 +62,18 @@ struct TargetSelection {
 }
 
 impl CastChoices {
-    pub(crate) fn spell<'a>(
-        self,
-        object: &'a crate::state::game_object::Object,
-    ) -> Cow<'a, crate::state::game_object::Object> {
-        if !self.profile.is_front() {
-            let mut spell = object.clone();
-            spell.show_spell(self.profile);
-            Cow::Owned(spell)
-        } else {
-            Cow::Borrowed(object)
-        }
+    pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
+        object
+            .spell_definition(self.profile)
+            .expect("offered spell profile")
     }
 
-    fn matches_spell(
-        self,
-        game: &Game,
-        object: ObjectId,
-        predicate: &crate::state::predicate::CardPredicate,
-    ) -> bool {
-        if !self.profile.is_front() {
-            let spell = self.spell(&game.state[object]);
-            predicate.matches_object_with_power(&spell, spell.power.unwrap_or(0))
-        } else {
-            game.object_matches_predicate(object, predicate)
+    fn matches_spell(self, game: &Game, object: ObjectId, predicate: &CardPredicate) -> bool {
+        if self.profile.is_front() {
+            return game.object_matches_predicate(object, predicate);
         }
+        let card = &game.state[object];
+        predicate.matches_printed_spell(self.spell(card), card.kind())
     }
 
     pub(crate) fn from_route(route: PlayRoute, profile: SpellProfile) -> Self {
@@ -326,7 +316,7 @@ impl Game {
             match cast.route? {
                 PlayRoute::PrintedFlashback => spell.flashback().cloned(),
                 PlayRoute::GrantedFlashback => self.granted_flashback_cost(object),
-                PlayRoute::Grant(_) => self.grant_cost_for_spell(cast.grant(self, object)?, &spell),
+                PlayRoute::Grant(_) => self.grant_cost_for_spell(cast.grant(self, object)?, spell),
                 _ => spell.mana_cost.clone(),
             }
         }
@@ -346,7 +336,7 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = cast.spell(&self.state[object]);
         let mut cost = self.casting_mana_cost(object, cast)?.with_x(cast.x);
-        cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
+        cost.purpose = SpendingContext::Cast(SpellSnapshot(Arc::clone(card_ref)));
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -572,22 +562,23 @@ impl Game {
         targets: Option<&[Target]>,
     ) -> bool {
         if self.uses_exile_alternative(object, cast)
-            && self.exile_alternative_cards(player, object).is_empty()
+            && self
+                .exile_alternative_objects(player, object, cast)
+                .is_empty()
         {
             return false;
         }
         let Some(cost) = self.effective_spell_cost(player, object, cast, targets) else {
             return false;
         };
+        let card = cast.spell(&self.state[object]);
         if !cast.kicked
-            && cast
-                .spell(&self.state[object])
+            && card
                 .life_alternative()
                 .is_some_and(|life| self.payable_life(player) < life as i32)
         {
             return false;
         }
-        let card = cast.spell(&self.state[object]);
         if card.discard_cost() && self.discard_candidates(player, Some(object)).is_empty() {
             return false;
         }
@@ -1182,18 +1173,24 @@ impl Game {
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
     /// card's kicked flag means the alternative, which costs no mana.
     pub(super) fn uses_exile_alternative(&self, object: ObjectId, cast: CastChoices) -> bool {
-        cast.kicked && self.state[object].exile_alternative().is_some()
+        cast.kicked
+            && cast
+                .spell(&self.state[object])
+                .exile_alternative()
+                .is_some()
     }
 
     /// The cards `player` may exile for `card`'s exile-from-hand alternative
     /// cost: other matching cards in hand while `card` is cast from hand,
     /// paying its costs, and, if the cost says so, outside `player`'s turn.
-    pub(crate) fn exile_alternative_cards(
+    pub(crate) fn exile_alternative_objects(
         &self,
         player: PlayerId,
         object: ObjectId,
-    ) -> Vec<CardId> {
-        let Some((predicate, not_your_turn)) = self.state[object].exile_alternative() else {
+        cast: CastChoices,
+    ) -> Vec<ObjectId> {
+        let Some((predicate, not_your_turn)) = cast.spell(&self.state[object]).exile_alternative()
+        else {
             return Vec::new();
         };
         if (not_your_turn && self.active_player() == player)
@@ -1203,10 +1200,8 @@ impl Game {
         }
         self.state
             .zone_cards(ZoneType::Hand, player)
-            .filter(|card| {
-                self.state.object_of(*card) != object
-                    && self.object_matches_predicate(self.state.object_of(*card), predicate)
-            })
+            .map(|card| self.state.object_of(card))
+            .filter(|&other| other != object && self.object_matches_predicate(other, predicate))
             .collect()
     }
 

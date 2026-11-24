@@ -226,6 +226,57 @@ fn vizier_filters_twinmaw_profiles_and_mana() {
     assert_eq!(s.game().state.players[0].life, life + 5);
 }
 
+/// Give only the Omen an exile alternative. Its front still requires six mana.
+#[test]
+fn charring_bite_uses_the_selected_profiles_alternative_cost() {
+    use crate::support::{
+        inspect::{offer_labels, zone_of},
+        play::choose,
+    };
+    use managym::{
+        agent::action::Action,
+        state::{
+            card::{AdditionalCost, InsetSpell, SpellProfile},
+            game_object::Target,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_unfunded_setup(&["Twinmaw Stormbrood", "Gray Ogre", "Lightning Bolt"]);
+    let dragon = force_new_card_in_hand(&mut s, 0, "Twinmaw Stormbrood");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let Some(InsetSpell::Omen(omen)) = &mut s.game_mut().state[dragon].inset else {
+        unreachable!()
+    };
+    std::sync::Arc::make_mut(omen).additional_costs.push(
+        AdditionalCost::ExileFromHandAlternative {
+            predicate: CardPredicate {
+                colors_any: vec![Color::Red],
+                ..Default::default()
+            },
+            not_your_turn: false,
+        },
+    );
+    s.set_player_mana_pool(0, "RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == dragon),
+    );
+    assert!(offer_labels(&s)
+        .iter()
+        .any(|label| label.starts_with("Exile a card")));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Permanent(target)));
+    select_card(&mut s, bolt);
+    assert_eq!(zone_of(&s, bolt), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, dragon), Some(ZoneType::Library));
+}
+
 #[test]
 fn charring_bite_shuffles_only_on_resolution() {
     use crate::support::{

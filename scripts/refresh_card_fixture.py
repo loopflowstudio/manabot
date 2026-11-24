@@ -103,9 +103,8 @@ def oracle_cards() -> dict[str, dict]:
             "front_card",
         ):
             continue
-        if card.get("layout") == "adventure":
-            # Scryfall groups Adventures and Omens under this layout. Decks
-            # register the physical card by its front name and characteristics.
+        if card.get("layout") in ("adventure", "prepare"):
+            # These layouts register one physical card under its front name.
             front = card["card_faces"][0]
             by_name.setdefault(front["name"], card | front)
         by_name.setdefault(card["name"], card)
