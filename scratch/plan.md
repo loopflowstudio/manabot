@@ -49,11 +49,12 @@ All slices are built (`d93b4c19f6` through the activation-limit commit after `ab
 - Decomposition review, third pass (2026-11-24, at `a855e140aa`, after compress `77a073e5bf`): **met**. Followed Mild-Mannered Librarian (offer `action.rs`, activation `play.rs`, mana `mana.rs:1807/1819/2953/3132`, observation `used_abilities`/`exhausted_abilities`) and Soulstone Sanctuary (layer `AllCreatureTypes` clears `creature_types_set`; mid-pass `has_subtype`, `buff`, `matches_view` all read `has_all_creature_types`; post-pass readers see `finish_object`'s normalized value). No card-key dispatch in `flow/` or `agent/`; the removed `Game::record_activation` wrapper has no callers left. Debug at HEAD: cards 895/895; `rules_tests` + `canonical_replay_tests` + `scenario_tests` 206 (2 skipped); lib `mana|observation|layers|sba` 98/99 (known base failure). Kindred creature types are a deferred gap with no catalog witness (`questions.md`).
 - Folded elsewhere: the death/LKI witnesses are the representation review's "mooned creature dying"; CR 603.6a Aura-entry suppression waits for a catalog witness (`questions.md`).
 
-Next: Batch 4 slice 2 (resumable `ExileLinked`, constrained manifest sampling).
 
 Use first printings and record each delivered definition and directed check in the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) where it applies. Match tokens by their full printed characteristics. Scope comes from Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md).
 
 ## Batch 4 · Representation, consumers and budget
+
+Next: slice 2 (resumable `ExileLinked`, constrained manifest sampling). Slice 1 is built and its claims hold at `fb8bcba24a`; `selection_foretold_allocations` still has no manifest accounting.
 
 Build in three slices (rationale and counterexamples in [the concept review](concept-review.html)):
 
@@ -70,7 +71,7 @@ Build in three slices (rationale and counterexamples in [the concept review](con
    - Route `Decision::ExileLinked` / `cast_permission::exile_linked` (sole remaining battlefield-capable immediate `move_object` caller; `payment.rs:1071` already uses `EffectFrame.batch`) through `EffectFrame.batch` via `EventBinding::ExileLinked { actor, grantee, source, grant }`. Pass the batch's exile `actor` (defaulting to `frame.controller`) to `advance_event_batch` / `meld_order_choice` (`decision.rs:1305`, `zones.rs:569`) so the player performing the exile (`TargetPlayer` for Azula) chooses relative order even when the ability controller (`grantee`) receives the cast grants. In each ordering fork, keep Ragnarok assembled and its grants unissued while the order is pending. In `bind_event_results`, issue `ExileCastGrant` for **every** surviving exiled arrival (computing per-arrival `object_mana_value` for `WaterbendManaValue`) before offering the next graveyard selection; reject the spent Command without advancing the frame or adding grants. Keep the Hama and ordinary Azula checks as single-arrival controls.
    - Account for `hidden_manifests(owner, viewer).count()` battlefield slots in `selection_foretold_allocations` (`selection_sampling.rs:703-724`) so non-hand, non-foretold manifested cards are not counted as `ZoneType::Library` slots during constrained sampling, and add a directed constrained-sampling manifest test.
 3. **Representation review, consumer checks and Engine Budget:**
-   - Finish the representation review witnesses (including Clone copying both front-face and back-face Cecil), two-root manifest privacy checks (including combat damage / triggers, constrained sampling, paired seeded searches and comparative viewer trace exports), replay/fork checks, pinned pilot and Engine Budget measurements below.
+   - Finish the remaining representation review witnesses (Cecil, Clone of either Cecil face and the Ragnarok token copy are witnessed in slice 1), two-root manifest privacy checks (including combat damage / triggers, constrained sampling, paired seeded searches and comparative viewer trace exports), replay/fork checks, pinned pilot and Engine Budget measurements below.
 
 ## Open checks on finished work
 
