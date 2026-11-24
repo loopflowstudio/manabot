@@ -214,6 +214,7 @@ class ObservationSpace(gym.spaces.Space):
             max_decision_members=config.max_decision_members,
         )
         self.shapes = self.layout.shapes
+        self.axis_buffers = self.layout.axis_buffers
         self.one_token = "stack" in self.shapes
         self.turn_state = "player_turn_state" in self.shapes
         # Checkpoints record str() of each NumPy scalar type.

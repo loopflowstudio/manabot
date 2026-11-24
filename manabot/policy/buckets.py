@@ -11,8 +11,8 @@ parameter, buffer, checkpoint or policy input.
 `row_needs` measures what each row needs on every axis; `sizes_of` buckets a
 group of rows from those needs (`bucket_sizes` does both for one batch).
 A learner measures each rollout row once and regroups the needs for every
-epoch's minibatches. `trim_observation` slices admitted NumPy buffers and
-remaps their object references before host index preparation.
+epoch's minibatches. Preparation reads original-coordinate bucket views and
+uses `object_map` to translate the integer joins it emits.
 
 An axis's need covers every row the default path could read or reject: the
 last row with any nonzero value (so poisoned padding is kept and still
@@ -33,77 +33,29 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation
-from manabot.env.observation import ObservationBuffers, ObservationSpace, column, width
+from manabot.env.observation import ObservationBuffers, ObservationSpace, width
+from manabot.infra.config import ModelConfig
+from manabot.policy.decision_memory import retained_memory
 
 MIN_BUCKET = 8
 
-# Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
-# are trimmed along axis 2.
-ROW_KEYS: dict[str, tuple[str, ...]] = {
-    "facts": ("facts",),
-    "effects": ("effects",),
-    "details": ("effect_details",),
-    "members": ("effect_members",),
-    "relations": ("relations",),
-    "actions": ("actions", "name_candidates", "action_focus", "actions_valid"),
-    "events": ("events", "events_valid"),
-    "cards": (
-        "agent_cards",
-        "opponent_cards",
-        "agent_cards_valid",
-        "opponent_cards_valid",
-    ),
-    "permanents": (
-        "agent_permanents",
-        "opponent_permanents",
-        "agent_permanents_valid",
-        "opponent_permanents_valid",
-    ),
-    "stack": ("stack", "stack_valid"),
-}
-# Keys only input v11 carries; absent from v9/v10 batches.
-STACK_KEYS = ("stack", "stack_valid")
-SEAT_KEYS: dict[str, tuple[str, ...]] = {
-    # `card_turn_state` (inputs v10 and v11) aligns with the card rows.
-    "cards": ("semantic_cards", "card_turn_state"),
-    "known": ("known_hand",),
-    "decklists": ("decklists",),
-}
-# Read only at legal rows, which `actions_valid` bounds; its padding is -1.
-_UNMEASURED_KEYS = ("action_focus",)
-# Column positions come from the native layout by name, so a moved or added
-# column cannot silently shift what is remapped. Policy history v1 is the
-# event layout whose context columns are object references.
-# Object-table references, one-based (0: none) or zero-based (-1: none):
-# (key, column). `action_focus` is a whole zero-based reference buffer.
-ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
-    (key, column(key, name))
-    for key, name in (
-        ("facts", "object"),
-        ("effects", "controller"),
-        ("effects", "source"),
-        ("effect_members", "object"),
-        ("relations", "source"),
-        ("relations", "reference"),
-        ("agent_permanents", "attached_to"),
-        ("agent_permanents", "blocking"),
-        ("opponent_permanents", "attached_to"),
-        ("opponent_permanents", "blocking"),
-        ("stack", "source"),
-    )
-)
-ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
-    ("events", column("events", "source_context")),
-    ("events", column("events", "target_context")),
+# Fixed column order of retained rollout extents, including absent legacy axes.
+AXES = (
+    "facts",
+    "effects",
+    "details",
+    "members",
+    "relations",
+    "actions",
+    "events",
+    "cards",
+    "known",
+    "decklists",
+    "permanents",
+    "stack",
 )
 _EVENT_WIDTH = width("events")
-# Row joins into other variable axes.
-_DETAIL_SPAN = (column("effects", "detail_offset"), column("effects", "detail_count"))
-_MEMBER_SPAN = (column("effects", "member_offset"), column("effects", "member_count"))
-_RELATION_FRAME = column("relations", "frame")
-_ACTION_CONTINUATION = column("actions", "continuation")
 
 
 def bucket(need: int, capacity: int) -> int:
@@ -123,79 +75,13 @@ class BucketSizes:
         return any(self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES)
 
 
-def _capacities(space: ObservationSpace) -> dict[str, int]:
-    shapes = space.shapes
-    return {
-        "facts": shapes["facts"][0],
-        "effects": shapes["effects"][0],
-        "details": shapes["effect_details"][0],
-        "members": shapes["effect_members"][0],
-        "relations": shapes["relations"][0],
-        "actions": shapes["actions"][0],
-        "events": shapes["events"][0],
-        "cards": space.config.max_cards_per_player,
-        "known": space.config.max_cards_per_player,
-        "decklists": space.config.max_cards_per_player,
-        "permanents": space.config.max_permanents_per_player,
-        "stack": shapes["stack"][0] if "stack" in shapes else 0,
-    }
+@dataclass(frozen=True)
+class BucketedObservation:
+    """Views in original object coordinates, with the extents used to select them."""
 
-
-def _batch_extent(value: np.ndarray, axis: int) -> int:
-    """One past the last row along `axis` that any batch row uses (nonzero or NaN).
-
-    One reduction over the batch axis first, with no full-size temporary: a
-    learner minibatch is hundreds of megabytes of mostly zero padding, so this
-    pass is the measurement's cost.
-    """
-    flags = np.any(value, axis=0)
-    if flags.ndim > 1:
-        flags = np.any(flags, axis=tuple(d for d in range(flags.ndim) if d != axis - 1))
-    used = np.flatnonzero(flags)
-    return int(used[-1]) + 1 if used.size else 0
-
-
-def _last_rows(reversed_flags: np.ndarray) -> np.ndarray:
-    """[B] one past each row's last true entry, from C-contiguous [B,R] flags
-    whose rows are reversed (so `argmax` scans memory forward); zero if none."""
-    last = reversed_flags.shape[1] - np.argmax(reversed_flags, axis=1)
-    return np.where(reversed_flags.any(1), last, 0)
-
-
-def _extent(value: np.ndarray, axis: int) -> np.ndarray:
-    """[B] one past the last row along `axis` each batch row uses.
-
-    The batch's extent bounds every row's, so only that prefix is read per row
-    (buckets are usually a small part of the declared capacity). Each row's
-    prefix is flattened and its last nonzero element located, then divided
-    back to a row; seat-major buffers ([B, seats, rows, ...]) fold their seats
-    into the batch.
-    """
-    count = len(value)
-    extent = _batch_extent(value, axis)
-    if extent == 0:
-        return np.zeros(count, np.int64)
-    prefix = value[(slice(None),) * axis + (slice(0, extent),)]
-    seats = int(np.prod(prefix.shape[1:axis], dtype=np.int64))
-    width = int(np.prod(prefix.shape[axis + 1 :], dtype=np.int64))
-    flat = prefix.reshape(count * seats, -1)
-    elements = _last_rows(np.not_equal(flat[:, ::-1], 0, order="C"))
-    rows = np.where(elements > 0, (elements - 1) // width + 1, 0)
-    return rows.reshape(count, seats).max(1, initial=0)
-
-
-def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
-    """`values` as float32 with NaN and infinities replaced by `invalid`."""
-    return np.nan_to_num(
-        values.astype(np.float32), nan=invalid, posinf=invalid, neginf=invalid
-    )
-
-
-def _reference_extent(values: np.ndarray, capacity: int) -> np.ndarray:
-    """[B] largest integer part of each row's finite one-based references,
-    clamped to capacity."""
-    clipped = np.clip(np.floor(_float32(values, 0.0)), 0, capacity)
-    return clipped.reshape(len(values), -1).max(1, initial=0).astype(np.int64)
+    rows: dict[str, np.ndarray]
+    buckets: BucketSizes
+    needs: np.ndarray
 
 
 def has_history_events(obs: Mapping[str, object]) -> bool:
@@ -205,17 +91,12 @@ def has_history_events(obs: Mapping[str, object]) -> bool:
     return shape is not None and len(shape) == 3 and shape[-1] == _EVENT_WIDTH
 
 
-def _object_references(obs: ObservationBuffers) -> list[np.ndarray]:
-    """Every object reference in zero-based full object coordinates."""
-    references = [obs["action_focus"].astype(np.float32)]
-    references.extend(
-        obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES if key in obs
+def object_trimming(config: ModelConfig) -> bool:
+    """Object padding is inert for masked aggregation without belief rows."""
+    return (
+        config.value_aggregation != "historical_mean"
+        and config.belief_count_buckets == 0
     )
-    if has_history_events(obs):
-        references.extend(
-            obs[key][..., column] for key, column in ZERO_BASED_REFERENCES
-        )
-    return references
 
 
 def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]:
@@ -228,51 +109,12 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     segments: list[tuple[str, int, int]] = []
     start = 2
     for axis in ("cards", "cards", "permanents", "permanents", "stack"):
-        segments.append((axis, start, capacities.get(axis, 0)))
-        start += capacities.get(axis, 0)
+        rows = capacities.get(axis, 0)
+        segments.append((axis, start, rows))
+        start += rows
     return segments
 
 
-def _object_extents(
-    references: list[np.ndarray], capacities: dict[str, int]
-) -> dict[str, np.ndarray]:
-    """[B] rows of each card and permanent axis that any of a row's references names."""
-    segments = object_segments(capacities)
-    objects = segments[-1][1] + segments[-1][2]
-    count = len(references[0])
-    # Which full object coordinates each row's references name: integer parts
-    # of finite values inside the table; NaN and infinities name none.
-    named = np.zeros((count, objects), dtype=bool)
-    flat = named.reshape(-1)
-    offsets = np.arange(count, dtype=np.int64)[:, None] * objects
-    for values in references:
-        index = np.floor(_float32(values, -1.0)).reshape(count, -1)
-        inside = (index >= 0) & (index < objects)
-        flat[(offsets + index.astype(np.int64))[inside]] = True
-    needs = {axis: np.zeros(count, np.int64) for axis in OBJECT_AXES}
-    for axis, start, rows in segments:
-        if rows == 0:
-            continue
-        # This segment's columns, last first.
-        segment = np.ascontiguousarray(named[:, start + rows - 1 : start - 1 : -1])
-        needs[axis] = np.maximum(needs[axis], _last_rows(segment))
-    return needs
-
-
-AXES: tuple[str, ...] = (
-    "facts",
-    "effects",
-    "details",
-    "members",
-    "relations",
-    "actions",
-    "events",
-    "cards",
-    "known",
-    "decklists",
-    "permanents",
-    "stack",
-)
 # Axes whose rows are object-table segments.
 OBJECT_AXES: tuple[str, ...] = ("cards", "permanents", "stack")
 
@@ -287,65 +129,29 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
     shapes differ from the declared layout: it is not trimmed, so the model
     rejects it exactly as it would without buckets.
     """
-    shapes = space.shapes
-    if any(
-        key not in obs
-        or obs[key].ndim != len(shape) + 1
-        or tuple(obs[key].shape[1:]) != tuple(shape)
-        for key, shape in shapes.items()
-        if not (
-            isinstance(obs, PrefixObservation)
-            and key in MEMORY_FIELDS
-            and key not in obs
-        )
-    ):
+    # Belief features belong to the policy, outside the native observation.
+    native = (
+        {key: value for key, value in obs.items() if not key.startswith("belief_")}
+        if "belief_card_def_ids" in obs
+        else obs
+    )
+    extents = space.layout.axis_extents(
+        native, omit_decision_memory=isinstance(obs, PrefixObservation)
+    )
+    if extents is None:
         return None
-    capacities = _capacities(space)
-    count = len(obs["actions_valid"])
-    needs = {axis: np.zeros(count, np.int64) for axis in AXES}
-
-    def need(axis: str, rows: np.ndarray) -> None:
-        needs[axis] = np.maximum(needs[axis], rows)
-
-    for axis, keys in ROW_KEYS.items():
-        for key in keys:
-            if key not in _UNMEASURED_KEYS and key in obs:
-                need(axis, _extent(obs[key], 1))
-    for axis, keys in SEAT_KEYS.items():
-        for key in keys:
-            if key in obs:
-                need(axis, _extent(obs[key], 2))
-    # Live effect headers name detail and member spans [offset, offset + count).
-    effects = obs["effects"]
-    for axis, (offset, length) in (
-        ("details", _DETAIL_SPAN),
-        ("members", _MEMBER_SPAN),
-    ):
-        need(
-            axis,
-            _reference_extent(
-                effects[..., offset] + effects[..., length], capacities[axis]
-            ),
-        )
-    # Frame ids and action continuation joins index the relation axis.
-    for key, index in (
-        ("relations", _RELATION_FRAME),
-        ("actions", _ACTION_CONTINUATION),
-    ):
-        need(
-            "relations",
-            _reference_extent(obs[key][..., index], capacities["relations"]),
-        )
-    for axis, rows in _object_extents(_object_references(obs), capacities).items():
-        need(axis, rows)
-    return np.stack([needs[axis] for axis in AXES], axis=1)
+    zeros = np.zeros_like(extents["actions"])
+    return np.stack([extents.get(axis, zeros) for axis in AXES], axis=1)
 
 
 def sizes_of(
     needs: np.ndarray, space: ObservationSpace, *, objects: bool
 ) -> BucketSizes:
     """The buckets of a batch whose rows need `needs` [B, len(AXES)]."""
-    capacities = _capacities(space)
+    capacities = dict.fromkeys(AXES, 0)
+    for axis, buffers in space.axis_buffers.items():
+        key, dimension = buffers[0]
+        capacities[axis] = space.shapes[key][dimension]
     most = needs.max(0, initial=0)
     sizes = {
         axis: bucket(int(most[column]), capacities[axis])
@@ -365,65 +171,42 @@ def bucket_sizes(
     return None if needs is None else sizes_of(needs, space, objects=objects)
 
 
-def trim_to_needs(
+def bucket_observation(
     obs: ObservationBuffers,
     space: ObservationSpace,
-    needs: np.ndarray | None,
+    needs: np.ndarray | None = None,
     *,
     objects: bool,
-) -> tuple[ObservationBuffers, np.ndarray | None]:
-    """Reuse recorded needs when available and keep them with the prepared rows."""
+) -> BucketedObservation | None:
+    """Select views in original coordinates using measured or supplied row extents."""
     if needs is None:
         needs = row_needs(obs, space)
-    if needs is not None:
-        obs = trim_observation(obs, sizes_of(needs, space, objects=objects))
-    return obs, needs
-
-
-def object_columns(buckets: BucketSizes) -> list[slice]:
-    """Full-coordinate object slices kept by `buckets`, in object order."""
-    return [slice(0, 2)] + [
-        slice(start, start + buckets.sizes[axis])
-        for axis, start, _ in object_segments(buckets.capacities)
-    ]
-
-
-def trim_observation(
-    obs: ObservationBuffers, buckets: BucketSizes
-) -> dict[str, np.ndarray]:
-    """Trim admitted host rows and remap every object join to the new table."""
+    if needs is None:
+        return None
+    buckets = sizes_of(needs, space, objects=objects)
+    memory = retained_memory(obs)
     trimmed = (
-        PrefixObservation(obs, obs.prefixes, obs.memory_capacities)
-        if isinstance(obs, PrefixObservation)
-        and not any(key in obs for key in MEMORY_FIELDS)
+        PrefixObservation(obs, memory.prefixes, memory.memory_capacities)
+        if memory is not None
         else dict(obs)
     )
-    for axis, keys in ROW_KEYS.items():
-        for key in keys:
-            if key in obs:
-                trimmed[key] = obs[key][:, : buckets.sizes[axis]]
-    for axis, keys in SEAT_KEYS.items():
-        for key in keys:
-            if key in obs:
-                trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+    for axis, buffers in space.axis_buffers.items():
+        stop = buckets.sizes[axis]
+        for key, dimension in buffers:
+            prefix = (slice(None),) * (dimension + 1) + (slice(stop),)
+            trimmed[key] = obs[key][prefix]
+    return BucketedObservation(trimmed, buckets, needs)
+
+
+def object_map(buckets: BucketSizes) -> np.ndarray | None:
+    """Translate original zero-based object slots into bucket coordinates."""
     if not buckets.trims_objects:
-        return trimmed
-
-    def remap(values: np.ndarray) -> np.ndarray:
-        shift = np.zeros_like(values)
-        for axis, start, rows in object_segments(buckets.capacities):
-            shift += (values >= start + rows) * (rows - buckets.sizes[axis])
-        return values - shift
-
-    trimmed["action_focus"] = remap(trimmed["action_focus"])
-    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
-        for key in dict.fromkeys(key for key, _ in references):
-            if key not in trimmed:
-                continue
-            if key == "events" and not has_history_events(trimmed):
-                continue
-            columns = [column for name, column in references if name == key]
-            value = trimmed[key].copy()
-            value[..., columns] = remap(value[..., columns] - base) + base
-            trimmed[key] = value
-    return trimmed
+        return None
+    segments = object_segments(buckets.capacities)
+    _, start, count = segments[-1]
+    indexes = np.arange(start + count, dtype=np.int64)
+    removed = 0
+    for axis, start, count in segments:
+        indexes[start : start + count] -= removed
+        removed += count - buckets.sizes[axis]
+    return indexes

@@ -11,21 +11,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.env.memory_store import PrefixObservation, select_rows
-from manabot.policy.buckets import row_needs
 
 if TYPE_CHECKING:
-    from manabot.env.observation import ObservationBuffers, ObservationSpace
+    from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Prepared
     from manabot.training.rollout.actions import ActionRows
     from manabot.training.rollout.collection import RolloutBatch
 
 
 class RowPolicy(Protocol):
-    bucketed_shapes: bool
-
-    @property
-    def observation_space(self) -> ObservationSpace: ...
-    def check_observation(self, obs: ObservationBuffers) -> None: ...
+    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None: ...
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
     ) -> Prepared[np.ndarray]: ...
@@ -37,8 +32,8 @@ class RowPolicy(Protocol):
 class AdmittedRows:
     """Only rows validated for this policy may be prepared for a learner.
 
-    The rollout stays immutable across epochs. Bucket needs come from collection
-    when available, or are measured on admission.
+    Rows may change before admission and must remain immutable across epochs.
+    Collection extents provide a floor for action rows dropped during packing.
     """
 
     def __init__(self, agent: RowPolicy, batch: RolloutBatch) -> None:
@@ -52,15 +47,13 @@ class AdmittedRows:
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
             obs = self.batch.observations(chunk).observation
-            self.agent.check_observation(obs)
+            needs = self.agent.check_observation(obs)
             self._admitted[chunk] = True
-            if not self.agent.bucketed_shapes:
-                continue
-            needs = self.batch.recorded.gather_needs(chunk)
-            if needs is None:
-                needs = row_needs(obs, self.agent.observation_space)
             if needs is None:
                 continue
+            recorded = self.batch.recorded.gather_needs(chunk)
+            if recorded is not None:
+                needs = np.maximum(needs, recorded)
             if self._needs is None:
                 # As in RecordedObservations, an unmeasured row has negative needs.
                 self._needs = np.full(
@@ -128,7 +121,7 @@ class AdmittedRows:
             raise ValueError("bootstrap rows must be positive")
         count = len(self.batch.next_done)
         for start in range(0, count, size):
-            indexes = np.arange(start, min(start + size, count))
+            indexes = slice(start, start + size)
             yield self.agent.prepare(
                 select_rows(self.batch.next_obs, indexes), inference=True
             )

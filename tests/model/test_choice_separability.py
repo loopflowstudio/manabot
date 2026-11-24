@@ -466,7 +466,11 @@ def test_shared_policy_can_learn_either_choice(
             permuted, _ = restored(device_input(restored, reordered))
             count = len(original)
             torch.testing.assert_close(permuted[0, :count].flip(0), logits[0, :count])
-            permuted, _ = restored(device_input(restored, reorder_objects(obs)))
+            permuted, _ = restored(
+                device_input(
+                    restored, reorder_objects(obs, restored.observation_space.layout)
+                )
+            )
             torch.testing.assert_close(permuted, logits, atol=1e-5, rtol=1e-5)
             assert not logits.softmax(-1)[obs["actions_valid"] == 0].any()
             # A specific dropped channel must recreate the forced tie. These
