@@ -2930,13 +2930,10 @@ impl Game {
                     self.spend_once_each_turn(key);
                 }
                 let (player, object_id) = (suspended.decision.player(), *object_id);
-                let cast = self
-                    .cast_choices(
-                        player,
-                        object_id,
-                        profile,
-                        CastAuthority::Resolution(&suspended.decision),
-                    )
+                let cast = suspended
+                    .decision
+                    .cast_authority()
+                    .and_then(|authority| self.cast_choices(player, object_id, profile, authority))
                     .expect("cast decision");
                 if let Decision::CastDuringResolution {
                     offer: ResolutionCastOffer::AmongExiled { objects },
@@ -3308,7 +3305,13 @@ impl Game {
         &self,
         decision: &Decision,
     ) -> Vec<(CardId, SpellProfile)> {
-        let Decision::CastDuringResolution { player, offer, .. } = decision else {
+        let Decision::CastDuringResolution {
+            player,
+            offer,
+            paid,
+            ..
+        } = decision
+        else {
             return Vec::new();
         };
         // Casting from exile or a library is casting from outside the hand
@@ -3370,9 +3373,9 @@ impl Game {
                         *player,
                         object,
                         profile,
-                        CastAuthority::Resolution(decision),
+                        CastAuthority::Resolution { offer, paid: *paid },
                     )
-                    .expect("cast decision");
+                    .expect("an offered card's own profile");
                 let spell = cast.spell(definition);
                 if !spell.types.is_castable() {
                     continue;

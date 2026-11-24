@@ -24,7 +24,7 @@ use crate::{
         game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         permanent::CounterKind,
-        stack_object::{SpellOnStack, StackObject, TriggeredAbilityOnStack},
+        stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
 };
@@ -2080,17 +2080,6 @@ impl Game {
             GameEvent::CardMoved { from, .. } => *from,
             _ => None,
         }
-    }
-
-    /// The spell `object` is on the stack.
-    fn stack_spell(&self, object: ObjectId) -> Option<&SpellOnStack> {
-        self.state
-            .stack_objects
-            .iter()
-            .find_map(|stacked| match stacked {
-                StackObject::Spell(spell) if spell.object == object => Some(spell),
-                _ => None,
-            })
     }
 
     /// How many times one event triggers a matching ability: once, except

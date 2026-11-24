@@ -1076,14 +1076,19 @@ impl Game {
         }
     }
 
-    /// The controller of `card` while it is a spell on the stack.
-    pub(crate) fn stack_spell_controller(&self, object_id: ObjectId) -> Option<PlayerId> {
+    /// The spell `object` is on the stack.
+    pub(crate) fn stack_spell(&self, object: ObjectId) -> Option<&SpellOnStack> {
         self.state
             .stack_objects
             .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell.controller),
+            .find_map(|stacked| match stacked {
+                StackObject::Spell(spell) if spell.object == object => Some(spell),
                 _ => None,
             })
+    }
+
+    /// The controller of `card` while it is a spell on the stack.
+    pub(crate) fn stack_spell_controller(&self, object_id: ObjectId) -> Option<PlayerId> {
+        self.stack_spell(object_id).map(|spell| spell.controller)
     }
 }

@@ -98,13 +98,28 @@ impl CastChoices {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum CastAuthority<'a> {
     Priority(PlayRoute),
-    Resolution(&'a Decision),
+    Resolution {
+        offer: &'a ResolutionCastOffer,
+        paid: bool,
+    },
+}
+
+impl Decision {
+    /// The authority a `CastDuringResolution` decision grants its casts;
+    /// None for every other decision.
+    pub(crate) fn cast_authority(&self) -> Option<CastAuthority<'_>> {
+        match self {
+            Decision::CastDuringResolution { offer, paid, .. } => {
+                Some(CastAuthority::Resolution { offer, paid: *paid })
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Game {
     /// The one construction of a cast's choices for every way of casting.
-    /// None when `profile` has no definition for `object`, or when a
-    /// resolution authority is not a `CastDuringResolution` decision.
+    /// None when `profile` has no definition for `object`.
     pub(crate) fn cast_choices(
         &self,
         player: PlayerId,
@@ -115,7 +130,7 @@ impl Game {
         let spell = crate::cards::content_pack::default_content_pack()
             .spell_definition(&self.state[object], profile)?;
         let route = match authority {
-            CastAuthority::Resolution(Decision::CastDuringResolution { offer, paid, .. }) => {
+            CastAuthority::Resolution { offer, paid } => {
                 // The instruction supplies timing and zone permission for
                 // every resolution cast, paid or free, so no permission
                 // surcharge (flash) is ever bought here.
@@ -133,7 +148,6 @@ impl Game {
                     ..Default::default()
                 });
             }
-            CastAuthority::Resolution(_) => return None,
             CastAuthority::Priority(route) => route,
         };
         let grant = match route {

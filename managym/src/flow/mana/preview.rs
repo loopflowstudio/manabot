@@ -172,13 +172,9 @@ impl Game {
             (
                 Action::CastSpell { object, .. } | Action::SelectCard { object, .. },
                 Some(suspended),
-            ) if matches!(suspended.decision, Decision::CastDuringResolution { .. }) => self
-                .cast_choices(
-                    player,
-                    *object,
-                    action.spell_profile(),
-                    CastAuthority::Resolution(&suspended.decision),
-                ),
+            ) if let Some(authority) = suspended.decision.cast_authority() => {
+                self.cast_choices(player, *object, action.spell_profile(), authority)
+            }
             (
                 Action::CastSpell {
                     object,
