@@ -1,23 +1,17 @@
-at: 8246e1c4db70e68464d148a7ce8ab3c5caf09bcb
+at: a3555c399a09fae74625f5dba153f21deac3a23e
 first:
-  - path: docs/engine.md
-    why: Follow the exile copy through transfer and blink
-  - path: managym/cards/src/lib.rs
-    why: See what every enters-prepared creature declares
-  - path: managym/cards/src/fra.rs
-    why: Follow shared spells across distinct source creatures
-  - path: managym/cards/src/sos.rs
-    why: Inspect the prepared creatures and their spells
-  - path: managym/src/agent/observation.rs
-    why: Read current caster and source entitlement together
-  - path: managym/src/agent/observation_encoder.rs
-    why: See which grant facts reach the policy
-  - path: academy/ui/src/lib/board/inspect.ts
-    why: See how a viewer reads source control
+  - path: managym/src/flow/zones.rs
+    why: Follow the exact copy through prepare and unprepare
   - path: managym/src/flow/resolution_tests.rs
-    why: Compare control transfer with a new battlefield incarnation
-  - path: managym/cards/tests/cards/sos.rs
-    why: Exercise exile casts across both sets
+    why: Fork the paid Waypoint and the upkeep trigger
+  - path: managym/cards/src/fra.rs
+    why: Inspect Coursework and the three upkeep creatures
+  - path: managym/cards/src/sos.rs
+    why: Read Waypoint, Tomekeeper and the triggered creatures
+  - path: tests/env/test_game_snapshot.py
+    why: Replay payment and compare both viewers’ linked copies
   - path: scratch/plan.md
-    why: Find the dependency for each remaining preparation card
-hide: []
+    why: Find the remaining nineteen preparation rows
+hide:
+  - path: managym/academy/fixtures/
+    why: Generated from the retained Academy Command prefixes
