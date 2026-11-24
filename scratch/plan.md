@@ -157,6 +157,10 @@ Academy seed 4 plays Forest, casts Manifest Dread, privately chooses Llanowar El
 
 ### Next batch · Copy tokens and their triggered abilities
 
+The concept review at `ff22e98e` reran all seven native DSK fixtures successfully. The paired-root sampling criterion is complete for the unconstrained deal.
+
+For the next batch, fork at the end-step trigger ordering and replay both legal orders. Check occurrence identity, controller, program, sacrifice and subsequent death targets on each restored branch. This distinguishes an inherited ability from a duplicated pending instruction even when the first generation produces the same outcome.
+
 Start with Electroduplicate on Driver of the Dead under Doubling Season. Copy a resulting token with Rite and follow the inherited end-step and death triggers through resolution. Use The Fire Crystal as the control for an externally scheduled sacrifice. Carry the same copy path through the cohort: Extravagant Replication, Self-Reflection, Rite of Replication, Electroduplicate, Relm’s Sketching, The Fire Crystal and Abyssal Harvester. Distinguish an intrinsic triggered copy exception from an external scheduled sacrifice. The former requires extending `Modification::apply_copiable`; Harvester additionally needs the graveyard-entry query named in its ledger. Keep the per-card fixtures and the Doubling Season interaction inside that batch.
 
 Keep the remaining immediate movement callers under review, including linked entry follow-ups. Trace each caller’s legal source zones before migrating it. Airbend needed a retained batch because one selected permanent produced two arrivals. A top-of-library move in `flow/cast_permission.rs` takes one card. Lost Days still needs owner-only library-order visibility and recorded replay checks.
