@@ -1003,15 +1003,21 @@ fn effect_description(effect: &Effect) -> Option<String> {
             format!("{} gains flashback at its mana cost until end of turn", target_description(target))
         } else { format!("You may cast {} this turn", target_description(target)) },
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileTopCardsToPlay { count, until } => format!(
-            "Exile the top {} of your library. You may play {} {}",
-            if *count == 1 { "card".to_string() } else { format!("{count} cards") },
-            if *count == 1 { "that card" } else { "those cards" },
-            match until {
+        ExileTopCardsToPlay { count, until, face_down, condition } => {
+            let them = if *count == 1 { "that card" } else { "those cards" };
+            let window = match until {
                 crate::state::ability::PlayWindow::ThisTurn => "this turn",
                 crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
+                crate::state::ability::PlayWindow::WhileExiled => "for as long as they remain exiled",
+            };
+            let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
+            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text(condition))).unwrap_or_default();
+            if *face_down {
+                format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
+            } else {
+                format!("Exile the top {cards} of your library. You may play {them} {window}{condition}")
             }
-        ),
+        }
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         CumulativeUpkeep { each } => format!("Sacrifice this unless you pay {} for each age counter on it", cost_description(each)),
         ExileEachLibraryTopCastFree => "Exile the top card of each library. You may cast any number of spells from among those cards without paying their mana costs".into(),

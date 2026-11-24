@@ -1534,8 +1534,8 @@ impl Observation {
                 .zone_objects(ZoneType::Exile, player)
                 .iter()
             {
-                // A foretold card is face down; inspection follows native control.
-                if game.shares_information(agent_player, player) || !game.is_foretold(*object_id) {
+                // A face-down card shows only to whoever may look at it.
+                if !game.hides_face_down_exile(*object_id, agent_player) {
                     add_object(*object_id, ZoneType::Exile);
                 }
             }
@@ -1731,7 +1731,7 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_token: !object.is_card(),
             characteristics: Self::printed_characteristics_data(game, object_id),
-            face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
+            face_down: zone == ZoneType::Exile && game.is_face_down_in_exile(object_id),
             cast_permissions: game
                 .play_grants_on(object_id)
                 .map(|(grant, caster)| CastPermissionData {

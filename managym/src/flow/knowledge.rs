@@ -177,7 +177,11 @@ impl Game {
         commitments: &HiddenCommitments,
         rng: &mut impl Rng,
     ) {
-        if self.library_facts(owner, viewer).is_empty() && self.state.suspended_decision.is_none() {
+        let hidden_exile = self.hidden_face_down_exile(owner, viewer);
+        if self.library_facts(owner, viewer).is_empty()
+            && self.state.suspended_decision.is_none()
+            && hidden_exile.is_empty()
+        {
             self.state
                 .zones
                 .shuffle_canonical(ZoneType::Library, owner, rng);
@@ -188,11 +192,16 @@ impl Game {
             .zones
             .zone_objects(ZoneType::Library, owner)
             .to_vec();
+        pool.extend(hidden_exile);
         pool.sort_unstable_by_key(|object| object.slot());
         let reserved = self
             .reserve_library_facts(owner, viewer, &mut pool, commitments)
             .expect("library facts are true in the source world");
         pool.shuffle(rng);
+        assert!(
+            self.refill_hidden_exile_slots(owner, viewer, &mut pool),
+            "face-down cards are in their own pool"
+        );
         let library = Self::place_library_facts(pool, reserved).expect("valid library positions");
         let hand = self
             .state

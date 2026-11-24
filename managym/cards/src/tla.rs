@@ -9548,10 +9548,10 @@ fn the_legend_of_roku() -> CardDefinition {
             abilities: vec![
                 chapter(
                     1,
-                    vec![Effect::ExileTopCardsToPlay {
-                        count: 3,
-                        until: PlayWindow::ThroughYourNextTurn,
-                    }],
+                    vec![Effect::exile_top_to_play(
+                        3,
+                        PlayWindow::ThroughYourNextTurn,
+                    )],
                 ),
                 chapter(2, vec![one_mana_of_any_color(None)]),
                 chapter(3, return_transformed()),
@@ -11631,10 +11631,7 @@ fn zuko_exiled_prince() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::ExileTopCardsToPlay {
-                    count: 1,
-                    until: PlayWindow::ThisTurn,
-                }],
+                effects: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
                 ..Default::default()
             }],
             text_box: text_box.into(),

@@ -3637,7 +3637,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             }
             checked_command(&mut branch, Action::Decline { player });
             assert_eq!(branch.state.zones.size(ZoneType::Hand, player), 2);
-            assert_eq!(branch.foretold_cards(player).count(), 2);
+            assert_eq!(branch.hidden_face_down_counts(player, viewer), (2, 0));
             assert!(branch
                 .state
                 .zones
@@ -4515,7 +4515,13 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         panic!("expected a spell copy");
     };
     spell(&mut game, "Time Stop");
-    game.exile_top_cards_to_play(player, 1, crate::state::ability::PlayWindow::ThisTurn);
+    game.exile_top_cards_to_play(
+        player,
+        1,
+        crate::state::ability::PlayWindow::ThisTurn,
+        false,
+        None,
+    );
     let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());

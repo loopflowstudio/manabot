@@ -687,7 +687,7 @@ impl Game {
         let definition = self.state.entry_object(object_id).definition_id;
         let public_source = old_zone.is_some_and(|zone| {
             !matches!(zone, ZoneType::Hand | ZoneType::Library)
-                && !(zone == ZoneType::Exile && self.is_foretold(object_id))
+                && !(zone == ZoneType::Exile && self.is_face_down_in_exile(object_id))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
             self.state.library_order_pins_mut(owner).remove(&object_id);

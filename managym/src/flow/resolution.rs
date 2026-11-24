@@ -1488,8 +1488,19 @@ impl Game {
                 frame.batch = Some(batch);
                 None
             }
-            Effect::ExileTopCardsToPlay { count, until } => {
-                self.exile_top_cards_to_play(frame.controller, *count, *until);
+            Effect::ExileTopCardsToPlay {
+                count,
+                until,
+                face_down,
+                condition,
+            } => {
+                self.exile_top_cards_to_play(
+                    frame.controller,
+                    *count,
+                    *until,
+                    *face_down,
+                    condition.as_ref(),
+                );
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {

@@ -75,7 +75,7 @@ fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     else {
         return HistoryReference::Unavailable;
     };
-    if game.is_foretold(object) {
+    if game.is_face_down_in_exile(object) {
         return HistoryReference::Unavailable;
     }
     let data = &game.state[object];

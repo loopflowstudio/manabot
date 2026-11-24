@@ -1125,11 +1125,17 @@ pub enum Effect {
         flashback: bool,
         target: TargetSpec,
     },
-    /// "Exile the top `count` cards of your library. You may play them
-    /// [`until`]."
+    /// "Exile the top `count` cards of your library [face down]. You may
+    /// play them [`until`] [if `condition`]." A face-down card is hidden
+    /// from everyone, its exiler included, while the condition fails
+    /// (Flameshape).
     ExileTopCardsToPlay {
         count: usize,
         until: PlayWindow,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        face_down: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<Condition>,
     },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
@@ -1478,6 +1484,8 @@ pub enum PlayWindow {
     ThisTurn,
     /// "until the end of your next turn".
     ThroughYourNextTurn,
+    /// "for as long as they remain exiled".
+    WhileExiled,
 }
 
 /// The event a delayed triggered ability created by
@@ -1998,6 +2006,17 @@ impl Effect {
             amount: amount.into(),
             what,
             by: None,
+        }
+    }
+
+    /// "Exile the top `count` cards of your library. You may play them
+    /// [`until`]."
+    pub fn exile_top_to_play(count: usize, until: PlayWindow) -> Self {
+        Effect::ExileTopCardsToPlay {
+            count,
+            until,
+            face_down: false,
+            condition: None,
         }
     }
 

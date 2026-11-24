@@ -271,8 +271,7 @@ impl Game {
                 && (self.searches_private_zones(viewer, record.owner)
                     || self.decision_reveals(object, viewer)))
             || self.pending_public_entries().contains(&object);
-        if !visible || (self.is_foretold(object) && !self.shares_information(viewer, record.owner))
-        {
+        if !visible || self.hides_face_down_exile(object, viewer) {
             return VisibleReference::default();
         }
         VisibleReference {

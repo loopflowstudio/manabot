@@ -137,10 +137,10 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                                         per: Per::Object,
                                     },
                                     intervening_if: None,
-                                    effects: vec![Effect::ExileTopCardsToPlay {
-                                        count: 1,
-                                        until: PlayWindow::ThisTurn,
-                                    }],
+                                    effects: vec![Effect::exile_top_to_play(
+                                        1,
+                                        PlayWindow::ThisTurn,
+                                    )],
                                 })),
                             ),
                         ],
@@ -434,10 +434,7 @@ fn redcap_gutter_dweller() -> CardDefinition {
                                 CounterKind::PlusOnePlusOne,
                                 1,
                             ),
-                            Effect::ExileTopCardsToPlay {
-                                count: 1,
-                                until: PlayWindow::ThisTurn,
-                            },
+                            Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
                         ]),
                     ],
                 },

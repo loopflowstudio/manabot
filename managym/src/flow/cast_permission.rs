@@ -9,9 +9,11 @@
 // A `HandOnly` restriction ("can't cast spells from anywhere other than
 // their hands") overrides every non-hand casting permission, including
 // graveyard flashback, until the start of its controller's next turn.
-// Foretell (CR 702.143) exiles a card face down with a grant marked
-// `foretold`: the grant is also the authority for that card being hidden
-// from every player but its owner.
+// A card face down in exile (CR 406.3) is hidden by its grant: Foretell
+// (CR 702.143) marks it `foretold`, visible to its owner; Flameshape marks
+// it `face_down`, visible to the grant's player only while the grant's
+// `condition` holds. Determinization refills both kinds of hidden slot at
+// once (`refill_hidden_exile_slots`).
 
 use crate::{
     agent::action::AgentError,
@@ -106,6 +108,15 @@ pub struct PlayGrant {
     /// This exact exile copy survives while linked to its battlefield source.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
+    /// The card lies face down in exile (CR 406.3), seen by `player` only
+    /// while `condition` holds. A foretold card is face down too, but its
+    /// owner always sees it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
+    /// The grant is usable, and a face-down card visible, only while this
+    /// holds for `player` ("if you control a Wizard").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<crate::state::ability::Condition>,
 }
 
 #[deprecated(note = "use PlayGrant; ExileCastGrant will be removed in 0.4.0")]
@@ -134,6 +145,8 @@ impl PlayGrant {
             prepared: false,
             follows_source_controller: false,
             flashback: false,
+            face_down: false,
+            condition: None,
         }
     }
 }
@@ -197,22 +210,35 @@ impl Game {
         });
     }
 
-    /// "Exile the top `count` cards of your library. You may play them
-    /// [this turn | until the end of your next turn]."
+    /// "Exile the top `count` cards of your library [face down]. You may
+    /// play them [this turn | until the end of your next turn | for as long
+    /// as they remain exiled] [if `condition`]."
     pub(crate) fn exile_top_cards_to_play(
         &mut self,
         player: PlayerId,
         count: usize,
         until: PlayWindow,
+        face_down: bool,
+        condition: Option<&crate::state::ability::Condition>,
     ) {
         let turn = self.state.turn.turn_number;
         for _ in 0..count {
             let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
                 return;
             };
-            self.exile_with_play_grant(object_id, |object| PlayGrant {
+            let exiled = self.move_object_with_entry(
+                object_id,
+                ZoneType::Exile,
+                ZoneEntry {
+                    face_down,
+                    ..ZoneEntry::default()
+                },
+            );
+            self.grant_if_exiled(exiled, |object| PlayGrant {
                 this_turn: until == PlayWindow::ThisTurn,
                 through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
+                face_down,
+                condition: condition.cloned(),
                 ..PlayGrant::new(object, player)
             });
         }
@@ -265,63 +291,127 @@ impl Game {
         self.restart_priority_round();
     }
 
-    /// Whether `card` is a foretold card lying face down in exile, hidden
-    /// from everyone but its owner.
+    /// Whether `object` is a foretold card: cast for its foretell cost, and
+    /// fillable only by a foretell-bearing card when determinized.
     pub(crate) fn is_foretold(&self, object: ObjectId) -> bool {
         self.grants_naming(object).any(|grant| grant.foretold)
     }
 
-    /// Determinization: refill `player`'s face-down foretold slots from the
-    /// ordered unseen `pool`, taking its first foretell-bearing cards out of
-    /// it. A chosen card already foretold keeps its own slot, so no card
-    /// fills two slots; each vacated slot takes one incoming card, keeping
-    /// its cast grant, and its old card is left in `pool` for the caller to
-    /// assign to the hand or library. Returns false, changing nothing, when
-    /// the pool holds too few foretell-bearing cards.
-    pub(crate) fn fill_foretold_slots(
+    /// Whether `object` lies face down in exile (CR 406.3).
+    pub(crate) fn is_face_down_in_exile(&self, object: ObjectId) -> bool {
+        self.state.zones.zone_of(object) == Some(ZoneType::Exile)
+            && self
+                .grants_naming(object)
+                .any(|grant| grant.foretold || grant.face_down)
+    }
+
+    /// Whether `viewer` may look at face-down `object`: a foretold card's
+    /// owner, or a face-down grant's player while its condition holds, and
+    /// whoever shares their information.
+    pub(crate) fn can_view_face_down_exile(&self, object: ObjectId, viewer: PlayerId) -> bool {
+        self.grants_naming(object).any(|grant| {
+            if grant.foretold {
+                return self.shares_information(viewer, self.state[object].owner);
+            }
+            grant.face_down
+                && self.grant_player(grant).is_some_and(|player| {
+                    self.shares_information(viewer, player)
+                        && self.grant_condition_holds(grant, player)
+                })
+        })
+    }
+
+    /// Whether `object` is face down in exile and hidden from `viewer`.
+    pub(crate) fn hides_face_down_exile(&self, object: ObjectId, viewer: PlayerId) -> bool {
+        self.is_face_down_in_exile(object) && !self.can_view_face_down_exile(object, viewer)
+    }
+
+    fn grant_condition_holds(&self, grant: &PlayGrant, player: PlayerId) -> bool {
+        grant
+            .condition
+            .as_ref()
+            .is_none_or(|condition| self.check_static_condition(condition, player))
+    }
+
+    /// `owner`'s face-down exiled cards hidden from `viewer`, in exile
+    /// order. These are unseen cards: determinization refills them.
+    pub(crate) fn hidden_face_down_exile(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+    ) -> Vec<ObjectId> {
+        self.state
+            .zones
+            .zone_objects(ZoneType::Exile, owner)
+            .iter()
+            .copied()
+            .filter(|object| self.hides_face_down_exile(*object, viewer))
+            .collect()
+    }
+
+    /// Counts of `owner`'s hidden face-down exile slots for `viewer`:
+    /// (foretold, any other face down).
+    pub(crate) fn hidden_face_down_counts(&self, owner: PlayerId, viewer: PlayerId) -> (u32, u32) {
+        let hidden = self.hidden_face_down_exile(owner, viewer);
+        let foretold = hidden
+            .iter()
+            .filter(|object| self.is_foretold(**object))
+            .count() as u32;
+        (foretold, hidden.len() as u32 - foretold)
+    }
+
+    /// Determinization: refill every face-down exile slot of `owner` hidden
+    /// from `viewer` from the ordered unseen `pool`, which holds those slots'
+    /// own cards. Foretold slots take the pool's first foretell-bearing
+    /// cards; the other face-down slots then take its first remaining cards.
+    /// A chosen card already in a slot of its kind keeps it; every other slot
+    /// takes one incoming card and keeps its grants, and the cards leaving
+    /// exile stay in `pool` for the caller to deal to the hand or library.
+    /// Slots and grants move in one simultaneous exchange, so a card moving
+    /// between slots never doubles in exile. Returns false, changing nothing,
+    /// when the pool cannot fill every slot.
+    pub(crate) fn refill_hidden_exile_slots(
         &mut self,
-        player: PlayerId,
+        owner: PlayerId,
+        viewer: PlayerId,
         pool: &mut Vec<ObjectId>,
     ) -> bool {
-        let slots: Vec<ObjectId> = self
-            .foretold_cards(player)
-            .map(|card| self.state.object_of(card))
-            .collect();
+        let (foretold_slots, face_down_slots): (Vec<ObjectId>, Vec<ObjectId>) = self
+            .hidden_face_down_exile(owner, viewer)
+            .into_iter()
+            .partition(|object| self.is_foretold(*object));
+        if foretold_slots.is_empty() && face_down_slots.is_empty() {
+            return true;
+        }
         let bearers = pool
             .iter()
-            .filter(|object_id| self.state[**object_id].foretell().is_some())
+            .filter(|object| self.state[**object].foretell().is_some())
             .count();
-        if bearers < slots.len() {
+        if bearers < foretold_slots.len()
+            || pool.len() < foretold_slots.len() + face_down_slots.len()
+        {
             return false;
         }
-        let mut chosen = Vec::with_capacity(slots.len());
-        pool.retain(|object_id| {
-            let take = chosen.len() < slots.len() && self.state[*object_id].foretell().is_some();
+        let mut foretold = Vec::with_capacity(foretold_slots.len());
+        pool.retain(|object| {
+            let take =
+                foretold.len() < foretold_slots.len() && self.state[*object].foretell().is_some();
             if take {
-                chosen.push(*object_id);
+                foretold.push(*object);
             }
             !take
         });
-        let mut incoming = chosen.iter().filter(|object_id| !slots.contains(object_id));
-        for &old in slots.iter().filter(|old| !chosen.contains(old)) {
-            let new = *incoming.next().expect("one incoming card per vacated slot");
-            let from = self.state.live(old).expect("a foretold card is exiled");
-            let to = self.state.live(new).expect("an unseen card is hidden");
-            self.state.zones.replace_face_down_exile(player, old, new);
-            for grant in &mut self.state.cast_permissions.grants {
-                if grant.object == from {
-                    grant.object = to;
-                }
+        let face_down: Vec<ObjectId> = pool.drain(..face_down_slots.len()).collect();
+        let mut exchange = fill_slots(&foretold_slots, &foretold);
+        exchange.extend(fill_slots(&face_down_slots, &face_down));
+        exchange.retain(|(old, new)| old != new);
+        self.state.zones.exchange_face_down_exile(owner, &exchange);
+        for grant in &mut self.state.cast_permissions.grants {
+            if let Some((_, new)) = exchange.iter().find(|(old, _)| *old == grant.object) {
+                grant.object = *new;
             }
         }
         true
-    }
-
-    /// `player`'s face-down foretold cards in exile.
-    pub(crate) fn foretold_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
-        self.state
-            .zone_cards(ZoneType::Exile, player)
-            .filter(|card| self.is_foretold(self.state.object_of(*card)))
     }
 
     /// Exile `card` linked to `source`: while `player` controls `source`,
@@ -462,6 +552,7 @@ impl Game {
     ) -> impl Iterator<Item = &PlayGrant> {
         self.grants_naming(object).filter(move |grant| {
             self.grant_player(grant) == Some(player)
+                && self.grant_condition_holds(grant, player)
                 && (!grant.own_turn_only || self.active_player() == player)
                 && grant
                     .after_turn
@@ -559,4 +650,21 @@ impl Game {
             .chain(marked)
             .filter(move |object| seen.insert(*object))
     }
+}
+
+/// Pair each slot with the chosen card filling it: a chosen card already in
+/// one of `slots` keeps it, and the other slots take the rest in order.
+fn fill_slots(slots: &[ObjectId], chosen: &[ObjectId]) -> Vec<(ObjectId, ObjectId)> {
+    let mut incoming = chosen.iter().filter(|object| !slots.contains(object));
+    slots
+        .iter()
+        .map(|old| {
+            let new = if chosen.contains(old) {
+                *old
+            } else {
+                *incoming.next().expect("one incoming card per vacated slot")
+            };
+            (*old, new)
+        })
+        .collect()
 }

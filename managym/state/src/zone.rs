@@ -427,18 +427,31 @@ impl ZoneManager {
         self.shuffle(zone, player, rng);
     }
 
-    /// Put hidden card `new` where `player`'s face-down exiled card `old`
-    /// lies. `old` is left zoneless until the caller reassigns it to the
-    /// hand or library with [`ZoneManager::reassign_hidden`].
-    pub fn replace_face_down_exile(&mut self, player: PlayerId, old: ObjectId, new: ObjectId) {
-        if let Some(slot) = self.exile[player.0]
-            .iter_mut()
-            .find(|object| **object == old)
-        {
-            *slot = new;
+    /// Put each hidden card `new` where `player`'s face-down exiled card
+    /// `old` lies, all at once: a card may leave one slot and fill another.
+    /// An `old` that fills no slot is left zoneless until the caller
+    /// reassigns it to the hand or library with [`ZoneManager::reassign_hidden`].
+    pub fn exchange_face_down_exile(
+        &mut self,
+        player: PlayerId,
+        exchange: &[(ObjectId, ObjectId)],
+    ) {
+        let positions: Vec<usize> = exchange
+            .iter()
+            .map(|(old, _)| {
+                self.exile[player.0]
+                    .iter()
+                    .position(|object| object == old)
+                    .expect("a face-down slot is in its owner's exile")
+            })
+            .collect();
+        for (old, _) in exchange {
+            self.slots.states[old.slot()].zone = None;
         }
-        self.slots.states[new.slot()].zone = Some(ZoneType::Exile);
-        self.slots.states[old.slot()].zone = None;
+        for ((_, new), position) in exchange.iter().zip(positions) {
+            self.exile[player.0][position] = *new;
+            self.slots.states[new.slot()].zone = Some(ZoneType::Exile);
+        }
     }
 
     /// Reassign `player`'s hand and library to exactly `new_hand` and
