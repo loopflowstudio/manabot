@@ -587,12 +587,10 @@ impl Game {
                 if trigger.trigger_damage > 0 {
                     super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
                 }
-                if trigger.program {
-                    frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
+                if let Some(effects) = self.pending_trigger_program(trigger) {
+                    frame.program(&effects);
                 }
-                if let ([mode], true) = (trigger.chosen_modes.as_slice(), trigger.modes_chosen) {
-                    frame.mode = Some(*mode);
-                }
+                frame.mode = crate::flow::triggers::pending_trigger_mode(trigger);
                 frames.push(frame);
             }
         }

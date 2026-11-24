@@ -375,6 +375,15 @@ fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
     };
     assert!(description.contains("Hill Giant"), "{description}");
     assert!(!description.contains("delayed ability"), "{description}");
+    assert!(description.contains("gain 2 life"), "{description}");
+    assert!(!description.contains("gain 1 life"), "{description}");
+    let modes: Vec<Option<usize>> = Observation::for_player(s.game(), PlayerId(0))
+        .stack_objects
+        .iter()
+        .filter(|row| row.description.is_some())
+        .map(|row| row.chosen_mode)
+        .collect();
+    assert_eq!(modes, vec![Some(1)], "the stack row names the chosen mode");
     let life = s.life(0);
 
     let mut kept = s.clone();

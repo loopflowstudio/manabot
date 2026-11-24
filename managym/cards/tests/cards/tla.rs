@@ -13567,6 +13567,54 @@ fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
     assert_eq!(counters(&s, forest), 3);
 }
 
+/// Two chosen modes are no catalog mode: while Bumi's trigger targets, its
+/// frame carries the chosen program, and its text and stack row name the
+/// modes it will run rather than the whole modal rule (CR 700.2b).
+#[test]
+fn bumi_two_chosen_modes_project_as_the_program_while_targeting() {
+    let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!", "Price of Freedom"]);
+    plant_in_graveyard(&mut s, 0, "Yip Yip!");
+    plant_in_graveyard(&mut s, 0, "Price of Freedom");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    choose_mode(&mut s, 2);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let frames = s.game().continuation_frames(PlayerId(0));
+    let frame = frames
+        .iter()
+        .find(|frame| frame.kind == 8)
+        .expect("the placing trigger's frame");
+    assert_eq!(frame.mode, None, "two modes are not one catalog mode");
+    let program = frame
+        .program_description
+        .as_deref()
+        .expect("chosen program");
+    assert!(program.contains("Scry 3"), "{program}");
+    assert!(program.contains("arthbend"), "{program}");
+    assert!(!program.contains("Choose up to"), "{program}");
+    let context = s.game().decision_context(PlayerId(0)).expect("targeting");
+    assert!(
+        !context.instruction.contains("Choose up to"),
+        "{}",
+        context.instruction
+    );
+
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    assert!(s.choose_target(Target::Permanent(forest)));
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let row = observation
+        .stack_objects
+        .iter()
+        .find(|row| row.kind == managym::agent::observation::StackObjectKindData::TriggeredAbility)
+        .expect("Bumi's trigger on the stack");
+    assert_eq!(row.chosen_mode, None);
+    let description = row.description.as_deref().expect("described");
+    assert!(description.contains("Scry 3"), "{description}");
+    assert!(!description.contains("Choose up to"), "{description}");
+}
+
 /// Paying 5 life (or {2}) moves a single-target spell to another legal
 /// target.
 #[test]

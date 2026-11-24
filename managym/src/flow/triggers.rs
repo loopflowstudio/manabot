@@ -251,6 +251,29 @@ impl Game {
         })
     }
 
+    /// The program a pending frame projects, by the stacked rule
+    /// (`stacked_trigger_program`): a flagged inline program, or chosen modes
+    /// of a modal rule other than exactly one, which the projected mode and
+    /// catalog join cannot recover.
+    pub(crate) fn pending_trigger_program<'a>(
+        &'a self,
+        trigger: &'a PendingTrigger,
+    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
+        if let Some(effects) = &trigger.inline_effects {
+            return trigger.program.then(|| effects.as_slice().into());
+        }
+        let modal = matches!(
+            self.pending_trigger_face(trigger)?
+                .abilities
+                .get(trigger.ability_index)?
+                .effects(),
+            [Effect::TriggerModes { .. }]
+        );
+        (modal && trigger.modes_chosen && pending_trigger_mode(trigger).is_none())
+            .then(|| self.pending_trigger_effects(trigger))
+            .flatten()
+    }
+
     fn trigger_requirements(&self, trigger: &PendingTrigger) -> Option<Vec<TargetRequirement>> {
         Some(crate::state::ability::effect_target_requirements(
             &self.pending_trigger_effects(trigger)?,
@@ -2112,6 +2135,14 @@ impl Game {
             .permanent_of(aura)
             .and_then(|aura| self.attached_permanent(aura))
             == Some(permanent_id)
+    }
+}
+
+/// The single chosen mode of a pending trigger once its modes are chosen.
+pub(crate) fn pending_trigger_mode(trigger: &PendingTrigger) -> Option<usize> {
+    match (trigger.chosen_modes.as_slice(), trigger.modes_chosen) {
+        ([mode], true) => Some(*mode),
+        _ => None,
     }
 }
 
