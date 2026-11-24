@@ -2,7 +2,7 @@
 
 ## Exploratory
 
-**Four 400-update snapshot self-play runs completed cleanly on Colab L4 (`~$3.62` training; `~$7.13` total including CPU32 evals and one cancelled RunPod trial, well inside the USD 25 exploratory cap), and none of the three tested configurations beat pure `tau-x2` self-play head-to-head.** From scratch, `H=20` (80/20 snapshot/fresh starts) learned reliably (`0.055 -> 0.684` mean vs the first-64 heuristic across 2 seeds; `+5.5` to `+10.5 pts` vs itself at half updates) but consistently trailed retained `tla_trophies_floor/tau-x2` (`0.727` vs heuristic at u400; `0.455` H2H at u200 across 512 games; `0.419` H2H at u400 across 124 games). Warm-starting from `tau-x2@40902` update 400 eliminated the early bootstrap deficit and flipped the horizon tradeoff — `warm-h20` (`H=20`, 80/20) reached `0.813` vs heuristic at effective u800 vs `warm-full` (`H=None` terminal, 65/35) at `0.734` — yet both warm-start arms still lost head-to-head to retained `tau-x2@40902` at matched effective updates (`warm-h20`: `0.492` at u600, `0.461` at u800; `warm-full`: `0.461` at u600, `0.461` at u700, `0.484` at u800; 128 games per matchup).
+**Four 400-update snapshot self-play runs completed cleanly on Colab L4 (`~$3.62` training; `~$7.01` total including all 1,888 CPU32 eval matches and one cancelled RunPod trial, well inside the USD 25 exploratory cap), and none of the three tested configurations beat pure `tau-x2` self-play head-to-head.** From scratch, `H=20` (80/20 snapshot/fresh starts) learned reliably (`0.055 -> 0.684` mean vs the first-64 heuristic across 2 seeds; `+5.5` to `+10.5 pts` vs itself at half updates) but consistently trailed retained `tla_trophies_floor/tau-x2` (`0.727` vs heuristic at u400; `0.449` mean H2H across 2,048 games at u100–u400: `0.447`, `0.455`, `0.451`, `0.443`). Warm-starting from `tau-x2@40902` update 400 split heuristic vs head-to-head behavior — `warm-h20` (`H=20`, 80/20) reached `0.813` vs heuristic at effective u800 vs `warm-full` (`H=None` terminal, 65/35) at `0.734` — yet both warm-start arms lost head-to-head to retained `tau-x2@40902` across all four u500–u800 milestones (`warm-h20`: `0.438`, `0.492`, `0.414`, `0.461`, mean `0.451` over 512 games; `warm-full`: `0.461`, `0.461`, `0.461`, `0.484`, mean `0.467` over 512 games).
 
 This is an exploratory report. Its observations are operational and directional only and are not cited as findings.
 
@@ -36,33 +36,34 @@ Library-shuffle common random numbers across sibling branches were not enabled i
 
 All 128-game heuristic and half-training points completed for both seeds (`40901`, `40902`). From-scratch `H=20` climbed steadily (`0.055 -> 0.684` mean vs heuristic; `+5.5` to `+10.5 pts` vs itself at half updates) with zero failed or discarded snapshot branches, but trailed `tau-x2` at every milestone by 4–7 pts on heuristic and 4.5–8 pts head-to-head.
 
-| Update | `tau-x2` heur mean (`40901` / `40902`) | `plr-vine-rloo` heur mean (`40901` / `40902`) | Delta (heur) | H2H vs `tau-x2` | Half-training self |
+| Update | `tau-x2` heur mean (`40901` / `40902`) | `plr-vine-rloo` heur mean (`40901` / `40902`) | Delta (heur) | H2H vs `tau-x2` (512g/pt) | Half-training self |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | u0 | `0.055` | `0.055` (`0.055` / `0.055`) | `0.0 pts` | — | — |
 | u50 | — | `0.457` (`0.461` / `0.453`) | — | — | — |
-| u100 | `0.586` (`0.570` / `0.602`) | `0.516` (`0.500` / `0.531`) | `-7.0 pts` | *(not uploaded before stop)* | `0.559` (`0.547` / `0.570`) |
+| u100 | `0.586` (`0.570` / `0.602`) | `0.516` (`0.500` / `0.531`) | `-7.0 pts` | **`0.447`** (`40901`: `0.500`/`0.430`; `40902`: `0.438`/`0.422`) | `0.559` (`0.547` / `0.570`) |
 | u150 | — | `0.566` (`0.609` / `0.523`) | — | — | — |
-| u200 | `0.648` (`0.641` / `0.656`) | `0.609` (`0.633` / `0.586`) | `-3.9 pts` | **`0.455`** (512g: `40901` `0.453`/`0.477`; `40902` `0.438`/`0.453`) | `0.559` (`0.555` / `0.563`) |
+| u200 | `0.648` (`0.641` / `0.656`) | `0.609` (`0.633` / `0.586`) | `-3.9 pts` | **`0.455`** (`40901`: `0.453`/`0.477`; `40902`: `0.438`/`0.453`) | `0.559` (`0.555` / `0.563`) |
 | u250 | — | `0.637` (`0.656` / `0.617`) | — | — | — |
-| u300 | `0.695` (`0.719` / `0.672`) | `0.645` (`0.641` / `0.648`) | `-5.0 pts` | *(not uploaded before stop)* | `0.605` (`0.633` / `0.578`) |
+| u300 | `0.695` (`0.719` / `0.672`) | `0.645` (`0.641` / `0.648`) | `-5.0 pts` | **`0.451`** (`40901`: `0.469`/`0.484`; `40902`: `0.430`/`0.422`) | `0.605` (`0.633` / `0.578`) |
 | u350 | — | `0.680` (`0.664` / `0.695`) | — | — | — |
-| **u400** | **`0.727`** (`0.734` / `0.719`) | **`0.684`** (`0.672` / `0.695`) | **`-4.3 pts`** | **`0.419`** (124g: `40902` vs `tau-x2@40901`) | `0.574` (`0.555` / `0.594`) |
+| **u400** | **`0.727`** (`0.734` / `0.719`) | **`0.684`** (`0.672` / `0.695`) | **`-4.3 pts`** | **`0.443`** (`40901`: `0.469`/`0.430`; `40902`: `0.430`/`0.445`) | `0.574` (`0.555` / `0.594`) |
 
 ### 2. Warm-start from `tau-x2@40902` u400 (`eff. u400 -> u800`, 128g/pt)
 
-Starting from a calibrated u400 critic (`explained_variance ~ 0.93`, `0.719` vs heuristic) revealed a sharp horizon split: `warm-h20` tracked `tau-x2@40902` closely against the heuristic (`0.813` vs `0.824` at u800) and beat `warm-full` by `+7.8 pts` on heuristic (`0.813` vs `0.734`), yet every completed 128-game H2H matchup against retained `tau-x2@40902` was still below `0.500`.
+Starting from a calibrated u400 critic (`explained_variance ~ 0.93`, `0.719` vs heuristic) showed a split between heuristic and head-to-head strength: `warm-h20` tracked `tau-x2@40902` closely against the heuristic (`0.813` vs `0.824` at u800) and beat `warm-full` by `+7.8 pts` on heuristic (`0.813` vs `0.734`), while `warm-full` edged `warm-h20` slightly in head-to-head vs `tau-x2@40902` (`0.467` vs `0.451` mean over 512 games). Every single one of the eight 128-game warm-start H2H matchups against retained `tau-x2@40902` finished below `0.500`.
 
 | Effective update | `tau-x2@40902` (heur) | `warm-h20` (heur) | `warm-full` (heur) | `warm-h20` H2H vs `tau-x2@40902` | `warm-full` H2H vs `tau-x2@40902` |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | u400 (`+0`) | `0.719` | `0.719` | `0.719` | — | — |
 | u450 (`+50`) | — | `0.750` | `0.664` | — | — |
-| u500 (`+100`) | `0.776` | `0.758` | `0.719` | *(not uploaded)* | *(not uploaded)* |
-| u550 (`+150`) | — | `0.729` (48g) | `0.766` | — | — |
+| **u500 (`+100`)** | `0.776` | `0.758` | `0.719` | **`0.438`** (128g) | **`0.461`** (128g) |
+| u550 (`+150`) | — | `0.734` | `0.766` | — | — |
 | **u600 (`+200`)** | `0.771` | `0.750` | `0.758` | **`0.492`** (128g) | **`0.461`** (128g) |
 | u650 (`+250`) | — | `0.781` | `0.719` | — | — |
-| **u700 (`+300`)** | `0.735` | `0.695` | `0.719` | *(8g partial)* | **`0.461`** (128g) |
-| u750 (`+350`) | — | *(not uploaded)* | `0.727` | — | — |
+| **u700 (`+300`)** | `0.735` | `0.695` | `0.719` | **`0.414`** (128g) | **`0.461`** (128g) |
+| u750 (`+350`) | — | `0.789` | `0.727` | — | — |
 | **u800 (`+400`)** | **`0.824`** | **`0.813`** | `0.734` | **`0.461`** (128g) | **`0.484`** (128g) |
+| **Mean H2H (512g)** | — | — | — | **`0.451`** | **`0.467`** |
 
 ### 3. Training dynamics and the `H=20` vs `H=None` mechanistic split
 
@@ -76,13 +77,13 @@ All four completed runs had **0 failed branches and 0 discarded groups** across 
 | `warm-full@40902` | `166.8` | `0.932` | `0.645` | `-3.98` | `+6.03` | `-0.50` | `184 / 184` (100%) | `~45` |
 
 Two structural mechanisms stand out:
-1. **Horizon `H=20` is 100% critic-bootstrapped (`0–1 / 608` terminals) because 20 surfaced decisions across both seats is ~1.5–2 turns in a ~170-decision TLA game.** From scratch, bootstrapping off an uncalibrated early critic plus losing ~45% of fresh full-game rows explains the `-7.0 pt` u100 deficit. Once warm-started from a calibrated u400 critic, `H=20` actually outperformed `H=None` (`0.813` vs `0.734` vs heuristic at u800; `0.477` vs `0.469` H2H) because it yielded **~3.3x more Vine-RLOO groups/update (`152` vs `45`)** with much lower return variance than uncoupled 100-decision terminal tails.
+1. **Horizon `H=20` is 100% critic-bootstrapped (`0–1 / 608` terminals) because 20 surfaced decisions across both seats is ~1.5–2 turns in a ~170-decision TLA game.** From scratch, bootstrapping off an uncalibrated early critic plus losing ~45% of fresh full-game rows explains the `-7.0 pt` u100 deficit and steady `~0.449` H2H lag. Once warm-started from a calibrated u400 critic, `H=20` climbed much higher against the heuristic (`0.813` vs `0.734` for `H=None`) by generating **~3.3x more Vine-RLOO groups/update (`152` vs `45`)** with low-variance `V(s_20)` returns, whereas `H=None` preserved sharper critic calibration (`pred_std=0.645` vs `0.560`, `ev=0.932` vs `0.924`) and was slightly steadier head-to-head against `tau-x2` (`0.467` vs `0.451`).
 2. **Even warm-started, 65–80% snapshot replay starved fresh full-game diversity without enough variance reduction on siblings.** Without library-shuffle common random numbers across sibling branches, 4-branch rollouts diverge via random draws as well as root actions, so paying ~45–60% of the stream budget for snapshot continuations did not outperform 100% fresh `tau-x2` self-play at matched updates.
 
 ## What this supports
 
 - **Operational readiness:** The native 4-worker `GameSnapshot` vector path (`6b4a1a`) is stable and fast on Colab L4 across 1,600 total training updates (`0` failed branches, `0` discarded groups, ~5s/update step overhead vs ~4.3s on `H=20`, ~$0.76–$1.22 per 400-update run).
-- **Learnability direction (exploratory):** At high `replay_fraction` (`0.65–0.80`) without sibling CRN, PLR + Vine-RLOO does not beat `tau-x2` from scratch (`-4` to `-7 pts`) or warm-started from u400 (`0.461–0.492` H2H). Between the two warm-start horizons, short bootstrapped branches (`H=20`) beat full uncoupled terminal branches (`H=None`) once the critic is calibrated.
+- **Learnability direction (exploratory):** At high `replay_fraction` (`0.65–0.80`) without sibling CRN, PLR + Vine-RLOO does not beat `tau-x2` from scratch (`0.449` H2H across 2,048 games) or warm-started from u400 (`0.451` for `H=20`, `0.467` for `H=None` across 512 games each).
 
 ## Recommendation
 
@@ -94,7 +95,7 @@ Before investing in a full multi-seed finding trial, test three targeted changes
 ## Caveats
 
 - **Exploratory single-seed warm-start arms:** `warm-h20` and `warm-full` ran on one seed (`40902`) to match retained `tau-x2@40902` u500–u800; replicated method claims require multiple training seeds.
-- **Partial H2H upload on `evals-6f4fbf2aa69a`:** `evals-6f4fbf2aa69a` was stopped at 1,557 uploaded / 1,014 sealed of 1,888 matches because `etude`'s `courier._track()` uploaded ~15k small files sequentially on one thread (~0.7s/PUT to R2). All reported cells above are exact 128-game readouts from the delivered `plays.parquet` files (with smaller partial counts explicitly labeled); missing cells (`u100`/`u300` fresh H2H, `+100` warm H2H, `warm-h20` `+300` H2H) remain missing and are not interpolated.
+- **Sequential eval upload overhead (`etude` `courier._track`):** All 1,888 / 1,888 matches completed and sealed in R2, but single-threaded sequential R2 PUTs (~0.7s/file across ~17.9k files) stretched delivery time to ~3.5 hours (`~$3.25`).
 - **Engine panic observed once in training:** `warm-h20@40902` logged one Rust panic around update 113 (`managym/src/flow/resolution.rs:1066:44: internal error: entered unreachable code: clauses are bound before resolution`, `Effect::TargetClause`). `GameErrorPolicy` isolated and recovered the stream cleanly and the run finished all 400 updates.
 
 ## Appendix: runs, changes, and admission state
@@ -111,8 +112,8 @@ Launcher costs recorded once from `etude status --experiment tla_frontier_snapsh
 | `tla_frontier_snapshots/warm-h20@40902` | `96b53172c098` | `colab-l4-warm-073bd866e78b` (L4) | 400 / 400 updates | ~1.22 (~12.25 CU) | Succeeded |
 | `tla_frontier_snapshots/warm-h60@40902` | `96b53172c098` | `mtg344-3090-e355dfc86b3b` (RTX 3090) | 16 / 400 updates | 0.11 | Cancelled (switched GPU training to Colab only) |
 | `tla_frontier_snapshots/warm-full@40902` | `a554e2ea9275` | `colab-l4-warm-073bd866e78b` (L4) | 400 / 400 updates | ~0.88 (~8.81 CU) | Succeeded |
-| `tla_frontier_snapshots/evals-6f4fbf2aa69a` | `a554e2ea9275` | `mtg344-cpu32-d4b93f31940b` (32 vCPU) | 1,014 sealed / 1,557 uploaded of 1,888 | ~3.37 | Cancelled after verdict settled (sequential R2 upload bottleneck) |
-| **Total** | | | | **~7.13** | Well inside USD 25.00 cap |
+| `tla_frontier_snapshots/evals-6f4fbf2aa69a` | `a554e2ea9275` | `mtg344-cpu32-d4b93f31940b` (32 vCPU) | 1,888 / 1,888 sealed | ~3.25 | All 1,888 matches sealed (stopped after delivery) |
+| **Total** | | | | **~7.01** | Well inside USD 25.00 cap |
 
 ### Dated change log
 
