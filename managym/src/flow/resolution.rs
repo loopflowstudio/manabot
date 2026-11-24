@@ -221,6 +221,9 @@ impl Game {
                 })
                 .count() as i32,
             EffectValue::Half(inner) => self.effect_value(inner, frame).div_euclid(2),
+            EffectValue::Scaled { factor, value } => {
+                factor.saturating_mul(self.effect_value(value, frame))
+            }
             EffectValue::Fixed(value) => *value,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)

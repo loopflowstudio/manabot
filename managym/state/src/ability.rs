@@ -343,6 +343,18 @@ pub enum Condition {
     AttackedThisTurn,
     /// "if a land entered the battlefield under your control this turn".
     LandEnteredThisTurn,
+    /// "if a [nonland] permanent [who] controlled left the battlefield this
+    /// turn" (disappear, void): read from each matching player's turn
+    /// history, counted under the controller it last had.
+    PermanentLeftThisTurn {
+        who: Actor,
+        nonland: bool,
+    },
+    /// "if [who] cast a spell for its warp cost this turn" (void's second
+    /// half, CR 702.185).
+    WarpedThisTurn {
+        who: Actor,
+    },
     /// "if you've done all four this turn": waterbent, earthbent, firebent
     /// and airbent.
     BentAllFourThisTurn,
@@ -600,6 +612,8 @@ impl Condition {
             | Condition::LostLifeThisTurn
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
+            | Condition::PermanentLeftThisTurn { .. }
+            | Condition::WarpedThisTurn { .. }
             | Condition::BentAllFourThisTurn
             | Condition::SacrificedThisTurnAtLeast { .. }
             | Condition::OpponentLostLifeThisTurnAtLeast { .. } => false,
@@ -910,6 +924,12 @@ pub enum EffectValue {
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
+    /// `factor` times the inner value ("2 life for each Gate you control"):
+    /// one quantity, so one event (CR 119.9) rather than `factor` of them.
+    Scaled {
+        factor: i32,
+        value: Box<EffectValue>,
+    },
     /// The greatest power among creatures `controller` controls that match
     /// [predicate] ("non-Human creatures you control"); 0 with none.
     GreatestPowerYouControl {
@@ -2573,7 +2593,7 @@ impl EffectValue {
             Self::TriggeringPower | Self::TriggeringManaValue => {
                 read == ContextRead::TriggeringObject
             }
-            Self::Half(inner) => inner.reads(read),
+            Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.reads(read),
             Self::Property { of, .. }
             | Self::Objects { of, .. }
             | Self::DistinctManaValues { of }
@@ -2586,7 +2606,7 @@ impl EffectValue {
     pub fn reads_source(&self) -> bool {
         match self {
             Self::SourcePower => true,
-            Self::Half(inner) => inner.reads_source(),
+            Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.reads_source(),
             Self::Property { of, .. }
             | Self::Objects { of, .. }
             | Self::DistinctManaValues { of } => match of.as_ref() {
@@ -2612,11 +2632,11 @@ impl EffectValue {
     }
     pub fn reads_mana_pools(&self) -> bool {
         // Spent mana is read from a payment receipt, independently of either live pool.
-        matches!(self, Self::Half(inner) if inner.reads_mana_pools())
+        matches!(self, Self::Half(inner) | Self::Scaled { value: inner, .. } if inner.reads_mana_pools())
     }
     pub fn is_resolution_only(&self) -> bool {
         match self {
-            Self::Half(inner) => inner.is_resolution_only(),
+            Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.is_resolution_only(),
             Self::LifeTotal(who)
             | Self::LifeLostThisTurn(who)
             | Self::LifeGainedThisTurn(who)

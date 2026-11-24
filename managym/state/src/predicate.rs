@@ -28,6 +28,10 @@ pub struct CardPredicate {
     /// (currently ControlsAtLeast); card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
+    /// "named [name]": the object's name as it is (or last was) equals this
+    /// one (CR 201.2). An empty name names nothing (CR 201.2a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub named: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -185,6 +189,13 @@ impl CardPredicate {
             || self.from_battlefield_this_turn
             || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
             || (self.flying && !object.keywords.has(Keyword::Flying))
+        {
+            return false;
+        }
+        if self
+            .named
+            .as_ref()
+            .is_some_and(|name| name.is_empty() || *name != object.name)
         {
             return false;
         }

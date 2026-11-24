@@ -464,6 +464,18 @@ fn condition_text(triggering: &'static str, condition: &Condition) -> String {
         Condition::BentAllFourThisTurn => {
             "you've waterbent, earthbent, firebent and airbent this turn".into()
         }
+        Condition::PermanentLeftThisTurn { who, nonland } => format!(
+            "a {}permanent{} left the battlefield this turn",
+            if *nonland { "nonland " } else { "" },
+            match who {
+                Actor::You => " you controlled",
+                Actor::Opponent => " an opponent controlled",
+                Actor::AnyPlayer => "",
+            }
+        ),
+        Condition::WarpedThisTurn { who } => {
+            format!("{} cast a spell for warp this turn", actor_noun(*who))
+        }
         Condition::LandEnteredThisTurn => {
             "a land entered the battlefield under your control this turn".into()
         }
@@ -561,6 +573,7 @@ fn color_word(color: Color) -> &'static str {
 pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
+        named,
         flying,
         deathtouch,
         no_counters,
@@ -650,6 +663,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if *namesake {
         terms.push("with the same name as this permanent".into());
+    }
+    if let Some(name) = named {
+        terms.push(format!("named {name}"));
     }
     if *token == Some(true) {
         terms.push("token".into());
@@ -944,6 +960,9 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
             "half of {}, rounded down",
             value_description(triggering, value)
         ),
+        EffectValue::Scaled { factor, value } => {
+            format!("{factor} times {}", value_description(triggering, value))
+        }
         EffectValue::OwnedPermanentsOpponentsControl => {
             "the number of permanents you own that your opponents control".into()
         }

@@ -133,7 +133,7 @@ struct ReadSet {
 
 impl ReadSet {
     fn predicate(&mut self, p: &CardPredicate) {
-        if p.namesake {
+        if p.namesake || p.named.is_some() {
             self.fields |= NAME;
         }
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
@@ -177,7 +177,9 @@ impl ReadSet {
 
     fn value(&mut self, value: &EffectValue) {
         match value {
-            EffectValue::Half(inner) => self.value(inner),
+            EffectValue::Half(inner) | EffectValue::Scaled { value: inner, .. } => {
+                self.value(inner)
+            }
             EffectValue::GraveyardMatching { predicate, .. } if predicate.reads_power() => {
                 self.fields |= CARD_TYPES
             }
@@ -976,6 +978,9 @@ impl<'a> Context<'a> {
         let controlled = || self.game.iter_battlefield_permanents(controller);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
+            EffectValue::Scaled { factor, value } => {
+                factor.saturating_mul(self.comparison_value(value, source))
+            }
             EffectValue::SourcePower => self.objects[&source].view.power,
             EffectValue::Property {
                 of,
@@ -1522,6 +1527,9 @@ pub(crate) fn matches_permanent_facts(
     !p.from_battlefield_this_turn
         // CR 201.2a: an empty name (a face-down permanent's) names nothing.
         && (!p.namesake || source_name.is_some_and(|name| !name.is_empty() && name == facts.name))
+        && p.named
+            .as_deref()
+            .is_none_or(|name| !name.is_empty() && name == facts.name)
         && (!p.deathtouch || facts.keywords.has(Keyword::Deathtouch))
         && (!p.flying || facts.keywords.has(Keyword::Flying))
         && (!p.no_counters || facts.counters.is_empty())

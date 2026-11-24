@@ -1289,6 +1289,8 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
+        Condition::PermanentLeftThisTurn { .. } => "Condition::PermanentLeftThisTurn",
+        Condition::WarpedThisTurn { .. } => "Condition::WarpedThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
         Condition::OpponentLostLifeThisTurnAtLeast { .. } => {
             "Condition::OpponentLostLifeThisTurnAtLeast"
@@ -1342,6 +1344,13 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
+        Condition::PermanentLeftThisTurn {
+            who: Actor::You,
+            nonland: false,
+        },
+        Condition::WarpedThisTurn {
+            who: Actor::AnyPlayer,
+        },
         Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
