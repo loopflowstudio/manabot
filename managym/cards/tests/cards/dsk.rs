@@ -27,6 +27,7 @@ fn manifest_dread_hides_the_printing_at_opponent_priority() {
         s.force_card_in_hand(1, "Lightning Bolt");
         let cards = pin_top(&mut s, &[hidden, "Plains", other]);
         let printing = s.game().state[cards[0]].definition_id;
+        let before = Observation::for_player(s.game(), PlayerId(0));
         let permanent = s.game_mut().manifest(cards[0], PlayerId(0));
         s.game_mut().move_object(cards[1], ZoneType::Graveyard);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -39,6 +40,10 @@ fn manifest_dread_hides_the_printing_at_opponent_priority() {
             assert_eq!(game.state.zones.zone_of(cards[2]), Some(ZoneType::Library));
             let controller = Observation::for_player(game, PlayerId(0));
             assert_eq!(
+                controller.agent.unseen_counts.as_ref().unwrap()[&printing.0] + 1,
+                before.agent.unseen_counts.as_ref().unwrap()[&printing.0]
+            );
+            assert_eq!(
                 controller.agent_permanents[0].registry_key,
                 printing.0 as i32
             );
@@ -46,7 +51,12 @@ fn manifest_dread_hides_the_printing_at_opponent_priority() {
         let opponent = Observation::for_player(s.game(), PlayerId(1));
         let encoded = encode(&opponent, &ObservationEncoderConfig::default()).unwrap();
         assert_anonymous_manifest(&opponent);
-        (opponent.opponent_permanents, encoded.opponent_permanents)
+        (
+            opponent.opponent_permanents,
+            encoded.opponent_permanents,
+            opponent.opponent.unseen_counts.unwrap(),
+            encoded.decklists,
+        )
     });
     assert_eq!(projections[0], projections[1]);
 }

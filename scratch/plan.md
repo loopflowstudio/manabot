@@ -135,7 +135,7 @@ All four native DSK fixtures passed, including v11 encoding of both generations 
 
 Behavior review at `786a6bf3` reran the four DSK fixtures, the transforming-token control, the exhaustive effect-token check and the two-seat semantic text fixture. All seven passed. The anonymous copy rule meets its criterion. Shared viewer privacy still fails. In `manifest_dread_hides_the_printing_at_opponent_priority`, adding `opponent.opponent.unseen_counts` to the existing paired comparison produced Forest/Gray Ogre counts of 16/3 with Ogre manifested and 15/4 with Forest manifested. Both roots expose the same Plains in the graveyard. The public decklist and these counts identify the hidden printing. The temporary probe was removed after reproduction.
 
-Repair the native unseen-count projection so it accounts for uninspectable manifested cards by their backing printing while respecting viewer knowledge. Keep physical identities private. Retain this paired comparison as a regression and compare the encoded decklist rows. Recheck both seats and keep exact private snapshot recovery distinct from viewer sampling. This privacy defect blocks working-phase signoff. Recorded replay, Academy and full-suite validation remain open.
+The native unseen-count projection now counts each uninspectable manifest by its backing printing in the owner's decklist. The paired Manifest Dread regression passed for identical opponent unseen counts and v11 decklist rows. The controller's unseen count drops by one for the inspected printing in both the live and restored position. Possible-world sampling, recorded replay, Academy and full-suite validation remain open.
 
 ### Next slice · Turning a manifested creature face up
 
