@@ -147,6 +147,17 @@ Instructions retired (`/usr/bin/time -l`, stable to 0.1% under any load) against
 - Checks: debug nextest `--profile ci` lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests` 565/566 (known base `historical_captures…`), cards 907/907; `content_pack_clone_allocations` + `bench_footprint` with `--features benchmark`; `cargo check --all-targets --features benchmark` and `--features python`; `tests/infra/test_engine_budget.py` 20 passed; `cargo fmt --check`, ruff clean.
 - Speed verdict belongs to CI's same-runner Engine Budget; no wall-time claim from this host.
 
+## Performance review over the merged tree (engine-performance-review, 2026-11-24, at `0784a13607`)
+
+**Accepted; no change made.**
+
+- CI Engine Budget, run `45496898404` job `138809984677` (candidate `0784a13607` vs the recorded reference, same runner): **PASS**. Search seeds 1–3 and steps digests (512 games, 118,559 steps, `10601622128491155944`) equal on both sides. Steps throughput 22,732/s vs 24,609/s (−7.6%, floor −10%); search total 114.7 s vs 110.2 s (+4.1%); worst reply 2.76 s vs 2.63 s. This matches the local instruction count (+5.2% steps, +4.4% search), and the measured costs belong to new rules (face-down scans, departure snapshots, meld). The margin to the floor is 2.4 points. The next engine change on top should expect to pay for itself.
+- `bench_states` A/B against main `610370233c` (each side's own harness, release `--features benchmark`, contended host so ms are not compared) on `duplicate-creatures`, `duplicate-tokens`, `triggers`, `zones`, `mixed`, `attachments`, `choices`, `prepared-copies`, `unprepared-copies`, `graveyard-routes`. The run state digests differ because the branch's serialized state changed (expected). Every work counter equals main except:
+  - clone `allocated_bytes` 25–30% smaller everywhere (boxed form), as before;
+  - **`graveyard-routes` search `boards` +5–20%** (size 4: 122→135, 136→154; 8: 142→164, 220→249; 16: 262→314, 370→433). Source plans, trigger sources/found, payment work and search output are equal. Cause (traced with a temporary backtrace at each revision bump and board build): `advance_event_batch` calls `graveyard_departure_sources` (CR 603.10a look-back, `71838e7eb1`, Fang) for any batch that moves a card out of a graveyard. On a Muldrotha graveyard cast, the board is already stale from the cast's earlier writes, so the look-back builds one extra board per graveyard-departure batch. Routing `spend_play_route`'s `spent_types` push through a non-advancing accessor was tried and changed nothing (payment invalidates earlier), so it was reverted. The cost grows with the number of graveyard departures, not the board size, and is a correct pre-batch read. A cheaper gate (skip when no `CardsLeftGraveyard` trigger can exist) would need a second trigger authority beside `TriggerIndex`. Not worth it at this size; revisit if a graveyard-heavy deck enters the curated budget.
+  - `face-down` (branch only) observe/characteristics/clone/actions flat across 4/8/16.
+- Stopping is a judgement: the remaining +5–8% is diffuse (each part under 1.5% in the earlier profile) and pays for new rules. No absolute optimum is claimed.
+
 ## After the measurement
 
 - `e99ca6604d`: `ProgramProjection` (`agent/continuation.rs`) owns the tokens-and-text rule for `ContinuationFrame::program` and `DelayedEffects`.
@@ -162,7 +173,7 @@ The post-merge concept review ([concept-review.html](concept-review.html), at `6
 
 ## Then: `gate`
 
-- Read CI on `3ca5b59f93`; a failure caused by the merge is fixed in place. Engine Budget there is the speed verdict (the earlier `bench_steps` failure was the unified `benchmark` feature, fixed in `9f841c3e74`).
+- Read CI on the PR head; a failure caused by the merge is fixed in place. Engine Budget passed at `0784a13607` (see the performance review above); rerun it after the entry-face change.
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
 - Rerun vector/recording consumers and canonical replay over the merged tree.
 - The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's; recheck them against the new base.
