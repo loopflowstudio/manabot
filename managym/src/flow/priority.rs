@@ -15,10 +15,10 @@ pub struct PriorityState {
     /// stack has not emptied. Boxed so the common empty case stays one word.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loop_watch: Option<Box<MandatoryLoopWatch>>,
-    /// A resolution that owes the watch its count once it finishes, which
-    /// may be after a decision it stopped for (CR 608.2m). Not hashed: an
-    /// action space sees it only while that suspended resolution, which is
-    /// hashed, waits; it is spent before any other action space is offered.
+    /// Count this resolution once its consequences have stabilized. Only a
+    /// forced decision during resolution or stabilization can be published
+    /// with a count pending. Those continuations are hashed. Priority spends
+    /// the count and a decision with multiple options clears it.
     #[serde(skip)]
     pub resolution_owed: bool,
 }
@@ -47,6 +47,10 @@ impl PriorityState {
         self.pass_count = 0;
         self.consecutive_passes = 0;
         self.sba_done = false;
+        self.clear_loop_watch();
+    }
+
+    pub fn clear_loop_watch(&mut self) {
         self.loop_watch = None;
         self.resolution_owed = false;
     }
@@ -57,10 +61,8 @@ impl PriorityState {
     }
 
     pub fn on_non_pass_action(&mut self, active: PlayerId) {
-        self.holder = active;
-        self.consecutive_passes = 0;
-        self.sba_done = false;
-        self.loop_watch = None;
+        self.start_round(active);
+        self.clear_loop_watch();
     }
 }
 

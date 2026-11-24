@@ -687,7 +687,13 @@ Checks. At `31a2d7dbd3`, debug: the new test and the loop card fixtures, lib `pr
 - *SBA precedence at `CAP` (18.4):* confirmed only by reading. A probe would take 10,000 resolutions. The fix order (stabilize, then `is_game_over`, then count) settles it structurally.
 Under `skip_trivial = true`, both 18.1 and 18.2 are unbounded inside one call, like the Finding 17 repro. Their directed tests must run under `skip_trivial = true` and draw within `LOOP_RECOGNIZED_WITHIN`, as the plan says. The working phase is not satisfied: implement Finding 18, then rerun the same debug selection.
 
-Remaining for this slice: implement Finding 18, verify on hash contract v31, then gate. At gate, Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the pre-existing Academy failures in `scratch/questions.md` fail on main.
+**Finding 18 implementation.** The watch now samples after stabilization has applied state-based actions and placed the next triggers, with terminal results checked first. Every reset of the watch cancels the pending resolution count too. All three directed fixtures failed on the previous engine and pass on this change. The state trigger and the untap trigger draw within 128 resolutions with forced decisions skipped. Choosing between two Ogres leaves the watch empty at the next priority, with a gain trigger on the stack. The forced discard still pauses at a count of two.
+
+The v31 semantic-kernel corpus regenerated with 14 games, 3,049 commands and 15 Phase rows. Only the trace digests for `gw-vs-ur-5eee`, `ur-vs-gw-5eef`, `elemental-163`, `elemental-164` and `sacrifice-163` changed. All final state hashes and outcomes matched.
+
+Focused debug results after refreshing the five traces: priority and fingerprint units 8/8, canonical replay, search, match-state hash and semantic conformance 43/43, directed card fixtures 17/17. With the rebuilt CPython 3.13 extension the checked Academy opening authority and live/headless parity receipts both pass as recorded. Terminal SBA precedence at the 10,000-resolution cap was checked by control-flow order only.
+
+Next comes gate. At gate, Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the pre-existing Academy failures in `scratch/questions.md` fail on main.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 

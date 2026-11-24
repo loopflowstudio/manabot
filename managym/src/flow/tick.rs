@@ -111,7 +111,7 @@ impl Game {
                 if !self.skip_trivial || space.actions.len() > 1 {
                     if space.kind != ActionSpaceKind::Priority && space.actions.len() > 1 {
                         // A player chooses: the chain is no longer mandatory.
-                        self.state.priority_mut().loop_watch = None;
+                        self.state.priority_mut().clear_loop_watch();
                     }
                     self.publish_action_space(space);
                     return false;
@@ -203,9 +203,7 @@ impl Game {
 
     fn on_step_start(&mut self, step: StepKind) {
         self.restart_priority_round();
-        let priority = self.state.priority_mut();
-        priority.loop_watch = None;
-        priority.resolution_owed = false;
+        self.state.priority_mut().clear_loop_watch();
         if step == StepKind::Untap {
             let player = self.active_player();
             if let Some(exposure) = self.exposure_mut() {
@@ -476,16 +474,6 @@ impl Game {
                 return Some(choice_space);
             }
 
-            if self.state.priority.resolution_owed {
-                // CR 608.2m: a resolution finishes once any decision it
-                // stopped for is made. Count it toward the watch then, once.
-                self.state.priority_mut().resolution_owed = false;
-                if self.end_mandatory_loop() {
-                    return None;
-                }
-                stabilized = false;
-            }
-
             if !stabilized {
                 if let Some(space) = self.stabilize_before_priority() {
                     return Some(space);
@@ -499,6 +487,14 @@ impl Game {
             if self.is_game_over() {
                 return None;
             }
+            if self.state.priority.resolution_owed {
+                // CR 117.5: state-based losses and newly stacked triggers
+                // determine whether the resolution ended the game or the chain.
+                self.state.priority_mut().resolution_owed = false;
+                if self.end_mandatory_loop() {
+                    return None;
+                }
+            }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
                 self.restart_priority_round();
@@ -510,6 +506,7 @@ impl Game {
                         return None;
                     }
                     self.state.priority_mut().resolution_owed = true;
+                    stabilized = false;
                     continue;
                 }
                 return None;
@@ -534,11 +531,8 @@ impl Game {
     /// emptied stack with nothing waiting to trigger ends any chain, so it
     /// ends the watch instead.
     fn end_mandatory_loop(&mut self) -> bool {
-        if self.stack_is_empty()
-            && self.state.pending_triggers.is_empty()
-            && self.state.trigger_placement.is_none()
-        {
-            self.state.priority_mut().loop_watch = None;
+        if self.stack_is_empty() {
+            self.state.priority_mut().clear_loop_watch();
             return false;
         }
         // Taken out of the state so the sample can read the whole state.

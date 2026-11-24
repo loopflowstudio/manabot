@@ -1002,7 +1002,7 @@ impl Game {
         ) {
             // CR 104.4b: a player who acts at priority has broken any loop.
             // A rejected action changed nothing, so it leaves the watch.
-            self.state.priority_mut().loop_watch = None;
+            self.state.priority_mut().clear_loop_watch();
         }
         Ok(())
     }

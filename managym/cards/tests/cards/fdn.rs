@@ -2,7 +2,7 @@
 use crate::support::game::move_card;
 use crate::support::inspect::permanent_of;
 use crate::support::{
-    game::five_color_setup,
+    game::{five_color_setup, Scenario},
     inspect::{card_of, permanent_named},
     play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
 };
@@ -3528,6 +3528,84 @@ fn bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain() {
 /// loop of a few resolutions per cycle.
 const LOOP_RECOGNIZED_WITHIN: u32 = MandatoryLoopWatch::UNWATCHED + 64;
 
+fn assert_prompt_loop_draw(s: &Scenario) {
+    assert!(s.game().state.mandatory_loop_draw());
+    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
+    assert!(
+        watch.resolutions() <= LOOP_RECOGNIZED_WITHIN,
+        "{}",
+        watch.resolutions()
+    );
+}
+
+/// Keep an instant available so a missed draw returns control to the fixture
+/// once per resolution, even with forced decisions skipped.
+fn pass_through_trigger_loop(s: &mut Scenario) {
+    crate::support::game::force_new_card_in_hand(s, 0, "Lightning Bolt");
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().skip_trivial = true;
+    pass_until_over(s, 2 * LOOP_RECOGNIZED_WITHIN as usize + 2);
+    assert_prompt_loop_draw(s);
+}
+
+#[test]
+fn a_state_trigger_loop_draws_while_its_condition_stays_true() {
+    use crate::support::game::{inject_ability, set_counters};
+    use managym::state::ability::{Ability, Condition, Effect, TriggerCondition};
+
+    let mut s = five_color_setup(&["Gray Ogre", "Lightning Bolt"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        card,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::State(Condition::SourceCountersAtLeast {
+                kind: CounterKind::Page,
+                count: 4,
+            }),
+            effects: vec![Effect::gain_life(1)],
+        },
+    );
+    set_counters(&mut s, ogre, CounterKind::Page, 4);
+    pass_through_trigger_loop(&mut s);
+}
+
+#[test]
+fn an_untap_trigger_loop_draws_when_the_trigger_untaps_its_source() {
+    use crate::support::game::inject_ability;
+    use managym::state::ability::{
+        Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject,
+    };
+
+    let mut s = five_color_setup(&["Gray Ogre", "Lightning Bolt"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        card,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::BecomesUntapped {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![
+                Effect::Tap {
+                    what: ObjectSelector::This,
+                },
+                Effect::Untap {
+                    what: ObjectSelector::This,
+                },
+            ],
+        },
+    );
+    s.game_mut().state.permanents[ogre].as_mut().unwrap().tapped = true;
+    // The ordinary untap step starts the chain.
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    pass_through_trigger_loop(&mut s);
+}
+
 /// Poison is a total the watch tracks, like life: a drain that also poisons
 /// Herald of Eternal Dawn's controller repeats its state and draws soon after
 /// the watch starts, instead of running to the cap.
@@ -3536,13 +3614,7 @@ fn a_poison_loop_against_a_protected_player_draws_promptly() {
     let (mut s, _) = conqueror_drain_loop(true, 20, 0, true);
     s.game_mut().skip_trivial = true;
     s.pass_priority();
-    assert!(s.game().state.mandatory_loop_draw());
-    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
-    assert!(
-        watch.resolutions() <= LOOP_RECOGNIZED_WITHIN,
-        "{}",
-        watch.resolutions()
-    );
+    assert_prompt_loop_draw(&s);
     assert!(s.game().state.players[1].counters.get(CounterKind::Poison) >= 10);
 }
 
@@ -3623,11 +3695,8 @@ fn a_suspended_resolution_is_not_counted_toward_a_loop() {
     assert_eq!(watch.resolutions(), 2);
 }
 
-/// A loop made only of resolutions that stop for a decision is still a loop:
-/// each counts once it finishes. The Ogre's gain trigger taps a chosen Gray
-/// Ogre, then gains 1 life, which triggers it again with no way to stop.
-#[test]
-fn a_loop_of_suspending_resolutions_draws() {
+/// Bolt starts a life-gain trigger that taps a chosen Ogre and gains life again.
+fn suspending_gain_loop() -> Scenario {
     use crate::support::{
         game::{clear_hand, force_new_card_in_hand, inject_ability},
         play::{cast_card, target_opponent},
@@ -3667,15 +3736,38 @@ fn a_loop_of_suspending_resolutions_draws() {
     let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
     cast_card(&mut s, bolt);
     target_opponent(&mut s);
+    s
+}
+
+/// A loop made only of resolutions that stop for a decision is still a loop:
+/// each counts once it finishes. The Ogre's gain trigger taps a chosen Gray
+/// Ogre, then gains 1 life, which triggers it again with no way to stop.
+#[test]
+fn a_loop_of_suspending_resolutions_draws() {
+    let mut s = suspending_gain_loop();
     s.game_mut().skip_trivial = true;
     s.pass_priority();
-    assert!(s.game().state.mandatory_loop_draw());
-    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
-    assert!(
-        watch.resolutions() <= LOOP_RECOGNIZED_WITHIN,
-        "{}",
-        watch.resolutions()
-    );
+    assert_prompt_loop_draw(&s);
+}
+
+#[test]
+fn a_choice_during_resolution_clears_the_loop_watch() {
+    use managym::agent::action::ActionSpaceKind;
+
+    let mut s = suspending_gain_loop();
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().skip_trivial = true;
+    s.pass_priority();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert!(s.game().state.priority.loop_watch.is_none());
+
+    // Inspect the next priority, with the following gain trigger on the stack.
+    s.game_mut().skip_trivial = false;
+    s.step_action(0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert!(s.game().state.priority.loop_watch.is_none());
 }
 
 /// A long chain that uses something up is no loop (CR 104.4b asks for "no

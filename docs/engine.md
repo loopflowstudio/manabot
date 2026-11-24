@@ -213,11 +213,12 @@ It also records the winning seat for a card-instructed victory, private
 opening progress and simultaneous loss causes. Version 30 adds a
 `PermanentUntapped` event to the hashed event ledger for each permanent that
 becomes untapped. Version 31 hashes the draw-by-mandatory-loop watch (CR
-104.4b) on `PriorityState`. It follows resolutions while players only pass,
-and ends on any other action at priority, a decision with several choices, a
-new step, or a resolution that leaves nothing on the stack or waiting to
-trigger. After 64 resolutions it fingerprints the state with life totals,
-event logs, priority and identity allocation masked
+104.4b) on `PriorityState`. It counts each forced resolution after state-based
+actions finish and waiting triggers reach the stack. A win or loss at that
+point takes precedence over a loop draw. An empty stabilized stack, a new step, a
+successful non-pass priority action, or a decision with several choices ends
+the watch and cancels any pending count. After 64 resolutions it fingerprints
+the state with life totals, event logs, priority and identity allocation masked
 (`GameState::loop_fingerprint`). A repeated fingerprint with no new low of
 life or high of poison for a player who can lose ends the game as
 `GameOutcome::Draw { mandatory_loop: true }`, and Env reports
