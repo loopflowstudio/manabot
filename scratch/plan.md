@@ -26,7 +26,40 @@ Jack Heart’s Task steer says “Stop doing 1 card per `coverage-working` loop:
 2. **Done, Batch 5f follow-up (`19a556c3a2`, `51b8933231`) · Alignment 1 and 20 activation, characteristic and choice rows**: Axgard Cavalry, Mystic Archaeologist, Vampire Neonate, Goblin Smuggler, Druid of the Cowl, Wildheart Invoker, Dawnwing Marshal, Treetop Snarespinner; Witness Protection, Eaten by Piranhas, Twinblade Paladin, Goblin Oriflamme, Pirate’s Cutlass, Kitesail Corsair, Kargan Dragonrider; Apothecary Stomper, Burglar Rat, Campus Guide, Circuitous Route, Spinner of Souls. The combat rows (Vampire Interloper, Stromkirk Noble, Juggernaut, Sower of Chaos) landed in `42c077de7b`.
 3. **Done, Batch 5g (`ee88092e95`, `14fc827786`, `b3643f7b99`) · Alignments 1b, 2b, 4 and 5 replacement rows**: Fleeting Flight and Grappling Kraken (`fdn`), Elspeth's Smite (`mom`), Scorching Dragonfire (`eld`) and Obliterating Bolt (`bro`), each with a `foundations_5g_*` fixture and ledger citation. Competing death-exile replacements remain deferred with `Dryad Militant` and `Darksteel Colossus`.
 
-**Next: gate.** Alignment 5 landed; gate re-records `semantic_conformance` (stale frozen corpus) and runs the v11/text/Academy parity checks, Commands, stale rejection, replay and privacy on the final rebuilt branch.
+**Next: decomposition (below), then gate.** Alignment 5 landed; gate re-records `semantic_conformance` (stale frozen corpus) and runs the v11/text/Academy parity checks, Commands, stale rejection, replay and privacy on the final rebuilt branch.
+
+## Decomposition phase (surveyed at `6f9a3b31fd`)
+
+The question is whether the next cards compose from what the 204 authored ones use, with one owner per fact. The survey read the rules-type diff against `88ce96bd6b` and every rules-type form in the branch's card code.
+
+### What already holds (keep, with its evidence)
+
+- **One layer implementation.** `flow/layers.rs::node` lowers every static spelling (`Continuous`, `KeywordGrant`, `TypeGrant`, `PtBuff`, `AttachedSetsCharacteristics`, `AttachedHas`) into one `SourcePlan` of `(Layer, Operation)` parts. The older variants are definition spellings whose serialization the TLA learning programs hash; they are not second implementations. 25 branch definitions use `StaticAbility::continuous`.
+- **Verbs over selectors.** The branch's new verbs are `Effect::Reveal { what }` and flags on existing verbs (`Move.unrevealed`, `OwnerPutsIntoLibrary.top`). Its new triggers are events over actors (`GainsLife { who }`, `TriggerSubject::Attached`, `ThisOr`). `ReplacementEffect::ModifyDamage { source_by, recipient_by, transform }` replaced the two controller-named damage variants. Fog Bank, the Fleeting Flight shield and `ModifyDamage` share the damage arm of `collect_replacements` and one `apply_replacement` arm for prevention.
+- **One query per rules question.** `Game::must_attack` and `Game::can_block` are read by the declaration tick, validation, structured offers and previews (Alignments 1 and 3). `Game::enchant()` derives an Aura's target and its CR 704.5m recheck from its `AttachSourceTo`.
+- **Shared authoring forms with many consumers.** `Ability::when_enters` (56 uses on the branch), `Effect::until_end_of_turn` + `Modification::pump` (42 and 32), `ActivatedAbilityDefinition::equip` (14), `Ability::prowess` (13), `Effect::pump_and_grant_until_end_of_turn` (9), `CardPredicate::{creature, permanent, instant_or_sorcery, noncreature}`.
+- **Single-consumer variants stay.** `Effect::RevealUntilToHand` (Spinner of Souls), `StaticAbility::OpponentsEnterTapped` (Authority of the Consuls, beside Zhao's frozen `EntersTapped` predicate), `TargetSpec::PlayerOrPlaneswalker` and `Restriction::AttacksEachCombat` each have one real card shape. Generalizing them now would invent mechanics.
+
+### Slices (deepest duplicate first)
+
+1. **An Aura states its enchant restriction once.** Five branch Auras write `targeting: vec![TargetRequirement::one(TargetSpec::Creature)]` beside the same spec in `Effect::AttachSourceTo` (`dgm.rs`, `fdn.rs`, `ogw.rs`, `lci.rs` Eaten by Piranhas, `snc.rs` Witness Protection). Pacifism, Starlight Snare and the seven TLA Auras state it once and derive the cast target (`Object::target_requirements`) and the recheck (`Object::enchant`) from it. Add `Effect::enchant(spec)` for `AttachSourceTo { what: ObjectSelector::Target(spec) }`, use it in the branch's Auras, and delete their `targeting`. Imprisoned in the Moon (`emn.rs`) predates the branch and keeps its bytes.
+2. **New static grants use one spelling, and it cannot drop a modification.** Five branch definitions use the TLA-era variants: `KeywordGrant` on Kitesail Corsair (`rix`), Kargan Dragonrider (`m19`) and Twinblade Paladin (`m20`); `PtBuff` on Goblin Oriflamme (`mh1`) and Pirate's Cutlass (`xln`). Move them to `StaticAbility::continuous` with `Modification::AddKeywords` / `Modification::pump`. `layers.rs::node` skips any `Continuous` modification for which `layer()` returns `None` (`CantBlock`, `CantBeBlocked`, `DoesntUntap`, `PreventCombatDamage`, …), so "enchanted creature can't block" written that way is a silent no-op. Make that a `debug_assert!` naming the modification, so a definition test in debug fails where the card is authored.
+
+### Delete — do not maintain
+
+- `targeting` on a single-target Aura whose `AttachSourceTo` names the same spec (five branch definitions).
+- `StaticAbility::KeywordGrant`, `PtBuff` and `TypeGrant` in set files this branch created or extended, for scopes on permanents. They remain only in definitions that existed at `88ce96bd6b` (TLA, TLE and the base EOE, WTH and ZEN rows), where the pinned pilots' token programs fix their bytes, and in `StaticScope::SpellsYouControl` grants read by `Game::spell_keywords`.
+- The silent `None` arm for a `Continuous` modification without a layer.
+
+### Review criterion
+
+Kitesail Corsair, Twinblade Paladin, Goblin Oriflamme, Pirate's Cutlass, Witness Protection and Eaten by Piranhas compose from `StaticAbility::continuous` and one `Effect::enchant`, with no `targeting` copy and no older grant variant, and their `foundations_5f_*` fixtures still pass in debug unchanged: Twinblade Paladin still gains and loses double strike across 25 life (`Revisions.life`), Corsair flies only while attacking, Oriflamme reaches attacking creatures only, and each Aura offers and rechecks exactly creatures. No definition present at `88ce96bd6b` changes its JSON or catalog token row, so the pinned pilot and record vocabulary tests pass on the rebuilt extension. The new `debug_assert!` fires for a constructed `continuous(.., [Modification::CantBlock])` and for no authored definition (the whole debug cards target passes).
+
+A fixture that fails after the move is a semantic counterexample to "the spellings are equivalent": stop, record which layer, timestamp or dependency differs, and revise this section before moving the remaining cards.
+
+### Not in this phase
+
+Static prohibitions and their resolved twins keep two vocabularies (`Restriction::{CantAttackOrBlock, DoesntUntap}` and `BlockRestriction::CantBlock` on statics; `Modification::{CantBlock, DoesntUntap, CantBeBlocked}` on records), each pair read at one query. Folding them needs the TLA definitions to change spelling, which is a declared pinned-pilot break and belongs to its own Task (questions.md).
 
 Use the [set notes](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.md) and the ledger for card obligations. Identify the fixed 222-card cohort at `0b1cc9cfef9c1a98430c825b9764a49237182696` by `definition pending`, empty dependencies and these primary batches. Join by Oracle ID to count current outcomes.
 

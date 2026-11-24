@@ -79,3 +79,9 @@ Concept-review (`49cc87c7`) choices folded into Batch 5g:
 - Academy placement of `assign_combat_damage` offers once `Observation::action_focus` carries `[attacker, blocker]`: keep them as rail buttons via `view.ts:isButton` and highlight `[attacker, blocker]` via `askedObjects` rather than anchoring 2..N damage choices inside a popup menu on the attacker card.
 
 The compression pass started at `57c18aa9d0`, which already contained Alignment 5 and its rebuild evidence. The semantic corpus refresh remains with gate.
+
+## Decomposition survey (`6f9a3b31fd`) choices
+
+- The phase is limited to two authoring cuts (one enchant statement per Aura; `StaticAbility::continuous` for the five new grants plus a debug assertion for a layerless modification). The task brief asks for engine edits that stay "minimal and local", and every definition present at the base keeps its serialized bytes.
+- Open: static prohibitions (`Restriction`, `BlockRestriction::CantBlock`, `CantBeBlockedIf`) and record prohibitions (`Modification::CantBlock`, `DoesntUntap`, `CantBeBlocked`) are two vocabularies for one fact. One vocabulary would let a status modification in a `Continuous` static answer the same query, but moving the TLA definitions changes their token programs and needs a declared pinned-pilot break. Not started; a candidate Task for the coverage wave.
+- `Ability::Triggered { condition, intervening_if: None, effects }` is written out 286 times across the cards crate (26 on this branch). An `Ability::when(condition, effects)` constructor would be sugar only; left out to avoid a wide `tla.rs` diff beside the parallel engine Tasks.
