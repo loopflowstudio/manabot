@@ -133,6 +133,10 @@ The text fixture casts Manifest Dread, chooses one of the two library cards, the
 
 All four native DSK fixtures passed, including v11 encoding of both generations for both seats. The existing transforming Aang token control passed. The rebuilt CPython 3.13 extension passed `tests/semantic/test_manifest_text.py`. Full suites and recorded replay remain with their planned later checks.
 
+Behavior review at `786a6bf3` reran the four DSK fixtures, the transforming-token control, the exhaustive effect-token check and the two-seat semantic text fixture. All seven passed. The anonymous copy rule meets its criterion. Shared viewer privacy still fails. In `manifest_dread_hides_the_printing_at_opponent_priority`, adding `opponent.opponent.unseen_counts` to the existing paired comparison produced Forest/Gray Ogre counts of 16/3 with Ogre manifested and 15/4 with Forest manifested. Both roots expose the same Plains in the graveyard. The public decklist and these counts identify the hidden printing. The temporary probe was removed after reproduction.
+
+Repair the native unseen-count projection so it accounts for uninspectable manifested cards by their backing printing while respecting viewer knowledge. Keep physical identities private. Retain this paired comparison as a regression and compare the encoded decklist rows. Recheck both seats and keep exact private snapshot recovery distinct from viewer sampling. This privacy defect blocks working-phase signoff. Recorded replay, Academy and full-suite validation remain open.
+
 ### Next slice · Turning a manifested creature face up
 
 At controller priority, fork a manifested transforming creature with a counter and enough mana to pay its front-face mana cost. Take the turn-up Command, verify the spend once, retain the battlefield identity and counter, and expose the front face to both viewers. Reject the spent Command. Copy the revealed creature and compare it with the existing pre-reveal copy fixture. Check that a noncreature printing and an unpayable creature supply no turn-up offer. Reuse the existing payment decisions and public alias when revealing the printing.
