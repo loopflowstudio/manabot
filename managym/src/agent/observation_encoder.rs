@@ -1008,7 +1008,8 @@ pub fn encode_rows(
         let mut row = [Cell::ZERO; PLAYER_DIM];
         encode_player_features(player, &obs.turn, &mut row);
         row[player::DECKLISTS_OPEN] = flag(!obs.decklists_closed);
-        out.write(player_table, 0, 0, &row)?;
+        // The deprecated v9/v10 rows end before the first-strike step flag.
+        out.write(player_table, 0, 0, &row[..config.player_dim()])?;
         if config.turn_state {
             out.write(Table::PlayerTurnState, 0, seat, &turn_state_row(player))?;
         }
@@ -1395,9 +1396,8 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
     }
     out[player::HAND_ONLY] = flag(player.hand_only_until.is_some());
     out[player::NO_MAXIMUM_HAND_SIZE] = flag(player.no_maximum_hand_size);
-    if let Some(cell) = out.get_mut(player::STEP_FIRST_STRIKE_COMBAT_DAMAGE) {
-        *cell = flag(turn.step == StepKind::FirstStrikeCombatDamage);
-    }
+    out[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE] =
+        flag(turn.step == StepKind::FirstStrikeCombatDamage);
     out[player::TURN] = Scalar(turn.turn_number as f32 / 20.0);
     // Seat 0 is on the play.
     out[player::SEAT] = Integer(player.player_index as i64);
