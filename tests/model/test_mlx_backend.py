@@ -66,6 +66,12 @@ from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
+    FACT_CONTINUATION_PROGRAM,
+    FACT_DETAIL_INDEX,
+    FACT_KIND_INDEX,
+    FACT_OBJECT_INDEX,
+    FACT_VALID_INDEX,
+    FACT_VALUE_INDEX,
     STACK_SOURCE_INDEX,
     ObservationSpace,
     encode_observation,
@@ -787,7 +793,11 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Grouped attention restores interleaved rows and their focused opponent permanent."""
+    """Grouped attention restores interleaved rows and their focused opponent permanent.
+
+    Compact fact routes reach the same objects as padded ones: rows hold unequal
+    fact counts, one has none, and a later row carries a two-token program.
+    """
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
@@ -807,6 +817,25 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     obs["action_focus"][:, 1, 0] = (
         2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
     )
+    # (observation, slot, object, program position, number): row 1 has no
+    # facts, and row 2's second program is linked to no object.
+    fact_rows = [
+        (0, 0, 1, 0, -71),
+        (2, 0, 2, 0, 3),
+        (2, 1, 2, 1, 70000),
+        (2, 2, 0, 0, 9),
+        (3, 0, 4, 0, -2147483648),
+        (3, 1, 4, 1, 5),
+        (3, 2, 1, 0, 12),
+    ]
+    for b, slot, target, position, number in fact_rows:
+        row = obs["facts"][b, slot]
+        row[FACT_VALID_INDEX] = 1
+        row[FACT_OBJECT_INDEX] = target
+        row[FACT_KIND_INDEX] = FACT_CONTINUATION_PROGRAM
+        row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = [4, position]
+        word = number & 0xFFFFFFFF
+        row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = [word >> 16, word & 65535]
     checkpoint = policy_weights(agent)
     widths: list[int] = []
     table_widths: list[int] = []
@@ -826,6 +855,13 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
         learner = MLXLearner(policy, minibatch_rows=4)
         prepared = policy.prepare(obs)
         assert prepared.is_agent.shape == prepared.validity.shape
+        assert prepared.facts.compact == bucketed
+        if bucketed:
+            assert prepared.facts.kinds.shape == (1, len(fact_rows))
+            programs = prepared.facts.programs
+            assert programs is not None
+            np.testing.assert_array_equal(programs.rows, np.arange(len(fact_rows)))
+            assert programs.schedule.lengths == (1, 2, 1, 2, 1)
         table_widths.append(prepared.validity.shape[1])
         widths.clear()
         logits, values = policy.evaluate(prepared)

@@ -35,6 +35,7 @@ def concatenate(rows: list[Prepared[np.ndarray]]) -> Prepared[np.ndarray]:
             or row.relation_features.shape[1:] != first.relation_features.shape[1:]
             or row.facts.kinds.shape[1:] != first.facts.kinds.shape[1:]
             or row.packed_attention is not None
+            or row.facts.compact
             or row.attention_columns is not None
             or row.live_index is not None
             or row.bucket_needs is not None
@@ -135,7 +136,7 @@ def concatenate(rows: list[Prepared[np.ndarray]]) -> Prepared[np.ndarray]:
         else None
     )
     facts_joined = rebuild(
-        FactRoutes, [row.facts for row in shifted], programs=programs
+        FactRoutes, [row.facts for row in shifted], programs=programs, compact=False
     )
     live_effects = [row.effects for row in rows if row.effects is not None]
     effects = None

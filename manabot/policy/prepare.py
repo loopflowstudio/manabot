@@ -468,6 +468,8 @@ class FactRoutes[A]:
     targets: A  # [B*F] flat object index
     linked: A  # [B,F] float
     programs: FactPrograms[A] | None
+    # Live rows only, as [1,R]; `targets` still name each row's observation.
+    compact: bool = False
 
 
 @dataclass(frozen=True)
@@ -652,8 +654,8 @@ def prepare(
     dropped unless bucketed, and unused attention columns unless live tokens
     are packed. `compact_attention` also selects live attention columns for
     dense learner batches. For bucketed learners it packs short and long rows
-    separately when smaller. `action_capacity` retains full logit coordinates
-    after trimming.
+    separately when smaller, and routes only live fact rows.
+    `action_capacity` retains full logit coordinates after trimming.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
@@ -828,7 +830,12 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(facts, tables, objects),
+        facts=_facts(
+            facts,
+            tables,
+            objects,
+            compact=compact_attention and bucketed and not inference,
+        ),
         effects=_effects(obs, tables, objects),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
@@ -921,16 +928,25 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
-def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
-    batch = len(facts)
+def _facts(
+    facts: Array, tables: Tables, objects: int, *, compact: bool = False
+) -> FactRoutes[Array]:
+    """Route fact rows into object slots.
+
+    Only live facts are indexed on the host. By default padding is restored to
+    `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
+    `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
+    with targets from each row's own observation; a padded row changes no
+    output or gradient, so the encoder skips that work.
+    """
     valid = facts[..., FACT_VALID_INDEX] == 1
-    # Index only live facts on the host. Restore padding before the forward:
-    # its matrix shapes and gradient reduction order must remain unchanged.
     live = facts[valid]
+    routed = (1, len(live)) if compact else valid.shape
 
     def padded(values: Array) -> Array:
-        shape = (*valid.shape, *values.shape[1:])
-        result = np.zeros(shape, dtype=values.dtype)
+        if compact:
+            return values[None]
+        result = np.zeros((*routed, *values.shape[1:]), dtype=values.dtype)
         result[valid] = values
         return result
 
@@ -991,10 +1007,10 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         detail_rows = detail % tables.record_buckets
         sources = live[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
         # Hashed records embed every row, padding included.
-        id_mask = np.ones(valid.shape, np.float32)
-        detail_mask = np.ones(valid.shape, np.float32)
+        id_mask = np.ones(routed, np.float32)
+        detail_mask = np.ones(routed, np.float32)
     links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
-    base = np.arange(batch)[:, None] * objects
+    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(facts))[:, None]
     all_programs = padded(program)
     return FactRoutes(
         kinds=padded(kinds),
@@ -1006,9 +1022,12 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         token_rows=padded(token_rows),
         token_mask=all_programs.astype(np.float32),
         source_rows=padded(sources),
-        targets=(base + (links - 1).clip(min=0)).reshape(-1),
-        linked=(valid & (links > 0)).astype(np.float32),
-        programs=_fact_programs(facts, all_programs, tables.order_lengths),
+        targets=(owners * objects + (links - 1).clip(min=0)).reshape(-1),
+        linked=(links > 0).astype(np.float32),
+        programs=_fact_programs(
+            live[None] if compact else facts, all_programs, tables.order_lengths
+        ),
+        compact=compact,
     )
 
 
