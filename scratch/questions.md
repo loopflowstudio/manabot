@@ -1,10 +1,5 @@
 # Open questions (choices made for review)
 
-- **etude-sdk 0.4.6 release.** Etude PR #141 (`af71c109`) merged after v0.4.5;
-  PyPI latest is 0.4.5. This Task builds against Etude main through a
-  temporary uv source and cannot land on PyPI pins until 0.4.6 is published.
-  Publishing is outward-facing and was not done here. Needed: cut Etude
-  v0.4.6 (it would also carry #142/#143).
 - **Dedicated `learner.safetensors` instead of published policy containers
   (`raw.safetensors` / `ema.safetensors` + `optimizer.safetensors`).** Chosen
   because live training continuation requires strict exact-match admission,
@@ -48,17 +43,3 @@
   `SelfPlay.precision` spelling (`"float32"`, `"tf32"`, `"bf16"`) in
   `learner.safetensors` so CUDA Torch `bf16` → MLX `bf16` passes exact precision
   admission.
-
-## Slice 2 validation
-
-- Compare all learner tensors and parameter clocks exactly across independently
-  timed CPU runs. Each learner header binds its own `Counts.training_seconds`
-  through `counts_sha256`, so the whole learner files can differ even when
-  every tensor is identical. The host and sampling files can be compared as bytes.
-
-## Slice 3 validation
-
-- Use a recorded Torch CPU learner and host state with a simulated CUDA sampling
-  file. The CPU reader must reject changed bytes and, with the digest intact,
-  start both CPU generators at their expected resumed seeds. This exercises
-  the domain transition on a host without CUDA.
