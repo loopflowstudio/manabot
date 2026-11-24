@@ -1,37 +1,39 @@
-at: d61564193aa3b0d5aa3becc6adbfaf3af53b729b
+at: 7cd57bfb32a6bc60f90fd85e02b2df2abd312ac6
 first:
   - path: docs/engine.md
-    why: Play the kicked Clerics and follow a copied spell.
+    why: Follow a kicked Cleric from casting through return.
   - path: scratch/plan.md
-    why: Delivered cohorts and remaining rules work.
+    why: Delivered card cohorts and remaining rules work.
   - path: managym/state/src/permanent.rs
-    why: Spell choices and payment belong to one battlefield entry.
-  - path: managym/src/flow/decision.rs
-    why: Resolving spells supply choices before entry replacements.
+    why: Spell choices and payment survive battlefield entry.
+  - path: managym/state/src/game_object.rs
+    why: Exact sources and battlefield facts survive departure.
+  - path: managym/src/flow/trigger.rs
+    why: Required identity and initial state of each waiting trigger.
   - path: managym/src/flow/proposed_event.rs
-    why: Cast-only and X-counter replacements read the entering spell.
+    why: Mana spent on the spell supplies entry counters.
+  - path: managym/src/flow/zones.rs
+    why: Find the stacked spell and commit its battlefield entry.
   - path: managym/src/flow/triggers.rs
-    why: Capture the entering source before anyone can respond.
+    why: Capture event facts before choosing modes and targets.
   - path: managym/src/flow/resolution.rs
-    why: Recheck intervening conditions with the captured choices.
+    why: Resolve using the choices captured when the trigger fired.
   - path: managym/cards/src/fdn.rs
-    why: Healer restricts targets by type and mana value.
+    why: Healer restricts graveyard targets by type and mana value.
   - path: managym/cards/src/znr.rs
     why: Nullpriest uses the same trigger for any creature.
   - path: managym/cards/tests/cards.rs
-    why: Fork kicker and targets, then kill or blink.
+    why: Fork the kicker choice, then kill or blink.
   - path: managym/tests/rules/cr_400_identity.rs
-    why: Resolving spell copies retain choices and have no payment.
-  - path: managym/state/src/game_object.rs
-    why: Earlier departure work records last-known battlefield facts.
-  - path: managym/src/flow/identity.rs
-    why: Capture battlefield forms before departure.
-  - path: managym/src/flow/layers.rs
-    why: Match live and departed characteristics.
+    why: Spell copies retain choices and have no payment.
+  - path: managym/src/flow/target_authority_tests.rs
+    why: Targeting and ordering after the original source leaves.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Graveyard returns, copies, and departure regressions.
+    why: Graveyard returns, copies and simultaneous departures.
   - path: managym/cards/tests/cards/fin.rs
-    why: Transform, meld, and token movement.
+    why: Transform, meld and token movement.
+  - path: managym/cards/tests/cards/dsk.rs
+    why: Hidden manifest identity through sampling, copying and reveal.
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Each delivered row names its source and check.
 hide:
