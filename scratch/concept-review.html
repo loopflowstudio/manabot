@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Unified Damage Triggers, Triggering Nouns, Void/Disappear &amp; Scaled Live-Board Queries</title>
+<title>MTG-418 Concept Review · Mana-Ability Classification, Damage Source Binding, */* CDAs, Move Results &amp; State Triggers</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -95,130 +95,137 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Post-v29 Concept Review · HEAD d7ef237481</div>
-  <h1>Do MTG-418’s damage triggers, ability descriptions, turn departures, and live-board/move queries line up?</h1>
+  <div class="eyebrow">Managym · MTG-418 · Post-v29 Live-Board Concept Review · HEAD 256d8ac310</div>
+  <h1>Do MTG-418’s mana abilities, damage triggers, all-zone CDAs, move results, and state triggers line up?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, damage-trigger, contextual-query,
-    predicate, CDA, and ability-description layers
-    (<code>state/src/{ability,card,game_object,predicate}.rs</code>,
-    <code>src/flow/{damage,decision,event,layers,play,resolution,statics,triggers,turn,zones}.rs</code>,
-    <code>src/agent/ability_description.rs</code>, and <code>src/cards/deck_admission.rs</code>) — reviewed as a whole
-    against base <code>88ce96bd6b</code> after the v29 departed-name &amp; damage slice landed
-    (<code>2279c515b2</code>..<code>d7ef237481</code>, 58/81 primary FDN rows) and widened across the remaining
-    23 primary FDN rows, 9 pending history/query-gated cost-primary rows, and the 2 remaining cross-set witnesses
-    (<em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>).
+    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, mana-ability classification,
+    damage-trigger context, CDA/predicate, move-result, state-trigger, and stack-LKI projection layers
+    (<code>state/src/{ability,card,permanent,predicate}.rs</code>,
+    <code>src/flow/{decision,layers,mana,play,resolution,statics,triggers,zones}.rs</code>,
+    <code>src/agent/{ability_description,effect_execution,observation}.rs</code>) — reviewed as a whole against
+    base <code>88ce96bd6b</code> after the damage-trigger &amp; live-board slice landed
+    (<code>e2b919e0e0</code>..<code>256d8ac310</code>, <strong>68/81</strong> primary FDN rows + both remaining
+    cross-set witnesses <em>Plasma Bolt</em> and <em>Michelangelo, Game Master</em>), and widened across the final
+    <strong>13 primary FDN rows</strong> and <strong>7 pending cost-primary rows</strong> citing
+    <code>event_history</code>/<code>context_queries</code>.
   </p>
   <p class="small">
-    The v29 slice cleanly closed the prior review’s departed-name LKI mismatch (<code>ObjectLki.renamed</code> +
-    shared <code>lki_face_printing</code>/<code>lki_mana_printing</code> + CR 201.2a guard restored
-    <code>compatibility_names_and_content_allocations_are_metamorphic</code>), fixed stolen-spell attribution in
-    <code>source_controller</code>, and reset <code>frame.excess_damage</code> unconditionally. Stepping back across the
-    whole branch exposes <strong>five concrete mismatches</strong> — two introduced in v29 itself
-    (<code>DealsNoncombatDamage</code> and <code>name_triggering_object</code>) and three hiding in the upcoming
-    live-board, Void/Disappear, and move-result slices.
+    The slice cleanly unified <code>TriggerCondition::DealsDamage</code>, threaded <code>triggering_noun</code>
+    through <code>ability_description.rs</code> (deleting <code>name_triggering_object</code>), closed Finding 9,
+    and added <code>CardPredicate.named</code> / <code>accepts_name</code>, <code>EffectValue::Scaled</code>, and
+    <code>PermanentLeftThisTurn</code> / <code>WarpedThisTurn</code> via <code>TurnState::any_history</code>.
+    Stepping back across the whole area reveals <strong>one major hidden concept conflation</strong>
+    (<code>mana_choices</code> conflating CR 605.1a classification with finalized outputs — which caused a real
+    Layer 6 bug AND falsely blocked <em>Elvish Archdruid</em>†), <strong>one half-finished seam</strong>
+    (<code>DamageDealt</code> still unbound in <code>trigger_context</code>), and <strong>three structural
+    unifications</strong> needed to close all 81/81 primary FDN rows and feasible cost-primary rows cleanly in two
+    final slices.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at d7ef237481</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 256d8ac310</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code> at <code>d7ef237481</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code> at <code>256d8ac310</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Turn history, spell LKI, departed-name LKI &amp; multi-player execution</strong><br><span class="small">CR 101.4, 201.2a, 400.7, 608.2h, 712.8e</span></td>
+        <td><strong>Turn history, spell/departed LKI, triggering nouns, scaled quantities &amp; name predicates</strong><br><span class="small">CR 101.4, 119.9, 201.2a, 201.5c, 400.7, 608.2h, 712.8e</span></td>
         <td>
-          <code>PlayerTurnHistory</code> owns all 13 per-seat counters and v11 cols 8–14;
-          <code>ObjectLki.renamed</code> + <code>lki_face_printing</code>/<code>lki_mana_printing</code> keep
-          compatibility names out of canonical hash v29 and read copied/transformed faces;
-          <code>SpellLki</code> + <code>spell_info</code> + <code>source_controller</code> cover live/departed/stolen spells;
-          <code>ForPlayer</code> + <code>RestoreController</code> run APNAP/<code>TargetController</code> cleanly.
+          <code>PlayerTurnHistory</code> + <code>TurnState::any_history</code>;
+          <code>ObjectLki.renamed</code> + <code>lki_face_printing</code>/<code>lki_mana_printing</code>;
+          <code>SpellLki</code> + <code>spell_info</code> + <code>source_controller</code>;
+          <code>CardPredicate::accepts_name</code>; <code>EffectValue::Scaled</code>; threaded
+          <code>triggering_noun</code> in <code>ability_description.rs</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Closed cleanly through hash v29 (<code>2279c515b2</code>).</td>
+        <td>Cleanly aligned across 68/81 primary FDN rows and all 5 cross-set query families on hash v29.</td>
       </tr>
       <tr>
-        <td><strong>Damage triggers &amp; damage event binding</strong><br><span class="small">CR 120.2–120.4, 510.2: one damage event filtered by kind (any/combat/noncombat), source (permanent or spell), and recipient (player or any)</span></td>
+        <td><strong>Activated mana ability (CR 605.1a) vs. finalized concrete mana outputs</strong><br><span class="small">Whether an ability is a mana ability is intrinsic to its definition; its current mana amount is a board-time evaluation</span></td>
         <td>
-          <code>TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }</code>
-          (<code>ability.rs:261</code>, brand new on this branch) encodes <code>combat == false</code> in the
-          <strong>variant name</strong>, uses <code>Actor</code> instead of <code>TriggerSubject</code>, and only
-          matches <code>DamageTarget::Player</code>.
-          <code>TriggerCondition::DealsCombatDamage</code> watches only <code>CombatDamageToPlayers</code>.
-          <code>event_amount</code> (<code>triggers.rs:162</code>) hardcodes <code>combat: false</code> +
-          <code>Player</code> for <code>DamageDealt</code>; <code>trigger_context</code> (<code>triggers.rs:1197</code>)
-          never binds <code>DamageDealt.source</code>.
+          <code>ActivatedAbilityDefinition::mana_choices()</code> (<code>state/src/card.rs:562</code>) claims to
+          answer CR 605.1a (“<code>None</code> for an ability that uses the stack”) yet matches <strong>only</strong>
+          finalized <code>AddMana { amount: Fixed(1) }</code> and <code>Modal</code> of those. Meanwhile
+          <code>finalize_characteristics</code> (<code>statics.rs:399</code>) + <code>current_mana_output</code>
+          (<code>mana.rs:1654</code>) already materialize dynamic <code>AddMana</code>,
+          <code>AddOneColorManaValue</code>, and <code>If</code> mana branches into <code>Fixed(1)</code>
+          (tested in <code>fdn.rs:1926</code>).
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Biggest mismatch — one rules concept split into incompatible variants, actor shapes, and events.</strong>
-          Violates “parameters are fields, not variant names”, blocks <em>Quilled Greatwurm</em>’s combat-damage trigger
-          (any recipient), and leaves <code>DamageDealt</code> unable to bind its source or non-player amount.
+          <strong>Biggest mismatch — one name for two different concepts.</strong>
+          (1) Real Layer 6 bug: <code>lose_nonmana_abilities</code> (<code>layers.rs:1405</code>) calls
+          <code>mana_choices().is_some()</code> <em>before</em> finalization, wrongly stripping dynamic mana abilities
+          (<em>Raucous Audience</em>, <em>Avatar Kyoshi</em>, <em>Elvish Archdruid</em>).
+          (2) Fooled the last pass into falsely blocking <em>Elvish Archdruid</em>†.
+          (3) <code>finalize_characteristics</code> only checks 1-effect slices, dropping any dynamic mana ability with a <code>mana_suffix</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Triggering-object pronoun in ability text</strong><br><span class="small"><code>ObjectSelector::Triggering</code> names “that spell / card / source / permanent” according to its enclosing trigger</span></td>
+        <td><strong><code>DealsDamage</code> event source binding</strong><br><span class="small">CR 603.4, 608.2h: a damage trigger’s “it / that creature” refers to the damage source</span></td>
         <td>
-          <code>selector_description</code> (<code>ability_description.rs:766</code>) hardcodes
-          <code>"that permanent"</code>, then <code>trigger_description</code> (line 81) and
-          <code>GrantTriggered</code> (line 1360) run a post-hoc
-          <code>program.replace("that permanent", ...)</code> over the entire rendered string.
+          <code>TriggerCondition::DealsDamage</code> matches <code>GameEvent::DamageDealt</code> via
+          <code>subject_matches_damage_source</code> and binds <code>event_amount</code>, but
+          <code>trigger_context</code> (<code>triggers.rs:1171</code>) still binds only
+          <code>TriggerMember::CombatHit</code> and returns <code>None</code> for <code>DamageDealt</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>String-rewriting hack corrupts unrelated phrases.</strong> Any cast or graveyard trigger whose body
-          also refers to a target/chosen permanent or nests a <code>GrantTriggered</code> has its unrelated
-          <code>"that permanent"</code> rewritten to <code>"that spell"</code>.
+          <strong>Half-finished unification.</strong> Any <code>DealsDamage</code> body using
+          <code>ObjectSelector::Triggering</code> (such as <em>Quilled Greatwurm</em>’s “put that many +1/+1 counters
+          on it”) silently resolves to nothing.
         </td>
       </tr>
       <tr>
-        <td><strong>Void &amp; Disappear turn-departure / warp queries</strong><br><span class="small">EOE Void: any player’s nonland departure OR any player’s warped spell; TMT Disappear: your permanent departure</span></td>
+        <td><strong>All-zone <code>*/*</code> &amp; opponent-graveyard CDAs</strong><br><span class="small">CR 604.3, 613.4a: <code>*/*</code> defines power AND toughness in all zones; may count any actor’s graveyard</span></td>
         <td>
-          <code>PlayerTurnHistory</code> already records, hashes, and encodes <code>permanents_left</code>,
-          <code>nonland_permanents_left</code>, and <code>warped_this_turn</code> (v11 cols 12–14), but no
-          <code>Condition</code> reads them and no <code>Game</code> commit helper writes <code>warped_this_turn</code>.
-          The prior plan’s parameterless <code>Condition::WarpedThisTurn</code> left whose warp counts ambiguous.
+          <code>StaticAbility::CharacteristicPower(PowerCda)</code> sets only <code>power</code>
+          (<code>toughness: None</code> in <code>layers.rs:821</code>);
+          <code>PowerCda::GraveyardMatching</code> hardcodes controller; CDA evaluation is duplicated between
+          <code>layers.rs:888</code> and <code>statics.rs:647</code>; off-battlefield readers have no
+          <code>object_toughness</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Missing reader + ambiguous actor scope + missing commit hook.</strong> Checking only
-          <code>controller</code> for <code>WarpedThisTurn</code> would silently break Void when an opponent warps a
-          spell; casting-permissions needs one <code>record_warped_cast</code> hook.
+          <strong>Power-only / controller-only CDA blocks 3 primary rows:</strong> <em>Crusader of Odric</em>
+          (<code>*/*</code>), <em>Consuming Aberration</em> (<code>*/*</code>, opponents’ graveyards), and
+          <em>Enigma Drake</em> (<code>*/4</code>).
         </td>
       </tr>
       <tr>
-        <td><strong>Multiplied single-event quantities &amp; fixed-name predicates</strong><br><span class="small">CR 119.9 (“gain 2 life for each Gate” is ONE gain event); CR 201.5c (“named Hare Apparent” survives source departure/rename)</span></td>
+        <td><strong>Move-result destination checks, multi-player mill &amp; simultaneous namesake destruction</strong><br><span class="small">CR 201.2a, 400.7j, 608.2b, 701.13c: actual zone arrived vs. attempted move; APNAP multi-player mill; reveal-until-land</span></td>
         <td>
-          <code>EffectValue</code> has <code>Half</code> but no linear scaling (<code>Scaled</code>), forcing either
-          two separate <code>GainLife</code> instructions (breaking <em>Cat Collector</em> / <em>Exemplar of Light</em>
-          gain counts!) or a card-specific value variant.
-          <code>CardPredicate</code> has only source-relative <code>namesake</code> (which returns 0 once the entering
-          source leaves, violating CR 201.5c for <em>Hare Apparent</em>).
+          <code>Effect::MillCards</code> takes only a single <code>target: Option&lt;TargetSpec&gt;</code>;
+          <code>EffectValue::Objects</code> has no destination <code>in_zone</code> filter (while
+          <code>Condition::TargetCardExiled</code> special-cases one zone); no <code>MillUntil</code> or
+          <code>TargetAndSameName</code> exists.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Missing <code>EffectValue::Scaled</code> threatens CR 119.9 single-event fidelity; <code>namesake</code> fails CR 201.5c.</strong>
-          Blocks faithful authoring of <em>Archway Angel</em> and <em>Hare Apparent</em>.
+          <strong>Blocks 5 primary rows:</strong> <em>Dread Summons</em> (each player mills + actual graveyard
+          arrivals under exile replacement), <em>Consuming Aberration</em> (reveal until land, then mill),
+          <em>Scavenging Ooze</em>, <em>Cemetery Recruitment</em>, and <em>Maelstrom Pulse</em>.
         </td>
       </tr>
       <tr>
-        <td><strong>All-zone <code>*/*</code> CDAs, move-result zone checks &amp; state triggers</strong><br><span class="small">CR 604.3, 603.8, 701.13c, 201.2a: shared P/T CDA, multi-player mill + actual destination check, target+namesake destroy, ≥N counter state trigger</span></td>
+        <td><strong>State triggers, counter-adding costs &amp; departed-source counter reads</strong><br><span class="small">CR 602.2h, 603.8, 608.2h: ≥N counter state trigger; counter placement as activation cost; LKI counters on sacrificed source</span></td>
         <td>
-          <code>PowerCda</code> is power-only and controller-only, duplicated across <code>layers.rs</code> and
-          <code>statics.rs</code>; <code>Effect::MillCards</code> is single-player and <code>EffectValue::Objects</code>
-          has no <code>in_zone</code> filter; no <code>MillUntil</code> or <code>TargetAndSameName</code> exists;
-          <code>check_state_triggers</code> hardcodes <code>NoCounters</code>.
+          <code>check_state_triggers</code> (<code>triggers.rs:1436</code>) hardcodes <code>NoCounters</code>;
+          <code>ActivatedAbilityDefinition</code> has <code>remove_counters</code> but no <code>add_counters</code>;
+          <code>ObjectProperty</code> lacks <code>Counters(CounterKind)</code> and
+          <code>effect_execution::project_stack_object</code> never projects a departed activated source’s LKI counters.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Carried cleanly into Slices 2 and 3 below</strong> (<em>Crusader of Odric</em>, <em>Consuming Aberration</em>,
-          <em>Dread Summons</em>, <em>Cemetery Recruitment</em>, <em>Maelstrom Pulse</em>, <em>Mazemind Tome</em>).
+          <strong>Blocks final primary row (<em>Mazemind Tome</em>, 81/81) and <em>Ravenous Amulet</em>†.</strong>
+          Putting a page counter in the effect body instead of as a cost would invert CR 603.8 stack order against Scry/Draw.
         </td>
       </tr>
     </tbody>
@@ -226,80 +233,92 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch: Split Damage Triggers (<code>DealsNoncombatDamage</code> vs. <code>DealsCombatDamage</code>)</h2>
+  <h2>2. Biggest Mismatch: CR 605.1a Mana Ability Classification vs. Finalized Outputs (<code>mana_choices</code>)</h2>
   <div class="callout">
-    <strong>The core problem:</strong> <code>GameEvent::DamageDealt</code> already carries <code>source</code>,
-    <code>target: Player | Permanent</code>, <code>amount</code>, and <code>combat: bool</code> for every committed
-    damage event. Yet v29 added a brand-new, narrow variant
-    <code>TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }</code> alongside permanent-only
-    <code>DealsCombatDamage { subject, to, per }</code>. Because <code>DealsNoncombatDamage</code> has zero pinned-pilot
-    history, unifying it now into one parameterized <code>TriggerCondition::DealsDamage</code> costs zero token renames
-    and removes the split before more damage cards land.
+    <strong>The core problem:</strong> <code>ActivatedAbilityDefinition::mana_choices()</code> claims to be the
+    engine’s CR 605.1a mana-ability test (“<code>None</code> for an ability that uses the stack”), yet it only
+    recognizes already-materialized <code>Effect::AddMana { amount: Fixed(1) }</code>. Because
+    <code>finalize_characteristics</code> + <code>current_mana_output</code> already materialize dynamic mana
+    outputs <em>after</em> Layer 6, two failures happen immediately: Layer 6’s <code>lose_nonmana_abilities</code>
+    wrongly deletes dynamic mana abilities, and engineers reading <code>mana_choices()</code> falsely conclude
+    that board-counted mana abilities like <em>Elvish Archdruid</em> are unsupported.
   </div>
 
   <h3>Concrete interaction walkthrough (normal path, failure, and recovery)</h3>
   <p>
-    <strong>Scenario A (<em>Niv-Mizzet, Visionary</em> + stolen spell + departed permanent):</strong> Seat 0 controls
-    <em>Niv-Mizzet, Visionary</em>, casts Seat 1’s exiled <em>Lightning Bolt</em> at Seat 1 (3 noncombat damage), then
-    sacrifices <em>Fanatical Firebrand</em> to ping Seat 1 (1 noncombat damage from a departed permanent), then attacks
-    with <em>Niv-Mizzet</em> (5 combat damage).<br>
-    <strong>Scenario B (<em>Quilled Greatwurm</em> combat damage to a blocker):</strong> Seat 0 controls
-    <em>Quilled Greatwurm</em> and attacks with a 3/3 <em>Hill Giant</em>; Seat 1 blocks with a 2/2 <em>Gray Ogre</em>.
-    <em>Hill Giant</em> deals 3 combat damage to a <strong>creature</strong> (not a player) and must get 3 +1/+1 counters
-    from the single damage trigger.
+    <strong>Normal path (<em>Elvish Archdruid</em>†):</strong> Seat 0 controls <em>Elvish Archdruid</em> and two
+    other Elves (3 Elves total) and taps Archdruid for mana. <code>finalize_characteristics</code> runs
+    <code>current_mana_output</code>, materializing <code>AddMana { G, amount: Objects(Elves) }</code> into
+    <code>AddMana { GGG, amount: Fixed(1) }</code>. Archdruid resolves immediately off the stack, adding
+    <code>{G}{G}{G}</code>, and is visible to payment planning, previews, and manual floats (already verified for
+    counted creatures in <code>fdn.rs:1926</code>).<br>
+    <strong>Failure path (Layer 6 <code>LoseNonManaAbilities</code> / 0-Elf subtype loss):</strong>
+    (a) An effect applies <code>Modification::LoseNonManaAbilities</code> to <em>Elvish Archdruid</em> (or
+    <em>Raucous Audience</em>, or <em>Avatar Kyoshi</em>). Layer 6 runs <code>lose_nonmana_abilities</code>
+    <strong>before</strong> <code>finalize_characteristics</code> and retains
+    <code>ability.mana_choices().is_some()</code>, which returns <code>false</code> on the unfinalized dynamic
+    effect — <strong>silently stripping a legal mana ability</strong>!
+    (b) Archdruid loses the Elf creature type while Seat 0 controls no other Elves: <code>current_mana_output</code>
+    materializes <code>Mana::default()</code> (0 mana), matching <em>Avatar Kyoshi</em>’s 0-power path.<br>
+    <strong>Recovery / clean boundary:</strong> Separating <code>is_mana_ability()</code> (CR 605.1a on any
+    unfinalized or finalized definition) from <code>mana_choices()</code> (concrete outputs on a finalized view)
+    makes Layer 6 preserve every dynamic mana ability, lets <code>finalize_characteristics</code> handle dynamic
+    mana abilities with a <code>mana_suffix</code>, and unblocks <em>Elvish Archdruid</em>† immediately.
   </p>
+
   <div class="grid">
     <div class="panel existing-box">
-      <h3>Before <span class="badge existing">Existing at d7ef237481</span></h3>
-      <pre>enum TriggerCondition {
-  // Watches CombatDamageToPlayers (players only!)
-  DealsCombatDamage {
-    subject: TriggerSubject,
-    to: Actor,
-    per: Per,
-  },
-  // Brand new in v29: noncombat + player only,
-  // wrong actor shape (Actor, not TriggerSubject)
-  DealsNoncombatDamage {
-    source: Actor,
-    to: Actor,
-  },
+      <h3>Before <span class="badge existing">Existing at 256d8ac310</span></h3>
+      <pre>// state/src/card.rs:562 — conflates CR 605.1a with finalized output
+pub fn mana_choices(&amp;self) -&gt; Option&lt;Vec&lt;Mana&gt;&gt; {
+  let (effect, suffix) = self.effects.split_first()?;
+  if !suffix.iter().all(is_mana_suffix_effect) { return None; }
+  match effect {
+    Effect::AddMana { mana, amount: Fixed(1),
+                      until_end_of_combat: false } =&gt; Some(vec![mana.clone()]),
+    Effect::Modal { modes } =&gt; ... // Fixed(1) only
+    _ =&gt; None, // &lt;-- returns None for unfinalized dynamic mana!
+  }
 }
 
-// triggers.rs:162 — artificially gated!
-(DamageDealt { target: Player(_), amount,
-               combat: false, .. }, None) =&gt; *amount</pre>
+// flow/layers.rs:1405 — BUG: runs BEFORE finalize_characteristics!
+view.activated_abilities.retain(|a| a.mana_choices().is_some());
+
+// flow/statics.rs:398 — misses dynamic mana with a mana_suffix
+if let [effect] = ability.effects.as_slice() {
+  if let Some(effect) = self.current_mana_output(effect, ctrl) { ... }
+}</pre>
       <p class="small">
-        Scenario A passes only by special-casing noncombat player damage; Scenario B cannot even be expressed
-        (<code>Quilled Greatwurm</code>’s ledger blocker explicitly cites this split), and <code>trigger_context</code>
-        never binds <code>DamageDealt.source</code>.
+        Strips <em>Raucous Audience</em>, <em>Avatar Kyoshi</em>, and <em>Elvish Archdruid</em> under
+        <code>LoseNonManaAbilities</code>, and misled the previous slice into marking <em>Elvish Archdruid</em>† blocked.
       </p>
     </div>
     <div class="panel proposed-box">
       <h3>After <span class="badge proposed">Proposed · Next Slice</span></h3>
-      <pre>enum DamageKind { Any, Combat, Noncombat }
-enum DamageRecipientFilter { Player(Actor), Any }
-
-enum TriggerCondition {
-  // Legacy/batch combat-to-player (kept for pinned pilots)
-  DealsCombatDamage { subject, to, per },
-  // Replaces branch-only DealsNoncombatDamage:
-  DealsDamage {
-    kind: DamageKind,
-    source: TriggerSubject,
-    to: DamageRecipientFilter,
-  },
+      <pre>// state/src/card.rs — two honest, non-overlapping predicates
+pub fn is_mana_ability(&amp;self) -&gt; bool {
+  let Some((first, suffix)) = self.effects.split_first() else { return false };
+  suffix.iter().all(is_mana_suffix_effect) &amp;&amp; is_mana_head(first)
 }
+pub fn has_dynamic_mana_output(&amp;self) -&gt; bool {
+  self.is_mana_ability() &amp;&amp; self.mana_choices().is_none()
+}
+/// Finalized concrete outputs on a `Characteristics` view.
+pub fn mana_choices(&amp;self) -&gt; Option&lt;Vec&lt;Mana&gt;&gt; { ... }
 
-// triggers.rs — binds EVERY DamageDealt uniformly:
-(DamageDealt { amount, .. }, None) =&gt; *amount as i32
-// trigger_context binds DamageDealt.source (live/LKI/spell)</pre>
+// flow/layers.rs:1405 — preserves fixed AND dynamic mana abilities
+view.activated_abilities.retain(ActivatedAbilityDefinition::is_mana_ability);
+
+// flow/statics.rs:398 — materializes head even with mana_suffix
+if ability.has_dynamic_mana_output() {
+  if let Some(effect) = self.current_mana_output(&amp;ability.effects[0], ctrl) {
+    ability.effects[0] = effect;
+  }
+}</pre>
       <p class="small">
-        One <code>subject_matches_damage_source</code> helper checks <code>source_controller</code> plus live, LKI, or
-        recorded predicate matching (empty predicate = any source, permanent or spell). Both Scenario A
-        (<code>Noncombat, you_control(default), Player(Opponent)</code>) and Scenario B
-        (<code>Combat, you_control(creature), Any</code>) flow through the same matcher, amount binding, and
-        <code>ObjectSelector::Triggering</code> context.
+        One CR 605.1a authority (<code>is_mana_ability</code>), zero duplication with
+        <code>has_dynamic_activations</code>, Layer 6 preserves dynamic mana abilities, and <em>Elvish Archdruid</em>†
+        ships in the very next slice with zero mana-solver redesign.
       </p>
     </div>
   </div>
@@ -308,36 +327,41 @@ enum TriggerCondition {
   <table>
     <thead>
       <tr>
-        <th style="width:28%">Counterexample</th>
+        <th style="width:27%">Counterexample</th>
         <th style="width:36%">What could break</th>
-        <th style="width:36%">How the unified model survives</th>
+        <th style="width:37%">How the unified model survives</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Stolen spell / departed permanent in <code>DealsDamage</code></strong></td>
-        <td><code>subject_matches_permanent</code> rejects spells (no <code>PermanentId</code>) and departed permanents.</td>
-        <td><code>subject_matches_damage_source</code> reads <code>source_controller(src)</code> (live permanent → LKI → live spell → <code>spell_lki</code> → owner) and treats empty <code>CardPredicate::default()</code> as matching any source, else checks permanent/LKI/recorded predicate.</td>
+        <td><strong><code>LoseNonManaAbilities</code> on <em>Elvish Archdruid</em> / <em>Raucous Audience</em></strong></td>
+        <td>Layer 6 checks <code>mana_choices().is_some()</code> before finalization and deletes the mana ability.</td>
+        <td><code>lose_nonmana_abilities</code> calls <code>is_mana_ability()</code>, which recognizes dynamic <code>AddMana</code>, <code>AddOneColorManaValue</code>, and <code>If</code> mana heads before finalization.</td>
       </tr>
       <tr>
-        <td><strong>Cast trigger with nested <code>GrantTriggered</code> or target permanent</strong></td>
-        <td><code>name_triggering_object</code>’s blanket <code>.replace("that permanent", "that spell")</code> corrupts unrelated permanent wording.</td>
-        <td>Threading <code>triggering_noun</code> into <code>selector_description</code> rewrites <em>only</em> <code>ObjectSelector::Triggering</code> and resets the noun inside each nested <code>GrantTriggered</code>.</td>
+        <td><strong><em>Elvish Archdruid</em> loses Elf subtype (0 Elves controlled)</strong></td>
+        <td><code>current_mana_output</code> produces <code>Mana::default()</code> (0 mana); solver/preview must not loop or panic.</td>
+        <td>Same path as <em>Avatar Kyoshi</em> at greatest power 0 (<code>mana.rs:1668</code>); directed test verifies 0-mana tap and unaffected payment solver.</td>
       </tr>
       <tr>
-        <td><strong>Opponent warps a spell (EOE Void)</strong></td>
-        <td>A parameterless <code>Condition::WarpedThisTurn</code> checking only <code>history[controller.0]</code> returns <code>false</code> when seat 1 warped.</td>
-        <td><code>Condition::WarpedThisTurn { who: Actor }</code> checks any seat matching <code>who.includes(controller, seat)</code>; Void uses <code>Actor::AnyPlayer</code> for both <code>PermanentLeftThisTurn</code> and <code>WarpedThisTurn</code>.</td>
+        <td><strong><em>Dread Summons</em> under graveyard→exile replacement</strong></td>
+        <td><code>frame.this_way</code> records moved cards (CR 701.13c), so unfiltered count creates Zombies for exiled creatures.</td>
+        <td><code>EffectValue::Objects { of: CardsThisWay, predicate: Some(creature), in_zone: Some(ZoneType::Graveyard) }</code> counts only creatures that actually arrived in a graveyard while preserving CR 701.13c in <code>this_way</code>.</td>
       </tr>
       <tr>
-        <td><strong><em>Archway Angel</em> + <em>Cat Collector</em> / <em>Exemplar of Light</em></strong></td>
-        <td>Authoring “gain 2 life for each Gate” as two <code>GainLife</code> instructions emits two <code>LifeChanged</code> events, giving <em>Exemplar</em> two counters instead of one (violating CR 119.9).</td>
-        <td><code>EffectValue::Scaled { factor: 2, value: each_you_control(Gate).count() }</code> evaluates <code>2 * gates</code> into one <code>GainLife</code> instruction and one <code>LifeChanged</code> event.</td>
+        <td><strong><em>Maelstrom Pulse</em> targeting a nameless permanent or blinked target</strong></td>
+        <td>Empty name <code>""</code> could match other nameless permanents (violating CR 201.2a), or blinked target could still wipe namesakes (violating CR 608.2b).</td>
+        <td>CR 608.2b fizzles before selection if the target left; when legal, <code>TargetAndSameName</code> always includes the target itself and adds other permanents only when <code>!name.is_empty() &amp;&amp; other.name == name</code>.</td>
       </tr>
       <tr>
-        <td><strong><em>Hare Apparent</em> killed or renamed before ETB resolves (CR 201.5c)</strong></td>
-        <td><code>CardPredicate { namesake: true }</code> reads <code>source_permanent_id(frame)</code>, returning <code>None</code> (0 Rabbits) after <em>Lightning Bolt</em> or counting Citizens after <em>Honest Work</em>.</td>
-        <td><code>CardPredicate.named: Some("Hare Apparent")</code> tests CR 201.2a non-empty equality against each other controlled creature’s effective layered name, independent of the entering source’s fate.</td>
+        <td><strong><em>Consuming Aberration</em> / <em>Crusader of Odric</em> off-battlefield &amp; on-battlefield</strong></td>
+        <td><code>CharacteristicPower</code> leaves toughness 0 (immediate SBA death on battlefield!) and counts only controller’s graveyard.</td>
+        <td><code>StaticAbility::CharacteristicPt(PowerCda)</code> sets both base power and base toughness in Layer 7a and via shared <code>object_pt</code> off-battlefield; <code>GraveyardMatchingBy { who: Actor::Opponent, .. }</code> counts opponents’ graveyards.</td>
+      </tr>
+      <tr>
+        <td><strong><em>Mazemind Tome</em>’s 4th page counter + Stifled state trigger (CR 603.8)</strong></td>
+        <td>Adding the page counter in the effect body delays the exile trigger until after Scry/Draw; countering the state trigger while 4 counters remain must re-trigger it immediately.</td>
+        <td><code>ActivatedAbilityDefinition.add_counters</code> pays the counter as an <code>EventCause::Cost</code> before the activation resolves, firing <code>check_state_triggers</code> immediately; once countered off the stack, <code>check_state_triggers</code> sees <code>!waiting &amp;&amp; count &gt;= 4</code> and re-enqueues it.</td>
       </tr>
     </tbody>
   </table>
@@ -346,47 +370,45 @@ enum TriggerCondition {
 <section>
   <h2>3. Architectural Plan to Close All 81 Primary FDN Rows <span class="badge proposed">Written into scratch/plan.md</span></h2>
   <p>
-    With 58 of 81 primary FDN rows landed on hash v29, the remaining <strong>23 primary FDN rows</strong>,
-    <strong>2 cross-set witnesses</strong> (<em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>), and feasible
-    cost-primary candidates close cleanly in <strong>three slices</strong> (pulling live-board <em>Ghalta</em> into the
-    next slice beside <em>Brass’s Bounty</em> in <code>rix.rs</code>):
+    With <strong>68 of 81</strong> primary FDN rows and all 5 cross-set query families delivered on hash v29, the
+    remaining <strong>13 primary FDN rows</strong>, <strong>7 pending cost-primary rows</strong> citing
+    <code>event_history</code>/<code>context_queries</code>, Findings 3–5, the CR 104.4b mandatory-loop draw, and
+    final conformance re-recording close cleanly in <strong>two slices</strong>:
   </p>
   <pre>
-Next slice · Damage-trigger cleanup, triggering-noun threading, live-board counts, name predicates &amp; turn departures
-             (10 primary → 68/81 + 3 cost + 2 cross-set = 15 cards; zero new match-state hash fields)
-  1. Replace branch-only DealsNoncombatDamage with DealsDamage { kind: DamageKind, source: TriggerSubject,
-     to: DamageRecipientFilter } on DamageDealt; generalize event_amount &amp; trigger_context for DamageDealt;
-     keep DealsCombatDamage for pinned pilots &amp; Per::Batch; update Quilled Greatwurm’s ledger blocker.
-  2. Delete name_triggering_object string rewrite; thread triggering_noun into selector_description for Triggering.
-  3. Add CardPredicate.named: Option&lt;String&gt; (CR 201.2a across live/departed/off-battlefield + ReadSet NAME).
-  4. Add EffectValue::Scaled { factor: i32, value: Box&lt;EffectValue&gt; } (CR 119.9 single gain event for Archway Angel).
-  5. Add Condition::PermanentLeftThisTurn { who: Actor, nonland: bool } + Condition::WarpedThisTurn { who: Actor }
-     reading existing PlayerTurnHistory cols 12–14 + Game::record_warped_cast(player) commit boundary.
-  Cards: Hare Apparent (fdn, token.rabbit), Brass's Bounty (rix), Krenko, Mob Boss (m13), Dwynen's Elite (ori),
-         Inspiring Call (dtk), Ingenious Leonin (fdn), Leonin Vanguard (m19), Volley Veteran (m19),
-         Archway Angel (rna), Dragonmaster Outcast (wwk);
-         Elvish Archdruid† (m10), Cryptic Caves† (m20), Ghalta, Primal Hunger† (rix);
-         cross-set witnesses Plasma Bolt (eoe, void) and Michelangelo, Game Master (tmt, disappear).
+Next slice (Slice 1) · Mana-ability split, DealsDamage source binding, */* CDAs, move results &amp; multi-player mill
+                       (12 primary → 80/81 + Elvish Archdruid† = 13 cards; hash stays v29)
+  1. Split ActivatedAbilityDefinition::is_mana_ability() (CR 605.1a) &amp; has_dynamic_mana_output() from finalized
+     mana_choices(); switch layers.rs:1405 (lose_nonmana_abilities) to is_mana_ability(); finalize head via
+     split_first in statics.rs:398. Add LoseNonManaAbilities + 0-Elf controls. Unblocks Elvish Archdruid†.
+  2. Bind GameEvent::DamageDealt { source: Some(source), .. } in flow/triggers.rs::trigger_context (live permanent
+     → ObjectLki → StackSpell) when ability.reads_triggering_object(). Add rules test; trim Quilled Greatwurm blocker.
+  3. Add PowerCda::GraveyardMatchingBy { who: Actor, predicate } &amp; StaticAbility::CharacteristicPt(PowerCda)
+     (keep legacy GraveyardMatching &amp; CharacteristicPower for pinned pilots); unify pt_cda(), Layer 7a Cda
+     operation, and off-battlefield object_pt() / object_toughness().
+  4. Add Effect::MillCards optional player: Option&lt;PlayerSelector&gt; (one APNAP ThisWay batch);
+     Effect::MillUntil { player, predicate } (CardRevealed per reveal + single ThisWay batch);
+     EffectValue::Objects optional in_zone: Option&lt;ZoneType&gt; (unifying Dread Summons, Scavenging Ooze,
+     Cemetery Recruitment; keep legacy TargetCardExiled for pinned pilots);
+     ObjectSelector::TargetAndSameName(TargetSpec) (simultaneous target + CR 201.2a namesake destruction).
+  Cards (13): Elvish Archdruid† (m10); Kiora, the Rising Tide (fdn), Crypt Feaster (fdn), Revenge of the Rats (fdn);
+     Enigma Drake (akh), Crusader of Odric (m13), Consuming Aberration (gtc); Stroke of Midnight (woe),
+     Feed the Swarm (znr), Scavenging Ooze (cmd), Cemetery Recruitment (emn), Dread Summons (c15),
+     Maelstrom Pulse (arb).
 
-Slice 2 · Graveyard thresholds, all-zone */* CDAs &amp; move results (12 primary → 80/81)
-  1. PowerCda::GraveyardMatchingBy { who: Actor, predicate } + StaticAbility::CharacteristicPt(PowerCda)
-     (shared evaluator across layers.rs &amp; off-battlefield statics.rs, including off-battlefield toughness).
-  2. Effect::MillUntil { player: PlayerSelector, predicate } (deterministic reveal + single ThisWay batch).
-  3. Effect::MillCards optional player: Option&lt;PlayerSelector&gt; + EffectValue::Objects.in_zone: Option&lt;ZoneType&gt;
-     (unifying Dread Summons under exile replacement, Cemetery Recruitment, and Scavenging Ooze).
-  4. ObjectSelector::TargetAndSameName(TargetSpec) (simultaneous target + CR 201.2a namesake destruction).
-  Cards: Kiora, the Rising Tide, Crypt Feaster, Revenge of the Rats, Consuming Aberration, Enigma Drake,
-         Crusader of Odric, Stroke of Midnight, Scavenging Ooze, Cemetery Recruitment, Dread Summons,
-         Maelstrom Pulse, Feed the Swarm.
-
-Slice 3 · State triggers, remaining cost rows, CR 104.4b draw &amp; closure (1 primary → 81/81 + cleanup + conformance)
-  1. Generalize check_state_triggers (CR 603.8) for TriggerCondition::CountersAtLeast { kind, count } + CounterKind::Page
-     → Mazemind Tome (81/81 primary FDN rows complete).
-  2. Author remaining feasible cost-primary rows (Ravenous Amulet†, Mentor of the Meek†, Immersturm Predator†,
-     Fishing Pole†, Ballyrush Banneret†, Arcane Epiphany†, Gate Colossus†); record concrete blockers for out-of-scope
-     mechanics (Ovika’s composite ward cost, Quilled Greatwurm’s graveyard cast + distributed counter removal).
-  3. Dedicated CR 104.4b mandatory-loop draw slice (GameOutcome::Draw + tick.rs cycle detection with loop partner)
-     + Findings 3–5 cleanup + final re-recording of evidence-opening-v1.json.
+Following slice (Slice 2) · State triggers, counter costs/LKI, remaining cost rows, CR 104.4b draw &amp; closure
+                            (1 primary → 81/81 + remaining feasible cost rows + cleanup + conformance)
+  1. Generalize check_state_triggers (CR 603.8) via state_trigger_holds for TriggerCondition::CountersAtLeast
+     { kind, count } beside NoCounters; add CounterKind::{Page, Soul, Bait} and ActivatedAbilityDefinition
+     add_counters: Option&lt;(CounterKind, u16)&gt; (EventCause::Cost) → Mazemind Tome (m21, 81/81 primary FDN).
+  2. Add ObjectProperty::Counters(CounterKind) (live &amp; departed LKI via EffectValue::Property) and project
+     departed source LKI in effect_execution::project_stack_object when an activation reads departed source
+     counters → Ravenous Amulet† (fdn).
+  3. Evaluate &amp; author remaining feasible cost-primary rows (Mentor of the Meek†, Immersturm Predator†,
+     Fishing Pole†); keep concrete blockers for out-of-scope mechanics (Ovika’s composite ward cost,
+     Quilled Greatwurm’s graveyard cast + distributed counter removal).
+  4. Dedicated CR 104.4b mandatory-loop draw (GameOutcome::Draw + tick.rs zero-choice cycle detection with loop
+     partner for Bloodthirsty Conqueror), Findings 3–5 cleanup, and final evidence-opening-v1.json re-record.
   </pre>
 </section>
 
@@ -398,56 +420,56 @@ Slice 3 · State triggers, remaining cost rows, CR 104.4b draw &amp; closure (1 
   </p>
   <ol class="questions">
     <li>
-      <strong>How should <code>TriggerCondition::DealsNoncombatDamage</code> be reconciled with <code>DealsCombatDamage</code>?</strong>
+      <strong>How should dynamic mana abilities (<em>Elvish Archdruid</em>†) be classified vs. finalized?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Replace the branch-only <code>DealsNoncombatDamage</code> with
-        <code>TriggerCondition::DealsDamage { kind: DamageKind, source: TriggerSubject, to: DamageRecipientFilter }</code>
-        on <code>EventKind::DamageDealt</code>, while keeping <code>DealsCombatDamage</code> for pinned pilots and
-        <code>Per::Batch</code> combat-player hits. Zero token renames, fixes the shape-review defect immediately, and
-        unblocks permanent-recipient damage triggers (<em>Quilled Greatwurm</em>).
+        <span class="selected">1a (Selected):</span> Split <code>ActivatedAbilityDefinition::is_mana_ability()</code>
+        (true CR 605.1a predicate covering fixed + dynamic mana heads + <code>mana_suffix</code>) from
+        <code>mana_choices()</code> (finalized concrete outputs), switch Layer 6’s <code>lose_nonmana_abilities</code>
+        to <code>is_mana_ability()</code>, and author <em>Elvish Archdruid</em>† immediately in Slice 1 using the
+        existing <code>current_mana_output</code> pipeline.
       </div>
       <div class="choice">
-        1b: Keep <code>DealsNoncombatDamage { source: Actor, to: Actor }</code> as-is and add a third variant when
-        permanent-recipient damage triggers are needed. (Passed over: cements a split variant/actor model that violates
-        “parameters are fields, not variant names”.)
-      </div>
-    </li>
-    <li>
-      <strong>How should <em>Archway Angel</em>’s “gain 2 life for each Gate you control” scale a counted quantity?</strong>
-      <div class="choice">
-        <span class="selected">2a (Selected):</span> Add <code>EffectValue::Scaled { factor: i32, value: Box&lt;EffectValue&gt; }</code>
-        so the doubled amount flows into a single <code>Effect::GainLife</code> and commits one <code>LifeChanged</code>
-        event (CR 119.9), matching <code>EffectValue::Half</code> symmetrically.
-      </div>
-      <div class="choice">
-        2b: Emit two <code>Effect::GainLife</code> instructions in sequence. (Passed over: produces two life-gain events,
-        corrupting <em>Cat Collector</em>, <em>Vanguard Seraph</em>, and <em>Exemplar of Light</em>.)
+        1b: Leave <em>Elvish Archdruid</em>† blocked and build a parallel variable-amount mana solver outside
+        <code>finalize_characteristics</code>. (Passed over: duplicates existing working <code>current_mana_output</code>
+        tested at <code>fdn.rs:1926</code> and leaves the Layer 6 <code>lose_nonmana_abilities</code> bug open.)
       </div>
     </li>
     <li>
-      <strong>Should <code>Condition::WarpedThisTurn</code> take <code>who: Actor</code> symmetrically with <code>PermanentLeftThisTurn</code>?</strong>
+      <strong>How should <em>Ravenous Amulet</em>† read a sacrificed source’s soul counters?</strong>
       <div class="choice">
-        <span class="selected">3a (Selected):</span> Yes — <code>Condition::WarpedThisTurn { who: Actor }</code> plus
-        <code>Game::record_warped_cast(player)</code> so EOE Void uses <code>Actor::AnyPlayer</code> for both halves
-        (matching the official rule that an opponent’s warped spell turns on Void) while any future “you warped” card
-        reuses the same condition.
+        <span class="selected">2a (Selected):</span> Add <code>ObjectProperty::Counters(CounterKind)</code> so
+        <code>EffectValue::Property</code> handles live and departed LKI counters uniformly across
+        <code>This</code>, <code>Triggering</code>, <code>Target</code>, <code>Paid</code>, and <code>Each</code>,
+        and project departed source LKI in <code>effect_execution::project_stack_object</code> (zero new v11 columns).
       </div>
       <div class="choice">
-        3b: Keep parameterless <code>Condition::WarpedThisTurn</code> hardcoding any-player or controller-only. (Passed
-        over: hides whose warp is checked and breaks symmetry with <code>PermanentLeftThisTurn { who, nonland }</code>.)
+        2b: Add a dedicated <code>EffectValue::SourceCounters(CounterKind)</code> variant and a new stack column.
+        (Passed over: narrows counter queries to <code>This</code> alone and grows the stack schema unnecessarily.)
       </div>
     </li>
     <li>
-      <strong>How should <em>Hare Apparent</em>’s “A deck can have any number of cards named Hare Apparent” be handled?</strong>
+      <strong>How should <em>Scavenging Ooze</em>, <em>Cemetery Recruitment</em>, and <em>Dread Summons</em> check move destinations?</strong>
       <div class="choice">
-        <span class="selected">4a (Selected):</span> Author <em>Hare Apparent</em> now with <code>CardPredicate.named</code>;
-        since <code>development-v1</code> (<code>deck_admission.rs:225</code>) intentionally enforces no 4-copy tournament
-        limit, any count is already admitted, and the ledger preserves its <code>game_procedure</code> note for future
-        tournament legality rules.
+        <span class="selected">3a (Selected):</span> Add optional <code>in_zone: Option&lt;ZoneType&gt;</code> on
+        <code>EffectValue::Objects</code> (keeping legacy <code>Condition::TargetCardExiled</code> intact for pinned
+        pilots), so all three cards share one destination-aware move-result query without adding bespoke
+        <code>Condition::TargetCardReturnedToHand</code> variants.
       </div>
       <div class="choice">
-        4b: Introduce a tournament 4-copy validator inside MTG-418 just to exempt <em>Hare Apparent</em>. (Passed over:
-        out-of-scope game-procedure work that contradicts <code>development_construction_is_not_tournament_legality</code>.)
+        3b: Add separate per-zone <code>Condition</code> variants alongside <code>TargetCardExiled</code>. (Passed
+        over: multiplies card-shaped conditions and does not serve multi-card counts like <em>Dread Summons</em>.)
+      </div>
+    </li>
+    <li>
+      <strong>Should <em>Mazemind Tome</em>’s page counter placement be an activation cost or an effect?</strong>
+      <div class="choice">
+        <span class="selected">4a (Selected):</span> Add <code>ActivatedAbilityDefinition.add_counters: Option&lt;(CounterKind, u16)&gt;</code>
+        paid with <code>EventCause::Cost</code> before the ability goes on the stack, so the CR 603.8 state trigger
+        stacks on top of Scry/Draw and resolves first.
+      </div>
+      <div class="choice">
+        4b: Put <code>Effect::PutCounters</code> inside the activation’s effect list. (Passed over: breaks CR 602.2h /
+        603.8 stack order — the Scry/Draw would resolve before Tome exiled itself.)
       </div>
     </li>
   </ol>
