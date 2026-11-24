@@ -42,3 +42,17 @@
   Both jobs use the same fresh experiment label so the sampler declaration
   sees the policy's final checkpoint. The linked MLX run is still Slice 3
   acceptance.
+
+## Slice 3 (2026-11-23)
+
+- MLX computes physical log-binomial odds on the host in float64 and centers
+  each conditional before sending it to the float32 correction network.
+  Physical search draws use NumPy's multivariate hypergeometric distribution.
+  The seeded receipts reproduced and agreed with Torch's physical log
+  probabilities with known cards reserved, including the empty physical deal.
+- At `a95bdce183`, the Torch-blocked local Etude run registered
+  `belief-mlx/policy@0` update 1 with 246 learner transitions and SHA-256
+  `25a5e7dcf51a28d03f67075352802fb4b4d918545855384c4eebe5f9e4640377`.
+  The sampler histories named those policy bytes. `belief-mlx/sampler@0`
+  registered its four-step checkpoint with SHA-256
+  `16c5ae2e14ab3080eb2b825a6fda8dfe5592b285bfc38199bbd6b3117c7c2a2f`.

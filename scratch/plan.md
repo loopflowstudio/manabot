@@ -18,42 +18,8 @@ preparation from `b9b09bc6d9`. Extend the current admission and
 
 1. **Done (`90211689b7`)** — Gray Ogre PPO runs on MLX through the shared update with `world=None`, hashed records, and historical mean. A Torch-blocked recipe registered a policy after one MPS Adam step and both backends reloaded it with identical outputs.
 2. **Done (`ec62204d49`)** — Seven architecture cases matched Torch on forwards, gradients and clipped Adam weights. A collected WDL rollout trained through the shared categorical returns and the single `UpdateBackend` / `RL` surface.
-3. **Next — portable belief sampler, belief rows, and Torch-free demo.**
-   - Factor byte-level `encode_safetensors` and `decode_safetensors` from
-     file I/O in `manabot/policy/checkpoint.py`. In
-     `manabot/belief/checkpoint.py`, own the immutable `belief.safetensors`
-     save and exact byte, schema, dataset, policy and world admission.
-     Preserve the `manabot.autoregressive-belief-sampler/v1` format marker,
-     schema and identities, hidden size, history dropout and metrics. The
-     nine canonical float32 tensors are `context.{weight,bias}`, `card.weight`,
-     `recurrent.{input_weight,hidden_weight,input_bias,hidden_bias}`, and
-     `correction.{weight,bias}`.
-   - Extend the existing `SamplerCodec` in `manabot/belief/protocol.py` to
-     extract and restore canonical parameters. Delete `SamplerEncoder`
-     from `BeliefTrainer`. Read legacy zip `.pt` by `PK\x03\x04` through
-     the Torch codec and apply the same admission checks. MLX must name
-     Torch when it refuses those bytes. Read `metrics.seed` in
-     `manabot/reports/belief.py` through the admitted sampler payload so
-     the report and loader use the same bytes. Preserve absent fit seeds.
-   - Implement `mlx/belief.py` and `mlx/belief_fit.py` against Torch's
-     physical-deal base measure and autoregressive sampler. Keep support,
-     normalization and `log_prob` parity with Torch, including under MLX's
-     GPU float64 limitation. Reuse host `score_sampler_arm`. Expose lazy
-     `belief_fit` on both backends and `belief` on MLX.
-   - In MLX policy and checkpoint loading, port the five belief embeddings
-     for card, owner, zone, count and global context. Add `admit_belief`,
-     read `Prepared.belief`, restore `belief_binding`, and remove the
-     corresponding architecture rejection. Self-play still rejects positive
-     `belief_count_buckets` because it produces no belief rows.
-   - Add the backend setting to `manabot/recipes/belief_sampler.py` with
-     Torch as its omitted default. Resolve it for collection, fitting and
-     checkpoint I/O, and register `belief.safetensors`. Update the recipe
-     consumer in `tests/training/test_recipe_etude.py` and qualify the
-     linked commands below in a subprocess with Torch imports blocked.
-     Add the belief row to the policy parity table and check sampler
-     `log_prob` after saving on either backend and loading on the other.
-     Retain a true legacy zip fixture for Torch admission and MLX refusal.
-4. **Recent events, decision memory, live tokens, and docs.**
+3. **Done (`a95bdce183`)** — The linked MLX policy and sampler jobs register portable checkpoints with Torch imports blocked. Belief rows pass forward, gradient and Adam parity. Both sampler writers preserve joint probabilities across readers, and legacy Torch zip reads preserve absent fit seeds.
+4. **Next — recent events, decision memory, live tokens, and docs.**
    - Port Torch's `RecentEventEncoder` over `Prepared.events` and include
      event validity in the context mask for stream normalization.
    - Port Torch's `DecisionMemory` over prepared prefixes for GRU and
@@ -89,12 +55,12 @@ preparation from `b9b09bc6d9`. Extend the current admission and
 
 ## Acceptance
 
-On Apple Silicon, run both jobs against a fresh experiment label. The
+On Apple Silicon, both jobs ran against a fresh experiment label. The
 policy recipe's default is one PPO update. Etude delivers its final policy
 to the sampler as `run.input("start")`. The sampler records
-`belief.safetensors`. Verify lineage and both artifacts with Torch imports
-blocked. The test can reuse the subprocess setup in
-`tests/training/test_mlx_workflow.py`.
+`belief.safetensors`. The linked-job test in
+`tests/training/test_mlx_workflow.py` checked lineage and admitted both
+registered artifacts with Torch imports blocked.
 
 ```sh
 uv run --extra mlx etude train experiments/belief.py --experiment belief-mlx --job policy --config '{"backend":"mlx","device":"mps"}'
