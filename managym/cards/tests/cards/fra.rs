@@ -27,6 +27,7 @@ fn prepared_insets_cast_from_exile() {
 fn heartwood_mana_pays_its_prepared_spell_but_no_hand_spell() {
     use crate::support::{
         game::{clear_summoning_sickness, enter_battlefield, five_color_unfunded_setup},
+        inspect::find_owned_card_off_battlefield,
         play::{cast_card, castable, resolve_top, settle, tap_for_mana},
     };
     use managym::agent::{
@@ -78,19 +79,12 @@ fn heartwood_mana_pays_its_prepared_spell_but_no_hand_spell() {
         .count();
     assert!(pooled_rows > 0, "the restricted class is a fact program");
 
-    let tether = s
-        .game()
-        .state
-        .zones
-        .zone_objects(ZoneType::Exile, PlayerId(0))
-        .iter()
-        .copied()
-        .find(|id| s.game().state[*id].name == "Soul Tether")
-        .expect("prepared Soul Tether");
+    let tether = find_owned_card_off_battlefield(&s, 0, "Soul Tether");
     // The pool pays exactly, so the cast completes without a manual choice.
     cast_card(&mut s, tether);
-    assert!(
-        s.game().state.players[0].mana_pool.total() == 0,
+    assert_eq!(
+        s.game().state.players[0].mana_pool.total(),
+        0,
         "Soul Tether spent the {{C}} and both red"
     );
     resolve_top(&mut s);

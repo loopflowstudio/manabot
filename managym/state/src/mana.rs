@@ -285,14 +285,8 @@ impl ManaClass {
         }
         match (&self.restriction, &self.effect) {
             (Some(ManaRestriction::Only(purposes)), _) => SpendOrder::Specific(purposes.len()),
-            (
-                Some(
-                    ManaRestriction::ExceptNonartifactSpells
-                    | ManaRestriction::ExceptSpellsFromHand,
-                ),
-                _,
-            )
-            | (None, Some(_)) => SpendOrder::Specific(usize::MAX),
+            // Exclusions and spend effects come after every narrower class.
+            (Some(_), _) | (None, Some(_)) => SpendOrder::Specific(usize::MAX),
             (None, None) => SpendOrder::Ordinary,
         }
     }
