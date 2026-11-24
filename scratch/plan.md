@@ -649,6 +649,10 @@ Built in `86c6f44a8a` on hash contract **v31**. Items 1–3 and Finding 10 below
 
 Tests: `fdn.rs` `bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices`, `bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain`, `a_finite_chain_over_counters_is_no_mandatory_loop` (Finding 10, 100 counters), `two_fishing_poles_on_one_creature_offer_activations_naming_each_pole`; `m21.rs` `mazemind_tome_state_trigger_is_not_held_by_another_trigger_of_the_tome`; `priority.rs` unit tests; `tests/academy/test_play_modes.py` viewer and trace draw cases. The grantor tap reservation has no catalog witness (no grantor taps for mana or waterbends), so it is covered only by reading.
 
+Checks: debug workspace under nextest (`--profile ci`, 1655 tests) failed only on the v31 pins (14 `frozen_*` semantic-kernel cases, the Clone witness) and a unit-test expectation, all since fixed. Semantic-kernel w17-v6 re-recorded in `3049b48fdb`: 14 cases, 3049 commands, every non-digest field unchanged. Opening authored-match authority (193 decisions, digests only) and live/headless parity (`RUL5_PARITY_OK`, no divergence) plus the Academy demo/choice-navigation fixtures refreshed in `3e7ca196fd`. With the rebuilt cp313 extension: authority/parity tests and the focused Python selection (text observation, effect-execution input, v10, named layout, pinned pilot, Academy boundary, combat preview, Blast, learn setup, decision surface) pass except four Academy tests listed in `scratch/questions.md` that do not touch these paths.
+
+Next: the closing-slice behavior review of this head, then gate (Engine Budget will see moved digests and should adopt the PR's run if within 10%).
+
 #### Planned form (kept for reference)
 
 The post-closure full-branch concept review at `65cebaf342` (`scratch/concept-review.html`) reviewed the entire MTG-418 surface against base `88ce96bd6b`. The core turn-history, LKI, query, CDA, mana-split, state-trigger and untap models align across rules, v11, text and refreshed conformance evidence. Three conceptual mismatches in the closing slice break real player interactions and must be fixed before behavior review and gate:
@@ -707,10 +711,8 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
 - Keep public object joins and pending history consistent through native
   projections, Python, v11 and text as new queries land. Save prefixes and
   frozen evidence, and keep hidden identities out of both projections.
-  The semantic-kernel, authored-match and live/headless parity receipts were
-  refreshed at hash v30 (`00da7aaf31`, `03deb316db`) and will refresh once more
-  at hash v31 for the persistent `PriorityState.loop_watch` hardening slice
-  above. The closing-slice behavior review, integrated replay and privacy
+  The semantic-kernel, authored-match and live/headless parity receipts are
+  refreshed at hash v31 (`3049b48fdb`, `3e7ca196fd`). The closing-slice behavior review, integrated replay and privacy
   checks, and Engine Budget remain open.
 
 ## Directed interactions for integrated validation
