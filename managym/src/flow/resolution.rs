@@ -369,12 +369,6 @@ impl Game {
         } else {
             Vec::new()
         };
-        // The object an Aura or Equipment was attached to as the ability was
-        // activated (last known information once the source has left).
-        let attached = ability
-            .attached
-            .and_then(|object| self.lookup_current_permanent(object).ok())
-            .map(Target::Permanent);
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
@@ -387,7 +381,7 @@ impl Game {
             x: ability.x,
             spent: ability.paid,
             targets,
-            context_target: attached,
+            attached: ability.attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
             ..EffectFrame::new(
                 ability.controller,
@@ -588,18 +582,23 @@ impl Game {
         }
     }
 
-    /// The object the resolving ability's Aura or Equipment is attached to:
-    /// the one captured as an activated ability was activated, or else the
-    /// source's current attachment (a triggered ability).
-    fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
-        match frame.context_target {
-            Some(Target::Permanent(id)) => Some(id),
-            Some(_) => None,
-            None => frame
-                .source_ref()
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .and_then(|source| self.attached_permanent(source)),
-        }
+    /// The permanent the resolving ability's Aura or Equipment is attached
+    /// to: the exact object captured as an activated ability was activated,
+    /// or else (a triggered ability) the source's current attachment, read
+    /// from the source's last known information once it has left. Never the
+    /// triggering event's object.
+    pub(crate) fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
+        let attached = match frame.attached {
+            Some(object) => object,
+            None => {
+                let source = frame.source_ref()?;
+                match self.lookup_current_permanent(source) {
+                    Ok(source) => return self.attached_permanent(source),
+                    Err(_) => self.object_lki(source)?.attached_to?,
+                }
+            }
+        };
+        self.lookup_current_permanent(attached).ok()
     }
 
     /// The players a selector names as the effect resolves; a target player

@@ -7274,5 +7274,19 @@
     "colors": [
       "B"
     ]
+  },
+  "Ordeal of Nylea": {
+    "name": "Ordeal of Nylea",
+    "mana_cost": "{1}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
   }
 }

@@ -187,10 +187,17 @@ pub struct EffectFrame {
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
-    /// Trigger-context object (e.g. the spell that targeted a warded
-    /// permanent) — used as the primary target when none was chosen. For an
-    /// activated ability of an Aura or Equipment, the object it was attached to.
+    /// Trigger-context object: the object of the triggering event (e.g. the
+    /// spell that targeted a warded permanent), used as the primary target
+    /// when none was chosen. Never the source's attachment.
     pub context_target: Option<Target>,
+    /// The exact object an activated Aura or Equipment ability's source was
+    /// attached to as it was activated (CR 602.2, last known information once
+    /// the source has left). Triggered abilities leave it empty and read the
+    /// source's attachment at resolution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub attached: Option<ObjectId>,
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub triggering_player: Option<PlayerId>,
@@ -265,6 +272,7 @@ impl EffectFrame {
             targets: Vec::new(),
             active_requirement: 0,
             context_target: None,
+            attached: None,
             triggering_player: None,
             grantor: None,
             ability: None,
@@ -290,6 +298,7 @@ impl EffectFrame {
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
             context_target: self.context_target,
+            attached: self.attached,
             triggering_player: self.triggering_player,
             grantor: self.grantor,
             ability: self.ability,

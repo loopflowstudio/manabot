@@ -452,6 +452,10 @@ fn condition_text(condition: &Condition) -> String {
             "this has {count} or more {} counters",
             kind.name().replace('_', " ")
         ),
+        Condition::AttachedCountersAtLeast { kind, count } => format!(
+            "the permanent this is attached to has {count} or more {} counters",
+            kind.name().replace('_', " ")
+        ),
         Condition::Moved => "you do".into(),
         Condition::TargetControlledByYou => "you controlled that target".into(),
     }

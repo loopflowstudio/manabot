@@ -1249,6 +1249,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
         Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
+        Condition::AttachedCountersAtLeast { .. } => "Condition::AttachedCountersAtLeast",
     }
 }
 
@@ -1302,6 +1303,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,
         Condition::TargetControlledByYou,
+        Condition::AttachedCountersAtLeast {
+            kind: CounterKind::PlusOnePlusOne,
+            count: 3,
+        },
     ]
 }
 

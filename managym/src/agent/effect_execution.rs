@@ -1083,6 +1083,9 @@ pub(crate) fn project_frame(
     if let Some(target) = effect.context_target {
         out.retained_target(target);
     }
+    if let Some(attached) = effect.attached {
+        out.retained_object(attached);
+    }
     for target in &effect.targets {
         out.retained_target(target.target);
     }

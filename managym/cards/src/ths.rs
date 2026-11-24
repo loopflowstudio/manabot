@@ -1,12 +1,14 @@
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
         ReplacementEffect,
     },
     mana::{Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -14,6 +16,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         burnished_hart(),
         lightning_strike(),
+        ordeal_of_nylea(),
         temple_of_abandon(),
         temple_of_deceit(),
         temple_of_mystery(),
@@ -75,6 +78,66 @@ fn lightning_strike() -> CardDefinition {
                 3,
                 ObjectSelector::Target(TargetSpec::AnyTarget),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ordeal_of_nylea() -> CardDefinition {
+    let text_box = "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.";
+
+    CardDefinition {
+        key: "ths.ordeal_of_nylea",
+        scryfall_id: "e5c48950-c246-47ad-94e1-bf42a62c2fe7",
+        printed: PrintedCharacteristics {
+            name: "Ordeal of Nylea".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(
+                        TriggerSubject::EnchantedCreature,
+                        Per::Object,
+                    ),
+                    effects: vec![
+                        Effect::put_counters(
+                            ObjectSelector::Attached,
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        ),
+                        Effect::If {
+                            condition: Condition::AttachedCountersAtLeast {
+                                kind: CounterKind::PlusOnePlusOne,
+                                count: 3,
+                            },
+                            then: vec![Effect::sacrifice_this()],
+                            otherwise: Vec::new(),
+                        },
+                    ],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Sacrificed {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(2),
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
+                    )],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

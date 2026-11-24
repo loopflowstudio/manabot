@@ -285,6 +285,14 @@ pub enum Condition {
         kind: CounterKind,
         count: i32,
     },
+    /// Resolution only: the permanent the resolving Aura or Equipment ability's
+    /// source is (or, once the source has left, was) attached to has `count`
+    /// or more `kind` counters ("Then if that creature has three or more
+    /// +1/+1 counters on it"). False once that permanent has left.
+    AttachedCountersAtLeast {
+        kind: CounterKind,
+        count: i32,
+    },
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
@@ -383,7 +391,8 @@ impl Condition {
             | Condition::CardsThisWayMatch(_)
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
-            | Condition::TargetControlledByYou => true,
+            | Condition::TargetControlledByYou
+            | Condition::AttachedCountersAtLeast { .. } => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::Kicked
             | Condition::OwnsMeldPair { .. }
