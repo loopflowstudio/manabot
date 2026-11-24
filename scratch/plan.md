@@ -117,5 +117,9 @@ Paired on the M4 Max against merge-base `5d85077748` built with this branch's be
 
 ## Next
 
-- engine-optimization implement (2026-11-24): no slice built. Both measured regressions were fixed in `29d7adc98d` (engine-measure), and every `bench_states` work counter equals the reference, so there is no bottleneck left to fix. The speed verdict belongs to CI's same-runner Engine Budget.
-- Advance to `pr-publish`; the gate items in `questions.md` stay for gate.
+All batches and Batch 4 items are built; engine-optimization found no bottleneck left after `29d7adc98d`. Next slice: `pr-publish`, then gate. Gate owns:
+
+- CI's same-runner Engine Budget for the speed verdict; digests may move (serialized `CopiableValues.faces`, hash fields, manifest rng draws when `M > 0`, ExileLinked program tokens), recorded with `scripts/engine_budget.py record --reason` if they do.
+- Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
+- Rerun vector/recording consumers and canonical replay after merges `361823be59`/`4c10520b67`.
+- The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's.
