@@ -19,16 +19,20 @@ use crate::state::{
 };
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
+/// A triggered ability's text with its X filled in. A trigger announces no
+/// X (CR 107.3): an entering permanent's own trigger reads its spell's X
+/// (CR 107.3m), and any other reads its event's amount ("that many").
 pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,
+    x: u8,
 ) -> String {
     if let Some(effects) = inline {
         return format!(
             "{} — delayed ability: {}",
             object.name,
-            effects_description(effects)
+            with_trigger_x(effects_description(effects), "that many", x)
         );
     }
     let Ability::Triggered {
@@ -40,12 +44,41 @@ pub(crate) fn trigger_description(
         .as_ref()
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
+    let amount = if enters_itself(condition) {
+        "X"
+    } else {
+        "that many"
+    };
     format!(
         "{} — {}{intervening}: {}",
         object.name,
         condition_description(condition),
-        effects_description(effects)
+        with_trigger_x(effects_description(effects), amount, x)
     )
+}
+
+fn with_trigger_x(text: String, amount: &str, x: u8) -> String {
+    text.replace(
+        &value_description(&EffectValue::X),
+        &format!("{amount} ({x})"),
+    )
+}
+
+/// Whether the event is the source's own entering, beneath any wrapper.
+fn enters_itself(condition: &TriggerCondition) -> bool {
+    match condition {
+        TriggerCondition::EntersTheBattlefield {
+            subject: TriggerSubject::This,
+        } => true,
+        TriggerCondition::WasCast { condition }
+        | TriggerCondition::OnceEachTurn { condition }
+        | TriggerCondition::WhileSourceAttacking { condition }
+        | TriggerCondition::FromZone { condition, .. }
+        | TriggerCondition::Prepared { condition }
+        | TriggerCondition::InGraveyard { condition }
+        | TriggerCondition::ActiveIf { condition, .. } => enters_itself(condition),
+        _ => false,
+    }
 }
 
 fn condition_description(condition: &TriggerCondition) -> String {

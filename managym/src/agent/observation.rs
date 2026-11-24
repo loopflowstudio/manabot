@@ -1215,7 +1215,7 @@ impl Observation {
 
         obs.populate_cards(game, agent_player);
         obs.populate_permanents(game, agent_player);
-        obs.populate_stack_objects(game);
+        obs.populate_stack_objects(game, agent_player);
         obs
     }
 
@@ -1589,10 +1589,10 @@ impl Observation {
         }
     }
 
-    fn populate_stack_objects(&mut self, game: &Game) {
+    fn populate_stack_objects(&mut self, game: &Game, viewer: PlayerId) {
         for object in game.state.stack_objects.iter().rev() {
             self.stack_objects
-                .push(Self::stack_object_data(game, object));
+                .push(Self::stack_object_data(game, object, viewer));
         }
     }
 
@@ -1821,19 +1821,31 @@ impl Observation {
         }
     }
 
-    fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
+    fn stack_object_data(
+        game: &Game,
+        stack_object: &StackObject,
+        viewer: PlayerId,
+    ) -> StackObjectData {
         StackObjectData {
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
+                // A trigger names its X and the object its event is about
+                // ("that many", "it"), as each occurrence differs.
                 StackObject::TriggeredAbility(a) => {
-                    Some(super::ability_description::trigger_description(
+                    let mut text = super::ability_description::trigger_description(
                         game.source_face(a.source_object(), a.source_definition_id)
                             .expect("trigger face"),
                         a.ability_index,
                         a.inline_effects.as_deref(),
-                    ))
+                        a.x,
+                    );
+                    if let Some(event) = a.context.and_then(|c| game.trigger_event_label(c, viewer))
+                    {
+                        text.push_str(&event);
+                    }
+                    Some(text)
                 }
                 _ => None,
             },
@@ -1859,7 +1871,7 @@ impl Observation {
             x: match stack_object {
                 StackObject::Spell(spell) => i32::from(spell.x),
                 StackObject::ActivatedAbility(ability) => i32::from(ability.x),
-                StackObject::TriggeredAbility(_) => 0,
+                StackObject::TriggeredAbility(ability) => i32::from(ability.x),
             },
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {

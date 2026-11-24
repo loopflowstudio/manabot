@@ -2518,6 +2518,122 @@ fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
     assert_eq!(plus(&s, wurm), Some(7));
 }
 
+/// Each stacked Greatwurm trigger shows its own creature and amount: the
+/// stack entry's X, its description ("that many", "event: ..."), and the
+/// continuation frame that joins the event creature in the policy input.
+#[test]
+fn quilled_greatwurm_triggers_name_their_creature_and_damage_on_the_stack() {
+    use crate::support::play::choose;
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::{Observation, StackObjectKindData},
+        },
+        state::{game_object::ObjectId, stack_object::StackObject},
+    };
+    let mut s = five_color_setup(&["Quilled Greatwurm", "Gray Ogre"]);
+    let wurm = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Quilled Greatwurm", true)
+        .unwrap();
+    let ogre = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    let mut placement = Vec::new();
+    s.advance_until(
+        |s| {
+            if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+                let obs = Observation::for_player(s.game(), PlayerId(0));
+                placement.extend(
+                    obs.action_space
+                        .actions
+                        .iter()
+                        .filter_map(|option| option.description.clone()),
+                );
+            }
+            s.game().state.stack_objects.len() == 2
+                && s.action_space().kind == ActionSpaceKind::Priority
+        },
+        "both triggers stacked".into(),
+    );
+    assert!(
+        placement
+            .iter()
+            .any(|label| label.contains("put that many (7) +1/+1 counters")
+                || label.contains("Put that many (7) +1/+1 counters")),
+        "{placement:?}"
+    );
+
+    let object = |id: managym::state::game_object::PermanentId| {
+        s.game().state.permanents[id].as_ref().unwrap().object
+    };
+    let (wurm_object, ogre_object) = (object(wurm), object(ogre));
+    let mut stacked: Vec<(u8, ObjectId)> = s
+        .game()
+        .state
+        .stack_objects
+        .iter()
+        .map(|item| match item {
+            StackObject::TriggeredAbility(trigger) => match trigger.context {
+                Some(managym::state::game_object::Target::Permanent(id)) => (
+                    trigger.x,
+                    s.game().state.permanents[id].as_ref().unwrap().object,
+                ),
+                other => panic!("event creature: {other:?}"),
+            },
+            other => panic!("only triggers: {other:?}"),
+        })
+        .collect();
+    stacked.sort();
+    assert_eq!(stacked, vec![(2, ogre_object), (7, wurm_object)]);
+
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let mut entries: Vec<(i32, String)> = obs
+            .stack_objects
+            .iter()
+            .inspect(|item| assert_eq!(item.kind, StackObjectKindData::TriggeredAbility))
+            .map(|item| (item.x, item.description.clone().unwrap()))
+            .collect();
+        entries.sort();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].0, 2);
+        assert!(
+            entries[0].1.contains("Put that many (2) +1/+1 counters")
+                && entries[0].1.contains(" — event: Gray Ogre"),
+            "{entries:?}"
+        );
+        assert_eq!(entries[1].0, 7);
+        assert!(
+            entries[1].1.contains("Put that many (7) +1/+1 counters")
+                && entries[1].1.contains(" — event: Quilled Greatwurm"),
+            "{entries:?}"
+        );
+        assert!(!entries.iter().any(|(_, text)| text.contains("announced")));
+
+        // The policy input joins each stacked trigger to its creature.
+        let mut frames: Vec<(u8, Option<i32>)> = s
+            .game()
+            .continuation_frames(viewer)
+            .iter()
+            .filter(|frame| frame.kind == 3)
+            .map(|frame| (frame.x, frame.context.and_then(|c| c.object)))
+            .collect();
+        frames.sort();
+        assert_eq!(frames.len(), 2);
+        assert_eq!((frames[0].0, frames[1].0), (2, 7));
+        assert!(frames.iter().all(|(_, object)| object.is_some()));
+        assert_ne!(frames[0].1, frames[1].1);
+    }
+}
+
 /// Tinybones lets its controller spend mana as though it were mana of any
 /// type on a stashed card, and that applies to the total cost after
 /// reductions (CR 601.2f before 601.2h): an opponent's stashed Glamdring's

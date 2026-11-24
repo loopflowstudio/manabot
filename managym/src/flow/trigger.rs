@@ -71,7 +71,8 @@ pub struct PendingTrigger {
     /// triggering spell), separate from its context object.
     pub player: Option<PlayerId>,
     /// The ability's X: for an entering permanent's own trigger, the X of
-    /// the spell that became it (CR 107.3m); otherwise 0.
+    /// the spell that became it (CR 107.3m); for a counters or per-creature
+    /// combat damage trigger, its event's amount ("that many"); otherwise 0.
     pub x: u8,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.

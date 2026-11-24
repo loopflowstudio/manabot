@@ -551,6 +551,7 @@ impl Game {
                     &self.state[trigger.source_object()],
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
+                    trigger.x,
                 );
                 if choosing_mode {
                     format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")

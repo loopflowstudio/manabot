@@ -167,21 +167,15 @@ impl Game {
                     trigger_description(
                         record,
                         trigger.ability_index,
-                        trigger.inline_effects.as_deref()
+                        trigger.inline_effects.as_deref(),
+                        trigger.x,
                     )
                 );
-                if let Some(context) = trigger.context {
-                    let reference = self.target_reference(context, *player);
-                    if let Some(seat) = reference.player {
-                        label.push_str(&format!(" — event: Seat {}", seat + 1));
-                    } else if let Some(definition) = reference.definition.and_then(|id| {
-                        default_content_pack().definition(crate::state::card::CardDefId(id))
-                    }) {
-                        label.push_str(&format!(" — event: {}", definition.name));
-                        if let Some(object) = reference.object {
-                            label.push_str(&format!(" (object {object})"));
-                        }
-                    }
+                if let Some(event) = trigger
+                    .context
+                    .and_then(|context| self.trigger_event_label(context, *player))
+                {
+                    label.push_str(&event);
                 }
                 Some(label)
             }
@@ -449,6 +443,26 @@ impl Game {
             },
             _ => None,
         }
+    }
+
+    /// " — event: Gray Ogre (object 7)": what a trigger's event is about,
+    /// as `viewer` sees it, for its placement offer and its stack entry.
+    pub(crate) fn trigger_event_label(
+        &self,
+        context: crate::state::game_object::Target,
+        viewer: PlayerId,
+    ) -> Option<String> {
+        let reference = self.target_reference(context, viewer);
+        if let Some(seat) = reference.player {
+            return Some(format!(" — event: Seat {}", seat + 1));
+        }
+        let definition = default_content_pack()
+            .definition(crate::state::card::CardDefId(reference.definition?))?;
+        let mut label = format!(" — event: {}", definition.name);
+        if let Some(object) = reference.object {
+            label.push_str(&format!(" (object {object})"));
+        }
+        Some(label)
     }
 
     /// Cards `player` might play at priority: their hand and graveyard, and
