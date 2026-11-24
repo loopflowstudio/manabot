@@ -111,8 +111,19 @@ impl Game {
                 profile,
                 route: None,
                 ..
+            }
+            | Action::PlayLand {
+                object,
+                profile,
+                route: None,
+                ..
             } if !profile.is_front() => Some(format!(
-                "Cast {}",
+                "{} {}",
+                if matches!(action, Action::PlayLand { .. }) {
+                    "Play"
+                } else {
+                    "Cast"
+                },
                 default_content_pack()
                     .spell_definition(&self.state[*object], *profile)?
                     .name
@@ -699,6 +710,7 @@ impl Game {
                     if self.can_play_land(player) {
                         offer(
                             Action::PlayLand {
+                                profile,
                                 player,
                                 object,
                                 route,
@@ -1074,11 +1086,12 @@ impl Game {
                 self.choose_trigger(*player, *trigger_id)
             }
             Action::PlayLand {
+                profile,
                 player,
                 object,
                 route,
             } => {
-                self.play_land(*player, self.chosen_card(*object)?, *route)?;
+                self.play_land(*player, self.chosen_card(*object)?, *route, *profile)?;
                 self.restart_priority_round();
                 Ok(())
             }
@@ -1359,7 +1372,8 @@ mod identity_tests {
             .execute_action(&Action::PlayLand {
                 player,
                 object: old,
-                route: None
+                route: None,
+                profile: crate::state::card::SpellProfile::Front,
             })
             .is_err());
         assert_eq!(witness(&game), before);
@@ -1368,12 +1382,90 @@ mod identity_tests {
             .execute_action(&Action::PlayLand {
                 player,
                 object: returned,
-                route: None
+                route: None,
+                profile: crate::state::card::SpellProfile::Front,
             })
             .is_ok());
         assert_eq!(
             game.state.zones.zone_of(game.state.object_of(card)),
             Some(ZoneType::Battlefield)
         );
+    }
+
+    /// Commands come from offers, but the executor still owns the
+    /// face-vs-route rules: a land face is never cast or played for free,
+    /// and a spell face is never played as a land.
+    #[test]
+    fn play_land_rejects_a_spell_face_and_a_free_route() {
+        use crate::{flow::cast_permission::PlayRoute, state::card::SpellProfile};
+        let deck = BTreeMap::from([
+            ("Island".into(), 30),
+            ("Tidal Errand".into(), 4),
+            ("Kelp Hollow".into(), 4),
+            ("Omniscience".into(), 2),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            419,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        game.scenario_force_battlefield(player, "Omniscience", true)
+            .unwrap();
+        for name in ["Tidal Errand", "Kelp Hollow"] {
+            game.scenario_force_card_in_hand(player, name).unwrap();
+        }
+        let in_hand = |game: &Game, name: &str| {
+            *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, player)
+                .iter()
+                .find(|object| game.state[**object].name == name)
+                .unwrap()
+        };
+        let errand = in_hand(&game, "Tidal Errand");
+        let hollow = in_hand(&game, "Kelp Hollow");
+        let before = witness(&game);
+        for (object, profile, route) in [
+            (errand, SpellProfile::Front, Some(PlayRoute::Hand)),
+            (
+                errand,
+                SpellProfile::BackFace,
+                Some(PlayRoute::FreeFromHand),
+            ),
+            (hollow, SpellProfile::Front, Some(PlayRoute::FreeFromHand)),
+            (hollow, SpellProfile::BackFace, Some(PlayRoute::Hand)),
+            (hollow, SpellProfile::Adventure, Some(PlayRoute::Hand)),
+        ] {
+            assert!(
+                game.execute_action(&Action::PlayLand {
+                    profile,
+                    player,
+                    object,
+                    route
+                })
+                .is_err(),
+                "{profile:?} via {route:?}"
+            );
+            assert_eq!(witness(&game), before);
+        }
+        let card = game.state.card_of(errand).unwrap();
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                profile: SpellProfile::BackFace,
+                player,
+                object: errand,
+                route: Some(PlayRoute::Hand),
+            })
+            .is_ok());
+        assert!(game.state[game.state.object_of(card)].is_transformed());
     }
 }

@@ -42,6 +42,10 @@ pub enum Action {
         trigger_id: crate::flow::trigger::TriggerId,
     },
     PlayLand {
+        /// The land face played: a modal card's back face enters back face
+        /// up (CR 712.14). Serialized under `CastSpell`'s profile key.
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
@@ -149,7 +153,7 @@ pub enum Action {
 impl Action {
     pub(crate) fn spell_profile(&self) -> SpellProfile {
         match self {
-            Self::CastSpell { profile, .. } => *profile,
+            Self::CastSpell { profile, .. } | Self::PlayLand { profile, .. } => *profile,
             _ => SpellProfile::Front,
         }
     }

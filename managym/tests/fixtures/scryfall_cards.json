@@ -8075,7 +8075,9 @@
       "Prepared"
     ],
     "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Add {C}. This mana can't be spent to cast spells from your hand.",
-    "colors": null
+    "colors": [
+      "G"
+    ]
   },
   "Sanar, Unfinished Genius": {
     "name": "Sanar, Unfinished Genius",
@@ -8088,7 +8090,10 @@
       "Prepared"
     ],
     "oracle_text": "Sanar enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Create a Treasure token. Activate only if you've cast an instant or sorcery spell this turn.",
-    "colors": null
+    "colors": [
+      "U",
+      "R"
+    ]
   },
   "Tinybones, Bauble Burglar": {
     "name": "Tinybones, Bauble Burglar",

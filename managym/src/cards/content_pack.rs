@@ -132,10 +132,14 @@ impl ContentPack {
 /// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        let fixture = fixtures::crossroads_of_destiny();
+        let fixtures = [
+            fixtures::crossroads_of_destiny(),
+            fixtures::tidal_errand(),
+            fixtures::kelp_hollow(),
+        ];
         let mut rows = managym_cards::catalog()
             .iter()
-            .chain([&fixture])
+            .chain(&fixtures)
             .map(Row::Card)
             .chain(managym_cards::token_catalog().iter().map(Row::Token))
             .collect::<Vec<_>>();

@@ -656,8 +656,17 @@ impl Game {
                         .name
                         .clone(),
                 }),
-                (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
-                    card: self.state[*object].name.clone(),
+                (
+                    _,
+                    Action::PlayLand {
+                        object, profile, ..
+                    },
+                ) => Some(PublicCommitment::PlayLand {
+                    card: default_content_pack()
+                        .spell_definition(&self.state[*object], *profile)
+                        .expect("offered land")
+                        .name
+                        .clone(),
                 }),
                 (ActionSpaceKind::Learn, Action::LearnDiscard { object, .. })
                 | (ActionSpaceKind::Discard, Action::SelectCard { object, .. }) => {

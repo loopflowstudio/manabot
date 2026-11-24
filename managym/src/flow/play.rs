@@ -234,9 +234,12 @@ impl Game {
         object: ObjectId,
     ) -> Cow<'static, [PlayRoute]> {
         let land = self.state[object].types.is_land();
+        // A modal card may have a spell on either face; `permits_spell`
+        // matches each route against the selected face.
+        let has_spell = !land || self.state[object].modal_back;
         match self.state.zones.zone_of(object) {
             Some(ZoneType::Hand) if self.state[object].owner == player => {
-                if !land && self.layer_board().play_permissions[player.0].free_from_hand {
+                if has_spell && self.layer_board().play_permissions[player.0].free_from_hand {
                     Cow::Borrowed(&[PlayRoute::Hand, PlayRoute::FreeFromHand])
                 } else {
                     Cow::Borrowed(&[PlayRoute::Hand])
@@ -304,7 +307,7 @@ impl Game {
                 for &(source, permanent_id) in sources {
                     for &kind in card.types.types.iter().chain(other_types.iter().copied()) {
                         use crate::state::card::CardType::*;
-                        if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
+                        if matches!(kind, Instant | Sorcery | Kindred) {
                             continue;
                         }
                         let route = PlayRoute::GraveyardType {
@@ -325,7 +328,7 @@ impl Game {
                 routes.into()
             }
             Some(ZoneType::Library)
-                if !land && self.state.zones.top(ZoneType::Library, player) == Some(object) =>
+                if has_spell && self.state.zones.top(ZoneType::Library, player) == Some(object) =>
             {
                 Cow::Borrowed(&[PlayRoute::LibraryTop])
             }
@@ -358,8 +361,10 @@ impl Game {
                 .library_spells
                 .iter()
                 .any(|predicate| cast.matches_spell(self, object, predicate)),
-            // Every printed spell of the card: its Adventure, Omen or back face too.
-            PlayRoute::Hand | PlayRoute::FreeFromHand | PlayRoute::ExileCounter(_) => true,
+            // Every printed face of the card: its Adventure, Omen or back face too.
+            PlayRoute::Hand | PlayRoute::ExileCounter(_) => true,
+            // "Cast spells without paying": never a land play.
+            PlayRoute::FreeFromHand => !cast.spell(&self.state[object]).types.is_land(),
             PlayRoute::GraveyardType { kind, .. } => {
                 cast.spell(&self.state[object]).types.types.contains(&kind)
             }
@@ -398,6 +403,7 @@ impl Game {
             player,
             object,
             route,
+            ..
         }) = action
         else {
             return None;
@@ -552,7 +558,7 @@ impl Game {
                     continue;
                 }
                 if let StaticAbility::SpellsFromOutsideHandCostLess(amount) = ability {
-                    if self.state.zones.zone_of(object) != Some(ZoneType::Hand) {
+                    if self.casting_zone(object) != ZoneType::Hand {
                         cost = cost.reduced_generic(*amount);
                     }
                     continue;
@@ -592,26 +598,34 @@ impl Game {
         player: PlayerId,
         card: CardId,
         selected: Option<PlayRoute>,
+        profile: SpellProfile,
     ) -> Result<(), AgentError> {
-        let card_ref = &self.state[self.state.object_of(card)];
-        if !card_ref.types.is_land() {
+        let object = self.state.object_of(card);
+        let route = self.selected_play_route(player, object, selected)?;
+        let cast = self
+            .cast_choices(player, object, profile, CastAuthority::Priority(route))
+            .ok_or_else(|| AgentError("the card has no such face".into()))?;
+        if !cast.spell(&self.state[object]).types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
         }
-        let route = self.selected_play_route(player, self.state.object_of(card), selected)?;
+        if !self.permits_spell(player, object, cast) {
+            return Err(AgentError("permission does not allow this land".into()));
+        }
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
-        let controller = (card_ref.owner != player).then_some(player);
+        let controller = (self.state[object].owner != player).then_some(player);
         self.spend_play_route(player, Some(route));
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
-            self.state.object_of(card),
+            object,
             ZoneType::Battlefield,
             crate::flow::proposed_event::ZoneEntry {
                 controller,
+                transformed: profile == SpellProfile::BackFace,
                 ..Default::default()
             },
         )]));
