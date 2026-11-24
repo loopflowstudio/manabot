@@ -36,6 +36,12 @@ pub enum StepKind {
     PostcombatMain = 9,
     End = 10,
     Cleanup = 11,
+    /// CR 510.4 — Additional combat damage step for creatures with first
+    /// strike or double strike; precedes `CombatDamage` when present.
+    /// Appended as 12 while `Observation.toJSON()` serializes steps as ints;
+    /// switch `Observation.toJSON()` to string step names and reorder before
+    /// `CombatDamage` in 0.3.0.
+    FirstStrikeCombatDamage = 12,
 }
 
 pub const PHASE_STEPS: [&[StepKind]; 5] = [
@@ -126,6 +132,29 @@ impl Bending {
     pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
 }
 
+/// One cast this turn: the spell's stack appearance and the printed profile
+/// it was cast as. The profile outlives the appearance: once an Adventure,
+/// Omen or back face leaves the stack, the card shows its front again, but
+/// "if you've cast an instant or sorcery spell this turn" still asks what was
+/// cast (CR 715.3, 702.181, 712.11).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RecordedCast {
+    pub object: ObjectId,
+    pub profile: crate::state::card::SpellProfile,
+}
+
+/// A front-face cast keeps the bare slot recorded before profiles existed;
+/// any other profile records `(slot, profile)`.
+impl serde::Serialize for RecordedCast {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.profile.is_front() {
+            serde::Serialize::serialize(&self.object, serializer)
+        } else {
+            serde::Serialize::serialize(&(self.object, self.profile), serializer)
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -133,7 +162,8 @@ pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
-    pub spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
+    /// Each player's casts this turn, in order (CR 601.2).
+    pub spells_cast: [Vec<RecordedCast>; 2],
     /// Each player's history this turn, by player index. Resets every turn.
     pub history: [PlayerTurnHistory; 2],
     /// Graveyard objects that were put there from the battlefield this turn

@@ -37,7 +37,7 @@ class CheckpointVillain:
         from manabot.sim.policy_provider import BaselineSession, provider
 
         warnings.warn(
-            "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.4.0)",
+            "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.3.0)",
             DeprecationWarning,
             stacklevel=2,
         )

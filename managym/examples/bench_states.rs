@@ -43,6 +43,7 @@ const STATES: &[(&str, &str)] = &[
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
+    ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
@@ -54,6 +55,10 @@ const STATES: &[(&str, &str)] = &[
     ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
     ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
     ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
+    ("graveyard-routes", "Muldrotha and Zul Ashur over N graveyard cards cycling artifact, creature, Zombie and land kinds; the granted checkpoint overlaps Zul's exact-object grant with Muldrotha's type routes on one Zombie"),
+    ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
+    ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
+    ("unprepared-copies", "prepared-copies' board with the Phytomedics forced onto the battlefield unprepared; the zero-link control"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -106,6 +111,20 @@ const GRAVEYARD: &[&str] = &[
     "Prophetic Prism",
     "Tiger-Seal",
 ];
+const CASCADE: &[&str] = &[
+    "Helpful Hunter",
+    "Ajani's Pridemate",
+    "Hinterland Sanctifier",
+    "Felidar Savior",
+    "Fog Bank",
+];
+const CASCADE_ENGINES: &[&str] = &[
+    "Arahbo, the First Fang",
+    "Impact Tremors",
+    "Doubling Season",
+    "Gratuitous Violence",
+    "Goblin Oriflamme",
+];
 const STATICS: &[&str] = &[
     "White Lotus Reinforcements",
     "Earth King's Lieutenant",
@@ -121,6 +140,9 @@ struct Seat {
     tokens: Vec<String>,
     /// Library cards manifested face down after the named permanents enter.
     manifests: usize,
+    /// Moved from hand to the battlefield through the zone move, so entry
+    /// replacements ("enters prepared") apply.
+    entered: Vec<String>,
 }
 impl Seat {
     fn add(&mut self, name: &str, count: usize) {
@@ -239,6 +261,63 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 .extend(["Archon's Glory".into(), "Feed the Cycle".into()]);
             seat.fill_graveyard(size);
         }
+        "graveyard-routes" => {
+            let seat = &mut seats[0];
+            for card in ["Muldrotha, the Gravetide", "Zul Ashur, Lich Lord"] {
+                seat.add(card, 1);
+            }
+            for land in ["Swamp", "Forest", "Island"] {
+                seat.add(land, 3);
+            }
+            let kinds = [
+                "Cityscape Leveler",
+                "Hungry Ghoul",
+                "Prophetic Prism",
+                "Forest",
+                "Suspicious Shambler",
+                "Gray Ogre",
+                "Kyoshi Battle Fan",
+            ];
+            seat.graveyard
+                .extend(kinds.iter().cycle().take(size).map(|name| name.to_string()));
+        }
+        "profile-hand" => {
+            let cards = [
+                "Twinmaw Stormbrood",
+                "Smaug, the Great Calamity",
+                "Sagu Wildling",
+                "Dirgur Island Dragon",
+                "Bofur, Reliable Guardian",
+                "Disruptive Stormbrood",
+            ];
+            seats[0]
+                .hand
+                .extend(cards.iter().cycle().take(size).map(|name| name.to_string()));
+            seats[0].cycle(
+                &[
+                    "Mountain",
+                    "Island",
+                    "Forest",
+                    "Plains",
+                    "Jasmine Dragon Tea Shop",
+                    "White Lotus Hideout",
+                ],
+                size + 6,
+            );
+            seats[1].add("Gray Ogre", size);
+        }
+        "prepared-copies" | "unprepared-copies" => {
+            for seat in &mut seats {
+                seat.add("Gray Ogre", size);
+                seat.add("Plains", size);
+            }
+            let medics = std::iter::repeat_n("Emergency Phytomedic".to_string(), size);
+            if name == "prepared-copies" {
+                seats[0].entered.extend(medics);
+            } else {
+                seats[0].battlefield.extend(medics);
+            }
+        }
         "diverse-mana" | "restricted-filter" | "distinct-restrictions" | "float-origins" => {
             let names = if matches!(name, "diverse-mana" | "float-origins") {
                 MANA
@@ -277,6 +356,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "attachments"
         | "face-down"
         | "triggers"
+        | "entry-cascade"
         | "zones"
         | "mixed" => {
             for seat in &mut seats {
@@ -288,6 +368,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
                         }
                         if name != "diverse-statics" {
                             seat.add("Herald of Eternal Dawn", 1);
+                        }
+                    }
+                    "entry-cascade" => {
+                        seat.cycle(CASCADE, size);
+                        for engine in CASCADE_ENGINES {
+                            seat.add(engine, 1);
                         }
                     }
                     "triggers" => {
@@ -363,6 +449,7 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .chain(&seat.hand)
                 .chain(&seat.graveyard)
+                .chain(&seat.entered)
             {
                 *deck.entry(name.clone()).or_default() += 1;
             }
@@ -403,6 +490,17 @@ fn build(recipe: &Recipe) -> Env {
             state
                 .zones
                 .move_object(&state.objects, card, PlayerId(i), ZoneType::Graveyard);
+        }
+        for name in &seat.entered {
+            env.scenario_force_card_in_hand(i, name).unwrap();
+            let game = env.fixture_game_mut();
+            let card = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, PlayerId(i))
+                .last()
+                .unwrap();
+            game.move_object(card, ZoneType::Battlefield);
         }
         for token in &seat.tokens {
             let game = env.fixture_game_mut();
@@ -578,6 +676,29 @@ fn float_everything(root: &Env) -> Env {
     }
     panic!("mana sources were still offered after 256 decisions")
 }
+/// Activate the first permanent ability (Zul Ashur's) and take the first
+/// target, returning to priority with its grant in place.
+fn granted(root: &Env) -> Env {
+    let mut env = root.fork().unwrap();
+    let index = actions(&mut env)
+        .iter()
+        .position(|a| matches!(a, Action::ActivateAbility { .. }))
+        .expect("Zul Ashur's ability is offered");
+    env.step(index as i64).unwrap();
+    for _ in 0..16 {
+        if env.action_space_kind() == Some(ActionSpaceKind::Priority)
+            && env.fixture_game_mut().state.stack_objects.is_empty()
+        {
+            return env;
+        }
+        let pass = actions(&mut env)
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        env.step(pass as i64).unwrap();
+    }
+    panic!("Zul Ashur's grant never resolved")
+}
 /// Reach combat by passing priority and declaring every attacker. Bound the
 /// preparation trace, not the rules search; error if it never reaches combat.
 fn combat(root: &Env, block: bool) -> Option<Env> {
@@ -618,11 +739,33 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
 fn damage(root: &Env) -> Option<Env> {
     use managym::flow::turn::StepKind;
     let mut env = combat(root, true)?;
+    // One blocker per attacker: a gang block would stop the measured step
+    // at the attacker's damage assignment instead of dealing damage.
+    let mut blocked = Vec::new();
     for _ in 0..256 {
         if env.action_space_kind() != Some(ActionSpaceKind::DeclareBlocker) {
             break;
         }
-        let index = first_action(&mut env, "block").unwrap_or(0);
+        let offered = actions(&mut env);
+        let index = offered
+            .iter()
+            .position(|action| {
+                matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                    if !blocked.contains(attacker))
+            })
+            .or_else(|| {
+                offered.iter().position(|action| {
+                    matches!(action, Action::DeclareBlocker { attacker: None, .. })
+                })
+            })
+            .unwrap_or(0);
+        if let Action::DeclareBlocker {
+            attacker: Some(attacker),
+            ..
+        } = offered[index]
+        {
+            blocked.push(attacker);
+        }
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
@@ -680,11 +823,15 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     if recipe.state == "names" {
         return vec![("name".into(), reach(root, "name"))];
     }
-    if recipe.state == "triggers" {
+    if let Some(token) = match recipe.state.as_str() {
+        "triggers" => Some("token.ally"),
+        "entry-cascade" => Some("token.cat_1_1_w"),
+        _ => None,
+    } {
         let mut entered = root.fork().unwrap();
         entered
             .fixture_game_mut()
-            .create_token("token.ally", PlayerId(0), false)
+            .create_token(token, PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
     }
@@ -702,6 +849,9 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     };
     for (label, path) in cost_choices {
         result.push(((*label).into(), follow(root, path)));
+    }
+    if recipe.state == "graveyard-routes" {
+        result.push(("granted".into(), granted(root)));
     }
     if recipe.state == "float-origins" {
         result.push(("floated".into(), float_everything(root)));
@@ -866,7 +1016,12 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state[p.object].name == "Gray Ogre")
+                        .find(|p| {
+                            matches!(
+                                game.state[p.object].name.as_str(),
+                                "Gray Ogre" | "Helpful Hunter"
+                            )
+                        })
                         .or_else(|| game.state.permanents.iter().flatten().next())
                         .map(|p| p.object);
                     if let Some(card) = source {

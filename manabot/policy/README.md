@@ -14,7 +14,7 @@ logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
 Every backend's forward reads a `Prepared` batch. With bucketed shapes,
-Torch and MLX measure occupied and referenced rows before admission. The
+Torch and MLX read exact counts from a native v11 `ObservationBatch` or measure occupied and referenced rows in dense mappings before admission. The
 resulting `BucketedObservation` pairs views of the original rows with their extents.
 Host preparation uses those extents to translate object joins and restore
 the full action width.
@@ -26,6 +26,11 @@ the full action width.
   `admit` on the host and prepare the views it validated.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
+- `spans.py` reads immutable packed values and offsets for the native
+  batch. Admission binds the batch layout and checks checkpoint vocabularies.
+  Preparation uses the offsets for slot coordinates and restores the model's
+  padding where its arithmetic depends on shape. A copied or read-only
+  dictionary goes through the full dense checks.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
   measures each item's occupied rows, object references, continuation joins
@@ -35,11 +40,40 @@ the full action width.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token
-  offsets and inference column compaction. Object joins and ownership follow
-  the batch's trimmed object axes. A backend's graph then holds only
-  gathers, scatters and arithmetic. `Prepared` is generic over its array type:
-  `prepare` returns NumPy arrays and a backend moves them to its device
-  (torch's `on_device`). Optional groups are `None` when unused: a fact
+  offsets and attention/fact compaction. Object joins and ownership follow
+  the batch's trimmed object axes (read from `obs.buckets` on
+  `BucketedObservation` or `ObservationSpans`, with no separate `bucketed`
+  flag). A backend's graph then holds only gathers, scatters and arithmetic.
+  `Prepared` is generic over its array type: `prepare` returns NumPy arrays and
+  a backend moves them to its device (torch's `on_device`).
+
+  Backends translate their device and purpose (`inference=True` vs learning)
+  into two explicit layout parameters on `prepare(obs, tables, *, attention="padded", facts="padded", ...)`:
+
+  ```python
+  from manabot.policy.prepare import prepare
+
+  # Admitted batch `obs` and checkpoint `tables`; pad used object columns to a power of two.
+  batch = prepare(obs, tables, attention="bucketed_columns", facts="padded")
+  batch.attention_columns  # sorted column indices of power-of-two length (>= 8), or None if dense
+  ```
+
+  - `attention: AttentionLayout`: `"padded"` (default, full object table),
+    `"used_columns"` (columns valid in at least one row; Torch CPU and MLX
+    inference), `"bucketed_columns"` (used columns padded with empty columns
+    via `buckets.bucket` to a power of two; Torch MPS inference),
+    `"packed_groups"` (rows sorted by live count in `packed_attention`, falling
+    back to `used_columns`), or `"live_tokens"` (flat `live_index` /
+    `live_offsets`, plus MLX's `compact_attention`).
+  - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (columns valid
+    in at least one row for unbucketed CPU and MLX inference), `"live_rows"`
+    (live fact rows for MLX learner compaction), or `"bucketed_live_rows"`
+    (live facts padded to a power of two of at least 64 for Torch MPS).
+
+  Unknown layouts raise `ValueError`. Both `ObservationSpans` and dense buffers
+  share `select_attention_columns`
+  ([inference column compaction](../../docs/observation-and-model.md#inference-column-compaction)).
+  Optional groups are `None` when unused: a fact
   table's `programs` holds its indexes together, and each `Packed` schedule
   owns the original sequence lengths. The batch records the
   model and observation configuration it was prepared for, and a forward
@@ -56,10 +90,12 @@ the full action width.
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`
-  applies each numeric reading once, so a backend never scales a column, and
-  admission keys include the readings, so two models that differ in one
-  reading never share a prepared batch. A column whose kind has no reading
-  raises when the layout is built; joins and ids never reach a projection. A
+  skips all-zero card, permanent and stack rows when applying numeric readings.
+  It reads relation features at valid slots and restores the original row
+  coordinates for every backend. The host applies the readings once. Admission
+  keys include them, so two models that differ in one reading never share a
+  prepared batch. A column whose kind has no reading raises when the layout
+  is built; joins and ids never reach a projection. A
   reading may write more than one input (`duration`: four flags), so
   projection widths come from `Layout` (`numeric_width`, `fact_width`)
   ([how the network reads a column](../../docs/observation-and-model.md#how-the-network-reads-a-column)).

@@ -170,13 +170,17 @@ fn encoded_to_dict<'py>(
     put(
         "relations",
         &encoded.relations,
-        &[continuation::RELATION_ROWS, continuation::RELATION_DIM],
+        &[continuation::RELATION_ROWS, config.relation_dim()],
     )?;
-    put("agent_player", &encoded.agent_player, &[1, enc::PLAYER_DIM])?;
+    put(
+        "agent_player",
+        &encoded.agent_player,
+        &[1, config.player_dim()],
+    )?;
     put(
         "opponent_player",
         &encoded.opponent_player,
-        &[1, enc::PLAYER_DIM],
+        &[1, config.player_dim()],
     )?;
     let cards = [config.max_cards_per_player, enc::CARD_DIM];
     put("agent_cards", &encoded.agent_cards, &cards)?;
@@ -454,6 +458,8 @@ pub enum StepEnum {
     PostcombatMainStep = 9,
     EndingEnd = 10,
     EndingCleanup = 11,
+    // Appended as 12 to preserve Observation JSON discriminants; reorder before CombatDamage in 0.3.0.
+    CombatFirstStrikeDamage = 12,
 }
 
 #[cfg(feature = "python")]
@@ -483,6 +489,8 @@ impl StepEnum {
     const ENDING_END: Self = Self::EndingEnd;
     #[classattr]
     const ENDING_CLEANUP: Self = Self::EndingCleanup;
+    #[classattr]
+    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -509,6 +517,7 @@ impl From<StepKind> for StepEnum {
             StepKind::PostcombatMain => Self::PostcombatMainStep,
             StepKind::End => Self::EndingEnd,
             StepKind::Cleanup => Self::EndingCleanup,
+            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
         }
     }
 }
@@ -529,6 +538,7 @@ impl From<StepEnum> for StepKind {
             StepEnum::PostcombatMainStep => Self::PostcombatMain,
             StepEnum::EndingEnd => Self::End,
             StepEnum::EndingCleanup => Self::Cleanup,
+            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
         }
     }
 }
@@ -1150,12 +1160,25 @@ pub struct PyPlayer {
     /// Pooled mana with a spend effect or combat expiry, by class.
     #[pyo3(get)]
     pub pooled_mana_classes: Vec<PyPooledManaClass>,
+    spent_graveyard_types: Vec<(u32, crate::state::card::CardType)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
     /// Continuous effects on this player, in timestamp order.
     #[pyo3(get, set)]
     pub effects: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayer {
+    #[getter]
+    fn spent_graveyard_types(&self) -> Vec<(u32, String)> {
+        self.spent_graveyard_types
+            .iter()
+            .map(|(source, kind)| (*source, format!("{kind:?}")))
+            .collect()
+    }
 }
 
 /// One continuous-effect record on a player or permanent.
@@ -1462,6 +1485,7 @@ impl From<PlayerData> for PyPlayer {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1506,6 +1530,7 @@ impl From<PyPlayer> for PlayerData {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1817,7 +1842,7 @@ fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> 
     py.import_bound("warnings")?.call_method1(
         "warn",
         (
-            format!("{old} is deprecated; use {new}; removal in 0.4.0"),
+            format!("{old} is deprecated; use {new}; removal in 0.3.0"),
             py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             // A native getter has no Python frame, so level 1 is the caller.
             1,
@@ -2015,13 +2040,23 @@ impl PyCard {
     fn set_face_down(&mut self, value: bool) {
         self.data.face_down = value;
     }
+    /// First listed grant. Use cast_permissions for inspection (singular removed in 0.4.0).
     #[getter]
     fn cast_permission(&self) -> Option<PyCastPermission> {
-        self.data.cast_permission.clone().map(Into::into)
+        self.data.cast_permissions.first().cloned().map(Into::into)
     }
     #[setter]
     fn set_cast_permission(&mut self, value: Option<PyCastPermission>) {
-        self.data.cast_permission = value.map(Into::into);
+        self.data.cast_permissions = value.into_iter().map(Into::into).collect();
+    }
+    #[getter]
+    fn cast_permissions(&self) -> Vec<PyCastPermission> {
+        self.data
+            .cast_permissions
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect()
     }
     #[getter]
     fn x(&self) -> Option<i32> {
@@ -2040,6 +2075,15 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
+    /// Counters on the card off the battlefield, by kind name.
+    #[getter]
+    fn counters(&self) -> BTreeMap<String, i32> {
+        self.data.counters.clone()
+    }
+    #[setter]
+    fn set_counters(&mut self, value: BTreeMap<String, i32>) {
+        self.data.counters = value;
+    }
     #[getter]
     fn characteristics(&self) -> PyObservationCharacteristics {
         PyObservationCharacteristics {
@@ -2048,7 +2092,7 @@ impl PyCard {
     }
 }
 
-/// A public permission to play an exiled card; see `CastPermissionData`.
+/// A public permission to play a card in its current zone; see `CastPermissionData`.
 #[cfg(feature = "python")]
 #[pyclass(name = "CastPermission")]
 #[derive(Clone)]
@@ -2075,6 +2119,20 @@ pub struct PyCastPermission {
     pub waterbend: bool,
     #[pyo3(get)]
     pub foretold: bool,
+    #[pyo3(get)]
+    pub follows_source_controller: bool,
+    #[pyo3(get)]
+    pub flashback: bool,
+    #[pyo3(get)]
+    pub on_adventure: bool,
+    #[pyo3(get)]
+    pub prepared: bool,
+    #[pyo3(get)]
+    pub face_down: bool,
+    #[pyo3(get)]
+    pub play_lands: bool,
+    #[pyo3(get)]
+    pub condition: Option<String>,
 }
 
 #[cfg(feature = "python")]
@@ -2092,6 +2150,13 @@ impl From<CastPermissionData> for PyCastPermission {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
+            on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            play_lands: value.play_lands,
+            condition: value.condition,
         }
     }
 }
@@ -2111,6 +2176,13 @@ impl From<PyCastPermission> for CastPermissionData {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
+            on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            play_lands: value.play_lands,
+            condition: value.condition,
         }
     }
 }
@@ -2297,6 +2369,10 @@ impl PyPermanent {
     #[setter]
     fn set_exile_if_dies_this_turn(&mut self, value: bool) {
         self.data.exile_if_dies_this_turn = value;
+    }
+    #[getter]
+    fn first_strike_participant(&self) -> bool {
+        self.data.first_strike_participant
     }
     #[getter]
     fn attacking(&self) -> bool {
@@ -2551,6 +2627,16 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
+    #[pyo3(get)]
+    pub spell_profile: u8,
+    #[pyo3(get)]
+    pub route_mana_value: Option<u8>,
+    #[pyo3(get)]
+    pub quota_type: Option<u8>,
+    /// The permission a play uses (`play_route_code`); None for an ordinary hand play.
+    #[pyo3(get)]
+    pub play_route: Option<u8>,
 }
 
 #[cfg(feature = "python")]
@@ -2666,6 +2752,10 @@ impl From<ActionOption> for PyAction {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            spell_profile: value.spell_profile,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }
@@ -2686,6 +2776,10 @@ impl From<PyAction> for ActionOption {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            spell_profile: value.spell_profile,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }
@@ -2883,6 +2977,14 @@ impl PyStackObject {
     fn set_kicked(&mut self, value: bool) {
         self.data.kicked = value;
     }
+    #[getter(from_prepared)]
+    fn prepared_origin(&self) -> bool {
+        self.data.from_prepared
+    }
+    #[getter]
+    fn flashback(&self) -> bool {
+        self.data.flashback
+    }
     #[getter]
     fn characteristics(&self) -> Option<PyObservationCharacteristics> {
         self.data
@@ -2903,6 +3005,10 @@ impl PyStackObject {
     #[getter]
     fn is_copy(&self) -> Option<bool> {
         self.data.spell.as_ref().map(|s| s.is_copy)
+    }
+    #[getter]
+    fn effective_mana_value(&self) -> Option<u8> {
+        self.data.effective_mana_value()
     }
     #[getter]
     fn announced_x(&self) -> Option<i32> {
@@ -3192,7 +3298,7 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    /// Deprecated input v9/v10 card rows (removed in 0.4.0): the observation's
+    /// Deprecated input v9/v10 card rows (removed in 0.3.0): the observation's
     /// cards with battlefield objects and stack spells listed as cards again.
     fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
         let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
@@ -3913,7 +4019,7 @@ impl PyEnv {
     ) -> PyResult<Self> {
         if enable_behavior_tracking {
             py.import_bound("warnings")?.call_method1("warn", (
-                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.4.0",
+                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.3.0",
                 py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             ))?;
         }
@@ -4983,7 +5089,7 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
-    /// Deprecated: encode with native default capacities. Removal in 0.4.0.
+    /// Deprecated: encode with native default capacities. Removal in 0.3.0.
     #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
@@ -4995,7 +5101,7 @@ impl PyEnv {
             py,
             "Env.encode_observation is deprecated; allocate buffers from \
              managym.observation_layout() or ObservationSpace and call \
-             managym.encode_observation_into; removal in 0.4.0",
+             managym.encode_observation_into; removal in 0.3.0",
         )?;
         let rust_obs = Observation::from(obs);
         if max_facts == Some(0) {
@@ -5013,7 +5119,7 @@ impl PyEnv {
         Ok(out.into_any().unbind())
     }
 
-    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.4.0.
+    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.3.0.
     #[pyo3(signature = (obs, out, action_overflow="error"))]
     fn encode_observation_into(
         &self,
@@ -5025,14 +5131,15 @@ impl PyEnv {
         warn_deprecated(
             py,
             "Env.encode_observation_into is deprecated; use \
-             managym.encode_observation_into; removal in 0.4.0",
+             managym.encode_observation_into; removal in 0.3.0",
         )?;
         let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         let layout = super::layout_bindings::ObservationLayout::from_config(config)?;
-        encode_observation_into(py, obs, &layout, out, action_overflow)
+        encode_observation_into_impl(py, obs, &layout, out, action_overflow)
     }
 }
 
+/// Deprecated dense scalar encoder; removed in 0.3.0.
 /// Write any observation (live, restored or a viewer projection) into
 /// caller-owned buffers at the supplied layout;
 /// companion shapes are checked before any write.
@@ -5040,6 +5147,21 @@ impl PyEnv {
 #[pyfunction]
 #[pyo3(signature = (obs, layout, out, action_overflow="error"))]
 fn encode_observation_into(
+    py: Python<'_>,
+    obs: PyObservation,
+    layout: &super::layout_bindings::ObservationLayout,
+    out: Bound<'_, PyDict>,
+    action_overflow: &str,
+) -> PyResult<()> {
+    warn_deprecated(
+        py,
+        "encode_observation_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.3.0",
+    )?;
+    encode_observation_into_impl(py, obs, layout, out, action_overflow)
+}
+
+#[cfg(feature = "python")]
+fn encode_observation_into_impl(
     py: Python<'_>,
     obs: PyObservation,
     layout: &super::layout_bindings::ObservationLayout,
@@ -5543,7 +5665,7 @@ fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
     pyo3::PyErr::warn_bound(
         py,
         &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.4.0.",
+        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.3.0.",
         2,
     )
 }

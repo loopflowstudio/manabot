@@ -23,7 +23,7 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
+from manabot.env.memory_store import MEMORY_FIELDS
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
@@ -41,6 +41,7 @@ from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
 )
+from manabot.policy.decision_memory import retained_memory
 from manabot.policy.prepare import reference_distribution
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.decks import UniformDecks
@@ -51,6 +52,7 @@ from manabot.training.loops.self_play import (
     SelfPlay,
     create,
     learn,
+    resume_training,
     self_play,
     self_play_collector,
     step,
@@ -248,7 +250,7 @@ def three_choices(
         encoded = encode_observation(space, scalar.observation_for_player(span.seat))
         assert span.bootstrap_index is not None
         frozen = batch.next_obs
-        if isinstance(frozen, PrefixObservation):
+        if retained_memory(frozen) is not None:
             dense = frozen.materialize()
             # Compact memory pads only to the largest live prefix in this read.
             for key in MEMORY_FIELDS:
@@ -474,8 +476,9 @@ def test_snapshot_bootstraps_retain_both_viewers_memory_at_the_cut() -> None:
         )
     )
     batch, _ = three_choices(small_agent(space))
-    assert isinstance(batch.next_obs, PrefixObservation)
-    assert [p.identity.viewer for p in batch.next_obs.prefixes] == [0, 1]
+    memory = retained_memory(batch.next_obs)
+    assert memory is not None
+    assert [p.identity.viewer for p in memory.prefixes] == [0, 1]
 
 
 def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
@@ -1867,7 +1870,9 @@ def test_native_snapshot_self_play(
             "transitions": 1,
             "games_per_stream": 1,
             "snapshot": SnapshotConfig(
-                capacity=2,
+                # Hold warmup entries alongside update 2's fresh captures so
+                # untrained critic-residual noise cannot evict the visited root.
+                capacity=4,
                 group_size=group_size,
                 horizon=horizon,
                 replay_fraction=replay_fraction,
@@ -1925,12 +1930,7 @@ def test_native_snapshot_self_play(
                 initial, _ = create(settings, seed=run.seed)
                 restored, averaged = create(settings, seed=run.seed + 1)
                 assert averaged is not None
-                run.resume(
-                    learner=restored.agent,
-                    optimizer=restored.optimizer,
-                    ema=averaged,
-                    extra=Counts(),
-                )
+                resume_training(settings, run, backend, restored, averaged)
                 assert not restored.optimizer.state
                 for policy in (restored.agent, averaged):
                     for name, value in policy.state_dict().items():
@@ -2133,7 +2133,7 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
 def test_deprecated_snapshot_factory_uses_native_deferred_slots(
     use_factory: bool,
 ) -> None:
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         vector = (
             InMemorySnapshotVector.factory(ObservationSpace(), Match(), 1, 42)
             if use_factory
@@ -2257,8 +2257,8 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
         patch.object(vector, "step_isolated_into_buffers", side_effect=fail_once),
         patch.object(
             vector,
-            "write_observations_for_players",
-            wraps=vector.write_observations_for_players,
+            "observations_for_players",
+            wraps=vector.observations_for_players,
         ) as reads,
         patch.object(
             torch,

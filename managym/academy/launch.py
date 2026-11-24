@@ -76,7 +76,7 @@ class RecordedGame:
 
 def _warn_listing_field(name: str, replacement: str) -> None:
     warnings.warn(
-        f"RecordedGame.{name} is deprecated; use {replacement}; removal in 0.4.0",
+        f"RecordedGame.{name} is deprecated; use {replacement}; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=3,
     )

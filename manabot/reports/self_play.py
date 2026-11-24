@@ -38,7 +38,7 @@ class SelfPlayPoint:
     @property
     def position(self) -> Literal["play", "draw"]:
         warnings.warn(
-            "SelfPlayPoint.position is deprecated and will be removed in 0.4.0; "
+            "SelfPlayPoint.position is deprecated and will be removed in 0.3.0; "
             "use seat (0 is on the play)",
             DeprecationWarning,
             stacklevel=2,

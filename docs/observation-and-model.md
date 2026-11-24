@@ -39,10 +39,11 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
-Every observation batch is prepared once, on the host, before any forward:
-`agent.prepare(obs)` checks shapes, references, programs and the legal-action
-mask of the NumPy buffers, does every integer lookup and returns a `Prepared`
-batch, the same one every [backend](../manabot/backends/README.md) reads. The
+Before a forward, `agent.prepare(obs)` admits the input on the host and
+builds the integer lookups in a `Prepared` batch shared by every backend.
+For a dense mapping it checks shapes, references, programs and legal-action
+masks. For a native v11 batch it reads the exact spans and checks the
+model layout and vocabulary. The
 forward reads only a prepared batch on its device, raises `TypeError` for an
 observation dictionary and does no validation or lookups of its own
 ([observation admission](../manabot/model/agent.md#observation-admission)).
@@ -212,19 +213,23 @@ checkpoint therefore computes what it did. The field cannot be changed on a
 trained model, since it adds parameters and moves the norms. The `baseline`
 and Elemental self-play recipes set it; frozen recipes and experiment files
 are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
-refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
+supports both `stream_norm` and `focus_film` with matching weights and outputs.
 
 ### Bucketed padding
 
-Each buffer arrives padded to its declared capacity, but a real batch uses
-little of it. Across 300 captured collection batches the median batch needed 59
+A dense observation mapping reserves the declared capacity of every table.
+A v11 `managym.ObservationBatch` carries each table's typed live rows with int32
+offsets. Its native record fields keep integer joins and full signed words exact
+through vocabulary lookup. Both transports use the same logical object and
+action coordinates and saved numeric readings. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding is the default for CUDA training. The host measures the last
-occupied or referenced row on each variable axis, including actions, objects
-and effect spans. It rounds each extent up to a power of two, with a minimum
+Bucketed padding is the default for CUDA training. For a native batch the
+host takes per-axis counts from the offsets. For an external mapping it
+measures the last occupied or referenced row on each variable axis, including
+actions, objects and effect spans. It rounds each extent up to a power of two, with a minimum
 of 8 rows and a maximum of the declared capacity. Admission validates these
 prefixes in the original object coordinates. Raw buffers keep those coordinates
 throughout collection and learning. Preparation translates the integer gathers
@@ -232,25 +237,24 @@ into the trimmed object table. Models with belief rows or
 `historical_mean` value aggregation keep the full object table. Logits retain
 the original action slots.
 
-Torch and MLX collection borrow the original group or a contiguous slice
-while preparing it. Both sample once in the original row order and keep the
-measured extents on the host. The learner checks the
+Torch and MLX prepare v11 decisions from the live spans of each selected
+stream. A masked step can leave several native batches represented in the
+same group. Both backends sample once in original group order, even when
+preparation splits it across execution chunks. The rollout retains the
+collection extents and shares immutable decision-memory prefixes. The learner checks the
 current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.
 
-Inside the network, fact ids are looked up at the fact axis's shape instead of
-for selected rows, and learning encodes the complete card catalog instead of
-the definitions a batch references. Shared-effect routing, fact programs and
-legal-action selection keep their packed, data-dependent layouts. A forward
-therefore takes one of a few shapes per input axis instead of a new shape for
-nearly every batch, and does much less work than padding everything to
-capacity. The complete catalog is more work than the padded path's
-referenced definitions: captured Elemental learner batches referenced 65 to
-154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
-tokens. On CPU, where the recurrent catalog encoder dominates learning, a
-learner forward and backward is therefore slower than on the padded path,
-most of all for small decks.
+On CUDA, Torch looks up fact ids at the bucketed fact axis's shape and
+encodes the complete card catalog to keep the recurrent encoder's schedule
+fixed across learner batches. This adds work for small decks. Captured
+Elemental learner batches referenced 65 to 154 of 360 definitions, so the
+full schedule encoded 2.3 to 5.8 times as many catalog tokens. Torch learners
+on CPU and MPS and MLX learners encode only the referenced definitions in
+both layouts. Inference uses the full catalog so it can cache the encoded
+programs across calls. Shared-effect routing, fact programs and legal-action
+selection keep their packed, data-dependent layouts.
 
 A loop's settings choose it, with
 [live-token attention](#live-token-attention). Both are plain `SelfPlay`
@@ -269,14 +273,15 @@ settings.bucketed_shapes, settings.live_tokens  # (True, True)
 The baseline recipe does this when its `device` is `cuda` and
 `padded_shapes` is false; to compare the paths on CUDA, run it with
 `--config '{"device": "cuda", "padded_shapes": true}'`
-([run training](training.md#run-training)). Nothing resolves the switches
-from the device: `live_tokens=True` off CUDA fails validation, and bucketed
-shapes may be written explicitly on CPU or MPS, where they are slower to
-learn, as described above.
+([run training](training.md#run-training)). Self-play checks `live_tokens`
+at run admission. Torch supports it on CUDA and MLX supports it on MPS and
+CPU. You can enable bucketed shapes explicitly on CPU or MPS.
 
 The loop's collection and learner policies use the settings' layout. Code
-that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
-off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
+that builds a policy outside a loop chooses it itself: `ActorCritic(...)`,
+`MLXActorCritic(...)`, `load_checkpoint(...)` and `backend.load_policy(...)`
+default both switches to off; pass `bucketed_shapes=True` or `live_tokens=True`
+to enable them.
 [Served evaluation](evaluation.md#shared-inference) accepts both switches and
 leaves them off: its batches are small, and the padded forward was the faster
 one there. Search players load their policies padded.
@@ -291,9 +296,9 @@ The setting changes how a forward is computed, not the model. It changes no
 `ModelConfig` field, checkpoint, binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the padded path
-up to the order of floating-point sums. A batch that references no card
-definition is the one difference in gradient support: the catalog encoder then
-receives exactly zero gradients instead of none. Capacity overflow and
+up to the order of floating-point sums. On CUDA, when a batch references no
+card definition, the bucketed learner's full catalog receives exactly zero
+gradients while the padded learner skips the encoder. Capacity overflow and
 malformed inputs are rejected with the same error and message as on the
 padded path.
 
@@ -320,32 +325,91 @@ names. The catalog encoder, shared-effect routing, fact programs and the action
 head run as they do without the setting; with `bucketed_shapes=True` their axes
 are still trimmed to buckets.
 
-Attention within each observation uses `scaled_dot_product_attention` on
-jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
-CPU it falls back to one attention call per observation, which is correct but
-slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
-padded on a laptop CPU
-([measurement](../experiments/reports/eval_forward_layout.md)). A stage therefore uses
-live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
-`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
-as a reduced precision does.
+On Torch, attention within each observation uses `scaled_dot_product_attention`
+on jagged nested tensors. On CUDA that runs the fused variable-length kernels;
+on CPU it falls back to one attention call per observation, which is correct
+but slow: at w160l8 a 256-row collection forward took about 0.86 s against
+0.46 s padded on a laptop CPU
+([measurement](../experiments/reports/eval_forward_layout.md)). On MLX, every
+per-object layer runs on packed `[L, D]` tokens and, around
+`mx.fast.scaled_dot_product_attention` only, Q/K/V are compacted to
+`[B, H, max_live, d]` using the prepared batch and slot coordinates, for
+`O(B * max_live^2)` attention. A broadcast key mask excludes the shorter
+sequences' padding. Self-play admits `live_tokens` per backend in
+`backend.runtime.admit_execution` before opening a run, rather than in
+`SelfPlay` settings validation: Torch refuses `live_tokens=True` when
+`device != "cuda"` (`live tokens require CUDA on the torch backend`), while
+MLX accepts `live_tokens=True` on both `mps` and `cpu`.
 
-Packing needs one host read per forward, the batch's total number of valid
-objects, to size the packed sequence. The policy's `prepare` measures it on the
-host with the token offsets, as it does bucket sizes, for collection and
-learning alike, so the device forward reads nothing back.
+For both collection and learning, `prepare` measures the live lengths on the
+host once per batch. Torch uses the flat object index and sequence offsets.
+MLX reuses the compact coordinates and key mask on each forward without a
+device readback.
 
 The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either
 may be on without the other. Code that builds a policy directly passes
-`ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
-which allow it on any device so CPU tests can compare the layouts. Like
+`ActorCritic(..., live_tokens=True)`, `MLXActorCritic(..., live_tokens=True)`,
+`load_checkpoint(..., live_tokens=True)` or
+`backend.load_policy(..., live_tokens=True)`, which allow it on CPU so tests
+and `.to("cuda")` callers can compare or move the layouts. Like
 bucketed shapes, it changes no model, checkpoint or input contract. Action
 probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
 shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/reports/live_token_attention.md)).
+
+### Inference column compaction
+
+On Torch CPU and MPS, rollout batches often leave most object slots empty
+across every row. Calling `policy.prepare(obs, inference=True)` selects the
+device's inference layout automatically.
+
+```python
+from manabot.backends.torch.checkpoint import load_checkpoint
+
+policy, space = load_checkpoint("policy.safetensors")
+policy = policy.to("mps")
+batch = policy.prepare(obs, inference=True)  # power-of-two attention_columns on MPS
+logits, values = policy.evaluate(batch)      # original action coordinates, logits [B,A], values [B]
+```
+
+Each Torch device maps `inference=True` to its host-preparation layout in
+`manabot.policy.prepare.prepare`:
+
+| Device (`inference=True`) | Object attention layout | Fact layout |
+| --- | --- | --- |
+| CPU | `"used_columns"`: exact columns valid in at least one row | `"used_columns"` (or `"padded"` when `bucketed_shapes=True`) |
+| MPS | `"bucketed_columns"`: used columns padded with empty columns to the next power of two (minimum 8) | `"bucketed_live_rows"`: live facts padded to a power of two (minimum 64) |
+| CUDA | `"padded"` (or `"live_tokens"` when `live_tokens=True`) | `"padded"` |
+
+On MPS, exact per-batch column counts change shape from step to step and trigger
+Metal graph recompiles. Padding the used object columns with empty (all-zero
+validity) columns via `manabot.policy.buckets.bucket` (`MIN_BUCKET = 8`) bounds
+the attention width to a small set of powers of two (at most `{8, 16, 32, 64,
+128, N}` on a 234-slot board) and collapses `attention_columns` to `None` (no
+gather or scatter) whenever the batch is empty, the table width is at most 8, or
+the bucket reaches the table width. Every added padding column has zero validity
+in every row, so it is masked in softmax keys, zeroed after attention, and
+scattered back to its original object slot as zero before action scoring and
+value pooling.
+
+Column compaction composes with `bucketed_shapes=True` (further shrinking or
+collapsing the trimmed object table when fewer columns are used),
+`historical_mean`, `value_token` (which appends one token after column
+gathering, preserving the small shape count), `attention_readout` and dense
+`belief` rows. When `attention_on` is false, no object columns are selected;
+when `live_tokens=True` and `attention_on` is true, live-token packing takes
+precedence.
+
+Because dropping or reordering empty columns changes floating-point summation
+order, learner batches (`inference=False`) keep padded columns on Torch (unless
+`live_tokens=True`). Rollout collection, evaluation, search and rollout
+bootstrapping (`next_observation`) use `inference=True`. Like bucketed padding
+and live-token attention, column compaction changes no `ModelConfig` field,
+checkpoint or policy input; float32 logits and values match the padded forward
+up to floating-point summation order.
 
 ## Running a checkpoint on a later revision
 
@@ -554,7 +618,7 @@ definition/reference after the source leaves. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
-compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+compatibility aliases, warn, and are removed in 0.3.0. Frozen viewer JSON
 keeps its existing fields and bytes; those wire records are normalized on read.
 Historical captures whose object identity is missing or ambiguous are refused.
 Academy's retained `base_power`/`base_toughness` fields still mean effective
@@ -574,7 +638,7 @@ Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
 stack spell was also a card row, permanent rows (38 columns) had no
 characteristics and stack abilities had no row. Selecting v9 or v10 warns
 (`DeprecationWarning`). They are removed once a v11 player is at least as
-strong as the strongest v9 one, and not before 0.4.0. Their rows are rebuilt from
+strong as the strongest v9 one, and not before 0.3.0. Their rows are rebuilt from
 the same observation by `agent/legacy_input.rs` and
 `manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
 byte; the model reads them through the same `ActorCritic`, without a stack
@@ -639,20 +703,20 @@ Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `agent_player`, `opponent_player` | 1 × 74 | Player state and public game disclosure |
+| `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
-| `agent_permanents`, `opponent_permanents` | 40 × 51 | Permanents with their characteristics |
-| `stack`, `stack_valid` | 32 × 37 (`max_stack_objects`), 32 | Spells and abilities, top first |
+| `agent_permanents`, `opponent_permanents` | 40 × 53 | Permanents with their characteristics |
+| `stack`, `stack_valid` | 32 × 40 (`max_stack_objects`), 32 | Spells and abilities, top first |
 | `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
-| `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
+| `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 25 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 30 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
-Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
+Policy inputs v9 and v10 keep 22 action columns and 49 relation columns. In v11, column 22
 (`pays_directly`, zero-based) marks taps that directly pay a cost through
 convoke, improvise or waterbend.
 When such a tap could pay more than one thing, the next choice's `mode`
@@ -664,9 +728,11 @@ modes are offered, and the choice's focus is the permanent just tapped.
 The same `mode` column carries every indexed choice: a mode of a modal spell,
 a mana-spend option, a replacement order and a value of X. In v11, columns 23
 and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
-value for X (for a spell, an activation or a payment, or a replicate count),
-and `x` is that value in tenths, named and scaled as the stack row's `has_x`
-and `x` are. The native `Action.announces_x` says the same of an offer:
+value for X (for a spell, an activation or a payment, or a replicate count)
+or an amount of combat damage an attacker assigns to a blocker, and `x` is
+that value in tenths, named and scaled as the stack row's `has_x` and `x`
+are, so amounts past the mode's one-hot range stay distinct. A combat damage
+offer's focus is the attacker and then the blocker. The native `Action.announces_x` says the same of an offer:
 
 ```python
 # arrays = game.encode_observation(observation), at a decision that chooses X
@@ -683,6 +749,20 @@ print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]
 `mode` keeps its stored value on these rows. Both columns are appended, so a
 checkpoint trained before them does not read them. Inputs v9 and v10 have
 neither; their X offers differ only in `mode`.
+
+When several permissions apply to one play, its action row gives the selected
+base mana value (`has_route_cost`, `route_mana_value`) and the permanent
+type it spends (`quota_type`, zero for none). `play_route` names the
+permission itself (`play_route_code`: 1 hand, 2 free from hand, 3 library
+top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type,
+8 exile counter, 9 the card's own graveyard permission such as Quilled
+Greatwurm's; zero for an ordinary hand play), so two routes with the
+same cost, such as Tinybones's stash and an exact grant, stay distinct. A
+resolution cast is authorized by its resolving instruction and names no
+route, even when the card also holds a priority permission. The
+column is appended; a checkpoint trained before it does not read it. A
+type-limited offer focuses the card first and the permanent granting the
+allowance second.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1
@@ -847,8 +927,10 @@ kind 11 under the id `Ward`, in the tokens the card's definition uses
 (`PaymentCost::Life`, then the amount). The LLM text says "ward: pay 7 life".
 
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
-enters with an additional +1/+1 counter") counts in its player's ordinary
-or restricted mana aggregate, according to its restriction, and is stated as
+enters with an additional +1/+1 counter"), and mana with a restriction the
+player columns do not name ("can't be spent to cast spells from your hand"),
+counts in its player's ordinary or restricted mana aggregate, according to
+its restriction, and is stated as
 an effect program on that player: fact kind 11
 under the id `PooledMana`, one program per class, in the tokens the producing
 card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
@@ -885,7 +967,7 @@ changed colors and keyword-counter timestamps; members keep one-based public
 object joins, and duplicate memberships survive. No rules record is deleted or
 semantically coalesced. The layout, routing and sum/normalization tradeoff are
 in the torch backend's shared-effect encoder
-([`manabot/backends/torch/_shared_effects.py`](../manabot/backends/torch/_shared_effects.py)) and
+([`manabot/backends/torch/shared_effects.py`](../manabot/backends/torch/shared_effects.py)) and
 [shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
 is an engineering result; it establishes no learning-quality advantage.
 
@@ -958,10 +1040,10 @@ positions represented once). Deprecated inputs v9/v10 omit these facts and prese
 so their checkpoints never read them.
 
 The encoder writes definition joins and one-based positions. Prepared resolves definitions once and weights each by the
-reciprocal of its one-based position. Torch projects this separate pooled
-vector, divided by 60, before adding it to hand and decklist knowledge, so a
-known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
-these rows do not extend the deprecated layout. It is a minimal live
+reciprocal of its one-based position. Both Torch and MLX project this separate
+pooled vector, divided by 60, before adding it to hand and decklist knowledge,
+so a known top card and a known hand card have distinct representations;
+these rows do not extend the deprecated v9/v10 layout. It is a minimal live
 read, with no measured claim about learning or an ability to infer joint
 constraints. The text observation states each exact position in words.
 
@@ -987,8 +1069,8 @@ complete decision history, and no training benefit has been measured.
 
 ## Whole-game decision memory
 
-**Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
-encoders are implemented with bounded execution rows. Memory stays opt-in.
+**Unreleased.** Whole-game native logs, shared immutable prefixes, and Torch
+and MLX encoders are implemented with bounded execution rows. Memory stays opt-in.
 The [cost report](../experiments/opponent_memory.md) records the current
 suffix A40 calibration: control costs 1.105× incumbent time and GRU-K1 1.201×. These are exploratory cost measurements;
 matched training and paired strength evaluation have not run. These CUDA receipts
@@ -1018,7 +1100,7 @@ capture even for a log-only control. Direct native callers opt in with
 `decision_memory_include_own=True` also enables it. Search clones retain existing
 facts and never append hypothetical decisions.
 
-To let a Torch policy use the opponent's earlier choices, select an encoder and
+To let a policy use the opponent's earlier choices, select an encoder and
 one or four summaries in its model configuration:
 
 ```python
@@ -1122,8 +1204,12 @@ width 64 and projects its final valid state to the selected summaries. Both
 return zero summaries for an empty history. Record embeddings use absolute
 ordinal and span features. The GRU reads their chronological order; the
 transformer adds a learned projection of prefix-relative recency (rank / 128)
-as a sequence position signal, outside the shared record embedding. Memory
-requires the Torch backend; MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
+as a sequence position signal, outside the shared record embedding. Both the
+Torch and MLX backends support both decision-memory encoders (`gru` and
+`transformer`, 1 or 4 summaries) and control-trunk branching. During
+collection, both GRU encoders can reuse stable records for the same viewer
+prefix and native epoch. A restored branch can share record content while
+requiring a fresh recurrent state. The latest record is recomputed on every draw.
 
 ### What a record means
 
@@ -1375,7 +1461,7 @@ it does not make hidden cards observable.
 
 | Layer | Holds | Representation | Must not carry |
 | --- | --- | --- | --- |
-| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 50 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source and memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
 | Recent events | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
 | Decision memory | Whole-game viewer-safe decision records; optional own public signals | Unreleased: four decision tables and transformer/GRU summaries for board attention | Unavailable information, or a substitute for current native rules facts |
@@ -1482,6 +1568,6 @@ this proof first.
 | Observation space and layout | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
-| Recent events | [`manabot/backends/torch/_recent_events.py`](../manabot/backends/torch/_recent_events.py) |
-| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/_semantic_cards.py`](../manabot/backends/torch/_semantic_cards.py) |
+| Recent events | [`manabot/backends/torch/recent_events.py`](../manabot/backends/torch/recent_events.py) |
+| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/semantic_cards.py`](../manabot/backends/torch/semantic_cards.py) |
 | Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

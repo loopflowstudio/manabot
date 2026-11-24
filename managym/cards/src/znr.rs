@@ -1,8 +1,8 @@
 //! Zendikar Rising.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, ObjectSelector, PaymentCost, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -15,7 +15,81 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![nullpriest_of_oblivion(), crawling_barrens()]
+    vec![
+        spitfire_lagac(),
+        crawling_barrens(),
+        broken_wings(),
+        highborn_vampire(),
+        CardDefinition {
+            key: "znr.marauding_blight_priest",
+            scryfall_id: "730ddbcd-0814-4e22-85e9-78b0878324b6",
+            printed: PrintedCharacteristics {
+                name: "Marauding Blight-Priest".into(),
+                mana_cost: Some(ManaCost::parse("{2}{B}")),
+                types: CardTypes::new([CardType::Creature]),
+                subtypes: vec!["Vampire".into(), "Cleric".into()],
+                power: Some(3),
+                toughness: Some(2),
+                abilities: vec![Ability::when_you_gain_life(Effect::LoseLife {
+                    player: PlayerSelector::EachOpponent,
+                    amount: EffectValue::Fixed(1),
+                })],
+                text_box: "Whenever you gain life, each opponent loses 1 life.".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        nullpriest_of_oblivion(),
+    ]
+}
+
+fn highborn_vampire() -> CardDefinition {
+    CardDefinition {
+        key: "znr.highborn_vampire",
+        scryfall_id: "24c40082-516e-4381-a4cc-e61c5a9a6cac",
+        printed: PrintedCharacteristics {
+            name: "Highborn Vampire".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Warrior".into()],
+            power: Some(4),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn broken_wings() -> CardDefinition {
+    CardDefinition {
+        key: "znr.broken_wings",
+        scryfall_id: "c0fc2dfd-85b0-4add-be18-b39549235921",
+        printed: PrintedCharacteristics {
+            name: "Broken Wings".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        any_of: vec![
+                            CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
+                            CardPredicate {
+                                flying: true,
+                                ..CardPredicate::creature()
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target artifact, enchantment, or creature with flying.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn crawling_barrens() -> CardDefinition {
@@ -32,24 +106,62 @@ fn crawling_barrens() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{4}"),
                 effects: vec![
-                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
-                    Effect::OptionalPayment {
-                        cost: PaymentCost::Mana(ManaCost::default()),
-                        if_paid: [
-                            Modification::BecomeCreature,
-                            Modification::base_pt(Some(0), Some(0)),
-                            Modification::AddSubtypes(vec!["Elemental".into()]),
-                        ]
-                        .into_iter()
-                        .map(|modification| {
-                            Effect::until_end_of_turn(ObjectSelector::This, modification)
-                        })
-                        .collect(),
-                        if_declined: vec![],
+                    Effect::put_counters(
+                        ObjectSelector::ExactSource,
+                        CounterKind::PlusOnePlusOne,
+                        2,
+                    ),
+                    Effect::Modal {
+                        modes: vec![
+                            vec![
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::BecomeCreature,
+                                ),
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::AddSubtypes(vec!["Elemental".into()]),
+                                ),
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::base_pt(Some(0), Some(0)),
+                                ),
+                            ],
+                            vec![],
+                        ],
                     },
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn spitfire_lagac() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, this creature deals 1 damage to each opponent.";
+    CardDefinition {
+        key: "znr.spitfire_lagac",
+        scryfall_id: "47f26493-812f-4c14-91c4-d2ab549a7b8a",
+        printed: PrintedCharacteristics {
+            name: "Spitfire Lagac".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Lizard".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: 1.into(),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

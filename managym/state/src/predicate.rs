@@ -30,6 +30,9 @@ pub struct CardPredicate {
     pub namesake: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
+    /// "without flying", as the object's characteristics are now.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub not_flying: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub deathtouch: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
@@ -77,6 +80,10 @@ pub struct CardPredicate {
     pub any_of: Vec<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_power: Option<i32>,
+    /// "with toughness N or greater", checked against effective toughness
+    /// on the battlefield.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_toughness: Option<u8>,
     /// Card must have this card type.
     pub card_type: Option<CardType>,
     /// Card must have at least one of these card types ("artifact,
@@ -98,6 +105,13 @@ pub struct CardPredicate {
 }
 
 impl CardPredicate {
+    pub fn creature() -> Self {
+        Self {
+            card_type: Some(CardType::Creature),
+            ..Self::default()
+        }
+    }
+
     pub fn permanent() -> Self {
         Self {
             card_types_any: vec![
@@ -108,13 +122,27 @@ impl CardPredicate {
                 CardType::Land,
                 CardType::Planeswalker,
             ],
+            ..Self::default()
+        }
+    }
+
+    pub fn creature_or_planeswalker() -> Self {
+        Self {
+            card_types_any: vec![CardType::Creature, CardType::Planeswalker],
             ..Default::default()
         }
     }
 
-    pub fn creature() -> Self {
+    pub fn instant_or_sorcery() -> Self {
         Self {
-            card_type: Some(CardType::Creature),
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Self::default()
+        }
+    }
+
+    pub fn noncreature() -> Self {
+        Self {
+            not_card_types: vec![CardType::Creature],
             ..Self::default()
         }
     }
@@ -146,6 +174,17 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
+    /// Match the selected spell's printed characteristics before it goes on the stack.
+    pub fn matches_printed_spell(&self, spell: &PrintedCharacteristics, kind: ObjectKind) -> bool {
+        self.matches_printing(
+            spell,
+            kind,
+            spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
+            spell.power.unwrap_or(0),
+            &[],
+        )
+    }
+
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
     /// `power` substitutes the printed power and `added_types` are card types
@@ -166,6 +205,10 @@ impl CardPredicate {
             || self.from_battlefield_this_turn
             || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
             || (self.flying && !object.keywords.has(Keyword::Flying))
+            || (self.not_flying && object.keywords.has(Keyword::Flying))
+            || self
+                .min_toughness
+                .is_some_and(|min| object.toughness.unwrap_or(0) < i32::from(min))
         {
             return false;
         }

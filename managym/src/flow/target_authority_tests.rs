@@ -918,6 +918,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let mut delayed = trigger(
         source,
         vec![Effect::Move {
+            unrevealed: false,
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
@@ -1052,6 +1053,7 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
         })
         .unwrap();
     assert!(label.contains("Gray Ogre"));
+    // Make the choice through placement, using the departed source's face.
     game.choose_trigger(PlayerId(0), trigger_id).unwrap();
     game.current_action_space = game.flush_triggers();
     let context = game.decision_context(PlayerId(0)).unwrap();
@@ -1240,4 +1242,43 @@ fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
         game.retarget_candidates(stacked, 1),
         [Target::Permanent(third)]
     );
+}
+
+#[test]
+fn exude_toxin_target_threshold_uses_the_announced_x() {
+    use crate::{flow::game::CastChoices, state::card::SpellProfile};
+    let deck = BTreeMap::from([("Scavenger Regent".to_string(), 20)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        42,
+        false,
+    );
+    for x in [0, 1] {
+        let card = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))[0];
+        let spell = game.push_spell_to_stack(
+            card,
+            PlayerId(0),
+            vec![],
+            vec![],
+            CastChoices {
+                profile: SpellProfile::Omen,
+                x,
+                ..Default::default()
+            },
+        );
+        let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
+        let target = Target::StackSpell(spell);
+        assert_eq!(
+            game.legal_targets_for_spec(&spec, PlayerId(1))
+                .contains(&target),
+            x == 1
+        );
+        assert_eq!(game.target_is_legal(target, &spec, PlayerId(1)), x == 1);
+    }
 }

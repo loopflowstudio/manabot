@@ -1,6 +1,6 @@
 //! Wilds of Eldraine.
 use managym_state::{
-    ability::{Condition, Effect, ObjectSelector, TargetSpec},
+    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SpellCostReduction, StaticAbility,
@@ -11,7 +11,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![archons_glory(), mocking_sprite(), scarecrow_guide()]
+    vec![
+        quick_study(),
+        archons_glory(),
+        mocking_sprite(),
+        scarecrow_guide(),
+    ]
 }
 
 fn scarecrow_guide() -> CardDefinition {
@@ -87,13 +92,27 @@ fn mocking_sprite() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: false,
-                predicate: CardPredicate {
-                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                    ..Default::default()
-                },
+                predicate: CardPredicate::instant_or_sorcery(),
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn quick_study() -> CardDefinition {
+    let text_box = "Draw two cards.";
+    CardDefinition {
+        key: "woe.quick_study",
+        scryfall_id: "b78e2bca-bc93-464a-8911-8361abff2ac6",
+        printed: PrintedCharacteristics {
+            name: "Quick Study".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::DrawCards { count: 2.into() }],
             text_box: text_box.into(),
             ..Default::default()
         },

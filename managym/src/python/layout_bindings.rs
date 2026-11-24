@@ -32,7 +32,7 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 /// Keys are the encoder's array names; `policy_history` selects the public
 /// history rows of `events`; `turn_state` adds the `player_turn_state` and
 /// `card_turn_state` arrays (inputs v10 and v11); `legacy` selects the
-/// deprecated v9/v10 object rows (removed in 0.4.0) instead of input v11's
+/// deprecated v9/v10 object rows (removed in 0.3.0) instead of input v11's
 /// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
 /// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]
@@ -202,9 +202,17 @@ impl ObservationLayout {
         buffers
     }
 
+    /// Deprecated dense object-reference metadata; removed in 0.3.0.
     /// Object coordinate columns and their index bases. None denotes the whole buffer.
     #[getter]
-    fn object_references(&self) -> BTreeMap<String, Vec<(Option<usize>, usize)>> {
+    fn object_references(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<BTreeMap<String, Vec<(Option<usize>, usize)>>> {
+        super::bindings::warn_deprecated(
+            py,
+            "ObservationLayout.object_references is deprecated; removed with dense observation admission in 0.3.0",
+        )?;
         use crate::agent::observation_extents::{joins, Join};
         let mut references = BTreeMap::new();
         for key in self.arrays.keys() {
@@ -220,9 +228,10 @@ impl ObservationLayout {
                     .push(field);
             }
         }
-        references
+        Ok(references)
     }
 
+    /// Deprecated dense extent scanner; removed in 0.3.0.
     /// Occupied or referenced row extents per batch item. Keep all input
     /// storage stable until return; the scan releases the GIL.
     #[pyo3(signature = (obs, *, omit_decision_memory=false))]
@@ -232,12 +241,46 @@ impl ObservationLayout {
         obs: &Bound<'_, PyAny>,
         omit_decision_memory: bool,
     ) -> PyResult<Option<PyObject>> {
+        super::bindings::warn_deprecated(
+            py,
+            "ObservationLayout.axis_extents is deprecated; use ObservationBatch offsets for v11 observations; removal in 0.3.0",
+        )?;
         super::layout_extents::axis_extents(py, self, obs, omit_decision_memory)
     }
 
     #[getter]
     fn arrays(&self, py: Python<'_>) -> PyResult<PyObject> {
         arrays_dict(py, &self.arrays)
+    }
+
+    /// Divisor of each fact kind's raw CSR payload in its logical v11 columns.
+    #[getter]
+    fn csr_fact_divisors(&self) -> BTreeMap<u8, u8> {
+        crate::agent::observation_encoder::FactKind::ALL
+            .into_iter()
+            .map(|kind| (kind as u8, kind.payload_divisor()))
+            .collect()
+    }
+
+    /// Physical fields of each v11 CSR record: name, NumPy dtype and logical column.
+    #[getter]
+    fn csr_fields(&self) -> BTreeMap<&str, Vec<(&str, &str, usize)>> {
+        self.arrays
+            .iter()
+            .filter(|(key, _)| {
+                self.config.layout == InputLayout::OneToken && !key.ends_with("_valid")
+            })
+            .map(|(key, array)| {
+                (
+                    key.as_str(),
+                    array
+                        .packed_fields(key)
+                        .into_iter()
+                        .map(|f| (f.name, f.storage.dtype(), f.index))
+                        .collect(),
+                )
+            })
+            .collect()
     }
 
     #[getter]

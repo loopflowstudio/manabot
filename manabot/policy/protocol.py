@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationSpace,
+    PolicyObservation,
+)
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 
@@ -29,8 +32,8 @@ Precision = Literal["float32", "bfloat16"]
 @dataclass(frozen=True)
 class Targets:
     """Constants of one minibatch: sampled actions [B], advantages [B], value
-    targets [B], actor-selected rows [B], behavior log-likelihoods [B,A]
-    (-inf off support) and reference probabilities [B,A]."""
+    targets [B] or loss/draw/win mixtures [B,3], actor-selected rows [B],
+    behavior log-likelihoods [B,A] (-inf off support) and reference probabilities [B,A]."""
 
     actions: np.ndarray
     advantages: np.ndarray
@@ -64,7 +67,7 @@ class InferenceResult:
 class InferenceScope(Protocol):
     def infer(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         span: Callable[[str], AbstractContextManager[object]] | None = None,
     ) -> InferenceResult: ...
@@ -149,7 +152,7 @@ class BackendPolicy(Protocol):
         ...
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self, obs: PolicyObservation, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
         """Index one admitted observation batch (`inference`: compact as
         PyTorch CPU inference does)."""

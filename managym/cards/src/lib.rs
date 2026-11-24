@@ -14,12 +14,16 @@
 
 mod aer;
 mod afr;
+mod akh;
+mod ala;
+mod apc;
 mod atq;
 mod avr;
 mod bfz;
 mod blb;
 mod bng;
 mod bro;
+mod c13;
 mod c17;
 mod c19;
 mod chk;
@@ -28,8 +32,11 @@ mod cmr;
 mod csp;
 mod dft;
 mod dgm;
+mod dis;
+mod dka;
 mod dmu;
 mod dom;
+mod drk;
 mod dtk;
 mod ecl;
 mod eld;
@@ -39,43 +46,57 @@ mod fdn;
 mod fin;
 pub use fin::ragnarok;
 mod dsk;
+mod fra;
 mod frf;
 mod fut;
 mod gpt;
 mod grn;
 mod gtc;
 mod hob;
+mod hou;
 mod ice;
 mod iko;
 mod inv;
 mod isd;
 mod j22;
+mod jmp;
 mod jou;
 mod khm;
 mod kld;
 mod ktk;
 mod lci;
 mod lea;
+mod lrw;
+mod m10;
 mod m11;
 mod m12;
+mod m13;
 mod m14;
 mod m15;
+mod m19;
 mod m20;
 mod m21;
 mod mbs;
 mod mh1;
 mod mh2;
 mod mid;
+mod mir;
 mod mkm;
 mod mmq;
+mod mom;
+mod mor;
 mod mrd;
 mod msh;
 mod ncc;
 mod nec;
 mod ody;
+mod ogw;
+mod one;
 mod ons;
 mod ori;
+mod p02;
 mod pls;
+mod pm15;
 mod por;
 mod psal;
 mod ptk;
@@ -83,29 +104,49 @@ mod rav;
 mod rix;
 mod roe;
 mod rtr;
+mod scg;
 mod shm;
 mod snc;
 mod soi;
+mod sos;
 mod spm;
 mod sth;
 mod stx;
 mod tdm;
+mod thb;
 mod ths;
 mod tla;
 mod tle;
+mod tmp;
 mod tokens;
+mod tsp;
 mod ulg;
+mod usg;
 mod vis;
 mod vow;
 mod war;
 mod woe;
 mod wth;
+mod wwk;
+mod xln;
 mod zen;
 mod znr;
 
 use std::sync::OnceLock;
 
-use managym_state::card::{CardDefinition, TokenDefinition};
+use managym_state::card::{
+    CardDefinition, CardType, CardTypes, InsetSpell, PrintedCharacteristics, ReplacementEffect,
+    TokenDefinition,
+};
+
+fn enters_prepared(spell: PrintedCharacteristics) -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        types: CardTypes::new([CardType::Creature]),
+        replacement_effects: vec![ReplacementEffect::EntersPrepared],
+        inset: Some(InsetSpell::Prepared(spell.into())),
+        ..Default::default()
+    }
+}
 
 /// Every card definition from every set, sorted by key. Tokens are in
 /// [`token_catalog`].
@@ -134,22 +175,29 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
 const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
+    akh::cards,
+    ala::cards,
+    apc::cards,
     atq::cards,
     avr::cards,
-    blb::cards,
     bfz::cards,
+    blb::cards,
     bng::cards,
     bro::cards,
+    c13::cards,
     c17::cards,
-    chk::cards,
     c19::cards,
+    chk::cards,
     clb::cards,
     cmr::cards,
     csp::cards,
     dft::cards,
+    dis::cards,
+    dka::cards,
     dgm::cards,
     dmu::cards,
     dom::cards,
+    drk::cards,
     dsk::cards,
     dtk::cards,
     ecl::cards,
@@ -158,66 +206,88 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     eoe::cards,
     fdn::cards,
     fin::cards,
+    fra::cards,
     frf::cards,
     fut::cards,
     gpt::cards,
     grn::cards,
     gtc::cards,
     hob::cards,
+    hou::cards,
     ice::cards,
     iko::cards,
     inv::cards,
     isd::cards,
     j22::cards,
+    jmp::cards,
     jou::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
     lci::cards,
     lea::cards,
+    lrw::cards,
+    m10::cards,
     m11::cards,
     m12::cards,
+    m13::cards,
     m14::cards,
     m15::cards,
+    m19::cards,
     m20::cards,
     m21::cards,
     mbs::cards,
     mh1::cards,
     mh2::cards,
     mid::cards,
+    mir::cards,
     mkm::cards,
     mmq::cards,
+    mom::cards,
+    mor::cards,
     mrd::cards,
     msh::cards,
     ncc::cards,
     nec::cards,
     ody::cards,
+    ogw::cards,
+    one::cards,
     ons::cards,
     ori::cards,
+    p02::cards,
     pls::cards,
+    pm15::cards,
     por::cards,
     psal::cards,
     ptk::cards,
     rav::cards,
-    roe::cards,
     rix::cards,
+    roe::cards,
     rtr::cards,
+    scg::cards,
     shm::cards,
     snc::cards,
     soi::cards,
+    sos::cards,
     spm::cards,
     sth::cards,
     stx::cards,
     tdm::cards,
+    thb::cards,
     ths::cards,
     tla::cards,
     tle::cards,
+    tmp::cards,
+    tsp::cards,
     ulg::cards,
+    usg::cards,
     vis::cards,
     vow::cards,
     war::cards,
     woe::cards,
     wth::cards,
+    wwk::cards,
+    xln::cards,
     zen::cards,
     znr::cards,
 ];

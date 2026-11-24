@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, num::NonZeroU32, sync::Arc};
 
 use super::zone::ZoneType;
 use super::{
-    ability::{Effect, TargetRequirement, TargetSpec},
-    card::{CardDefId, Keyword, PrintedCharacteristics},
+    ability::{Effect, TargetSpec},
+    card::{CardDefId, PrintedCharacteristics, SpellProfile},
     mana::ManaCost,
 };
 
@@ -889,6 +889,19 @@ impl Object {
         self.form.as_deref_mut().expect("backed form").face_down = true;
     }
 
+    /// A modal back uses its own characteristics and restores the front on departure.
+    pub fn show_modal_back(&mut self, back: CardDefId, definition: Arc<PrintedCharacteristics>) {
+        self.show_over_backing(back, definition);
+    }
+
+    /// Show an inset spell while keeping the underlying card for its next move.
+    pub fn show_inset(&mut self, profile: SpellProfile) {
+        if !profile.is_front() {
+            let spell = Arc::clone(self.inset_definition(profile).expect("offered inset spell"));
+            self.show_over_backing(self.definition_id, spell);
+        }
+    }
+
     /// Turn a face-down object face up in place, showing its hidden printing
     /// (CR 708.8). False when it is not face down.
     pub fn turn_face_up(&mut self) -> bool {
@@ -941,6 +954,15 @@ impl Object {
         }
     }
 
+    /// The shared characteristics used to announce, pay for and stack a spell.
+    pub fn front_or_inset(&self, profile: SpellProfile) -> Option<&Arc<PrintedCharacteristics>> {
+        if profile.is_front() {
+            Some(&self.definition)
+        } else {
+            self.inset_definition(profile)
+        }
+    }
+
     /// Snapshot the current copiable face without copying its ability programs.
     pub fn copiable_definition(&self) -> Arc<PrintedCharacteristics> {
         Arc::clone(self.copiable_face())
@@ -964,22 +986,6 @@ impl Object {
             .any(|kind| kind.eq_ignore_ascii_case("legendary"))
     }
 
-    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
-    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
-    /// `Game::has_instant_timing`.
-    pub fn is_instant_speed(&self) -> bool {
-        self.types.is_instant() || self.keywords.has(Keyword::Flash)
-    }
-
-    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
-    /// modal effects participate; choices inside resolving abilities do not.
-    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
-        self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::Modal { modes } => Some(modes.as_slice()),
-            _ => None,
-        })
-    }
-
     /// An Aura's enchant restriction (CR 303.4a, 702.5c): what its spell
     /// targets and what its attached object must keep matching (CR 704.5m).
     pub fn enchant(&self) -> Option<&TargetSpec> {
@@ -990,32 +996,6 @@ impl Object {
             Effect::AttachSourceTo { what } => what.target_spec(),
             _ => None,
         })
-    }
-
-    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
-        self.spell_effects
-            .iter()
-            .flat_map(|effect| match (effect, mode) {
-                (Effect::Modal { modes }, Some(index)) => {
-                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
-                }
-                _ => std::slice::from_ref(effect),
-            })
-            .cloned()
-            .collect()
-    }
-
-    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
-        if !self.targeting.is_empty() {
-            return self.targeting.clone();
-        }
-        crate::ability::effect_target_requirements(&self.spell_effects_for_mode(mode))
-    }
-
-    /// Explicit clauses bind distinct targets; repeated effects on "that"
-    /// target share the inferred single clause.
-    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        self.target_requirements_for_mode(None)
     }
 }
 

@@ -143,6 +143,18 @@ impl Serialize for ActionJson<'_> {
         if let Some(name_index) = &value.name_index {
             map.serialize_entry("name_index", name_index)?;
         }
+        if value.spell_profile != 0 {
+            map.serialize_entry("spell_profile", &value.spell_profile)?;
+        }
+        if let Some(cost) = value.route_mana_value {
+            map.serialize_entry("route_mana_value", &cost)?;
+        }
+        if let Some(kind) = value.quota_type {
+            map.serialize_entry("quota_type", &kind)?;
+        }
+        if let Some(route) = value.play_route {
+            map.serialize_entry("play_route", &route)?;
+        }
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }
@@ -176,8 +188,20 @@ impl Serialize for CardJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("card_types", &sorted_record(&value.card_types))?;
-        if let Some(permission) = &value.cast_permission {
+        if let [permission] = value.cast_permissions.as_slice() {
             map.serialize_entry("cast_permission", &CastPermissionJson(permission))?;
+        } else if !value.cast_permissions.is_empty() {
+            map.serialize_entry(
+                "cast_permissions",
+                &value
+                    .cast_permissions
+                    .iter()
+                    .map(CastPermissionJson)
+                    .collect::<Vec<_>>(),
+            )?;
+        }
+        if !value.counters.is_empty() {
+            map.serialize_entry("counters", &value.counters)?;
         }
         if value.face_down {
             map.serialize_entry("face_down", &true)?;
@@ -248,11 +272,26 @@ impl Serialize for CastPermissionJson<'_> {
         if value.any_mana {
             map.serialize_entry("any_mana", &true)?;
         }
+        if let Some(condition) = &value.condition {
+            map.serialize_entry("condition", condition)?;
+        }
         if let Some(cost) = &value.cost {
             map.serialize_entry("cost", &ManaCostJson(cost))?;
         }
+        if value.face_down {
+            map.serialize_entry("face_down", &true)?;
+        }
         if value.flash {
             map.serialize_entry("flash", &true)?;
+        }
+        if value.flashback {
+            map.serialize_entry("flashback", &true)?;
+        }
+        if value.follows_source_controller {
+            map.serialize_entry("follows_source_controller", &true)?;
+        }
+        if value.on_adventure {
+            map.serialize_entry("on_adventure", &true)?;
         }
         if value.foretold {
             map.serialize_entry("foretold", &true)?;
@@ -260,7 +299,13 @@ impl Serialize for CastPermissionJson<'_> {
         if value.own_turn_only {
             map.serialize_entry("own_turn_only", &true)?;
         }
+        if value.play_lands {
+            map.serialize_entry("play_lands", &true)?;
+        }
         map.serialize_entry("player_id", &value.player_id)?;
+        if value.prepared {
+            map.serialize_entry("prepared", &true)?;
+        }
         if let Some(source_permanent_id) = &value.source_permanent_id {
             map.serialize_entry("source_permanent_id", source_permanent_id)?;
         }
@@ -305,6 +350,12 @@ impl Serialize for StackObjectJson<'_> {
         if let Some(keywords) = &value.granted_keywords {
             map.serialize_entry("granted_keywords", &sorted_record(keywords))?;
         }
+        if value.flashback {
+            map.serialize_entry("flashback", &true)?;
+        }
+        if value.from_prepared {
+            map.serialize_entry("from_prepared", &true)?;
+        }
         if value.kicked {
             map.serialize_entry("kicked", &true)?;
         }
@@ -315,6 +366,9 @@ impl Serialize for StackObjectJson<'_> {
         map.serialize_entry("targets", &StackTargetsJson(&value.targets))?;
         if value.x != 0 {
             map.serialize_entry("x", &value.x)?;
+        }
+        if let Some(spell) = value.spell.as_ref().filter(|spell| spell.mana_cost.x > 0) {
+            map.serialize_entry("x_symbols", &spell.mana_cost.x)?;
         }
         map.end()
     }
@@ -385,7 +439,10 @@ macro_rules! integer_enum {
     };
 }
 integer_enum!(phase, PhaseKind, {0 => PhaseKind::Beginning, 1 => PhaseKind::PrecombatMain, 2 => PhaseKind::Combat, 3 => PhaseKind::PostcombatMain, 4 => PhaseKind::Ending});
-integer_enum!(step, StepKind, {0 => StepKind::Untap, 1 => StepKind::Upkeep, 2 => StepKind::Draw, 3 => StepKind::Main, 4 => StepKind::BeginningOfCombat, 5 => StepKind::DeclareAttackers, 6 => StepKind::DeclareBlockers, 7 => StepKind::CombatDamage, 8 => StepKind::EndOfCombat, 9 => StepKind::PostcombatMain, 10 => StepKind::End, 11 => StepKind::Cleanup});
+// 0.3.0: switch `turn.step` (and `phase`) in `Observation.toJSON()` to string
+// names (accepting these legacy ints on deserialize) and reorder
+// `StepKind::FirstStrikeCombatDamage` before `CombatDamage`.
+integer_enum!(step, StepKind, {0 => StepKind::Untap, 1 => StepKind::Upkeep, 2 => StepKind::Draw, 3 => StepKind::Main, 4 => StepKind::BeginningOfCombat, 5 => StepKind::DeclareAttackers, 6 => StepKind::DeclareBlockers, 7 => StepKind::CombatDamage, 8 => StepKind::EndOfCombat, 9 => StepKind::PostcombatMain, 10 => StepKind::End, 11 => StepKind::Cleanup, 12 => StepKind::FirstStrikeCombatDamage});
 integer_enum!(zone, ZoneType, {0 => ZoneType::Library, 1 => ZoneType::Hand, 2 => ZoneType::Battlefield, 3 => ZoneType::Graveyard, 4 => ZoneType::Stack, 5 => ZoneType::Exile, 6 => ZoneType::Command});
 integer_enum!(action, ActionType, {0 => ActionType::PriorityPlayLand, 1 => ActionType::PriorityCastSpell, 2 => ActionType::PriorityPassPriority, 3 => ActionType::DeclareAttacker, 4 => ActionType::DeclareBlocker, 5 => ActionType::ChooseTarget, 6 => ActionType::PriorityActivateAbility, 7 => ActionType::ScryKeep, 8 => ActionType::ScryBottom, 9 => ActionType::SelectCard, 10 => ActionType::DeclineChoice, 11 => ActionType::PayCost, 12 => ActionType::ChooseMode, 13 => ActionType::TapForCost, 14 => ActionType::LearnTakeLesson, 15 => ActionType::LearnDiscard, 16 => ActionType::ChooseTrigger});
 integer_enum!(space, ActionSpaceKind, {0 => ActionSpaceKind::GameOver, 1 => ActionSpaceKind::Priority, 2 => ActionSpaceKind::DeclareAttacker, 3 => ActionSpaceKind::DeclareBlocker, 4 => ActionSpaceKind::ChooseTarget, 5 => ActionSpaceKind::Scry, 6 => ActionSpaceKind::LookAndSelect, 7 => ActionSpaceKind::PayOrNot, 8 => ActionSpaceKind::Modal, 9 => ActionSpaceKind::Learn, 10 => ActionSpaceKind::Waterbend, 11 => ActionSpaceKind::Discard, 12 => ActionSpaceKind::LegendRule, 13 => ActionSpaceKind::OrderTriggers});
@@ -689,9 +746,11 @@ pub(super) struct WireCardData {
     /// Foretold and face down in exile; listed only for its owner.
     #[serde(default)]
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     #[serde(default)]
     pub cast_permission: Option<CastPermissionData>,
+    #[serde(default)]
+    pub cast_permissions: Vec<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
     #[serde(default)]
@@ -700,6 +759,9 @@ pub(super) struct WireCardData {
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
     #[serde(default)]
     pub from_battlefield_this_turn: bool,
+    /// Counters on the card off the battlefield, by kind name.
+    #[serde(default)]
+    pub counters: BTreeMap<String, i32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -738,6 +800,8 @@ pub(super) struct WirePermanentData {
     /// observations retained before this field stay canonical.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -817,6 +881,8 @@ pub(super) struct WirePermanentData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireStackObjectData {
+    #[serde(default)]
+    pub x_symbols: u8,
     /// Derived ability text; absent on spells and historical observations.
     #[serde(default)]
     pub description: Option<String>,
@@ -840,6 +906,10 @@ pub(super) struct WireStackObjectData {
     #[serde(default)]
     pub kicked: bool,
     #[serde(default)]
+    pub from_prepared: bool,
+    #[serde(default)]
+    pub flashback: bool,
+    #[serde(default)]
     pub cast_from_graveyard: bool,
     /// A spell's card record (zone stack, with its announced X); absent for
     /// abilities and in historical captures, whose card lists held spells.
@@ -856,9 +926,14 @@ impl From<WireCardData> for CardData {
             registry_key: w.registry_key,
             is_token: w.is_token,
             face_down: w.face_down,
-            cast_permission: w.cast_permission,
+            cast_permissions: w
+                .cast_permission
+                .into_iter()
+                .chain(w.cast_permissions)
+                .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
+            counters: w.counters,
             characteristics: CharacteristicsData {
                 name: w.name,
                 text_box: w.text_box,
@@ -898,6 +973,7 @@ impl From<WirePermanentData> for PermanentData {
             is_animated: w.is_animated,
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
             once_each_turn_used: w.once_each_turn_used,
@@ -942,9 +1018,10 @@ impl PermanentData {
             registry_key: self.registry_key,
             is_token: self.is_token,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         })
     }
@@ -968,6 +1045,7 @@ impl Serialize for PermanentData {
             is_animated: self.is_animated,
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
             once_each_turn_used: self.once_each_turn_used,
@@ -1011,9 +1089,14 @@ impl From<WireStackObjectData> for StackObjectData {
             x: w.x,
             granted_keywords: w.granted_keywords,
             kicked: w.kicked,
-            spell: w.card.map(|card| SpellData {
-                cast_from_graveyard: w.cast_from_graveyard,
-                ..SpellData::from_legacy_card(card)
+            from_prepared: w.from_prepared,
+            flashback: w.flashback,
+            spell: w.card.map(|mut card| {
+                card.characteristics.mana_cost.x = w.x_symbols;
+                SpellData {
+                    cast_from_graveyard: w.cast_from_graveyard,
+                    ..SpellData::from_legacy_card(card)
+                }
             }),
         }
     }
@@ -1041,9 +1124,10 @@ impl SpellData {
             registry_key: self.registry_key,
             is_token: self.is_copy,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
+            counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         }
     }

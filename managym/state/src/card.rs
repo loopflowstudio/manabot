@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, EffectValue, ObjectSelector,
+        PaymentCost, TargetRequirement, TargetSpec,
     },
     game_object::ObjectId,
     mana::{Color, Colors, Mana, ManaCost},
@@ -82,7 +82,7 @@ impl CardTypes {
     }
 
     #[inline]
-    pub fn is_spell(&self) -> bool {
+    pub fn is_instant_or_sorcery(&self) -> bool {
         self.types.contains(&CardType::Instant) || self.types.contains(&CardType::Sorcery)
     }
 
@@ -479,8 +479,19 @@ pub enum Restriction {
     CantAttackOrBlock,
     /// CR 502.3.
     DoesntUntap,
+    /// No creature can be declared as its blocker (CR 509.1b).
+    CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// "Attacks each combat if able" (CR 508.1d): a requirement on the
+    /// attack declaration, obeyed whenever the creature can attack.
+    AttacksEachCombat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageTransform {
+    Double,
+    Prevent(u32),
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -490,17 +501,28 @@ pub enum Restriction {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
-    /// Prevent `amount` damage that would be dealt to this permanent's
-    /// controller or a permanent they control.
-    PreventDamageToController { amount: i32 },
-    /// Double damage that would be dealt to this permanent's controller or a
-    /// permanent they control. This driver makes ordering observable.
-    DoubleDamageToController,
+    AdventureExile,
+    ExileInsteadOfGraveyard,
+    EntersPrepared,
+    PreventCombatDamageToOrFromSelf,
+    /// Combat damage that would be dealt to the protected permanent is
+    /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
+    /// record offers it; no definition prints it.
+    PreventCombatDamage,
+    ModifyDamage {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        creature_source: bool,
+        source_by: super::ability::Actor,
+        recipient_by: super::ability::Actor,
+        transform: DamageTransform,
+    },
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
     /// This object enters tapped unless its entering controller already
     /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
-    EntersTappedUnlessControls { predicate: CardPredicate },
+    EntersTappedUnlessControls {
+        predicate: CardPredicate,
+    },
     /// This object enters with +1/+1 counters already present (CR 614.1c),
     /// if `condition` holds for its entering controller as it enters
     /// ("enters with a +1/+1 counter on it if you attacked this turn").
@@ -511,7 +533,9 @@ pub enum ReplacementEffect {
     },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
-    EntersWithXCounters { kind: CounterKind },
+    EntersWithXCounters {
+        kind: CounterKind,
+    },
     /// This object enters with `count` counters of `kind` (CR 614.1c).
     EntersWithCounters {
         kind: CounterKind,
@@ -523,7 +547,9 @@ pub enum ReplacementEffect {
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).
-    OpponentDamagePlusCounters { kind: CounterKind },
+    OpponentDamagePlusCounters {
+        kind: CounterKind,
+    },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
@@ -542,7 +568,9 @@ pub enum ReplacementEffect {
     },
     /// Replace a logical creation under your control, before any token enters
     /// (CR 616.1g). Entry and copy terms belong to every resulting token.
-    MultiplyTokens { multiplier: i32 },
+    MultiplyTokens {
+        multiplier: i32,
+    },
     /// "You may have this creature enter as a copy of [a creature in
     /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
     /// controller chooses before the move commits, and the copy's own entry
@@ -579,6 +607,18 @@ impl ActivatedAbilityDefinition {
     /// Whether activating the ability spends one of its uses on the object.
     pub fn is_use_limited(&self) -> bool {
         self.once_per_object() || self.once_each_turn
+    }
+
+    /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
+    pub fn equip(mana_cost: ManaCost) -> Self {
+        Self {
+            sorcery_timing: true,
+            mana_cost,
+            effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            }],
+            ..Default::default()
+        }
     }
 
     /// The outputs of a mana ability (CR 605.1a): an untargeted activation
@@ -818,6 +858,10 @@ pub struct ActivatedAbilityDefinition {
     pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
+    /// "Activate only if [condition]" (CR 602.5b), asked of the
+    /// activating player.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<Condition>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
     pub mana_cost: ManaCost,
@@ -864,7 +908,22 @@ pub struct SpellCostReduction {
     pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
     pub condition: Condition,
-    pub generic: u8,
+    /// Generic mana less, read as the spell's cost is determined: a fixed
+    /// amount, or one relative to the reducing permanent ("{X} less, where X
+    /// is equipped creature's power"). A fixed amount serializes as its
+    /// number, as before amounts could vary.
+    #[serde(serialize_with = "fixed_as_number")]
+    pub generic: EffectValue,
+}
+
+fn fixed_as_number<S: serde::Serializer>(
+    value: &EffectValue,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        EffectValue::Fixed(amount) => serializer.serialize_i32(*amount),
+        value => serde::Serialize::serialize(value, serializer),
+    }
 }
 
 /// A P/T amount read from the current layer context for an affected object.
@@ -877,6 +936,12 @@ pub enum LayerValue {
     GraveyardCardTypes {
         offset: i32,
     },
+}
+
+impl From<i32> for LayerValue {
+    fn from(value: i32) -> Self {
+        Self::Fixed(value)
+    }
 }
 
 /// One static effect: once its first part applies, later layers retain its
@@ -899,6 +964,10 @@ pub enum StaticAbility {
     /// flashback cost is {1}, any other spell's is its mana cost (Iroh, Grand
     /// Lotus).
     GraveyardSpellsHaveFlashback,
+    /// The controller may cast spells from hand without paying their mana costs.
+    CastFromHandWithoutManaCost,
+    /// The controller may cast spells as though they had flash.
+    CastSpellsAsThoughFlash(CardPredicate),
     /// Each matching permanent you control has "{T}: Add one mana of any
     /// color."
     GrantsAnyColorManaAbility(CardPredicate),
@@ -937,6 +1006,11 @@ pub enum StaticAbility {
     /// Printed flashback (CR 702.34): castable from its owner's graveyard for
     /// this cost, then exiled instead of going anywhere else.
     Flashback(ManaCost),
+    /// "You may cast this card from your graveyard by removing N counters
+    /// from among creatures you control in addition to paying its other
+    /// costs" (Quilled Greatwurm): a printed graveyard cast whose additional
+    /// cost is counters of any kinds.
+    CastFromGraveyardRemovingCounters(u8),
     /// Printed foretell (CR 702.143): during its owner's turn it may be exiled
     /// face down from hand for {2}, then cast on a later turn for this cost.
     Foretell(ManaCost),
@@ -948,6 +1022,9 @@ pub enum StaticAbility {
     /// "Each player may play an additional land on each of their turns"
     /// (CR 305.2): one more land play per such permanent, for every player.
     AdditionalLandPlayEachPlayer,
+    /// "You may play an additional land on each of your turns" (CR 305.2):
+    /// one more land play per such permanent, for its controller.
+    AdditionalLandPlay,
     /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
     LegendRuleDoesntApply,
     CantLoseAndOpponentsCantWin,
@@ -965,13 +1042,18 @@ pub enum StaticAbility {
     /// ignored.
     CharacteristicPower(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
-    /// target" trigger, "counter it unless that player pays [cost]". The
-    /// cost is mana or a waterbend ("Ward—Waterbend {4}").
+    /// target" trigger, "counter it unless that player pays [cost]".
     Ward(PaymentCost),
     /// "You may look at the top card of your library any time" (CR 401.2).
     LookAtLibraryTop,
     /// "You may cast [predicate] spells from the top of your library."
     CastFromLibraryTop(CardPredicate),
+    SpendAnyManaToCast(CardPredicate),
+    PlayGraveyardByPermanentType,
+    /// "During your turn, you may play cards you don't own with [kind]
+    /// counters on them from exile, and mana of any type can be spent to
+    /// cast those spells" (Tinybones, Bauble Burglar).
+    PlayUnownedExiledWithCounter(CounterKind),
     /// "Equipped creature has \"...\"": an activated ability the creature
     /// this is attached to has, listed after its own in printed order.
     AttachedHas(ActivatedAbilityDefinition),
@@ -995,6 +1077,8 @@ pub enum StaticAbility {
     /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
     /// nonbasic lands), for every player (CR 614.1c).
     EntersTapped(CardPredicate),
+    /// Matching permanents entering under an opponent’s control enter tapped.
+    OpponentsEnterTapped(CardPredicate),
     /// "As long as this has [threshold], [predicate] lands are [subtype]"
     /// (CR 305.7): they lose all other land types and abilities and have
     /// that basic land type's mana ability.
@@ -1010,6 +1094,7 @@ pub enum StaticAbility {
     /// symbol reduces that color, or generic mana when the cost has none of
     /// it ("This can reduce generic costs").
     SpellsCostLessMana(ManaCost),
+    SpellsFromOutsideHandCostLess(u8),
     /// "Untap this during each other player's untap step" (CR 502.3): it
     /// untaps in its controller's opponents' untap steps as well as theirs.
     UntapsDuringOtherUntapSteps,
@@ -1019,6 +1104,22 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+}
+
+impl StaticAbility {
+    /// A battlefield effect applying its modifications together across layers (CR 613.6).
+    pub fn continuous(
+        scope: StaticScope,
+        condition: Option<Condition>,
+        modifications: Vec<crate::effect::Modification<LayerValue>>,
+    ) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope,
+            condition,
+            characteristic_defining: false,
+            modifications,
+        })
+    }
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -1041,6 +1142,8 @@ pub enum AdditionalCost {
     Sacrifice(Box<SacrificeCost>),
     /// Kicker (CR 702.33): an optional cost chosen while casting.
     Kicker(ManaCost),
+    /// Optional additional cost to cast as though the spell had flash.
+    FlashSurcharge(ManaCost),
     /// "As an additional cost, you may waterbend [cost]": an optional cost
     /// chosen like kicker whose generic mana may be paid by tapping artifacts
     /// and creatures.
@@ -1096,6 +1199,58 @@ pub enum AdditionalCost {
     Discard,
 }
 
+/// The printed spell chosen at announcement and retained through resolution.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SpellProfile {
+    #[default]
+    Front,
+    Adventure,
+    Omen,
+    BackFace,
+}
+
+impl SpellProfile {
+    pub fn is_front(&self) -> bool {
+        *self == Self::Front
+    }
+}
+
+impl serde::Serialize for SpellProfile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Existing pending casts and stack witnesses record the Adventure flag.
+        match self {
+            Self::Front | Self::Adventure => serializer.serialize_bool(*self == Self::Adventure),
+            Self::Omen => serializer.serialize_unit_variant("SpellProfile", 2, "Omen"),
+            Self::BackFace => serializer.serialize_unit_variant("SpellProfile", 3, "BackFace"),
+        }
+    }
+}
+
+/// The second spell printed on a physical card.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InsetSpell {
+    Adventure(Arc<PrintedCharacteristics>),
+    Omen(Arc<PrintedCharacteristics>),
+    Prepared(Arc<PrintedCharacteristics>),
+}
+
+impl InsetSpell {
+    /// A prepared spell is cast from its linked copy in exile.
+    pub fn casting_profile(&self) -> Option<SpellProfile> {
+        match self {
+            Self::Adventure(_) => Some(SpellProfile::Adventure),
+            Self::Omen(_) => Some(SpellProfile::Omen),
+            Self::Prepared(_) => None,
+        }
+    }
+
+    pub fn characteristics(&self) -> &Arc<PrintedCharacteristics> {
+        match self {
+            Self::Adventure(program) | Self::Omen(program) | Self::Prepared(program) => program,
+        }
+    }
+}
+
 /// An object as printed (CR 108.4, 111.3): what cards and tokens share,
 /// before any continuous effect. It is the input to the layer system;
 /// `Game::characteristics(id)` is the layered view computed from it. Identity
@@ -1104,6 +1259,9 @@ pub enum AdditionalCost {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
+    /// The other catalog face can be cast in its own right (CR 712.11).
+    pub modal_back: bool,
+    pub inset: Option<InsetSpell>,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
@@ -1220,6 +1378,12 @@ impl ObjectDefinition {
 #[derive(serde::Serialize)]
 #[serde(rename = "CardDefinition")]
 struct DefinitionWire<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    adventure: Option<&'a PrintedCharacteristics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    omen: Option<&'a PrintedCharacteristics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prepared: Option<&'a PrintedCharacteristics>,
     name: &'a String,
     mana_cost: &'a Option<ManaCost>,
     types: &'a CardTypes,
@@ -1245,11 +1409,34 @@ struct DefinitionWire<'a> {
     toughness: &'a Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     back_face: Option<&'a str>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    modal_back: bool,
 }
 
 impl PrintedCharacteristics {
+    pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
+        std::iter::once(SpellProfile::Front)
+            .chain(self.inset.as_ref().and_then(InsetSpell::casting_profile))
+            .chain(self.modal_back.then_some(SpellProfile::BackFace))
+    }
+
+    pub fn inset_definition(&self, profile: SpellProfile) -> Option<&Arc<Self>> {
+        self.inset
+            .as_ref()
+            .filter(|inset| inset.casting_profile() == Some(profile))
+            .map(InsetSpell::characteristics)
+    }
+
     fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
         DefinitionWire {
+            adventure: self
+                .inset_definition(SpellProfile::Adventure)
+                .map(Arc::as_ref),
+            omen: self.inset_definition(SpellProfile::Omen).map(Arc::as_ref),
+            prepared: match &self.inset {
+                Some(InsetSpell::Prepared(spell)) => Some(spell),
+                _ => None,
+            },
             name: &self.name,
             mana_cost: &self.mana_cost,
             types: &self.types,
@@ -1271,6 +1458,7 @@ impl PrintedCharacteristics {
             power: &self.power,
             toughness: &self.toughness,
             back_face,
+            modal_back: self.modal_back,
         }
     }
 }
@@ -1324,6 +1512,7 @@ pub enum CastOption<'a> {
     Kicker,
     /// Bargain (CR 702.166): sacrifice an artifact, enchantment or token.
     Bargain,
+    FlashSurcharge(&'a ManaCost),
     /// This mana rather than the mana cost, while a condition holds.
     AlternativeMana(&'a ManaCost),
     /// Exile a card from hand rather than pay the mana cost.
@@ -1336,6 +1525,7 @@ impl CastOption<'_> {
     pub fn words(self) -> (&'static str, &'static str) {
         match self {
             Self::Kicker => ("kicked", "kicker"),
+            Self::FlashSurcharge(_) => ("cast as though it had flash", "flash surcharge"),
             Self::Bargain => ("bargained", "bargain"),
             Self::AlternativeMana(_) | Self::ExileFromHand => {
                 ("cast for its alternative cost", "alternative cost")
@@ -1345,6 +1535,51 @@ impl CastOption<'_> {
 }
 
 impl PrintedCharacteristics {
+    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
+    /// `Game::has_instant_timing`.
+    pub fn is_instant_speed(&self) -> bool {
+        self.types.is_instant() || self.keywords.has(Keyword::Flash)
+    }
+
+    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
+    /// modal effects participate; choices inside resolving abilities do not.
+    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
+        self.spell_effects
+            .iter()
+            .flat_map(|effect| match (effect, mode) {
+                (Effect::Modal { modes }, Some(index)) => {
+                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
+                }
+                _ => std::slice::from_ref(effect),
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
+        if !self.targeting.is_empty() {
+            return self.targeting.clone();
+        }
+        match mode {
+            Some(_) => effect_target_requirements(&self.spell_effects_for_mode(mode)),
+            None => effect_target_requirements(&self.spell_effects),
+        }
+    }
+
+    /// Explicit clauses bind distinct targets; repeated effects on "that"
+    /// target share the inferred single clause.
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        self.target_requirements_for_mode(None)
+    }
+
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
@@ -1358,6 +1593,7 @@ impl PrintedCharacteristics {
             | AdditionalCost::Waterbend(kicker)
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
             AdditionalCost::Sacrifice(_)
+            | AdditionalCost::FlashSurcharge(_)
             | AdditionalCost::RequiredWaterbend(_)
             | AdditionalCost::Replicate(_)
             | AdditionalCost::Convoke
@@ -1379,11 +1615,20 @@ impl PrintedCharacteristics {
             Some(CastOption::ExileFromHand)
         } else if let Some((cost, _)) = self.alternative_mana() {
             Some(CastOption::AlternativeMana(cost))
+        } else if let Some(cost) = self.flash_surcharge() {
+            Some(CastOption::FlashSurcharge(cost))
         } else if self.bargain() {
             Some(CastOption::Bargain)
         } else {
             self.optional_cost().map(|_| CastOption::Kicker)
         }
+    }
+
+    pub fn flash_surcharge(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::FlashSurcharge(cost) => Some(cost),
+            _ => None,
+        })
     }
 
     /// Whether casting this spell discards a card as an additional cost.
@@ -1458,6 +1703,14 @@ impl PrintedCharacteristics {
     pub fn flashback(&self) -> Option<&ManaCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Flashback(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    /// The counters a printed graveyard cast removes, if it has one.
+    pub fn graveyard_counter_cast(&self) -> Option<u8> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CastFromGraveyardRemovingCounters(count) => Some(*count),
             _ => None,
         })
     }

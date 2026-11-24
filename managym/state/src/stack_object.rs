@@ -2,12 +2,20 @@ use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{AbilitySource, Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
+use crate::card::SpellProfile;
 use crate::payment::PaymentReceipt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
+    /// Cast from a prepared copy (a "prepared spell"). Copies of it are not.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,
@@ -59,8 +67,7 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
-    /// The exact object the source Aura or Equipment was attached to when
-    /// the ability was activated, before costs such as sacrificing it.
+    /// Exact object attached to the source when the ability was activated.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
     pub attached: Option<ObjectId>,

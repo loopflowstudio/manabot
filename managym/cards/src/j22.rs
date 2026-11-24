@@ -1,6 +1,8 @@
 //! Jumpstart 2022.
 use managym_state::{
-    ability::{Ability, Actor, Effect, EffectValue, ObjectSelector, TriggerCondition, TurnStep},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
@@ -12,7 +14,11 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![lita_mechanical_engineer(), mild_mannered_librarian()]
+    vec![
+        deadly_plot(),
+        lita_mechanical_engineer(),
+        mild_mannered_librarian(),
+    ]
 }
 
 fn lita_mechanical_engineer() -> CardDefinition {
@@ -45,6 +51,43 @@ fn lita_mechanical_engineer() -> CardDefinition {
                 tap_source: true,
                 effects: vec![Effect::create_tokens("token.zeppelin", 1)],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn deadly_plot() -> CardDefinition {
+    let text_box = "Choose one —\n• Destroy target creature or planeswalker.\n• Return target Zombie creature card from your graveyard to the battlefield tapped.";
+    CardDefinition {
+        key: "j22.deadly_plot",
+        scryfall_id: "9c78da23-e7ec-4a3d-9f79-09fb86993b26",
+        printed: PrintedCharacteristics {
+            name: "Deadly Plot".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                            predicate: CardPredicate {
+                                subtype: Some("Zombie".into()),
+                                ..CardPredicate::creature()
+                            },
+                        }),
+                        true,
+                    )],
+                ],
             }],
             text_box: text_box.into(),
             ..Default::default()

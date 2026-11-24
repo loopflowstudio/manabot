@@ -29,7 +29,7 @@ when reading measurements from different revisions.
 | **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 512 × 12 fact rows (policy input v9, the only input on main); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 w17 is the last number. `managym.WORLD_VERSION` is a deprecated alias that
-returns `"w17"` with a warning and is removed in 0.4.0; nothing reads it. The
+returns `"w17"` with a warning and is removed in 0.3.0; nothing reads it. The
 sections below record what each change added while the numbers were in use.
 
 MTG-241 extends the open world with retained simultaneous proposals and causal

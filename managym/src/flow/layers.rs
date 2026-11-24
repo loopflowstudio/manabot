@@ -81,6 +81,7 @@ pub(super) struct Context<'a> {
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
     pub reads_tapped: bool,
+    pub reads_life: bool,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
@@ -129,6 +130,7 @@ struct ReadSet {
     fields: u8,
     mana: bool,
     tapped: bool,
+    life: bool,
 }
 
 impl ReadSet {
@@ -148,10 +150,10 @@ impl ReadSet {
         if !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying || p.deathtouch {
+        if p.flying || p.not_flying || p.deathtouch {
             self.fields |= KEYWORDS;
         }
-        if p.min_power.is_some() || p.max_power.is_some() {
+        if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
             self.fields |= POWER;
         }
         self.tapped |= p.tapped;
@@ -172,6 +174,7 @@ impl ReadSet {
                     self.fields |= NAME;
                 }
             }
+            Condition::OpponentControlsMoreCreatures => self.fields |= CARD_TYPES,
             Condition::BattlefieldAtLeast { predicate, .. }
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
@@ -182,7 +185,10 @@ impl ReadSet {
                 }
             }
             Condition::SourceTapped => self.tapped = true,
-            _ => self.mana |= condition.reads_mana_pools(),
+            _ => {
+                self.mana |= condition.reads_mana_pools();
+                self.life |= condition.reads_life();
+            }
         }
     }
 }
@@ -365,6 +371,7 @@ impl<'a> Context<'a> {
             objects: BTreeMap::new(),
             reads_mana: false,
             reads_tapped: false,
+            reads_life: false,
         };
         let mut nodes = Vec::new();
         let mut known = BTreeSet::new();
@@ -393,6 +400,7 @@ impl<'a> Context<'a> {
                 for node in &seed.nodes {
                     context.reads_mana |= node.reads.mana;
                     context.reads_tapped |= node.reads.tapped;
+                    context.reads_life |= node.reads.life;
                     nodes.push(node.clone());
                 }
             }
@@ -614,6 +622,7 @@ impl<'a> Context<'a> {
                     if let Some(node) = self.node(id, entry) {
                         self.reads_mana |= node.reads.mana;
                         self.reads_tapped |= node.reads.tapped;
+                        self.reads_life |= node.reads.life;
                         nodes.push(node);
                     }
                 }
@@ -833,6 +842,12 @@ impl<'a> Context<'a> {
             }
         }
     }
+    fn creature_count(&self, controller: PlayerId) -> usize {
+        self.objects
+            .iter()
+            .filter(|(id, object)| self.controller(**id) == controller && object.view.is_creature())
+            .count()
+    }
     fn cda(&self, cda: &PowerCda, source: PermanentId) -> i32 {
         let controller = self.controller(source);
         match cda {
@@ -846,11 +861,7 @@ impl<'a> Context<'a> {
                         .counter_count(CounterKind::PlusOnePlusOne)
                 })
                 .sum(),
-            PowerCda::CreaturesYouControl => self
-                .objects
-                .iter()
-                .filter(|(id, o)| self.controller(**id) == controller && o.view.is_creature())
-                .count() as i32,
+            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
             PowerCda::GraveyardMatching(p) => {
                 self.game.count_graveyard_matching(controller, p) as i32
             }
@@ -858,6 +869,10 @@ impl<'a> Context<'a> {
     }
     fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
         match condition {
+            Condition::OpponentControlsMoreCreatures => {
+                let controller = self.controller(source);
+                self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
+            }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 self.objects
                     .keys()
@@ -926,6 +941,13 @@ impl<'a> Context<'a> {
                 plan.condition = effect.condition.clone();
                 plan.cda = effect.characteristic_defining;
                 for m in &effect.modifications {
+                    // A modification outside the layer system (a prohibition
+                    // or prevention) has no reader here; a printed static
+                    // spelling it would silently do nothing.
+                    debug_assert!(
+                        layer(m).is_some(),
+                        "continuous static modification {m:?} has no layer"
+                    );
                     if let Some(l) = layer(m) {
                         let layer = if plan.cda && l == Layer::BasePower {
                             Layer::CharacteristicPower
@@ -1273,6 +1295,7 @@ pub(super) fn matches_view(
         name: &view.name,
         keywords: view.keywords,
         power: view.power,
+        toughness: view.toughness,
         is_legendary: view.is_legendary,
         token: object.kind() == ObjectKind::Token,
         attacking: permanent.attacking,
@@ -1298,6 +1321,7 @@ struct CharacteristicView<'a> {
     name: &'a str,
     keywords: Keywords,
     power: i32,
+    toughness: i32,
     is_legendary: bool,
     token: bool,
     attacking: bool,
@@ -1347,6 +1371,7 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
         name: &facts.name,
         keywords: lki.keywords,
         power: lki.power,
+        toughness: lki.toughness,
         is_legendary: facts.is_legendary,
         token: facts.token,
         attacking: facts.attacking,
@@ -1369,6 +1394,7 @@ impl CharacteristicView<'_> {
             && (!p.namesake || source_name == Some(self.name))
             && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
             && (!p.flying || self.keywords.has(Keyword::Flying))
+            && (!p.not_flying || !self.keywords.has(Keyword::Flying))
             && (!p.no_counters || self.counters.is_empty())
             && (!p.in_combat || self.derived.in_combat())
             && (!p.with_counter || self.counters.get(CounterKind::PlusOnePlusOne) > 0)
@@ -1405,6 +1431,8 @@ impl CharacteristicView<'_> {
             && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| self.colors.contains(c)))
             && p.not_subtypes.iter().all(|s| !self.has_subtype(s))
             && p.min_power.is_none_or(|min| self.power >= min)
+            && p.min_toughness
+                .is_none_or(|min| self.toughness >= i32::from(min))
             && p.max_power.is_none_or(|max| self.power <= max)
             && (p.min_mana_value.is_none() && p.max_mana_value.is_none() || {
                 let mana_value = self.derived.mana_value();

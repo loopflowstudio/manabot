@@ -31,9 +31,13 @@ use super::{
 };
 
 /// What a continuous effect changes. `N` is the type of its P/T amounts:
-/// `EffectValue` in a card definition, `i32` once resolved into a record.
+/// `LayerValue` for a static ability, `EffectValue` for a resolving instruction,
+/// and `i32` for the resulting record.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Modification<N = i32> {
+    /// Layer 1 name replacement (CR 613.1a, 201.2): "named [name]". The
+    /// permanent loses every other name.
+    SetName(String),
     /// Replace creature subtypes, retaining land/artifact/enchantment types.
     SetCreatureTypes(Vec<String>),
     /// Add card types without replacing existing ones.
@@ -102,6 +106,10 @@ pub enum Modification<N = i32> {
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
+    /// Prevention: combat damage that would be dealt to it is prevented
+    /// (CR 615.1a). It is a record, not an ability, so losing all abilities
+    /// leaves it in place; damage the permanent deals is unaffected.
+    PreventCombatDamage,
     /// Replacement: if it would leave the battlefield, exile it instead of
     /// putting it anywhere else (unearth, CR 702.84a).
     ExileIfWouldLeave,
@@ -110,6 +118,8 @@ pub enum Modification<N = i32> {
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// One more land play for the affected player (CR 305.2).
+    AdditionalLandPlay,
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
@@ -146,8 +156,6 @@ pub enum Modification<N = i32> {
     /// "has all activated and triggered abilities of" the record's source
     /// definition (Koh, the Face Stealer's last chosen card), layer 6.
     HasAbilitiesOfSource,
-    /// Layer 3: is named this (CR 613.1c; "named Humble Merchant").
-    SetName(String),
     /// Layer 4: has all creature types (CR 205.3m), while it is a creature.
     /// A later type change that replaces its creature types or removes
     /// Creature ends it; losing abilities does not.
@@ -155,6 +163,17 @@ pub enum Modification<N = i32> {
 }
 
 impl<N> Modification<N> {
+    /// A fixed power/toughness bonus (layer 7c).
+    pub fn pump(power: i32, toughness: i32) -> Self
+    where
+        N: From<i32>,
+    {
+        Self::ModifyPt {
+            power: power.into(),
+            toughness: toughness.into(),
+        }
+    }
+
     /// The record's form, with every amount resolved.
     pub fn resolve(&self, amount: impl FnMut(&N) -> i32) -> Modification<i32> {
         self.map_amount(amount)
@@ -162,6 +181,7 @@ impl<N> Modification<N> {
 
     pub fn map_amount<M>(&self, mut amount: impl FnMut(&N) -> M) -> Modification<M> {
         match self {
+            Self::SetName(name) => Modification::SetName(name.clone()),
             Self::SetCreatureTypes(types) => Modification::SetCreatureTypes(types.clone()),
             Self::AddTypes(types) => Modification::AddTypes(types.clone()),
             Self::SetTypes { types, subtypes } => Modification::SetTypes {
@@ -197,8 +217,10 @@ impl<N> Modification<N> {
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
+            Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
@@ -210,7 +232,6 @@ impl<N> Modification<N> {
             },
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
-            Self::SetName(name) => Modification::SetName(name.clone()),
             Self::AllCreatureTypes => Modification::AllCreatureTypes,
         }
     }

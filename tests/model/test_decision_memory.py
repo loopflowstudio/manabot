@@ -1,5 +1,6 @@
 """Whole-prefix memories reach both heads and survive ordinary policy tooling."""
 
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 from typing import Literal
@@ -19,6 +20,8 @@ from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.policy.admission import admit_native
+from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     close_collector,
@@ -823,3 +826,42 @@ def test_no_head_admission_rejects_changed_companion_capacity(field: str) -> Non
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     with pytest.raises(ValueError, match="capacity mismatch"):
         control.prepare(obs)
+
+
+def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
+    space, _ = memory_root()
+    env = managym.Env(seed=111, decision_memory=True)
+    env.reset(Match().to_rust())
+    # Adjacent float32 numbers above 2**24 are two integers apart.
+    env.scenario_set_life(0, 16_777_217)
+    env.scenario_set_life(1, 16_777_219)
+    early = env.clone_env()
+    for _ in range(4):
+        env.step(0)
+    games = [early, env]
+    batch = managym.encode_observation_batch(games, space.layout)
+    dense = space.allocate(len(games))
+    managym.encode_observations_into(games, space.layout, dense, len(games))
+    dtype = np.dtype(
+        [
+            (name, dtype)
+            for name, dtype, _ in space.layout.csr_fields["decision_records"]
+        ]
+    )
+    records = np.frombuffer(batch.tables()["decision_records"][2], dtype)
+    assert records["life_viewer"].dtype == np.int32
+    assert set(records["life_viewer"]) | set(records["life_opponent"]) == {
+        16_777_217,
+        16_777_219,
+    }
+    assert np.all(records["valid"] == 1)
+    model = policy(space, "gru", 1)
+    packed = model.prepare(batch)
+    assert packed.memory is not None
+    np.testing.assert_equal(asdict(packed), asdict(model.prepare(dense)))
+    spec = model._admission_spec()
+    key = record_key(RecordNamespace.TOKEN, records["kind"][:1])[0]
+    keys = spec.tables.record_name_keys
+    incomplete = replace(spec.tables, record_name_keys=keys[keys != key])
+    with pytest.raises(ValueError, match="outside the record vocabulary"):
+        admit_native(batch, replace(spec, tables=incomplete), bucketed=False)

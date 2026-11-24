@@ -513,7 +513,13 @@ instrumentation attributes board, clone and dependency work without adding
 counters to ordinary wheels.
 
 A resolving spell remains on the stack until the zone-move authority commits
-its departure. That authority applies flashback exile replacement and captures
+its departure. A spell cast with flashback carries that choice onto the stack.
+A Zombie cast from the graveyard with Zul Ashur pays its normal cost, enters
+the battlefield on resolution and returns to the graveyard if countered.
+With Muldrotha in play, you can choose which permission casts the Zombie.
+Casting through Muldrotha spends its creature allowance for the turn, even
+if the spell is countered. Using Zul Ashur leaves that allowance available.
+The zone-move authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
@@ -630,14 +636,15 @@ payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
-source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
-Every cost carries a `SpendingContext`: `Cast` with the spell's announced
-subtypes and types, `Activate` with the source's zone and subtypes, or
+source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
+`ExceptSpellsFromHand` is Heartwood Crafter's. Every cost carries a
+`SpendingContext`: `Cast` with the spell's announced subtypes and types and
+the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
 Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every encoder refuses other restricted mana (`unrepresentable_state`)
-rather than drop it.
+mana); every other restriction is a `pooled_mana_classes` class and a
+`PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v6: the schema-8 semantic Observation, shared native continuation frames, bound public card
@@ -668,7 +675,68 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
-For a batched allocation, `layout.axis_extents(buffers)` returns one int64
+For a v11 batch, call
+`encode_observation_batch(items, layout, action_overflow="error")` with `Env`
+or `Observation` items.
+`RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
+`encode_active_batch()` and `step_active_batch(actions)` to return
+`(active_slots, ObservationBatch)`.
+`VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
+returns the batch from the step together with per-stream rewards, terminated
+flags and truncated flags. Each stream emits its observation and step events
+as it advances. A strict stepping error can leave streams advanced.
+
+For repeated collection, call `VectorEnv.set_observation_layout(state, layout,
+action_overflow)` with one writable outcome array per stream for each of
+`rewards` (float64), `terminated` and `truncated` (uint8). Use the ordinary
+buffered reset, replacement and step methods. After reset, `observation_rows()`
+returns one `(batch, index)` per stream in slot order. Masked steps preserve
+parked slots. Isolated stepping reports the failed slot and keeps every
+successful sibling's observation. A failed snapshot load leaves the prior
+roots and observations available.
+
+`observations_for_players(players)` freezes the requested viewers at their
+current decisions. Pass one seat or `None` per stream. The result contains the
+selected slot identities and a batch in that order. Any batch's
+`gather(coordinates)` copies just the selected live spans from compatible
+batches, preserving the requested order and repeated rows.
+
+Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
+each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+strings for native-endian int32 row offsets and packed, native-endian records.
+One span belongs to each batch item, or to each (item, seat) if `seat_axis`
+is true. Subtract consecutive offsets for live counts, including all-zero
+live rows. Companion validity masks derive from those counts. Object joins
+retain the layout's coordinates. The default overflow policy rejects excess
+actions. With `"first-legal"`, `action_counts` gives the retained prefix.
+
+`layout.csr_fields[key]` lists each record field's name, dtype and logical
+column index in byte order. IDs, joins, enums, unscaled counts and full signed
+words use int32. Flags use uint8 and scaled scalars use float32. In a dense
+input a word occupies two 16-bit columns. The packed field takes their common
+name and the first column's index. Both fact payloads use raw integer units.
+Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+Decision memory includes separate presence flags for optional selectors.
+
+```python
+fields = batch.layout.csr_fields["actions"]
+dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+_, offsets, values = batch.tables()["actions"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+actions = np.frombuffer(values, dtype=dtype)
+first_game_modes = actions["mode"][starts[0]:starts[1]]
+```
+
+For element arrays, the single field describes each element. An action-focus
+row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
+with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
+
+For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
+`encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
+emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
+the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
+`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape
 mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
@@ -720,12 +788,23 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
+that activated its ability. A zone change ends that identity. Avatar Destiny
+uses `ObjectSelector::This` to return the Aura from the graveyard after the
+enchanted creature dies.
+An effect on the enchanted or equipped permanent uses `ObjectSelector::Attached`.
+It reads the attachment at resolution. If the source left in response, its last
+known attachment identifies the exact permanent it last enchanted or equipped.
+
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
 result independently of a later `Move`; the caller keeps those results while
 selection effects run. Mill, optional discard/draw and basic/tutor searches use
 ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+An unrestricted `Effect::search_for_card` requires a choice while the library
+contains cards. Rune-Scarred Demon uses an unrevealed move into hand. Micromancer
+reveals the chosen card, which gives both viewers knowledge of it in hand.
 `ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
 materializers refresh unknown selected subsets throughout saved callers and child
 scopes, preserving cardinality and exact viewer-known choices. Restricted partial
@@ -961,3 +1040,17 @@ menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
 would finish it. The same address rules as payment previews apply, and the
 call is read-only in the same way.
+
+At the combat damage step, the attacking player assigns damage among the
+remaining blockers. Each choice names the attacker, the current blocker and
+the amount. A trampler can assign damage to the defending player once every
+blocker has been assigned lethal damage. For example, a 5-power trampler
+blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
+the rest. Without trample, that sole blocker takes all 5. The engine deals
+the assignments together after the final choice.
+
+When a combatant has first strike or double strike (CR 510.4), the first damage
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
+followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
+permanent's `first_strike_participant` remembers whether it had first strike or
+double strike when the first step began, including after its abilities change.

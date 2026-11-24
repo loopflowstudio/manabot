@@ -359,12 +359,12 @@ class CapturedSearch(_TrainingCapture, recording.CapturedSearch):
     """Engine search evidence with training policy accounting."""
 
 
-# Published evidence names retain a warning-only alias until 0.4.0.
+# Published evidence names retain a warning-only alias until 0.3.0.
 def __getattr__(name: str) -> Any:
     if name == "CapturedVector":
         warnings.warn(
             "manabot.env.failures.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.4.0",
+            "use RecordedVectorEnv; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -372,7 +372,7 @@ def __getattr__(name: str) -> Any:
     if name.startswith("_") or not hasattr(recording, name):
         raise AttributeError(name)
     warnings.warn(
-        f"manabot.env.failures.{name} moved to managym.recording; removal in 0.4.0",
+        f"manabot.env.failures.{name} moved to managym.recording; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )

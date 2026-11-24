@@ -148,7 +148,7 @@ def __getattr__(name: str) -> str:
     # The engine carries no world label; the last one it carried was w17.
     if name == "WORLD_VERSION":
         warnings.warn(
-            "managym.WORLD_VERSION is deprecated and removed in 0.4.0; the "
+            "managym.WORLD_VERSION is deprecated and removed in 0.3.0; the "
             "engine has no world label, and managym.world_identity() names "
             "its cards",
             DeprecationWarning,

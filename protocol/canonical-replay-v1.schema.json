@@ -1069,7 +1069,7 @@
       "type": "object",
       "properties": {
         "cast_permission": {
-          "description": "The permission to play this card from exile, when it has one.",
+          "description": "The permission to play this card from its current zone, when it has one.",
           "anyOf": [
             {
               "$ref": "#/$defs/LegacyCastPermissionView"
@@ -1078,6 +1078,20 @@
               "type": "null"
             }
           ]
+        },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
+        "counters": {
+          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "face_down": {
           "description": "Foretold and face down in exile; only its owner's views list it.",
@@ -1145,7 +1159,7 @@
       ]
     },
     "LegacyCastPermissionView": {
-      "description": "A public permission to play an exiled card. Only set terms are present.",
+      "description": "A public permission to play a card in its current zone. Only set terms are present.",
       "type": "object",
       "properties": {
         "after_turn": {
@@ -1160,6 +1174,13 @@
         "any_mana": {
           "type": "boolean"
         },
+        "condition": {
+          "description": "What must hold for the player to use it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cost": {
           "description": "Mana symbols paid to cast it, such as `{2}`; absent for a land play.",
           "type": [
@@ -1167,13 +1188,30 @@
             "null"
           ]
         },
+        "face_down": {
+          "description": "Face down in exile without Foretell.",
+          "type": "boolean"
+        },
         "flash": {
+          "type": "boolean"
+        },
+        "flashback": {
+          "type": "boolean"
+        },
+        "follows_source_controller": {
           "type": "boolean"
         },
         "foretold": {
           "type": "boolean"
         },
+        "on_adventure": {
+          "type": "boolean"
+        },
         "own_turn_only": {
+          "type": "boolean"
+        },
+        "play_lands": {
+          "description": "A land face may be played with it (\"you may play\"); otherwise it casts spells only.",
           "type": "boolean"
         },
         "player_id": {
@@ -1181,8 +1219,11 @@
           "format": "uint32",
           "minimum": 0
         },
+        "prepared": {
+          "type": "boolean"
+        },
         "source_permanent_id": {
-          "description": "Lasts while the permitted player controls this permanent.",
+          "description": "The public permanent sustaining this grant.",
           "type": [
             "integer",
             "null"
@@ -1379,6 +1420,9 @@
         },
         "face_down": {
           "description": "Face down (CR 708.2).",
+          "type": "boolean"
+        },
+        "first_strike_participant": {
           "type": "boolean"
         },
         "granted_firebending": {
@@ -1698,6 +1742,24 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "stack": {
           "type": "array",
@@ -2650,6 +2712,14 @@
           "format": "uint8",
           "maximum": 255,
           "minimum": 0
+        },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
         },
         "id": {
           "type": "integer",

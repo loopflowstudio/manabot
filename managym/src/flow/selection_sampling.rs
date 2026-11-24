@@ -66,7 +66,7 @@ struct InspectionSlot {
 /// ways a player could have chosen the private subset.
 struct HiddenAllocation {
     foretold: BTreeMap<String, u32>,
-    manifest: BTreeMap<String, u32>,
+    unrestricted: BTreeMap<String, u32>,
     ways: u128,
 }
 
@@ -141,12 +141,7 @@ fn unseen_objects(
         .flat_map(|zone| game.state.zones.zone_objects(*zone, owner).iter().copied())
         .filter(|object| !pinned_library.contains(object))
         .collect();
-    if !game.shares_information(viewer, owner) {
-        objects.extend(
-            game.foretold_cards(owner)
-                .map(|card| game.state.object_of(card)),
-        );
-    }
+    objects.extend(game.hidden_face_down_exile(owner, viewer));
     objects.extend(game.hidden_manifests(owner, viewer));
     objects
 }
@@ -226,7 +221,7 @@ impl Game {
 
     /// Draw the cards whose printings back `owner`'s hidden manifests from
     /// the shuffled deal `pool`, removing them from it. The first foretell
-    /// cards that `fill_foretold_slots` will take are set aside, then the
+    /// cards that the exile refill will take are set aside, then the
     /// manifests are a uniform draw from the rest: taking the rest's first
     /// cards would favor non-foretell cards, which precede the set-aside ones.
     /// `None` when too few cards remain.
@@ -243,7 +238,7 @@ impl Game {
         if count == 0 {
             return Some(Vec::new());
         }
-        let mut foretold = self.foretold_cards(owner).count();
+        let mut foretold = self.hidden_face_down_counts(owner, viewer).0 as usize;
         let rest: Vec<_> = pool
             .iter()
             .copied()
@@ -482,8 +477,8 @@ impl Game {
         pinned
     }
 
-    /// `owner`'s cards that `viewer` cannot see: the library, and for an
-    /// opponent also the hand and hidden foretold and manifested printings. For an opponent
+    /// `owner`'s cards that `viewer` cannot see: the library, face-down
+    /// exile hidden from `viewer`, and for an opponent also the hand. For an opponent
     /// this is exactly the possible-world pool, including any publicly known
     /// hand cards. Pinned library cards stay in place. Read retained printings for face-down objects.
     pub fn unseen_objects(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
@@ -666,12 +661,9 @@ impl Game {
             .sum()
     }
 
-    /// Draw one compatible foretold and manifest fill by its measure. The
-    /// foretold cards go before the remaining shuffled pool, where
-    /// `fill_foretold_slots` takes them; the manifest cards are removed and
-    /// returned, in slot order, for `fill_manifest_slots`. Those movers still
-    /// own backings, grants and exact exile membership. `None` when no fill
-    /// leaves the retained selections realizable.
+    /// Draw a compatible ordered fill for hidden exile slots and manifests.
+    /// The pool starts with the assigned exile cards, foretold first. The
+    /// returned manifest cards are in battlefield slot order.
     pub(crate) fn prepare_selection_hidden_slots(
         &self,
         commitments: &HiddenCommitments,
@@ -717,10 +709,15 @@ impl Game {
             chosen
         };
         let mut foretold = take(allocation.foretold, pool);
-        let manifests = take(allocation.manifest, pool);
+        let unrestricted = take(allocation.unrestricted, pool);
+        let manifest_count = self
+            .hidden_manifests(PlayerId(1 - commitments.viewer.0), commitments.viewer)
+            .count();
+        let (manifests, exiled) = unrestricted.split_at(manifest_count);
+        foretold.extend_from_slice(exiled);
         foretold.append(pool);
         *pool = foretold;
-        Some(manifests)
+        Some(manifests.to_vec())
     }
 
     fn selection_hidden_allocations(
@@ -765,17 +762,17 @@ impl Game {
                 )
             })
             .collect();
-        let count = self.foretold_cards(owner).count() as u32;
+        let (foretold, exiled) = self.hidden_face_down_counts(owner, commitments.viewer);
         let manifests = self.hidden_manifests(owner, commitments.viewer).count() as u32;
         let mut foretold_fills = Vec::new();
         enumerate_names(
             &bearers,
-            count,
+            foretold,
             1,
             &mut BTreeMap::new(),
             &mut foretold_fills,
         );
-        // Manifests take any printing the hand and foretold slots left.
+        // Other hidden exile slots and manifests take any remaining printing.
         let mut allocations = Vec::new();
         for (foretold, ways) in foretold_fills {
             let residual: Vec<_> = pool
@@ -786,30 +783,30 @@ impl Game {
                     (name.clone(), objects.len() as u32 - used)
                 })
                 .collect();
-            let mut manifest_fills = Vec::new();
+            let mut unrestricted_fills = Vec::new();
             enumerate_names(
                 &residual,
-                manifests,
+                exiled + manifests,
                 ways,
                 &mut BTreeMap::new(),
-                &mut manifest_fills,
+                &mut unrestricted_fills,
             );
-            allocations.extend(manifest_fills.into_iter().map(|(manifest, ways)| {
+            allocations.extend(unrestricted_fills.into_iter().map(|(unrestricted, ways)| {
                 HiddenAllocation {
                     foretold: foretold.clone(),
-                    manifest,
+                    unrestricted,
                     ways,
                 }
             }));
         }
         let factorial = |n: u32| (1..=n).map(u128::from).product::<u128>();
-        let orders = factorial(count) * factorial(manifests);
+        let orders = factorial(foretold) * factorial(exiled + manifests);
         allocations.retain_mut(|allocation| {
             let mut slots = Vec::new();
             for (name, objects) in &pool {
                 let in_hand = hand.get(name).copied().unwrap_or(0) as usize;
-                let foretold = (allocation.foretold.get(name).copied().unwrap_or(0)
-                    + allocation.manifest.get(name).copied().unwrap_or(0))
+                let hidden_fill = (allocation.foretold.get(name).copied().unwrap_or(0)
+                    + allocation.unrestricted.get(name).copied().unwrap_or(0))
                     as usize;
                 let pinned_hand = objects
                     .iter()
@@ -818,7 +815,7 @@ impl Game {
                             && commitments.pins(**object)
                     })
                     .count();
-                for index in pinned_hand..objects.len() - foretold {
+                for index in pinned_hand..objects.len() - hidden_fill {
                     slots.push((
                         if index < in_hand {
                             ZoneType::Hand

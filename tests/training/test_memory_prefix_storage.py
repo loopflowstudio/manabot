@@ -33,6 +33,7 @@ from manabot.env.memory_store import (
 )
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.policy.decision_memory import retained_memory
 from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import (
     Collector,
@@ -188,7 +189,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
     try:
         first = collect(original, model, 16)
         before = first.observations(np.array([15, 0, 15])).observation.materialize()
-        assert isinstance(first.next_obs, PrefixObservation)
+        assert retained_memory(first.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         bootstrap_before = first.next_obs.materialize()
         with torch.no_grad():
@@ -215,14 +216,16 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
             assert not gathered  # retained preparation never gathers dense history
-            prefix = first.next_obs.prefixes[0]
+            memory = retained_memory(first.next_obs)
+            assert memory is not None
+            prefix = memory.prefixes[0]
             selected = PrefixObservation(
                 {
                     key: np.repeat(value, 3, axis=0)
                     for key, value in first.next_obs.items()
                 },
                 [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
-                first.next_obs.memory_capacities,
+                memory.memory_capacities,
             )
             selected_batch = replace(
                 first, next_obs=selected, next_done=np.zeros(3, bool)
@@ -248,7 +251,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
         torch.testing.assert_close(actual_value, expected_value)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         second = collect(original, model, 8)
-        assert isinstance(second.next_obs, PrefixObservation)
+        assert retained_memory(second.next_obs) is not None
         # The retained bootstrap survives native buffer reuse by later collection.
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
@@ -343,7 +346,7 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     try:
         batch = collect(collector, model, 4)
         assert batch.actions.size == 4
-        assert isinstance(batch.next_obs, PrefixObservation)
+        assert retained_memory(batch.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
         assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
@@ -544,6 +547,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
+        native_index: int | None = None,
     ) -> Prefix:
         calls.append(row)
         return original(
@@ -553,6 +557,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
             epoch=epoch,
             counts=counts,
             tail_version=tail_version,
+            native_index=native_index,
         )
 
     monkeypatch.setattr(store, "_capture_live_admitted", capture)
@@ -639,21 +644,19 @@ def test_terminal_bootstrap_retains_empty_memory(closure: BatchClosure) -> None:
             # With seven lands and the first offer, seat zero decides twice per game.
             batch = collect(collector, model, 1)
             assert collector._env.current_game_seeds() == [197, 198]
-            assert isinstance(batch.next_obs, PrefixObservation)
+            memory = retained_memory(batch.next_obs)
+            assert memory is not None
             if closure == "exact-quota":
                 assert batch.next_done.tolist() == [False, True]
-                live, parked = batch.next_obs.prefixes
+                live, parked = memory.prefixes
                 assert live.identity.game == "197" and live.counts[0] > 0
                 assert parked.counts == (0, 0, 0, 0)
                 batch = collect(collector, model, 1)
                 assert collector._env.current_game_seeds() == [197, 200]
             assert collector._env.current_agent_indices() == [-1, -1]
-            assert batch.next_done.all() and isinstance(
-                batch.next_obs, PrefixObservation
-            )
-            assert all(
-                prefix.counts == (0, 0, 0, 0) for prefix in batch.next_obs.prefixes
-            )
+            memory = retained_memory(batch.next_obs)
+            assert batch.next_done.all() and memory is not None
+            assert all(prefix.counts == (0, 0, 0, 0) for prefix in memory.prefixes)
             assert any(prefix.counts[0] > 0 for prefix in batch.recorded.memory)
     finally:
         close_collector(collector)

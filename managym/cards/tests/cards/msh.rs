@@ -273,3 +273,61 @@ fn construct_a_cosmic_cube_requires_the_plan_to_be_sacrificed() {
     assert_eq!(s.game().state.deterministic_hash(), root);
     assert!(!tapped(&s, mountain));
 }
+
+#[test]
+fn monica_and_photon_cast_for_their_own_cost_and_keep_the_chosen_face() {
+    use crate::support::{
+        game::{move_card, move_from_library},
+        inspect::permanent_of,
+        play::{activate, fork_choosing},
+    };
+    use managym::state::{card::SpellProfile, zone::ZoneType};
+    let mut s = five_color_unfunded_setup(&["Monica Rambeau", "Gray Ogre", "Think Twice"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = move_from_library(&mut s, 0, "Monica Rambeau", ZoneType::Hand);
+    let draw = move_from_library(&mut s, 0, "Think Twice", ZoneType::Hand);
+    s.set_player_mana_pool(0, "8RWWU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for (profile, name, price) in [
+        (SpellProfile::Front, "Monica Rambeau", 3),
+        (SpellProfile::BackFace, "Photon, Living Light", 5),
+    ] {
+        let mut branch = fork_choosing(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, profile: chosen, .. } if *object == card && *chosen == profile),
+        );
+        let stacked = top_spell(&branch);
+        assert_eq!(branch.game().state[stacked.object].name, name);
+        assert_eq!(stacked.spent.mana().len(), price);
+        settle(&mut branch);
+        let permanent = permanent_of(&branch, card).unwrap();
+        let object = card_of(&branch, permanent);
+        assert_eq!(branch.game().state[object].name, name);
+        assert_eq!(
+            usize::from(
+                branch.game().state[object]
+                    .mana_value_cost()
+                    .unwrap()
+                    .mana_value
+            ),
+            price
+        );
+        if profile.is_front() {
+            branch.set_player_mana_pool(0, "2RWW");
+            branch.game_mut().scenario_refresh_priority().unwrap();
+            activate(&mut branch, permanent, 0);
+            settle(&mut branch);
+            assert_eq!(card_of(&branch, permanent), object);
+            assert_eq!(branch.game().state[object].name, "Photon, Living Light");
+        }
+        branch.set_player_mana_pool(0, "1U");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        cast_card(&mut branch, draw);
+        settle(&mut branch);
+        assert_eq!(branch.game().characteristics(ogre).pt(), (3, 3));
+        assert_eq!(branch.game().characteristics(permanent).pt(), (5, 5));
+        let grave = move_card(&mut branch, object, ZoneType::Graveyard);
+        assert_eq!(branch.game().state[grave].name, "Monica Rambeau");
+    }
+}

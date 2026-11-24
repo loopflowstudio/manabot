@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        heros_downfall(),
         burnished_hart(),
         lightning_strike(),
         ordeal_of_nylea(),
@@ -103,10 +104,7 @@ fn ordeal_of_nylea() -> CardDefinition {
             abilities: vec![
                 Ability::Triggered {
                     intervening_if: None,
-                    condition: TriggerCondition::attacks(
-                        TriggerSubject::EnchantedCreature,
-                        Per::Object,
-                    ),
+                    condition: TriggerCondition::attacks(TriggerSubject::Attached, Per::Object),
                     effects: vec![
                         Effect::put_counters(
                             ObjectSelector::Attached,
@@ -215,6 +213,27 @@ fn burnished_hart() -> CardDefinition {
                 )],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn heros_downfall() -> CardDefinition {
+    let text_box = "Destroy target creature or planeswalker.";
+    CardDefinition {
+        key: "ths.heros_downfall",
+        scryfall_id: "596822f6-dbd4-4cc8-aa50-9331ff42544e",
+        printed: PrintedCharacteristics {
+            name: "Hero's Downfall".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                },
+            ))],
             text_box: text_box.into(),
             ..Default::default()
         },

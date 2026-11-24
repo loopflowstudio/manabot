@@ -234,7 +234,7 @@ def run_probe(
         "manabot/backends/torch/decision_memory_probe.py",
         "manabot/verify/decision_memory_probe.py",
         "manabot/backends/torch/policy.py",
-        "manabot/backends/torch/_decision_memory.py",
+        "manabot/backends/torch/decision_memory.py",
     )
     for name in sources:
         target = out / "source" / name

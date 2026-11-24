@@ -81,6 +81,33 @@ fn seize_the_spoils_discards_a_chosen_card_then_draws_two_and_makes_a_treasure()
 }
 
 #[test]
+fn foundations_spell_snakeskin_veil() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Snakeskin Veil", "Hill Giant"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    cast(&mut s, "Snakeskin Veil");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(!s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
+}
+
+#[test]
 fn fynn_poison_and_herald_loss_protection() {
     use crate::support::{
         game::clear_summoning_sickness,
@@ -152,4 +179,86 @@ fn axe_equipped_fynn_poisons_in_both_damage_steps() {
         4
     );
     s.assert_life(1, 16);
+}
+
+#[test]
+fn foundations_permanent_youthful_valkyrie() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{counters, permanent_named};
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Youthful Valkyrie", "Gray Ogre", "Serra Angel"]);
+    enter_and_settle(&mut s, "Youthful Valkyrie");
+    let source = permanent_named(&s, "Youthful Valkyrie");
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Gray Ogre");
+    assert_eq!(counters(&s, permanent_named(&s, "Gray Ogre")), 0);
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Serra Angel");
+    assert_eq!(counters(&s, source), 1);
+}
+
+#[test]
+fn foundations_5d_goldvein_pick() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{activate, attack_with, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Goldvein Pick", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    for id in [ogre, giant] {
+        crate::support::game::clear_summoning_sickness(&mut s, id);
+    }
+    let gear = s.force_permanent_on_battlefield(0, "Goldvein Pick");
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, gear, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
+    let mut other = s.clone();
+    for (branch, attacker, count) in [(&mut s, ogre, 1), (&mut other, giant, 0)] {
+        branch.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(branch, attacker);
+        branch.advance_to_active_step(0, StepKind::PostcombatMain);
+        assert_eq!(
+            branch.battlefield_permanents_named(0, "Treasure").len(),
+            count
+        );
+    }
+}
+
+/// "{T}: Target creature gains haste until end of turn": a summoning-sick
+/// Gray Ogre is asked to attack this turn and loses haste at cleanup.
+#[test]
+fn foundations_5f_axgard_cavalry() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::keywords,
+        play::{activate, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Axgard Cavalry", "Gray Ogre"]);
+    let cavalry = s.force_permanent_on_battlefield(0, "Axgard Cavalry");
+    clear_summoning_sickness(&mut s, cavalry);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let mut unhasted = s.clone();
+    activate(&mut s, cavalry, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(keywords(&s, ogre).has(Keyword::Haste));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let asked = crate::walk_attack_declaration(&mut s, &[ogre]);
+    assert!(asked.contains(&(ogre, vec![true, false])), "{asked:?}");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!keywords(&s, ogre).has(Keyword::Haste));
+
+    unhasted.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let asked = crate::walk_attack_declaration(&mut unhasted, &[]);
+    assert!(
+        asked.iter().all(|(creature, _)| *creature != ogre),
+        "{asked:?}"
+    );
 }

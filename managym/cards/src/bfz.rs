@@ -1,13 +1,9 @@
 //! Battle for Zendikar.
 use managym_state::{
-    ability::Ability,
-    card::{Keyword, Keywords},
-};
-use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
-        PrintedCharacteristics, SacrificeCost,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        ManaAbility, PrintedCharacteristics, SacrificeCost,
     },
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
@@ -15,10 +11,11 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
-        stasis_snare(),
+        sure_strike(),
         felidar_cub(),
         hedron_archive(),
         vampiric_rites(),
+        stasis_snare(),
     ]
 }
 
@@ -105,6 +102,28 @@ fn vampiric_rites() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sure_strike() -> CardDefinition {
+    let text_box = "Target creature gets +3/+0 and gains first strike until end of turn. (It deals combat damage before creatures without first strike.)";
+    CardDefinition {
+        key: "bfz.sure_strike",
+        scryfall_id: "074dd176-4608-42ca-8fc3-c7040cd7b32e",
+        printed: PrintedCharacteristics {
+            name: "Sure Strike".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                3,
+                0,
+                Keyword::FirstStrike,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -120,6 +120,7 @@
    * first chips, so keywords (also in inspect) give way before them.
    */
   const chips = $derived(!field ? [] : [
+    ...(permanent?.first_strike_participant ? [{ key: 'first-strike-participant', text: 'First-strike participant', kind: 'combat', granted: false }] : []),
     ...(permanent?.attacking ? [{ key: 'attacking', text: 'Attacking', kind: 'combat', granted: false }] : []),
     ...(permanent?.blocking !== undefined ? [{ key: 'blocking', text: 'Blocking', kind: 'combat', granted: false }] : []),
     ...(permanent?.damage ? [{ key: 'damage', text: `${permanent.damage} damage`, kind: 'damage', granted: false }] : []),
@@ -159,6 +160,7 @@
     tapped ? 'tapped' : '',
     permanent?.summoning_sick && creature ? 'summoning sick' : '',
     permanent?.attacking ? 'attacking' : '',
+    permanent?.first_strike_participant ? 'first-strike participant' : '',
     permanent?.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
     permanent?.damage ? `${permanent.damage} damage` : '',
     ...counters.map(([kind, amount]) => `${amount} ${kind} counter${amount === 1 ? '' : 's'}`),

@@ -21,7 +21,6 @@ from typing import Literal
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
 from typing_extensions import deprecated
 
 from manabot.backends.torch.arrays import from_numpy, to_numpy
@@ -30,7 +29,7 @@ import manabot.policy.returns as returns
 
 @deprecated(
     "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
-    "The backend-bound function will be removed in 0.4.0."
+    "The backend-bound function will be removed in 0.3.0."
 )
 def damped_policy_loss(
     logits: Tensor,
@@ -255,7 +254,7 @@ def check_behavior(
 # as the longest trajectory has rows. Each row still takes the same float
 # operations in the same order as a row-by-row recursion, and device kernels of
 # that size are launch latency, not work. GAE is that module's NumPy function;
-# the categorical targets walk its waves over host tensors.
+# the categorical targets use the same host recursion in both backends.
 
 
 def transition_gae(
@@ -307,7 +306,6 @@ def outcome_probabilities(value_logits: Tensor) -> Tensor:
     return value_logits.softmax(-1)
 
 
-@torch.no_grad()
 def categorical_lambda_returns(
     probabilities: Tensor,
     rewards: Tensor,
@@ -316,77 +314,18 @@ def categorical_lambda_returns(
     trace_lambda: float,
     bootstrap_indexes: np.ndarray | None = None,
 ) -> Tensor:
-    """Undiscounted outcome mixtures [T,E,3], ordered loss/draw/win.
-
-    Each row ends at the next decision of the SAME player or at terminal.
-    Terminal targets are one-hot signed outcomes. A nonterminal tail uses the
-    exact paused next observation; reset observations never cross end markers.
-    For earlier rows mix (1-lambda)*next_prediction + lambda*next_return.
-    No policy receives true hidden-state input from these outcome labels.
-    """
-    if probabilities.ndim != 3 or probabilities.shape[-1] != 3:
-        raise ValueError("outcome probabilities require [T,E,3]")
-    if (
-        rewards.shape != probabilities.shape[:2]
-        or ends.shape != rewards.shape
-        or bootstrap.ndim != 2
-        or bootstrap.shape[-1] != 3
-        or (bootstrap_indexes is None and bootstrap.shape != probabilities.shape[1:])
-        or not len(rewards)
-        or not 0 <= trace_lambda <= 1
-    ):
-        raise ValueError("invalid outcome target shapes or lambda")
-    for name, distribution in (
-        ("probabilities", probabilities),
-        ("bootstrap", bootstrap),
-    ):
-        if (
-            not torch.isfinite(distribution).all()
-            or (distribution < 0).any()
-            or not torch.allclose(
-                distribution.sum(-1),
-                torch.ones_like(distribution.sum(-1)),
-                atol=1e-5,
-                rtol=1e-5,
-            )
-        ):
-            raise ValueError(f"outcome {name} must be distributions over 3 outcomes")
-    if (
-        not torch.isfinite(rewards).all()
-        or not ((rewards == -1) | (rewards == 0) | (rewards == 1)).all()
-    ):
-        raise ValueError("outcome rewards must be signed win/loss/draw")
-    ends = ends.bool()
-    if (rewards[~ends] != 0).any():
-        raise ValueError("nonterminal outcome reward must be zero")
-    # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
-    host_probabilities = probabilities.cpu()
-    host_ends = ends.cpu()
-    targets = torch.empty_like(
-        host_probabilities,
-        dtype=torch.promote_types(probabilities.dtype, bootstrap.dtype),
+    """Frozen loss/draw/win lambda targets on the predictions' device."""
+    targets = returns.categorical_lambda_returns(
+        to_numpy(probabilities),
+        to_numpy(rewards),
+        to_numpy(ends),
+        to_numpy(bootstrap),
+        trace_lambda,
+        bootstrap_indexes,
     )
-    targets[host_ends] = F.one_hot((rewards.cpu()[host_ends] + 1).long(), 3).to(
-        targets.dtype
+    return from_numpy(targets, probabilities.device).to(
+        torch.promote_types(probabilities.dtype, bootstrap.dtype)
     )
-    boundaries = host_ends.numpy()
-    if bootstrap_indexes is None:
-        tail = ~host_ends[-1]
-        prediction = bootstrap.cpu()[tail].to(targets.dtype)
-        # Preserve the rectangular estimator's floating-point interpolation.
-        targets[-1, tail] = (1 - trace_lambda) * prediction + trace_lambda * prediction
-    else:
-        cuts = returns.bootstrap_cuts(boundaries, bootstrap_indexes, len(bootstrap))
-        targets[cuts] = bootstrap.cpu()[bootstrap_indexes[cuts]].to(targets.dtype)
-        boundaries = boundaries | cuts
-    waves = returns.reverse_waves(boundaries)
-    next(waves)  # Every endpoint already has its outcome or frozen viewer prediction.
-    for wave_steps, wave_columns in waves:
-        steps, columns = torch.from_numpy(wave_steps), torch.from_numpy(wave_columns)
-        targets[steps, columns] = (1 - trace_lambda) * host_probabilities[
-            steps + 1, columns
-        ].to(targets.dtype) + trace_lambda * targets[steps + 1, columns]
-    return targets.to(probabilities.device)
 
 
 # -- Losses --------------------------------------------------------------------

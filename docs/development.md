@@ -41,10 +41,11 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.5,<0.5`
-(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.5 adds Colab on-demand training on top of fixed axes for checkpoint behaviour rates. The repository's
-`uv.lock` records the registry release; dedicated training and play runtime
-groups retain their backend choices.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.6,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.6
+provides the save and restore callbacks used by tracked training and the
+versioned storage listing used by training-time reports. The repository's
+`uv.lock` records the PyPI release for the training and play runtime groups.
 
 Install the locked client and inspect its database:
 
@@ -125,8 +126,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 **Training resume and game errors.**
 `uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
-Resume restores learner state at a saved update and opens fresh native streams;
-it does not restore an unfinished collection.
+Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
+for portable state, sampling-domain changes and historical Torch saves.
+On Apple Silicon, run the Metal subprocess cases serially. Resume restores
+learner state and native streams at the saved update boundary.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
@@ -677,10 +680,11 @@ the harness, not here. They come in four families: many copies of one thing
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
 `diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
-`names`, `face-down`) and one way of paying at size (`convoke-duplicates`, `convoke-diverse`,
-`delve-graveyard`, `improvise-artifacts`, `float-origins`, `crew-saddle`,
-`bargain-forage`), each measured again at the decision where its cost is
-chosen. Combat states put
+`names`, `face-down`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
+zero-link control `unprepared-copies`) and one way of paying at size
+(`convoke-duplicates`, `convoke-diverse`, `delve-graveyard`,
+`improvise-artifacts`, `float-origins`, `crew-saddle`, `bargain-forage`), each
+measured again at the decision where its cost is chosen. Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
 states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
@@ -861,7 +865,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.5,<0.5`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.6,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact

@@ -56,6 +56,8 @@ pub struct DeclarableCreature {
     pub can_block: Vec<ObjectRenderId>,
     /// Blockers only: a requirement (CR 509.1c) removes the option to not block.
     pub must_block: bool,
+    /// Attackers only: a requirement (CR 508.1d) removes the option to stay home.
+    pub must_attack: bool,
 }
 
 /// One per-creature answer the engine will ask for.
@@ -283,7 +285,43 @@ impl Game {
             label: self.label(creature),
             can_block: can_block.into_iter().map(|id| self.render_id(id)).collect(),
             must_block,
+            must_attack: kind == DeclarationKind::Attackers && self.must_attack(creature),
         }
+    }
+
+    /// Attackers already declared in this combat, before the current
+    /// decision (a creature that must attack and was offered no choice).
+    fn declared_attackers(&self) -> Vec<ObjectRenderId> {
+        self.state
+            .combat
+            .iter()
+            .flat_map(|combat| &combat.attackers)
+            .map(|attacker| self.render_id(*attacker))
+            .collect()
+    }
+
+    /// Blocks already declared in this combat, before the current decision
+    /// (a creature that must block and was offered no choice).
+    fn declared_blocks(&self) -> Vec<PlannedBlock> {
+        self.state
+            .combat
+            .iter()
+            .flat_map(|combat| &combat.attacker_to_blockers)
+            .flat_map(|(attacker, blockers)| {
+                blockers.iter().map(|blocker| PlannedBlock {
+                    blocker: self.render_id(*blocker),
+                    attacker: self.render_id(*attacker),
+                })
+            })
+            .collect()
+    }
+
+    /// The permanent's label, or "That creature" once it is gone.
+    fn render_label(&self, id: ObjectRenderId) -> String {
+        self.permanent_by_render_id(id).map_or_else(
+            || "That creature".to_string(),
+            |permanent| self.label(permanent),
+        )
     }
 
     fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
@@ -308,10 +346,7 @@ impl Game {
         plan: &CombatPlan,
     ) -> Option<DeclarationRefusal> {
         let refuse = |id: ObjectRenderId, reason: &str| {
-            let label = self.permanent_by_render_id(id).map_or_else(
-                || "That creature".to_string(),
-                |permanent| self.label(permanent),
-            );
+            let label = self.render_label(id);
             Some(DeclarationRefusal {
                 creature: id,
                 reason: format!("{label} {reason}"),
@@ -330,18 +365,27 @@ impl Game {
                         "is not blocking now: this is an attack.",
                     );
                 }
+                let declared = self.declared_attackers();
                 plan.attackers
                     .iter()
-                    .find(|id| !asked(**id))
+                    .find(|id| !asked(**id) && !declared.contains(id))
                     .and_then(|id| refuse(*id, "can't attack now."))
             }
             DeclarationKind::Blockers => {
                 if let Some(id) = plan.attackers.first() {
                     return refuse(*id, "is not attacking now: this is a block.");
                 }
+                let declared = self.declared_blocks();
                 for (index, block) in plan.blocks.iter().enumerate() {
-                    if !asked(block.blocker) {
-                        return refuse(block.blocker, "can't block now.");
+                    if !asked(block.blocker) && !declared.contains(block) {
+                        let reason =
+                            match declared.iter().find(|other| other.blocker == block.blocker) {
+                                Some(other) => {
+                                    format!("already blocks {}.", self.render_label(other.attacker))
+                                }
+                                None => "can't block now.".to_string(),
+                            };
+                        return refuse(block.blocker, &reason);
                     }
                     if plan.blocks[..index]
                         .iter()
@@ -399,7 +443,8 @@ impl Game {
             Answer::Block(Some(attacker)) => {
                 format!("{label} can't block {}.", self.label(attacker))
             }
-            Answer::Attack(_) => format!("{label} has no such attack answer."),
+            Answer::Attack(false) => format!("{label} must attack."),
+            Answer::Attack(true) => format!("{label} can't attack now."),
         };
         DeclarationRefusal {
             creature: self.render_id(creature),
@@ -451,42 +496,59 @@ impl Game {
         plan: &CombatPlan,
         preview: &CombatPreview,
     ) -> Option<DeclarationRefusal> {
-        let named = |id: ObjectRenderId| {
-            self.permanent_by_render_id(id).map_or_else(
-                || "That creature".to_string(),
-                |permanent| self.label(permanent),
-            )
-        };
+        let named = |id: ObjectRenderId| self.render_label(id);
         match kind {
             DeclarationKind::Attackers => {
+                // Creatures declared before this decision (a skipped
+                // creature that must attack) are not part of the plan.
                 let mut planned = plan.attackers.clone();
+                planned.extend(
+                    self.declared_attackers()
+                        .into_iter()
+                        .filter(|id| !plan.attackers.contains(id)),
+                );
                 let mut declared = preview.declared_attackers.clone();
                 planned.sort_by_key(|id| (id.entity, id.incarnation));
                 declared.sort_by_key(|id| (id.entity, id.incarnation));
                 (planned != declared).then(|| {
-                    let creature = plan
-                        .attackers
+                    let creature = planned
                         .iter()
                         .find(|id| !preview.declared_attackers.contains(id))
                         .or_else(|| {
                             preview
                                 .declared_attackers
                                 .iter()
-                                .find(|id| !plan.attackers.contains(id))
+                                .find(|id| !planned.contains(id))
                         })
                         .copied()
                         .expect("differing attacker sets");
                     let label = named(creature);
+                    let must_attack = self
+                        .permanent_by_render_id(creature)
+                        .is_some_and(|attacker| self.must_attack(attacker));
+                    let reason = if must_attack && !planned.contains(&creature) {
+                        format!("{label} must attack.")
+                    } else {
+                        format!("The engine would not declare {label} as planned.")
+                    };
                     DeclarationRefusal {
                         creature,
-                        reason: format!("The engine would not declare {label} as planned."),
+                        reason,
                         label,
                     }
                 })
             }
             DeclarationKind::Blockers => {
-                let missing = plan
-                    .blocks
+                // Blocks declared before this decision (a skipped creature
+                // that must block) are not part of the plan.
+                let mut planned = plan.blocks.clone();
+                // `unaskable` admits a declared blocker only in its declared block.
+                planned.extend(
+                    self.declared_blocks()
+                        .into_iter()
+                        .filter(|block| !plan.blocks.contains(block)),
+                );
+                let missing = planned
                     .iter()
                     .find(|block| !preview.declared_blocks.contains(block));
                 if let Some(block) = missing {
@@ -503,7 +565,7 @@ impl Game {
                 preview
                     .declared_blocks
                     .iter()
-                    .find(|block| !plan.blocks.contains(block))
+                    .find(|block| !planned.contains(block))
                     .map(|block| {
                         let label = named(block.blocker);
                         DeclarationRefusal {

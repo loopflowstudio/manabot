@@ -13,6 +13,7 @@ import torch
 from manabot.backends import resolve
 from manabot.backends.torch import belief_fit
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
+from manabot.belief.checkpoint import SamplerIdentities, read_belief_sampler
 from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -59,9 +60,9 @@ def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
     )
 
 
-def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
+def _checkpoint(path: Path, dataset: SamplerDataset, seed: int | None = 19) -> str:
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(seed)
+        torch.manual_seed(0 if seed is None else seed)
         model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
         # Fixed nonzero corrections exercise learned inference without training.
         with torch.no_grad():
@@ -79,7 +80,7 @@ def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
             "hidden_size": 4,
             "history_dropout": 0.0,
             "state_dict": model.state_dict(),
-            "metrics": {"seed": seed},
+            "metrics": {} if seed is None else {"seed": seed},
         },
         path,
     )
@@ -415,3 +416,22 @@ def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
     pooled = _pool_games([arm, replace(arm, calibration_bins=bins_b)], [1, 1])
     assert pooled.inclusion_ece == 0
     assert pooled.conjunction_brier is None
+
+
+def test_legacy_sampler_zip_requires_torch(tmp_path: Path) -> None:
+    pytest.importorskip("mlx.core")
+    dataset = _dataset()
+    path = tmp_path / "legacy.safetensors"
+    digest = _checkpoint(path, dataset, seed=None)
+    assert path.read_bytes().startswith(b"PK\x03\x04")
+    bindings = SamplerIdentities(
+        expected_dataset_identity=dataset.identity,
+        expected_policy_identity=dataset.policy_identity,
+        expected_schema_identity=dataset.schema.identity,
+        expected_world_identity=dataset.world_identity,
+        expected_checkpoint_identity=digest,
+    )
+    admitted = read_belief_sampler(path, codec=resolve("torch").belief, **bindings)
+    assert admitted.model.schema == dataset.schema and admitted.training_seed is None
+    with pytest.raises(ValueError, match="Torch"):
+        read_belief_sampler(path, codec=resolve("mlx").belief, **bindings)

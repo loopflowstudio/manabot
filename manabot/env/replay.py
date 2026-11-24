@@ -36,7 +36,7 @@ def __getattr__(name: str) -> Any:
     if name.startswith("_"):
         raise AttributeError(name)
     warnings.warn(
-        f"manabot.env.replay.{name} moved to managym.replay; removal in 0.4.0",
+        f"manabot.env.replay.{name} moved to managym.replay; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )

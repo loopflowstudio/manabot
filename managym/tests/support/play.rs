@@ -756,7 +756,23 @@ pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
 /// authority, pass once if it triggered, and `settle`.
 pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_object(id, ZoneType::Battlefield);
+    move_and_settle(s, id, ZoneType::Battlefield)
+}
+
+/// Move player 0's library copy onto the battlefield through the zone-change
+/// authority and stop at its entry trigger's target choice. Returns the
+/// library appearance; `now` follows it to the battlefield.
+pub fn enter_until_target(s: &mut Scenario, name: &str) -> ObjectId {
+    let id = library_card(s, 0, name);
+    crate::support::game::move_card(s, id, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+    id
+}
+
+/// Resolve any triggers from moving the card to its destination.
+pub fn move_and_settle(s: &mut Scenario, id: ObjectId, zone: ZoneType) -> ObjectId {
+    crate::support::game::move_card(s, id, zone);
     s.game_mut().scenario_refresh_priority().unwrap();
     if !s.game().state.pending_triggers.is_empty() {
         s.pass_priority();
@@ -860,11 +876,11 @@ pub fn resolve_until_priority(s: &mut Scenario) {
 
 /// Commit the chosen legal action through the public semantic Command API,
 /// checking that a fork commits identically, the source is untouched until
-/// it commits, and the spent Command is then stale.
+/// it commits, and the spent Command is then stale. Return the committed fork.
 pub fn command(
     s: &mut Scenario,
     predicate: impl Fn(&Action) -> bool,
-) -> managym::decision::Command {
+) -> (Scenario, managym::decision::Command) {
     use managym::{decision::Command, search_state::witness};
     let index = s
         .action_space()
@@ -895,7 +911,7 @@ pub fn command(
         witness(&fork),
         "stale Command changed state"
     );
-    command
+    (Scenario { game: fork }, command)
 }
 
 /// Answer the sole stacked ability with a scenario permanent's counter ability.
@@ -920,4 +936,18 @@ pub fn counter_stacked_ability(s: &mut Scenario) {
     assert!(matches!(targets.as_slice(), [Target::StackAbility(_)]));
     assert!(s.choose_target(targets[0]));
     settle(s);
+}
+
+/// Select a printed spell on the card's current appearance.
+pub fn cast_profile(
+    s: &mut Scenario,
+    object: ObjectId,
+    profile: managym::state::card::SpellProfile,
+) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let object = now(s, object);
+    choose(
+        s,
+        |action| matches!(action, Action::CastSpell { object: legal, profile: offered, .. } if *legal == object && *offered == profile),
+    );
 }

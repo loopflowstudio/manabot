@@ -81,6 +81,37 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   deal lengths that way before raising a budget. Rebuild the extension after
   such a merge: saves written before an appended input column refuse `--resume`
   by naming the changed readings, which is correct.
+- MLX architectures, PPO and belief samplers: the two `experiments/belief.py`
+  commands in `manabot/backends/mlx.md` take about 10 s and 25 s with Torch
+  blocked. Compare the job's `out/belief.safetensors` across backends with
+  `load_belief_sampler` on the rows of its own `out/histories.json`
+  (`read_dataset`; targets are `example.target_hand`); 64 rows agreed below
+  2e-7 in both directions. `python -m manabot.reports.belief` needs
+  `--training-dataset` as well as `--dataset`, `--checkpoint` and
+  `--checkpoint-sha256`. For non-default models, copy a single-job recipe
+  into `.runs/` that builds `SelfPlay` over `gray_ogre_match()` with
+  `batch_closure="exact-quota"`, `transitions=16` and `updates=1` (10–20 s an
+  arm). Decision memory needs `policy_film`, a catalog `world`, no
+  `recent_events`, explicit `collection_rows`/`bootstrap_rows`/`learner_rows`
+  and record capacity for the match: 128 `max_decision_records` suits Gray
+  Ogre, while a baseline TLA game passed 128 and ran with 1024. Warm-start
+  with `pretrained=<control policy>`. Torch `live_tokens` off CUDA must refuse
+  with "live tokens require CUDA on the torch backend" before a run exists.
+  `manabot.eval.local` plays its own match, so a Gray Ogre policy is refused
+  with "checkpoint setup differs from the execution match"; train on the
+  baseline match (`fresh_iteration` over `baseline.settings`) to evaluate.
+- Files from before a change: `git worktree add --detach .runs/base-wt
+  <merge-base>`, copy the built `managym/_managym.*.so` in when Rust is
+  unchanged, and run `PYTHONPATH=$PWD ../../.venv/bin/etude train …` from that
+  directory. Without `PYTHONPATH` the editable install imports the current
+  checkout and the files are not old (check `head -c 4`: a legacy sampler
+  starts `PK`). Then `--resume` or load them from the checkout under test.
+- `tests/training/test_mlx_workflow.py::test_mlx_local_evaluation_and_verification`
+  fails with "paired arena evaluation incomplete or from other deals" when
+  another workload shares the Mac: `panel/failures/` names "game wall-clock
+  budget exhausted" and `rows.json` candidate `latency.p50` is 0.3–0.5 s
+  against about 0.055 s on a quieter machine. Run the same test at the merge
+  base before blaming the change; check `uptime` first.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
@@ -250,3 +281,37 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+- Portable continuation and backend switching (`out/state/save-*/` with
+  `learner.safetensors`, `sampling.safetensors`, `continuation.json`):
+  `etude continue` needs a launched parent (on an `etude train` run it says
+  "the launcher has no run"), and `--resume --config` with another backend
+  refuses with `run_identity_conflict`. Emulate the launcher's continued child
+  locally: copy the parent's `track/<exp>/out` to `track/<new>/out`, then
+  `etude train manabot/recipes/local.py --experiment <new> --config
+  '{"backend":"mlx","device":"mps"}' --until updates=N` (about 30 s). Read
+  `run/sampling_reseeded` and `run/adam_steps_aligned` with
+  `read(...).points(m, clock="updates")`: only the first resumed update has
+  them (Torch→MLX on `local` showed 17 aligned clocks; MLX→Torch only the
+  reseed). Save folders are numbered by save, not update: read `at` in
+  `state.json`. For exactness, Ctrl-C a `--config '{"updates":4}'` run on a
+  pty once `out/policies/00000002-raw.safetensors` exists (exit 75),
+  `--resume`, and compare tensor bytes of `00000004-*.safetensors` with an
+  uninterrupted run; only `bc.counts.training_seconds` differs. A legacy save
+  comes from a detached `main` worktree with this checkout's `.so` when Rust
+  is unchanged (`learner.pt`/`optimizer.pt`/`ema.pt`); MLX refuses it, Torch
+  `--resume` rewrites it in the four-file layout, and a copy then continues
+  on MLX. Editing a seed in `continuation.json` must refuse naming that file
+  and leave `out/` byte-identical (Etude marks the attempt `failed`).
+- Torch MPS inference layout (`attention="bucketed_columns"`): run
+  `uv run etude train manabot/recipes/local.py --config '{"device":"mps"}' --until updates=2`,
+  then load the policy and its `ObservationSpace` with
+  `resolve("torch").load_policy`, build a wide `ActorCritic` (for example
+  `hidden_dim=384`, 8 heads) and play scalar `Env(Match(selected_match()), space,
+  Reward(RewardConfig()))` games by CPU argmax, keeping each encoded decision.
+  Stack them into 64- and 256-row dense dicts and compare CPU `prepare(rows,
+  inference=True)`, MPS `prepare(rows, inference=True)` and the same MPS batch
+  with `dataclasses.replace(batch, attention_columns=None)`. Choose moves with
+  the trained policy and use the same wide model weights in each forward
+  comparison. Compare legal logits and values within float32 tolerance and
+  check that masked logits retain the illegal-action sentinel. Measure latency
+  with alternating, warmed collection calls on a quiet machine.

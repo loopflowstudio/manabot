@@ -11,7 +11,7 @@
  * ability" (a static grant from another permanent).
  */
 import type { CardFace } from '$lib/card-faces.svelte';
-import type { ContinuousEffect, PermanentState } from '$lib/types';
+import type { CardState, ContinuousEffect, PermanentState } from '$lib/types';
 
 export interface PtPart {
   label: string;
@@ -110,4 +110,47 @@ export function signed(power: number, toughness: number): string {
 export function labelText(name: string): string {
   const words = name.replace(/_/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** "2 stun counters", "1 stash counter": counters by kind, positive counts only. */
+export function counterTerms(counters: Record<string, number> | undefined): string[] {
+  return Object.entries(counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${kind.replace(/_/g, ' ')} counter${n === 1 ? '' : 's'}`);
+}
+
+/** Play permissions from the inspected card's viewer projection. */
+export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_permissions'> | null, permanentName: (id: number) => string, playerName: (id: number) => string): string[] {
+  const grants = card?.cast_permissions ?? (card?.cast_permission ? [card.cast_permission] : []);
+  return grants.flatMap(grant => {
+    const player = playerName(grant.player_id);
+    const verb = grant.play_lands ? 'play' : 'cast';
+    const terms: string[] = [];
+    if (grant.source_permanent_id != null) {
+      const source = permanentName(grant.source_permanent_id);
+      terms.push(grant.follows_source_controller
+        ? `The controller of ${source} may ${verb} this (currently ${player}).`
+        : `${player} may ${verb} this while they control ${source}.`);
+    }
+    if (grant.flashback) {
+      const duration = grant.this_turn ? ' this turn' : '';
+      terms.push(`${player} may cast this with flashback${duration}. Exile it when it leaves the stack.`);
+    }
+    const rest: string[] = [];
+    if (grant.cost != null) rest.push(`for ${grant.cost}`);
+    if (grant.on_adventure) rest.push('as the permanent spell only');
+    if (grant.this_turn && !grant.flashback) rest.push('this turn only');
+    if (grant.through_next_turn) rest.push('until the end of their next turn');
+    if (grant.own_turn_only) rest.push('during their own turn only');
+    if (grant.after_turn != null) rest.push(`only after turn ${grant.after_turn}`);
+    if (grant.flash) rest.push('as though it had flash');
+    if (grant.any_mana) rest.push('spending mana of any type');
+    if (grant.waterbend) rest.push('paying generic mana by waterbending');
+    if (grant.foretold) rest.push('foretold, face down');
+    if (grant.face_down) rest.push('face down, seen only while it may be played');
+    if (grant.prepared) rest.push('as a prepared copy kept while linked to its source');
+    if (grant.condition) rest.push(`only if ${grant.condition}`);
+    if (rest.length || !terms.length) {
+      terms.push(`${player} may ${verb} this${rest.length ? ' ' + rest.join(', ') : ''}.`);
+    }
+    return terms;
+  });
 }

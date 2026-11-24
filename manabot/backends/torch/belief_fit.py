@@ -1,4 +1,4 @@
-"""Torch autoregressive fitting, seeded hand sampling and checkpoint encoding.
+"""Torch autoregressive fitting and seeded hand sampling.
 
 `fit_belief_sampler` optimizes joint NLL on training games; `evaluate_sampler`
 supplies hand scores and draws to the host sampler metrics.
@@ -7,11 +7,7 @@ supplies hand scores and draws to the host sampler metrics.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import asdict
-import io
-import math
 import time
-from typing import cast
 
 import numpy as np
 import torch
@@ -25,8 +21,9 @@ from manabot.belief.sampling_data import SamplerDataset, SamplerExample
 from manabot.belief.sampling_fit import (
     SamplerArmMetrics,
     SamplerEvaluation,
-    SamplerFitMetrics,
     SamplerFitResult,
+    fit_splits,
+    score_fit,
     score_sampler_arm,
 )
 from manabot.belief.sampling_types import SamplerInput
@@ -121,30 +118,9 @@ def fit_belief_sampler(
     it changes the treatment and cannot promise robustness to opponent baiting.
     Callback failures abort immediately so the run owner can retain the attempt.
     """
-    if (
-        steps < 1
-        or batch_size < 1
-        or evaluation_samples < 1
-        or not math.isfinite(learning_rate)
-        or learning_rate <= 0
-    ):
-        raise ValueError(
-            "fitting requires positive steps, batch size, evaluation samples and learning rate"
-        )
-    split_rows = {
-        split: tuple(
-            example
-            for game in dataset.games
-            if game.split == split
-            for example in game.examples
-        )
-        for split in ("train", "validation", "test")
-    }
-    if any(not rows for rows in split_rows.values()):
-        raise ValueError("all three whole-game splits need examples")
-    game_ids = [game.game_id for game in dataset.games]
-    if len(set(game_ids)) != len(game_ids):
-        raise ValueError("game identities must be unique across dataset splits")
+    split_rows = fit_splits(
+        dataset, steps, batch_size, evaluation_samples, learning_rate
+    )
     _check(check)
     with deterministic_cpu(), torch.random.fork_rng(devices=[]):
         torch.manual_seed(seed)
@@ -168,48 +144,18 @@ def fit_belief_sampler(
             optimizer.step()
         fit_seconds = time.perf_counter() - started
         model.eval()
-        evaluations = {
-            split: evaluate_sampler(
-                model, rows, samples=evaluation_samples, seed=seed + index, check=check
-            )
-            for index, (split, rows) in enumerate(split_rows.items())
-        }
-    metrics = SamplerFitMetrics(
-        train=evaluations["train"],
-        validation=evaluations["validation"],
-        test=evaluations["test"],
-        optimizer_exposures=steps * batch_size,
-        optimizer_steps=steps,
-        history_dropout=history_dropout,
-        seed=seed,
-        fit_seconds=fit_seconds,
-        parameter_bytes=sum(
-            value.numel() * value.element_size() for value in model.parameters()
-        ),
-    )
-    return SamplerFitResult(
-        model,
-        metrics,
-        dataset.identity,
-        dataset.policy_identity,
-        dataset.world_identity,
-    )
-
-
-def encode_sampler(result: SamplerFitResult, dataset: SamplerDataset) -> bytes:
-    model = cast(AutoregressiveBeliefSampler, result.model)
-    payload = {
-        "format": "manabot.autoregressive-belief-sampler/v1",
-        "schema": asdict(dataset.schema),
-        "schema_identity": dataset.schema.identity,
-        "dataset_identity": dataset.identity,
-        "policy_identity": dataset.policy_identity,
-        "world_identity": dataset.world_identity,
-        "hidden_size": model.hidden_size,
-        "history_dropout": model.history_dropout,
-        "state_dict": model.state_dict(),
-        "metrics": asdict(result.metrics),
-    }
-    stream = io.BytesIO()
-    torch.save(payload, stream)
-    return stream.getvalue()
+        return score_fit(
+            model,
+            dataset,
+            split_rows,
+            evaluate_sampler,
+            steps=steps,
+            batch_size=batch_size,
+            seed=seed,
+            evaluation_samples=evaluation_samples,
+            check=check,
+            fit_seconds=fit_seconds,
+            parameter_bytes=sum(
+                value.numel() * value.element_size() for value in model.parameters()
+            ),
+        )

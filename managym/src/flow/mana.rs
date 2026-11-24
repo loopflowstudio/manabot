@@ -3066,7 +3066,7 @@ impl Game {
         model: &PaymentModel,
     ) -> autotapper::PaymentProbe {
         let mut paying = match &cost.purpose {
-            SpendingContext::Cast(spell) => Some(spell.clone()),
+            SpendingContext::Cast { spell, .. } => Some(spell.clone()),
             _ => None,
         };
         let mut probe = autotapper::PaymentProbe::default();
@@ -3089,7 +3089,7 @@ impl Game {
             if followup.mana_value == 0 {
                 continue;
             }
-            let timing = self.has_instant_timing(player, object_id);
+            let timing = self.has_instant_timing(player, object_id, Default::default());
             match probe.followups.iter().position(|known| *known == followup) {
                 Some(index) => instant[index] |= timing,
                 None => {
@@ -3137,6 +3137,10 @@ impl Game {
                     || ability.mana_choices().is_some()
                     || permanent.activation_used(ability_index, ability)
                     || (ability.own_turn_only && self.active_player() != player)
+                    || ability
+                        .condition
+                        .as_ref()
+                        .is_some_and(|condition| !self.check_static_condition(condition, player))
                     || life < ability.life_cost as i32
                     || (ability.tap_source && !self.permanent_can_tap(source.permanent))
                     || (single_use && ability.mana_cost == *cost)

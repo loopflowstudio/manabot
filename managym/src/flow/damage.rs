@@ -48,12 +48,22 @@ impl Game {
         target: ProposedDamageTarget,
         amount: i32,
         combat: bool,
+        lifelink: &mut std::collections::BTreeMap<(ObjectId, PlayerId), i32>,
     ) -> bool {
         if amount <= 0 {
             return false;
         }
-        let source_has_deathtouch = source
-            .is_some_and(|object_ref| self.source_keywords(object_ref).has(Keyword::Deathtouch));
+        let keywords = source
+            .map(|object| self.source_keywords(object))
+            .unwrap_or_default();
+        let source_has_deathtouch = keywords.has(Keyword::Deathtouch);
+        let lifelink_source =
+            source
+                .filter(|_| keywords.has(Keyword::Lifelink))
+                .and_then(|object| {
+                    self.damage_source_facts(object)
+                        .map(|(controller, _)| (object, controller))
+                });
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
@@ -136,6 +146,10 @@ impl Game {
             }
         }
 
+        if let Some(source) = lifelink_source {
+            let total = lifelink.entry(source).or_default();
+            *total = total.saturating_add(amount);
+        }
         true
     }
 
@@ -197,22 +211,26 @@ impl Game {
         self.state.source_base(source).1.keywords
     }
 
-    pub(super) fn lifelink_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        if !self.source_keywords(source).has(Keyword::Lifelink) {
-            return None;
+    /// Read controller and creature status from the same incarnation of the source.
+    pub(crate) fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
+        if let Ok(id) = self.lookup_current_permanent(source) {
+            let permanent = self.state.permanents[id].as_ref()?;
+            return Some((
+                permanent.controller,
+                self.permanent_is_battlefield_creature(id),
+            ));
         }
-        if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.state.permanents[permanent_id]
-                .as_ref()
-                .map(|permanent| permanent.controller);
+        if self.state.live(source).is_some() {
+            if let Some(controller) = self.stack_spell_controller(source) {
+                return Some((controller, self.state[source].types.is_creature()));
+            }
         }
-        if let Some(lki) = self.object_lki(source) {
-            return Some(lki.controller);
-        }
-        self.state
-            .objects
-            .provenance(source)
-            .map(|(_, owner, _)| owner)
+        self.object_lki(source)
+            .map(|lki| (lki.controller, lki.battlefield.types.is_creature()))
+            .or_else(|| {
+                let (_, owner, _) = self.state.objects.provenance(source)?;
+                Some((owner, self.state.source_base(source).1.types.is_creature()))
+            })
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

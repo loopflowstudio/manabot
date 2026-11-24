@@ -1,16 +1,54 @@
 //! The Lost Caverns of Ixalan.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{Ability, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
-        StaticAbility, StaticContinuous, StaticScope,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Color, ManaCost},
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![eaten_by_piranhas(), self_reflection()]
+    vec![eaten_by_piranhas(), mischievous_pup(), self_reflection()]
+}
+
+fn mischievous_pup() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, return up to one other target permanent you control to its owner's hand.";
+    CardDefinition {
+        key: "lci.mischievous_pup",
+        scryfall_id: "7c219861-f808-456f-b551-37512764062d",
+        printed: PrintedCharacteristics {
+            name: "Mischievous Pup".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dog".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate::default(),
+                        })
+                    },
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate::default(),
+                        },
+                    ))],
+                }],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn eaten_by_piranhas() -> CardDefinition {
@@ -24,11 +62,11 @@ fn eaten_by_piranhas() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
             keywords: Keywords::of(&[Keyword::Flash]),
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
+            // One effect across layers 4, 5, 6 and 7b; the name is unchanged.
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
                     Modification::SetTypes {
                         types: vec![CardType::Creature],
                         subtypes: vec!["Skeleton".into()],
@@ -40,11 +78,8 @@ fn eaten_by_piranhas() -> CardDefinition {
                         toughness: Some(LayerValue::Fixed(1)),
                     },
                 ],
-            })],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            )],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             text_box: text_box.into(),
             ..Default::default()
         },

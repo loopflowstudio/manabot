@@ -1,3 +1,4 @@
+use crate::state::card::SpellProfile;
 use crate::state::{
     game_object::{ObjectId, PermanentId, PlayerId, PublicId},
     target::Target,
@@ -41,14 +42,24 @@ pub enum Action {
         trigger_id: crate::flow::trigger::TriggerId,
     },
     PlayLand {
+        /// The land face played: a modal card's back face enters back face
+        /// up (CR 712.14). Serialized under `CastSpell`'s profile key.
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     CastSpell {
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     ActivateAbility {
         player: PlayerId,
@@ -145,6 +156,13 @@ pub enum Action {
 }
 
 impl Action {
+    pub(crate) fn spell_profile(&self) -> SpellProfile {
+        match self {
+            Self::CastSpell { profile, .. } | Self::PlayLand { profile, .. } => *profile,
+            _ => SpellProfile::Front,
+        }
+    }
+
     /// The player performing this rules action, whose resources and objects
     /// it uses. The published ActionSpace.player separately authorizes its chooser.
     pub fn player(&self) -> PlayerId {

@@ -5,6 +5,7 @@
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
+        cast_permission::PlayGrant,
         decision::{
             Decision, EffectFrame, FrameCompletion, ResolutionCastOffer, ResolutionTarget,
             TargetIteration,
@@ -160,6 +161,7 @@ impl Game {
                 .map_or(0, |lki| {
                     lki.counters.get(*kind).saturating_sub(*subtract).max(0)
                 }),
+            EffectValue::NegativeX => -i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TriggeringManaValue => match frame.context_target {
                 // A spell that has left the stack is read as the card it became.
@@ -170,6 +172,7 @@ impl Game {
                     .map_or(0, |object| i32::from(self.object_mana_value(object))),
                 _ => 0,
             },
+            EffectValue::TargetPower => self.power_toughness_or_lki(frame.primary_target()).0,
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::TriggerDamage => frame.trigger_damage,
             EffectValue::ExcessDamage => frame.excess_damage,
@@ -186,6 +189,9 @@ impl Game {
                 .source_ref()
                 .and_then(|source| self.battlefield_power(source))
                 .unwrap_or(0),
+            EffectValue::AttachedCreaturePower => self
+                .source_permanent_id(frame)
+                .map_or(0, |source| self.attached_creature_power(source)),
             EffectValue::AttackingMatching { predicate } => self
                 .battlefield_permanents(frame.controller)
                 .into_iter()
@@ -209,14 +215,17 @@ impl Game {
             EffectValue::Objects { .. }
             | EffectValue::X
             | EffectValue::TriggerDamage
+            | EffectValue::NegativeX
             | EffectValue::ExcessDamage
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
             | EffectValue::DeathCountersMinus { .. }
             | EffectValue::SourcePower
+            | EffectValue::AttachedCreaturePower
             | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
             | EffectValue::TriggeringManaValue
+            | EffectValue::TargetPower
             | EffectValue::TargetToughness
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
@@ -864,6 +873,7 @@ impl Game {
                 None
             }
             Effect::Move {
+                unrevealed,
                 library_end,
                 what,
                 to,
@@ -908,6 +918,9 @@ impl Game {
                         (from, *to, library_end)
                     {
                         self.reorder_in_library(object, *end);
+                        if *end == crate::state::ability::LibraryEnd::Top {
+                            self.remember_placed_top(object, frame);
+                        }
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
@@ -926,7 +939,11 @@ impl Game {
                             ..ZoneEntry::default()
                         }
                     } else {
-                        ZoneEntry::default()
+                        // "exile it with a stash counter on it" (CR 122.1).
+                        ZoneEntry {
+                            counters: counters.clone(),
+                            ..ZoneEntry::default()
+                        }
                     };
                     events.push(self.zone_move_proposal(object, *to, entry));
                 }
@@ -937,9 +954,20 @@ impl Game {
                     }),
                     shuffle: *to == ZoneType::Library && library_end.is_none(),
                     library_end: *library_end,
-                    reveal: *to == ZoneType::Hand,
+                    reveal: *to == ZoneType::Hand && !unrevealed,
                 };
                 frame.batch = Some(batch);
+                None
+            }
+            Effect::Prepare { what } | Effect::Unprepare { what } => {
+                for id in self.selected_permanents(what, frame) {
+                    let source = self.state.permanents[id].as_ref().unwrap().object;
+                    if matches!(effect, Effect::Prepare { .. }) {
+                        self.prepare_inset(source);
+                    } else {
+                        self.unprepare_inset(source);
+                    }
+                }
                 None
             }
             Effect::Tap { what } => {
@@ -1366,6 +1394,20 @@ impl Game {
                 }
                 None
             }
+            Effect::GrantGraveyardCastThisTurn { flashback, .. } => {
+                if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
+                    let grant = PlayGrant {
+                        flashback: *flashback,
+                        origin: frame
+                            .source_ref()
+                            .map(|source| self.state.source_base(source).0),
+                        this_turn: true,
+                        ..PlayGrant::new(object, frame.controller)
+                    };
+                    self.state.cast_permissions.grant(grant);
+                }
+                None
+            }
             Effect::OpponentsCastOnlyFromHand => {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
@@ -1396,6 +1438,21 @@ impl Game {
                 };
                 (!self.linked_exile_candidates(&decision).is_empty()).then_some(decision)
             }
+            Effect::CastFromGraveyard {
+                predicate,
+                exile_instants_and_sorceries,
+            } => {
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    spends: None,
+                    offer: ResolutionCastOffer::Graveyard {
+                        predicate: predicate.clone(),
+                        exile_instants_and_sorceries: *exile_instants_and_sorceries,
+                    },
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
+            }
             Effect::CastFromHandFree { predicate } => {
                 let decision = Decision::CastDuringResolution {
                     player: frame.controller,
@@ -1423,19 +1480,20 @@ impl Game {
                     }
                 }
                 let object_id = nonland?;
-                let limit = self.effect_value(below, frame);
+                let below = self.effect_value(below, frame);
                 let decision = Decision::CastDuringResolution {
                     player,
                     paid: false,
-                    offer: ResolutionCastOffer::Exiled { object: object_id },
+                    offer: ResolutionCastOffer::Exiled {
+                        object: object_id,
+                        below,
+                    },
                     spends: None,
                 };
-                if i32::from(self.object_mana_value(object_id)) < limit
-                    && !self.resolution_cast_candidates(&decision).is_empty()
-                {
+                if !self.resolution_cast_candidates(&decision).is_empty() {
                     return Some(decision);
                 }
-                self.reveal_object_to_hand(object_id, player);
+                self.reveal_object_to_hand(object_id, player, ZoneEntry::default());
                 None
             }
             Effect::CumulativeUpkeep { each } => {
@@ -1450,6 +1508,21 @@ impl Game {
                     Vec::new(),
                     vec![Effect::sacrifice_this()],
                 )))
+            }
+            Effect::ExileEachLibraryTopCastFree => {
+                let mut objects = Vec::new();
+                for owner in [PlayerId(0), PlayerId(1)] {
+                    if let Some(card) = self.library_top_card(owner) {
+                        objects.push(self.move_object(self.state.object_of(card), ZoneType::Exile));
+                    }
+                }
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    offer: ResolutionCastOffer::AmongExiled { objects },
+                    paid: false,
+                    spends: None,
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::Cascade => {
                 let player = frame.controller;
@@ -1478,6 +1551,7 @@ impl Game {
                         offer: ResolutionCastOffer::Cascade {
                             object: object_id,
                             exiled: exiled.clone(),
+                            below,
                         },
                         spends: None,
                     })
@@ -1486,6 +1560,20 @@ impl Game {
                     self.put_exiled_on_bottom_in_random_order(exiled);
                 }
                 decision
+            }
+            Effect::Reveal { what } => {
+                for object in self.select(what, frame) {
+                    self.emit(GameEvent::CardRevealed {
+                        owner: self.state[object].owner,
+                        definition: self.state[object].definition_id,
+                    });
+                }
+                frame.selected_revealed |= *what == ObjectSelector::Selected;
+                None
+            }
+            Effect::RevealUntilToHand { predicate } => {
+                self.reveal_until_to_hand(frame.controller, predicate);
+                None
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
                 let Some(Target::Player(owner)) = self.present_primary_target(frame) else {
@@ -1515,18 +1603,33 @@ impl Game {
                     end: *end,
                 })
             }
-            Effect::OwnerPutsIntoLibrary { .. } => {
+            Effect::OwnerPutsIntoLibrary { target, top } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
                 let object_id = self.state.permanents[id].as_ref()?.object;
-                Some(Decision::Modal {
-                    player: self.state[object_id].owner,
-                    modes: [true, false]
+                let modes = if *top {
+                    [
+                        crate::state::ability::LibraryEnd::Top,
+                        crate::state::ability::LibraryEnd::Bottom,
+                    ]
+                    .map(|end| {
+                        vec![Effect::put_in_library(
+                            ObjectSelector::Target(target.clone()),
+                            end,
+                        )]
+                    })
+                    .to_vec()
+                } else {
+                    [true, false]
                         .map(|second_from_top| {
                             vec![Effect::PlaceTargetInLibrary { second_from_top }]
                         })
-                        .to_vec(),
+                        .to_vec()
+                };
+                Some(Decision::Modal {
+                    player: self.state[object_id].owner,
+                    modes,
                 })
             }
             Effect::PlaceTargetInLibrary { second_from_top } => {
@@ -1546,8 +1649,19 @@ impl Game {
                 frame.batch = Some(batch);
                 None
             }
-            Effect::ExileTopCardsToPlay { count, until } => {
-                self.exile_top_cards_to_play(frame.controller, *count, *until);
+            Effect::ExileTopCardsToPlay {
+                count,
+                until,
+                face_down,
+                condition,
+            } => {
+                self.exile_top_cards_to_play(
+                    frame.controller,
+                    *count,
+                    *until,
+                    *face_down,
+                    condition.as_ref(),
+                );
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {
@@ -2081,6 +2195,7 @@ impl Game {
                 min_select,
                 max_select,
                 predicate,
+                max_mana_value,
             } => {
                 let look = self.effect_value(look, frame).max(0) as usize;
                 let looked = self.library_top_objects(frame.controller, look);
@@ -2088,13 +2203,24 @@ impl Game {
                     return None;
                 }
                 self.remember_library_objects(frame.controller, &looked);
+                // The decision carries the bound as resolved now.
+                let mut predicate = predicate.clone();
+                if let Some(value) = max_mana_value {
+                    let bound =
+                        u8::try_from(self.effect_value(value, frame).max(0)).unwrap_or(u8::MAX);
+                    predicate.max_mana_value = Some(
+                        predicate
+                            .max_mana_value
+                            .map_or(bound, |printed| printed.min(bound)),
+                    );
+                }
                 Some(Decision::LookAndSelect {
                     random_order: *random_order,
                     reveal: *reveal,
                     to_battlefield: *to_battlefield,
                     player: frame.controller,
                     looked,
-                    predicate: predicate.clone(),
+                    predicate,
                     selected: 0,
                     min_select: *min_select,
                     max_select: *max_select,
@@ -2216,6 +2342,7 @@ impl Game {
                             Some(watched),
                         ),
                         effects: DelayedEffects::new(vec![Effect::Move {
+                            unrevealed: false,
                             library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
@@ -2317,6 +2444,11 @@ impl Game {
                 .collect()
         };
         match what {
+            ObjectSelector::ExactSource => frame
+                .source_ref()
+                .and_then(|source| self.state.live(source))
+                .into_iter()
+                .collect(),
             ObjectSelector::This => self.source_objects(frame),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)
@@ -2338,6 +2470,9 @@ impl Game {
                     },
                     |object| vec![object],
                 ),
+                Some(Target::GraveyardCard(object)) => {
+                    self.state.live(object).into_iter().collect()
+                }
                 _ => Vec::new(),
             },
             ObjectSelector::ExiledWithSource => frame
@@ -2360,6 +2495,11 @@ impl Game {
                 .iter()
                 .map(|binding| binding.object)
                 .filter(|object| self.state.live(*object).is_some())
+                .collect(),
+            ObjectSelector::Matching { of, predicate } => self
+                .select(of, frame)
+                .into_iter()
+                .filter(|object| self.object_matches_predicate(*object, predicate))
                 .collect(),
             ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
                 (match what {
@@ -2516,7 +2656,10 @@ impl Game {
     fn source_objects(&self, frame: &EffectFrame) -> Vec<ObjectId> {
         match frame.source_ref() {
             Some(source) => self.state.live(source).map_or_else(
-                || self.departure_arrivals(source).collect(),
+                || {
+                    self.object_lki(source)
+                        .map_or_else(Vec::new, |_| self.departure_arrivals(source).collect())
+                },
                 |object| vec![object],
             ),
             None => frame
@@ -2600,7 +2743,9 @@ impl Game {
             // the player, theirs included (CR 702.16b, 702.16j).
             Target::Player(player) if self.has_protection_from_everything(player) => false,
             Target::Player(player) => match spec {
-                TargetSpec::Player | TargetSpec::AnyTarget => true,
+                TargetSpec::Player | TargetSpec::AnyTarget | TargetSpec::PlayerOrPlaneswalker => {
+                    true
+                }
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
@@ -2723,6 +2868,7 @@ impl Game {
                 let types = &self.characteristics(id).types;
                 types.is_creature() || types.is_planeswalker() || types.is_battle()
             }
+            TargetSpec::PlayerOrPlaneswalker => self.characteristics(id).types.is_planeswalker(),
             TargetSpec::Creature => self.characteristics(id).is_creature(),
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature()
@@ -2757,7 +2903,7 @@ impl Game {
             return cost.mana_value;
         }
         let x = self.spell_on_stack(object).map_or(0, |spell| spell.x);
-        cost.mana_value.saturating_add(cost.x.saturating_mul(x))
+        cost.mana_value_at(x)
     }
 }
 

@@ -7,8 +7,7 @@ one with these methods over its own policy input.
 """
 
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 
 import numpy as np
 from numpy.typing import NDArray
@@ -21,7 +20,6 @@ from manabot.backends.torch.rl import (
     legal_mask,
     require,
 )
-from manabot.env.memory_store import PrefixObservation
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.admission import AdmittedRows
@@ -61,55 +59,24 @@ class AdmittedRollout(AdmittedRows):
         prepared, rows = self.prepare_rows(indexes)
         return on_device(prepared, device), rows
 
-    def prepare_rows(
-        self, indexes: NDArray[np.int64]
-    ) -> tuple[Prepared[np.ndarray], ActionRows]:
-        prepared, rows = super().prepare_rows(indexes)
-        # Behavior/reference calculations need ordinary action fields, not a
-        # second raw memory owner beside Prepared (including in the prefetch).
-        if isinstance(rows.observation, PrefixObservation):
-            raw = rows.observation
-            rows.observation = PrefixObservation(
-                raw, raw.prefixes, raw.memory_capacities
-            )
-        return prepared, rows
-
     @contextmanager
     def minibatches(
         self, order: NDArray[np.int64], size: int, device: torch.device
     ) -> Iterator[
         Iterator[tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]]
     ]:
-        """Prepare learner rows one batch ahead, independent of autograd mode.
+        # Transfers stay on the caller's device stream.
+        with self.prefetch_minibatches(order, size) as batches:
 
-        Only immutable host input is read on the worker. Transfers and all
-        model/optimizer work stay on the caller's device stream. At most two
-        host minibatches are live; exiting joins the worker even on failure.
-        """
-        if size < 1:
-            raise ValueError("minibatch size must be positive")
-        chunks = [order[start : start + size] for start in range(0, len(order), size)]
-        with ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="ppo-prepare"
-        ) as worker:
-
-            def batches() -> Iterator[
+            def transferred() -> Iterator[
                 tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]
             ]:
-                # Lazy submission: the worker holds the batch being awaited
-                # and at most the one after it.
-                submitted = (
-                    worker.submit(self.prepare_rows, chunk) for chunk in chunks
-                )
-                pending = next(submitted, None)
-                for chunk in chunks:
-                    ready, pending = pending, next(submitted, None)
-                    assert ready is not None
-                    prepared, rows = ready.result()
+                for chunk, prepared, rows in batches:
                     yield chunk, on_device(prepared, device), rows
-                    del prepared, rows, ready
+                    del prepared, rows
 
-            yield batches()
+            with closing(transferred()) as inputs:
+                yield inputs
 
     def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         """The 0/1 legal-action input [B,A] of rows this rollout returned."""
@@ -124,7 +91,9 @@ def packing_mask(
     mask: NDArray[np.generic], logs: NDArray[np.generic]
 ) -> NDArray[np.bool_]:
     """Validate legal support and padding before the host drops padding rows."""
-    valid = legal_mask(torch.as_tensor(mask)).numpy()
+    valid = (
+        mask if mask.dtype == np.bool_ else legal_mask(torch.as_tensor(mask)).numpy()
+    )
     if valid.ndim != 2 or logs.shape != valid.shape:
         raise ValueError("packed actions require matching [B,A] distributions")
     if np.any(~np.isneginf(logs[~valid])):
@@ -161,7 +130,7 @@ def check_packed(
         )
     for start in range(0, len(packed.offsets) - 1, 32):
         indexes = np.arange(start, min(start + 32, len(packed.offsets) - 1))
-        rows = packed.unpack(indexes)
+        rows = packed.behavior(indexes)
         try:
             check_behavior(
                 torch.as_tensor(rows.log_probabilities),

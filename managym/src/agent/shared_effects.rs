@@ -5,6 +5,10 @@
 //! an ordered membership, including duplicates. No timestamps are coalesced.
 
 use super::observation_layout::{detail, effect, member};
+use super::observation_rows::{
+    Cell::{self, Integer, Scalar, Word},
+    RowWriter, Table,
+};
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -136,12 +140,11 @@ pub const MEMBER_DIM: usize = member::WIDTH;
 pub fn encode(
     observation: &super::observation::Observation,
     objects: &HashMap<i32, i32>,
-    ranks: &BTreeMap<i32, f32>,
-    headers: &mut [f32],
-    details: &mut [f32],
-    members: &mut [f32],
-) -> Result<(), super::observation_encoder::ObservationEncodeError> {
-    use super::observation_encoder::{split_id, ObservationEncodeError as Error};
+    ranks: &BTreeMap<i32, i64>,
+    detail_capacity: usize,
+    out: &mut impl RowWriter,
+) -> Result<[usize; 3], super::observation_encoder::ObservationEncodeError> {
+    use super::observation_encoder::ObservationEncodeError as Error;
     use crate::cards::tokens::name_value;
 
     let records = observation
@@ -162,7 +165,7 @@ pub fn encode(
     let member_count: usize = records.iter().map(|record| record.members.len()).sum();
     for (field, actual, capacity) in [
         ("effects", records.len(), EFFECT_ROWS),
-        ("effect_details", detail_count, details.len() / DETAIL_DIM),
+        ("effect_details", detail_count, detail_capacity),
         ("effect_members", member_count, MEMBER_ROWS),
     ] {
         if actual > capacity {
@@ -173,78 +176,88 @@ pub fn encode(
             });
         }
     }
-    let join = |id: Option<i32>| -> Result<f32, Error> {
+    let join = |id: Option<i32>| -> Result<Cell, Error> {
         id.and_then(|id| objects.get(&id))
-            .map(|index| (index + 1) as f32)
+            .map(|index| Integer(i64::from(*index) + 1))
             .ok_or(Error::InvalidShared(
                 "shared effect has an unavailable object join",
             ))
     };
-    headers.fill(0.0);
-    details.fill(0.0);
-    members.fill(0.0);
     let (mut d, mut m) = (0, 0);
     let mut orders = std::collections::BTreeSet::new();
-    for (row, record) in headers
-        .as_chunks_mut::<EFFECT_DIM>()
-        .0
-        .iter_mut()
-        .zip(records)
-    {
+    for (slot, record) in records.iter().enumerate() {
+        let mut row = [Cell::ZERO; EFFECT_DIM];
         let effect = &record.effect;
-        row[effect::MODIFICATION_HIGH..effect::POWER].copy_from_slice(&split_id(name_value(
-            &format!("Modification::{}", effect.modification),
+        row[effect::MODIFICATION_HIGH] = Word(name_value(&format!(
+            "Modification::{}",
+            effect.modification
         )));
         for (i, value) in [effect.power, effect.toughness, effect.amount]
             .into_iter()
             .enumerate()
         {
-            row[effect::POWER + i] = value.unwrap_or(0) as f32 / 10.0;
-            row[effect::HAS_POWER + i] = u8::from(value.is_some()) as f32;
+            row[effect::POWER + i] = Scalar(value.unwrap_or(0) as f32 / 10.0);
+            row[effect::HAS_POWER + i] = Integer(i64::from(value.is_some()));
         }
-        row[effect::DURATION] = duration_code(&effect.duration)
-            .filter(|_| effect.duration != "WhileYouControlSource" || record.source.is_some())
-            .ok_or(Error::InvalidShared(
-                "invalid shared effect duration/source",
-            ))?;
-        row[effect::TIMESTAMP] = *ranks
-            .get(&effect.timestamp)
-            .ok_or(Error::InvalidShared("missing effect timestamp"))?;
+        row[effect::DURATION] = Integer(
+            duration_code(&effect.duration)
+                .filter(|_| effect.duration != "WhileYouControlSource" || record.source.is_some())
+                .ok_or(Error::InvalidShared(
+                    "invalid shared effect duration/source",
+                ))?,
+        );
+        row[effect::TIMESTAMP] = Integer(
+            *ranks
+                .get(&effect.timestamp)
+                .ok_or(Error::InvalidShared("missing effect timestamp"))?,
+        );
         row[effect::CONTROLLER] = join(Some(record.controller_id))?;
         row[effect::SOURCE_DEFINITION] =
-            effect.source_registry_key.map_or(0.0, |id| (id + 1) as f32);
+            Integer(effect.source_registry_key.map_or(0, |id| i64::from(id) + 1));
         row[effect::SOURCE] = record
             .source
             .as_ref()
             .map(|source| join(source.object_id))
             .transpose()?
-            .unwrap_or(0.0);
-        row[effect::DETAIL_OFFSET] = d as f32;
+            .unwrap_or(Cell::ZERO);
+        let detail_start = d;
+        row[effect::DETAIL_OFFSET] = Integer(d as i64);
         for (kind, token) in effect
             .keywords
             .iter()
-            .map(|s| (1.0, name_value(s)))
-            .chain(effect.subtypes.iter().map(|s| (2.0, name_value(s))))
+            .map(|s| (1, name_value(s)))
+            .chain(effect.subtypes.iter().map(|s| (2, name_value(s))))
             .chain(
                 effect
                     .color
                     .iter()
-                    .map(|s| (3.0, name_value(&format!("Color::{s}")))),
+                    .map(|s| (3, name_value(&format!("Color::{s}")))),
             )
         {
-            details[d * DETAIL_DIM + detail::KIND] = kind;
-            details[d * DETAIL_DIM + detail::VALUE_HIGH..(d + 1) * DETAIL_DIM]
-                .copy_from_slice(&split_id(token));
+            out.write(
+                Table::EffectDetails,
+                0,
+                d,
+                &[Integer(kind), Word(token), Cell::ZERO],
+            )?;
             d += 1;
         }
         for &(kind, value) in &effect.program {
-            details[d * DETAIL_DIM + detail::KIND] = f32::from(program_detail_kind(kind));
-            details[d * DETAIL_DIM + detail::VALUE_HIGH..(d + 1) * DETAIL_DIM]
-                .copy_from_slice(&split_id(value));
+            out.write(
+                Table::EffectDetails,
+                0,
+                d,
+                &[
+                    Integer(i64::from(program_detail_kind(kind))),
+                    Word(value),
+                    Cell::ZERO,
+                ],
+            )?;
             d += 1;
         }
-        row[effect::DETAIL_COUNT] = d as f32 - row[effect::DETAIL_OFFSET];
-        row[effect::MEMBER_OFFSET] = m as f32;
+        row[effect::DETAIL_COUNT] = Integer((d - detail_start) as i64);
+        let member_start = m;
+        row[effect::MEMBER_OFFSET] = Integer(m as i64);
         if record.members.is_empty() {
             return Err(Error::InvalidShared("shared effect has no memberships"));
         }
@@ -254,24 +267,32 @@ pub fn encode(
                     "invalid shared effect membership order",
                 ));
             }
-            members[m * MEMBER_DIM + member::OBJECT] = join(member.target.object_id)?;
-            members[m * MEMBER_DIM + member::ORDER] = (member.order + 1) as f32;
+            out.write(
+                Table::EffectMembers,
+                0,
+                m,
+                &[
+                    join(member.target.object_id)?,
+                    Integer(member.order as i64 + 1),
+                ],
+            )?;
             m += 1;
         }
-        row[effect::MEMBER_COUNT] = m as f32 - row[effect::MEMBER_OFFSET];
-        row[effect::VALID] = 1.0;
+        row[effect::MEMBER_COUNT] = Integer((m - member_start) as i64);
+        row[effect::VALID] = Integer(1);
+        out.write(Table::Effects, 0, slot, &row)?;
     }
-    Ok(())
+    Ok([records.len(), d, m])
 }
 
 /// The header duration column and the copy-exception fact's duration: the record's
 /// `EffectDuration` code, or `None` for a name no record carries.
-pub(super) fn duration_code(duration: &str) -> Option<f32> {
+pub(super) fn duration_code(duration: &str) -> Option<i64> {
     match duration {
-        "EndOfTurn" => Some(1.0),
-        "Indefinite" => Some(2.0),
-        "WhileYouControlSource" => Some(3.0),
-        "UntilYourNextTurn" => Some(4.0),
+        "EndOfTurn" => Some(1),
+        "Indefinite" => Some(2),
+        "WhileYouControlSource" => Some(3),
+        "UntilYourNextTurn" => Some(4),
         _ => None,
     }
 }

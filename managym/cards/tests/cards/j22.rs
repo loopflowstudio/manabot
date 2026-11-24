@@ -1,5 +1,4 @@
-//! Lita's vigilance, scoped untap, and Zeppelin activation; Mild-Mannered
-//! Librarian's once-only transformation.
+//! Lita's vigilance, scoped untap, and Zeppelin activation.
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup, five_color_unfunded_setup},
     inspect::{card_of, observed, tapped},
@@ -86,6 +85,32 @@ fn lita_creates_a_zeppelin_that_crews_until_end_of_turn() {
     settle(&mut s);
     s.advance_to_active_step(1, StepKind::Main);
     assert!(!s.game().characteristics(zeppelin).is_creature());
+}
+
+#[test]
+fn foundations_spell_deadly_plot() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::{card_of, permanent, permanent_of, zone_of};
+    use crate::support::play::{cast, choose_mode, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Deadly Plot", "Gray Ogre", "Hungry Ghoul"]);
+    let subject = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let object = card_of(&s, subject);
+    let zombie = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    let zombie_card = card_of(&s, zombie);
+    let grave = move_card(&mut s, zombie_card, ZoneType::Graveyard);
+    cast(&mut s, "Deadly Plot");
+    assert!(crate::support::inspect::mode_labels(&s)[1].contains("Zombie creature card"));
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+    cast(&mut s, "Deadly Plot");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::GraveyardCard(grave)));
+    settle(&mut s);
+    assert!(permanent(&s, permanent_of(&s, grave).unwrap()).tapped);
 }
 
 #[test]

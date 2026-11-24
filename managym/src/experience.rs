@@ -313,15 +313,20 @@ pub struct LegacyCardView {
     /// Foretold and face down in exile; only its owner's views list it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cast_permission: Option<LegacyCastPermissionView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cast_permissions: Vec<LegacyCastPermissionView>,
     /// The value of X announced for this spell on the stack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
+    /// Counters on the card off the battlefield ("with a stash counter on it").
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
 }
 
-/// A public permission to play an exiled card. Only set terms are present.
+/// A public permission to play a card in its current zone. Only set terms are present.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCastPermissionView {
@@ -339,7 +344,7 @@ pub struct LegacyCastPermissionView {
     /// Usable only on a turn numbered after this one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after_turn: Option<u32>,
-    /// Lasts while the permitted player controls this permanent.
+    /// The public permanent sustaining this grant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_permanent_id: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -350,6 +355,23 @@ pub struct LegacyCastPermissionView {
     pub waterbend: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub foretold: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub follows_source_controller: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_adventure: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
+    /// Face down in exile without Foretell.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
+    /// A land face may be played with it ("you may play"); otherwise it casts spells only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub play_lands: bool,
+    /// What must hold for the player to use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 /// Mana spendable only on spells with one of `spells`' subtypes or abilities
@@ -448,6 +470,8 @@ pub struct LegacyPermanentView {
     /// Attacking in the current combat.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
@@ -521,6 +545,8 @@ pub struct LegacyPlayerView {
     /// `lesson_mana` split by restriction class.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<LegacyRestrictedManaView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spent_graveyard_types: Vec<(u32, String)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<u32>,
@@ -623,6 +649,12 @@ pub struct StackEntryView {
     /// The announced value of X, when one was announced above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,
+    /// A spell cast from a prepared copy; its stack copies are not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    /// A spell cast with flashback, exiled as it leaves the stack.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
 }
 
 /// Read-only explanation of the current native continuation. This adds no

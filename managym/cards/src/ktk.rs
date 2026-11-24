@@ -1,13 +1,11 @@
 //! Khans of Tarkir.
-use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Ability, Actor, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, ReplacementEffect,
     },
     mana::{Mana, ManaCost},
-    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -114,20 +112,7 @@ fn monastery_swiftspear() -> CardDefinition {
             power: Some(1),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Haste]),
-            abilities: vec![Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::casts(
-                    Actor::You,
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                ),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            }],
+            abilities: vec![Ability::prowess()],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -665,7 +665,7 @@ fn ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw() {
         *s.game_mut() = env.fixture_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
         assert_eq!(hand(&s), before);
-        assert!(s.game().state.cast_permissions.exile_grants.is_empty());
+        assert!(s.game().state.cast_permissions.grants.is_empty());
         s.game_mut().execute_semantic_command(&cmd).unwrap();
         let state = &s.game().state;
         let arrivals = [first, 1 - first].map(|i| state.object_of(cards[i]));
@@ -678,9 +678,9 @@ fn ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw() {
             .contains(state.object_of(top), ZoneType::Hand, caster));
         assert_eq!(hand(&s), before + 1);
         let grants = state.cast_permissions.clone();
-        assert_eq!(grants.exile_grants.len(), 2);
+        assert_eq!(grants.grants.len(), 2);
         for arrival in arrivals {
-            assert!(grants.exile_grants.iter().any(|g| g.object == arrival
+            assert!(grants.grants.iter().any(|g| g.object == arrival
                 && g.player == owner
                 && g.cost == Some(ManaCost::parse("{2}"))));
         }
@@ -1042,7 +1042,7 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
     for (first, mut env, cmd) in restored_meld_orders(&s) {
         *s.game_mut() = env.fixture_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
-        assert!(s.game().state.cast_permissions.exile_grants.is_empty());
+        assert!(s.game().state.cast_permissions.grants.is_empty());
         s.game_mut().execute_semantic_command(&cmd).unwrap();
         let state = &s.game().state;
         let arrivals = [first, 1 - first].map(|i| state.object_of(cards[i]));
@@ -1054,10 +1054,10 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
         assert_eq!(s.action_space().player, Some(owner));
         assert!(offered_cards(&s).contains(&now(&s, spell)));
         let grants = state.cast_permissions.clone();
-        assert_eq!(grants.exile_grants.len(), 2);
+        assert_eq!(grants.grants.len(), 2);
         for arrival in arrivals {
             let grant = grants
-                .exile_grants
+                .grants
                 .iter()
                 .find(|g| g.object == arrival)
                 .expect("granted arrival");
@@ -1067,7 +1067,7 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
         }
         // The grant names Azula by the viewer id her permanent row carries.
         let azula_id = grants
-            .exile_grants
+            .grants
             .iter()
             .find_map(|grant| grant.source)
             .and_then(|source| s.game().lookup_current_permanent(source).ok())
@@ -1079,7 +1079,7 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
             .agent_cards
             .iter()
             .chain(&view.opponent_cards)
-            .filter_map(|card| card.cast_permission.as_ref())
+            .flat_map(|card| &card.cast_permissions)
             .map(|permission| permission.source_permanent_id)
             .collect();
         assert_eq!(sources, [Some(azula_id); 2]);

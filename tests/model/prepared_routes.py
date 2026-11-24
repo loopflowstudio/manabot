@@ -7,9 +7,9 @@ from typing import Any, cast
 import numpy as np
 import torch
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic, _catalog_order
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import FACT_VALID_INDEX, ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
@@ -81,10 +81,9 @@ def fact_rows(
     values = facts.detach().cpu().numpy()
     if not torch.is_grad_enabled():
         values = values[:, (values[..., FACT_VALID_INDEX] == 1).any(0)]
-    return cast(
-        FactRoutes[torch.Tensor],
-        _device(_facts(values, _tables(catalog, readings), objects.shape[1]), objects),
-    )
+    valid = values[..., FACT_VALID_INDEX] == 1
+    routes = _facts(values[valid], valid, _tables(catalog, readings), objects.shape[1])
+    return cast(FactRoutes[torch.Tensor], _device(routes, objects))
 
 
 def effect_rows(

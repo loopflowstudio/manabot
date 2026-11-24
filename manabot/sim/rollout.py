@@ -31,17 +31,22 @@ from manabot.env.memory_store import select_rows
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
-    allocate_vector_buffers as allocate_buffers,
+    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import ObservationSelection
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     GameRecord,
     SearchStats,
 )
+import managym
 from managym import SlotLoad
+
+allocate_buffers = allocate_vector_buffers
 
 # -----------------------------------------------------------------------------
 # Batched action selection
@@ -80,16 +85,51 @@ class BatchedSampler:
         self.forward_calls = 0
         self.obs_selected = 0
 
-    def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
-        """Actions (len(rows),) for the given rows of the observation buffers."""
+    def select(
+        self,
+        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        rows: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Actions for the selected rows of dense buffers or an `ObservationBatch`."""
 
         logits: list[np.ndarray] = []
-        width = self.execution_rows or max(1, len(rows))
-        with self.agent.inference_scope() as scope:
-            for start in range(0, len(rows), width):
-                selected = select_rows(buffers, rows[start : start + width])
-                logits.append(scope.infer(selected).logits)
-                del selected
+        if isinstance(buffers, managym.ObservationBatch):
+            count = buffers.batch_size if rows is None else len(rows)
+            width = self.execution_rows or max(1, count)
+            with self.agent.inference_scope() as scope:
+                for start in range(0, count, width):
+                    if rows is None and start == 0 and width >= count:
+                        selected: Any = buffers
+                    else:
+                        idx = (
+                            range(start, min(count, start + width))
+                            if rows is None
+                            else rows[start : start + width]
+                        )
+                        selected = buffers.gather([(buffers, int(i)) for i in idx])
+                    logits.append(scope.infer(selected).logits)
+                    del selected
+        elif isinstance(buffers, ObservationSelection):
+            count = len(buffers.coordinates) if rows is None else len(rows)
+            width = self.execution_rows or max(1, count)
+            with self.agent.inference_scope() as scope:
+                for start in range(0, count, width):
+                    chunk = (
+                        buffers.select(slice(start, min(count, start + width)))
+                        if rows is None
+                        else buffers.select(rows[start : start + width])
+                    )
+                    logits.append(scope.infer(chunk).logits)
+                    del chunk
+        else:
+            assert rows is not None
+            count = len(rows)
+            width = self.execution_rows or max(1, count)
+            with self.agent.inference_scope() as scope:
+                for start in range(0, count, width):
+                    selected = select_rows(buffers, rows[start : start + width])
+                    logits.append(scope.infer(selected).logits)
+                    del selected
         actions = self.agent.sample_logits(
             np.concatenate(logits),
             deterministic=self.deterministic,
@@ -98,19 +138,36 @@ class BatchedSampler:
         )
 
         if self.epsilon > 0.0:
-            explore = self._rng.random(len(rows)) < self.epsilon
+            explore = self._rng.random(count) < self.epsilon
             if explore.any():
-                valid = buffers["actions_valid"][rows[explore]] > 0
-                # Vectorized uniform choice over each row's valid actions.
-                weights = valid.astype(np.float64)
-                weights /= weights.sum(axis=1, keepdims=True)
-                cdf = np.cumsum(weights, axis=1)
-                u = self._rng.random((len(cdf), 1))
-                actions[explore] = (u < cdf).argmax(axis=1)
+                if isinstance(buffers, managym.ObservationBatch):
+                    counts = np.asarray(buffers.action_counts, dtype=np.int64)
+                    if rows is not None:
+                        counts = counts[rows]
+                    actions[explore] = _uniform_from_counts(counts[explore], self._rng)
+                elif isinstance(buffers, ObservationSelection):
+                    counts = buffers.action_counts.astype(np.int64, copy=False)
+                    if rows is not None:
+                        counts = counts[rows]
+                    actions[explore] = _uniform_from_counts(counts[explore], self._rng)
+                else:
+                    assert rows is not None
+                    valid = buffers["actions_valid"][rows[explore]] > 0
+                    # Vectorized uniform choice over each row's valid actions.
+                    weights = valid.astype(np.float64)
+                    weights /= weights.sum(axis=1, keepdims=True)
+                    cdf = np.cumsum(weights, axis=1)
+                    u = self._rng.random((len(cdf), 1))
+                    actions[explore] = (u < cdf).argmax(axis=1)
 
         self.forward_calls += 1
-        self.obs_selected += len(rows)
+        self.obs_selected += count
         return actions
+
+
+def _uniform_from_counts(counts: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    safe = np.maximum(counts, 1)
+    return (rng.random(len(safe)) * safe).astype(np.int64)
 
 
 class RandomBatchController:
@@ -125,7 +182,22 @@ class RandomBatchController:
     def restore_rng(self, state: dict[str, Any]) -> None:
         self._rng.bit_generator.state = state
 
-    def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
+    def select(
+        self,
+        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        rows: np.ndarray | None = None,
+    ) -> np.ndarray:
+        if isinstance(buffers, managym.ObservationBatch):
+            counts = np.asarray(buffers.action_counts, dtype=np.int64)
+            if rows is not None:
+                counts = counts[rows]
+            return _uniform_from_counts(counts, self._rng)
+        if isinstance(buffers, ObservationSelection):
+            counts = buffers.action_counts.astype(np.int64, copy=False)
+            if rows is not None:
+                counts = counts[rows]
+            return _uniform_from_counts(counts, self._rng)
+        assert rows is not None
         valid = buffers["actions_valid"][rows] > 0
         weights = valid.astype(np.float64)
         totals = weights.sum(axis=1, keepdims=True)
@@ -180,8 +252,8 @@ def run_vector_games(
         skip_trivial=True,
         player_policies=("agent", "agent"),
     )
-    buffers = allocate_buffers(obs_space, num_streams)
-    env.set_buffers(buffers, layout=obs_space.layout)
+    outcomes = step_buffers(num_streams)
+    env.set_observation_layout(outcomes, layout=obs_space.layout)
     env.reset_all_into_buffers(match.to_rust())
 
     hero_seat = np.arange(num_streams, dtype=np.int64) % 2
@@ -197,12 +269,13 @@ def run_vector_games(
     while active.any() and total_steps < max_env_steps:
         acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
         actions = np.zeros(num_streams, dtype=np.int64)
+        selection = ObservationSelection(obs_space, tuple(env.observation_rows()))
         hero_rows = np.flatnonzero(active & (acting == hero_seat))
         villain_rows = np.flatnonzero(active & (acting != hero_seat))
         if len(hero_rows):
-            actions[hero_rows] = hero.select(buffers, hero_rows)
+            actions[hero_rows] = hero.select(selection, hero_rows)
         if len(villain_rows):
-            actions[villain_rows] = villain.select(buffers, villain_rows)
+            actions[villain_rows] = villain.select(selection, villain_rows)
 
         env.context.update(
             requested_games=num_games,
@@ -214,7 +287,7 @@ def run_vector_games(
         total_steps += int(active.sum())
         steps_in_game[active] += 1
 
-        done = active & ((buffers["terminated"] > 0) | (buffers["truncated"] > 0))
+        done = active & ((outcomes["terminated"] > 0) | (outcomes["truncated"] > 0))
         if done.any():
             infos = env.get_last_info()
             for s in np.flatnonzero(done):
@@ -312,10 +385,6 @@ class PolicyRolloutMCPlayer:
         self.stats = PolicySearchStats()
         self.last_scores: np.ndarray | None = None
         self._obs_space = ObservationSpace()
-        self._capacity = (
-            self._obs_space.config.max_actions * self.worlds * self.rollouts
-        )
-        self._buffers = allocate_buffers(self._obs_space, self._capacity)
 
     def act(self, env: Env, obs: ObservationBuffers) -> int:
         validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())
@@ -325,11 +394,11 @@ class PolicyRolloutMCPlayer:
         start = time.perf_counter()
 
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
-        pool.set_buffers(self._buffers, self._capacity, layout=self._obs_space.layout)
+        pool.set_observation_layout(self._obs_space.layout)
         num_slots = pool.num_slots
         actions_full = np.zeros(num_slots, dtype=np.int64)
 
-        active = pool.encode_active()
+        active, batch = pool.encode_active_batch()
         plies = 0
         while active:
             plies += 1
@@ -341,11 +410,10 @@ class PolicyRolloutMCPlayer:
             if plies > self.max_rollout_plies:
                 # Safety valve: finish stragglers with random actions so a
                 # pathological loop cannot pin the net indefinitely.
-                controller: Any = _straggler_random
+                actions_full[rows] = _straggler_random(batch)
             else:
-                controller = self.sampler.select
-            actions_full[rows] = controller(self._buffers, rows)
-            active = pool.step_active(actions_full.tolist())
+                actions_full[rows] = self.sampler.select(batch)
+            active, batch = pool.step_active_batch(actions_full.tolist())
             self.stats.rollout_steps += len(rows)
 
         scores, simulations, cap_hits = pool.scores()
@@ -364,12 +432,6 @@ class PolicyRolloutMCPlayer:
 _straggler_rng = np.random.default_rng(0xC7)
 
 
-def _straggler_random(buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
-    valid = buffers["actions_valid"][rows] > 0
-    weights = valid.astype(np.float64)
-    totals = weights.sum(axis=1, keepdims=True)
-    totals[totals == 0] = 1.0
-    weights /= totals
-    cdf = np.cumsum(weights, axis=1)
-    u = _straggler_rng.random((len(cdf), 1))
-    return (u < cdf).argmax(axis=1).astype(np.int64)
+def _straggler_random(batch: managym.ObservationBatch) -> np.ndarray:
+    counts = np.asarray(batch.action_counts, dtype=np.int64)
+    return _uniform_from_counts(counts, _straggler_rng)

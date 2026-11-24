@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._semantic_cards import KnowledgeStreams
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.semantic_cards import KnowledgeStreams
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Prepared

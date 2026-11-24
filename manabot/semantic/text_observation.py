@@ -51,6 +51,8 @@ _STEPS = (
     "second main",
     "end",
     "cleanup",
+    # Appended at index 12 to match StepEnum; reorder before "combat damage" in 0.3.0.
+    "first-strike combat damage",
 )
 _SPACES = (
     "game over",
@@ -117,6 +119,7 @@ _STAGES = frozenset(
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
+        "assign_combat_damage",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -223,6 +226,7 @@ _OBLIGATIONS = (
     "spend mana",
     "order melded cards",
     "manifest dread",
+    "assign combat damage",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -299,6 +303,10 @@ def _yes(value: bool) -> str:
     return "yes" if value else "no"
 
 
+# Native `spell_profile_code`: the printed spell an offer or announcement casts.
+_SPELL_PROFILES = {1: "Adventure", 2: "Omen", 3: "back face"}
+
+
 def _selectors(mode: int | None, ability: int | None) -> list[str]:
     return [
         f"{label} {value + 1}"
@@ -342,6 +350,13 @@ def _spending(restricted: managym.RestrictedMana) -> str:
     if restricted.abilities:
         parts.append("abilities of " + " or ".join(restricted.abilities) + " sources")
     return " or ".join(parts)
+
+
+def spend_phrase(spending: str) -> str:
+    """ "only for Lesson spells", but "for anything but spells from hand"."""
+    if spending.startswith("anything but "):
+        return f"for {spending}"
+    return f"only for {spending}"
 
 
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
@@ -430,6 +445,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantActivateAbilities": "its activated abilities can't be activated",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "PreventCombatDamage": "combat damage dealt to it is prevented",
         "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
@@ -718,6 +734,8 @@ class _Renderer:
             )
         else:
             details += _selectors(relation.mode, relation.ability)
+        if relation.spell_profile:
+            details.append(f"casting its {_SPELL_PROFILES[relation.spell_profile]}")
         if relation.x:
             details.append(f"X = {relation.x}")
         if relation.kicked:
@@ -859,7 +877,11 @@ class _Renderer:
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
                         if count
                     )
-                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (
+                        f"; {spend_phrase(pooled.restriction)}"
+                        if pooled.restriction
+                        else ""
+                    )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
                     + (
                         "; expires at end of combat."
@@ -867,6 +889,9 @@ class _Renderer:
                         else "; expires at step end."
                     )
                 )
+            for source, kind in player.spent_graveyard_types:
+                grantor = self.names.get(source, f"departed permanent {source}")
+                lines.append(f"Used {grantor}'s {kind} graveyard play this turn.")
             if player.hand_only_until is not None:
                 lines.append(
                     "Can cast spells only from hand, overriding permissions to cast "
@@ -933,13 +958,19 @@ class _Renderer:
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
             if card.face_down:
-                optional += "; foretold, face down (hidden from other players)"
+                optional += (
+                    "; foretold, face down (hidden from other players)"
+                    if any(permission.foretold for permission in card.cast_permissions)
+                    else "; face down in exile (hidden from players who cannot look at it)"
+                )
             if card.x is not None:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
-            if card.cast_permission is not None:
-                optional += "; " + self._cast_permission(card.cast_permission)
+            for kind, count in sorted(card.counters.items()):
+                optional += f"; {kind.replace('_', ' ')} counters {count}"
+            for permission in card.cast_permissions:
+                optional += "; " + self._cast_permission(permission, int(card.zone))
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )
@@ -947,12 +978,18 @@ class _Renderer:
             lines.append("Empty.")
         return lines
 
-    def _cast_permission(self, permission: managym.CastPermission) -> str:
-        terms = [
-            "as a land play"
-            if permission.cost is None
-            else f"cast for {_mana(permission.cost)}"
-        ]
+    def _cast_permission(self, permission: managym.CastPermission, zone: int) -> str:
+        # A cast-only grant never plays a land face (CR 305.9), so it has no
+        # land-play term; a land under it shows no cost.
+        terms = []
+        if permission.cost is not None:
+            terms.append(f"cast for {_mana(permission.cost)}")
+        elif permission.play_lands:
+            terms.append("as a land play")
+        if permission.flashback:
+            terms.append("with flashback, exiling the spell when it leaves the stack")
+        if permission.on_adventure:
+            terms.append("permanent spell only")
         if permission.this_turn:
             terms.append("this turn only")
         if permission.through_next_turn:
@@ -963,7 +1000,9 @@ class _Renderer:
             terms.append(f"only after turn {permission.after_turn}")
         if permission.source_permanent_id is not None:
             terms.append(
-                f"while they control {self.name(permission.source_permanent_id)}"
+                f"permission follows the controller of {self.name(permission.source_permanent_id)}"
+                if permission.follows_source_controller
+                else f"while they control {self.name(permission.source_permanent_id)}"
             )
         if permission.flash:
             terms.append("as though it had flash")
@@ -971,9 +1010,14 @@ class _Renderer:
             terms.append("spending mana of any type")
         if permission.waterbend:
             terms.append("generic may be paid by waterbending")
+        if permission.prepared:
+            terms.append("prepared copy, kept while linked to its source")
+        if permission.condition is not None:
+            terms.append(f"only if {permission.condition}")
+        verb = "played" if permission.play_lands else "cast"
         return (
-            f"may be played from exile by {self.name(permission.player_id)}: "
-            + ", ".join(terms)
+            f"may be {verb} from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}"
+            + (": " + ", ".join(terms) if terms else "")
         )
 
     def _permanents_lines(self) -> list[str]:
@@ -982,6 +1026,8 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.first_strike_participant:
+                optional += "; participated in the first-strike damage step"
             if permanent.attacking:
                 optional += "; attacking"
             if permanent.colors is not None:
@@ -1255,6 +1301,10 @@ class _Renderer:
                 details.append("cast from graveyard")
             if item.kicked:
                 details.append(self.taken_cost(item.source_card_registry_key).taken)
+            if item.from_prepared:
+                details.append("cast from a prepared copy")
+            if item.flashback:
+                details.append("cast with flashback (exiled as it leaves the stack)")
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""
@@ -1263,7 +1313,7 @@ class _Renderer:
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "
-                    f"mana value {card.mana_cost.mana_value}{_type_flags(card.card_types)}"
+                    f"mana value {item.effective_mana_value}{_type_flags(card.card_types)}"
                     f"{f'; keywords {keywords}' if keywords else ''}; unlisted type and keyword flags false; "
                     f"legendary {_yes(card.is_legendary)}. Rules: {card.text_box or '(empty)'}"
                 )

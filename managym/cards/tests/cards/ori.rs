@@ -190,6 +190,12 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
 }
 
 #[test]
+fn printed_creature_skyraker_giant() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat("Skyraker Giant", 4, 3, &[Keyword::Reach]);
+}
+
+#[test]
 fn demonic_pact_loss_can_be_answered_with_herald() {
     use crate::support::{
         game::force_new_card_in_hand,

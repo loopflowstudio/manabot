@@ -101,7 +101,7 @@ fn virulent_silencer() -> CardDefinition {
                         card_types_any: vec![CardType::Artifact],
                         ..CardPredicate::creature()
                     }),
-                    to: Actor::Opponent,
+                    to: Some(Actor::Opponent),
                     per: Per::Object,
                 },
                 effects: vec![Effect::GivePlayerCounters {
@@ -130,14 +130,7 @@ Equip {1}"#;
             types: CardTypes::new([CardType::Artifact]),
             supertypes: vec!["Legendary".into()],
             subtypes: vec!["Equipment".into()],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
             statics: vec![
                 StaticAbility::PtBuff(StaticPtBuff {
                     scope: StaticScope::Attached,

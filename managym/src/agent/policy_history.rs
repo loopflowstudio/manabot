@@ -75,7 +75,7 @@ fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     else {
         return HistoryReference::Unavailable;
     };
-    if game.is_foretold(object) {
+    if game.is_face_down_in_exile(object) {
         return HistoryReference::Unavailable;
     }
     let data = &game.state[object];
@@ -260,7 +260,7 @@ pub fn encode(
     obs: &Observation,
     capacity: usize,
     object_to_index: &HashMap<i32, i32>,
-) -> Vec<[f32; HISTORY_DIM]> {
+) -> Vec<[i64; HISTORY_DIM]> {
     encode_rows(obs, capacity, |id| {
         object_to_index.get(&id).map(|index| *index as usize)
     })
@@ -271,18 +271,18 @@ pub(crate) fn encode_rows(
     obs: &Observation,
     capacity: usize,
     context: impl Fn(i32) -> Option<usize>,
-) -> Vec<[f32; HISTORY_DIM]> {
-    let reference = |value: &HistoryReference| -> [f32; 5] {
+) -> Vec<[i64; HISTORY_DIM]> {
+    let reference = |value: &HistoryReference| -> [i64; 5] {
         let role = |owner: PlayerId| {
             if owner.0 as i32 == obs.turn.agent_player_id {
-                1.0
+                1
             } else {
-                2.0
+                2
             }
         };
         match value {
-            HistoryReference::Unavailable => [0.0, 0.0, 0.0, -1.0, 0.0],
-            HistoryReference::Player(player) => [0.0, role(*player), 0.0, role(*player) - 1.0, 1.0],
+            HistoryReference::Unavailable => [0, 0, 0, -1, 0],
+            HistoryReference::Player(player) => [0, role(*player), 0, role(*player) - 1, 1],
             HistoryReference::Card {
                 definition,
                 owner,
@@ -291,11 +291,11 @@ pub(crate) fn encode_rows(
             } => {
                 let context = context_id.and_then(&context);
                 [
-                    definition.map_or(0., |id| (id + 1) as f32),
+                    definition.map_or(0, |id| (u64::from(id) + 1) as i64),
                     role(*owner),
-                    zone.map(|zone| (zone as usize + 1) as f32).unwrap_or(0.0),
-                    context.map(|v| v as f32).unwrap_or(-1.0),
-                    if context.is_some() { 1.0 } else { 2.0 },
+                    zone.map(|zone| (zone as usize + 1) as i64).unwrap_or(0),
+                    context.map(|v| v as i64).unwrap_or(-1),
+                    if context.is_some() { 1 } else { 2 },
                 ]
             }
         }
@@ -304,9 +304,9 @@ pub(crate) fn encode_rows(
         .iter()
         .skip(obs.policy_history.len().saturating_sub(capacity))
         .map(|event| {
-            let mut row = [0.0; HISTORY_DIM];
-            row[history::KIND] = event.kind as u8 as f32;
-            row[history::AMOUNT] = event.amount as f32;
+            let mut row = [0; HISTORY_DIM];
+            row[history::KIND] = event.kind as u8 as i64;
+            row[history::AMOUNT] = event.amount as i64;
             row[history::SOURCE_DEFINITION..history::TARGET_DEFINITION]
                 .copy_from_slice(&reference(&event.source));
             row[history::TARGET_DEFINITION..history::WIDTH]

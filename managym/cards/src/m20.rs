@@ -6,15 +6,25 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
-    effect::EffectDuration,
-    mana::ManaCost,
+    effect::{EffectDuration, Modification},
+    mana::{Color, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![agent_of_treachery(), brought_back(), spectral_sailor()]
+    vec![
+        twinblade_paladin(),
+        goblin_smuggler(),
+        devout_decree(),
+        empyrean_eagle(),
+        rapacious_dragon(),
+        agent_of_treachery(),
+        brought_back(),
+        spectral_sailor(),
+    ]
 }
 
 fn spectral_sailor() -> CardDefinition {
@@ -106,6 +116,150 @@ fn brought_back() -> CardDefinition {
                 true,
             )],
             targeting: vec![TargetRequirement::up_to(2, spec)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rapacious_dragon() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "m20.rapacious_dragon",
+        scryfall_id: "2c9bf6d8-ebf6-40ff-858a-3483d19bb584",
+        printed: PrintedCharacteristics {
+            name: "Rapacious Dragon".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.treasure", 2)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn empyrean_eagle() -> CardDefinition {
+    CardDefinition {
+        key: "m20.empyrean_eagle",
+        scryfall_id: "ac555709-c7cc-4c64-8a6f-8fe2bc149fcd",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
+                    flying: true,
+                    ..CardPredicate::creature()
+                }),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
+            name: "Empyrean Eagle".into(),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Spirit".into()],
+            mana_cost: Some(ManaCost::parse("{1}{W}{U}")),
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            text_box: "Flying\nOther creatures you control with flying get +1/+1.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn devout_decree() -> CardDefinition {
+    let text_box = "Exile target creature or planeswalker that's black or red. Scry 1. (Look at the top card of your library. You may put that card on the bottom.)";
+    CardDefinition {
+        key: "m20.devout_decree",
+        scryfall_id: "2dcde8fe-d4a4-4c6e-926e-c4a1b45045e4",
+        printed: PrintedCharacteristics {
+            name: "Devout Decree".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Black, Color::Red],
+                        ..CardPredicate::creature_or_planeswalker()
+                    },
+                })),
+                Effect::Scry { count: 1 },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_smuggler() -> CardDefinition {
+    let text_box = "Haste (This creature can attack and {T} as soon as it comes under your control.)\n{T}: Another target creature with power 2 or less can't be blocked this turn.";
+    let target = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Creature),
+            max_power: Some(2),
+            ..Default::default()
+        },
+    };
+    CardDefinition {
+        key: "m20.goblin_smuggler",
+        scryfall_id: "95dc1a65-271c-455a-ae0c-f652444a53ac",
+        printed: PrintedCharacteristics {
+            name: "Goblin Smuggler".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Rogue".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::another_target(target, |target| {
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(target),
+                        Modification::CantBeBlocked,
+                    )]
+                })],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn twinblade_paladin() -> CardDefinition {
+    let text_box = "Whenever you gain life, put a +1/+1 counter on this creature.\nAs long as you have 25 or more life, this creature has double strike. (It deals both first-strike and regular combat damage.)";
+    CardDefinition {
+        key: "m20.twinblade_paladin",
+        scryfall_id: "6397d426-00e0-44da-b23c-44ccea65f5aa",
+        printed: PrintedCharacteristics {
+            name: "Twinblade Paladin".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            ))],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::LifeAtLeast { amount: 25 }),
+                vec![Modification::AddKeywords(Keywords::of(&[
+                    Keyword::DoubleStrike,
+                ]))],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

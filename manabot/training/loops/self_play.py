@@ -2,7 +2,7 @@
 
 `SelfPlay` describes the learning problem; `Counts` is the cumulative work
 registered with the run. `step` collects and learns in place. `self_play`
-registers raw weights, Adam, EMA and counts, then publishes immutable
+saves canonical weights, Adam, EMA and counts, then publishes immutable
 policies for evaluation. Snapshot runs also save root recipes and scheduler RNG.
 
 Fresh streams at starting update u use run seed s + 10000 + u, framework
@@ -97,9 +97,10 @@ from manabot.training.state.backend import (
     require_continuation,
 )
 from manabot.training.state.continuation import (
-    capture_host,
+    RestoredContinuation,
+    export_continuation,
+    restore_continuation,
     restore_host_rng,
-    write_host,
 )
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -118,7 +119,6 @@ from manabot.training.update_metrics import (
     phase_seconds,
     time_since,
 )
-from manabot.training.updates.backend import ppo_rl
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
@@ -223,8 +223,6 @@ class SelfPlay(BaseModel):
             raise ValueError("precision tf32 requires CUDA")
         if self.precision == "bf16" and self.device == "cpu":
             raise ValueError("precision bf16 requires CUDA or MPS")
-        if self.live_tokens and self.device != "cuda":
-            raise ValueError("live tokens require CUDA")
         if self.workers > self.streams:
             raise ValueError("producer count cannot exceed streams")
         if self.snapshot is not None and self.learning_seats != "both":
@@ -424,7 +422,7 @@ def self_play_collector(
 
 
 # ---------------------------------------------------------------------------
-# Cumulative work, saved by Etude alongside the framework objects
+# Cumulative work, saved by Etude alongside the continuation tensors
 
 
 class Counts(BaseModel):
@@ -509,8 +507,6 @@ def create(
 ) -> tuple[SelfPlayLearner, BackendPolicy | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     backend = backend or default_backend()
-    if isinstance(settings.learning, Learning):
-        ppo_rl(backend.rl)
     space = ObservationSpace(settings.observation)
     published = (
         pretrained_policy(settings, space, backend)
@@ -1032,6 +1028,54 @@ def self_play_games(
             close_collector(collector)
 
 
+def resume_training(
+    settings: SelfPlay,
+    run: TrainingRun,
+    backend: SelfPlayBackend,
+    learner: SelfPlayLearner,
+    ema: BackendPolicy | None,
+) -> tuple[Counts, RestoredContinuation]:
+    """Register the counts and admit saved tensors before opening the collector."""
+    state = require_continuation(backend)
+    counts = Counts()
+    restored = RestoredContinuation()
+    model = settings.model.checkpoint_payload()
+    readings = resume_readings(
+        counts, learner.agent.readings, learner.agent.observation_space
+    )
+
+    def restore(folder: Path) -> None:
+        nonlocal restored, readings
+        saved_model = counts.model
+        if (
+            saved_model is None
+            and counts.updates > 0
+            and (folder / "learner.pt").is_file()
+        ):
+            initial = run.out / "policies/00000000-raw.safetensors"
+            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
+        resume_model(saved_model, settings.model)
+        readings = resume_readings(
+            counts, learner.agent.readings, learner.agent.observation_space
+        )
+        restored = restore_continuation(
+            folder,
+            state=state,
+            learner=learner,
+            ema=ema,
+            counts=counts,
+            settings=settings,
+        )
+
+    def unopened_export(folder: Path) -> None:
+        raise RuntimeError("cannot export self-play before opening the collector")
+
+    run.resume(export=unopened_export, restore=restore, extra=counts)
+    counts.model = model
+    counts.readings = readings
+    return counts, restored
+
+
 def self_play(
     settings: SelfPlay,
     run: TrainingRun,
@@ -1053,26 +1097,13 @@ def self_play(
     backend = backend or default_backend()
     state = require_continuation(backend)
     settings = SelfPlay.model_validate(settings.model_dump())
+    backend.runtime.admit_execution(settings.device, live_tokens=settings.live_tokens)
     if updates < 1:
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
-        # Check the saved architecture and input contract before restoring tensors.
-        counts = run.resume(extra=Counts())
-        saved_model = counts.model
-        if saved_model is None and counts.updates > 0:
-            initial = run.out / "policies/00000000-raw.safetensors"
-            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
-        model = resume_model(saved_model, settings.model)
-        readings = resume_readings(
-            counts,
-            learner.agent.readings,
-            learner.agent.observation_space,
-        )
-        staged = state.restore(run, learner, ema, counts)
-        counts.model = model
-        counts.readings = readings
-        host = staged.host if staged is not None else None
+        counts, restored = resume_training(settings, run, backend, learner, ema)
+        host = restored.host
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         with self_play_games(
             settings,
@@ -1100,16 +1131,25 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
-            if staged is not None:
-                if host is not None:
-                    restore_host_rng(host, rng)
-                    staged.restore_sampling(collector.numerics)
+            if host is not None:
+                restore_host_rng(host, rng)
+            if restored.sampling is not None:
+                state.restore_sampling(collector.numerics, restored.sampling)
 
-                def export(folder: Path) -> None:
-                    host_sha256 = write_host(folder, capture_host(collector, rng))
-                    staged.export(folder, host_sha256, collector.numerics)
+            def export(folder: Path) -> None:
+                export_continuation(
+                    folder,
+                    state=state,
+                    learner=learner,
+                    ema=ema,
+                    counts=counts,
+                    settings=settings,
+                    collector=collector,
+                    rng=rng,
+                )
 
-                run.save(export=export)
+            run.save(export=export)
+            first_update = counts.updates + 1
             for update in run.steps("updates", to=updates):
                 row = step(
                     settings,
@@ -1121,6 +1161,11 @@ def self_play(
                     out=run.out,
                     backend=backend,
                 )
+                if update == first_update:
+                    if restored.sampling_reseeded:
+                        row["run/sampling_reseeded"] = 1
+                    if restored.adam_steps_aligned:
+                        row["run/adam_steps_aligned"] = restored.adam_steps_aligned
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
@@ -1159,6 +1204,7 @@ def fresh_iteration(
 ) -> FreshIteration:
     """Run one ordinary collect/update iteration and export it into a new directory."""
     settings = SelfPlay.model_validate(settings.model_dump())
+    backend.runtime.admit_execution(settings.device, live_tokens=settings.live_tokens)
     out.mkdir(parents=True, exist_ok=False)
     run = FreshRun(out, seed)
     counts = Counts()

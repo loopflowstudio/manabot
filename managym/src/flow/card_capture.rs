@@ -6,6 +6,8 @@ use crate::agent::{
     observation::Observation,
 };
 use crate::flow::decision::EffectFrame;
+#[cfg(test)]
+use crate::state::card::SpellProfile;
 use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
@@ -156,7 +158,7 @@ pub struct CardSnapshot {
     pub origin: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
     #[serde(rename = "card")]
@@ -763,8 +765,10 @@ mod tests {
                 kind: ActionSpaceKind::Priority,
                 actions: vec![
                     Action::CastSpell {
+                        profile: SpellProfile::Front,
                         player: PlayerId(0),
                         object: object_id,
+                        route: None,
                     },
                     Action::PassPriority {
                         player: PlayerId(0),

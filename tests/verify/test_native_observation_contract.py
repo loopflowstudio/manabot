@@ -203,9 +203,9 @@ def test_env_encode_methods_warn_and_name_their_removal() -> None:
     obs, _ = env.reset(make_player_configs())
     space = ObservationSpace()
     out = space.allocate()
-    with pytest.warns(DeprecationWarning, match=r"encode_observation_into.*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"encode_observation_into.*0\.3\.0"):
         env.encode_observation_into(obs, out)
-    with pytest.warns(DeprecationWarning, match=r"encode_observation.*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"encode_observation.*0\.3\.0"):
         env.encode_observation(obs)
     np.testing.assert_array_equal(
         out["agent_cards"], encode_observation(space, obs)["agent_cards"]
@@ -445,7 +445,7 @@ def test_encodes_every_observed_permanent_and_card_field() -> None:
     assert not actual["effects"].any()
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
-        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1, 1],
+        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1, 1, 0],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
 
@@ -706,7 +706,7 @@ def test_merchant_food_tap_count_is_the_payment_frame_mode() -> None:
         submit_response(env, decision, decision.actions[0].reference)
 
 
-@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 25)])
+@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 30)])
 def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     version: int, width: int
 ) -> None:

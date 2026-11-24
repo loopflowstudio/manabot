@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing, contextmanager
 from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.env.memory_store import select_rows
+from manabot.env.memory_store import PrefixObservation, select_rows
 
 if TYPE_CHECKING:
     from manabot.env.observation import ObservationBuffers
@@ -44,7 +46,7 @@ class AdmittedRows:
         pending = np.unique(indexes[~self._admitted[indexes]])
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
-            obs = self.batch.observations(chunk).observation
+            obs = self.batch.policy_rows(chunk).observation
             needs = self.agent.check_observation(obs)
             self._admitted[chunk] = True
             if needs is None:
@@ -64,11 +66,55 @@ class AdmittedRows:
     ) -> tuple[Prepared[np.ndarray], ActionRows]:
         if not self._admitted[indexes].all():
             raise ValueError("rollout rows were not admitted")
-        rows = self.batch.observations(indexes)
+        rows = self.batch.policy_rows(indexes)
         needs = self._needs[indexes] if self._needs is not None else None
         if needs is not None and (needs < 0).any():
             needs = None
-        return self.agent.prepare_admitted(rows.observation, needs=needs), rows
+        prepared = self.agent.prepare_admitted(rows.observation, needs=needs)
+        # Behavior/reference calculations need ordinary action fields, not a
+        # second raw memory owner beside Prepared (including in the prefetch).
+        if isinstance(rows.observation, PrefixObservation):
+            raw = rows.observation
+            rows.observation = PrefixObservation(
+                raw, raw.prefixes, raw.memory_capacities
+            )
+        return prepared, rows
+
+    @contextmanager
+    def prefetch_minibatches(
+        self, order: NDArray[np.int64], size: int
+    ) -> Iterator[Iterator[tuple[NDArray[np.int64], Prepared[np.ndarray], ActionRows]]]:
+        """Prepare learner rows one batch ahead, independent of autograd mode.
+
+        Only immutable host input is read on the worker. Transfers and all
+        model/optimizer work stay on the caller's device stream. At most two
+        host minibatches are live; exiting joins the worker even on failure.
+        """
+        if size < 1:
+            raise ValueError("minibatch size must be positive")
+        with ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="ppo-prepare"
+        ) as worker:
+
+            def batches() -> Iterator[
+                tuple[NDArray[np.int64], Prepared[np.ndarray], ActionRows]
+            ]:
+                if not len(order):
+                    return
+                pending = worker.submit(self.prepare_rows, order[:size])
+                for start in range(0, len(order), size):
+                    stop = start + size
+                    ready = pending
+                    if stop < len(order):
+                        pending = worker.submit(
+                            self.prepare_rows, order[stop : stop + size]
+                        )
+                    prepared, rows = ready.result()
+                    yield order[start:stop], prepared, rows
+                    del ready, prepared, rows
+
+            with closing(batches()) as prepared_batches:
+                yield prepared_batches
 
     def bootstrap_inputs(self, size: int) -> Iterator[Prepared[np.ndarray]]:
         if size < 1:

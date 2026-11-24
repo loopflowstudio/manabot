@@ -82,7 +82,7 @@ struct CanonicalTurn {
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
-    spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
+    spells_cast: [Vec<crate::flow::turn::RecordedCast>; 2],
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -137,6 +137,10 @@ impl From<&TurnState> for CanonicalTurn {
 
 #[derive(Serialize)]
 struct CanonicalCombat {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    first_strikers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    regular_damage_step: bool,
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     attackers_to_declare: Vec<PermanentId>,
@@ -146,6 +150,8 @@ struct CanonicalCombat {
 impl From<&CombatState> for CanonicalCombat {
     fn from(combat: &CombatState) -> Self {
         Self {
+            first_strikers: combat.first_strikers.clone(),
+            regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
@@ -187,11 +193,17 @@ struct CanonicalMatchState<'a> {
     trigger_placement: Option<&'a crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    /// Omitted when empty, keeping hashes of states without them unchanged.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    object_counters: Vec<(ObjectId, &'a crate::state::permanent::Counters)>,
     effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
     #[serde(skip_serializing_if = "no_cast_permissions")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cast_caller: Option<&'a crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
@@ -229,9 +241,11 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            object_counters,
             effects,
             cast_permissions,
             suspended_decision,
+            cast_caller,
             trigger_enqueue_counter,
             rng,
             id_gen,
@@ -286,9 +300,14 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement: trigger_placement.as_deref(),
             delayed_triggers,
             exile_links,
+            object_counters: object_counters
+                .iter()
+                .map(|(&id, counters)| (id, counters))
+                .collect(),
             effects: effects.as_slice(),
             cast_permissions,
             suspended_decision,
+            cast_caller: cast_caller.as_deref(),
             trigger_enqueue_counter: *trigger_enqueue_counter,
             rng_probe,
             allocation_watermark: id_gen.watermark(),

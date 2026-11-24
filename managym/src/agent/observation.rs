@@ -1,12 +1,16 @@
 use crate::cards::names::NameOption;
+use crate::flow::cast_permission::play_route_code;
+use crate::state::card::SpellProfile;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
+    agent::observation_encoder::representable,
     cards::content_pack::default_content_pack,
     flow::{
         decision::Decision,
         event::{EventEntity, EventSubject, GameEvent},
         game::Game,
+        play::CastAuthority,
         statics::Characteristics,
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
@@ -54,14 +58,17 @@ pub struct PlayerData {
     pub mana: [i32; 6],
     /// Spend-restricted mana by color, whatever its restriction (CR 106.6).
     /// The name predates restrictions other than Herbalist's Lesson-only mana;
-    /// `restricted_mana` splits this total by restriction.
+    /// `restricted_mana` and `pooled_mana_classes` split this total by
+    /// restriction.
     pub lesson_mana: [i32; 6],
-    /// Restricted mana by restriction class, in class order.
+    /// Restricted mana by restriction class, in class order, for the
+    /// restrictions with player columns.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
-    /// Pooled mana with a spend effect or combat expiry, by class and expiry.
-    /// Its amounts are also counted in `mana` when
-    /// unrestricted and in `restricted_mana` when restricted.
+    /// Pooled mana with a spend effect, combat expiry or a restriction
+    /// without player columns, by class and expiry. Its amounts are also
+    /// counted in `mana` when unrestricted, in `restricted_mana` when its
+    /// restriction has columns and in `lesson_mana` when restricted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pooled_mana_classes: Vec<PooledManaClassData>,
     /// While set, this player can cast spells only from their hand until the
@@ -69,6 +76,9 @@ pub struct PlayerData {
     /// card's `cast_permission`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<i32>,
+    /// Public permanent incarnation and permanent type already played this turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spent_graveyard_types: Vec<(u32, crate::state::card::CardType)>,
     /// No maximum hand size for the rest of the game (Spirit Water Revival).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
@@ -184,8 +194,7 @@ impl RestrictedManaData {
     }
 }
 
-/// A public permission to play an exiled card (airbend, impulse draw,
-/// linked exile, foretell), projected from the engine's exile grant. The
+/// A permission to play this card in its current zone. The
 /// terms describe when it may be used; a pending offer to cast the card
 /// exists only while they are all met and the player is not hand-only.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -212,7 +221,12 @@ pub struct CastPermissionData {
     /// Usable only on a turn numbered after this one.
     #[serde(default)]
     pub after_turn: Option<u32>,
-    /// Lasts while the permitted player controls this permanent.
+    /// Entitlement follows the current controller of the source.
+    #[serde(default)]
+    pub follows_source_controller: bool,
+    #[serde(default)]
+    pub flashback: bool,
+    /// Permanent sustaining this permission.
     #[serde(default)]
     pub source_permanent_id: Option<i32>,
     #[serde(default)]
@@ -225,6 +239,20 @@ pub struct CastPermissionData {
     /// Foretold: face down, so only its owner sees the card or this permission.
     #[serde(default)]
     pub foretold: bool,
+    #[serde(default)]
+    pub on_adventure: bool,
+    /// This exact exiled copy stays prepared while linked to its source.
+    #[serde(default)]
+    pub prepared: bool,
+    /// Face down in exile without Foretell: seen only by whoever may play it.
+    #[serde(default)]
+    pub face_down: bool,
+    /// "You may play": a land face may be played. Otherwise only spells are cast.
+    #[serde(default)]
+    pub play_lands: bool,
+    /// What must hold for the player to use it ("you control a Wizard").
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -328,14 +356,17 @@ pub struct CardData {
     pub is_token: bool,
     /// Foretold and face down in exile; listed only for its owner.
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
-    pub cast_permission: Option<CastPermissionData>,
+    /// The permission to play this card from its current zone, when it has one.
+    pub cast_permissions: Vec<CastPermissionData>,
     /// The value of X announced for this spell on the stack (CR 107.3),
     /// when its mana cost has X.
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
     pub from_battlefield_this_turn: bool,
+    /// Counters on it off the battlefield ("with a stash counter on it"),
+    /// by `CounterKind` name.
+    pub counters: BTreeMap<String, i32>,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -479,9 +510,37 @@ pub struct StackObjectData {
     pub granted_keywords: Option<KeywordData>,
     /// Whether a spell's kicker cost was paid (CR 702.33).
     pub kicked: bool,
+    /// A spell cast from a prepared copy (a "prepared spell"); its stack
+    /// copies are not.
+    pub from_prepared: bool,
+    /// A spell cast with flashback, exiled when it leaves the stack
+    /// (CR 702.34a); its stack copies are not.
+    pub flashback: bool,
     /// A spell owns identity and characteristics; abilities do not.
     #[serde(default)]
     pub spell: Option<SpellData>,
+}
+
+/// The observed code of a printed spell profile: 0 the front face, 1 an
+/// Adventure, 2 an Omen. Offers and announcement frames share it, and its
+/// category columns read it, so a new profile appends a code.
+pub fn spell_profile_code(profile: SpellProfile) -> u8 {
+    match profile {
+        SpellProfile::Front => 0,
+        SpellProfile::Adventure => 1,
+        SpellProfile::Omen => 2,
+        SpellProfile::BackFace => 3,
+    }
+}
+
+impl StackObjectData {
+    pub fn effective_mana_value(&self) -> Option<u8> {
+        self.spell.as_ref().map(|spell| {
+            spell
+                .mana_cost
+                .mana_value_at(self.x.clamp(0, i32::from(u8::MAX)) as u8)
+        })
+    }
 }
 
 /// One continuous-effect record (`state::effect`) affecting a player or
@@ -583,7 +642,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 39] = [
+pub const MODIFICATION_NAMES: [&str; 41] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -621,7 +680,9 @@ pub const MODIFICATION_NAMES: [&str; 39] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "AdditionalLandPlay",
     "SetName",
+    "PreventCombatDamage",
     "AllCreatureTypes",
 ];
 
@@ -658,14 +719,14 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "SetCreatureTypes"
             }
-            Modification::AddTypes(_)
+            Modification::SetName(_)
+            | Modification::AddTypes(_)
             | Modification::SetTypes { .. }
             | Modification::SetColors(_)
             | Modification::AddColors(_)
             | Modification::GrantActivated(_)
             | Modification::GrantTriggered(_)
-            | Modification::GrantStatic(_)
-            | Modification::SetName(_) => {
+            | Modification::GrantStatic(_) => {
                 data.description = Some(super::ability_description::continuous_description(
                     &crate::state::ability::ObjectSelector::This,
                     &modification.map_amount(|n| crate::state::ability::EffectValue::Fixed(*n)),
@@ -675,6 +736,7 @@ impl ContinuousEffectData {
                     crate::cards::tokens::rules_tokens(modification, default_content_pack())
                         .expect("registered rules payload");
                 match modification {
+                    Modification::SetName(_) => "SetName",
                     Modification::AddTypes(_) => "AddTypes",
                     Modification::SetTypes { .. } => "SetTypes",
                     Modification::SetColors(_) => "SetColors",
@@ -682,7 +744,6 @@ impl ContinuousEffectData {
                     Modification::GrantActivated(_) => "GrantActivated",
                     Modification::GrantTriggered(_) => "GrantTriggered",
                     Modification::GrantStatic(_) => "GrantStatic",
-                    Modification::SetName(_) => "SetName",
                     _ => unreachable!(),
                 }
             }
@@ -723,11 +784,13 @@ impl ContinuousEffectData {
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::PreventCombatDamage => "PreventCombatDamage",
             Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
+            Modification::AdditionalLandPlay => "AdditionalLandPlay",
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
@@ -796,6 +859,7 @@ pub struct PermanentData {
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
     pub attacking: bool,
+    pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     pub exhausted_abilities: i32,
@@ -811,9 +875,11 @@ pub struct PermanentData {
     pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
     pub attached_to: Option<i32>,
-    /// Name and creature types set by an effect (Honest Work); absent while
-    /// the printed ones apply.
+    /// The name a layer 1 effect set (Honest Work, Witness Protection);
+    /// absent while the printed one applies.
     pub name: Option<String>,
+    /// The creature types a layer 4 effect set (Eaten by Piranhas), each
+    /// independent of the name; absent while the printed ones apply.
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
     pub is_granted_land: bool,
@@ -924,9 +990,23 @@ pub struct ActionOption {
     #[serde(default)]
     pub pays_directly: bool,
     /// `mode_index` is an announced number (X for a spell or activation, a
-    /// replicate count, a resolving payment's X) rather than an option index.
+    /// replicate count, a resolving payment's X, an amount of combat damage)
+    /// rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
+    /// The printed spell this offer casts, as [`spell_profile_code`].
+    #[serde(default)]
+    pub spell_profile: u8,
+    /// Base mana value of the selected permission, before reductions or additional costs.
+    #[serde(default)]
+    pub route_mana_value: Option<u8>,
+    /// CardType + 1 when this play spends that permanent type for its source.
+    #[serde(default)]
+    pub quota_type: Option<u8>,
+    /// The permission this play uses, as [`play_route_code`]; absent for an
+    /// ordinary hand play and every other action.
+    #[serde(default)]
+    pub play_route: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -1014,10 +1094,21 @@ impl Observation {
             .winner_index()
             .is_some_and(|winner| winner == agent_player.0);
 
+        let step = if game.state.turn.current_step_kind() == StepKind::CombatDamage
+            && game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|c| c.in_first_strike_damage_step())
+        {
+            StepKind::FirstStrikeCombatDamage
+        } else {
+            game.state.turn.current_step_kind()
+        };
         let turn = TurnData {
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
-            step: game.state.turn.current_step_kind(),
+            step,
             active_player_id: game.state.players[game.active_player().0].id.0 as i32,
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };
@@ -1057,12 +1148,38 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
+                            let profile = action.spell_profile();
+                            let route = game.resolved_play_route(action);
+                            let (route_mana_value, quota_type) = match (action, route) {
+                                (
+                                    Action::CastSpell { object, .. } | Action::PlayLand { object, .. },
+                                    Some(route),
+                                ) => {
+                                    let cost = game
+                                        .cast_choices(action.player(), *object, profile, CastAuthority::Priority(route))
+                                        .and_then(|cast| game.casting_mana_cost(*object, cast));
+                                    let quota = match route {
+                                        crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(kind as u8 + 1),
+                                        _ => None,
+                                    };
+                                    (cost.map(|cost| cost.mana_value), quota)
+                                }
+                                _ => (None, None),
+                            };
+                            let mode_index = match action {
+                                Action::ChooseMode { mode, .. } => Some(*mode),
+                                _ => None,
+                            };
                             ActionOption {
+                                spell_profile: spell_profile_code(profile),
+                                route_mana_value,
+                                quota_type,
+                                play_route: route.map(play_route_code),
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
-                                announces_x: game.announces_x(action),
+                                announces_x: mode_index.is_some() && game.announces_x(),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -1077,10 +1194,7 @@ impl Observation {
                                 name_index,
                                 name_definition,
                                 name_group,
-                                mode_index: match action {
-                                    Action::ChooseMode { mode, .. } => Some(*mode),
-                                    _ => None,
-                                },
+                                mode_index,
                                 ability_index: match action {
                                     Action::ActivateAbility { ability_index, .. }
                                     | Action::ActivateCardAbility { ability_index, .. } => {
@@ -1135,7 +1249,7 @@ impl Observation {
 
         obs.populate_cards(game, agent_player);
         obs.populate_permanents(game, agent_player);
-        obs.populate_stack_objects(game);
+        obs.populate_stack_objects(game, agent_player);
         obs
     }
 
@@ -1271,14 +1385,21 @@ impl Observation {
                 .iter()
                 .filter_map(|(class, amounts)| {
                     let restriction = class.restriction.as_ref()?;
-                    Some(RestrictedManaData::new(restriction, *amounts))
+                    representable(restriction)
+                        .then(|| RestrictedManaData::new(restriction, *amounts))
                 })
                 .collect(),
+            // Restrictions without player columns are fact rows, as is mana
+            // with a spend effect or combat expiry.
             pooled_mana_classes: pool
                 .classes()
                 .iter()
                 .filter_map(|(class, amounts)| {
-                    if class.effect.is_none() && !class.combat {
+                    let unrepresentable = class
+                        .restriction
+                        .as_ref()
+                        .is_some_and(|restriction| !representable(restriction));
+                    if class.effect.is_none() && !class.combat && !unrepresentable {
                         return None;
                     }
                     Some(PooledManaClassData {
@@ -1295,6 +1416,20 @@ impl Observation {
                         )
                         .expect("registered rules payload"),
                     })
+                })
+                .collect(),
+            spent_graveyard_types: game
+                .state
+                .cast_permissions
+                .spent_types
+                .iter()
+                .filter_map(|(owner, route)| match route {
+                    crate::flow::cast_permission::PlayRoute::GraveyardType {
+                        permanent_id,
+                        kind,
+                        ..
+                    } if *owner == player => Some((permanent_id.0, *kind)),
+                    _ => None,
                 })
                 .collect(),
             hand_only_until: game
@@ -1453,8 +1588,8 @@ impl Observation {
                 .zone_objects(ZoneType::Exile, player)
                 .iter()
             {
-                // A foretold card is face down; inspection follows native control.
-                if game.shares_information(agent_player, player) || !game.is_foretold(*object_id) {
+                // A face-down card shows only to whoever may look at it.
+                if !game.hides_face_down_exile(*object_id, agent_player) {
                     add_object(*object_id, ZoneType::Exile);
                 }
             }
@@ -1496,10 +1631,10 @@ impl Observation {
         }
     }
 
-    fn populate_stack_objects(&mut self, game: &Game) {
+    fn populate_stack_objects(&mut self, game: &Game, viewer: PlayerId) {
         for object in game.state.stack_objects.iter().rev() {
             self.stack_objects
-                .push(Self::stack_object_data(game, object));
+                .push(Self::stack_object_data(game, object, viewer));
         }
     }
 
@@ -1551,6 +1686,11 @@ impl Observation {
                 && characteristics.restricted_by_summoning_sickness(),
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
+            first_strike_participant: game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.first_strikers.contains(&perm_id)),
             attacking: permanent.attacking,
             exhausted_abilities: permanent
                 .spent_abilities
@@ -1670,12 +1810,12 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_token: !object.is_card(),
             characteristics: Self::printed_characteristics_data(game, object_id),
-            face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
-            cast_permission: game
-                .exile_grant_on(object_id)
-                .map(|grant| CastPermissionData {
-                    player_id: game.state.players[grant.player.0].id.0 as i32,
-                    cost: game.grant_cast_cost(grant, object_id),
+            face_down: game.is_face_down_in_exile(object_id),
+            cast_permissions: game
+                .play_grants_on(object_id)
+                .map(|(grant, caster)| CastPermissionData {
+                    player_id: game.state.players[caster.0].id.0 as i32,
+                    cost: game.grant_card_cast_cost(grant),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,
@@ -1690,12 +1830,31 @@ impl Observation {
                     any_mana: grant.any_mana,
                     waterbend: grant.waterbend,
                     foretold: grant.foretold,
-                }),
+                    follows_source_controller: grant.follows_source_controller,
+                    flashback: grant.flashback,
+                    on_adventure: grant.on_adventure,
+                    prepared: grant.prepared,
+                    face_down: grant.face_down,
+                    play_lands: grant.play_lands,
+                    condition: grant
+                        .condition
+                        .as_ref()
+                        .map(crate::agent::ability_description::condition_text),
+                })
+                .collect(),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
                 && game.state.live(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
+            counters: game
+                .state
+                .object_counters
+                .get(&object_id)
+                .into_iter()
+                .flat_map(|counters| counters.iter())
+                .map(|(kind, count)| (kind.name().to_string(), count))
+                .collect(),
         }
     }
 
@@ -1722,15 +1881,26 @@ impl Observation {
         }
     }
 
-    fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
+    fn stack_object_data(
+        game: &Game,
+        stack_object: &StackObject,
+        viewer: PlayerId,
+    ) -> StackObjectData {
         StackObjectData {
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
-                StackObject::TriggeredAbility(a) => Some(
-                    super::ability_description::stacked_trigger_description(game, a),
-                ),
+                StackObject::TriggeredAbility(a) => {
+                    let mut text = super::ability_description::stacked_trigger_description(game, a);
+                    if let Some(event) = a
+                        .context
+                        .and_then(|target| game.trigger_event_label(target, viewer))
+                    {
+                        text.push_str(&event);
+                    }
+                    Some(text)
+                }
                 _ => None,
             },
             stack_object_id: stack_object.id().0 as i32,
@@ -1765,6 +1935,9 @@ impl Observation {
                 _ => None,
             },
             kicked: stack_object.kicked(),
+
+            from_prepared: matches!(stack_object, StackObject::Spell(spell) if spell.from_prepared),
+            flashback: matches!(stack_object, StackObject::Spell(spell) if spell.flashback),
             spell: match stack_object {
                 StackObject::Spell(spell) => Some(Self::spell_data(game, spell)),
                 _ => None,
@@ -2019,6 +2192,7 @@ impl Observation {
             | GameEvent::CardsLeftGraveyard { .. }
             | GameEvent::SourceDealtDamage { .. }
             | GameEvent::CombatDamageToPlayers { .. }
+            | GameEvent::CombatDamageTotals { .. }
             | GameEvent::LibrarySearched { .. }
             | GameEvent::CountersPut { .. }
             | GameEvent::Scried { .. }
@@ -2097,8 +2271,22 @@ impl Observation {
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
+            Action::PlayLand { object, .. } | Action::CastSpell { object, .. }
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    ..
+                }) = game.resolved_play_route(action) =>
+            {
+                vec![game.state[object].id, game.state[source].id]
+            }
+            Action::CastSpell { object, .. } => {
+                let mut focus = vec![game.state[object].id];
+                if let Some(source) = game.preparation_source(*object) {
+                    focus.push(game.state[source].id);
+                }
+                focus
+            }
             Action::PlayLand { object, .. }
-            | Action::CastSpell { object, .. }
             | Action::ActivateCardAbility { object, .. }
             | Action::TurnFaceUp { object, .. }
             | Action::Foretell { object, .. }
@@ -2170,18 +2358,36 @@ impl Observation {
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
-                if let (
-                    Action::ChooseMode { mode, .. },
-                    Some(Decision::OrderReplacement { candidates, .. }),
-                ) = (
+                match (
                     action,
                     game.state.suspended_decision.as_ref().map(|s| &s.decision),
                 ) {
-                    return candidates
-                        .get(*mode)
-                        .map(|candidate| game.observed_object_id(candidate.source()))
-                        .into_iter()
-                        .collect();
+                    (
+                        Action::ChooseMode { mode, .. },
+                        Some(Decision::OrderReplacement { candidates, .. }),
+                    ) => {
+                        return candidates
+                            .get(*mode)
+                            .map(|candidate| game.observed_object_id(candidate.source()))
+                            .into_iter()
+                            .collect();
+                    }
+                    // An amount of combat damage is about the attacker
+                    // assigning it and the blocker receiving it.
+                    (
+                        Action::ChooseMode { .. },
+                        Some(Decision::AssignCombatDamage {
+                            attacker, blocker, ..
+                        }),
+                    ) => {
+                        return [attacker, blocker]
+                            .into_iter()
+                            .filter_map(|object| game.state.permanent_of(*object))
+                            .filter_map(|permanent| game.state.permanents[permanent].as_ref())
+                            .map(|permanent| permanent.id)
+                            .collect();
+                    }
+                    _ => {}
                 }
                 // Other decisions focus the resolving or cast object's card.
                 let object_id = game
@@ -2232,6 +2438,11 @@ impl Observation {
                                 crate::flow::payment::CostComponent::TapPays { tapped, .. } => {
                                     Some(*tapped)
                                 }
+                                // Which counter to remove is about the creature chosen.
+                                crate::flow::payment::CostComponent::RemoveCounters {
+                                    choosing_from: Some(object),
+                                    ..
+                                } => Some(*object),
                                 _ => game.payment_source_object(&payment.operation),
                             }
                         }
@@ -2283,7 +2494,7 @@ impl Observation {
     }
 
     /// Deprecated compatibility records; non-card objects are synthesized only here.
-    #[deprecated(note = "use object_records; removed in 0.4.0")]
+    #[deprecated(note = "use object_records; removed in 0.3.0")]
     pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
         self.agent_cards
             .iter()
@@ -2379,7 +2590,7 @@ fn ward_life(cost: Option<&PaymentCost>) -> i32 {
 /// ward and for a ward whose price is its mana value.
 fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
     match cost {
-        Some(cost @ PaymentCost::Life(_)) => {
+        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard)) => {
             crate::cards::tokens::rules_tokens(cost, default_content_pack())
                 .expect("registered rules payload")
         }
@@ -2419,7 +2630,7 @@ mod card_type_tests {
                     is_permanent: types.is_permanent(),
                     is_non_land_permanent: types.is_non_land_permanent(),
                     is_non_creature_permanent: types.is_non_creature_permanent(),
-                    is_spell: types.is_spell(),
+                    is_spell: types.is_instant_or_sorcery(),
                     is_creature: types.is_creature(),
                     is_land: types.is_land(),
                     is_planeswalker: types.is_planeswalker(),
@@ -2567,6 +2778,10 @@ mod characteristics_tests {
             continuation_index: None,
             pays_directly: false,
             announces_x: false,
+            spell_profile: 0,
+            route_mana_value: None,
+            quota_type: None,
+            play_route: None,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

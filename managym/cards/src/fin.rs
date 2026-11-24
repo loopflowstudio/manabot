@@ -363,7 +363,7 @@ fn the_fire_crystal() -> CardDefinition {
                         ..Default::default()
                     },
                     condition: Condition::Always,
-                    generic: 1,
+                    generic: 1.into(),
                 }),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::YouControl(CardPredicate::creature()),

@@ -5,7 +5,8 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        card::ReplacementEffect,
+        ability::Actor,
+        card::{DamageTransform, ReplacementEffect},
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
@@ -18,9 +19,9 @@ use crate::support::inspect::{permanent_of, zone_of};
 
 fn resolve_bolt_with_drivers(
     seed: u64,
-    driver_effects: Vec<Vec<ReplacementEffect>>,
+    transforms: &[Option<DamageTransform>],
     target: PlayerId,
-    first_replacement: usize,
+    first_replacement: Option<usize>,
 ) -> (i32, Vec<GameEvent>) {
     let mut s = Scenario::new(
         deck(&[("Gray Ogre", 40)]),
@@ -28,12 +29,21 @@ fn resolve_bolt_with_drivers(
         seed,
     );
 
-    for effects in driver_effects {
+    for transform in transforms {
         let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
         let object = card_of(&s, permanent);
         // Scenario-local COW definitions make these rule drivers without
         // expanding the production card pack.
-        s.game_mut().state[object].replacement_effects = effects;
+        if let Some(transform) = transform {
+            s.game_mut().state[object]
+                .replacement_effects
+                .push(ReplacementEffect::ModifyDamage {
+                    creature_source: false,
+                    source_by: Actor::AnyPlayer,
+                    recipient_by: Actor::You,
+                    transform: *transform,
+                });
+        }
     }
 
     s.force_card_in_hand(1, "Mountain");
@@ -47,14 +57,16 @@ fn resolve_bolt_with_drivers(
     s.pass_priority();
     s.pass_priority();
 
-    if matches!(
+    let order_pending = matches!(
         s.game()
             .state
             .suspended_decision
             .as_ref()
             .map(|s| &s.decision),
         Some(managym::flow::decision::Decision::OrderReplacement { .. })
-    ) {
+    );
+    assert_eq!(order_pending, first_replacement.is_some());
+    if let Some(first_replacement) = first_replacement {
         assert_eq!(s.action_space().player, Some(target));
         assert_eq!(s.life(target.0), 20, "proposal has not committed");
         crate::support::play::choose_mode(&mut s, first_replacement);
@@ -80,11 +92,9 @@ fn committed_damage(events: &[GameEvent], player: PlayerId) -> Option<u32> {
 fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
     let (life, events) = resolve_bolt_with_drivers(
         614_001,
-        vec![vec![ReplacementEffect::PreventDamageToController {
-            amount: 3,
-        }]],
+        &[Some(DamageTransform::Prevent(3))],
         PlayerId(0),
-        0,
+        None,
     );
 
     assert_eq!(life, 20);
@@ -102,12 +112,12 @@ fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
 /// The chosen order is replayable; source insertion does not choose for them.
 #[test]
 fn cr_616_affected_player_chooses_replacement_order() {
-    let prevent_then_double = vec![
-        vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
-        vec![ReplacementEffect::DoubleDamageToController],
+    let drivers = &[
+        Some(DamageTransform::Prevent(1)),
+        Some(DamageTransform::Double),
     ];
-    let first = resolve_bolt_with_drivers(614_002, prevent_then_double.clone(), PlayerId(0), 0);
-    let replay = resolve_bolt_with_drivers(614_002, prevent_then_double, PlayerId(0), 0);
+    let first = resolve_bolt_with_drivers(614_002, drivers, PlayerId(0), Some(0));
+    let replay = resolve_bolt_with_drivers(614_002, drivers, PlayerId(0), Some(0));
 
     assert_eq!(
         first, replay,
@@ -121,29 +131,20 @@ fn cr_616_affected_player_chooses_replacement_order() {
         new: 16,
     }));
 
-    let (reverse_life, reverse_events) = resolve_bolt_with_drivers(
-        614_002,
-        vec![
-            vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
-            vec![ReplacementEffect::DoubleDamageToController],
-        ],
-        PlayerId(0),
-        1,
-    );
+    let (reverse_life, reverse_events) =
+        resolve_bolt_with_drivers(614_002, drivers, PlayerId(0), Some(1));
     assert_eq!(reverse_life, 15, "(3 * 2) - 1 damage");
     assert_eq!(committed_damage(&reverse_events, PlayerId(0)), Some(5));
 }
 
 #[test]
 fn nonmatching_replacement_preserves_the_legacy_committed_trace() {
-    let baseline = resolve_bolt_with_drivers(614_003, vec![Vec::new()], PlayerId(1), 0);
+    let baseline = resolve_bolt_with_drivers(614_003, &[None], PlayerId(1), None);
     let nonmatching = resolve_bolt_with_drivers(
         614_003,
-        vec![vec![ReplacementEffect::PreventDamageToController {
-            amount: 3,
-        }]],
+        &[Some(DamageTransform::Prevent(3))],
         PlayerId(1),
-        0,
+        None,
     );
 
     assert_eq!(baseline, nonmatching);
@@ -228,4 +229,84 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
         .expect("mountain facts");
     assert!(!permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 0);
+}
+
+#[test]
+fn lifelink_spell_uses_its_stack_controller_for_doubling_and_gain() {
+    use managym::state::{card::Keyword, stack_object::StackObject};
+
+    for competing in [false, true] {
+        let mut s = Scenario::new(
+            deck_of("Mountain", "Lightning Bolt"),
+            deck(&[("Twinflame Tyrant", 40)]),
+            614_006,
+        );
+        s.advance_to_active_step(0, StepKind::Main);
+        s.force_permanent_on_battlefield(1, "Twinflame Tyrant");
+        if competing {
+            let land = s.force_permanent_on_battlefield(0, "Mountain");
+            let object = card_of(&s, land);
+            s.game_mut().state[object]
+                .replacement_effects
+                .push(ReplacementEffect::ModifyDamage {
+                    creature_source: false,
+                    source_by: Actor::AnyPlayer,
+                    recipient_by: Actor::You,
+                    transform: DamageTransform::Prevent(1),
+                });
+        }
+        let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
+        let bolt = move_card(&mut s, bolt, ZoneType::Hand);
+        s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("R").into();
+        s.game_mut().scenario_refresh_priority().unwrap();
+        crate::support::play::cast_card(&mut s, bolt);
+        assert!(s.choose_target(Target::Player(PlayerId(0))));
+        let spell = now(&s, bolt);
+        s.game_mut().state[spell].keywords.insert(Keyword::Lifelink);
+        let Some(StackObject::Spell(top)) = s.game_mut().state.stack_objects.last_mut() else {
+            panic!("expected Lightning Bolt on the stack");
+        };
+        top.controller = PlayerId(1);
+        s.drain_events();
+        s.pass_priority();
+        s.pass_priority();
+        let outcome = |s: &mut Scenario| (s.drain_events(), [s.life(0), s.life(1)]);
+        let verify = |(events, life): &(Vec<GameEvent>, [i32; 2]), amount: i32| {
+            assert_eq!(*life, [20 - amount, 20 + amount]);
+            assert_eq!(committed_damage(events, PlayerId(0)), Some(amount as u32));
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|e| matches!(
+                        e,
+                        GameEvent::LifeChanged {
+                            player: PlayerId(1),
+                            ..
+                        }
+                    ))
+                    .count(),
+                1
+            );
+        };
+        if competing {
+            assert_eq!(s.action_space().player, Some(PlayerId(0)));
+            let mut amounts = Vec::new();
+            for mode in 0..2 {
+                let play = || {
+                    let mut fork = s.clone();
+                    crate::support::play::choose_mode(&mut fork, mode);
+                    outcome(&mut fork)
+                };
+                let result = play();
+                assert_eq!(result, play());
+                let amount = 20 - result.1[0];
+                verify(&result, amount);
+                amounts.push(amount);
+            }
+            amounts.sort();
+            assert_eq!(amounts, [4, 5]);
+        } else {
+            verify(&outcome(&mut s), 6);
+        }
+    }
 }

@@ -17,6 +17,15 @@ use super::{
     shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
 };
 
+impl InputLayout {
+    pub fn player_columns(self) -> &'static [Column] {
+        match self {
+            Self::OneToken => player::COLUMNS,
+            Self::Legacy => &player::COLUMNS[..player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
+        }
+    }
+}
+
 /// A permanent row's columns: input v11 writes every `permanent` column; the
 /// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
 /// (`legacy_input`).
@@ -278,6 +287,7 @@ columns! { player {
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
+    74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
@@ -404,7 +414,8 @@ columns! { permanent {
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
     51: ENTERED_THIS_TURN => ("entered_this_turn", ValueLayout::FLAG),
-    52: FACE_DOWN => ("face_down", ValueLayout::FLAG),
+    52: FIRST_STRIKE_PARTICIPANT => ("first_strike_participant", ValueLayout::FLAG),
+    53: FACE_DOWN => ("face_down", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -448,7 +459,10 @@ columns! { stack {
     34: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     35: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     36: VALID => ("valid", ValueLayout::FLAG),
-    37: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
+    37: EFFECTIVE_MANA_VALUE => ("effective_mana_value", ValueLayout::COUNT_TENTHS),
+    38: FROM_PREPARED => ("from_prepared", ValueLayout::FLAG),
+    39: FLASHBACK => ("flashback", ValueLayout::FLAG),
+    40: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
 } }
 
 columns! { action {
@@ -480,6 +494,11 @@ columns! { action {
     // `mode` keeps its index, and these name it as the stack row does.
     23: HAS_X => ("has_x", ValueLayout::FLAG),
     24: X => ("x", ValueLayout::COUNT_TENTHS),
+    25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
+    26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
+    27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
+    28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
+    29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -744,6 +763,7 @@ columns! { relation {
     46: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
+    49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
 } }
 
 #[derive(Clone, Debug)]
@@ -758,6 +778,65 @@ pub struct ArrayLayout {
     pub row_kinds: BTreeMap<u8, &'static str>,
     /// Each row kind's name, for consumers that read kinds by name.
     pub row_kind_names: BTreeMap<&'static str, u8>,
+}
+
+/// Packed records use native endian fields, in logical column order. A signed
+/// word replaces its high/low pair. Scalar-element arrays repeat one field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Storage {
+    Int32,
+    Uint8,
+    Float32,
+}
+
+impl Storage {
+    pub fn dtype(self) -> &'static str {
+        match self {
+            Self::Int32 => "int32",
+            Self::Uint8 => "uint8",
+            Self::Float32 => "float32",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PackedField {
+    pub name: &'static str,
+    pub index: usize,
+    pub storage: Storage,
+}
+
+impl ArrayLayout {
+    pub fn packed_fields(&self, table: &str) -> Vec<PackedField> {
+        let field = |name: &'static str, index, kind: ValueKind| {
+            let memory_flag = table.starts_with("decision_")
+                && (name.ends_with("_present")
+                    || matches!(
+                        name,
+                        "valid" | "declared" | "tapped" | "ready" | "attacking" | "blocking"
+                    ));
+            let storage = if memory_flag || kind == ValueKind::Flag {
+                Storage::Uint8
+            } else if kind.scale().is_some_and(|n| n > 1) {
+                Storage::Float32
+            } else {
+                Storage::Int32
+            };
+            PackedField {
+                name: name.strip_suffix("_high").unwrap_or(name),
+                index,
+                storage,
+            }
+        };
+        if let Some(element) = &self.element {
+            return vec![field("value", 0, element.kind)];
+        }
+        self.columns
+            .iter()
+            .filter(|c| !c.name.ends_with("_low"))
+            .map(|c| field(c.name, c.index, c.value.kind))
+            .collect()
+    }
 }
 
 impl ArrayLayout {
@@ -911,7 +990,7 @@ pub fn observation_layout(
     let mut layout = BTreeMap::new();
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
-            ("player", "player", Some(1), player::COLUMNS),
+            ("player", "player", Some(1), layout_kind.player_columns()),
             ("cards", "card", None, card::COLUMNS),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
@@ -990,7 +1069,10 @@ pub fn observation_layout(
     let mut relations = ArrayLayout::features(
         &["relation"],
         &[Some(super::continuation::RELATION_ROWS)],
-        relation::COLUMNS,
+        match layout_kind {
+            InputLayout::Legacy => &relation::COLUMNS[..super::legacy_input::RELATION_DIM],
+            InputLayout::OneToken => relation::COLUMNS,
+        },
     );
     relations.row_kinds = BTreeMap::from([
         (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
@@ -1111,24 +1193,32 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 74),
+                (
+                    "agent_player",
+                    config.player_dim(),
+                    if one_token { 75 } else { 74 },
+                ),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 53 } else { 38 },
+                    if one_token { 54 } else { 38 },
                 ),
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 25 } else { 22 },
+                    if one_token { 30 } else { 22 },
                 ),
                 (
                     "events",
                     config.event_dim(),
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", relation::WIDTH, 49),
+                (
+                    "relations",
+                    config.relation_dim(),
+                    if one_token { 50 } else { 49 },
+                ),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1142,7 +1232,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 38);
+                assert_eq!(stack::WIDTH, 41);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }
@@ -1158,17 +1248,17 @@ mod tests {
             }
             assert_eq!(
                 config.relations_len(),
-                super::super::continuation::RELATION_ROWS * relation::WIDTH
+                super::super::continuation::RELATION_ROWS * config.relation_dim()
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
+            let permanent_valid = if one_token {
+                permanent::VALID
+            } else {
+                super::super::legacy_input::PERMANENT_VALID
+            };
             assert_eq!(
-                layout["agent_permanents"].columns[if one_token {
-                    permanent::VALID
-                } else {
-                    super::super::legacy_input::PERMANENT_VALID
-                }]
-                .name,
+                layout["agent_permanents"].columns[permanent_valid].name,
                 "valid"
             );
             for key in ["agent_cards", "facts", "effects"] {

@@ -22,4 +22,9 @@ fn cruel_tutor_puts_the_found_card_on_top_and_costs_two_life() {
     settle(&mut s);
     assert_eq!(library_top(&s, 0), ogre);
     s.assert_life(0, 18);
+    // The caster saw what they put on top; the unrevealed card stays private.
+    let definition = s.game().state[ogre].definition_id;
+    let known = &s.game().state.players[0].known_library;
+    assert_eq!(known.own.get(&0), Some(&definition));
+    assert!(known.public.is_empty());
 }

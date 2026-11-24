@@ -381,3 +381,93 @@ fn expedition_map_sacrifices_itself_for_any_land_into_hand() {
     settle(&mut s);
     assert_eq!(zone_of(&s, arena), Some(ZoneType::Hand));
 }
+
+#[test]
+fn token_producer_rampaging_baloths() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Rampaging Baloths"]);
+    enter_and_settle(&mut s, "Rampaging Baloths");
+    enter_and_settle(&mut s, "Forest");
+    crate::assert_creature_tokens(
+        &s,
+        "Beast",
+        1,
+        (4, 4),
+        &[managym::state::mana::Color::Green],
+        &[],
+    );
+}
+
+#[test]
+fn printed_creature_vampire_nighthawk() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Vampire Nighthawk",
+        2,
+        3,
+        &[Keyword::Deathtouch, Keyword::Flying, Keyword::Lifelink],
+    );
+}
+
+#[test]
+fn foundations_spell_day_of_judgment() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, counters_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::permanent::CounterKind;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&[
+        "Day of Judgment",
+        "Gray Ogre",
+        "Hill Giant",
+        "Beifong's Bounty Hunters",
+    ]);
+    let hunters = s.force_permanent_on_battlefield(0, "Beifong's Bounty Hunters");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let victims = [card_of(&s, hunters), card_of(&s, mine), card_of(&s, theirs)];
+    cast(&mut s, "Day of Judgment");
+    settle(&mut s);
+    // The dying Hunters see both their own four power and the Ogre's two.
+    assert_eq!(counters_of(&s, forest, CounterKind::PlusOnePlusOne), 6);
+    for victim in victims {
+        assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
+    }
+}
+
+#[test]
+fn foundations_5d_adventuring_gear() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::card_of;
+    use crate::support::play::{activate, play_land, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Adventuring Gear", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let gear = s.force_permanent_on_battlefield(0, "Adventuring Gear");
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, gear, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    play_land(&mut s, "Forest");
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let mut moved = s.clone();
+    let new_wearer = card_of(&moved, giant);
+    moved.game_mut().state.permanents[gear]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(new_wearer);
+    let mut gone = moved.clone();
+    let source = card_of(&gone, gear);
+    move_card(&mut gone, source, ZoneType::Graveyard);
+    for (branch, old, new) in [(&mut s, 4, 3), (&mut moved, 2, 5), (&mut gone, 2, 5)] {
+        settle(branch);
+        assert_eq!(branch.game().characteristics(ogre).power, old);
+        assert_eq!(branch.game().characteristics(giant).power, new);
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(branch.game().characteristics(giant).power, 3);
+    }
+}

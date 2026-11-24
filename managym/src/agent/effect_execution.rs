@@ -20,8 +20,8 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game},
-        payment::{Operation, Payment},
+        game::{ActivationSource, CastChoices, Game},
+        payment::{CostComponent, Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -44,16 +44,20 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "after selection",
     "applied replacements",
     "attach to",
-    "attached at activation",
     "batch",
     "bind moved",
     "bind result",
     "caller frame",
     "captured activation",
     "cascade exiled",
+    "cascade mana value limit",
+    "spell mana value limit",
     "cast choices",
+    "quota type",
     "cast from exile",
     "cast from hand",
+    "cast from graveyard",
+    "exile instants and sorceries",
     "cast from library",
     "cast predicate",
     "choice",
@@ -113,8 +117,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
-    "last attached to",
     "last known characteristics",
+    "last known attachment",
     "last known definition",
     "legend group",
     "legends kept",
@@ -151,6 +155,12 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "placed on bottom",
     "placement",
     "pre-event object",
+    "combat damage source",
+    "another damage step",
+    "first-strike participant",
+    "minimum assignment",
+    "last blocker",
+    "assigned combat damage",
     "remaining",
     "remaining instructions",
     "remaining iteration subjects",
@@ -404,10 +414,6 @@ impl<'a> Projection<'a> {
                 });
                 self.field("return", &"end the turn");
             }
-            FrameCompletion::CombatNormal => {
-                self.summary(|| "Normal combat damage follows these choices.".into());
-                self.field("return", &"normal combat damage");
-            }
             FrameCompletion::StateBased { next } => {
                 self.summary(|| "Finish the pending state-based actions before priority.".into());
                 self.field("return", &"finish state-based actions");
@@ -470,9 +476,6 @@ impl<'a> Projection<'a> {
                 for target in &ability.targets {
                     self.target("target", *target);
                 }
-                if let Some(object) = ability.attached {
-                    self.object("attached at activation", object);
-                }
                 if let Some(grant) = ability.granted_by {
                     self.object("grantor", grant.grantor);
                     self.field("grant index", &grant.index);
@@ -494,7 +497,25 @@ impl<'a> Projection<'a> {
                 target_req_indices,
             } => {
                 self.object_id("paid spell", *object);
-                self.field("cast choices", cast);
+                // Storage keys identify the chosen permission only within the game.
+                // The payment already gives its cost. Project a quota source as a
+                // viewer-safe object reference, including when it left to pay a cost.
+                self.field(
+                    "cast choices",
+                    &CastChoices {
+                        route: None,
+                        ..*cast
+                    },
+                );
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    kind,
+                    ..
+                }) = cast.route
+                {
+                    self.object("grantor", source);
+                    self.field("quota type", &kind);
+                }
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
                 for target in targets {
@@ -651,7 +672,7 @@ impl<'a> Projection<'a> {
         } = lki;
         if let Some(attached) = attached_to {
             self.reference(
-                "last attached to",
+                "last known attachment",
                 game.visible_reference(*attached, viewer),
             );
         }
@@ -1070,18 +1091,46 @@ pub(crate) fn receipt_matters(
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the receipt of a stack spell or ability, or of the payment in
-/// progress, onto the frame of `source`.
+/// Project the receipt of a stack spell or ability onto the frame of `source`.
 pub(crate) fn project_receipt(
     game: &Game,
     spent: &PaymentReceipt,
-    source: Option<ObjectId>,
+    source: ObjectId,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent, source);
+    out.receipt(spent, Some(source));
+    out.finish(frame);
+}
+
+/// Project the payment in progress onto its announcement frame: how many
+/// counters a removal cost still owes (Quilled Greatwurm), then what the
+/// payment has already committed. Writes nothing when neither applies.
+pub(crate) fn project_pending_payment(
+    game: &Game,
+    payment: &Payment,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let remaining = match payment.owed.first() {
+        Some(CostComponent::RemoveCounters { remaining, .. }) => Some(*remaining),
+        _ => None,
+    };
+    if remaining.is_none() && payment.receipt.is_empty() {
+        return;
+    }
+    let mut out = Projection::new(game, viewer, text);
+    if let Some(remaining) = remaining {
+        out.field("counters remaining", &remaining);
+        out.summary(|| match remaining {
+            1 => "1 counter left to remove.".into(),
+            n => format!("{n} counters left to remove."),
+        });
+    }
+    out.receipt(&payment.receipt, None);
     out.finish(frame);
 }
 
@@ -1277,6 +1326,34 @@ pub(crate) fn project_decision(
                 });
             }
         }
+        Decision::AssignCombatDamage {
+            attacker,
+            blocker,
+            pass,
+            minimum,
+            remaining,
+            last,
+            assigned,
+            ..
+        } => {
+            out.object("combat damage source", *attacker);
+            out.object("target", *blocker);
+            out.field(
+                "another damage step",
+                &matches!(pass, crate::flow::game::CombatDamagePass::FirstStrike),
+            );
+            if let Some(combat) = &game.state.combat {
+                for &id in &combat.first_strikers {
+                    if let Some(object) = game.permanent_object(id) {
+                        out.object("first-strike participant", object);
+                    }
+                }
+            }
+            out.field("minimum assignment", minimum);
+            out.field("remaining", remaining);
+            out.field("last blocker", last);
+            out.field("assigned combat damage", assigned);
+        }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {
                 out.field("replacement option", &index);
@@ -1471,14 +1548,32 @@ pub(crate) fn project_decision(
             use crate::flow::decision::ResolutionCastOffer;
             out.field("pay casting costs", paid);
             match offer {
+                ResolutionCastOffer::Graveyard {
+                    predicate,
+                    exile_instants_and_sorceries,
+                } => {
+                    out.field("cast from graveyard", predicate);
+                    out.field("exile instants and sorceries", exile_instants_and_sorceries);
+                }
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { object: object_id } => {
+                ResolutionCastOffer::Exiled {
+                    object: object_id,
+                    below,
+                } => {
+                    out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
+                }
+                ResolutionCastOffer::AmongExiled { objects } => {
+                    for object in objects {
+                        out.object_id("cast from exile", *object);
+                    }
                 }
                 ResolutionCastOffer::Cascade {
                     object: object_id,
                     exiled,
+                    below,
                 } => {
+                    out.field("cascade mana value limit", below);
                     out.object_id("cast from exile", *object_id);
                     for exiled in exiled {
                         out.object_id("cascade exiled", *exiled);
