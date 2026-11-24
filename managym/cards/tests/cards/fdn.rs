@@ -1340,6 +1340,7 @@ fn departure_angelic_destiny_and_enchanted_creature_die_together() {
             && enchanted.keywords.has(Keyword::FirstStrike)
             && enchanted.keywords.has(Keyword::Flying)
     );
+    let attached = s.snapshot();
     // The animated Aura has zero toughness in the same SBA batch that
     // destroys the lethally damaged creature it enchants.
     let id = permanent_of(&s, aura).unwrap();
@@ -1349,8 +1350,23 @@ fn departure_angelic_destiny_and_enchanted_creature_die_together() {
     assert!(s.game().state.permanents[ogre].is_none());
     assert_eq!(zone_of(&s, aura), Some(ZoneType::Graveyard));
     assert_eq!(s.game().state.stack_objects.len(), 1);
+    let stacked = s.snapshot();
     settle(&mut s);
     assert_eq!(zone_of(&s, aura), Some(ZoneType::Hand));
+
+    // A later graveyard appearance of the Aura is a new object (CR 400.7).
+    s.restore(&stacked);
+    let in_hand = move_card(&mut s, aura, ZoneType::Hand);
+    move_card(&mut s, in_hand, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, aura), Some(ZoneType::Graveyard));
+
+    // The Aura leaving alone does not trigger its enchanted-creature death.
+    s.restore(&attached);
+    move_card(&mut s, aura, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    assert!(s.game().state.stack_objects.is_empty());
+    assert!(s.game().state.permanents[ogre].is_some());
 }
 
 #[test]
