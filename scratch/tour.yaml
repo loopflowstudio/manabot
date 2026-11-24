@@ -1,9 +1,11 @@
-at: 7cd57bfb32a6bc60f90fd85e02b2df2abd312ac6
+at: 7e1fa0b92e2a7efa536c41f5b99ac9001b81f0e3
 first:
   - path: docs/engine.md
-    why: Follow a kicked Cleric from casting through return.
+    why: Play the graveyard returns and battlefield form examples.
   - path: scratch/plan.md
     why: Delivered card cohorts and remaining rules work.
+  - path: managym/cards/src/fdn.rs
+    why: Panda and Healer describe different graveyard returns.
   - path: managym/state/src/permanent.rs
     why: Spell choices and payment survive battlefield entry.
   - path: managym/state/src/game_object.rs
@@ -11,15 +13,15 @@ first:
   - path: managym/src/flow/trigger.rs
     why: Required identity and initial state of each waiting trigger.
   - path: managym/src/flow/proposed_event.rs
-    why: Mana spent on the spell supplies entry counters.
+    why: Commit entries and simultaneous life gains.
   - path: managym/src/flow/zones.rs
     why: Find the stacked spell and commit its battlefield entry.
-  - path: managym/src/flow/triggers.rs
-    why: Capture event facts before choosing modes and targets.
   - path: managym/src/flow/resolution.rs
-    why: Resolve using the choices captured when the trigger fired.
-  - path: managym/cards/src/fdn.rs
-    why: Healer restricts graveyard targets by type and mana value.
+    why: Each target is checked against its exact source.
+  - path: managym/src/flow/triggers.rs
+    why: Place triggers with legal modes and targets.
+  - path: managym/src/flow/retarget.rs
+    why: Replace one target within its original clause.
   - path: managym/cards/src/znr.rs
     why: Nullpriest uses the same trigger for any creature.
   - path: managym/cards/tests/cards.rs
@@ -29,7 +31,7 @@ first:
   - path: managym/src/flow/target_authority_tests.rs
     why: Targeting and ordering after the original source leaves.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Graveyard returns, copies and simultaneous departures.
+    why: Fork Panda retargeting and shrink a live source.
   - path: managym/cards/tests/cards/fin.rs
     why: Transform, meld and token movement.
   - path: managym/cards/tests/cards/dsk.rs
