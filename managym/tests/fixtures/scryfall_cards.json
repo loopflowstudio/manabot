@@ -8114,5 +8114,31 @@
     ],
     "oracle_text": "Instant and sorcery spells you cast cost {X} less to cast, where X is equipped creature's power.\nEquip {2}",
     "colors": []
+  },
+  "Loot, Exuberant Explorer": {
+    "name": "Loot, Exuberant Explorer",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Creature — Beast Noble",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "You may play an additional land on each of your turns.\n{4}{G}{G}, {T}: Look at the top six cards of your library. You may reveal a creature card with mana value less than or equal to the number of lands you control from among them and put it onto the battlefield. Put the rest on the bottom in a random order.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Redcap Gutter-Dweller": {
+    "name": "Redcap Gutter-Dweller",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace\nWhen this creature enters, create two 1/1 black Rat creature tokens with \"This token can't block.\"\nAt the beginning of your upkeep, you may sacrifice another creature. If you do, put a +1/+1 counter on this creature and exile the top card of your library. You may play that card this turn.",
+    "colors": [
+      "R"
+    ]
   }
 }

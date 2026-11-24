@@ -46,6 +46,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         blue_red_elemental(),
         inkling(),
         red_white_spirit(),
+        rat(),
     ]
 }
 
@@ -124,6 +125,26 @@ fn bear() -> TokenDefinition {
         "token.bear",
         "ca3dae7d-3880-4c0a-acfb-8fd227cf9fab",
         creature(base, 4, 4, [Color::Green]),
+    )
+}
+
+/// Redcap Gutter-Dweller's Rats (first token printing, WOE).
+fn rat() -> TokenDefinition {
+    let base = face(
+        "Rat",
+        [CardType::Creature],
+        &["Rat"],
+        "This token can't block.",
+    );
+    token(
+        "token.rat",
+        "1e0205f2-25c1-403b-b408-56e3f2d63b4d",
+        PrintedCharacteristics {
+            statics: vec![StaticAbility::BlockRestriction(
+                BlockRestriction::CantBlock(CardPredicate::default()),
+            )],
+            ..creature(base, 1, 1, [Color::Black])
+        },
     )
 }
 

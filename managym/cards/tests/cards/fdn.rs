@@ -1873,3 +1873,220 @@ fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
         (PlayerId(0), PlayerId(1))
     );
 }
+
+/// Loot gives its controller, and only them, a second land play each turn.
+/// Its activation looks at six cards and offers only creature cards with
+/// mana value at most the lands its controller has as it resolves; the
+/// chosen creature enters and the other five go to the bottom.
+#[test]
+fn loot_grants_its_controller_a_land_play_and_finds_a_creature_within_its_lands() {
+    use crate::support::{
+        game::{move_to_hand, pin_top},
+        inspect::{has_action, now, offered_cards, zone_of},
+        play::{play_land, resolve_top, select_card},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+    let mut s = five_color_setup(&[
+        "Loot, Exuberant Explorer",
+        "Gray Ogre",
+        "Tinybones, Bauble Burglar",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let mut theirs = s.clone();
+    theirs
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(1), "Loot, Exuberant Explorer", true)
+        .unwrap();
+    play_land(&mut theirs, "Forest");
+    move_to_hand(&mut theirs, "Island");
+    theirs.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !has_action(&theirs, |a| matches!(a, Action::PlayLand { .. })),
+        "an opponent's Loot"
+    );
+
+    let loot = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Loot, Exuberant Explorer", true)
+        .unwrap();
+    play_land(&mut s, "Forest");
+    play_land(&mut s, "Island");
+    move_to_hand(&mut s, "Plains");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::PlayLand { .. })),
+        "two land plays only"
+    );
+
+    let top = pin_top(
+        &mut s,
+        &[
+            "Gray Ogre",
+            "Tinybones, Bauble Burglar",
+            "Forest",
+            "Island",
+            "Swamp",
+            "Plains",
+        ],
+    );
+    let names = |s: &crate::support::game::Scenario,
+                 cards: Vec<managym::state::game_object::ObjectId>|
+     -> Vec<String> {
+        let mut names: Vec<_> = cards
+            .into_iter()
+            .map(|id| s.game().state[id].name.clone())
+            .collect();
+        names.sort();
+        names
+    };
+    let mut three_lands = s.clone();
+    three_lands.force_permanent_on_battlefield(0, "Mountain");
+    activate(&mut three_lands, loot, 0);
+    resolve_top(&mut three_lands);
+    assert_eq!(
+        names(&three_lands, offered_cards(&three_lands)),
+        ["Gray Ogre", "Tinybones, Bauble Burglar"]
+    );
+
+    activate(&mut s, loot, 0);
+    resolve_top(&mut s);
+    assert_eq!(
+        names(&s, offered_cards(&s)),
+        ["Tinybones, Bauble Burglar"],
+        "two lands: the three-mana Ogre is out of reach"
+    );
+    let found = now(&s, top[1]);
+    select_card(&mut s, found);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Battlefield));
+    let library: Vec<_> = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .copied()
+        .collect();
+    for card in [top[0], top[2], top[3], top[4], top[5]] {
+        let object = now(&s, card);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Library));
+        let position = library.iter().position(|id| *id == object).unwrap();
+        assert!(position < 5, "{position}: on the bottom");
+    }
+}
+
+/// Redcap Gutter-Dweller enters with two Rats that can't block. At its
+/// controller's upkeep they may sacrifice another creature; if they do, it
+/// gets a +1/+1 counter and the top card of their library is exiled,
+/// playable this turn. Declining changes nothing.
+#[test]
+fn redcap_makes_nonblocking_rats_and_trades_one_for_a_counter_and_a_card() {
+    use crate::support::{
+        inspect::{has_action, permanent_named, zone_of},
+        play::{choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::ObjectId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Redcap Gutter-Dweller", "Gray Ogre"]);
+    enter_and_settle(&mut s, "Redcap Gutter-Dweller");
+    let rats = s.battlefield_permanents_named(0, "Rat");
+    assert_eq!(rats.len(), 2);
+    let redcap = permanent_named(&s, "Redcap Gutter-Dweller");
+
+    // The Rats can't block; Redcap can.
+    let mut blocking = s.clone();
+    let attacker = blocking.force_permanent_on_battlefield(1, "Gray Ogre");
+    blocking.advance_to_active_step(1, StepKind::Main);
+    crate::support::game::clear_summoning_sickness(&mut blocking, attacker);
+    pass_until(&mut blocking, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut blocking, attacker);
+    pass_until(&mut blocking, ActionSpaceKind::DeclareBlocker);
+    // Each creature's block is asked in turn; collect who may block the Ogre.
+    let mut blockers = Vec::new();
+    while blocking.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        blockers.extend(
+            blocking
+                .action_space()
+                .actions
+                .iter()
+                .filter_map(|a| match a {
+                    Action::DeclareBlocker {
+                        blocker,
+                        attacker: Some(_),
+                        ..
+                    } => Some(*blocker),
+                    _ => None,
+                }),
+        );
+        choose(&mut blocking, |a| {
+            matches!(a, Action::DeclareBlocker { attacker: None, .. })
+        });
+    }
+    assert!(blockers.contains(&redcap), "{blockers:?}");
+    assert!(
+        rats.iter().all(|rat| !blockers.contains(rat)),
+        "{blockers:?}"
+    );
+
+    let top = |s: &crate::support::game::Scenario| -> ObjectId {
+        s.game()
+            .state
+            .zones
+            .top(ZoneType::Library, PlayerId(0))
+            .unwrap()
+    };
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let mut declined = s.clone();
+    let card = top(&s);
+    assert!(has_action(&declined, |a| matches!(
+        a,
+        Action::Decline { .. }
+    )));
+    choose(&mut declined, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut declined);
+    assert_eq!(declined.battlefield_permanents_named(0, "Rat").len(), 2);
+    assert_eq!(zone_of(&declined, card), Some(ZoneType::Library));
+
+    let rat = s.game().state.permanents[rats[0]].as_ref().unwrap().object;
+    assert!(
+        !has_action(
+            &s,
+            |a| matches!(a, Action::SelectCard { object, .. } if s.game().state.permanent_of(*object) == Some(redcap))
+        ),
+        "another creature"
+    );
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == rat),
+    );
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Rat").len(), 1);
+    assert_eq!(
+        s.game().state.permanents[redcap]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::PlusOnePlusOne),
+        1
+    );
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    let exiled = s
+        .game()
+        .state
+        .zones
+        .top(ZoneType::Exile, PlayerId(0))
+        .unwrap();
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } | Action::PlayLand { object, .. } if *object == exiled)
+        ),
+        "{} is playable this turn",
+        s.game().state[exiled].name
+    );
+}

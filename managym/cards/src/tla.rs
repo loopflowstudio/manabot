@@ -328,6 +328,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
                         subject: TriggerSubject::This,
                     },
                     effects: vec![Effect::LookAndSelect {
+                        max_mana_value: None,
                         random_order: true,
                         reveal: false,
                         to_battlefield: true,
@@ -699,6 +700,7 @@ fn accumulate_wisdom() -> CardDefinition {
                 },
                 then: vec![Effect::PutTopCardsInHand { count: 3 }],
                 otherwise: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: false,
                     reveal: false,
@@ -4729,6 +4731,7 @@ fn guru_pathik() -> CardDefinition {
                     },
                     intervening_if: None,
                     effects: vec![Effect::LookAndSelect {
+                        max_mana_value: None,
                         to_battlefield: false,
                         random_order: true,
                         reveal: true,
@@ -6483,6 +6486,7 @@ fn master_piandao() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: true,
                     reveal: true,
@@ -8328,6 +8332,7 @@ fn seismic_sense() -> CardDefinition {
             types: CardTypes::new([CardType::Sorcery]),
             subtypes: vec!["Lesson".into()],
             spell_effects: vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 to_battlefield: false,
                 random_order: true,
                 reveal: true,
@@ -11057,6 +11062,7 @@ fn water_tribe_rallier() -> CardDefinition {
                 mana_cost: ManaCost::parse("{5}"),
                 waterbend: true,
                 effects: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: true,
                     reveal: true,

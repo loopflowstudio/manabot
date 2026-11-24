@@ -285,6 +285,7 @@ impl Game {
                             restrictions.push((id, controller, rule.clone()))
                         }
                         StaticAbility::AdditionalLandPlayEachPlayer => land_plays_each_player += 1,
+                        StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
                         StaticAbility::PlayUnownedExiledWithCounter(kind) => {
                             if !permissions.exile_counter_plays.contains(kind) {
                                 permissions.exile_counter_plays.push(*kind)

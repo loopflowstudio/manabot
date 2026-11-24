@@ -2692,6 +2692,7 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
             player,
             vec![
                 Effect::LookAndSelect {
+                    max_mana_value: None,
                     look: EffectValue::Fixed(4),
                     predicate: CardPredicate::default(),
                     min_select: 0,
@@ -3772,6 +3773,7 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
         Effect::Scry { count: 3 },
         Effect::Surveil { count: 3 },
         Effect::LookAndSelect {
+            max_mana_value: None,
             random_order: false,
             reveal: false,
             to_battlefield: false,
@@ -4079,6 +4081,7 @@ fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
         root.run_frame(EffectFrame::new(
             player,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 random_order: false,
                 reveal: false,
                 to_battlefield: false,
@@ -4298,6 +4301,7 @@ fn hidden_knowledge_public_prefix_survives_a_pending_inspection() {
             owner,
             vec![if reveal {
                 Effect::LookAndSelect {
+                    max_mana_value: None,
                     look: 3.into(),
                     min_select: 1,
                     max_select: 2,
@@ -4377,6 +4381,7 @@ fn hidden_knowledge_forced_single_bottom_is_remembered() {
         game.run_frame(EffectFrame::new(
             owner,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 look: 1.into(),
                 min_select: 0,
                 max_select: 1,
@@ -4570,6 +4575,7 @@ fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules
         game.run_frame(EffectFrame::new(
             owner,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 look: 12.into(),
                 min_select: 0,
                 max_select: 1,

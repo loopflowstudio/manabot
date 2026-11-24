@@ -3,7 +3,7 @@ use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, EffectValue, KeywordAction, ObjectSelector, PaymentCost,
         Per, PlayWindow, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
@@ -31,6 +31,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         sphinx_of_forgotten_lore(),
         suspicious_shambler(),
         tinybones_bauble_burglar(),
+        loot_exuberant_explorer(),
+        redcap_gutter_dweller(),
         zul_ashur_lich_lord(),
     ]
 }
@@ -394,6 +396,94 @@ fn suspicious_shambler() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn redcap_gutter_dweller() -> CardDefinition {
+    let text_box = "Menace\nWhen this creature enters, create two 1/1 black Rat creature tokens with \"This token can't block.\"\nAt the beginning of your upkeep, you may sacrifice another creature. If you do, put a +1/+1 counter on this creature and exile the top card of your library. You may play that card this turn.";
+    CardDefinition {
+        key: "fdn.redcap_gutter_dweller",
+        scryfall_id: "c6c7f55a-bcc7-4ca3-853d-fc6e260d9429",
+        printed: PrintedCharacteristics {
+            name: "Redcap Gutter-Dweller".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Warrior".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens("token.rat", 2)],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                    effects: vec![
+                        Effect::may_sacrifice(CardPredicate::creature(), true),
+                        Effect::if_you_do(vec![
+                            Effect::put_counters(
+                                ObjectSelector::This,
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            ),
+                            Effect::ExileTopCardsToPlay {
+                                count: 1,
+                                until: PlayWindow::ThisTurn,
+                            },
+                        ]),
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn loot_exuberant_explorer() -> CardDefinition {
+    let text_box = "You may play an additional land on each of your turns.\n{4}{G}{G}, {T}: Look at the top six cards of your library. You may reveal a creature card with mana value less than or equal to the number of lands you control from among them and put it onto the battlefield. Put the rest on the bottom in a random order.";
+    CardDefinition {
+        key: "fdn.loot_exuberant_explorer",
+        scryfall_id: "09980ce6-425b-4e03-94d0-0f02043cb361",
+        printed: PrintedCharacteristics {
+            name: "Loot, Exuberant Explorer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Beast".into(), "Noble".into()],
+            power: Some(1),
+            toughness: Some(4),
+            statics: vec![StaticAbility::AdditionalLandPlay],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}{G}{G}"),
+                tap_source: true,
+                effects: vec![Effect::LookAndSelect {
+                    random_order: true,
+                    reveal: true,
+                    to_battlefield: true,
+                    look: EffectValue::Fixed(6),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: CardPredicate::creature(),
+                    max_mana_value: Some(Box::new(EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        },
+                    })),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

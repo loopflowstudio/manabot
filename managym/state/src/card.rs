@@ -957,6 +957,9 @@ pub enum StaticAbility {
     /// "Each player may play an additional land on each of their turns"
     /// (CR 305.2): one more land play per such permanent, for every player.
     AdditionalLandPlayEachPlayer,
+    /// "You may play an additional land on each of your turns" (CR 305.2):
+    /// one more land play per such permanent, for its controller.
+    AdditionalLandPlay,
     /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
     LegendRuleDoesntApply,
     CantLoseAndOpponentsCantWin,

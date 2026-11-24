@@ -2007,6 +2007,7 @@ impl Game {
                 min_select,
                 max_select,
                 predicate,
+                max_mana_value,
             } => {
                 let look = self.effect_value(look, frame).max(0) as usize;
                 let looked = self.library_top_objects(frame.controller, look);
@@ -2014,13 +2015,24 @@ impl Game {
                     return None;
                 }
                 self.remember_library_objects(frame.controller, &looked);
+                // The decision carries the bound as resolved now.
+                let mut predicate = predicate.clone();
+                if let Some(value) = max_mana_value {
+                    let bound =
+                        u8::try_from(self.effect_value(value, frame).max(0)).unwrap_or(u8::MAX);
+                    predicate.max_mana_value = Some(
+                        predicate
+                            .max_mana_value
+                            .map_or(bound, |printed| printed.min(bound)),
+                    );
+                }
                 Some(Decision::LookAndSelect {
                     random_order: *random_order,
                     reveal: *reveal,
                     to_battlefield: *to_battlefield,
                     player: frame.controller,
                     looked,
-                    predicate: predicate.clone(),
+                    predicate,
                     selected: 0,
                     min_select: *min_select,
                     max_select: *max_select,

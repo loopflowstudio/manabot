@@ -899,6 +899,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Scry { count: 1 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
+            max_mana_value: None,
             to_battlefield: true,
             random_order: true,
             reveal: false,
@@ -1446,6 +1447,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "fut",
             "rites_of_flourishing_draws_for_each_player_and_grants_a_land_play",
         ),
+        StaticAbility::AdditionalLandPlay => witnessed(
+            "StaticAbility::AdditionalLandPlay",
+            Seen::Actions("a second land play is offered to its controller only"),
+            "Loot, Exuberant Explorer",
+            "fdn",
+            "loot_grants_its_controller_a_land_play_and_finds_a_creature_within_its_lands",
+        ),
         StaticAbility::ActivatedAbilitiesCostLess { .. } => witnessed(
             "StaticAbility::ActivatedAbilitiesCostLess",
             Seen::Actions("the activation becomes affordable at the reduced cost"),
@@ -1813,6 +1821,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::AdditionalLandPlay,
         StaticAbility::CantLoseAndOpponentsCantWin,
         StaticAbility::LegendRuleDoesntApply,
         StaticAbility::ActivatedAbilitiesCostLess {
@@ -5637,6 +5646,7 @@ fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
 #[test]
 fn library_order_and_any_target_are_distinct_learning_rules() {
     let effect = |random_order| Effect::LookAndSelect {
+        max_mana_value: None,
         random_order,
         to_battlefield: false,
         reveal: false,

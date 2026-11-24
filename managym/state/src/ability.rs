@@ -1357,6 +1357,11 @@ pub enum Effect {
         min_select: usize,
         max_select: usize,
         predicate: CardPredicate,
+        /// Read as the instruction resolves: selectable cards have at most
+        /// this mana value ("with mana value less than or equal to the
+        /// number of lands you control").
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_mana_value: Option<Box<EffectValue>>,
     },
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
