@@ -11,7 +11,7 @@ from conformance.authored_match_receipt import (
 )
 
 
-def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
+def test_release_stack_authored_match_receipt_is_terminal_and_authoritative() -> None:
     checked = json.loads(OPENING_RECEIPT_PATH.read_text(encoding="utf-8"))
     generated = generate_authored_match_receipt()
     assert generated == checked
