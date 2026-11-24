@@ -477,7 +477,8 @@ impl Game {
             }
 
             if self.state.priority.resolution_owed {
-                // The suspended resolution has finished: count it now.
+                // CR 608.2m: a resolution finishes once any decision it
+                // stopped for is made. Count it toward the watch then, once.
                 self.state.priority_mut().resolution_owed = false;
                 if self.end_mandatory_loop() {
                     return None;
@@ -508,17 +509,7 @@ impl Game {
                         // A turn-ending resolution leaves this priority round.
                         return None;
                     }
-                    if self.state.suspended_decision.is_some() {
-                        // CR 608.2m: the spell is still resolving. The watch
-                        // counts it once it finishes, above.
-                        self.state.priority_mut().resolution_owed = true;
-                        continue;
-                    }
-                    if self.end_mandatory_loop() {
-                        return None;
-                    }
-                    self.restart_priority_round();
-                    stabilized = false;
+                    self.state.priority_mut().resolution_owed = true;
                     continue;
                 }
                 return None;
@@ -539,21 +530,10 @@ impl Game {
     }
 
     /// Count one finished resolution toward the CR 104.4b watch, ending the
-    /// game in a draw once it shows a mandatory loop; true if it did.
+    /// game in a draw once it shows a mandatory loop; true if it did. An
+    /// emptied stack with nothing waiting to trigger ends any chain, so it
+    /// ends the watch instead.
     fn end_mandatory_loop(&mut self) -> bool {
-        if !self.watch_for_mandatory_loop() {
-            return false;
-        }
-        self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
-            mandatory_loop: true,
-        });
-        true
-    }
-
-    /// Count one resolution toward the CR 104.4b watch; true once it shows
-    /// a mandatory loop. An emptied stack with nothing waiting to trigger
-    /// ends any chain, so it ends the watch instead.
-    fn watch_for_mandatory_loop(&mut self) -> bool {
         if self.stack_is_empty()
             && self.state.pending_triggers.is_empty()
             && self.state.trigger_placement.is_none()
@@ -579,6 +559,11 @@ impl Game {
             }
         });
         self.state.priority_mut().loop_watch = Some(watch);
+        if looped {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true,
+            });
+        }
         looped
     }
 }

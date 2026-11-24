@@ -15,10 +15,10 @@ pub struct PriorityState {
     /// stack has not emptied. Boxed so the common empty case stays one word.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loop_watch: Option<Box<MandatoryLoopWatch>>,
-    /// A resolution that stopped for a decision and still owes the watch its
-    /// count once it finishes (CR 608.2m). Not hashed: it is set exactly
-    /// while a stack object's suspended resolution, which is hashed, waits,
-    /// and is spent before the next action space is offered.
+    /// A resolution that owes the watch its count once it finishes, which
+    /// may be after a decision it stopped for (CR 608.2m). Not hashed: an
+    /// action space sees it only while that suspended resolution, which is
+    /// hashed, waits; it is spent before any other action space is offered.
     #[serde(skip)]
     pub resolution_owed: bool,
 }
