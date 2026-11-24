@@ -4787,3 +4787,65 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     game.shuffle_unseen_libraries(12);
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
+
+/// CR 608.2h, 707.8a: a token copy of a departed creature uses the copiable
+/// values it last had. A front-face-up transforming card leaves no snapshot,
+/// yet its copy is a transforming token; a single-faced copy of that face
+/// (CR 712.9) leaves one that cannot transform.
+#[test]
+fn departed_copy_source_keeps_catalog_faces_only_on_a_transforming_card() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Cecil, Dark Knight".into(), 4),
+        ("Gray Ogre".into(), 4),
+        ("Mountain".into(), 32),
+    ]);
+    let token_after = |copy_cecil: bool| {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck.clone()),
+            ],
+            608_2027,
+            false,
+        );
+        game.keep_opening_hands();
+        let cecil = game
+            .scenario_force_battlefield(player, "Cecil, Dark Knight", true)
+            .unwrap();
+        let mut source = cecil;
+        if copy_cecil {
+            source = game
+                .scenario_force_battlefield(player, "Gray Ogre", true)
+                .unwrap();
+            let template = game.state[game.permanent_object(cecil).unwrap()].clone();
+            let object = game.permanent_object(source).unwrap();
+            game.state[object].become_copy_of(&template, &[]);
+        }
+        let object = game.permanent_object(source).unwrap();
+        let mut frame = EffectFrame::new(
+            player,
+            vec![Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::This,
+                exceptions: Vec::new(),
+            }],
+        );
+        frame.bind_source(Some(object), Some(object));
+        frame.completion = FrameCompletion::Continue;
+        game.move_object(object, ZoneType::Graveyard);
+        game.run_frame(frame);
+        let (token, _) = game
+            .state
+            .latest_objects()
+            .find(|(_, object)| object.kind() == ObjectKind::Token)
+            .expect("token copy");
+        let token = game.state.permanent_of(game.state.now(token)).unwrap();
+        assert_eq!(game.characteristics(token).name, "Cecil, Dark Knight");
+        game.transform_permanent(token);
+        game.characteristics(token).name.clone()
+    };
+    assert_eq!(token_after(false), "Cecil, Redeemed Paladin");
+    assert_eq!(token_after(true), "Cecil, Dark Knight");
+}

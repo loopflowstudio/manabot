@@ -19,7 +19,10 @@ use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
-    card::{CardDefId, CardDefinition, CastOption, ObjectDefinition, TokenDefinition},
+    card::{
+        CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
+        TokenDefinition,
+    },
     game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId, TransformingFaces},
 };
 
@@ -344,15 +347,24 @@ impl ContentPack {
     pub fn transforming_faces(&self, object: &Object) -> Option<TransformingFaces> {
         match object.form {
             Some(_) => object.form_faces().cloned(),
-            None => {
-                let (back, row) = self.back_face_row(object.definition_id)?;
-                Some(TransformingFaces {
-                    front: (object.definition_id, object.copiable_definition()),
-                    back: (back, Arc::clone(&row.printed)),
-                    back_up: false,
-                })
-            }
+            None => self.catalog_faces(object.definition_id, object.copiable_definition()),
         }
+    }
+
+    /// The front-face-up faces of the catalog transforming card `front`
+    /// showing `printed`: what an object with no battlefield form, live or
+    /// departed, transforms between.
+    fn catalog_faces(
+        &self,
+        front: CardDefId,
+        printed: Arc<PrintedCharacteristics>,
+    ) -> Option<TransformingFaces> {
+        let (back, row) = self.back_face_row(front)?;
+        Some(TransformingFaces {
+            front: (front, printed),
+            back: (back, Arc::clone(&row.printed)),
+            back_up: false,
+        })
     }
 
     /// `card`'s current copiable values in the row shape, with its token
@@ -395,19 +407,23 @@ impl ContentPack {
         Some(Arc::new(self.copiable_values(object)))
     }
 
+    /// The copiable values `lki`'s object had as it last existed (CR 608.2h).
+    /// Without a retained snapshot it was an ordinary catalog appearance, so
+    /// a front-face-up transforming card keeps its faces (CR 707.8a).
     pub(crate) fn departed_copiable_values(&self, lki: &ObjectLki) -> CopiableValues {
-        lki.copiable
-            .as_deref()
-            .cloned()
-            .unwrap_or_else(|| CopiableValues {
-                definition_id: Some(lki.definition_id),
-                definition: self
-                    .definition(lki.definition_id)
-                    .expect("catalog copy source")
-                    .clone(),
-                faces: None,
-                copy: None,
-            })
+        if let Some(values) = lki.copiable.as_deref() {
+            return values.clone();
+        }
+        let definition = self
+            .definition(lki.definition_id)
+            .expect("catalog copy source")
+            .clone();
+        CopiableValues {
+            definition_id: Some(lki.definition_id),
+            faces: self.catalog_faces(lki.definition_id, Arc::clone(&definition.printed)),
+            definition,
+            copy: None,
+        }
     }
 
     /// A new card object of the card named `name`.

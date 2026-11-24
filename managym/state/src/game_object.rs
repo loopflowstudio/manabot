@@ -822,16 +822,6 @@ impl Object {
         }
     }
 
-    /// A fresh token with the source's copiable values (CR 707.2, 111.1).
-    pub fn token_copy(source: Self, id: PublicId, owner: PlayerId) -> Self {
-        Self {
-            id,
-            owner,
-            kind: ObjectKind::Token,
-            ..source
-        }
-    }
-
     /// A fresh copy of a spell on the stack (CR 707.10), never a card.
     pub fn spell_copy(source: Self, id: PublicId, owner: PlayerId) -> Self {
         Self {
