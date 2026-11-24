@@ -88,21 +88,7 @@ Done when:
 
 ## Design by area
 
-### 1. Remaining protocol collapse and shared returns
-
-Slice 1 rewrote PPO on the damped rule's shape, moved the `PrefixObservation`
-trim and one-ahead `prefetch_minibatches` into `AdmittedRows`, folded
-`standardized_advantages`/`minibatches` into `RL`/`AdmittedRollout` and deleted
-the `PPO*` protocols and `ppo_rl()`. What remains:
-
-- move `categorical_lambda_returns` (the `reverse_waves` / `bootstrap_cuts`
-  recursion in `manabot/backends/torch/rl.py`) into `manabot/policy/returns.py`
-  in NumPy; both `torch/rl.py` and `mlx/rl.py` wrap it thinly;
-- after MLX gains categorical WDL, fold `CategoricalRL` into `RL` and delete
-  `CategoricalRL`, `categorical_rl()` (callers in `updates/targets.py`) and
-  `test_a_backend_without_a_categorical_critic_is_refused`.
-
-### 2. Live tokens: runtime admission and `O(B * max_live^2)` MLX attention
+### Live tokens: runtime admission and `O(B * max_live^2)` MLX attention
 
 - **Execution admission (`SelfPlay` + `backend.runtime`)**:
   - remove `if self.live_tokens and self.device != "cuda"` from
@@ -134,36 +120,12 @@ the `PPO*` protocols and `ppo_rl()`. What remains:
 - **Qualification gate**: parity row checks MLX-live == MLX-padded, MLX-live ==
   Torch-live (CPU), and MLX-live == Torch-padded.
 
-### 3. Complete MLX policy, collection, runtime, and checkpoint parity
+### Remaining policy inputs
 
 Every remaining `ModelConfig` variant mirrors Torch `ActorCritic` in
 `manabot/backends/mlx/policy.py`, closing all hidden scalar/catalog assumptions
 outside `require_supported`:
 
-- **`categorical_wdl`**:
-  - 3-logit `value_head` output; set `self.value_semantic = "signed_outcome"`
-    for `categorical_wdl` (else `None`).
-  - Match Torch's split between `forward_distribution(obs)` (raw `[B,1]` or
-    `[B,3]` logits) and `__call__(obs)` (expected signed outcome `[B]` via
-    `P(win) - P(loss)` for `categorical_wdl`, `[B]` scalar otherwise). Update
-    `evaluate`, `evaluate_probabilities`, `win_probabilities`, and
-    `SelectionPredictor` to consume `__call__`'s `[B]` values.
-  - Update `manabot/backends/mlx/collection.py` (`CollectionScope.sample`) to
-    compute `outcomes = softmax(value)`, `value = outcomes[:, 2] - outcomes[:, 0]`,
-    and return `outcome_probabilities` when `value_kind == "categorical_wdl"`,
-    mirroring `torch/collection.py:118-121`.
-  - Add `expected_outcome`, `outcome_probabilities`, `categorical_lambda_returns`
-    (wrapping `policy/returns.py`), `categorical_value_loss`, `selected_rows`,
-    `selected_moves`, and `magnitude_quantile` to `manabot/backends/mlx/rl.py`.
-  - Update `manabot/backends/parity.py:minibatch_loss` to set
-    `categorical=policy.config.value_kind == "categorical_wdl"`.
-- **`value_aggregation`** (`historical_mean` landed in Slice 1):
-  - `value_token` (learned trailing token through attention; neutral perspective
-    and zero memory gate), `attention_readout` (`AttentionReadout` with one
-    learned query + `mha`, built last as in Torch).
-- **`attention_on=False`**:
-  - omit `self.attention` and `self.extra_attention`; skip attention and column
-    trimming while preserving `final_norm` and `value_token` behavior.
 - **`recent_events`**:
   - port `torch/_recent_events.py` (`RecentEventEncoder`) over `Prepared.events`;
     include `events.validity.any(-1)` in `stream_norm` context presence mask.
@@ -188,7 +150,7 @@ outside `require_supported`:
   - add `pretrained_memory_branch` warm-start support in `mlx/runtime.py`
     matching `torch/runtime.py:95-120`.
 
-### 4. Belief: one portable container (`belief.safetensors`), unified codec, MLX sampler
+### Belief: one portable container (`belief.safetensors`), unified codec, MLX sampler
 
 - **Recipes**:
   - `manabot/recipes/belief_policy.py`: `PolicyConfig` inherits from
@@ -264,17 +226,12 @@ outside `require_supported`:
 
 ## What goes
 
-- `CategoricalRL`, `categorical_rl()`,
-  `test_a_backend_without_a_categorical_critic_is_refused` (Slice 2).
-- Torch `rl.categorical_lambda_returns` duplicate wave recursion (moves into
-  `manabot/policy/returns.py`).
 - `SelfPlay.valid_settings`' hardcoded live-token CUDA check (moves to
   `backend.runtime.admit_execution`).
 - `SamplerEncoder` on `BeliefTrainer`, the hard `manabot.backends.torch.belief_fit`
   import in `manabot/recipes/belief_sampler.py`, and raw `torch.load` in
   `manabot/reports/belief.py`.
-- Each `require_supported` reason as its slice lands, and
-  `test_unimplemented_layouts_are_refused_by_name`.
+- Each remaining `require_supported` architecture reason as its slice lands.
 - Docs: `manabot/backends/mlx.md`, `manabot/backends/README.md`,
   `docs/observation-and-model.md`, and `docs/training.md` updated to reflect
   full MLX parity, runtime live-token admission, and `belief.safetensors`.
@@ -285,20 +242,8 @@ outside `require_supported`:
    `world=None`/hashed records, `historical_mean`; the Torch-blocked recipe
    test registered a portable checkpoint after one MPS Adam step, and both
    backends reloaded it with identical logits and value.
-2. **Next — critic and attention variants, then final protocol collapse**:
-   - Move `categorical_lambda_returns` to `manabot/policy/returns.py`; add
-     categorical WDL + selection helpers to `mlx/rl.py`.
-   - Separate `MLXActorCritic.forward_distribution` vs `__call__`, fix
-     `evaluate`/`evaluate_probabilities`/`win_probabilities`/`value_semantic`,
-     add `categorical_wdl` handling to `mlx/collection.py` and
-     `backends/parity.py:minibatch_loss`.
-   - Fold `CategoricalRL` into `RL`; delete `CategoricalRL`, `categorical_rl()`,
-     and `test_a_backend_without_a_categorical_critic_is_refused`.
-   - Implement `value_token`, `attention_readout` (built last), and
-     `attention_on=False` in `mlx/policy.py`.
-   - Convert `test_mlx_backend.py` parity test into a parametrized table over
-     architecture variants.
-3. **Portable belief sampler container, belief rows, and Torch-free demo**:
+2. **Done (ec62204d49)** — Seven MLX architecture cases match Torch on forward outputs, gradients and clipped Adam weights. A collected WDL rollout trained through the shared categorical return estimator and update protocol.
+3. **Next — portable belief sampler container, belief rows, and Torch-free demo**:
    - Factor `encode_safetensors` / `decode_safetensors` in
      `manabot/policy/checkpoint.py`.
    - Unify `belief.safetensors` in `manabot/belief/checkpoint.py` with
@@ -319,8 +264,7 @@ outside `require_supported`:
      `PackedGRU.run`, `CollectionMemory` in `PolicyInference`, `memory_gates`,
      `pretrained_memory_branch`, and `transformer` with `.self_attn.qkv_*` and
      `_SEQUENTIAL` mappings).
-   - Remove remaining `require_supported` architecture checks and delete
-     `test_unimplemented_layouts_are_refused_by_name`.
+   - Remove remaining `require_supported` architecture checks.
    - Update `mlx.md`, `backends/README.md`, `docs/observation-and-model.md`,
      and `docs/training.md`.
 

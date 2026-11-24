@@ -1,18 +1,22 @@
-at: 90211689b7746073e90adbfe6a787e01446ef46c
+at: ec62204d49778118bb56e40455e08b4a2a6e4468
 first:
   - path: manabot/backends/mlx.md
-    why: Gray Ogre command and intended backend coverage
-  - path: manabot/recipes/belief_policy.py
-    why: Select the backend for tracked PPO training
+    why: Policy outputs, training commands and intended backend coverage
   - path: manabot/training/updates/backend.py
-    why: Both optimizers use the same learner and rollout contracts
+    why: Shared contract for learners and both critic types
+  - path: manabot/policy/returns.py
+    why: Frozen outcome mixtures across terminals and bootstrap cuts
+  - path: manabot/backends/mlx/policy.py
+    why: Attention variants and each critic's raw and expected outputs
+  - path: manabot/backends/mlx/collection.py
+    why: Store each sampled decision's outcome probabilities
+  - path: manabot/training/updates/targets.py
+    why: Build training targets from the collected distributions
   - path: manabot/training/updates/ppo.py
-    why: Differentiate one PPO objective across execution chunks
+    why: Accumulate one clipped PPO step across execution chunks
   - path: manabot/training/rollout/admission.py
     why: Bound host preparation and release prefetched rows
-  - path: manabot/backends/mlx/policy.py
-    why: Embed hashed records and pool historical critic slots
   - path: tests/model/test_mlx_backend.py
-    why: Compare logits, gradients and clipped Adam weights
+    why: Compare real forwards, gradient directions and Adam weights
   - path: tests/training/test_mlx_workflow.py
     why: Register a policy checkpoint with Torch imports blocked

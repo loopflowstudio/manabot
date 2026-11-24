@@ -29,3 +29,12 @@
   On the first step it is proportional to the accumulated gradient, so the
   test can check per-tensor cosine through the actual optimizer on both
   backends, including a split MLX minibatch.
+
+## Slice 2 (2026-11-23)
+
+- Used MLX's built-in multihead attention for object self-attention and the
+  learned critic query. It already runs fused SDPA with the checkpoint's
+  separate Q/K/V projections.
+- The attention-off historical mean differed from Torch by up to 0.051 before
+  masking continuation context by object validity. That table row passed the
+  existing forward, gradient and Adam tolerances with the mask.
