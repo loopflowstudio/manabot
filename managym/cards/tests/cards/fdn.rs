@@ -988,6 +988,19 @@ fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
             for viewer in [PlayerId(0), PlayerId(1)] {
                 let view = Observation::for_player(s.game(), viewer);
                 assert_eq!(view.stack_objects.len(), s.game().state.stack_objects.len());
+                let programs: Vec<_> = view
+                    .continuation
+                    .iter()
+                    .filter(|frame| frame.kind == 3)
+                    .collect();
+                assert_eq!(programs.len(), view.stack_objects.len());
+                assert!(programs.iter().all(|frame| !frame.program.is_empty()
+                    && frame
+                        .program_description
+                        .as_ref()
+                        .unwrap()
+                        .to_lowercase()
+                        .contains("sacrifice")));
                 for entry in view.stack_objects {
                     let text = entry.description.unwrap();
                     assert!(
@@ -1001,8 +1014,266 @@ fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
                 *source
             );
             resolve_top(&mut s);
+            // Even the departed source's ability resolves once (CR 113.7a).
+            assert_eq!(
+                s.game()
+                    .state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .get(&(source.slot(), 0)),
+                Some(&1)
+            );
             assert_eq!(zone_of(&s, hand), Some(ZoneType::Hand));
         }
         assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), [ogre]);
+    }
+}
+
+/// A temporary death trigger distinguishes the exact recipient from its copies.
+fn grant_coil_death_trigger(
+    s: &mut crate::support::game::Scenario,
+    coil: managym::state::game_object::PermanentId,
+) {
+    use managym::state::{
+        ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        effect::{Affected, EffectDuration, Modification},
+    };
+    let object = card_of(s, coil);
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [Affected::Object(object)],
+        Modification::GrantTriggered(Box::new(Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::gain_life(3)],
+        })),
+        EffectDuration::EndOfTurn,
+    );
+}
+
+#[test]
+fn named_coil_copies_inherit_electroduplicate_but_only_the_recipient_gains_life() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{offered_targets, top_spell, zone_of},
+        play::{cast, cast_card},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+    use std::collections::BTreeSet;
+    let mut s = five_color_setup(&[
+        "Electroduplicate",
+        "Rite of Replication",
+        "Self-Reflection",
+        "Relm's Sketching",
+        "Gray Ogre",
+        "Doubling Season",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let original = s
+        .game_mut()
+        .create_token("token.komas_coil", PlayerId(0), false)
+        .unwrap();
+    let opponent = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(1, "Island");
+    let clue = s
+        .game_mut()
+        .create_token("token.clue", PlayerId(1), false)
+        .unwrap();
+    s.force_permanent_on_battlefield(1, "Doubling Season");
+    cast(&mut s, "Electroduplicate");
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    let recipient = *s
+        .battlefield_permanents_named(0, "Koma's Coil")
+        .iter()
+        .find(|id| **id != original)
+        .unwrap();
+    grant_coil_death_trigger(&mut s, recipient);
+    let main = s.snapshot();
+    for (spell, flashback) in [
+        ("Rite of Replication", false),
+        ("Relm's Sketching", false),
+        ("Self-Reflection", false),
+        ("Self-Reflection", true),
+    ] {
+        s.restore(&main);
+        if spell == "Rite of Replication" {
+            replicate(&mut s, recipient, false);
+        } else {
+            let casting_card = if flashback {
+                let card = move_from_library(&mut s, 0, spell, ZoneType::Graveyard);
+                cast_card(&mut s, card);
+                card
+            } else {
+                cast(&mut s, spell)
+            };
+            let mut legal = vec![original, recipient];
+            if spell == "Relm's Sketching" {
+                legal.extend([opponent, land, clue]);
+            }
+            assert_eq!(
+                offered_targets(&s).into_iter().collect::<BTreeSet<_>>(),
+                legal.into_iter().map(Target::Permanent).collect()
+            );
+            assert!(s.choose_target(Target::Permanent(recipient)));
+            assert_eq!(
+                top_spell(&s).spent.total(),
+                if spell == "Self-Reflection" && !flashback {
+                    6
+                } else {
+                    4
+                }
+            );
+            settle(&mut s);
+            assert_eq!(
+                zone_of(&s, casting_card),
+                Some(if flashback {
+                    ZoneType::Exile
+                } else {
+                    ZoneType::Graveyard
+                })
+            );
+        }
+        check_coil_sacrifices(&mut s, original, recipient);
+    }
+}
+
+fn check_coil_sacrifices(
+    s: &mut crate::support::game::Scenario,
+    original: managym::state::game_object::PermanentId,
+    recipient: managym::state::game_object::PermanentId,
+) {
+    use crate::support::play::{command, resolve_top};
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        state::mana::{Color, Colors},
+    };
+    use std::collections::BTreeSet;
+    let coils = s.battlefield_permanents_named(0, "Koma's Coil");
+    assert_eq!(coils.len(), 3);
+    for &id in &coils {
+        let object = &s.game().state[card_of(s, id)];
+        assert!(object.has_subtype("Serpent"));
+        assert_eq!(object.colors(), Colors::from_iter([Color::Blue]));
+        assert_eq!(s.game().characteristics(id).pt(), (3, 3));
+    }
+    let descendants: BTreeSet<_> = coils
+        .into_iter()
+        .filter(|id| *id != original)
+        .map(|id| {
+            assert!(s.game().characteristics(id).keywords.has(Keyword::Haste));
+            card_of(s, id)
+        })
+        .collect();
+    let grantee = card_of(s, recipient);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    let root = s.snapshot();
+    let orders = s.action_space().actions.clone();
+    assert_eq!(orders.len(), 2);
+    let mut first_sources = Vec::new();
+    for order in orders {
+        s.restore(&root);
+        let committed = command(s, |action| action == &order);
+        let recorded = serde_json::to_vec(&committed).unwrap();
+        let expected = managym::search_state::witness(s.game());
+        s.restore(&root);
+        s.game_mut()
+            .execute_semantic_command(&serde_json::from_slice(&recorded).unwrap())
+            .unwrap();
+        assert_eq!(managym::search_state::witness(s.game()), expected);
+        let sources: Vec<_> = s
+            .game()
+            .state
+            .stack_objects
+            .iter()
+            .map(|a| a.source_object())
+            .collect();
+        assert_eq!(
+            sources.iter().copied().collect::<BTreeSet<_>>(),
+            descendants
+        );
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let view = Observation::for_player(s.game(), viewer);
+            let recipients: BTreeSet<_> = view
+                .agent_permanents
+                .iter()
+                .chain(&view.opponent_permanents)
+                .filter(|row| {
+                    row.is_token
+                        && row.characteristics.name == "Koma's Coil"
+                        && row.characteristics.keywords.haste
+                })
+                .map(|row| row.id)
+                .collect();
+            assert_eq!(recipients.len(), 2);
+            assert_eq!(
+                view.continuation
+                    .iter()
+                    .filter(|frame| frame.kind == 3)
+                    .map(|frame| frame.source.object.unwrap())
+                    .collect::<BTreeSet<_>>(),
+                recipients
+            );
+        }
+        if first_sources.is_empty() {
+            first_sources = sources.clone();
+        } else {
+            assert!(sources.iter().rev().eq(&first_sources));
+        }
+        let before = s.game().state.players[0].life;
+        for source in sources.into_iter().rev() {
+            resolve_top(s);
+            if source == grantee {
+                assert_eq!(
+                    s.game().state.stack_objects.last().unwrap().source_object(),
+                    grantee
+                );
+                resolve_top(s);
+            }
+        }
+        assert_eq!(s.game().state.players[0].life, before + 3);
+        assert!(s.game().state.stack_objects.is_empty());
+        assert_eq!(s.battlefield_permanents_named(0, "Koma's Coil"), [original]);
+    }
+}
+
+#[test]
+fn named_coil_upkeep_copies_only_another_controlled_nonland() {
+    use crate::support::inspect::offered_targets;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Extravagant Replication", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Extravagant Replication");
+    let coil = s
+        .game_mut()
+        .create_token("token.komas_coil", PlayerId(0), false)
+        .unwrap();
+    let clue = s
+        .game_mut()
+        .create_token("token.clue", PlayerId(0), false)
+        .unwrap();
+    s.force_permanent_on_battlefield(0, "Island");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(s.game().state.stack_objects.is_empty() && offered_targets(&s).is_empty());
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    let targets = offered_targets(&s);
+    assert_eq!(targets.len(), 2);
+    for candidate in [coil, clue] {
+        assert!(targets.contains(&Target::Permanent(candidate)));
+    }
+    assert!(s.choose_target(Target::Permanent(coil)));
+    grant_coil_death_trigger(&mut s, coil);
+    settle(&mut s);
+    let coils = s.battlefield_permanents_named(0, "Koma's Coil");
+    assert_eq!(coils.len(), 2);
+    for id in coils {
+        assert_eq!(
+            s.game().characteristics(id).triggered_abilities.len(),
+            usize::from(id == coil)
+        );
     }
 }

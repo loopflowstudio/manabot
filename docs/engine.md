@@ -1161,6 +1161,16 @@ source's copiable values at resolution or, after departure, at the moment it
 left. A Clone that returns as a different creature keeps its new form while
 the earlier ability copies the departed form.
 
+Stack inspection, target changes and resolution use the triggering face captured
+at placement. For example, a Clone that copies an Electroduplicate token can
+return to hand with its sacrifice ability still on the stack. Both players can
+read the ability, and its source reference still names the departed Clone.
+
+Copy exceptions become part of the new token’s copiable characteristics. A Rite
+of Replication copy of an Electroduplicate Koma’s Coil inherits haste and its own
+end-step sacrifice trigger. A temporary death ability granted to the first Coil
+triggers only when that Coil dies.
+
 A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
 on it, and a delayed trigger watching one creature retires on it. Code picks
 the id for what its rules text means:

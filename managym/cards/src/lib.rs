@@ -54,6 +54,7 @@ mod jou;
 mod khm;
 mod kld;
 mod ktk;
+mod lci;
 mod lea;
 mod m12;
 mod m15;
@@ -66,6 +67,7 @@ mod mkm;
 mod mmq;
 mod mrd;
 mod msh;
+mod ncc;
 mod nec;
 mod ody;
 mod ons;
@@ -165,6 +167,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     khm::cards,
     kld::cards,
     ktk::cards,
+    lci::cards,
     lea::cards,
     m12::cards,
     m15::cards,
@@ -177,6 +180,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     mmq::cards,
     mrd::cards,
     msh::cards,
+    ncc::cards,
     nec::cards,
     ody::cards,
     ons::cards,

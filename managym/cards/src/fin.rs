@@ -19,6 +19,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         the_fire_crystal(),
+        relms_sketching(),
         cecil(),
         esper_origins(),
         fang(),
@@ -393,6 +394,35 @@ fn the_fire_crystal() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn relms_sketching() -> CardDefinition {
+    CardDefinition {
+        key: "fin.relms_sketching",
+        scryfall_id: "6aedac12-3714-4a81-bd4d-1d2555c66f78",
+        printed: PrintedCharacteristics {
+            name: "Relm's Sketching".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![
+                            CardType::Artifact,
+                            CardType::Creature,
+                            CardType::Land,
+                        ],
+                        ..Default::default()
+                    },
+                }),
+                exceptions: vec![],
+            }],
+            text_box: "Create a token that's a copy of target artifact, creature, or land.".into(),
             ..Default::default()
         },
         ..Default::default()

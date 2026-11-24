@@ -852,7 +852,10 @@ pub fn resolve_until_priority(s: &mut Scenario) {
 /// Commit the chosen legal action through the public semantic Command API,
 /// checking that a fork commits identically, the source is untouched until
 /// it commits, and the spent Command is then stale.
-pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
+pub fn command(
+    s: &mut Scenario,
+    predicate: impl Fn(&Action) -> bool,
+) -> managym::decision::Command {
     use managym::{decision::Command, search_state::witness};
     let index = s
         .action_space()
@@ -883,6 +886,7 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
         witness(&fork),
         "stale Command changed state"
     );
+    command
 }
 
 /// Answer the sole stacked ability with a scenario permanent's counter ability.

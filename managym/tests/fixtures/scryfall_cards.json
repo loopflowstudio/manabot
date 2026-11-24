@@ -1,4 +1,42 @@
 {
+  "Relm's Sketching": {
+    "name": "Relm's Sketching",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create a token that's a copy of target artifact, creature, or land.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Extravagant Replication": {
+    "name": "Extravagant Replication",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Self-Reflection": {
+    "name": "Self-Reflection",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Ragnarok, Divine Deliverance": {
     "name": "Ragnarok, Divine Deliverance",
     "mana_cost": "",
