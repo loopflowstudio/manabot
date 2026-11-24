@@ -36,3 +36,5 @@ The pending damage binding exceeded the 4096-byte GameState ceiling with trigger
 For Hunter, use a nontoken noncreature copying a creature as one simultaneous victim. This makes the departure and destination readings distinguishable.
 
 Prowler’s turn-wide fact uses the active player row as its v11 join for either viewer. The turn owns the single boolean.
+
+The Blast privacy fixture uses identical closed lists for both substitutions and ordinary forced-action skipping. Nonacting LLM privacy is checked at capture admission because only the chooser receives a decision prompt.
