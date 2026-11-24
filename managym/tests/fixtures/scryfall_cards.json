@@ -8209,5 +8209,32 @@
     "keywords": [],
     "oracle_text": "{1}, {T}, Sacrifice a creature: Draw a card and put a soul counter on this artifact. Activate only as a sorcery.\n{4}, {T}, Sacrifice this artifact: Each opponent loses life equal to the number of soul counters on this artifact.",
     "colors": []
+  },
+  "Mentor of the Meek": {
+    "name": "Mentor of the Meek",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever another creature you control with power 2 or less enters, you may pay {1}. If you do, draw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Immersturm Predator": {
+    "name": "Immersturm Predator",
+    "mana_cost": "{2}{B}{R}",
+    "type_line": "Creature — Vampire Dragon",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature becomes tapped, exile up to one target card from a graveyard and put a +1/+1 counter on this creature.\nSacrifice another creature: This creature gains indestructible until end of turn. Tap it.",
+    "colors": [
+      "B",
+      "R"
+    ]
   }
 }

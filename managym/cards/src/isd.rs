@@ -1,6 +1,9 @@
 //! Innistrad.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope},
+    ability::{
+        Ability, Effect, EffectValue, ObjectSelector, PaymentCost, Scope, TriggerCondition,
+        TriggerSubject,
+    },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
         StaticAbility,
@@ -10,7 +13,42 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![blasphemous_act(), typhoid_rats()]
+    vec![blasphemous_act(), mentor_of_the_meek(), typhoid_rats()]
+}
+
+fn mentor_of_the_meek() -> CardDefinition {
+    let text_box = "Whenever another creature you control with power 2 or less enters, you may pay {1}. If you do, draw a card.";
+    CardDefinition {
+        key: "isd.mentor_of_the_meek",
+        scryfall_id: "bd8f179a-f6ab-4d4c-8195-ed077a7770d3",
+        printed: PrintedCharacteristics {
+            name: "Mentor of the Meek".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        max_power: Some(2),
+                        ..CardPredicate::creature()
+                    }),
+                },
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::parse("{1}")),
+                    if_paid: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    if_declined: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn typhoid_rats() -> CardDefinition {

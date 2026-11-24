@@ -1,7 +1,8 @@
 //! Kaldheim.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TurnStep,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -9,12 +10,14 @@ use managym_state::{
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         fynn_the_fangbearer(),
+        immersturm_predator(),
         koma_cosmos_serpent(),
         seize_the_spoils(),
     ]
@@ -72,6 +75,66 @@ fn koma_cosmos_serpent() -> CardDefinition {
                     duration: EffectDuration::EndOfTurn,
                 }]),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn immersturm_predator() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature becomes tapped, exile up to one target card from a graveyard and put a +1/+1 counter on this creature.\nSacrifice another creature: This creature gains indestructible until end of turn. Tap it.";
+    let card = TargetSpec::GraveyardCard {
+        predicate: CardPredicate::default(),
+    };
+    CardDefinition {
+        key: "khm.immersturm_predator",
+        scryfall_id: "0d83d2d9-b9d0-47f5-989b-f2c726401ade",
+        printed: PrintedCharacteristics {
+            name: "Immersturm Predator".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Dragon".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BecomesTapped {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, card.clone()),
+                    effects: vec![
+                        Effect::exile(ObjectSelector::Target(card)),
+                        Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        ),
+                    ],
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sacrifice: Some(SacrificeCost {
+                    predicate: CardPredicate::creature(),
+                    another: true,
+                    or_mana: None,
+                }),
+                effects: vec![
+                    Effect::ApplyContinuous {
+                        affected: ObjectSelector::This,
+                        modification: Modification::AddKeywords(Keywords::of(&[
+                            Keyword::Indestructible,
+                        ])),
+                        duration: EffectDuration::EndOfTurn,
+                    },
+                    Effect::Tap {
+                        what: ObjectSelector::This,
+                    },
+                ],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
