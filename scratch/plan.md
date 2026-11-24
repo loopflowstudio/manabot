@@ -384,6 +384,22 @@ The working phase for the life batch is satisfied except Finding 6 below. These 
    fixtures are named in the slices above.
 6. **Closed in the death slice.** **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
 
+7. **A stacked "up to" modal trigger that chose no modes reads as all of
+   them.** `trigger_description` (`agent/ability_description.rs`) only
+   prefixes "chosen mode N" when `chosen_modes` is nonempty and otherwise
+   describes the printed `TriggerModes`. Before the death slice an empty
+   choice became `inline_effects = Some([])`. Reproduction: Bumi, King of
+   Three Trials enters with no Lesson in its controller's graveyard (X = 0)
+   and the trigger is placed after one priority pass. Both viewers' stack
+   row reads "Choose up to 0 plus the number of Lesson cards… Put 3 +1/+1
+   counters…; or … Scry 3; or … Earthbend 3", `chosen_mode` is `None`, and
+   the frame has no program. It resolves to nothing (0 counters), which is
+   correct. Fix: a stacked trigger has always chosen its modes. Pass
+   whether the choice is made (stack: always; placement: `modes_chosen`)
+   and render a made empty choice as "no modes chosen". Add the zero-Lesson
+   case to `tla.rs::bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard`,
+   asserting both viewers' text.
+
 Still open beyond findings: recorded Watch playback of a partial
 declaration, the full debug and browser gate, frozen pilot compatibility on
 the merged preparation path, and Engine Budget comparisons.
@@ -460,7 +476,19 @@ Compression (`e4579800a7`) gave stacked triggers one effects reader, `Game::stac
 
 Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
-Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5.
+Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5 and 7.
+
+**Death batch behavior review at `4581548f6f`**
+
+The working phase for the death batch is satisfied except Finding 7, a text-only defect in a TLA card that the modal-trigger change exposed. These passed at this head, all in debug: the cards target (899), the `managym` lib (359), rules (188), `match_state_hash_tests`, `search_state_contract` and `canonical_replay_tests`. The installed extension predated the compression commit `e4579800a7`. After rebuilding it at this head and replacing it atomically, the five-file focused Python selection passed (116 passed, 1 skipped optional checkpoint).
+
+- All nine definitions match their Scryfall Oracle text, cost, types and stats. Banshee and Needletooth read death history as the ability resolves or as the intervening "if" requires (CR 608.2h, 603.4). Cerberus's `DoesntUntap` blocks only its untap step, not its own untap effect. Wardens rechecks its intervening "if" after choosing a mode. Reaper and Bloodwitch include their own deaths (CR 603.10a), and Reaper's damage comes from its LKI source. Massacre Wurm's "that player" is the stolen creature's controller, not its owner. Garna reads `was_attacking` from LKI and skips its own death. Kalastria targets before offering {B} (CR 603.3d) and reads a creature's last known types.
+- One matcher (`matches_permanent_facts`) serves live, layer-context and departed permanents. Departed supertypes and mana value come from `source_base`, the same printing a live copy reads. `recorded_object_matches_predicate` and `entry_matches_predicate` remain separate printing-level paths for non-battlefield appearances, which is correct for their callers. `ObjectLki` is `Serialize`-only, so no stored snapshot reader breaks. The hash moved to v27.
+- `event_player` strips trigger wrappers through `condition.event()`. Entering binds the entry controller and departure binds the controller from LKI (`zones.rs` `event_controller`). `PutIntoGraveyard` keeps the owner.
+- Departed trigger context projects to both viewers. A creature dying is public, and a face-down permanent is revealed as it leaves (CR 708.9), so no new disclosure was found.
+- Fixed during review: the Exemplar ledger row still carried Finding 6 as `pending`; it was removed (its `lifelink_gains` fixture pointer stays).
+- Payment did not change in this batch. Kalastria's {B} uses the existing optional-payment path, so no competing-spend case is new.
+- Not covered by this batch's tests: granted modal triggers are still offered no modes (`unchosen_trigger_modes` returns `None` for inline effects), as before. No granted modal trigger exists in the catalog.
 
 #### Deferred dedicated slice · CR 104.4b mandatory-loop draw
 
