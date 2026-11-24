@@ -258,17 +258,13 @@ wheels = [
 [[package]]
 name = "etude-sdk"
 version = "0.4.5"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/loopflowstudio/etude?rev=af71c109526df2cc2cb2fb68f158653c119b1c51#af71c109526df2cc2cb2fb68f158653c119b1c51" }
 dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
     { name = "typer" },
     { name = "typing-extensions" },
     { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/18/29/83051ffb27633d2de4eef8708d94efde8505076e09cf66bee57d72d01924/etude_sdk-0.4.5.tar.gz", hash = "sha256:2e73a90c254675267cb7b6dc4aa9ba7c3b47ff93fd569f7b67e772c3152f89f6", size = 1086803, upload-time = "2026-11-23T18:21:13.472Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/08/d43d7d7c7b84edfa95a0e4a9fcee20f7a3bf8389f9e73a30869087617e7e/etude_sdk-0.4.5-py3-none-any.whl", hash = "sha256:0db6f43bd028a1b82dc71b947c0a85d049b5b44bbda64540dcfac8fbfe8b590f", size = 672112, upload-time = "2026-11-23T18:21:12.153Z" },
 ]
 
 [package.optional-dependencies]
@@ -585,9 +581,9 @@ requires-dist = [
     { name = "blake3", marker = "extra == 'dev'", specifier = ">=1" },
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
     { name = "cloudpickle", specifier = ">=3.1.2" },
-    { name = "etude-sdk", specifier = ">=0.4.5,<0.5" },
-    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.4.5,<0.5" },
-    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.4.5,<0.5" },
+    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=af71c109526df2cc2cb2fb68f158653c119b1c51" },
+    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", git = "https://github.com/loopflowstudio/etude?rev=af71c109526df2cc2cb2fb68f158653c119b1c51" },
+    { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", git = "https://github.com/loopflowstudio/etude?rev=af71c109526df2cc2cb2fb68f158653c119b1c51" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
@@ -614,7 +610,7 @@ provides-extras = ["openrouter", "llm", "reports", "artifacts", "academy", "eval
 
 [package.metadata.requires-dev]
 play-runtime = [
-    { name = "etude-sdk", specifier = "==0.4.5" },
+    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=af71c109526df2cc2cb2fb68f158653c119b1c51" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.9.3,<2.0" },

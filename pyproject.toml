@@ -107,6 +107,7 @@ explicit = true
 members = ["managym"]
 
 [tool.uv.sources]
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "af71c109526df2cc2cb2fb68f158653c119b1c51" }
 managym = { workspace = true }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
