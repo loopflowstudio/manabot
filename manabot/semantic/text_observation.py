@@ -327,9 +327,12 @@ def _turn_history(player: managym.Player) -> str:
     if amount := history.life_gained:
         parts.append(f"gained {amount} life")
     if count := history.creatures_died:
-        parts.append(f"{count} controlled creature deaths")
+        parts.append(f"had {count} creature{'' if count == 1 else 's'} they controlled die")
     if count := history.permanents_left:
-        parts.append(f"{count} permanents left ({history.nonland_permanents_left} nonland)")
+        parts.append(
+            f"had {count} permanent{'' if count == 1 else 's'} they controlled leave "
+            f"the battlefield ({history.nonland_permanents_left} nonland)"
+        )
     if history.warped_this_turn:
         parts.append("cast a spell for warp")
     if amount := history.life_lost:

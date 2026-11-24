@@ -753,9 +753,9 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "cards_drawn": "drew",
         "bent": "bent",
         "life_gained": "gained N life",
-        "creatures_died": "controlled creature deaths",
-        "permanents_left": "permanents left",
-        "nonland_permanents_left": "nonland departures",
+        "creatures_died": "they controlled die",
+        "permanents_left": "leave the battlefield",
+        "nonland_permanents_left": "nonland)",
         "warped_this_turn": "cast a spell for warp",
         "mana_spent_casting": "spent N mana casting spells",
         "life_gains": "gained life N times",
@@ -915,7 +915,8 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card; gained life 2 times; lost 3 life; cast 2 spells."
+        "their control; drew 1 card; gained life 2 times; gained 5 life; had 1 "
+            "creature they controlled die; lost 3 life; cast 2 spells."
         in text
     )
     assert "Restricted mana for anything but nonartifact spells: C 2." in text
@@ -1307,7 +1308,10 @@ def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
     submit_response(env, decision, original.reference)
     text = capture_text_decision(env).text
     assert "; copy of D" in text
-    assert "This turn: sacrificed 1 permanent." in text
+    assert (
+        "This turn: sacrificed 1 permanent; had 1 creature they controlled die; "
+        "had 1 permanent they controlled leave the battlefield (1 nonland)." in text
+    )
 
 
 def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:

@@ -66,7 +66,7 @@ pub enum FactKind {
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
     AbilityResolution = 15,
-    TriggeringDamage = 17,
+    TriggeringDamage = 16,
 }
 
 impl FactKind {

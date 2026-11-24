@@ -261,7 +261,9 @@ Directed verification for this slice must exercise:
 - The semantic-kernel `evidence-opening-v1.json` was re-recorded under hash v26 and the grown catalog; the Clone suspended-entry hash witness in `lea.rs` was re-pinned for the same reason.
 A dynamic mana output (`AddMana` with a counted amount) finalizes to one `ManaChoice`; trivial skipping removes it in play, and the constructed fixture takes it explicitly.
 
-Next: Python-side checks after the CPython 3.13 rebuild (`tests/semantic/test_text_observation.py` attack-batch text, `tests/env/test_named_observation_layout.py`, `tests/verify/test_input_v10.py`, `tests/model/test_pinned_pilot.py`), then compress and the batch behavior review. Recorded Watch playback of a partial declaration and the Engine Budget stay in integrated validation.
+After the CPython 3.13 rebuild, `tests/semantic/test_text_observation.py`, `tests/env/test_named_observation_layout.py`, `tests/verify/test_input_v10.py` and `tests/model/test_pinned_pilot.py` passed (v9/v11 pilots unchanged). Turn-history text now names creature deaths and departures in sentence form ("had 1 creature they controlled die"). `FactKind::TriggeringDamage` moved from 17 to 16 to close the gap the deleted branch-local `LifeGains` kind left; no merged pilot used either number.
+
+Next: compress and the batch behavior review. Recorded Watch playback of a partial declaration and the Engine Budget stay in integrated validation.
 
 ## Remaining mechanic batches
 
