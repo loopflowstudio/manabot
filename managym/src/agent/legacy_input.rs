@@ -9,7 +9,7 @@
 //! else depends on it.
 //!
 //! Its whole surface is frozen; deleting it (and the `InputLayout::Legacy`
-//! branches that call it) removes inputs v9 and v10. Removal release: 0.4.0.
+//! branches that call it) removes inputs v9 and v10. Removal release: 0.3.0.
 //! MTG-353 owns the general mechanism for checkpoints across worlds.
 
 use std::collections::HashMap;
@@ -63,7 +63,7 @@ pub fn history(
     obs: &Observation,
     capacity: usize,
     cards_per_player: usize,
-) -> Vec<[f32; HISTORY_DIM]> {
+) -> Vec<[i64; HISTORY_DIM]> {
     let agent: HashMap<i32, usize> = obs
         .agent_cards
         .iter()

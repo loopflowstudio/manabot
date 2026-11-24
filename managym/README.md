@@ -663,7 +663,68 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
-For a batched allocation, `layout.axis_extents(buffers)` returns one int64
+For a v11 batch, call
+`encode_observation_batch(items, layout, action_overflow="error")` with `Env`
+or `Observation` items.
+`RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
+`encode_active_batch()` and `step_active_batch(actions)` to return
+`(active_slots, ObservationBatch)`.
+`VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
+returns the batch from the step together with per-stream rewards, terminated
+flags and truncated flags. Each stream emits its observation and step events
+as it advances. A strict stepping error can leave streams advanced.
+
+For repeated collection, call `VectorEnv.set_observation_layout(state, layout,
+action_overflow)` with one writable outcome array per stream for each of
+`rewards` (float64), `terminated` and `truncated` (uint8). Use the ordinary
+buffered reset, replacement and step methods. After reset, `observation_rows()`
+returns one `(batch, index)` per stream in slot order. Masked steps preserve
+parked slots. Isolated stepping reports the failed slot and keeps every
+successful sibling's observation. A failed snapshot load leaves the prior
+roots and observations available.
+
+`observations_for_players(players)` freezes the requested viewers at their
+current decisions. Pass one seat or `None` per stream. The result contains the
+selected slot identities and a batch in that order. Any batch's
+`gather(coordinates)` copies just the selected live spans from compatible
+batches, preserving the requested order and repeated rows.
+
+Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
+each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+strings for native-endian int32 row offsets and packed, native-endian records.
+One span belongs to each batch item, or to each (item, seat) if `seat_axis`
+is true. Subtract consecutive offsets for live counts, including all-zero
+live rows. Companion validity masks derive from those counts. Object joins
+retain the layout's coordinates. The default overflow policy rejects excess
+actions. With `"first-legal"`, `action_counts` gives the retained prefix.
+
+`layout.csr_fields[key]` lists each record field's name, dtype and logical
+column index in byte order. IDs, joins, enums, unscaled counts and full signed
+words use int32. Flags use uint8 and scaled scalars use float32. In a dense
+input a word occupies two 16-bit columns. The packed field takes their common
+name and the first column's index. Both fact payloads use raw integer units.
+Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+Decision memory includes separate presence flags for optional selectors.
+
+```python
+fields = batch.layout.csr_fields["actions"]
+dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+_, offsets, values = batch.tables()["actions"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+actions = np.frombuffer(values, dtype=dtype)
+first_game_modes = actions["mode"][starts[0]:starts[1]]
+```
+
+For element arrays, the single field describes each element. An action-focus
+row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
+with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
+
+For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
+`encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
+emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
+the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
+`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape
 mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists

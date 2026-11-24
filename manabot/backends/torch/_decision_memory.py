@@ -18,7 +18,7 @@ from manabot.env.memory_store import PrefixIdentity, RecordNode, record_tail
 from manabot.policy.decision_memory import MemoryRows, retained_memory
 
 if TYPE_CHECKING:
-    from manabot.env.observation import ObservationBuffers
+    from manabot.env.observation import PolicyObservation
     from manabot.policy.prepare import Prepared
 
 
@@ -43,7 +43,7 @@ class CollectionMemory:
     def clear(self) -> None:
         self.nodes.clear()
 
-    def roots(self, obs: "ObservationBuffers") -> dict[str, int]:
+    def roots(self, obs: "PolicyObservation") -> dict[str, int]:
         retained = retained_memory(obs)
         if retained is None:
             return {}
@@ -88,7 +88,7 @@ class CollectionMemory:
         return roots
 
     def bind(
-        self, batch: "Prepared[torch.Tensor]", obs: "ObservationBuffers"
+        self, batch: "Prepared[torch.Tensor]", obs: "PolicyObservation"
     ) -> "Prepared[torch.Tensor]":
         retained = retained_memory(obs)
         if retained is None or batch.memory is None or batch.memory.fold is None:

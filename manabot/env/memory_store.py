@@ -352,7 +352,12 @@ class CompactObservation(PrefixObservation):
 
 def select_rows(
     rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
-) -> dict[str, np.ndarray]:
+) -> Mapping[str, np.ndarray]:
+    from manabot.policy.spans import ObservationSelection
+
+    if type(rows) is ObservationSelection:
+        return rows.select(indexes)
+    # Deprecated dense row slicing; removed in 0.3.0.
     selected = {key: value[indexes] for key, value in rows.items()}
     if isinstance(rows, PrefixObservation):
         prefixes = (
@@ -500,10 +505,15 @@ class MemoryStore:
         """Capture selected native streams; unchanged cursors do no row work.
 
         Generation, chooser, counts and coalesced-tail revision are compared in
-        bulk. Only changed rows enter scalar capture and its full admission.
+        bulk. Dense buffers use global slot indexes. A native selection is
+        already in requested order, while stream identities still use global
+        slots. Only the changed suffix enters chunk admission.
         The seed is checked independently so an identity change within a native
         generation still fails rather than reusing an unrelated issued prefix.
         """
+        from manabot.policy.spans import ObservationSelection
+
+        native = type(buffers) is ObservationSelection
         count = len(seeds)
         if self._live_prefixes.shape != (count, 2):
             self._live_prefixes = np.full((count, 2), None, object)
@@ -525,15 +535,16 @@ class MemoryStore:
             counts = selected_cursors[changed, :4]
             if (counts > np.asarray(self.capacities)).any():
                 raise ValueError("decision-memory native counts exceed capacity")
-            for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-                if buffers[key].dtype != np.float32 or buffers[key].shape != (
-                    count,
-                    capacity,
-                    MEMORY_WIDTHS[key],
-                ):
-                    raise ValueError(
-                        "decision-memory capacity mismatch or non-float32 transport"
-                    )
+            if not native:
+                for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
+                    if buffers[key].dtype != np.float32 or buffers[key].shape != (
+                        count,
+                        capacity,
+                        MEMORY_WIDTHS[key],
+                    ):
+                        raise ValueError(
+                            "decision-memory capacity mismatch or non-float32 transport"
+                        )
         for index in changed:
             row, seat = int(rows[index]), int(selected_seats[index])
             epoch = int(selected_epochs[index])
@@ -553,6 +564,7 @@ class MemoryStore:
                 epoch=epoch,
                 counts=selected_cursors[index, :4],
                 tail_version=int(selected_cursors[index, 4]),
+                native_index=int(index) if native else None,
             )
         self._live_prefixes[rows, selected_seats] = previous
         self._live_metadata[rows, selected_seats] = metadata
@@ -607,6 +619,7 @@ class MemoryStore:
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
+        native_index: int | None = None,
     ) -> Prefix:
         """Native transport shape/count admission precedes this chunk admission."""
         previous = self._streams.get((row, identity.viewer))
@@ -630,11 +643,20 @@ class MemoryStore:
             else None
         )
         cursor = tail.cursor if tail else MemoryCursor()
-        rows = tuple(
-            buffers[key][row, :count]
-            for key, count in zip(MEMORY_FIELDS, counts, strict=True)
-        )
-        for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
+        starts = (cursor.records, cursor.details, cursor.references, cursor.members)
+        if native_index is not None:
+            from manabot.policy.spans import ObservationSelection
+
+            assert isinstance(buffers, ObservationSelection)
+            rows = buffers.live_memory(native_index, starts)
+        else:
+            rows = tuple(
+                buffers[key][row, start:count]
+                for key, start, count in zip(MEMORY_FIELDS, starts, counts, strict=True)
+            )
+        for blocks in record_chunks(
+            rows, _CHUNK_ROWS, reference_offset=cursor.references
+        ):
             tail = self._append(tail, self._intern(blocks))
         serving = RecordVersion()
         if tail is not None and old_tail is not None:

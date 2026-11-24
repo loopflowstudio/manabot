@@ -14,18 +14,18 @@ def test_permanent_characteristics_and_compatibility_getters_share_one_source() 
     permanent = obs.agent_permanents[0]
     assert permanent.characteristics.name == "Gray Ogre"
     assert permanent.name is None  # The old name accessor still means override.
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         old = permanent.card
     assert old is not None
     assert old.id == permanent.object_id
     assert old.owner_id == permanent.owner_id
     assert old.is_token == permanent.is_token
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         permanent.power = 7
     assert permanent.characteristics.power == 7
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert permanent.power == 7
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert permanent.card.characteristics.power == 7
     obs.agent_permanents = [permanent]
     restored = managym.Observation.from_json(obs.toJSON())
@@ -46,7 +46,7 @@ def test_card_characteristics_are_read_only_snapshots_with_derived_aliases() -> 
     env = priority_root(("Lightning Bolt",), ())
     obs = env.observation_for_player(env.current_agent_index())
     card = obs.agent_cards[0]
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert card.name == card.characteristics.name
     with pytest.raises(AttributeError):
         card.characteristics.power = 99

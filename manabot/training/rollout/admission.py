@@ -44,7 +44,7 @@ class AdmittedRows:
         pending = np.unique(indexes[~self._admitted[indexes]])
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
-            obs = self.batch.observations(chunk).observation
+            obs = self.batch.policy_rows(chunk).observation
             needs = self.agent.check_observation(obs)
             self._admitted[chunk] = True
             if needs is None:
@@ -64,7 +64,7 @@ class AdmittedRows:
     ) -> tuple[Prepared[np.ndarray], ActionRows]:
         if not self._admitted[indexes].all():
             raise ValueError("rollout rows were not admitted")
-        rows = self.batch.observations(indexes)
+        rows = self.batch.policy_rows(indexes)
         needs = self._needs[indexes] if self._needs is not None else None
         if needs is not None and (needs < 0).any():
             needs = None

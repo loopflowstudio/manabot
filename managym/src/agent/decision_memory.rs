@@ -548,11 +548,14 @@ pub const RECORD_NAMES: &[&str] = &[
     "Foretell",
 ];
 
-/// Exact signed words, shared with fact and execution transport conventions.
-fn words(value: i32) -> [f32; 2] {
-    let bits = value as u32;
-    [(bits >> 16) as f32, (bits & 0xffff) as f32]
-}
+use super::{
+    observation_encoder::ObservationEncodeError,
+    observation_rows::{
+        write_dense_row,
+        Cell::{self, Integer, Word},
+        RowWriter, Table,
+    },
+};
 
 /// The catalog is immutable shared rules data, not a viewer or object cache.
 /// Both the complete canonical description and complete token program must
@@ -599,6 +602,34 @@ pub struct EncodedMemory {
     pub members: Vec<[f32; MEMBER_DIM]>,
 }
 
+impl RowWriter for EncodedMemory {
+    fn write(
+        &mut self,
+        table: Table,
+        _seat: usize,
+        _slot: usize,
+        row: &[Cell],
+    ) -> Result<(), ObservationEncodeError> {
+        fn append<const N: usize>(target: &mut Vec<[f32; N]>, row: &[Cell]) {
+            let mut dense = [0.0; N];
+            write_dense_row(row, &mut dense);
+            target.push(dense);
+        }
+        match table {
+            Table::DecisionRecords => append(&mut self.records, row),
+            Table::DecisionReferences => append(&mut self.references, row),
+            Table::DecisionReferenceDetails => append(&mut self.details, row),
+            Table::DecisionMembers => append(&mut self.members, row),
+            _ => unreachable!("not a decision-memory table"),
+        }
+        Ok(())
+    }
+
+    fn reset_memory(&mut self) {
+        self.reset = true;
+    }
+}
+
 /// Caller-owned native transport state, never serialized with game facts.
 #[derive(Default)]
 pub struct MemoryEncoding {
@@ -618,6 +649,17 @@ pub fn encode_suffix(
     log: &DecisionLog,
     cursor: &mut MemoryEncoding,
 ) -> ([usize; 4], EncodedMemory) {
+    let mut out = EncodedMemory::default();
+    let starts =
+        write_suffix(log, cursor, &mut out).expect("dense memory projection is infallible");
+    (starts, out)
+}
+
+pub(super) fn write_suffix(
+    log: &DecisionLog,
+    cursor: &mut MemoryEncoding,
+    out: &mut impl RowWriter,
+) -> Result<[usize; 4], ObservationEncodeError> {
     let reset = cursor
         .origin
         .as_ref()
@@ -625,6 +667,7 @@ pub fn encode_suffix(
     if reset {
         *cursor = MemoryEncoding::default();
         cursor.origin = Some(log.origin.clone());
+        out.reset_memory();
     }
     let mut starts = cursor.counts;
     if starts[0] > 0 && cursor.version != log.tail_version() {
@@ -642,8 +685,7 @@ pub fn encode_suffix(
         starts[3] -=
             last.context.mana_sources.len() + last.response.len() + last.choice.references.len();
     }
-    let mut out = encode_from(log, starts, &mut cursor.indexes);
-    out.reset = reset;
+    write_from(log, starts, &mut cursor.indexes, out)?;
     cursor.counts = [
         log.len(),
         log.detail_count(),
@@ -652,59 +694,77 @@ pub fn encode_suffix(
     ];
     cursor.version = log.tail_version();
     cursor.log = Some(log.clone());
-    (starts, out)
+    Ok(starts)
 }
 
-fn encode_from(
+fn write_from(
     log: &DecisionLog,
     starts: [usize; 4],
     indexes: &mut std::collections::HashMap<usize, usize>,
-) -> EncodedMemory {
+    out: &mut impl RowWriter,
+) -> Result<(), ObservationEncodeError> {
     use crate::cards::tokens::name_value;
-    let mut out = EncodedMemory::default();
-    for (offset, reference) in log.snapshots_since(starts[2]).enumerate() {
-        let index = starts[2] + offset;
+    let [record_start, mut detail_slot, reference_start, mut member_slot] = starts;
+    for (offset, reference) in log.snapshots_since(reference_start).enumerate() {
+        let index = reference_start + offset;
         indexes.insert(Arc::as_ptr(reference) as usize, index + 1);
-        let mut header = [0.; REFERENCE_DIM];
-        header[0] = reference.role as f32;
-        header[1] = reference.definition.map_or(0., |id| (id + 1) as f32);
-        header[2..4].copy_from_slice(&words(reference.power));
-        header[4..6].copy_from_slice(&words(reference.toughness));
-        header[6] = f32::from(reference.tapped);
-        header[7] = f32::from(reference.ready);
-        header[8] = f32::from(reference.attacking);
-        header[9] = f32::from(reference.blocking);
-        header[10] = (starts[1] + out.details.len()) as f32;
-        header[13] = f32::from(definition_only(reference));
+        let mut header = [Cell::ZERO; REFERENCE_DIM];
+        header[0] = Integer(reference.role as i64);
+        header[1] = Integer(reference.definition.map_or(0, |id| i64::from(id) + 1));
+        header[2] = Word(reference.power);
+        header[4] = Word(reference.toughness);
+        header[6] = Integer(i64::from(reference.tapped));
+        header[7] = Integer(i64::from(reference.ready));
+        header[8] = Integer(i64::from(reference.attacking));
+        header[9] = Integer(i64::from(reference.blocking));
+        let detail_start = detail_slot;
+        header[10] = Integer(detail_start as i64);
+        header[13] = Integer(i64::from(definition_only(reference)));
         for (ordinal, &(kind, value)) in reference
             .program
             .iter()
             .enumerate()
-            .filter(|_| header[13] == 0.)
+            .filter(|_| header[13] == Cell::ZERO)
         {
-            let value = words(value);
-            out.details
-                .push([0., kind as f32, value[0], value[1], ordinal as f32, 1.]);
+            out.write(
+                Table::DecisionReferenceDetails,
+                0,
+                detail_slot,
+                &[
+                    Cell::ZERO,
+                    Integer(kind as i64),
+                    Word(value),
+                    Cell::ZERO,
+                    Integer(ordinal as i64),
+                    Integer(1),
+                ],
+            )?;
+            detail_slot += 1;
         }
         for (ordinal, production) in reference.mana.iter().enumerate() {
             for (color, &amount) in production.iter().enumerate() {
-                let value = words(amount as i32);
-                out.details.push([
-                    1.,
-                    -1.,
-                    value[0],
-                    value[1],
-                    (ordinal * 6 + color) as f32,
-                    1.,
-                ]);
+                out.write(
+                    Table::DecisionReferenceDetails,
+                    0,
+                    detail_slot,
+                    &[
+                        Integer(1),
+                        Integer(-1),
+                        Word(amount as i32),
+                        Cell::ZERO,
+                        Integer((ordinal * 6 + color) as i64),
+                        Integer(1),
+                    ],
+                )?;
+                detail_slot += 1;
             }
         }
-        header[11] = (starts[1] + out.details.len() - header[10] as usize) as f32;
-        header[12] = 1.;
-        out.references.push(header);
+        header[11] = Integer((detail_slot - detail_start) as i64);
+        header[12] = Integer(1);
+        out.write(Table::DecisionReferences, 0, index, &header)?;
     }
-    for record in log.records_since(starts[0]) {
-        let mut header = [0.0; RECORD_DIM];
+    for (index, record) in log.records_since(record_start).enumerate() {
+        let mut header = [Cell::ZERO; RECORD_DIM];
         for (offset, value) in [
             (0, record.ordinal),
             (2, record.count),
@@ -712,15 +772,12 @@ fn encode_from(
             (6, record.first_position),
             (8, record.last_position),
         ] {
-            header[offset..offset + 2].copy_from_slice(&words(value as i32));
+            header[offset] = Word(value as i32);
         }
-        header[10] = record.context.phase as f32;
-        header[11] = record.context.step as f32;
-        header[12..14].copy_from_slice(&words(name_value(&format!(
-            "DecisionMemory::{}",
-            record.kind
-        ))));
-        header[14] = (starts[3] + out.members.len()) as f32;
+        header[10] = Integer(record.context.phase as i64);
+        header[11] = Integer(record.context.step as i64);
+        header[12] = Word(name_value(&format!("DecisionMemory::{}", record.kind)));
+        header[14] = Integer(member_slot as i64);
         for (group, references) in [
             &record.context.mana_sources,
             &record.response,
@@ -729,16 +786,22 @@ fn encode_from(
         .into_iter()
         .enumerate()
         {
-            header[15 + group] = references.len() as f32;
+            header[15 + group] = Integer(references.len() as i64);
             for (ordinal, reference) in references.iter().enumerate() {
-                out.members.push([
-                    indexes[&(Arc::as_ptr(reference) as usize)] as f32,
-                    ordinal as f32,
-                ]);
+                out.write(
+                    Table::DecisionMembers,
+                    0,
+                    member_slot,
+                    &[
+                        Integer(indexes[&(Arc::as_ptr(reference) as usize)] as i64),
+                        Integer(ordinal as i64),
+                    ],
+                )?;
+                member_slot += 1;
             }
         }
-        header[18] = record.actor as f32;
-        header[19] = 1.;
+        header[18] = Integer(record.actor as i64);
+        header[19] = Integer(1);
         let context = record
             .context
             .life
@@ -753,7 +816,7 @@ fn encode_from(
                     .map(|n| n as i32),
             );
         for (index, value) in context.enumerate() {
-            header[20 + 2 * index..22 + 2 * index].copy_from_slice(&words(value));
+            header[20 + 2 * index] = Word(value);
         }
         for (index, value) in [
             record
@@ -770,17 +833,19 @@ fn encode_from(
         {
             if let Some(value) = value {
                 let offset = 60 + index * 3;
-                header[offset] = 1.;
-                header[offset + 1..offset + 3].copy_from_slice(&words(value as i32));
+                header[offset] = Integer(1);
+                header[offset + 1] = Word(value as i32);
             }
         }
         if let Some(value) = record.choice.declared {
-            header[72] = 1.;
-            header[73] = f32::from(value);
+            header[72] = Integer(1);
+            header[73] = Integer(i64::from(value));
         }
-        out.records.push(header);
+        out.write(Table::DecisionRecords, 0, record_start + index, &header)?;
     }
-    out
+    debug_assert_eq!(detail_slot, log.detail_count());
+    debug_assert_eq!(member_slot, log.member_count());
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

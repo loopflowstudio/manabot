@@ -677,7 +677,7 @@ def _parse_game_config(config: Any) -> GameConfig:
     villain_type = data.get("villain_type", "search")
     if villain_type == "checkpoint":
         warnings.warn(
-            "checkpoint player names are deprecated; use registered policies (removed in 0.4.0)",
+            "checkpoint player names are deprecated; use registered policies (removed in 0.3.0)",
             DeprecationWarning,
             stacklevel=2,
         )

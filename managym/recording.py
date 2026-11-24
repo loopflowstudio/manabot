@@ -633,9 +633,9 @@ class _Capture:
         raise NotImplementedError
 
     def evidence(self) -> GameRecord:
-        """Deprecated spelling of snapshot, removed in 0.4.0."""
+        """Deprecated spelling of snapshot, removed in 0.3.0."""
         warnings.warn(
-            "evidence() is deprecated; use snapshot(); removal in 0.4.0",
+            "evidence() is deprecated; use snapshot(); removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1198,6 +1198,8 @@ _VECTOR_READS = frozenset(
         "next_fresh_seeds",
         "snapshot_slots",
         "slot_metadata",
+        "observation_rows",
+        "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
         "get_last_info",
@@ -1371,17 +1373,41 @@ class RecordedVectorEnv(_Capture):
         *,
         layout: managym.ObservationLayout | None = None,
     ) -> None:
+        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
         self.native.set_buffers(buffers, action_overflow, layout=layout)
-        self._terminated = buffers["terminated"]
-        self._truncated = buffers["truncated"]
-        # NumPy owns these buffers; preserve their native encoding ABI as evidence.
+        self._register_outcomes(buffers, action_overflow, buffers["actions"].shape[1])
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
             for key, value in buffers.items()
         }
-        self._action_cutoff = (
-            buffers["actions"].shape[1] if action_overflow == "first-legal" else None
+
+    def set_observation_layout(
+        self,
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout,
+    ) -> None:
+        self.native.set_observation_layout(buffers, layout, action_overflow)
+        self._register_outcomes(buffers, action_overflow, layout.shapes["actions"][0])
+        dtypes = layout.dtypes
+        self.identities["input_buffers"] = {
+            key: {"shape": list(shape), "dtype": dtypes[key]}
+            for key, shape in layout.shapes.items()
+        }
+        self.identities["input_buffers"].update(
+            {
+                key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
+                for key, value in buffers.items()
+            }
         )
+
+    def _register_outcomes(
+        self, buffers: dict[str, np.ndarray], action_overflow: str, capacity: int
+    ) -> None:
+        self._terminated = buffers["terminated"]
+        self._truncated = buffers["truncated"]
+        self._action_cutoff = capacity if action_overflow == "first-legal" else None
         if self._action_cutoff is not None:
             self.identities["action_overflow"] = action_overflow
 
@@ -2028,6 +2054,38 @@ class CapturedSearch(_Capture):
         # Native pool counters and observations are read-only PyO3 APIs.
         return getattr(self.native, name)
 
+    def set_observation_layout(
+        self,
+        layout: managym.ObservationLayout,
+        action_overflow: str = "error",
+    ) -> None:
+        self.native.set_observation_layout(layout, action_overflow)
+        dtypes = layout.dtypes
+        slots = self.native.num_slots
+        self.search.buffers = {
+            key: BufferSpec(shape=[slots, *shape], dtype=dtypes[key])
+            for key, shape in layout.shapes.items()
+        }
+        self.search.buffers.update(
+            {
+                "rewards": BufferSpec(shape=[slots], dtype="float64"),
+                "terminated": BufferSpec(shape=[slots], dtype="uint8"),
+                "truncated": BufferSpec(shape=[slots], dtype="uint8"),
+            }
+        )
+        self.search.capacity = slots
+
+    def encode_active_batch(self) -> tuple[list[int], managym.ObservationBatch]:
+        with self._guard(self._snapshot):
+            return self.native.encode_active_batch()
+
+    def step_active_batch(
+        self, actions: list[int]
+    ) -> tuple[list[int], managym.ObservationBatch]:
+        self.search.operations.append(list(actions))
+        with self._guard(self._snapshot):
+            return self.native.step_active_batch(actions)
+
     def set_buffers(
         self,
         buffers: dict[str, Any],
@@ -2035,6 +2093,7 @@ class CapturedSearch(_Capture):
         *,
         layout: managym.ObservationLayout | None = None,
     ) -> None:
+        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
         self.native.set_buffers(buffers, capacity, layout=layout)
         self.search.buffers = {
             key: BufferSpec(shape=list(value.shape), dtype=str(value.dtype))
@@ -2280,11 +2339,11 @@ def read_record(path: Path) -> GameRecord:
 
 
 class FailureEvidence(GameRecord):
-    """Deprecated name of GameRecord, removed in 0.4.0."""
+    """Deprecated name of GameRecord, removed in 0.3.0."""
 
     def __init__(self, **data: Any) -> None:
         warnings.warn(
-            "FailureEvidence is deprecated; use GameRecord; removal in 0.4.0",
+            "FailureEvidence is deprecated; use GameRecord; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -2293,7 +2352,7 @@ class FailureEvidence(GameRecord):
 
 def read_failure(path: Path) -> GameRecord:
     warnings.warn(
-        "read_failure is deprecated; use read_record; removal in 0.4.0",
+        "read_failure is deprecated; use read_record; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -2304,7 +2363,7 @@ def __getattr__(name: str) -> Any:
     if name == "CapturedVector":
         warnings.warn(
             "managym.recording.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.4.0",
+            "use RecordedVectorEnv; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
