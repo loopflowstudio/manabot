@@ -267,12 +267,10 @@ class RecordedObservations:
         return rows
 
     def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
-        """Bucket needs of rollout `indexes` measured at collection, or None if
-        any of those rows has none."""
+        """Select collection extents, preserving -1 for unmeasured entries."""
         if self.needs is None:
             return None
-        needs = self.needs[self.index[indexes]]
-        return needs if bool((needs >= 0).all()) else None
+        return self.needs[self.index[indexes]]
 
     def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
         """Ordinary fields in trajectory order; memory requires selected indexes."""

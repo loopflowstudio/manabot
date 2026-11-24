@@ -1,6 +1,7 @@
 """Bucketed shapes agree with the default path on admitted inputs."""
 
 from collections.abc import Callable
+from dataclasses import asdict, replace
 
 import numpy as np
 import pytest
@@ -399,6 +400,36 @@ def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
     batch.recorded.rows["facts"][row, -1, column("facts", "valid")] = 2
     with pytest.raises(ValueError, match="^fact validity must be binary$"):
         AdmittedRollout(agent, batch).admit_rows(np.array([0]), 1)
+
+
+@pytest.mark.parametrize("recorded", [True, False], ids=["mixed", "absent-table"])
+def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
+    case = _policy()
+    agent = _bucketed(case.agent)
+    mask = case.obs["actions_valid"][0]
+    legal_slots = np.flatnonzero(mask)
+    # Collection measures this continuation before packing drops the masked action.
+    masked_slot = np.flatnonzero(mask == 0)[0]
+    case.obs["actions"][0, masked_slot, column("actions", "continuation")] = 64
+    batch = collect(case.collector, agent, 1)
+    needs = batch.recorded.needs
+    assert needs is not None
+    first, second = batch.recorded.index[:2]
+    assert needs[first, AXES.index("relations")] == 64
+    if recorded:
+        needs[second] = -1
+    else:
+        batch.recorded = replace(batch.recorded, needs=None)
+
+    prepared = []
+    for width in (1, 2):
+        rollout = AdmittedRollout(agent, batch)
+        rollout.admit_rows(np.array([0, 1]), width)
+        row, _ = rollout.prepare_rows(np.array([0]))
+        assert row.relation_features.shape[1] == (64 if recorded else 8)
+        np.testing.assert_array_equal(row.legal_slots, legal_slots)
+        prepared.append(row)
+    np.testing.assert_equal(asdict(prepared[0]), asdict(prepared[1]))
 
 
 def test_reference_to_padding_object_is_kept() -> None:
