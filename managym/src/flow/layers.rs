@@ -1070,15 +1070,15 @@ impl<'a> Context<'a> {
                 Operation::Modify(modification) => match modification {
                     Modification::SetName(name) => {
                         view.name = name.clone();
-                        view.characteristics_set = true;
+                        view.name_set = true;
                     }
                     Modification::AllCreatureTypes => view.creature_types = CreatureTypes::All,
                     Modification::SetCreatureTypes(types) => {
                         view.creature_types = CreatureTypes::default();
+                        view.creature_types_set = true;
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
                         view.added_subtypes.retain(|s| !is_creature_type(s));
-                        view.added_subtypes.extend(types.iter().cloned());
                     }
                     Modification::AddSubtypes(types) => {
                         if view.is_land() {
@@ -1108,9 +1108,11 @@ impl<'a> Context<'a> {
                                     .iter()
                                     .any(|set| subtype_category(set) == subtype_category(subtype))
                         };
-                        if !types.contains(&CardType::Creature)
-                            || subtypes.iter().any(|s| is_creature_type(s))
-                        {
+                        let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
+                        if !types.contains(&CardType::Creature) || sets_creature_types {
+                            view.creature_types_set |= sets_creature_types
+                                || view.creature_types.is_all()
+                                || view.subtypes.iter().any(|s| is_creature_type(s));
                             view.creature_types = CreatureTypes::default();
                         }
                         view.types.types = types.iter().copied().collect();
@@ -1119,7 +1121,9 @@ impl<'a> Context<'a> {
                         for subtype in subtypes {
                             if !view.subtypes.contains(subtype) {
                                 view.subtypes.push(subtype.clone());
-                                view.added_subtypes.push(subtype.clone());
+                                if !is_creature_type(subtype) {
+                                    view.added_subtypes.push(subtype.clone());
+                                }
                             }
                         }
                     }

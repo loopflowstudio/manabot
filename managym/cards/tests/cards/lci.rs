@@ -2,6 +2,7 @@
 
 use crate::support::{
     game::five_color_setup,
+    inspect::observed,
     play::{cast, settle},
 };
 use managym::state::{
@@ -32,4 +33,8 @@ fn eaten_by_piranhas_makes_a_black_skeleton_without_its_other_types() {
     assert_eq!(view.pt(), (1, 1));
     assert!(view.activated_abilities.is_empty(), "no mana ability");
     assert!(!view.keywords.has(Keyword::Flash));
+    let row = observed(&s, elves);
+    assert_eq!(row.creature_types, Some(vec!["Skeleton".to_string()]));
+    assert!(row.temp_subtypes.is_empty(), "set, not added");
+    assert_eq!(row.name, None);
 }

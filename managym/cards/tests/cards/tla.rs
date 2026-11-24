@@ -18,7 +18,7 @@ use crate::support::{
     inspect::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
-        library, library_card, library_top, offered_cards, offered_targets, permanent,
+        library, library_card, library_top, observed, offered_cards, offered_targets, permanent,
         permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, zone_of,
     },
     play::{
@@ -4909,18 +4909,6 @@ fn realm_of_koh_creates_a_spirit() {
     assert!(tapped(&s, realm));
     assert_eq!(s.battlefield_permanents_named(0, "Spirit").len(), 1);
     assert!(s.battlefield_permanents_named(1, "Spirit").is_empty());
-}
-
-fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
-    let permanent = s.game().state.permanents[id].as_ref().unwrap();
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    observation
-        .agent_permanents
-        .iter()
-        .chain(&observation.opponent_permanents)
-        .find(|p| p.id == permanent.id.0 as i32)
-        .cloned()
-        .unwrap()
 }
 
 fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {

@@ -1,11 +1,10 @@
 //! Foundations behavior through ordinary activation, payment and combat.
 use crate::support::{
     game::{five_color_setup, move_card, Scenario},
-    inspect::{card_of, keywords, permanent_named, permanent_of},
+    inspect::{card_of, keywords, observed, permanent_named, permanent_of},
     play::{activate, attack_with, cast, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
-    agent::observation::Observation,
     flow::turn::StepKind,
     state::{
         card::Keyword,
@@ -31,6 +30,14 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
     let view = s.game().characteristics(k);
     assert!(view.has_subtype("Rogue") && !view.has_subtype("Detective"));
     assert_eq!(view.pt(), (3, 2));
+    let row = observed(&s, k);
+    assert_eq!(
+        row.creature_types,
+        Some(["Faerie", "Human", "Rogue"].map(String::from).to_vec()),
+        "replaced creature types are projected"
+    );
+    assert!(row.temp_subtypes.is_empty(), "not as added subtypes");
+    assert_eq!(row.name, None);
     assert!(view.keywords.has(Keyword::DoubleStrike));
     assert_eq!(view.triggered_abilities.len(), 1);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
@@ -2019,13 +2026,7 @@ fn soulstone_sanctuary_has_all_creature_types_until_a_later_type_change() {
     assert!(!view.has_subtype("Forest"), "no land subtype");
     assert!(view.keywords.has(Keyword::Vigilance));
     assert_eq!(view.pt(), (3, 3), "a Human gets no Zookeeper bonus");
-    let id = s.game().state.permanents[sanctuary].as_ref().unwrap().id.0 as i32;
-    let row = Observation::for_player(s.game(), PlayerId(0))
-        .agent_permanents
-        .into_iter()
-        .find(|row| row.id == id)
-        .unwrap();
-    assert!(row.is_ally);
+    assert!(observed(&s, sanctuary).is_ally);
 
     s.advance_to_active_step(0, StepKind::Upkeep);
     s.advance_to_active_step(0, StepKind::Main);

@@ -2,6 +2,7 @@
 
 use crate::support::{
     game::five_color_setup,
+    inspect::observed,
     play::{cast, settle},
 };
 use managym::state::{game_object::Target, mana::Color};
@@ -27,4 +28,8 @@ fn witness_protection_renames_a_creature_a_green_white_citizen() {
         !view.keywords.has(managym::state::card::Keyword::Flying),
         "no flying"
     );
+    let row = observed(&s, drake);
+    assert_eq!(row.name.as_deref(), Some("Legitimate Businessperson"));
+    assert_eq!(row.creature_types, Some(vec!["Citizen".to_string()]));
+    assert!(row.temp_subtypes.is_empty());
 }

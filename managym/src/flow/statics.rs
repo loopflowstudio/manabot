@@ -56,14 +56,15 @@ pub struct Characteristics {
     pub triggered_abilities: Vec<crate::state::ability::EffectiveTrigger>,
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
     pub name: String,
-    /// Whether a characteristic-setting Aura replaced its name, creature
-    /// types and base power/toughness.
-    pub characteristics_set: bool,
-    /// Every subtype it has: printed (creature types replaced by a
-    /// characteristic-setting Aura's), then added by records.
+    /// Whether a layer 3 effect set its name.
+    pub name_set: bool,
+    /// Whether a layer 4 effect replaced its creature types (Kellan's
+    /// upgrades, a Citizen, a Skeleton) or removed them with Creature.
+    pub creature_types_set: bool,
+    /// Every subtype it has: printed or set, then added by records.
     pub subtypes: Vec<String>,
-    /// Creature subtypes added by records after any characteristic-setting
-    /// Aura (layer 4), in record order.
+    /// Subtypes added on top of its printed or set ones (layer 4), in record
+    /// order; creature types a record replaced are in `creature_types`.
     pub added_subtypes: Vec<String>,
     /// Its creature types (CR 205.3m); none unless it is a creature.
     pub creature_types: CreatureTypes,

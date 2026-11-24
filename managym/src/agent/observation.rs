@@ -1576,11 +1576,11 @@ impl Observation {
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
             name: characteristics
-                .characteristics_set
+                .name_set
                 .then(|| characteristics.name.to_string()),
             // All creature types is projected by its shared-effect row.
             creature_types: characteristics
-                .characteristics_set
+                .creature_types_set
                 .then(|| characteristics.creature_types.listed().to_vec()),
             is_granted_land: characteristics.is_land() && !object.types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {

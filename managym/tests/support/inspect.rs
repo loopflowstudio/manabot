@@ -5,7 +5,7 @@
 use managym::{
     agent::{
         action::{Action, ActionSpace, ActionSpaceKind, ActionType},
-        observation::Observation,
+        observation::{Observation, PermanentData},
     },
     flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
@@ -293,6 +293,19 @@ pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
 
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
     permanent(s, id).tapped
+}
+
+/// A battlefield permanent's row as player 0 observes it, on either side.
+pub fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
+    let permanent = s.game().state.permanents[id].as_ref().unwrap();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    observation
+        .agent_permanents
+        .iter()
+        .chain(&observation.opponent_permanents)
+        .find(|p| p.id == permanent.id.0 as i32)
+        .cloned()
+        .unwrap()
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {

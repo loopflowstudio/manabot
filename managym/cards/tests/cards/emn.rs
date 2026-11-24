@@ -2,6 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup},
+    inspect::observed,
     play::{cast, settle, target_opponent},
 };
 use managym::state::{card::CardType, game_object::Target};
@@ -20,6 +21,13 @@ fn imprisoned_in_the_moon_makes_a_colorless_land_that_taps_for_colorless() {
     assert!(view.colors.is_empty());
     assert!(view.subtypes.is_empty());
     assert!(view.triggered_abilities.is_empty());
+    let row = observed(&s, agent);
+    assert_eq!(
+        row.creature_types,
+        Some(vec![]),
+        "its creature types are gone"
+    );
+    assert!(row.temp_subtypes.is_empty());
     let [ability] = view.activated_abilities.as_slice() else {
         panic!("one granted ability: {:?}", view.activated_abilities);
     };
@@ -41,6 +49,9 @@ fn imprisoned_in_the_moon_keeps_a_forest_a_forest_that_taps_only_for_colorless()
     settle(&mut s);
     let view = s.game().characteristics(forest);
     assert_eq!(view.subtypes, vec!["Forest".to_string()]);
+    let row = observed(&s, forest);
+    assert_eq!(row.creature_types, None, "it had none to replace");
+    assert!(row.temp_subtypes.is_empty(), "Forest is printed");
     let choices: Vec<_> = view
         .activated_abilities
         .iter()
