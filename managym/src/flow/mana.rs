@@ -1614,7 +1614,7 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
     Some(SourceReservation {
         permanent,
         tap,
-        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled),
+        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
     })
 }
 
@@ -1848,7 +1848,11 @@ impl Game {
             model.reserve(reservation);
         }
         model.life = model.life.saturating_sub(payment.life());
-        for object in payment.receipt.sacrificed() {
+        let grantors = payment.owed.iter().filter_map(|component| match component {
+            CostComponent::ExileGrantor(object) => Some(*object),
+            _ => None,
+        });
+        for object in payment.receipt.sacrificed().chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
                 model.reserve(SourceReservation {
                     permanent,
@@ -1877,6 +1881,13 @@ impl Game {
         } = operation
         {
             let ability = self.activation_ability(*source, *ability_index)?;
+            if ability.exile_grantor {
+                model.reserve(SourceReservation {
+                    permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
+                    tap: false,
+                    sacrifice: true,
+                });
+            }
             model.life = model.life.checked_sub(ability.life_cost)?;
         }
         Some(model)

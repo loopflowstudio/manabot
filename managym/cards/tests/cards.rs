@@ -38,6 +38,8 @@ mod csp;
 mod definitions;
 #[path = "cards/dft.rs"]
 mod dft;
+#[path = "cards/dgm.rs"]
+mod dgm;
 #[path = "cards/dmu.rs"]
 mod dmu;
 #[path = "cards/dom.rs"]

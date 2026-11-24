@@ -10,7 +10,6 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import (
     ResponseProtocolError,
     TextDecision,
@@ -20,8 +19,46 @@ from manabot.semantic.text_observation import (
     submit_response,
 )
 import managym
-from managym.decision import Observation, SemanticContractError, apply_semantic_command
+from managym.decision import SemanticContractError, apply_semantic_command
 from managym.decision_capture import CardReference, DecisionInput
+
+
+def keep_opening_index(obs: managym.Observation) -> int:
+    """Select the fixture's explicit keep or finish opening offer."""
+    return next(
+        i
+        for i, action in enumerate(obs.action_space.actions)
+        if (
+            action.action_type == managym.ActionEnum.CHOOSE_MODE
+            and action.mode_index == 0
+        )
+        or action.action_type == managym.ActionEnum.DECLINE_CHOICE
+    )
+
+
+def keep_opening_hands(
+    env: managym.Env, obs: managym.Observation
+) -> managym.Observation:
+    """Keep the dealt hands and decline optional entries for a constructed fixture."""
+    while obs.turn.turn_number == 0:
+        obs = env.step(keep_opening_index(obs))[0]
+    return obs
+
+
+def reset_to_first_main(env: managym.Env, setup: managym.GameSetup) -> int:
+    """Reset a fixture and advance it to first-main priority and return its acting seat."""
+    obs, _ = env.reset(setup)
+    obs = keep_opening_hands(env, obs)
+    for _ in range(22):
+        if obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
+            return obs.agent.player_index
+        index = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+        )
+        obs = env.step(index)[0]
+    raise AssertionError("main phase not reached")
 
 
 def priority_root(
@@ -37,23 +74,13 @@ def priority_root(
     # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
-    env.reset(
+    actor = reset_to_first_main(
+        env,
         managym.GameSetup(
             [managym.PlayerConfig(name, deck) for name in ("a", "b")],
             mana_floats=(mana_floats, mana_floats),
-        )
+        ),
     )
-    for _ in range(20):
-        contract = SemanticDecisionContract.from_env(env)
-        observation = Observation.from_json(
-            env.semantic_observation_json(contract.frame.actor)
-        )
-        if observation.viewer_state["turn"]["phase"] == 1:
-            break
-        contract.apply(env, contract.frame.find_verb("pass_priority")["id"])
-    else:
-        raise AssertionError("main phase not reached")
-    actor = contract.frame.actor
     env.scenario_clear_hand(actor)
     for card in hand:
         env.scenario_force_card_in_hand(actor, card)

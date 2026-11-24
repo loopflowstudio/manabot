@@ -135,3 +135,141 @@ fn ironheart_improvises_with_artifacts_and_grants_it_to_noncreature_spells() {
         assert!(!tapped(&s, ironheart));
     }
 }
+
+#[test]
+fn quicksilver_power_up_discounts_only_normal_entry_and_is_spent_on_activation() {
+    use crate::support::{game::enter_battlefield, play::activate};
+    use managym::state::{card::Keyword, permanent::CounterKind};
+    let name = "Quicksilver, Brash Blur";
+    let mut s = five_color_unfunded_setup(&[name]);
+    let permanent = enter_battlefield(&mut s, name);
+    let view = s.game().characteristics(permanent);
+    assert!(view.keywords.has(Keyword::Haste));
+    assert_eq!(view.activated_abilities[0].mana_cost.mana_value, 4);
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, permanent, 0);
+    settle(&mut s);
+    let source = s.game().state.permanents[permanent].as_ref().unwrap();
+    for kind in [CounterKind::PlusOnePlusOne, CounterKind::DoubleStrike] {
+        assert_eq!(source.counter_count(kind), 1);
+    }
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!has_action(
+        &s,
+        |action| matches!(action, Action::ActivateAbility { permanent: id,.. } if *id == permanent)
+    ));
+}
+
+#[test]
+fn construct_a_cosmic_cube_requires_the_plan_to_be_sacrificed() {
+    use crate::support::{
+        game::{move_card, set_counters},
+        inspect::zone_of,
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Construct a Cosmic Cube", "Doubling Season", "Gray Ogre"]);
+    let plan = s.force_permanent_on_battlefield(0, "Construct a Cosmic Cube");
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    let object = card_of(&s, plan);
+    set_counters(&mut s, plan, CounterKind::Plan, 6);
+    let drawn = s.game().state.turn.history[0].cards_drawn;
+    s.game_mut().draw_cards(PlayerId(0), (2 - drawn) as usize);
+    s.pass_priority();
+    for _ in 0..4 {
+        if crate::support::inspect::counters_of(&s, plan, CounterKind::Plan) != 6 {
+            break;
+        }
+        s.pass_priority();
+    }
+    assert_eq!(
+        crate::support::inspect::counters_of(&s, plan, CounterKind::Plan),
+        8
+    );
+    for seat in 0..2 {
+        let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(seat));
+        let permanents = if seat == 0 {
+            obs.agent_permanents
+        } else {
+            obs.opponent_permanents
+        };
+        assert!(permanents
+            .iter()
+            .any(|p| p.counters.get("plan") == Some(&8)));
+    }
+    let villains = s.battlefield_permanents_named(0, "Villain");
+    assert_eq!(villains.len(), 2);
+    let view = s.game().characteristics(villains[0]);
+    assert_eq!(view.pt(), (2, 1));
+    assert!(view.keywords.has(managym::state::card::Keyword::Menace));
+
+    let mut removed = s.clone();
+    move_card(&mut removed, object, ZoneType::Exile);
+    settle(&mut removed);
+    assert_eq!(zone_of(&removed, object), Some(ZoneType::Exile));
+    removed.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(removed.game().decision_controller(PlayerId(1)), PlayerId(1));
+
+    crate::support::play::resolve_top(&mut s);
+    assert!(s.choose_target(managym::state::target::Target::Player(PlayerId(1))));
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+    let mut countered = s.clone();
+    crate::support::play::counter_stacked_ability(&mut countered);
+    countered.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(
+        countered.game().decision_controller(PlayerId(1)),
+        PlayerId(1)
+    );
+
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.game().decision_controller(PlayerId(1)), PlayerId(0));
+    s.advance_to_active_step(1, StepKind::Main);
+    let ogre = force_new_card_in_hand(&mut s, 1, "Gray Ogre");
+    let mountain = s.force_permanent_on_battlefield(1, "Mountain");
+    s.force_permanent_on_battlefield(1, "Mountain");
+    s.game_mut().mana_payment[1] = ManaPayment::Manual;
+    s.set_player_mana_pool(1, "2");
+    s.set_player_mana_pool(0, "RRR");
+    cast_card(&mut s, ogre);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    assert_eq!(frame.actor, 0);
+    let victim = managym::agent::observation::Observation::for_player(s.game(), PlayerId(1));
+    assert!(victim.action_space.actions.is_empty());
+    let tap = Action::TapForMana {
+        player: PlayerId(1),
+        permanent: mountain,
+    };
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| a == &tap)
+        .unwrap();
+    let command = managym::decision::Command {
+        command_id: "controlled-payment".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    let root = s.game().state.deterministic_hash();
+    let mut first = s.game().clone();
+    let mut replay = s.game().clone();
+    for game in [&mut first, &mut replay] {
+        game.execute_semantic_command(&command).unwrap();
+        assert!(game.state.permanents[mountain].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[0].mana_pool.total(), 3);
+        assert_eq!(game.state.players[1].mana_pool.total(), 0);
+    }
+    assert_eq!(
+        first.state.deterministic_hash(),
+        replay.state.deterministic_hash()
+    );
+    assert_eq!(s.game().state.deterministic_hash(), root);
+    assert!(!tapped(&s, mountain));
+}

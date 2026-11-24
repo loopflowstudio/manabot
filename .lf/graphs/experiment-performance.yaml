@@ -2,12 +2,12 @@
     - loop:
         - experiment-measure
         - loop:
-            - implement
+            - loop:
+                - implement
+                - cmd: sync
+                - realign                         # decides: next slice, or on
             - compress
-            - graph: refresh
-            - concept-review
-            - experiment-performance-review
-            - loop-or-next
+            - experiment-performance-review      # decides: another bottleneck, or done
         - pr-publish
         - interactive: demo
     - graph: deliver

@@ -47,6 +47,8 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
         )
         try:
             env.reset()
+            env.step(0)
+            env.step(0)
             actor = env.last_raw_obs.agent.player_index
             engine = env._engine
             engine.scenario_clear_hand(actor)
@@ -88,7 +90,8 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
     (path,) = tmp_path.glob("action-cutoff-*.json")
     report = json.loads(path.read_bytes())
     assert report["counts_by_kind"] == {
-        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 3}
+        "Modal": {"decisions": 2, "overflows": 0, "dropped_actions": 0},
+        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 3},
     }
     assert report["samples"][0]["game"]["actor"] == actor
 
@@ -155,7 +158,9 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
     with capture_scope(CaptureScope(tmp_path)):
         env = Env(match, space, Reward(RewardConfig()), seed=213)
         try:
-            obs, _ = env.reset()
+            env.reset()
+            env.step(0)
+            obs, *_ = env.step(0)
             assert obs["actions_valid"].sum() == 2
             assert len(env.last_raw_obs.action_space.actions) > 2
             actor = env.last_raw_obs.agent.player_index
@@ -171,7 +176,7 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
     assert sample["decision_kind"] == "Priority"
     assert sample["game"]["actor"] == actor
     assert json.loads(sample["game"]["frame"])["actor"] == actor
-    assert sample["game"]["actions"] == []
+    assert sample["game"]["actions"] == [0, 0]
 
 
 def test_vector_reseed_retains_consumed_decision_counts(tmp_path: Path) -> None:
@@ -195,5 +200,5 @@ def test_vector_reseed_retains_consumed_decision_counts(tmp_path: Path) -> None:
     assert len(reports) == 2
     for report in reports:
         assert report["counts_by_kind"] == {
-            "Priority": {"decisions": 1, "overflows": 0, "dropped_actions": 0}
+            "Modal": {"decisions": 1, "overflows": 0, "dropped_actions": 0}
         }
