@@ -3623,6 +3623,61 @@ fn a_suspended_resolution_is_not_counted_toward_a_loop() {
     assert_eq!(watch.resolutions(), 2);
 }
 
+/// A loop made only of resolutions that stop for a decision is still a loop:
+/// each counts once it finishes. The Ogre's gain trigger taps a chosen Gray
+/// Ogre, then gains 1 life, which triggers it again with no way to stop.
+#[test]
+fn a_loop_of_suspending_resolutions_draws() {
+    use crate::support::{
+        game::{clear_hand, force_new_card_in_hand, inject_ability},
+        play::{cast_card, target_opponent},
+    };
+    use managym::state::{
+        ability::{Ability, Actor, Effect, ObjectSelector, TriggerCondition},
+        predicate::CardPredicate,
+    };
+
+    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        ogre_card,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::GainsLife {
+                who: Actor::You,
+                nth: None,
+            },
+            effects: vec![
+                Effect::Tap {
+                    what: ObjectSelector::chosen(CardPredicate {
+                        named: Some("Gray Ogre".into()),
+                        ..Default::default()
+                    }),
+                },
+                Effect::gain_life(1),
+            ],
+        },
+    );
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.set_player_mana_pool(0, "R");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    s.game_mut().skip_trivial = true;
+    s.pass_priority();
+    assert!(s.game().state.mandatory_loop_draw());
+    let watch = s.game().state.priority.loop_watch.as_ref().unwrap();
+    assert!(
+        watch.resolutions() <= LOOP_RECOGNIZED_WITHIN,
+        "{}",
+        watch.resolutions()
+    );
+}
+
 /// A long chain that uses something up is no loop (CR 104.4b asks for "no
 /// way to stop"): each gain removes one of the Ogre's 100 +1/+1 counters to
 /// gain 1 more, so the chain runs far past the watch's unwatched prefix and

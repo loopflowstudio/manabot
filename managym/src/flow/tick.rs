@@ -203,7 +203,9 @@ impl Game {
 
     fn on_step_start(&mut self, step: StepKind) {
         self.restart_priority_round();
-        self.state.priority_mut().loop_watch = None;
+        let priority = self.state.priority_mut();
+        priority.loop_watch = None;
+        priority.resolution_owed = false;
         if step == StepKind::Untap {
             let player = self.active_player();
             if let Some(exposure) = self.exposure_mut() {
@@ -474,6 +476,15 @@ impl Game {
                 return Some(choice_space);
             }
 
+            if self.state.priority.resolution_owed {
+                // The suspended resolution has finished: count it now.
+                self.state.priority_mut().resolution_owed = false;
+                if self.end_mandatory_loop() {
+                    return None;
+                }
+                stabilized = false;
+            }
+
             if !stabilized {
                 if let Some(space) = self.stabilize_before_priority() {
                     return Some(space);
@@ -498,14 +509,12 @@ impl Game {
                         return None;
                     }
                     if self.state.suspended_decision.is_some() {
-                        // CR 608.2m: the spell is still resolving, so no
-                        // resolution has finished for the watch to count.
+                        // CR 608.2m: the spell is still resolving. The watch
+                        // counts it once it finishes, above.
+                        self.state.priority_mut().resolution_owed = true;
                         continue;
                     }
-                    if self.watch_for_mandatory_loop() {
-                        self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
-                            mandatory_loop: true,
-                        });
+                    if self.end_mandatory_loop() {
                         return None;
                     }
                     self.restart_priority_round();
@@ -527,6 +536,18 @@ impl Game {
 
             return Some(space);
         }
+    }
+
+    /// Count one finished resolution toward the CR 104.4b watch, ending the
+    /// game in a draw once it shows a mandatory loop; true if it did.
+    fn end_mandatory_loop(&mut self) -> bool {
+        if !self.watch_for_mandatory_loop() {
+            return false;
+        }
+        self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
+            mandatory_loop: true,
+        });
+        true
     }
 
     /// Count one resolution toward the CR 104.4b watch; true once it shows
