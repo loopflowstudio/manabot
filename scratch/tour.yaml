@@ -1,13 +1,11 @@
-at: d9a7ce3257ed69b878383d90b8ea27811eea615e
+at: dbc21ccf3fd6b9d06e6b3cee7f63d2a68f0458a5
 first:
-  - path: managym/cards/src/kld.rs
-    why: Authority’s entry replacement and separate triggered gain
-  - path: managym/state/src/card.rs
-    why: Represent entry under an opponent’s control
-  - path: managym/src/flow/proposed_event.rs
-    why: Match the prospective controller before committing the move
-  - path: managym/cards/tests/cards/kld.rs
-    why: Cross ownership and control, then resolve both forks
-  - path: managym/cards/tests/cards/observability.rs
-    why: Bind the static ability to its catalog witness
+  - path: managym/cards/src/isd.rs
+    why: Diregraf Ghoul supplies its own tapped-entry replacement
+  - path: managym/cards/tests/cards/isd.rs
+    why: Compare both creatures when priority returns
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Check printed characteristics against Innistrad number 97
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Link the Foundations reprint to native coverage
 hide: []
