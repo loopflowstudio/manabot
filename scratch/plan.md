@@ -88,46 +88,19 @@ Done when:
 
 ## Design by area
 
-### 1. One `UpdateBackend`, PPO rewrite, and shared host prefetch
+### 1. Remaining protocol collapse and shared returns
 
-Rewrite `manabot/training/updates/ppo.py`'s minibatch body on the damped rule's
-shape (`damped_policy.py`): an `_objective` closure handed to
-`learner.loss(_objective)` that runs `learner.agent.forward_distribution(obs)`
-under `learner.forward_precision()`, casts with `backend.arrays.float32`, keeps
-`0.5 * squared_value_loss` and `rl.float64_operand(value_loss)`, and reads
-diagnostics through `rl.constant(...)` (no `.float()`, `.detach()`, or
-`learner.agent(obs)`).
+Slice 1 rewrote PPO on the damped rule's shape, moved the `PrefixObservation`
+trim and one-ahead `prefetch_minibatches` into `AdmittedRows`, folded
+`standardized_advantages`/`minibatches` into `RL`/`AdmittedRollout` and deleted
+the `PPO*` protocols and `ppo_rl()`. What remains:
 
-Fold the rollout and protocol surfaces cleanly across layers:
-
-- **Shared `AdmittedRows` (`manabot/training/rollout/admission.py`)**:
-  - move Torch's `PrefixObservation` trim in `prepare_rows` into `AdmittedRows`
-    so neither backend retains a second raw decision-memory owner alongside
-    `Prepared` (including in prefetch);
-  - add `prefetch_minibatches(order, size)` yielding host
-    `(chunk, Prepared[np.ndarray], ActionRows)` from a 1-worker thread pool
-    with strict release-before-submit ordering (`del prepared, rows, ready`
-    before submitting the next chunk; exit joins the worker even on failure).
-  - Each backend's `AdmittedRollout.minibatches(order, size, device)` wraps
-    `prefetch_minibatches`: Torch applies `on_device(prepared, device)`; MLX
-    yields the host batch directly.
-- **Protocol collapse (`manabot/training/updates/backend.py`)**:
-  - Slice 1: fold `standardized_advantages` into `RL` (implementing it in
-    `manabot/backends/mlx/rl.py`) and `minibatches` into `AdmittedRollout`;
-    delete `PPOPolicy`, `PPOLearner`, `PPOAdmittedRollout`, `PPORolloutFile`,
-    `PPORL`, `PPOBackend`, and `ppo_rl()`. `ppo.update_iteration` and
-    `self_play` take `UpdateBackend` / `Learner` / `Policy`.
-  - Slice 2: after MLX gains categorical WDL, fold `CategoricalRL` into `RL`
-    and delete `CategoricalRL`, `categorical_rl()`, and
-    `test_a_backend_without_a_categorical_critic_is_refused`. Keep
-    `CategoricalValueLoss` in `updates/objective.py` only for standalone
-    `LossTerms` callers if needed, with `RL` extending both `LossTerms` and
-    `CategoricalValueLoss`.
-- **Shared host returns (`manabot/policy/returns.py`)**:
-  - move `categorical_lambda_returns` (the `reverse_waves` / `bootstrap_cuts`
-    recursion currently in `manabot/backends/torch/rl.py`) into
-    `manabot/policy/returns.py` in NumPy; both `torch/rl.py` and `mlx/rl.py`
-    wrap it thinly, guaranteeing bit-for-bit identical targets.
+- move `categorical_lambda_returns` (the `reverse_waves` / `bootstrap_cuts`
+  recursion in `manabot/backends/torch/rl.py`) into `manabot/policy/returns.py`
+  in NumPy; both `torch/rl.py` and `mlx/rl.py` wrap it thinly;
+- after MLX gains categorical WDL, fold `CategoricalRL` into `RL` and delete
+  `CategoricalRL`, `categorical_rl()` (callers in `updates/targets.py`) and
+  `test_a_backend_without_a_categorical_critic_is_refused`.
 
 ### 2. Live tokens: runtime admission and `O(B * max_live^2)` MLX attention
 
@@ -167,18 +140,6 @@ Every remaining `ModelConfig` variant mirrors Torch `ActorCritic` in
 `manabot/backends/mlx/policy.py`, closing all hidden scalar/catalog assumptions
 outside `require_supported`:
 
-- **`world=None` and hashed records** (needed in Slice 1 for Gray Ogre):
-  - `card_definitions` embedding (`managym.CARD_DEFINITION_COUNT + 1`, row 0
-    zero) when the prepared tables have no `definition_rows`; `semantic_cards` is `None`.
-  - `Facts` and `SharedEffects` support `vocabulary="hashed"` (4096-row
-    `ident`/`detail`/`source` and `modification`/`detail`/`source` embeddings)
-    matching `torch/_facts.py` and `torch/_shared_effects.py`.
-  - Fix hidden catalog assumptions in `mlx/policy.py`: `compute_dtype` reads
-    `self.player_embedding.projection.layers[0].weight.dtype` (always present);
-    `has_programs` returns `self.semantic_cards is not None`; `_Static`,
-    `programs()`, `cache_programs()`, and `resident_bytes` handle
-    a missing `definition_rows` buffer without building a catalog schedule; `check_observation` passes
-    `self.card_definitions.weight.shape[0]` (when present) to `admission.Spec`.
 - **`categorical_wdl`**:
   - 3-logit `value_head` output; set `self.value_semantic = "signed_outcome"`
     for `categorical_wdl` (else `None`).
@@ -196,9 +157,8 @@ outside `require_supported`:
     `selected_moves`, and `magnitude_quantile` to `manabot/backends/mlx/rl.py`.
   - Update `manabot/backends/parity.py:minibatch_loss` to set
     `categorical=policy.config.value_kind == "categorical_wdl"`.
-- **`value_aggregation`**:
-  - `historical_mean` (full `value_head` mean over all slots, padding included),
-    `value_token` (learned trailing token through attention; neutral perspective
+- **`value_aggregation`** (`historical_mean` landed in Slice 1):
+  - `value_token` (learned trailing token through attention; neutral perspective
     and zero memory gate), `attention_readout` (`AttentionReadout` with one
     learned query + `mha`, built last as in Torch).
 - **`attention_on=False`**:
@@ -304,12 +264,8 @@ outside `require_supported`:
 
 ## What goes
 
-- `PPOPolicy`, `PPOLearner`, `PPOAdmittedRollout`, `PPORolloutFile`, `PPORL`,
-  `PPOBackend`, `ppo_rl()` (Slice 1), and `CategoricalRL`, `categorical_rl()`,
+- `CategoricalRL`, `categorical_rl()`,
   `test_a_backend_without_a_categorical_critic_is_refused` (Slice 2).
-- PPO's Torch-only `.float()`/`.detach()`/`learner.agent(obs)` idioms.
-- Torch `AdmittedRollout.minibatches` thread pool and private
-  `PrefixObservation` trim (both move into `AdmittedRows`).
 - Torch `rl.categorical_lambda_returns` duplicate wave recursion (moves into
   `manabot/policy/returns.py`).
 - `SelfPlay.valid_settings`' hardcoded live-token CUDA check (moves to
@@ -325,7 +281,10 @@ outside `require_supported`:
 
 ## Slices
 
-1. **Done — belief-pilot PPO on MLX.** The Gray Ogre recipe registered its portable checkpoint after one MPS Adam step with Torch imports blocked (246 learner transitions). Both backends reloaded its bytes and gave identical logits and value on one held-out decision. The fixed-rollout check covers scalar loss, per-tensor gradient direction and post-Adam weights with MLX execution chunks.
+1. **Done (90211689b7)** — Gray Ogre PPO on MLX through the shared update,
+   `world=None`/hashed records, `historical_mean`; the Torch-blocked recipe
+   test registered a portable checkpoint after one MPS Adam step, and both
+   backends reloaded it with identical logits and value.
 2. **Next — critic and attention variants, then final protocol collapse**:
    - Move `categorical_lambda_returns` to `manabot/policy/returns.py`; add
      categorical WDL + selection helpers to `mlx/rl.py`.
@@ -374,28 +333,13 @@ uv run --extra mlx --extra dev pytest tests/model/test_mlx_backend.py tests/trai
 All pass, the parity table has every architecture row above, cross-backend
 sampler parity passes, and the Torch-blocked belief demo test passes.
 
-## Docs written (write-docs, 2026-11-23)
+## Open choice for Slice 3's demo
 
-Updated in place for intended behavior:
-- `manabot/backends/mlx.md`
-- `manabot/backends/README.md`
-- `docs/observation-and-model.md`
-- `docs/training.md`
-- `docs/training-loop.md`
-- `manabot/README.md`
-
-### Open question surfaced while writing the docs
-
-- **Standalone `belief_sampler.py` CLI demo vs `run.input("start")`:** The
-  plan's Outcome shows running
-  `uv run --extra mlx etude train manabot/recipes/belief_sampler.py --config '{"backend":"mlx"}'`
-  directly after `belief_policy.py`. However, `manabot/recipes/belief_sampler.py`
-  reads `policy = run.input("start")`, which is supplied only by a
-  `TrainingJob(..., start=policy)` declaration (such as `experiments/belief.py`),
-  not by running `belief_sampler.py` standalone. Should the CLI path be:
-  (a) running `experiments/belief.py` with `--job policy --config ...` and
-  `--job sampler --config ...` (if `etude train` supports `--config` with
-  `--job` on `training_jobs()`), (b) keeping `belief_sampler.py` as a
-  two-job-only recipe and documenting `collect_belief` + `train_belief` in
-  Python for standalone use (what the docs currently show), or (c) adding an
-  optional start-checkpoint path to `BeliefConfig` for standalone runs?
+`manabot/recipes/belief_sampler.py` reads `run.input("start")`, supplied only
+by a `TrainingJob(..., start=policy)` declaration (`experiments/belief.py`), so
+the Outcome's standalone `etude train .../belief_sampler.py` line cannot run as
+written. Options: (a) run `experiments/belief.py` per job with `--config`;
+(b) keep the sampler two-job-only and show `collect_belief` + `train_belief`
+in Python (what the docs show); (c) add an optional start-checkpoint path to
+`BeliefConfig`. Slice 3 takes (a) if `etude train --job` accepts `--config`,
+else (b), and records the choice in `scratch/questions.md`.
