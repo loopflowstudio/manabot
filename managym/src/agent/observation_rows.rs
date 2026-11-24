@@ -165,6 +165,7 @@ pub struct PackedTable {
     element: bool,
     pub seat_axis: bool,
     counts: [i32; 2],
+    committed_bytes: usize,
 }
 
 pub struct PackedRows {
@@ -236,6 +237,7 @@ impl PackedRows {
                             element: array.element.is_some(),
                             seat_axis,
                             counts: [0; 2],
+                            committed_bytes: 0,
                             offsets: vec![0],
                             values: Vec::new(),
                         },
@@ -245,26 +247,34 @@ impl PackedRows {
         }
     }
     /// Append a complete game in seat order, including offsets for empty seats.
-    /// On an encoding error the caller discards this batch.
+    /// Roll back partial records before an isolated writer continues on a sibling.
     pub fn append(
         &mut self,
         obs: &Observation,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationEncodeError> {
-        encode_rows(obs, config, self, None)?;
+        let result = encode_rows(obs, config, self, None).and_then(|()| {
+            for table in self.tables.values() {
+                table
+                    .counts
+                    .iter()
+                    .try_fold(*table.offsets.last().unwrap(), |n, count| {
+                        n.checked_add(*count).ok_or_else(offset_overflow)
+                    })?;
+            }
+            Ok(())
+        });
         for table in self.tables.values_mut() {
-            for count in &table.counts[..if table.seat_axis { 2 } else { 1 }] {
-                table.offsets.push(
-                    table
-                        .offsets
-                        .last()
-                        .unwrap()
-                        .checked_add(*count)
-                        .ok_or_else(offset_overflow)?,
-                );
+            if result.is_ok() {
+                for count in &table.counts[..if table.seat_axis { 2 } else { 1 }] {
+                    table.offsets.push(table.offsets.last().unwrap() + count);
+                }
+                table.committed_bytes = table.values.len();
+            } else {
+                table.values.truncate(table.committed_bytes);
             }
             table.counts = [0; 2];
         }
-        Ok(())
+        result
     }
 }

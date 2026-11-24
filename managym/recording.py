@@ -1198,6 +1198,8 @@ _VECTOR_READS = frozenset(
         "next_fresh_seeds",
         "snapshot_slots",
         "slot_metadata",
+        "observation_rows",
+        "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
         "get_last_info",
@@ -1375,16 +1377,39 @@ class RecordedVectorEnv(_Capture):
         layout: managym.ObservationLayout | None = None,
     ) -> None:
         self.native.set_buffers(buffers, action_overflow, layout=layout)
-        self._terminated = buffers["terminated"]
-        self._truncated = buffers["truncated"]
-        # NumPy owns these buffers; preserve their native encoding ABI as evidence.
+        self._register_outcomes(buffers, action_overflow, buffers["actions"].shape[1])
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
             for key, value in buffers.items()
         }
-        self._action_cutoff = (
-            buffers["actions"].shape[1] if action_overflow == "first-legal" else None
+
+    def set_observation_layout(
+        self,
+        buffers: dict[str, np.ndarray],
+        action_overflow: str,
+        *,
+        layout: managym.ObservationLayout,
+    ) -> None:
+        self.native.set_observation_layout(buffers, layout, action_overflow)
+        self._register_outcomes(buffers, action_overflow, layout.shapes["actions"][0])
+        dtypes = layout.dtypes
+        self.identities["input_buffers"] = {
+            key: {"shape": list(shape), "dtype": dtypes[key]}
+            for key, shape in layout.shapes.items()
+        }
+        self.identities["input_buffers"].update(
+            {
+                key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
+                for key, value in buffers.items()
+            }
         )
+
+    def _register_outcomes(
+        self, buffers: dict[str, np.ndarray], action_overflow: str, capacity: int
+    ) -> None:
+        self._terminated = buffers["terminated"]
+        self._truncated = buffers["truncated"]
+        self._action_cutoff = capacity if action_overflow == "first-legal" else None
         if self._action_cutoff is not None:
             self.identities["action_overflow"] = action_overflow
 

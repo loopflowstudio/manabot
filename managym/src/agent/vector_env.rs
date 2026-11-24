@@ -568,17 +568,26 @@ impl VectorEnv {
     pub fn write_observations_for_players(
         &self,
         players: &[Option<usize>],
-        mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
+        write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
     ) -> Result<Vec<ObservationRead>, AgentError> {
+        self.read_observations_for_players(players, write)
+    }
+
+    pub fn read_observations_for_players<E: From<AgentError>>(
+        &self,
+        players: &[Option<usize>],
+        mut write: impl FnMut(usize, &Observation) -> Result<(), E>,
+    ) -> Result<Vec<ObservationRead>, E> {
         if players.len() != self.len() {
             return Err(AgentError(format!(
                 "expected {} observation players, got {}",
                 self.len(),
                 players.len()
-            )));
+            ))
+            .into());
         }
         if players.iter().flatten().any(|&player| player > 1) {
-            return Err(AgentError("observation player must be 0 or 1".into()));
+            return Err(AgentError("observation player must be 0 or 1".into()).into());
         }
         let reads = players
             .iter()
@@ -640,6 +649,15 @@ impl VectorEnv {
     {
         self.validate_ready_for_step()?;
         self.reset_each_into_at(self.player_configs.clone(), Some(seeds), write)
+    }
+
+    pub(crate) fn reset_seeds_with_writer(
+        &mut self,
+        seeds: Vec<u64>,
+        write: impl Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
+    ) -> Result<Vec<InfoDict>, ObservationWriteError> {
+        self.validate_ready_for_step()?;
+        self.reset_with_writer(self.player_configs.clone(), Some(seeds), write)
     }
 
     /// Per-env `skip_trivial` collapse counters for the current games.
@@ -732,6 +750,21 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        self.reset_with_writer(player_configs, seeds, |i, obs, r, d, t| {
+            write(i, obs, r, d, t).map_err(Into::into)
+        })
+        .map_err(Into::into)
+    }
+
+    pub(crate) fn reset_with_writer<F, S: Into<GameSetup>>(
+        &mut self,
+        player_configs: Vec<S>,
+        seeds: Option<Vec<u64>>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, ObservationWriteError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
+    {
         let player_configs: Vec<GameSetup> = player_configs.into_iter().map(Into::into).collect();
         self.validate_actions_len(player_configs.len())?;
         for configs in &player_configs {
@@ -767,19 +800,38 @@ impl VectorEnv {
         V: Fn(usize, &Observation) -> Result<(), AgentError>,
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        self.reassign_with_writer(
+            configs,
+            |slot, obs| validate(slot, obs).map_err(Into::into),
+            |i, obs, r, d, t| write(i, obs, r, d, t).map_err(Into::into),
+        )
+        .map_err(Into::into)
+    }
+
+    pub(crate) fn reassign_with_writer<V, F, S: Into<GameSetup>>(
+        &mut self,
+        configs: Vec<Option<S>>,
+        validate: V,
+        write: F,
+    ) -> Result<Vec<InfoDict>, ObservationWriteError>
+    where
+        V: Fn(usize, &Observation) -> Result<(), ObservationWriteError>,
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
+    {
         self.validate_actions_len(configs.len())?;
         self.validate_ready_for_step()?;
         if !self.uniform_roster.is_empty() || self.player_policies != [PlayerPolicy::Agent; 2] {
             return Err(AgentError(
                 "root reassignment requires externally routed fixed setups".into(),
-            ));
+            )
+            .into());
         }
         let mut prepared = Vec::new();
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
                 let setup: GameSetup = setup.into();
                 if self.slots[index] != SlotState::FreshOpening {
-                    return Err(AgentError("cannot reassign a live game".into()));
+                    return Err(AgentError("cannot reassign a live game".into()).into());
                 }
                 let previous = &self.envs[index];
                 let mut env = previous.replacement_root(previous.reset_seed());
@@ -807,6 +859,15 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        self.step_with_writer(actions, active, write)
+    }
+
+    pub(crate) fn step_with_writer<E: From<AgentError>>(
+        &mut self,
+        actions: &[i64],
+        active: Option<&[bool]>,
+        mut write: impl FnMut(usize, &Observation, f64, bool, bool) -> Result<(), E>,
+    ) -> Result<Vec<InfoDict>, E> {
         self.validate_actions_len(actions.len())?;
         self.validate_ready_for_step()?;
 
@@ -848,6 +909,20 @@ impl VectorEnv {
         recover_capacity: bool,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
+    {
+        self.step_isolated_with_writer(actions, active, recover_capacity, write)
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn step_isolated_with_writer<F>(
+        &mut self,
+        actions: &[i64],
+        active: &[bool],
+        recover_capacity: bool,
+        write: F,
+    ) -> Result<Vec<InfoDict>, ObservationWriteError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
@@ -922,7 +997,7 @@ impl VectorEnv {
                         ]));
                     }
                 }
-                return Err(error.into());
+                return Err(error);
             }
             Ok(out.info)
         })
@@ -936,6 +1011,20 @@ impl VectorEnv {
     ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.replace_with_writer(failed, |i, obs, r, d, t| {
+            write(i, obs, r, d, t).map_err(Into::into)
+        })
+        .map_err(Into::into)
+    }
+
+    pub(crate) fn replace_with_writer<F>(
+        &mut self,
+        failed: &[bool],
+        write: F,
+    ) -> Result<Vec<InfoDict>, ObservationWriteError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
         self.validate_actions_len(failed.len())?;
         self.validate_ready_for_step()?;
@@ -952,16 +1041,16 @@ impl VectorEnv {
         })
     }
 
-    fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
+    fn for_each_env<R, E, F>(&mut self, mut work: F) -> Result<Vec<R>, E>
     where
-        F: Fn(
+        F: FnMut(
             usize,
             &mut Env,
             &mut u64,
             &GameSetup,
             &RootRoster,
             &mut SlotState,
-        ) -> Result<R, AgentError>,
+        ) -> Result<R, E>,
     {
         // Setups are immutable between resets. Borrow each stream's setup while
         // mutating its environment/seed, including when most streams are paused.

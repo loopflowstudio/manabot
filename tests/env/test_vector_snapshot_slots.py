@@ -11,8 +11,13 @@ import pytest
 
 from manabot.env.match import Match
 from manabot.env.memory_store import MemoryStore, Prefix, gather_memory
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    step_buffers,
+)
 from manabot.infra.config import MatchConfig, ObservationConfig
+from manabot.policy.native_rows import native_rows
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import SlotInstall, replay_snapshot
@@ -216,7 +221,8 @@ def test_sparse_reads_beside_quarantined_slot_and_direct_replacement() -> None:
     assert "game_error" not in vector.get_last_info()[0]
 
 
-def test_last_snapshot_capacity_error_leaves_the_batch_untouched() -> None:
+@pytest.mark.parametrize("packed", [False, True], ids=["dense", "csr"])
+def test_last_snapshot_capacity_error_leaves_the_batch_untouched(packed: bool) -> None:
     config = ObservationConfig(
         max_decision_records=1,
         max_decision_references=128,
@@ -227,19 +233,25 @@ def test_last_snapshot_capacity_error_leaves_the_batch_untouched() -> None:
     vector = managym.VectorEnv(
         2, seed=42, decision_memory_include_own=True, auto_reset=False
     )
-    buffers = allocate_vector_buffers(space, 2)
-    vector.set_buffers(buffers, layout=space.layout)
+    buffers = step_buffers(2) if packed else allocate_vector_buffers(space, 2)
+    if packed:
+        vector.set_observation_layout(buffers, space.layout)
+    else:
+        vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(setup())
     source = managym.Env(seed=42, decision_memory_include_own=True)
     source.reset(setup())
     source.step(1)
     source.step(0)
     before = {name: value.copy() for name, value in buffers.items()}
+    original = vector.observation_rows() if packed else None
     generations = vector.current_game_generations()
     with pytest.raises(managym.ObservationCapacity, match="decision_records"):
         vector.load_slots_into_buffers(
             [managym.SlotLoad.fresh(1), managym.SlotLoad.snapshot(0, source.snapshot())]
         )
+    if packed:
+        assert vector.observation_rows() == original
     assert vector.current_game_generations() == generations
     assert vector.next_fresh_seeds() == [44, 45]
     for name, value in before.items():
@@ -537,3 +549,47 @@ def test_sharded_producers_support_arbitrary_worker_counts() -> None:
             vector.current_game_seeds()[7] == 42
             and vector.current_game_seeds()[2] == 52
         )
+
+
+def test_isolated_csr_capacity_failure_preserves_sibling_and_masked_rows() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=1,
+            max_decision_references=128,
+            max_decision_reference_details=2048,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    setup_game = setup()
+    typed = managym.VectorEnv(3, seed=42, decision_memory_include_own=True)
+    reference = managym.VectorEnv(3, seed=42, decision_memory_include_own=True)
+    outcomes = step_buffers(3)
+    typed.set_observation_layout(outcomes, space.layout)
+    dense = allocate_vector_buffers(space, 3)
+    reference.set_buffers(dense, layout=space.layout)
+    for vector in (typed, reference):
+        vector.reset_each_into_buffers([setup_game] * 3, seeds=[42, 42, 42])
+        vector.step_into_buffers([1, -1, -1], [True, False, False])
+    previous = typed.observation_rows()
+    for vector in (typed, reference):
+        vector.step_isolated_into_buffers(
+            [0, 1, -1], [True, True, False], recover_capacity=True
+        )
+    assert typed.get_last_info()[0]["game_error_class"] == "ObservationCapacity"
+    assert typed.get_last_info() == reference.get_last_info()
+    rows = typed.observation_rows()
+    assert rows[0] == previous[0] and rows[2] == previous[2]
+    selected = [1, 2, 1]
+    batch = rows[0][0].gather([rows[i] for i in selected])
+    spans = native_rows(batch, space, bucketed=False, objects=False)
+    for key in space.shapes:
+        np.testing.assert_array_equal(
+            spans.dense(key), dense[key][selected], err_msg=key
+        )
+    for key in outcomes:
+        np.testing.assert_array_equal(outcomes[key], dense[key])
+    for vector in (typed, reference):
+        vector.replace_failed_into_buffers([True, False, False])
+    assert typed.current_game_seeds() == reference.current_game_seeds()
+    assert typed.state_digests() == reference.state_digests()

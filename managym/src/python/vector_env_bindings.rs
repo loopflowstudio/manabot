@@ -13,6 +13,8 @@ use pyo3::{
 };
 
 #[cfg(feature = "python")]
+use super::observation_batch::{self, ObservationBatch};
+use crate::agent::observation_rows::PackedRows;
 use crate::{
     agent::{
         action::AgentError,
@@ -95,9 +97,43 @@ pub struct PyVectorEnv {
     config: ObservationEncoderConfig,
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
+    packed: Option<PackedVector>,
     last_info: Vec<InfoDict>,
     timings: BufferedCallTimings,
     memory_encoding: Vec<Mutex<crate::agent::decision_memory::MemoryEncoding>>,
+}
+
+/// Published slot coordinates survive masked calls. Each successful call freezes
+/// its writes together; replaced slots drop their previous batch reference.
+struct PackedVector {
+    layout: Py<ObservationLayout>,
+    state: StepStateBuffers,
+    slots: Vec<Option<(Py<ObservationBatch>, usize)>>,
+}
+
+struct PackedWrites {
+    rows: PackedRows,
+    slots: Vec<usize>,
+}
+
+impl PackedWrites {
+    fn new(layout: &ObservationLayout) -> Self {
+        Self {
+            rows: PackedRows::new(&layout.arrays),
+            slots: Vec::new(),
+        }
+    }
+
+    fn append(
+        &mut self,
+        slot: usize,
+        obs: &Observation,
+        config: &ObservationEncoderConfig,
+    ) -> Result<(), ObservationWriteError> {
+        self.rows.append(obs, config)?;
+        self.slots.push(slot);
+        Ok(())
+    }
 }
 
 #[pyclass(name = "SlotLoad", frozen)]
@@ -203,6 +239,7 @@ impl PyVectorEnv {
             num_envs,
             memory_encoding: (0..num_envs).map(|_| Mutex::default()).collect(),
             buffers: None,
+            packed: None,
             last_info: Vec::new(),
             timings: BufferedCallTimings::default(),
         })
@@ -261,20 +298,82 @@ impl PyVectorEnv {
         Vec<bool>,
     )> {
         let config = super::observation_batch::config(&layout.borrow(py), action_overflow)?;
-        let results = py
-            .allow_threads(|| self.inner.step(&actions))
-            .map_err(map_agent_err)?;
-        let rewards = results.iter().map(|row| row.reward).collect();
-        let terminated = results.iter().map(|row| row.terminated).collect();
-        let truncated = results.iter().map(|row| row.truncated).collect();
-        self.last_info = results.iter().map(|row| row.info.clone()).collect();
-        let batch = super::observation_batch::batch(
-            py,
-            layout,
-            config,
-            results.into_iter().map(|row| Ok(row.obs)),
-        )?;
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let (mut rewards, mut terminated, mut truncated) = (Vec::new(), Vec::new(), Vec::new());
+        self.last_info = py
+            .allow_threads(|| {
+                self.inner
+                    .step_with_writer(&actions, None, |_, obs, reward, done, cut| {
+                        rows.append(obs, &config)?;
+                        rewards.push(reward);
+                        terminated.push(done);
+                        truncated.push(cut);
+                        Ok(())
+                    })
+            })
+            .map_err(map_write_error)?;
+        let batch = observation_batch::freeze(py, layout, rows, rewards.len());
         Ok((batch, rewards, terminated, truncated))
+    }
+
+    /// Register step outcomes and select owned v11 observations for buffered calls.
+    #[pyo3(signature = (state, layout, action_overflow="error"))]
+    fn set_observation_layout(
+        &mut self,
+        py: Python<'_>,
+        state: Bound<'_, PyDict>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<()> {
+        let config = observation_batch::config(&layout.borrow(py), action_overflow)?;
+        if state.len() != 3 {
+            return Err(PyValueError::new_err("expected three step outcome buffers"));
+        }
+        let state = read_step_state(&state, &[self.num_envs])?;
+        self.packed = Some(PackedVector {
+            layout,
+            state,
+            slots: (0..self.num_envs).map(|_| None).collect(),
+        });
+        self.config = config;
+        self.buffers = None;
+        Ok(())
+    }
+
+    fn observation_rows(&self, py: Python<'_>) -> PyResult<Vec<(Py<ObservationBatch>, usize)>> {
+        self.packed
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .slots
+            .iter()
+            .map(|slot| {
+                slot.as_ref()
+                    .map(|(batch, i)| (batch.clone_ref(py), *i))
+                    .ok_or_else(|| PyValueError::new_err("vector has no encoded observation"))
+            })
+            .collect()
+    }
+
+    fn observations_for_players(
+        &mut self,
+        py: Python<'_>,
+        players: Vec<Option<usize>>,
+    ) -> PyResult<(Vec<ObservationRead>, ObservationBatch)> {
+        let packed = self
+            .packed
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?;
+        let mut rows = PackedRows::new(&packed.layout.borrow(py).arrays);
+        let config = self.config;
+        let reads = self
+            .inner
+            .read_observations_for_players(&players, |_, obs| {
+                rows.append(obs, &config)
+                    .map_err(ObservationWriteError::from)
+            })
+            .map_err(map_write_error)?;
+        let batch = observation_batch::freeze(py, packed.layout.clone_ref(py), rows, reads.len());
+        Ok((reads, batch))
     }
 
     #[pyo3(signature = (buffers, action_overflow="error", *, layout=None))]
@@ -299,6 +398,7 @@ impl PyVectorEnv {
         self.config = config;
         self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.buffers = Some(buffers);
+        self.packed = None;
         Ok(())
     }
 
@@ -321,11 +421,14 @@ impl PyVectorEnv {
     ) -> PyResult<()> {
         let configs = super::bindings::game_setup(&player_configs)?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
-            })
+            inner.reset_with_writer(
+                vec![configs; inner.len()],
+                None,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
         })
     }
 
@@ -341,13 +444,12 @@ impl PyVectorEnv {
             .map(|row| super::bindings::game_setup(&row))
             .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_each_into_at(
+            inner.reset_with_writer(
                 configs,
                 seeds,
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                        .map_err(AgentError::from)
                 },
             )
         })
@@ -366,18 +468,22 @@ impl PyVectorEnv {
             })
             .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.reassign_roots_into(
+            inner.reassign_with_writer(
                 configs,
-                |_, obs| {
+                |slot, obs| {
+                    if let Destination::Packed(writer) = buffers.fields {
+                        return writer.lock().unwrap().append(slot, obs, &config);
+                    }
                     encode(obs, &config)
                         .map(|_| ())
-                        .map_err(|error| AgentError(error.to_string()))
+                        .map_err(ObservationWriteError::from)
                 },
                 |index, obs, reward, terminated, truncated| {
+                    if matches!(buffers.fields, Destination::Packed(_)) {
+                        return Ok(buffers.write_step_state(index, reward, terminated, truncated)?);
+                    }
                     buffers.clear_memory_cursor(index);
-                    buffers
-                        .write_encoded_row(index, obs, reward, terminated, truncated, &config)
-                        .map_err(AgentError::from)
+                    buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
                 },
             )
         })
@@ -432,10 +538,20 @@ impl PyVectorEnv {
                     |slot, obs| {
                         // Owners may have resized a registered array between calls.
                         // Check every selected destination before publishing any of them.
-                        buffers.fields.encoded_row_mut(slot, &config)?;
+                        match &buffers.fields {
+                            Destination::Dense(fields) => {
+                                fields.encoded_row_mut(slot, &config)?;
+                            }
+                            Destination::Packed(writer) => {
+                                writer.lock().unwrap().append(slot, obs, &config)?;
+                            }
+                        }
                         buffers.rewards.element_ptr(slot)?;
                         buffers.terminated.element_ptr(slot)?;
                         buffers.truncated.element_ptr(slot)?;
+                        if matches!(buffers.fields, Destination::Packed(_)) {
+                            return Ok(());
+                        }
                         if let Some(row) = &mut admission {
                             encode_into(obs, &config, row.buffers_mut())?;
                         } else {
@@ -444,6 +560,9 @@ impl PyVectorEnv {
                         Ok(())
                     },
                     |slot, obs, terminal| {
+                        if matches!(buffers.fields, Destination::Packed(_)) {
+                            return Ok(buffers.write_step_state(slot, 0.0, terminal, false)?);
+                        }
                         buffers.clear_memory_cursor(slot);
                         buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
                         if terminal {
@@ -452,10 +571,7 @@ impl PyVectorEnv {
                         Ok(())
                     },
                 )
-                .map_err(|e| match e {
-                    ObservationWriteError::Encoding(error) => map_encode_err(error),
-                    ObservationWriteError::Buffer(error) => map_agent_err(error),
-                })
+                .map_err(map_write_error)
         })?;
         self.last_info.resize_with(self.num_envs, InfoDict::new);
         Ok(loaded
@@ -477,9 +593,9 @@ impl PyVectorEnv {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             if let Some(mask) = &active {
                 if mask.len() != inner.len() {
-                    return Err(AgentError(
-                        "active mask length must match environments".into(),
-                    ));
+                    return Err(
+                        AgentError("active mask length must match environments".into()).into(),
+                    );
                 }
                 for (index, enabled) in mask.iter().enumerate() {
                     if !enabled {
@@ -487,13 +603,12 @@ impl PyVectorEnv {
                     }
                 }
             }
-            let infos = inner.step_into(
+            let infos = inner.step_with_writer(
                 &actions,
                 active.as_deref(),
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                        .map_err(AgentError::from)
                 },
             )?;
             for slot in inner.parked_slots() {
@@ -635,7 +750,7 @@ impl PyVectorEnv {
             for index in 0..inner.len() {
                 buffers.write_step_state(index, 0.0, false, false)?;
             }
-            let infos = inner.step_isolated_into(
+            let infos = inner.step_isolated_with_writer(
                 &actions,
                 &active,
                 recover_capacity,
@@ -652,20 +767,16 @@ impl PyVectorEnv {
 
     fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
-                buffers
-                    .write_encoded_row(index, obs, reward, done, truncated, &config)
-                    .map_err(AgentError::from)
+            inner.replace_with_writer(&failed, |index, obs, reward, done, truncated| {
+                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
             })
         })
     }
 
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
+            inner.reset_seeds_with_writer(seeds, |index, obs, reward, terminated, truncated| {
+                write_buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
             })
         })
     }
@@ -881,18 +992,26 @@ fn read_observation_buffers(
         actions_valid: array("actions_valid")?,
         events_valid: array("events_valid")?,
         step_state: if step_state {
-            Some(StepStateBuffers {
-                rewards: require_numpy_array(buffers, "rewards", batch.as_slice(), "float64")?
-                    .unbind(),
-                terminated: require_numpy_array(buffers, "terminated", batch.as_slice(), "uint8")?
-                    .unbind(),
-                truncated: require_numpy_array(buffers, "truncated", batch.as_slice(), "uint8")?
-                    .unbind(),
-            })
+            Some(read_step_state(buffers, batch.as_slice())?)
         } else {
             None
         },
     })
+}
+
+fn read_step_state(buffers: &Bound<'_, PyDict>, shape: &[usize]) -> PyResult<StepStateBuffers> {
+    Ok(StepStateBuffers {
+        rewards: require_numpy_array(buffers, "rewards", shape, "float64")?.unbind(),
+        terminated: require_numpy_array(buffers, "terminated", shape, "uint8")?.unbind(),
+        truncated: require_numpy_array(buffers, "truncated", shape, "uint8")?.unbind(),
+    })
+}
+
+fn map_write_error(error: ObservationWriteError) -> PyErr {
+    match error {
+        ObservationWriteError::Encoding(error) => map_encode_err(error),
+        ObservationWriteError::Buffer(error) => map_agent_err(error),
+    }
 }
 
 #[cfg(feature = "python")]
@@ -904,11 +1023,18 @@ impl PyVectorEnv {
                 &mut VectorEnv,
                 SendWriteBuffers,
                 ObservationEncoderConfig,
-            ) -> Result<Vec<InfoDict>, AgentError>
+            ) -> Result<Vec<InfoDict>, ObservationWriteError>
             + Send,
     ) -> PyResult<()> {
+        let packed = self.packed.is_some();
         self.last_info = self.with_buffers(py, |inner, buffers, config| {
-            run(inner, buffers, config).map_err(map_agent_err)
+            run(inner, buffers, config).map_err(|error| {
+                if packed {
+                    map_write_error(error)
+                } else {
+                    map_agent_err(error.into())
+                }
+            })
         })?;
         Ok(())
     }
@@ -919,33 +1045,55 @@ impl PyVectorEnv {
         run: impl FnOnce(&mut VectorEnv, SendWriteBuffers, ObservationEncoderConfig) -> PyResult<R>
             + Send,
     ) -> PyResult<R> {
-        let buffers = self
-            .buffers
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
         let config = self.config;
         let inner = &mut self.inner;
-        let memory_encoding = &self.memory_encoding;
-
         let started = Instant::now();
         ENCODING_NANOS.set(0);
-        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| {
-                run(
-                    inner,
-                    SendWriteBuffers {
-                        memory_encoding: Some(memory_encoding),
-                        ..write_buffers
-                    },
-                    config,
-                )
+        let result = if let Some(packed) = &mut self.packed {
+            let writer = Mutex::new(PackedWrites::new(&packed.layout.borrow(py)));
+            let result =
+                with_step_writer(py, &packed.state, Destination::Packed(&writer), |buffers| {
+                    py.allow_threads(move || run(inner, buffers, config))
+                });
+            let writes = writer.into_inner().unwrap();
+            if result.is_ok() {
+                let batch = Py::new(
+                    py,
+                    observation_batch::freeze(
+                        py,
+                        packed.layout.clone_ref(py),
+                        writes.rows,
+                        writes.slots.len(),
+                    ),
+                )?;
+                for (index, slot) in writes.slots.into_iter().enumerate() {
+                    packed.slots[slot] = Some((batch.clone_ref(py), index));
+                }
+            }
+            result
+        } else {
+            let buffers = self
+                .buffers
+                .as_ref()
+                .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+            let memory_encoding = &self.memory_encoding;
+            with_send_write_buffers(py, buffers, |write_buffers| {
+                py.allow_threads(|| {
+                    run(
+                        inner,
+                        SendWriteBuffers {
+                            memory_encoding: Some(memory_encoding),
+                            ..write_buffers
+                        },
+                        config,
+                    )
+                })
             })
-        });
+        };
         let encoding = ENCODING_NANOS.get();
         self.timings.encoding_nanos += encoding;
         self.timings.stepping_nanos +=
             (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
-        self.buffers = Some(buffers);
         result
     }
 }
@@ -1646,9 +1794,14 @@ impl SendObservationFieldSlices {
 
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
+enum Destination<'a> {
+    Dense(SendObservationFieldSlices),
+    Packed(&'a Mutex<PackedWrites>),
+}
+
 struct SendWriteBuffers<'a> {
     memory_encoding: Option<&'a [Mutex<crate::agent::decision_memory::MemoryEncoding>]>,
-    fields: SendObservationFieldSlices,
+    fields: Destination<'a>,
     rewards: SendSlice<f64>,
     terminated: SendSlice<u8>,
     truncated: SendSlice<u8>,
@@ -1668,7 +1821,15 @@ impl SendWriteBuffers<'_> {
         observation: &Observation,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
-        let out = self.fields.encoded_row_mut(env_index, config)?;
+        let out = match &self.fields {
+            Destination::Packed(writer) => {
+                return writer
+                    .lock()
+                    .unwrap()
+                    .append(env_index, observation, config)
+            }
+            Destination::Dense(fields) => fields.encoded_row_mut(env_index, config)?,
+        };
         match self.memory_encoding {
             Some(cursors) => {
                 let mut cursor = cursors[env_index].lock().expect("exclusive buffer row");
@@ -1727,17 +1888,26 @@ fn with_send_write_buffers<R>(
         .step_state
         .as_ref()
         .ok_or_else(|| PyRuntimeError::new_err("step-state buffers are required"))?;
+    with_observation_field_slices(py, buffers, |fields| {
+        with_step_writer(py, step_state, Destination::Dense(fields), f)
+    })
+}
+
+fn with_step_writer<'a, R>(
+    py: Python<'_>,
+    step_state: &StepStateBuffers,
+    fields: Destination<'a>,
+    run: impl FnOnce(SendWriteBuffers<'a>) -> PyResult<R>,
+) -> PyResult<R> {
     let rewards_buffer = typed_numpy_buffer::<f64>(py, &step_state.rewards, "rewards")?;
     let terminated_buffer = typed_numpy_buffer::<u8>(py, &step_state.terminated, "terminated")?;
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &step_state.truncated, "truncated")?;
-    with_observation_field_slices(py, buffers, |fields| {
-        f(SendWriteBuffers {
-            memory_encoding: None,
-            fields,
-            rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
-            terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
-            truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
-        })
+    run(SendWriteBuffers {
+        memory_encoding: None,
+        fields,
+        rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
+        terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
+        truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
     })
 }
 

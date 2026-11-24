@@ -667,9 +667,23 @@ For a v11 acting-view batch, call
 `encode_observation_batch(envs, layout, action_overflow="error")`.
 `VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
 returns the batch from the step together with per-stream rewards, terminated
-flags and truncated flags. It advances all streams and includes the events
-from that step. Encoding happens after advancement, so an encoding error
-leaves the streams advanced.
+flags and truncated flags. Each stream emits its observation and step events
+as it advances. A strict stepping error can leave streams advanced.
+
+For repeated collection, call `VectorEnv.set_observation_layout(state, layout,
+action_overflow)` with one writable outcome array per stream for each of
+`rewards` (float64), `terminated` and `truncated` (uint8). Use the ordinary
+buffered reset, replacement and step methods. After reset, `observation_rows()`
+returns one `(batch, index)` per stream in slot order. Masked steps preserve
+parked slots. Isolated stepping reports the failed slot and keeps every
+successful sibling's observation. A failed snapshot load leaves the prior
+roots and observations available.
+
+`observations_for_players(players)` freezes the requested viewers at their
+current decisions. Pass one seat or `None` per stream. The result contains the
+selected slot identities and a batch in that order. Any batch's
+`gather(coordinates)` copies just the selected live spans from compatible
+batches, preserving the requested order and repeated rows.
 
 Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
 each value buffer to `(seat_axis, offsets, values)`, with immutable byte

@@ -16,6 +16,7 @@ use pyo3::{
 use std::collections::BTreeMap;
 
 struct FrozenTable {
+    stride: usize,
     seat_axis: bool,
     offsets: Py<PyBytes>,
     values: Py<PyBytes>,
@@ -53,6 +54,98 @@ impl ObservationBatch {
             )?;
         }
         Ok(out)
+    }
+
+    /// Gather arbitrary coordinates across compatible native batches, including repeats.
+    fn gather(&self, py: Python<'_>, rows: Vec<(PyRef<'_, Self>, usize)>) -> PyResult<Self> {
+        let config = self.layout.borrow(py).config;
+        for (batch, index) in &rows {
+            if *index >= batch.batch_size || batch.layout.borrow(py).config != config {
+                return Err(PyValueError::new_err(
+                    "invalid observation batch coordinate or layout",
+                ));
+            }
+        }
+        let mut tables = BTreeMap::new();
+        for (key, source) in &self.tables {
+            let groups = if source.seat_axis { 2 } else { 1 };
+            let mut offsets = Vec::with_capacity((1 + rows.len() * groups) * 4);
+            let mut values = Vec::new();
+            let mut end = 0i32;
+            let mut stride = 0;
+            offsets.extend(end.to_ne_bytes());
+            for (batch, index) in &rows {
+                let table = &batch.tables[key];
+                stride = stride.max(table.stride);
+                let bytes = table.offsets.as_bytes(py);
+                let at = |group: usize| {
+                    i32::from_ne_bytes(bytes[group * 4..group * 4 + 4].try_into().unwrap())
+                };
+                let group = index * groups;
+                let start = at(group);
+                let stop = at(group + groups);
+                for i in 1..=groups {
+                    offsets.extend(
+                        end.checked_add(at(group + i) - start)
+                            .ok_or_else(|| {
+                                PyValueError::new_err("observation batch exceeds int32 row offsets")
+                            })?
+                            .to_ne_bytes(),
+                    );
+                }
+                end += stop - start;
+                values.extend_from_slice(
+                    &table.values.as_bytes(py)
+                        [start as usize * table.stride..stop as usize * table.stride],
+                );
+            }
+            tables.insert(
+                key.clone(),
+                FrozenTable {
+                    seat_axis: source.seat_axis,
+                    stride,
+                    offsets: PyBytes::new_bound(py, &offsets).unbind(),
+                    values: PyBytes::new_bound(py, &values).unbind(),
+                },
+            );
+        }
+        Ok(Self {
+            layout: self.layout.clone_ref(py),
+            tables,
+            batch_size: rows.len(),
+        })
+    }
+
+    /// Share ordinary spans and release memory bytes after interning the viewer prefixes.
+    fn blank_decision_memory(&self, py: Python<'_>) -> Self {
+        let empty_offsets = PyBytes::new_bound(py, &vec![0; 4 * (1 + self.batch_size)]).unbind();
+        let empty_values = PyBytes::new_bound(py, &[]).unbind();
+        let tables = self
+            .tables
+            .iter()
+            .map(|(key, table)| {
+                let memory = key.starts_with("decision_");
+                (
+                    key.clone(),
+                    FrozenTable {
+                        stride: table.stride,
+                        seat_axis: table.seat_axis,
+                        offsets: if memory {
+                            &empty_offsets
+                        } else {
+                            &table.offsets
+                        }
+                        .clone_ref(py),
+                        values: if memory { &empty_values } else { &table.values }.clone_ref(py),
+                    },
+                )
+            })
+            .collect();
+        Self {
+            layout: self.layout.clone_ref(py),
+            tables,
+            batch_size: self.batch_size,
+        }
     }
 
     /// Retained action counts, including first-legal truncation.
@@ -98,10 +191,21 @@ pub(super) fn batch(
             .map_err(map_encode_err)?;
         batch_size += 1;
     }
+    Ok(freeze(py, layout, rows, batch_size))
+}
+
+pub(super) fn freeze(
+    py: Python<'_>,
+    layout: Py<ObservationLayout>,
+    rows: PackedRows,
+    batch_size: usize,
+) -> ObservationBatch {
     let tables = rows
         .tables
         .into_iter()
         .map(|(key, table)| {
+            let count = *table.offsets.last().unwrap() as usize;
+            let stride = table.values.len().checked_div(count).unwrap_or(0);
             let offsets: Vec<_> = table
                 .offsets
                 .into_iter()
@@ -110,6 +214,7 @@ pub(super) fn batch(
             (
                 key,
                 FrozenTable {
+                    stride,
                     seat_axis: table.seat_axis,
                     offsets: PyBytes::new_bound(py, &offsets).unbind(),
                     values: PyBytes::new_bound(py, &table.values).unbind(),
@@ -117,11 +222,11 @@ pub(super) fn batch(
             )
         })
         .collect();
-    Ok(ObservationBatch {
+    ObservationBatch {
         layout,
         tables,
         batch_size,
-    })
+    }
 }
 
 /// Encode acting-view frontiers, preserving input order and repeated games.
