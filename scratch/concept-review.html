@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Post-Measurement Whole-Branch Review</title>
+  <title>MTG-419 Concept Review — Post-Repair Whole-Branch Review</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -71,7 +71,7 @@
     .scope {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--no-ink);
+      border-left: 4px solid var(--yes-ink);
       padding: 0.95rem 1.15rem;
       border-radius: 6px;
       margin: 1rem 0 1.6rem;
@@ -127,8 +127,8 @@
       border-radius: 6px;
       padding: 0.95rem 1.05rem;
     }
-    .card.broken-box { border-color: var(--no-ink); }
-    .card.proposed-box { border-color: var(--prop-ink); }
+    .card.before-box { border-color: var(--border); }
+    .card.after-box { border-color: var(--yes-ink); }
     pre {
       margin: 0.5rem 0;
       padding: 0.7rem 0.85rem;
@@ -162,7 +162,7 @@
     .callout {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--no-ink);
+      border-left: 4px solid var(--yes-ink);
       padding: 0.85rem 1rem;
       border-radius: 6px;
       margin: 0.9rem 0 1.2rem;
@@ -179,194 +179,165 @@
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Post-Measurement Whole-Branch Concept Review (ce06c12d3f vs. main 3040e9969c)</p>
+  <p class="kicker">Managym · MTG-419 · Post-Repair Whole-Branch Concept Review (84f4c51894 vs. main 5d85077748)</p>
   <h1>Do the shared casting-profile, play-permission, and zone-departure concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, library-top departure, and event-bound trigger X area against base <code>3040e9969c</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, resolution.rs, proposed_event.rs, sba.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>cards/content_pack.rs</code>, <code>state/src/{card.rs, stack_object.rs, game_object.rs}</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, structured_offer.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, Board.svelte, Rail.svelte, Inspect.svelte, Plate.svelte}</code>).<br>
-    <strong>Why this area:</strong> After the previous concept review (<code>9efbf356cc</code>), decomposition review (<code>fd57d06120</code>) edited <code>flow/play.rs</code> and measurement added stress states before gate. Re-reading the full branch fresh against <code>main</code> found <strong>two real mismatches</strong>—including a <strong>live rules regression on Iroh, Grand Lotus</strong> introduced by <code>fd57d06120</code> because <code>CardTypes::is_spell()</code> names two different ideas and <code>permits_spell</code> did not own <code>GrantedFlashback</code>'s card-type rule. <strong>Outcome: <code>scratch/plan.md</code> updated with a small pre-gate repair pass before gate.</strong>
+    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, library-top departure, and event-bound trigger X area against base <code>5d85077748</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, resolution.rs, proposed_event.rs, sba.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>cards/content_pack.rs</code>, <code>state/src/{card.rs, stack_object.rs, game_object.rs, zone.rs}</code>, <code>possible_worlds.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, structured_offer.rs, continuation.rs, effect_execution.rs, ability_description.rs, record_vocabulary.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, Board.svelte, Rail.svelte, Inspect.svelte, Plate.svelte}</code>).<br>
+    <strong>Why this area:</strong> After the pre-gate repair pass (<code>ee3a8bbcd9</code>, <code>672ddd4961</code>) and realign (<code>84f4c51894</code>), re-reading the whole branch fresh against <code>main</code> checks whether the two repairs closed the prior mismatches without introducing new splits, and whether every concept in the casting/permission surface now has one owner. <strong>Outcome: nothing to change — all product and code concepts in scope align; ready for gate.</strong>
   </div>
 
-  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>ce06c12d3f</code>)</h2>
+  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>84f4c51894</code>)</h2>
   <table>
     <thead>
       <tr>
-        <th style="width:22%">Product concept<br><span class="muted">What a player, policy, LLM, or Academy knows and does</span></th>
+        <th style="width:23%">Product concept<br><span class="muted">What a player, policy, LLM, or Academy knows and does</span></th>
         <th style="width:27%">Code concept<br><span class="muted">Types, records, and APIs behind it</span></th>
         <th style="width:10%">Aligned?</th>
-        <th style="width:41%">Finding / verification</th>
+        <th style="width:40%">Verification at HEAD <code>84f4c51894</code></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>“Instant or sorcery” vs. “castable spell (nonland)” &amp; granted flashback (Iroh, Grand Lotus)</strong><br>Iroh grants flashback only to instant/sorcery cards (for their mana cost) and Lesson cards (for <code>{1}</code>) in your graveyard—never to creatures, artifacts, enchantments, or planeswalkers.</td>
-        <td><code>CardTypes::is_spell()</code> (<code>state/src/card.rs:76</code>), <code>play_routes</code> (<code>flow/play.rs:275</code>), <code>granted_flashback_cost</code> (<code>flow/play.rs:214</code>), <code>permits_spell</code> (<code>flow/play.rs:383</code>).</td>
-        <td><span class="badge no">No</span></td>
-        <td><strong>Biggest mismatch — one name for two ideas + missing rule in <code>permits_spell</code>.</strong> <code>CardTypes::is_spell()</code> means “instant or sorcery” (while <code>is_castable()</code> means nonland spell). Commit <code>fd57d06120</code> deleted <code>if card.types.is_spell()</code> from <code>play_routes</code> believing it duplicated <code>!land</code> in <code>permits_spell</code>. Because neither <code>permits_spell</code> nor <code>granted_flashback_cost</code> checks instant/sorcery/Lesson, <strong>Iroh now grants flashback to every creature, artifact, enchantment, and planeswalker in your graveyard</strong> (even exiling them on resolution and colliding with Muldrotha/Zul/Greatwurm).</td>
-      </tr>
-      <tr>
-        <td><strong>Top-of-library departures preserve remembered library order</strong><br>When a player knows the top cards of their library (e.g. Scry 2) and removes the top card—by drawing, exiling to play, or casting/playing it from the top of the library—the remaining remembered cards shift up by one position.</td>
-        <td><code>ZoneEntry.library_top_departure</code> (<code>proposed_event.rs:61</code>), <code>draw_cards</code> (<code>zones.rs:294</code>), <code>exile_top_cards_to_play</code> (<code>cast_permission.rs:258</code>), <code>push_spell_to_stack</code> (<code>zones.rs:575</code>), <code>play_land</code> (<code>play.rs:689</code>), <code>commit_zone_move</code> (<code>zones.rs:701</code>).</td>
-        <td><span class="badge no">No</span></td>
-        <td><strong>Incomplete ownership across top-of-library plays.</strong> <code>draw_cards</code> and <code>exile_top_cards_to_play</code> set <code>library_top_departure: true</code>, but <code>push_spell_to_stack</code> (used by Vizier’s <code>PlayRoute::LibraryTop</code> and Planetarium’s <code>ResolutionCastOffer::LibraryTop</code>) and <code>play_land</code> leave it <code>false</code>. Casting the top creature after Scry 2 calls <code>known_library.forget_order()</code> and erases the remembered second card.</td>
-      </tr>
-      <tr>
-        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play names one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions and cast-only-from-hand blocks spells without blocking land plays.</td>
-        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>ContentPack::spell_definition</code>, <code>play_routes</code> &rarr; <code>permits_spell</code> &rarr; <code>permitted_play_routes</code> &rarr; <code>cast_choices</code> &rarr; <code>priority_play</code> (<code>flow/play.rs:234-668</code>), <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code>.</td>
+        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play chooses one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions and cast-only-from-hand blocks spells without blocking land plays.</td>
+        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>ContentPack::spell_definition</code>, <code>play_routes</code> &rarr; <code>permits_spell</code> &rarr; <code>permitted_play_routes</code> &rarr; <code>cast_choices</code> &rarr; <code>priority_play</code> (<code>flow/play.rs:123-674</code>), <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Single authority across Hand, FreeFromHand, LibraryTop, GraveyardType, ExileCounter, Grant, and PrintedGraveyard; single-route wire compatibility preserved via <code>resolved_play_route</code>. Once <code>GrantedFlashback</code> (plus <code>PrintedFlashback</code>/<code>PrintedGraveyard</code>) face guards live in <code>permits_spell</code>, the whole route table is self-contained.</td>
+        <td><span class="badge existing">Existing</span> Single authority across Hand, FreeFromHand, LibraryTop, PrintedFlashback, GrantedFlashback, Grant, GraveyardType, ExileCounter, and PrintedGraveyard. <code>play_routes</code> opens zone candidates; <code>permits_spell</code> alone validates every route against the selected face; single-route wire compatibility holds via <code>resolved_play_route</code>.</td>
       </tr>
       <tr>
-        <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast (CR 608.2g) is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into or is accepted by it.</td>
-        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:426</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2905</code>), <code>payment_preview</code> (<code>mana/preview.rs:171</code>).</td>
+        <td><strong>“Instant or sorcery” vs. “castable spell” &amp; Iroh’s granted flashback</strong><br>Iroh grants flashback only to Lessons (for <code>{1}</code>) and other instants/sorceries (for their mana cost) in your graveyard—never to creatures, artifacts, enchantments, planeswalkers, or an Adventure card’s graveyard face (CR 715.4).</td>
+        <td><code>CardTypes::is_instant_or_sorcery()</code> (<code>state/src/card.rs:76</code>), <code>granted_flashback_cost</code> (<code>flow/play.rs:214</code>), <code>permits_spell</code> (<code>flow/play.rs:385-393</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td><code>resolved_play_route</code> returns <code>None</code> whenever <code>suspended_decision.is_some()</code>; <code>CastDuringResolution</code> rejects forged priority routes before unsuspending; <code>CastChoices</code> separates <code>resolving</code>, <code>free</code>, and <code>flash_surcharge</code> cleanly.</td>
+        <td><span class="badge existing">Existing · repaired in ee3a8bbcd9</span> Internal Rust helper renamed across all 3 call sites (serialized <code>CardTypeData.is_spell</code> unchanged). <code>granted_flashback_cost</code> returns <code>None</code> for non-Lesson permanents; <code>permits_spell</code> enforces face eligibility on <code>PrintedFlashback</code>, <code>GrantedFlashback</code>, and <code>PrintedGraveyard</code>. Covered by <code>tla::iroh_leaves_graveyard_permanents_to_muldrothas_permission</code>.</td>
       </tr>
       <tr>
-        <td><strong>Exact grants (“may play” vs. “may cast”), multi-face pricing &amp; CR 601.2h</strong><br>Grants distinguish play vs. cast, price Land//Spell MDFCs by their castable face, and apply <code>any_mana</code> once after reductions and additional costs (CR 601.2f &rarr; 601.2h).</td>
-        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code> (<code>statics.rs:192</code>), <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code> (<code>play.rs:513</code>), <code>PlayGrantTerms</code> / <code>PlayGrantExtension</code>, Academy <code>permissionTerms</code>.</td>
+        <td><strong>Top-of-library play &amp; exile-to-play preserve remembered library order</strong><br>When a player knows cards near the top of their library (e.g. Scry 2) and draws, exiles to play (Redcap/Flameshape/Loot), or casts/plays the top card (Vizier/Planetarium), remembered positions shift up by one privately.</td>
+        <td><code>Game::is_library_top</code> (<code>zones.rs:132</code>), <code>ZoneEntry.library_top_departure</code> (<code>proposed_event.rs:61, 89</code>), <code>draw_cards</code> (<code>zones.rs:303</code>), <code>exile_top_cards_to_play</code> (<code>cast_permission.rs:258</code>), <code>push_spell_to_stack</code> (<code>zones.rs:589</code>), <code>play_land</code> (<code>play.rs:700</code>), <code>commit_zone_move</code> (<code>zones.rs:709-719</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>One static owner (<code>StaticPlayPermissions</code>), one CR 601.2h step in <code>effective_spell_cost</code> across <code>ExileCounter</code>, <code>PlayGrant.any_mana</code>, and <code>SpendAnyManaToCast</code>; aligned across rules, v11 tokens, LLM text, and Academy.</td>
+        <td><span class="badge existing">Existing · repaired in ee3a8bbcd9 + 672ddd4961</span> <code>push_spell_to_stack</code> and <code>play_land</code> both compute <code>self.is_library_top(object)</code> (keyed by owner’s library top), shifting <code>known_library</code> via <code>remove_top()</code> while keeping non-top departures on conservative <code>forget_order()</code>. Covered by both Vizier and Planetarium two-viewer tests.</td>
       </tr>
       <tr>
-        <td><strong>Two-seat face-down exile privacy &amp; determinization</strong><br>Foretold and conditional face-down exiled cards (Flameshape) stay private to authorized viewers across observations, search determinization, and possible worlds.</td>
-        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code> (<code>cast_permission.rs:322-348</code>), atomic <code>refill_hidden_exile_slots</code>, <code>shuffle_known_library</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
+        <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast (CR 608.2g) is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into its observation or is accepted by its executor.</td>
+        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:434</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2905</code>), <code>payment_preview</code> (<code>mana/preview.rs:171</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection and owner-seat resampling when no Wizard is controlled.</td>
+        <td><span class="badge existing">Existing</span> <code>resolved_play_route</code> returns <code>None</code> whenever <code>suspended_decision.is_some()</code>; <code>CastDuringResolution</code> requires <code>route: None</code> and rejects forged priority routes without mutating state; <code>CastChoices</code> cleanly separates <code>resolving</code>, <code>free</code>, and <code>flash_surcharge</code>.</td>
       </tr>
       <tr>
-        <td><strong>Prepared spell copies, stack provenance, cast history, off-battlefield counters, open-ended pooled mana, counter-removal progress &amp; event-bound trigger X</strong><br>Prepared copies follow source control and cease when unlinked; stack provenance flags stay off copies; cast history keeps profiles; exile counters persist until zone change; non-column mana restrictions use facts; counter removal reports remaining counters without faking a mode; bound vs. unchosen trigger X stays accurate.</td>
+        <td><strong>Exact grants (“may play” vs. “may cast”), multi-face pricing &amp; CR 601.2h</strong><br>Grants distinguish play vs. cast, price Land//Spell MDFCs by their first spell face, and apply <code>any_mana</code> once after reductions and additional costs (CR 601.2f &rarr; 601.2h).</td>
+        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code> (<code>statics.rs:192</code>), <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code> (<code>play.rs:521</code>), <code>PlayGrantTerms</code> / <code>PlayGrantExtension</code>, Academy <code>permissionTerms</code>.</td>
+        <td><span class="badge yes">Yes</span></td>
+        <td><span class="badge existing">Existing</span> One static owner (<code>StaticPlayPermissions</code>), one CR 601.2h step in <code>effective_spell_cost</code> across <code>ExileCounter</code>, <code>PlayGrant.any_mana</code>, and <code>SpendAnyManaToCast</code>; aligned across rules, v11 learning tokens, LLM text, and Academy UI.</td>
+      </tr>
+      <tr>
+        <td><strong>Two-seat face-down exile privacy &amp; determinization</strong><br>Foretold and conditional face-down exiled cards (Flameshape) stay hidden from unauthorized viewers across observations, search determinization, and possible worlds.</td>
+        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code> (<code>cast_permission.rs:322-348</code>), atomic <code>refill_hidden_exile_slots</code>, <code>ZoneManager::exchange_face_down_exile</code>, <code>shuffle_known_library</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
+        <td><span class="badge yes">Yes</span></td>
+        <td><span class="badge existing">Existing</span> Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection and owner-seat resampling when no Wizard is controlled.</td>
+      </tr>
+      <tr>
+        <td><strong>Prepared copies, stack provenance, cast history, exile counters, open-ended pooled mana, counter-removal progress &amp; event-bound trigger X</strong><br>Prepared copies follow source control and cease when unlinked; stack provenance stays off copies; cast history retains profiles; exile counters clear on zone change; non-column mana restrictions use facts; counter removal reports remaining count without faking a mode; bound vs. unchosen trigger X stays accurate.</td>
         <td><code>prepare_inset</code> / <code>sba.rs:289</code>, <code>StackObjectData.{from_prepared, flashback, x}</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>, <code>project_pending_payment</code>, <code>trigger_description</code> + <code>bound_x</code>, Academy <code>Rail.svelte</code> &amp; <code>inspectableCards</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Every concept uses one representation across rules, hashing, v11 tensors, LLM text, and Academy UI.</td>
+        <td><span class="badge existing">Existing</span> Each concept has one representation across rules, state hashing, v11 tensors, LLM text, and Academy UI, with no cohort card name in engine code outside tests/fixtures/comments.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Biggest mismatch — Before &amp; After</h2>
+  <h2>2. Verification of the two repaired mismatches — Before &amp; After</h2>
   <div class="callout">
-    <strong>Why this broke:</strong> In Magic, a “spell” is any castable nonland card (CR 112.1). In <code>managym</code>, <code>CardTypes::is_spell()</code> means <code>Instant | Sorcery</code> only, while <code>is_castable()</code> means nonland. When <code>fd57d06120</code> removed <code>if card.types.is_spell()</code> from <code>play_routes</code> assuming <code>permits_spell</code>’s <code>!land</code> check replaced it, Iroh’s instant/sorcery restriction vanished from the entire engine.
+    <strong>Result:</strong> Both mismatches found at <code>ce06c12d3f</code> are now closed in <code>HEAD 84f4c51894</code> with zero new splits across the casting/permission surface. No further model or plan change is proposed.
   </div>
 
   <div class="grid">
-    <div class="card broken-box">
-      <p><span class="badge existing">Existing · HEAD ce06c12d3f (broken)</span></p>
-      <h3><code>CardTypes::is_spell()</code> hides “instant or sorcery”; <code>GrantedFlashback</code> admits every permanent</h3>
+    <div class="card before-box">
+      <p><span class="badge existing">Before · ce06c12d3f (broken)</span></p>
+      <h3><code>CardTypes::is_spell()</code> hid “instant or sorcery”; Iroh admitted permanents</h3>
+      <pre>state/src/card.rs
+  pub fn is_spell(&amp;self) -&gt; bool { Instant | Sorcery }
+
+flow/play.rs
+  granted_flashback_cost: else { card.mana_cost.clone() }
+  permits_spell:
+    PlayRoute::PrintedFlashback
+    | PlayRoute::GrantedFlashback
+    | PlayRoute::PrintedGraveyard =&gt; !land &amp;&amp; cast.profile.is_front()</pre>
+    </div>
+
+    <div class="card after-box">
+      <p><span class="badge yes">After · Existing HEAD 84f4c51894</span></p>
+      <h3><code>is_instant_or_sorcery()</code> + complete face authority in <code>permits_spell</code></h3>
       <pre>state/src/card.rs:76
-  pub fn is_spell(&amp;self) -&gt; bool {
-      self.types.contains(&amp;CardType::Instant)
-          || self.types.contains(&amp;CardType::Sorcery)
-  }
+  pub fn is_instant_or_sorcery(&amp;self) -&gt; bool { Instant | Sorcery }
 
-flow/play.rs:214-221
-  fn granted_flashback_cost(&amp;self, object: ObjectId) -&gt; Option&lt;ManaCost&gt; {
-      let card = &amp;self.state[object];
-      if card.has_subtype("Lesson") { Some(ManaCost::parse("{1}")) }
-      else { card.mana_cost.clone() } // returns Some({2}{R}) for Gray Ogre!
-  }
-
-flow/play.rs:383-385
-  PlayRoute::PrintedFlashback
-  | PlayRoute::GrantedFlashback
-  | PlayRoute::PrintedGraveyard =&gt; !land &amp;&amp; cast.profile.is_front(),
-  // Gray Ogre passes! Iroh casts it with flashback, then exiles it on resolution!</pre>
-    </div>
-
-    <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed · Pre-gate repair</span></p>
-      <h3>Name <code>is_instant_or_sorcery()</code> plainly; make <code>permits_spell</code> &amp; <code>granted_flashback_cost</code> enforce Iroh’s rule</h3>
-      <pre>state/src/card.rs:76  (only 3 Rust call sites; CardTypeData.is_spell unchanged)
-  pub fn is_instant_or_sorcery(&amp;self) -&gt; bool {
-      self.types.contains(&amp;CardType::Instant)
-          || self.types.contains(&amp;CardType::Sorcery)
-  }
-
-flow/play.rs (granted_flashback_cost)
-  if card.has_subtype("Lesson") { Some(ManaCost::parse("{1}")) }
-  else if card.types.is_instant_or_sorcery() { card.mana_cost.clone() }
-  else { None }
-
-flow/play.rs (permits_spell — complete face authority per route)
-  PlayRoute::PrintedFlashback =&gt;
-      !land &amp;&amp; cast.profile.is_front() &amp;&amp; face.flashback().is_some(),
-  PlayRoute::GrantedFlashback =&gt;
-      !land &amp;&amp; cast.profile.is_front()
-          &amp;&amp; (face.types.is_instant_or_sorcery() || face.has_subtype("Lesson")),
-  PlayRoute::PrintedGraveyard =&gt;
-      !land &amp;&amp; cast.profile.is_front() &amp;&amp; face.graveyard_counter_cast().is_some(),</pre>
+flow/play.rs:214-223 &amp; 385-393
+  granted_flashback_cost:
+    Lesson =&gt; {1} | is_instant_or_sorcery() =&gt; mana_cost | _ =&gt; None
+  permits_spell:
+    PrintedFlashback =&gt; !land &amp;&amp; is_front &amp;&amp; face.flashback().is_some()
+    GrantedFlashback =&gt; !land &amp;&amp; is_front &amp;&amp; granted_flashback_cost.is_some()
+    PrintedGraveyard =&gt; !land &amp;&amp; is_front &amp;&amp; face.graveyard_counter_cast().is_some()</pre>
     </div>
   </div>
 
-  <h3>Second mismatch — Top-of-library plays forget remembered library order</h3>
   <div class="grid">
-    <div class="card broken-box">
-      <p><span class="badge existing">Existing · HEAD ce06c12d3f</span></p>
-      <h3><code>push_spell_to_stack</code> drops <code>library_top_departure</code></h3>
-      <pre>flow/zones.rs:575-582
-  let object = self.move_object_with_entry(
-      object, ZoneType::Stack,
-      ZoneEntry { profile: cast.profile, ..Default::default() },
-  );
-  // commit_zone_move sees library_top_departure == false
-  // =&gt; known_library_mut(owner).forget_order() wipes position 1!</pre>
+    <div class="card before-box">
+      <p><span class="badge existing">Before · ce06c12d3f (broken)</span></p>
+      <h3>Top-of-library casts &amp; land plays wiped <code>known_library</code></h3>
+      <pre>flow/zones.rs (push_spell_to_stack) &amp; flow/play.rs (play_land)
+  ZoneEntry { profile: cast.profile, ..Default::default() }
+  // library_top_departure == false =&gt; commit_zone_move calls forget_order()</pre>
     </div>
 
-    <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed · Pre-gate repair</span></p>
-      <h3>Mark genuine top-of-library departures on spell casts &amp; land plays</h3>
-      <pre>flow/zones.rs (push_spell_to_stack)
-  let library_top_departure = cast_from == ZoneType::Library
-      &amp;&amp; self.state.zones.top(ZoneType::Library, self.state[object].owner)
-          == Some(object);
-  ZoneEntry { profile: cast.profile, library_top_departure, ..Default::default() }
-  // Same check in flow/play.rs::play_land.
-  // commit_zone_move calls remove_top(), shifting position 1 -&gt; 0.</pre>
+    <div class="card after-box">
+      <p><span class="badge yes">After · Existing HEAD 84f4c51894</span></p>
+      <h3>One position check (<code>is_library_top</code>) for casts &amp; land plays</h3>
+      <pre>flow/zones.rs:132, 589 &amp; flow/play.rs:700
+  pub(super) fn is_library_top(&amp;self, object: ObjectId) -&gt; bool {
+      self.state.zones.top(ZoneType::Library, self.state[object].owner)
+          == Some(object)
+  }
+  // library_top_departure: self.is_library_top(object)
+  // commit_zone_move calls remove_top(), shifting position 1 -&gt; 0</pre>
     </div>
   </div>
 
-  <h2>3. Concrete walkthrough — Normal path, failure, and recovery</h2>
+  <h2>3. Concrete walkthrough — Normal path, failure, and recovery (verified on HEAD)</h2>
   <div class="trace">
-    <div class="trace-label">Walkthrough A: Iroh, Grand Lotus + Muldrotha + Gray Ogre &amp; Smaug in graveyard</div>
+    <div class="trace-label">Walkthrough A: Iroh, Grand Lotus + Muldrotha + graveyard permanents &amp; Adventures</div>
     <ol>
-      <li><strong>Normal path (after repair):</strong> P0 controls Iroh and Muldrotha on P0’s main phase with <code>Lightning Strike</code>, <code>Waterbending Lesson</code>, <code>Gray Ogre</code>, and <code>Smaug // Spew Flame</code> in P0’s graveyard.
-        <ul>
-          <li><code>Lightning Strike</code> offers <code>GrantedFlashback</code> for <code>{1}{R}</code>; <code>Waterbending Lesson</code> offers <code>GrantedFlashback</code> for <code>{1}</code>.</li>
-          <li><code>Gray Ogre</code> offers <em>only</em> Muldrotha’s <code>GraveyardType(Creature)</code> (<code>route: None</code>), never <code>GrantedFlashback</code>; it resolves onto the battlefield.</li>
-          <li><code>Smaug // Spew Flame</code> (a Creature card in graveyard, CR 715.4) offers <em>only</em> Muldrotha’s <code>GraveyardType(Creature)</code> for <code>Front</code>; Iroh grants flashback to neither Smaug nor Spew Flame.</li>
-        </ul>
-      </li>
-      <li><strong>Failure on current HEAD (<code>ce06c12d3f</code>):</strong> <code>play_routes</code> opens <code>GrantedFlashback</code> on both <code>Gray Ogre</code> and <code>Smaug</code>, and <code>permits_spell</code> admits them. Casting <code>Gray Ogre</code> via route 5 sets <code>flashback: true</code> and exiles it from the stack instead of putting it onto the battlefield; without Muldrotha, Iroh alone lets P0 cast any graveyard creature/artifact/enchantment/planeswalker.</li>
-      <li><strong>Recovery / forged Command guard:</strong> After the repair, submitting a forged <code>Action::CastSpell { object: gray_ogre, route: Some(GrantedFlashback), profile: Front }</code> is rejected by both <code>selected_play_route</code> and <code>permits_spell</code> before any state mutates.</li>
+      <li><strong>Normal path:</strong> P0 controls Iroh and Muldrotha with <code>Gray Ogre</code>, <code>Prophetic Prism</code>, <code>Omniscience</code>, and <code>Smaug // Spew Flame</code> in P0’s graveyard. Under Iroh alone, none are offered. With Muldrotha added, <code>Gray Ogre</code> offers only Muldrotha’s lone route (<code>route: None</code>) and resolves onto the battlefield rather than exiling with flashback.</li>
+      <li><strong>Failure / forged Command:</strong> Submitting a forged <code>Action::CastSpell { object: ogre, route: Some(PlayRoute::GrantedFlashback), profile: Front }</code> fails both <code>selected_play_route</code> and <code>permits_spell</code> before any state mutates, leaving the state witness unchanged.</li>
+      <li><strong>Counterexample checked:</strong> A Lesson card with printed flashback <code>{1}</code> deduplicates <code>GrantedFlashback</code> against <code>PrintedFlashback</code> in <code>play_routes</code>; an instant/sorcery with no mana cost returns <code>None</code> from <code>granted_flashback_cost</code> (CR 118.6a); an Adventure creature card in graveyard has Creature front characteristics (CR 715.4) so Iroh grants flashback to neither face.</li>
     </ol>
   </div>
 
   <div class="trace">
-    <div class="trace-label">Walkthrough B: Scry 2 + Vizier of the Menagerie casting from library top</div>
+    <div class="trace-label">Walkthrough B: Scry 2 + Vizier / Planetarium casting from library top</div>
     <ol>
-      <li><strong>Normal path (after repair):</strong> P0 scries 2, keeping <code>Gray Ogre</code> on top (position 0) and <code>Lightning Bolt</code> second (position 1). P0 casts <code>Gray Ogre</code> from the top of the library via Vizier (<code>PlayRoute::LibraryTop</code>). <code>push_spell_to_stack</code> sets <code>library_top_departure: true</code>; <code>commit_zone_move</code> calls <code>known_library.remove_top()</code>, shifting <code>Lightning Bolt</code> to position 0 (matching draw and Redcap/Flameshape exile-top).</li>
-      <li><strong>Failure on current HEAD (<code>ce06c12d3f</code>):</strong> <code>library_top_departure</code> is <code>false</code>, so casting <code>Gray Ogre</code> calls <code>forget_order()</code> and erases P0’s knowledge of <code>Lightning Bolt</code> at position 0 (breaking observation, determinization, and possible-world library constraints).</li>
-      <li><strong>Counterexample checked:</strong> A non-top library cast cannot happen (both <code>PlayRoute::LibraryTop</code> and <code>ResolutionCastOffer::LibraryTop</code> require <code>zones.top(Library, owner) == Some(object)</code>), and guarding <code>library_top_departure</code> on <code>zones.top(...) == Some(object)</code> ensures a hypothetical non-top library move still falls back to <code>forget_order()</code>.</li>
+      <li><strong>Normal path:</strong> P0 scries two cards (Forest, Island) to the top, then casts the top card (<code>Gray Ogre</code>) via Vizier (priority <code>PlayRoute::LibraryTop</code>) or Planetarium (<code>ResolutionCastOffer::LibraryTop</code>). <code>push_spell_to_stack</code> sets <code>library_top_departure: self.is_library_top(object)</code>; <code>commit_zone_move</code> shifts <code>known_library</code> via <code>remove_top()</code>, preserving Forest at position 0 and Island at position 1 for P0 while P1’s <code>opponent.known_library</code> stays empty.</li>
+      <li><strong>Counterexample checked:</strong> A card cast from hand, graveyard, or exile is never <code>zones.top(Library, owner)</code>, so <code>is_library_top</code> is strictly <code>false</code>; a hypothetical non-top library move likewise keeps <code>library_top_departure: false</code> and falls back to <code>forget_order()</code> without leaking hidden library positions.</li>
     </ol>
   </div>
 
-  <h2>4. Outside MTG-419 scope (unchanged from prior review)</h2>
+  <h2>4. Outside MTG-419 scope (follow-up items, no blocker to gate)</h2>
   <div class="outside">
-    <p><span class="badge outside-badge">Outside MTG-419 · Academy prompt surface</span> <strong>Academy <code>Rail.svelte</code> &amp; <code>prompt.ts</code> do not yet render <code>decision_context.pending</code> or distinguish <code>stage === 'additional_cost'</code>:</strong> Pre-existing across Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, and RemoveCounters (~30-line Game/Academy follow-up task).</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Library knowledge across top-card effects</span> <strong>Resolution effects that exile/mill from the library top conservatively forget remembered order:</strong> <code>Effect::ExileEachLibraryTopCastFree</code> (Etali, <code>resolution.rs:1384</code>), <code>Effect::Cascade</code> (<code>resolution.rs:1408</code>), <code>Effect::ExileUntilNonlandCastFree</code> (<code>resolution.rs:1344</code>), and <code>Effect::MillCards</code> (<code>resolution.rs:1029</code>) still call <code>move_object</code> / <code>ZoneEntry::default()</code> without <code>library_top_departure: true</code>. Conservative forgetting never leaks private information or breaks legality; unifying top-of-library departure across all library-top effects belongs to a small library-knowledge follow-up rather than another MTG-419 pre-gate loop.</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Academy prompt surface</span> <strong>Academy <code>Rail.svelte</code> &amp; <code>prompt.ts</code> do not yet render <code>decision_context.pending</code> or distinguish <code>stage === 'additional_cost'</code>:</strong> Pre-existing across Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, and RemoveCounters (~30-line Academy follow-up task).</p>
     <p><span class="badge outside-badge">Outside MTG-419 · Payment continuation cleanup</span> <strong>Pre-existing multi-tap <code>CostComponent::Tap</code> in <code>continuation.rs:714-723</code>:</strong> Still writes remaining tap count into <code>frame.mode</code>; migrate into <code>project_pending_payment</code> in a dedicated cleanup task.</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Trigger X ownership nit</span> <strong>Two owners of trigger-X binding (<code>flow/triggers.rs</code> vs. <code>ability_description.rs::bound_x</code>):</strong> Both agree on the catalog; moving to <code>Option&lt;u8&gt;</code> on <code>FiredTrigger</code> / <code>TriggeredAbilityOnStack</code> changes hashed trigger state and is best done as its own clean change if a new X-binding trigger arrives.</p>
     <p><span class="badge outside-badge">Outside MTG-419 · Combat priority</span> <strong>Missing priority between first-strike and regular combat damage (CR 510.4):</strong> <code>FrameCompletion::CombatNormal</code> runs immediately after first-strike SBAs without placing triggers or passing priority. File as a separate bug Task at gate.</p>
-    <p><span class="badge outside-badge">Outside MTG-419 · Future inline triggers with X</span> <strong><code>trigger_description</code>’s <code>inline</code> arm (<code>ability_description.rs:31-37</code>):</strong> Substitutes <code>"that many (N)"</code> for all <code>inline_effects</code> (safe for current catalog where only reflexive <code>WhenYouDo</code> triggers carry <code>EffectValue::X</code>).</p>
   </div>
 
   <h2>5. Questions for review</h2>
-  <p class="muted">Both choices below are reversible and written into <code>scratch/plan.md</code> as the pre-gate repair slice so implement can fix them before gate. Reply with e.g. <code>1b</code> or <code>2b</code> if you want a different disposition.</p>
+  <p class="muted">No code or plan changes are proposed; the branch is ready for gate. Reply with e.g. <code>1b</code> or <code>2b</code> if you want a different follow-up disposition.</p>
   <ol class="q-list">
-    <li><strong>Rename <code>CardTypes::is_spell()</code> to <code>is_instant_or_sorcery()</code> alongside repairing <code>GrantedFlashback</code> in <code>permits_spell</code> and <code>granted_flashback_cost</code>?</strong>
-      <br><span class="chosen">1a (chosen):</span> Yes — rename the internal Rust helper (3 call sites; keep serialized <code>CardTypeData.is_spell</code> intact), enforce <code>face.types.is_instant_or_sorcery() || face.has_subtype("Lesson")</code> in both <code>permits_spell</code> and <code>granted_flashback_cost</code> (plus <code>flashback().is_some()</code> / <code>graveyard_counter_cast().is_some()</code> on the other two graveyard routes), and add directed Iroh graveyard-permanent regression tests in <code>tla.rs</code>.
-      <br>1b: Repair <code>GrantedFlashback</code> only and leave <code>CardTypes::is_spell()</code> named as is.
+    <li><strong>Proceed directly to gate on <code>84f4c51894</code> without adding another pre-gate loop for Etali/Cascade/Mill <code>library_top_departure</code>?</strong>
+      <br><span class="chosen">1a (chosen):</span> Yes — Vizier/Planetarium/Redcap/Flameshape/draw all shift <code>known_library</code> cleanly, and Etali/Cascade/ExileUntilNonland/Mill share the existing conservative <code>forget_order()</code> behavior; handle all four together in a small library-knowledge follow-up if desired.
+      <br>1b: Pull <code>library_top_departure: true</code> into Etali (and optionally Cascade/Mill) before gate.
     </li>
-    <li><strong>Preserve shifted <code>known_library</code> positions on top-of-library casts/plays (<code>push_spell_to_stack</code> and <code>play_land</code>) in the same pre-gate pass?</strong>
-      <br><span class="chosen">2a (chosen):</span> Yes — set <code>library_top_departure</code> when the moved object is the current library top, matching <code>draw_cards</code> and <code>exile_top_cards_to_play</code>, with a directed Scry 2 + Vizier test.
-      <br>2b: Defer library-top cast knowledge retention to a separate follow-up task.
+    <li><strong>Keep the pre-existing multi-tap <code>frame.mode</code> and trigger <code>bound_x</code> nits out of MTG-419?</strong>
+      <br><span class="chosen">2a (chosen):</span> Yes — neither affects casting profiles or play permissions, and changing trigger state hashing or unrelated activation fixtures right before gate adds churn without fixing a live defect.
+      <br>2b: Clean up either nit before gate.
     </li>
   </ol>
 </main>
