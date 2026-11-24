@@ -73,7 +73,9 @@ Behavior review of the alignment pass at `e2327b6a59` (2026-11-24). Items 1 and 
 
 ## Remaining work
 
-Next is **D7**, then **gate**. Gate owns:
+D7 delivered: `trigger_description` fills X only for the source's own entering (`enters_itself`) or an event that binds it (`event_binds_x`: counters put — `PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper — and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`). Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
+
+Next is **gate**. Gate owns:
 
 - Clippy, the full debug workspace, the measured 10% Engine Budget (search/decision digests move: new card, new routes, `play_lands` in state hashes), `conformance/` receipts for the final catalog.
 - Compare against main: `tests/academy/test_play_modes.py::test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture` and four `tests/belief` tests stop at the opening Keep/Mulligan decision (opening procedure from main `d12eb496b3`); `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails (16 Islands make Islandcycling ask for a manual tap; Slice 5 does not touch payment).
