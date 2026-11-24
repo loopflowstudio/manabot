@@ -3149,6 +3149,10 @@ impl Game {
                     || ability.mana_choices().is_some()
                     || permanent.activation_used(ability_index, ability)
                     || (ability.own_turn_only && self.active_player() != player)
+                    || ability
+                        .condition
+                        .as_ref()
+                        .is_some_and(|condition| !self.check_static_condition(condition, player))
                     || life < ability.life_cost as i32
                     || (ability.tap_source && !self.permanent_can_tap(source.permanent))
                     || (single_use && ability.mana_cost == *cost)

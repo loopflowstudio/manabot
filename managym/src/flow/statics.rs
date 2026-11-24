@@ -908,6 +908,9 @@ impl Game {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
+            Condition::CastThisTurn(predicate) => self.state.turn.spells_cast[controller.0]
+                .iter()
+                .any(|&cast| self.recorded_object_matches_predicate(cast, predicate)),
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {

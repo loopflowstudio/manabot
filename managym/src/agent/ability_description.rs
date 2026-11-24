@@ -385,6 +385,15 @@ fn condition_text(condition: &Condition) -> String {
             format!("you have {count} or more unspent mana")
         }
         Condition::AttackedThisTurn => "you attacked this turn".into(),
+        Condition::CastThisTurn(predicate) => {
+            let spell = predicate_description(predicate, "spell");
+            let article = if spell.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
+            format!("you've cast {article} {spell} this turn")
+        }
         Condition::BentAllFourThisTurn => {
             "you've waterbent, earthbent, firebent and airbent this turn".into()
         }

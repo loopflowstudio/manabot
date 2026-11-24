@@ -1593,6 +1593,11 @@ impl Game {
                 "activation requires a time before attackers".into(),
             ));
         }
+        if let Some(condition) = &ability.condition {
+            if !self.check_static_condition(condition, player) {
+                return Err(AgentError("activation condition does not hold".into()));
+            }
+        }
         Ok(())
     }
 

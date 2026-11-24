@@ -229,6 +229,9 @@ pub enum Condition {
     AttackedThisTurn,
     /// "if a land entered the battlefield under your control this turn".
     LandEnteredThisTurn,
+    /// "if you've cast a [predicate] spell this turn", read from the
+    /// turn's recorded casts as each spell was cast.
+    CastThisTurn(CardPredicate),
     /// "if you've done all four this turn": waterbent, earthbent, firebent
     /// and airbent.
     BentAllFourThisTurn,
@@ -379,6 +382,7 @@ impl Condition {
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
+            | Condition::CastThisTurn(_)
             | Condition::BentAllFourThisTurn
             | Condition::SacrificedThisTurnAtLeast { .. }
             | Condition::OpponentLostLifeThisTurnAtLeast { .. } => false,

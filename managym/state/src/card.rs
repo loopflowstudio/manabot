@@ -804,6 +804,10 @@ pub struct ActivatedAbilityDefinition {
     pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
+    /// "Activate only if [condition]" (CR 602.5b), asked of the
+    /// activating player.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<Condition>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
     pub mana_cost: ManaCost,

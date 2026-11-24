@@ -1233,6 +1233,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
+        Condition::CastThisTurn(_) => "Condition::CastThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
         Condition::OpponentLostLifeThisTurnAtLeast { .. } => {
             "Condition::OpponentLostLifeThisTurnAtLeast"
@@ -1282,6 +1283,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
+        Condition::CastThisTurn(CardPredicate {
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Default::default()
+        }),
         Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },

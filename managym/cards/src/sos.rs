@@ -47,6 +47,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         spellbook_seeker(),
         strife_scholar(),
         studious_first_year(),
+        sanar_unfinished_genius(),
     ]
 }
 
@@ -1095,6 +1096,47 @@ fn emeritus_of_truce() -> CardDefinition {
                 ..Default::default()
             }.into())),
             ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sanar_unfinished_genius() -> CardDefinition {
+    let text_box = "Sanar enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Create a Treasure token. Activate only if you've cast an instant or sorcery spell this turn.";
+    let instant_or_sorcery = CardPredicate {
+        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+        ..Default::default()
+    };
+    let wild_idea = PrintedCharacteristics {
+        name: "Wild Idea".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: "Search your library for an instant or sorcery card, reveal it, put it into your hand, then shuffle.".into(),
+        spell_effects: vec![Effect::search_library(
+            instant_or_sorcery.clone(),
+            EffectValue::Fixed(1),
+            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+        )],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "sos.sanar_unfinished_genius",
+        scryfall_id: "173157aa-712d-44f2-89ba-dd2511a07f26",
+        printed: PrintedCharacteristics {
+            name: "Sanar, Unfinished Genius".into(),
+            mana_cost: Some(ManaCost::parse("{U}{R}")),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Goblin".into(), "Sorcerer".into()],
+            power: Some(0),
+            toughness: Some(4),
+            text_box: text_box.into(),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                condition: Some(Condition::CastThisTurn(instant_or_sorcery)),
+                effects: vec![Effect::create_tokens("token.treasure", 1)],
+                ..Default::default()
+            }],
+            ..enters_prepared(wild_idea)
         },
         ..Default::default()
     }

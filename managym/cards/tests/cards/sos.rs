@@ -248,3 +248,74 @@ fn copying_a_prepared_creature_and_removing_its_abilities_preserve_one_cast() {
     }
     s.assert_zone_size(0, ZoneType::Exile, 0);
 }
+
+/// Sanar's Treasure activation waits for an instant or sorcery cast this
+/// turn, however that spell has since left the stack; a creature spell does
+/// not count. Its prepared Wild Idea finds an instant or sorcery, reveals it
+/// into its caster's hand and shuffles.
+#[test]
+fn sanar_makes_treasure_after_an_instant_and_wild_idea_finds_one() {
+    use crate::support::{
+        game::{clear_summoning_sickness, move_from_library},
+        inspect::{hand, offered_cards},
+        play::{activate, offers_ability, resolve_top, select_card, target_opponent},
+    };
+    let mut s = five_color_setup(&["Sanar, Unfinished Genius", "Lightning Bolt", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let sanar = enter_battlefield(&mut s, "Sanar, Unfinished Genius");
+    settle(&mut s);
+    clear_summoning_sickness(&mut s, sanar);
+    assert!(!offers_ability(&mut s, sanar, 0), "no spell cast yet");
+
+    let ogre = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Hand);
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    assert!(
+        !offers_ability(&mut s, sanar, 0),
+        "a creature spell is not enough"
+    );
+
+    let bolt = move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Hand);
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    settle(&mut s);
+    assert!(
+        offers_ability(&mut s, sanar, 0),
+        "the resolved instant still counts"
+    );
+    activate(&mut s, sanar, 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+
+    let wild_idea = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, PlayerId(0))
+        .iter()
+        .copied()
+        .find(|id| s.game().state[*id].name == "Wild Idea")
+        .expect("prepared Wild Idea");
+    cast_card(&mut s, wild_idea);
+    resolve_top(&mut s);
+    let choices = offered_cards(&s);
+    assert!(!choices.is_empty());
+    assert!(
+        choices
+            .iter()
+            .all(|&id| s.game().state[id].types.is_spell()),
+        "only instant and sorcery cards"
+    );
+    select_card(&mut s, choices[0]);
+    settle(&mut s);
+    let [found] = hand(&s, 0)[..] else {
+        panic!("one card found")
+    };
+    assert_eq!(s.game().state[found].name, "Lightning Bolt");
+    let definition = s.game().state[found].definition_id;
+    assert_eq!(
+        s.game().state.players[0].known_hand.get(&definition),
+        Some(&1),
+        "the found card is revealed"
+    );
+}
