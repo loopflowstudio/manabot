@@ -96,7 +96,7 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     reordered_logits, reordered_value = model(
-        device_input(model, reorder_objects(values))
+        device_input(model, reorder_objects(values, space.layout))
     )
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)

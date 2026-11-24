@@ -15,7 +15,8 @@ keeps the averaged model that evaluation and exports read. `forward_precision` a
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
+import warnings
 
 import numpy as np
 import torch
@@ -23,6 +24,12 @@ from torch import Tensor, nn
 
 from manabot.backends.torch.rl import NumericalError, float64_operand, require
 from manabot.infra.profiler import Profiler
+from manabot.training.updates.health import (
+    CRITIC_READOUT_PREFIXES,
+    UNRECORDED_STEP,
+    StepRecorder as _StepRecorder,
+    parameter_movement,
+)
 
 if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
@@ -35,52 +42,11 @@ if TYPE_CHECKING:
 # -- Update step ---------------------------------------------------------------
 
 
-class StepRecorder(Protocol):
-    """What `gradient_step` reports; recording never changes the loss, step or RNG.
-
-    `track(section)` times "Backward and gradient clipping" and "Optimizer
-    step"; each ends at a finite check that already waits for the device.
-    `rejecting()` wraps the whole step, so it sees every `NumericalError`.
-    On a sampled step the learner reports clipped gradient measurements before
-    Adam, then parameter displacement after its finite check. Every completed
-    step calls `record_step`, including those without a sample.
-    """
-
-    def track(self, section: str) -> AbstractContextManager[object]: ...
-
-    def rejecting(self) -> AbstractContextManager[object]: ...
-
-    def sampling(self) -> bool: ...
-
-    def record_sample(self, sample: "StepSample") -> None: ...
-
-    def record_step(self) -> None: ...
-
-
 def check_objective(loss: Tensor) -> None:
     """Raise NumericalError for a loss that is detached or nonfinite."""
     if not loss.requires_grad:
         raise NumericalError("detached_objective", {"loss": loss})
     require(torch.isfinite(loss), "nonfinite_objective", loss=loss)
-
-
-class _Unrecorded:
-    """The `StepRecorder` of an unobserved step: no timing, no samples."""
-
-    def track(self, section: str) -> AbstractContextManager[object]:
-        return nullcontext()
-
-    def rejecting(self) -> AbstractContextManager[object]:
-        return nullcontext()
-
-    def sampling(self) -> bool:
-        return False
-
-    def record_sample(self, sample: "StepSample") -> None:
-        pass
-
-    def record_step(self) -> None:
-        pass
 
 
 def gradient_step(
@@ -89,7 +55,7 @@ def gradient_step(
     optimizer: torch.optim.Optimizer,
     max_grad_norm: float,
     *,
-    recorder: StepRecorder | None = None,
+    recorder: _StepRecorder | None = None,
     accumulated: bool = False,
 ) -> Tensor:
     """Zero, backward, clip the global norm to `max_grad_norm`, step; return the pre-clip norm.
@@ -100,7 +66,7 @@ def gradient_step(
     `accumulated` preserves gradients already backpropagated by execution chunks;
     clipping and Adam still occur exactly once at the logical boundary.
     """
-    recorder = recorder or _Unrecorded()
+    recorder = recorder if recorder is not None else UNRECORDED_STEP
     with recorder.rejecting():
         check_objective(loss)
         parameters = list(model.parameters())
@@ -281,7 +247,7 @@ class Learner:
         loss: Tensor,
         max_grad_norm: float,
         *,
-        recorder: StepRecorder | None = None,
+        recorder: _StepRecorder | None = None,
         accumulated: bool = False,
     ) -> Tensor:
         """`gradient_step` on this learner's policy and optimizer: the
@@ -326,14 +292,6 @@ class Learner:
         }
 
 
-# ActorCritic parameter prefixes that only the critic output reads, in every
-# value aggregation.
-_CRITIC_READOUT = ("value_head.", "value_readout.")
-# The value token is an unmasked key in object attention, so actor logits read
-# it too: its gradient mixes policy and value loss and is reported on its own.
-_VALUE_TOKEN = "value_token"
-
-
 def _norm(tensors: list[Tensor]) -> float:
     if not tensors:
         return 0.0
@@ -353,10 +311,10 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
         [
             p.grad
             for name, p in named.items()
-            if p.grad is not None and name.startswith(_CRITIC_READOUT)
+            if p.grad is not None and name.startswith(CRITIC_READOUT_PREFIXES)
         ]
     )
-    token = named.get(_VALUE_TOKEN)
+    token = named.get("value_token")
     if token is None:
         return critic, None
     return critic, _norm([] if token.grad is None else [token.grad])
@@ -407,7 +365,15 @@ def parameter_health(
         .sum()
         .sqrt()
     )
-    return {
-        "parameter_delta_l2": float(delta),
-        "parameter_relative_delta": float(delta / scale) if scale > 0 else float(delta),
-    }
+    return parameter_movement(float(delta), float(scale))
+
+
+def __getattr__(name: str) -> type[_StepRecorder]:
+    if name == "StepRecorder":
+        warnings.warn(
+            "StepRecorder moved to manabot.training.updates.health; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _StepRecorder
+    raise AttributeError(name)

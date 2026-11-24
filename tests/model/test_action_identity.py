@@ -80,7 +80,11 @@ def test_policy_choice_can_learn_either_preference(
         assert float(logits.softmax(-1)[0, preferred]) > 0.95
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
-        actual, _ = agent(device_input(agent, reorder_offers(obs, order)))
+        actual, _ = agent(
+            device_input(
+                agent, reorder_offers(obs, order, agent.observation_space.layout)
+            )
+        )
         # Reordering changes floating-point reduction order after training.
         torch.testing.assert_close(
             actual[:, :count], logits[:, order], atol=2e-5, rtol=1e-5
