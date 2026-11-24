@@ -146,6 +146,8 @@ pub enum Modification<N = i32> {
     /// "has all activated and triggered abilities of" the record's source
     /// definition (Koh, the Face Stealer's last chosen card), layer 6.
     HasAbilitiesOfSource,
+    /// Layer 3: is named this (CR 613.1c; "named Humble Merchant").
+    SetName(String),
 }
 
 impl<N> Modification<N> {
@@ -204,6 +206,7 @@ impl<N> Modification<N> {
             },
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
+            Self::SetName(name) => Modification::SetName(name.clone()),
         }
     }
 }

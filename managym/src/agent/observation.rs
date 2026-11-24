@@ -583,7 +583,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 37] = [
+pub const MODIFICATION_NAMES: [&str; 38] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -621,6 +621,7 @@ pub const MODIFICATION_NAMES: [&str; 37] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "SetName",
 ];
 
 impl ContinuousEffectData {
@@ -662,7 +663,8 @@ impl ContinuousEffectData {
             | Modification::AddColors(_)
             | Modification::GrantActivated(_)
             | Modification::GrantTriggered(_)
-            | Modification::GrantStatic(_) => {
+            | Modification::GrantStatic(_)
+            | Modification::SetName(_) => {
                 data.description = Some(super::ability_description::continuous_description(
                     &crate::state::ability::ObjectSelector::This,
                     &modification.map_amount(|n| crate::state::ability::EffectValue::Fixed(*n)),
@@ -679,6 +681,7 @@ impl ContinuousEffectData {
                     Modification::GrantActivated(_) => "GrantActivated",
                     Modification::GrantTriggered(_) => "GrantTriggered",
                     Modification::GrantStatic(_) => "GrantStatic",
+                    Modification::SetName(_) => "SetName",
                     _ => unreachable!(),
                 }
             }

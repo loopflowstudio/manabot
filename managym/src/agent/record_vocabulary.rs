@@ -292,12 +292,17 @@ fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json
     out
 }
 
-/// The names a definition's `SetCharacteristics` give other permanents (a
-/// copy takes a definition's own name).
+/// The names a definition's `SetCharacteristics` or `Modification::SetName`
+/// give other permanents (a copy takes a definition's own name).
 fn set_names(value: &serde_json::Value) -> Vec<String> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("named")?.as_str().map(str::to_owned))
+        .filter_map(|map| {
+            map.get("named")
+                .or_else(|| map.get("SetName"))?
+                .as_str()
+                .map(str::to_owned)
+        })
         .collect()
 }
 

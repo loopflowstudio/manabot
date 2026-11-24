@@ -359,6 +359,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::HasAbilitiesOfSource",
             Seen::Via("its shared-effect row"),
         ),
+        Modification::SetName(_) => (
+            "Modification::SetName",
+            Seen::Via("the permanent's projected name and its shared-effect row"),
+        ),
         Modification::NextCreatureCastFlash => (
             "Modification::NextCreatureCastFlash",
             Seen::Via("its shared-effect row"),
@@ -456,10 +460,11 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         }),
         permanent(Modification::ModeChosen { mode: 1 }),
         permanent(Modification::HasAbilitiesOfSource),
+        permanent(Modification::SetName("Humble Merchant".into())),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 37;
+const MODIFICATION_VARIANTS: usize = 38;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {

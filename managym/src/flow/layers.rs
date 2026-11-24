@@ -259,7 +259,6 @@ impl Node {
 enum Operation {
     Modify(Modification<LayerValue>),
     LandType(String),
-    Name(String),
     // Expressions resolve before becoming per-target instructions. Indirection
     // keeps their large predicates out of every small resolved modification.
     Power(Box<PowerCda>),
@@ -282,11 +281,11 @@ const ABILITIES: u8 = 128;
 impl Operation {
     fn writes(&self) -> u8 {
         match self {
-            Self::Name(_) => NAME,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Power(_) | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
+                Modification::SetName(_) => NAME,
                 Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
                 Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
@@ -319,6 +318,7 @@ struct Instruction {
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
+        Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
         | Modification::AddTypes(_)
@@ -963,7 +963,10 @@ impl<'a> Context<'a> {
             StaticAbility::AttachedSetsCharacteristics(set) => {
                 plan.scope = StaticScope::Attached;
                 plan.parts = vec![
-                    (Layer::Name, Operation::Name(set.named.clone())),
+                    (
+                        Layer::Name,
+                        Operation::Modify(Modification::SetName(set.named.clone())),
+                    ),
                     (
                         Layer::Type,
                         Operation::Modify(Modification::SetCreatureTypes(
@@ -1030,10 +1033,6 @@ impl<'a> Context<'a> {
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
-                Operation::Name(name) => {
-                    view.name = name.clone();
-                    view.characteristics_set = true;
-                }
                 Operation::LandType(subtype) => {
                     if !view.is_land() {
                         continue;
@@ -1066,6 +1065,10 @@ impl<'a> Context<'a> {
                     })
                 }
                 Operation::Modify(modification) => match modification {
+                    Modification::SetName(name) => {
+                        view.name = name.clone();
+                        view.characteristics_set = true;
+                    }
                     Modification::SetCreatureTypes(types) => {
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());

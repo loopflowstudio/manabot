@@ -1375,6 +1375,7 @@ pub(super) fn continuous_description(
         Modification::HasAbilitiesOfSource => {
             format!("{subject} has all activated and triggered abilities of the chosen card")
         }
+        Modification::SetName(name) => format!("{subject} is named {name}{until}"),
     }
 }
 
