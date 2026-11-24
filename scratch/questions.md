@@ -179,3 +179,10 @@ Slice 5 item 5 choices (2026-11-24):
 - `trigger_multiplicity` now reads through `ActiveIf` (`event_condition`), so a gated per-object trigger counts each matching creature. The one existing gated case (`dft` saddled attack on `This`) is unchanged.
 - The Glamdring evidence casts Gleam of Death (the stashed Glamdring's Adventure) because Glamdring's reduction applies to instants and sorceries; Glamdring's own {2} artifact cast needs no reduction.
 - `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails here: with caster 1 the controlled seat has 16 Islands, so Islandcycling's {2} asks for a manual tap instead of finishing itself, and the loop finds no pass. Nothing in Slice 5 touches mana payment; gate should compare with main.
+
+## 2026-11-24 post-Slice-5 whole-branch concept review (`bb2fb68c0d` vs `88ce96bd6b`)
+
+Three reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md`:
+- Remove `frame.mode = Some(usize::from(*remaining))` for `CostComponent::RemoveCounters` (`continuation.rs:724-727`) and project `"counters remaining"` (reusing `EXECUTION_TEXT[77]`, matching `Decision::DistributeCounters`) plus `"{remaining} counter(s) left to remove."` through `effect_execution::project_pending_payment`. Fixes `DecisionContextView.chosen_mode: Some(6)` / LLM `"Chosen mode: 7."` / missing remaining-counter progress with zero new vocabulary or columns, while leaving pre-existing multi-tap `CostComponent::Tap` (`continuation.rs:714-723`) untouched to avoid churning unrelated activation fixtures.
+- Update `action::PLAY_ROUTE` in `observation_layout.rs:488` to list `9 printed graveyard` and `1..9`, matching `play_route_code` and `docs/observation-and-model.md`.
+- Check `self.state.suspended_decision.is_some()` before `if route.is_some()` in `Game::resolved_play_route` (`play.rs:453`) and require `route: None` on `Action::CastSpell` in `Decision::CastDuringResolution` (`decision.rs:2905`) to reject forged priority routes during resolution.
