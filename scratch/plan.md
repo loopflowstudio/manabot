@@ -98,6 +98,8 @@ Build in three slices (rationale and counterexamples in [the concept review](con
    - Academy fixtures refreshed with `scripts/refresh_academy_fixtures.py` (labels unchanged; catalog ids, digests, frame hashes moved).
    - Gate list on the rebuilt extension (incl. `tests/model`, trigger order, current-world list): 1013 passed, 18 skipped, 8 failed — the 8 fail identically at base (`questions.md`).
    - Debug at `14b0ecdd70`: nextest `--profile ci` over lib, cards, `rules_tests`, `canonical_replay_tests`, `scenario_tests`: 1472 run, 2 skipped, all pass except the known base `observation_json::…historical_captures…` (the observability witness failure is fixed in `14b0ecdd70`, 77/77 rerun); `cargo fmt --check` clean.
+   - After the closing pass, `aa3b51fc16` folded `hides_physical_card` and the hand-patched aliases in `agent/observation.rs` and `decision_context.rs` into `Game::observed_identity` (`flow/identity.rs`). No debug or Python run is recorded after it: rerun the slice 3c witnesses (`decision_capture::tests`, `dsk::`, `decision_memory::tests`) and `tests/semantic/test_manifest_two_roots.py tests/academy/test_manifest_recovery.py` on a rebuilt extension before measuring.
+   - New gate item: `semantic_conformance_tests::frozen_case_inventory_covers_the_complete_manifest_and_evidence` fails because this branch changes the content digest (`questions.md`).
    - Next: `engine-optimization` (Measurement below), then `pr-publish`.
    - Taught: seed replay needs a journaled prefix, so no constructed fixture can replay from its seed; replay evidence comes from natural games (`questions.md` lists what keeps only native fork checks).
 
@@ -105,7 +107,7 @@ Build in three slices (rationale and counterexamples in [the concept review](con
 
    **Decomposition (2026-11-24, at `fba56295e9`): already met; this pass adds consumers, not owners.** One owner per fact, checked by grep at HEAD:
    - Form and transformability: `Object.form` (`state/src/game_object.rs`), `ContentPack::transforming_faces`/`catalog_faces`/`departed_copiable_values` (`cards/content_pack.rs`), `Game::turn_over` (`flow/zones.rs`).
-   - Viewer identity: `hides_physical_card`, `observed_object_id`, `observed_source_definition`, `observed_permanent_definition`, `observed_object_name`, `object_event_ref`/`permanent_event_ref` (all `flow/identity.rs`); `structured_offer::object_render_ref` and `ObjectRenderId: From<ObjectEventRef>` wrap them. The only hand-built incarnations left are public or private by construction: `decision_context.rs:91` (an announced graveyard target) and `card_capture.rs:194` (the private recorder).
+   - Viewer identity: `observed_identity` (one reference plus the slot a viewer may see; replaced `hides_physical_card` in `aa3b51fc16`), `hidden_card_alias`, `observed_object_id`, `observed_source_definition`, `observed_permanent_definition`, `observed_object_name`, `object_event_ref`/`permanent_event_ref` (all `flow/identity.rs`); `structured_offer::object_render_ref` and `ObjectRenderId: From<ObjectEventRef>` wrap them. The only hand-built incarnations left are public or private by construction: `decision_context.rs:91` (an announced graveyard target) and `card_capture.rs:194` (the private recorder).
    - Retained printing: `Game::printing_matches_predicate` (`flow/statics.rs`). Hidden entries: `ZoneEntry::is_face_down`.
    - No card key appears in `src/flow`, `src/agent`, `src/cards/content_pack.rs` or `state/src`.
 
@@ -133,6 +135,7 @@ Build in three slices (rationale and counterexamples in [the concept review](con
 
 - Ragnarok's meld order, Horde/Driver/Fire Crystal trigger orders, the named Coil and Batch 1 fixtures have native restore-based fork/stale/commit-once checks but no seed replay (constructed positions are unjournaled; `questions.md`).
 - Constrained sampling with a pending private selection and paired seeded searches: native witness only (`questions.md`).
+- Frozen semantic conformance evidence must be re-recorded for the new content digest.
 - Engine Budget digests at gate: serialized bytes changed as listed in git history of this section, plus meld program tokens (definition references instead of text). `observation_json::…historical_captures_move_battlefield_and_spell_rows_onto_their_records` fails at base too.
 
 ## Representation review
