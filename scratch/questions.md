@@ -60,3 +60,10 @@ Batch 5f follow-up choices:
 - Reveal-until with exactly one passed card reuses `place_entrant_on_bottom`, which keeps the facts below it but records no public fact for the revealed card now on the bottom (lossy, never wrong).
 - The blocker compound offer also falls back to exact atomic offers when an attacker must be blocked by every able creature, since a later blocker's decline is then illegal.
 - Academy's `combat.ts`/`Board.svelte` change was not checked here: this checkout has no `node_modules`. Gate runs `npm run check` and the Vitest suite.
+
+Concept-review (`49cc87c7`) choices folded into Batch 5g:
+
+- Pre-declared combat participants (`skip_trivial: true`): add symmetric `declared_blocks()` tolerance in `combat_preview.rs` (no wire-schema change; conflicting blocks for a pre-declared blocker are still refused) and feed already-committed attackers/blockers from the live frame into Academy's `draftWords()` so the confirm button never says `"No attack"` while `Juggernaut` is attacking.
+- Spell-created prevention shield (`Fleeting Flight`): add a target-only `ReplacementEffect::PreventCombatDamage` variant (distinct from `Fog Bank`'s two-way `PreventCombatDamageToOrFromSelf`) and wire `Modification::PreventCombatDamage` across all 5 observability/text layers including `text_observation.py`.
+- Single-passed-card `reveal_until_to_hand`: record the publicly revealed `[top]` card at `public[0]` and `own[0]` right before `place_entrant_on_bottom(*top)` so both viewers keep the exact bottom fact.
+
