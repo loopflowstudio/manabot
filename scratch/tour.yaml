@@ -1,0 +1,19 @@
+at: fa2c52e493067ecce3bf60a66d849086b9b3e146
+first:
+  - path: scratch/plan.md
+    why: Completed slice and remaining tracked recovery work
+  - path: manabot/backends/README.md
+    why: Portable training contract and sampling domains
+  - path: manabot/training/state/optimizer.py
+    why: Canonical moments, parameter clocks and admission
+  - path: manabot/backends/torch/state.py
+    why: Restore optimizer history on live Torch parameters
+  - path: manabot/backends/mlx/checkpoint.py
+    why: Map packed weights and moments to MLX leaves
+  - path: manabot/backends/mlx/state.py
+    why: Transfer exact moments and clocks
+  - path: manabot/backends/mlx/learner.py
+    why: Apply bias correction at each parameter's age
+  - path: tests/training/test_portable_adam.py
+    why: Compare resumed and uninterrupted optimizer steps
+hide: []
