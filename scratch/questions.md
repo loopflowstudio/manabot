@@ -162,3 +162,12 @@ Four reversible choices recorded in `scratch/concept-review.html` and `scratch/p
 - A cast-only grant on a land shows no cost term in LLM text (the land has no casting cost), only "may be cast from exile by …" and its other terms.
 - `play_route` codes number the routes 1..8 in `PlayRoute` declaration order; `Category { size: 10 }` leaves one spare code after `PrintedGraveyard` (9).
 - D5 is tested by refusal in `permits_spell` (no catalog library-top predicate matches a land face) plus the existing Vizier/Kelp Hollow assertion; no fixture with a land-matching library predicate was added.
+
+
+## 2026-11-24 post-Slice-5 (items 1–3) concept review (`d46d360241` vs `88ce96bd6b`)
+
+Four reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md`:
+- Guard `Game::resolved_play_route` (`play.rs:434`) on `self.state.suspended_decision.is_some()` returning `None` (and guard `action.rs:54`'s `preparation_source` arm on `suspended_decision.is_none()`), keeping non-front `CastDuringResolution` offers (`Action::CastSpell { route: None, profile }`) clean of overlapping priority route codes, focus, and descriptions rather than introducing a separate wire action variant.
+- Compute `CastPermissionData.cost` (`observation.rs:1758`) via `Game::grant_card_cast_cost(grant, object)` — using the front face unless it is a land with a castable `modal_back`, in which case use the back face — so Land//Spell MDFCs (`Kelp Hollow // Kelp Warden`) project their Airbend/Flameshape cast costs across policy tokens, LLM text, and Academy while pure lands remain `None`.
+- Update Academy's announcing-spell stack card lookup (`academy/ui/src/lib/board/view.ts:257`) from `frame.projection.agent.hand` to `inspectableCards([agent, opponent])` so spells announced from graveyard, exile, or library top keep their full card projection in the stack rail during targeting and payment.
+- Align Slice 5's Quilled Greatwurm architecture with existing engine concepts before coding: generalize `TriggerCondition::DealsCombatDamage.to: Option<Actor>` (preserving existing learning tokens via transparent `TokenWriter::serialize_some`), reuse `EffectValue::X` with per-occurrence `(context, x)` on `FiredTrigger` fed from one aggregated combat-damage step record, place the printed graveyard permission on `StaticAbility::CastFromGraveyardRemoveCounters` (like `Flashback`/`Foretell`), and use one `CostComponent::RemoveCounters { remaining, kind, predicate, choosing_from }` with `commit_counter_change` and stable `kind as usize` mode codes.
