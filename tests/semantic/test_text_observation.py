@@ -19,11 +19,6 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
-from manabot.managym.experience_projection import (
-    decision_surface_view,
-    describe_actions,
-    serialize_observation,
-)
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -44,7 +39,11 @@ import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
-from managym.experience_projection import serialize_observation
+from managym.experience_projection import (
+    decision_surface_view,
+    describe_actions,
+    serialize_observation,
+)
 
 
 def test_every_native_decision_code_has_a_label() -> None:

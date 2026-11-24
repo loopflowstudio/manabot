@@ -17,8 +17,8 @@ from __future__ import annotations
 import gzip
 import io
 import json
-import re
 from pathlib import Path
+import re
 import sys
 import urllib.request
 
