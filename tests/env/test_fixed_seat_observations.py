@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
@@ -60,7 +60,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
 ) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     vector = (
-        CapturedVector(num_envs=2, seed=42)
+        RecordedVectorEnv(num_envs=2, seed=42)
         if captured
         else managym.VectorEnv(2, seed=42)
     )
@@ -177,7 +177,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
 
 def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
     space = ObservationSpace()
-    vector = CapturedVector(num_envs=2, seed=42)
+    vector = RecordedVectorEnv(num_envs=2, seed=42)
     vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
     players = _players()
     vector.reset_all_into_buffers(players)
