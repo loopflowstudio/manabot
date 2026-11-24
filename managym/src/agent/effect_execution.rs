@@ -1074,6 +1074,61 @@ pub(crate) fn project_receipt(
     out.finish(frame);
 }
 
+/// Project a stack object's retained facts: its committed payment, and for
+/// a trigger that reads its triggering permanent after that permanent has
+/// left, the permanent's last known information ("if it was attacking").
+/// `text` additionally renders summaries; the policy occurrence is
+/// identical either way.
+pub(crate) fn project_stack_object(
+    game: &Game,
+    object: &crate::state::stack_object::StackObject,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let mut out = Projection::new(game, viewer, text);
+    if let crate::state::stack_object::StackObject::TriggeredAbility(ability) = object {
+        if game.stacked_trigger_reads_triggering_permanent(ability) {
+            if let Some(context) = ability.context {
+                out.retained_target(context);
+            }
+        }
+    }
+    if let Some(spent) = super::continuation::stack_receipt(object) {
+        out.receipt(spent, Some(object.source_object()));
+    }
+    out.finish(frame);
+}
+
+/// Project a pending trigger's departed triggering permanent, as its
+/// stacked ability will (`project_stack_object`).
+pub(crate) fn project_pending_trigger(
+    game: &Game,
+    trigger: &crate::flow::trigger::PendingTrigger,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+) {
+    let reads = match &trigger.inline_effects {
+        Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
+        None => game
+            .source_face(
+                trigger.source_object(),
+                trigger.source_lki.as_ref().map_or_else(
+                    || game.state.source_base(trigger.source_object()).0,
+                    |lki| lki.definition_id,
+                ),
+            )
+            .and_then(|face| face.abilities.get(trigger.ability_index))
+            .is_some_and(|ability| ability.reads_triggering_permanent()),
+    };
+    let Some(context) = trigger.context.filter(|_| reads) else {
+        return;
+    };
+    let mut out = Projection::new(game, viewer, false);
+    out.retained_target(context);
+    out.finish(frame);
+}
+
 /// Project a suspended effect frame's retained work. `text` additionally
 /// renders its description and summaries; the policy occurrence is identical
 /// either way.

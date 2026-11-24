@@ -64,6 +64,8 @@ mod frf;
 mod fut;
 #[path = "cards/gpt.rs"]
 mod gpt;
+#[path = "cards/grn.rs"]
+mod grn;
 #[path = "cards/gtc.rs"]
 mod gtc;
 #[path = "cards/hob.rs"]
@@ -174,5 +176,7 @@ mod war;
 mod woe;
 #[path = "cards/wth.rs"]
 mod wth;
+#[path = "cards/wwk.rs"]
+mod wwk;
 #[path = "cards/zen.rs"]
 mod zen;

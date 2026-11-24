@@ -39,6 +39,7 @@ fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
         context: None,
         player: None,
         chosen_modes: Vec::new(),
+        modes_chosen: false,
         attacker: None,
         inline_effects: Some(effects),
         x: 0,

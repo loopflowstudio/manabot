@@ -7,8 +7,8 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, ReplacementEffect, SacrificeCost, StaticAbility,
-        TargetCostReduction,
+        Keywords, PrintedCharacteristics, ReplacementEffect, Restriction, SacrificeCost,
+        StaticAbility, StaticRestriction, StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::{Color, ManaCost},
@@ -18,6 +18,11 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        tragic_banshee(),
+        vengeful_bloodwitch(),
+        needletooth_pack(),
+        slumbering_cerberus(),
+        wardens_of_the_cycle(),
         courageous_goblin(),
         bulk_up(),
         ashroot_animist(),
@@ -1210,6 +1215,181 @@ fn courageous_goblin() -> CardDefinition {
                         Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
                     ),
                 ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tragic_banshee() -> CardDefinition {
+    let text_box = "Morbid — When this creature enters, target creature an opponent controls gets -1/-1 until end of turn. If a creature died this turn, that creature gets -13/-13 until end of turn instead.";
+    let victim = || ObjectSelector::Target(TargetSpec::CreatureOpponentControls);
+    CardDefinition {
+        key: "fdn.tragic_banshee",
+        scryfall_id: "30df3e33-2f17-4067-99f1-5db6b0f41fd4",
+        printed: PrintedCharacteristics {
+            name: "Tragic Banshee".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spirit".into()],
+            power: Some(5),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                // Death history is read as the ability resolves (CR 608.2h).
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+                    effects: vec![Effect::If {
+                        condition: Condition::CreatureDiedThisTurn,
+                        then: vec![Effect::until_end_of_turn(
+                            victim(),
+                            Modification::pump(-13, -13),
+                        )],
+                        otherwise: vec![Effect::until_end_of_turn(
+                            victim(),
+                            Modification::pump(-1, -1),
+                        )],
+                    }],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vengeful_bloodwitch() -> CardDefinition {
+    let text_box = "Whenever this creature or another creature you control dies, target opponent loses 1 life and you gain 1 life.";
+    CardDefinition {
+        key: "fdn.vengeful_bloodwitch",
+        scryfall_id: "bd0c12dd-f138-45c0-9614-d83a1d8e8399",
+        printed: PrintedCharacteristics {
+            name: "Vengeful Bloodwitch".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Warlock".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Opponent),
+                    effects: vec![
+                        Effect::LoseLife {
+                            player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                            amount: EffectValue::Fixed(1),
+                        },
+                        Effect::gain_life(1),
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn needletooth_pack() -> CardDefinition {
+    let text_box = "Morbid — At the beginning of your end step, if a creature died this turn, put two +1/+1 counters on target creature you control.";
+    CardDefinition {
+        key: "fdn.needletooth_pack",
+        scryfall_id: "993c1679-e02b-44f2-b34e-12fd6b5142e9",
+        printed: PrintedCharacteristics {
+            name: "Needletooth Pack".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dinosaur".into()],
+            power: Some(4),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::CreatureDiedThisTurn),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        2,
+                    )],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn slumbering_cerberus() -> CardDefinition {
+    let text_box = "This creature doesn't untap during your untap step.\nMorbid — At the beginning of each end step, if a creature died this turn, untap this creature.";
+    CardDefinition {
+        key: "fdn.slumbering_cerberus",
+        scryfall_id: "9d06faa8-201d-45db-b398-ad56f7b01848",
+        printed: PrintedCharacteristics {
+            name: "Slumbering Cerberus".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dog".into()],
+            power: Some(4),
+            toughness: Some(2),
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::This,
+                kind: Restriction::DoesntUntap,
+                unless: None,
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
+                intervening_if: Some(Condition::CreatureDiedThisTurn),
+                effects: vec![Effect::untap(ObjectSelector::This)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wardens_of_the_cycle() -> CardDefinition {
+    let text_box = "Morbid — At the beginning of your end step, if a creature died this turn, choose one —\n• You gain 2 life.\n• You draw a card and you lose 1 life.";
+    CardDefinition {
+        key: "fdn.wardens_of_the_cycle",
+        scryfall_id: "83ea9b2c-5723-4eff-88ac-6669975939e3",
+        printed: PrintedCharacteristics {
+            name: "Wardens of the Cycle".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Warlock".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::CreatureDiedThisTurn),
+                effects: vec![Effect::TriggerModes {
+                    modes: vec![
+                        vec![Effect::gain_life(2)],
+                        vec![
+                            Effect::DrawCards {
+                                count: EffectValue::Fixed(1),
+                            },
+                            Effect::LoseLife {
+                                player: PlayerSelector::You,
+                                amount: EffectValue::Fixed(1),
+                            },
+                        ],
+                    ],
+                    up_to: None,
+                    unchosen: false,
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

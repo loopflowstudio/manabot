@@ -1240,6 +1240,21 @@ impl Game {
         }
     }
 
+    /// Whether a stacked trigger asks about the permanent whose event fired
+    /// it, in its effects or its intervening-if clause.
+    pub(crate) fn stacked_trigger_reads_triggering_permanent(
+        &self,
+        ability: &crate::state::stack_object::TriggeredAbilityOnStack,
+    ) -> bool {
+        match &ability.inline_effects {
+            Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
+            None => self
+                .source_face(ability.source_object(), ability.source_definition_id)
+                .and_then(|face| face.abilities.get(ability.ability_index))
+                .is_some_and(Ability::reads_triggering_permanent),
+        }
+    }
+
     /// "That player" for a trigger whose event `leaf` matched `event`: the
     /// recipient of a combat hit, the caster, drawer or performer, whose
     /// graveyard a card was put into, or whose step it is. A permanent that

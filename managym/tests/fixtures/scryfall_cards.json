@@ -7508,5 +7508,123 @@
     "colors": [
       "W"
     ]
+  },
+  "Garna, Bloodfist of Keld": {
+    "name": "Garna, Bloodfist of Keld",
+    "mana_cost": "{1}{B}{R}{R}",
+    "type_line": "Legendary Creature — Human Berserker",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever another creature you control dies, draw a card if it was attacking. Otherwise, Garna deals 1 damage to each opponent.",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
+  "Kalastria Highborn": {
+    "name": "Kalastria Highborn",
+    "mana_cost": "{B}{B}",
+    "type_line": "Creature — Vampire Shaman",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever this creature or another Vampire you control dies, you may pay {B}. If you do, target player loses 2 life and you gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Massacre Wurm": {
+    "name": "Massacre Wurm",
+    "mana_cost": "{3}{B}{B}{B}",
+    "type_line": "Creature — Phyrexian Wurm",
+    "power": "6",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "When this creature enters, creatures your opponents control get -2/-2 until end of turn.\nWhenever a creature an opponent controls dies, that player loses 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Midnight Reaper": {
+    "name": "Midnight Reaper",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Zombie Knight",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever a nontoken creature you control dies, this creature deals 1 damage to you and you draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Needletooth Pack": {
+    "name": "Needletooth Pack",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Dinosaur",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Morbid"
+    ],
+    "oracle_text": "Morbid — At the beginning of your end step, if a creature died this turn, put two +1/+1 counters on target creature you control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Slumbering Cerberus": {
+    "name": "Slumbering Cerberus",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Dog",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Morbid"
+    ],
+    "oracle_text": "This creature doesn't untap during your untap step.\nMorbid — At the beginning of each end step, if a creature died this turn, untap this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Tragic Banshee": {
+    "name": "Tragic Banshee",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Spirit",
+    "power": "5",
+    "toughness": "3",
+    "keywords": [
+      "Morbid"
+    ],
+    "oracle_text": "Morbid — When this creature enters, target creature an opponent controls gets -1/-1 until end of turn. If a creature died this turn, that creature gets -13/-13 until end of turn instead.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Vengeful Bloodwitch": {
+    "name": "Vengeful Bloodwitch",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Warlock",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever this creature or another creature you control dies, target opponent loses 1 life and you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Wardens of the Cycle": {
+    "name": "Wardens of the Cycle",
+    "mana_cost": "{1}{B}{G}{G}",
+    "type_line": "Creature — Elf Warlock",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Morbid"
+    ],
+    "oracle_text": "Morbid — At the beginning of your end step, if a creature died this turn, choose one —\n• You gain 2 life.\n• You draw a card and you lose 1 life.",
+    "colors": [
+      "B",
+      "G"
+    ]
   }
 }

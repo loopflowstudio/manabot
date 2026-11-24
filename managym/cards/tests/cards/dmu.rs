@@ -67,3 +67,110 @@ fn tolarian_terror_ward_counters_a_spell_unless_two_is_paid() {
         assert_eq!(permanent(&s, terror).damage, if pay { 3 } else { 0 });
     }
 }
+
+/// Garna asks whether the other creature was attacking as it last existed
+/// (CR 603.10a): an attacker that dies in combat draws a card; a creature
+/// that dies outside combat, or beside Garna in one event, deals 1 damage to
+/// each opponent. Both seats see the departed creature's attacking status on
+/// the stacked trigger, and the acting seat's text says so.
+#[test]
+fn garna_draws_for_a_dying_attacker_and_pings_otherwise() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::hand,
+        play::{attack_with, bolt, cast, pass_until, settle},
+    };
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        state::{game_object::PlayerId, player::ManaPayment},
+    };
+    let stacked = |s: &crate::support::game::Scenario| {
+        [PlayerId(0), PlayerId(1)].map(|viewer| {
+            Observation::for_player(s.game(), viewer)
+                .continuation
+                .into_iter()
+                .find(|frame| frame.kind == 3)
+                .expect("Garna's trigger")
+                .effect_execution
+        })
+    };
+    // An attacker blocked and killed in combat.
+    let mut s = five_color_setup(&[
+        "Garna, Bloodfist of Keld",
+        "Gray Ogre",
+        "Hill Giant",
+        "Lightning Bolt",
+    ]);
+    s.force_permanent_on_battlefield(0, "Garna, Bloodfist of Keld");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    clear_summoning_sickness(&mut s, ogre);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, ogre);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    let block = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| {
+            matches!(a, Action::DeclareBlocker { blocker, attacker: Some(at), .. }
+                if *blocker == giant && *at == ogre)
+        })
+        .unwrap();
+    s.step_action(block);
+    s.advance_until(
+        |s| !s.game().state.stack_objects.is_empty(),
+        "Garna's trigger".into(),
+    );
+    let attacking = stacked(&s);
+    assert!(attacking.iter().all(|tokens| !tokens.is_empty()));
+    assert_eq!(attacking[0], attacking[1], "public last known information");
+    let text = s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .pending
+        .join(" ");
+    assert!(text.contains("attacking"), "{text}");
+    let before = hand(&s, 0).len();
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 1);
+    s.assert_life(1, 20);
+
+    // A creature that was not attacking.
+    let mut s = five_color_setup(&["Garna, Bloodfist of Keld", "Gray Ogre", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Garna, Bloodfist of Keld");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    bolt(&mut s, ogre);
+    let resting = stacked(&s);
+    assert_ne!(resting[0], attacking[0]);
+    let text = s
+        .game()
+        .decision_context(PlayerId(0))
+        .unwrap()
+        .pending
+        .join(" ");
+    assert!(!text.contains("attacking"), "{text}");
+    let before = hand(&s, 0).len();
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before);
+    s.assert_life(1, 19);
+
+    // Garna dying beside another creature still sees it die (CR 603.10a),
+    // and does not trigger for itself.
+    let mut s = five_color_setup(&["Garna, Bloodfist of Keld", "Gray Ogre", "Fumigate"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Garna, Bloodfist of Keld");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    cast(&mut s, "Fumigate");
+    s.advance_until(
+        |s| s.game().state.stack_objects.len() == 1,
+        "one Garna trigger".into(),
+    );
+    settle(&mut s);
+    s.assert_life(1, 19);
+    s.assert_life(0, 22);
+}

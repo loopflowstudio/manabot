@@ -752,6 +752,20 @@ pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
 // Passing and resolving
 // ---------------------------------------------------------------------------
 
+/// Player 0 casts a Lightning Bolt at `target` (floating {R} when its pool
+/// is empty) and both players pass, so it resolves; triggers it causes wait
+/// for the caller.
+pub fn bolt(s: &mut Scenario, target: PermanentId) {
+    if s.game().state.players[0].mana_pool.total() == 0 {
+        s.set_player_mana_pool(0, "R");
+    }
+    let card = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    cast_card(s, card);
+    assert!(s.choose_target(Target::Permanent(target)));
+    s.pass_priority();
+    s.pass_priority();
+}
+
 /// Both players pass priority once.
 pub fn resolve_top(s: &mut Scenario) {
     s.pass_priority();

@@ -1,13 +1,57 @@
 //! Dominaria United.
 use managym_state::{
-    ability::{Effect, PaymentCost, TargetRequirement, TargetSpec},
+    ability::{
+        Ability, Condition, Effect, EffectValue, PaymentCost, PlayerSelector, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![bite_down(), tolarian_terror()]
+    vec![bite_down(), garna_bloodfist_of_keld(), tolarian_terror()]
+}
+
+fn garna_bloodfist_of_keld() -> CardDefinition {
+    let text_box = "Whenever another creature you control dies, draw a card if it was attacking. Otherwise, Garna deals 1 damage to each opponent.";
+    CardDefinition {
+        key: "dmu.garna_bloodfist_of_keld",
+        scryfall_id: "294c5f08-08e7-458f-8838-ff321dc5d9f2",
+        printed: PrintedCharacteristics {
+            name: "Garna, Bloodfist of Keld".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Berserker".into()],
+            power: Some(4),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::another_you_control(CardPredicate::creature()),
+                },
+                intervening_if: None,
+                // Whether it was attacking is its last known information
+                // (CR 603.10a), read as the ability resolves.
+                effects: vec![Effect::If {
+                    condition: Condition::TriggeringMatches(CardPredicate {
+                        attacking: true,
+                        ..CardPredicate::default()
+                    }),
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![Effect::DealDamageToPlayer {
+                        player: PlayerSelector::EachOpponent,
+                        amount: EffectValue::Fixed(1),
+                    }],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn tolarian_terror() -> CardDefinition {

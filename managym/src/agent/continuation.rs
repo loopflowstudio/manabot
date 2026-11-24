@@ -204,7 +204,7 @@ impl ContinuationFrame {
 
 /// The receipt a stack object carries, when its frame shows any of it
 /// (`effect_execution::receipt_matters`).
-fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
+pub(super) fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
         StackObject::Spell(spell) => &spell.spent,
         StackObject::TriggeredAbility(ability) => &ability.spent,
@@ -331,10 +331,16 @@ impl Game {
                 player: Some(player.0),
                 ..VisibleReference::default()
             },
-            Target::Permanent(id) => self
-                .permanent_object(id)
-                .map(|object| self.visible_reference(object, viewer))
-                .unwrap_or_default(),
+            // A departed permanent keeps its public definition (CR 603.10a).
+            Target::Permanent(id) => match self.permanent_object(id) {
+                Some(object) => self.visible_reference(object, viewer),
+                None => VisibleReference {
+                    definition: self
+                        .departed_permanent_lki(id)
+                        .map(|lki| lki.definition_id.0),
+                    ..VisibleReference::default()
+                },
+            },
             Target::StackSpell(object_id) => {
                 if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
                     self.object_reference(object_id, viewer)
@@ -582,6 +588,7 @@ impl Game {
                 if trigger.modes_chosen {
                     frame.mode = super::observation::single_chosen_mode(&trigger.chosen_modes);
                 }
+                super::effect_execution::project_pending_trigger(self, trigger, viewer, &mut frame);
                 frames.push(frame);
             }
         }
@@ -683,16 +690,7 @@ impl Game {
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
-        if let Some(spent) = stack_receipt(object) {
-            super::effect_execution::project_receipt(
-                self,
-                spent,
-                Some(object.source_object()),
-                viewer,
-                &mut frame,
-                false,
-            );
-        }
+        super::effect_execution::project_stack_object(self, object, viewer, &mut frame, false);
         frame
     }
 
@@ -875,16 +873,7 @@ impl Game {
         // Stack frames lead, top to bottom; their receipts are public.
         for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
             debug_assert!(matches!(frame.kind, 1..=3));
-            if let Some(spent) = stack_receipt(object) {
-                super::effect_execution::project_receipt(
-                    self,
-                    spent,
-                    Some(object.source_object()),
-                    viewer,
-                    frame,
-                    true,
-                );
-            }
+            super::effect_execution::project_stack_object(self, object, viewer, frame, true);
         }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()

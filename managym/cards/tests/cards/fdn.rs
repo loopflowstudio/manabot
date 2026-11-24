@@ -2822,3 +2822,249 @@ fn exemplar_of_light_draws_once_each_turn_for_counters_on_itself() {
     assert_eq!(counters(&s, exemplar), 3);
     assert_eq!(hand(&s, 0).len(), before + 1);
 }
+
+/// Tragic Banshee reads whether a creature died this turn as its ability
+/// resolves (CR 608.2h): a death between trigger and resolution counts.
+#[test]
+fn tragic_banshee_reads_death_history_as_it_resolves() {
+    use crate::support::play::{bolt, cast, resolve_top};
+    use managym::state::player::ManaPayment;
+    for (before_entry, between, dies) in [
+        (false, false, false),
+        (true, false, true),
+        (false, true, true),
+    ] {
+        let mut s = five_color_setup(&[
+            "Tragic Banshee",
+            "Hill Giant",
+            "Savannah Lions",
+            "Lightning Bolt",
+        ]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+        let lions = s.force_permanent_on_battlefield(0, "Savannah Lions");
+        if before_entry {
+            bolt(&mut s, lions);
+            settle(&mut s);
+        }
+        cast(&mut s, "Tragic Banshee");
+        // A card in hand keeps player 0's priority with the trigger stacked.
+        crate::support::game::force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+        resolve_top(&mut s);
+        // The only opposing creature is the target.
+        assert!(s.choose_target(managym::state::game_object::Target::Permanent(giant)));
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        if between {
+            bolt(&mut s, lions);
+            assert_eq!(s.game().state.stack_objects.len(), 1, "Bolt resolved first");
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.game().state.permanents[giant].is_none(),
+            dies,
+            "{before_entry} {between}"
+        );
+        if !dies {
+            assert_eq!(s.game().characteristics(giant).pt(), (2, 2));
+        }
+    }
+}
+
+/// Vengeful Bloodwitch triggers once for each creature its controller
+/// controlled that died, itself and a land copying a creature included, in one
+/// simultaneous event; the opponent's creature does not trigger it.
+#[test]
+fn vengeful_bloodwitch_drains_for_each_of_its_controllers_simultaneous_deaths() {
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&[
+        "Vengeful Bloodwitch",
+        "Gray Ogre",
+        "Savannah Lions",
+        "Fumigate",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Vengeful Bloodwitch");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    // A noncreature card copying a creature dies as that creature.
+    let island = s.force_permanent_on_battlefield(0, "Island");
+    let original = s.game().state[card_of(&s, ogre)].clone();
+    let copy = card_of(&s, island);
+    s.game_mut().state[copy].become_copy_of(&original, &[]);
+    s.force_permanent_on_battlefield(1, "Savannah Lions");
+    crate::support::play::cast(&mut s, "Fumigate");
+    s.advance_until(
+        |s| s.game().state.stack_objects.len() == 3,
+        "three Bloodwitch triggers".into(),
+    );
+    settle(&mut s);
+    // Fumigate gains one for each of four creatures; each drain one more.
+    s.assert_life(0, 27);
+    s.assert_life(1, 17);
+}
+
+/// Needletooth Pack's end-step trigger needs a creature to have died this
+/// turn, on either side; a death on an earlier turn does not count.
+#[test]
+fn needletooth_pack_counts_this_turns_deaths_at_its_end_step() {
+    use crate::support::{inspect::counters, play::bolt};
+    for (when, counted) in [("none", false), ("opponent", true), ("earlier", false)] {
+        let mut s = five_color_setup(&["Needletooth Pack", "Savannah Lions", "Lightning Bolt"]);
+        let pack = s.force_permanent_on_battlefield(0, "Needletooth Pack");
+        let lions = s.force_permanent_on_battlefield(1, "Savannah Lions");
+        if when == "earlier" {
+            // A death on the opponent's turn, before player 0's next turn.
+            s.advance_to_active_step(1, StepKind::Main);
+            crate::support::game::force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+            s.game_mut().scenario_refresh_priority().unwrap();
+            s.advance_until(
+                |s| s.action_space().player == Some(PlayerId(0)),
+                "priority".into(),
+            );
+            bolt(&mut s, lions);
+            settle(&mut s);
+            s.advance_to_active_step(0, StepKind::Main);
+        } else if when == "opponent" {
+            bolt(&mut s, lions);
+            settle(&mut s);
+        }
+        s.advance_to_active_step(0, StepKind::End);
+        settle(&mut s);
+        assert_eq!(counters(&s, pack), if counted { 2 } else { 0 }, "{when}");
+    }
+}
+
+/// Slumbering Cerberus stays tapped through its controller's untap step and
+/// untaps at any end step of a turn in which a creature died.
+#[test]
+fn slumbering_cerberus_untaps_only_at_an_end_step_after_a_death() {
+    use crate::support::{inspect::tapped, play::bolt};
+    let mut s = five_color_setup(&["Slumbering Cerberus", "Savannah Lions", "Lightning Bolt"]);
+    let cerberus = s.force_permanent_on_battlefield(0, "Slumbering Cerberus");
+    s.game_mut().state.permanents[cerberus]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(tapped(&s, cerberus), "no death this turn");
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(tapped(&s, cerberus), "its untap step leaves it tapped");
+    // A death on the opponent's turn untaps it at that turn's end step.
+    s.advance_to_active_step(1, StepKind::Main);
+    let lions = s.force_permanent_on_battlefield(1, "Savannah Lions");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.advance_until(
+        |s| s.action_space().player == Some(PlayerId(0)),
+        "priority".into(),
+    );
+    bolt(&mut s, lions);
+    settle(&mut s);
+    assert!(tapped(&s, cerberus));
+    s.advance_to_active_step(1, StepKind::End);
+    settle(&mut s);
+    assert!(!tapped(&s, cerberus), "each end step");
+}
+
+/// Wardens of the Cycle chooses its mode as the trigger is put on the stack.
+/// The stacked ability keeps its printed identity: both seats see the chosen
+/// mode in the stack row and continuation frame, and it resolves only that
+/// mode.
+#[test]
+fn wardens_of_the_cycle_keeps_its_chosen_mode_on_the_stack() {
+    use crate::support::{
+        inspect::hand,
+        play::{bolt, choose_mode},
+    };
+    use managym::agent::{action::ActionSpaceKind, observation::Observation};
+    let mut s = five_color_setup(&["Wardens of the Cycle", "Savannah Lions", "Lightning Bolt"]);
+    let wardens = s.force_permanent_on_battlefield(0, "Wardens of the Cycle");
+    let key = s.game().state[card_of(&s, wardens)].definition_id;
+    let lions = s.force_permanent_on_battlefield(1, "Savannah Lions");
+    // No death: no trigger.
+    let quiet = s.game().clone();
+    s.advance_to_active_step(0, StepKind::End);
+    assert!(s.game().state.stack_objects.is_empty());
+    *s.game_mut() = quiet;
+    bolt(&mut s, lions);
+    settle(&mut s);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::Modal,
+        "Wardens' mode".into(),
+    );
+    let modal = s.game().clone();
+    for mode in [0, 1] {
+        *s.game_mut() = modal.clone();
+        choose_mode(&mut s, mode);
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            let row = &obs.stack_objects[0];
+            assert_eq!(row.chosen_mode, Some(mode));
+            assert_eq!(row.ability_index, Some(0));
+            assert_eq!(row.source_card_registry_key, key.0 as i32);
+            assert!(row
+                .description
+                .as_deref()
+                .unwrap()
+                .contains(&format!("chosen mode {}", mode + 1)));
+            let frame = obs.continuation.iter().find(|f| f.kind == 3).unwrap();
+            assert_eq!(frame.mode, Some(mode));
+        }
+        let before = hand(&s, 0).len();
+        settle(&mut s);
+        let (life, drawn) = if mode == 0 { (22, 0) } else { (19, 1) };
+        s.assert_life(0, life);
+        assert_eq!(hand(&s, 0).len(), before + drawn);
+    }
+}
+
+/// CR 603.4: a printed modal trigger whose intervening "if" stops holding
+/// before it resolves does nothing, though its mode was chosen.
+#[test]
+fn modal_trigger_rechecks_its_intervening_if_on_resolution() {
+    use crate::support::{
+        game::inject_ability,
+        play::{bolt, choose_mode},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Gray Ogre", "Savannah Lions", "Lightning Bolt"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let lions = s.force_permanent_on_battlefield(0, "Savannah Lions");
+    let ogre_card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        ogre_card,
+        Ability::Triggered {
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+            intervening_if: Some(Condition::ControlsAtLeast {
+                distinct_names: false,
+                count: 2,
+                predicate: CardPredicate::creature(),
+            }),
+            effects: vec![Effect::TriggerModes {
+                modes: vec![vec![Effect::gain_life(2)], vec![Effect::gain_life(5)]],
+                up_to: None,
+                unchosen: false,
+            }],
+        },
+    );
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::Modal,
+        "the injected mode".into(),
+    );
+    choose_mode(&mut s, 1);
+    let pending = s.game().clone();
+    settle(&mut s);
+    s.assert_life(0, 25);
+    *s.game_mut() = pending;
+    bolt(&mut s, lions);
+    settle(&mut s);
+    s.assert_life(0, 20);
+}
