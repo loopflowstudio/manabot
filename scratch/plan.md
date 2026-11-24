@@ -59,9 +59,7 @@ Behavior review of items 4–5 at `4bd8f23023` (2026-11-24). Items 4–5 behave 
 - Nit: the `ChooseMode` kind code is `CounterKind as usize + 1` on `one_hot:15`. Charge (15) and later kinds share the top bucket, so on one creature only Charge+Plan-style pairs collide; no catalog creature holds both.
 - Nit/latent: castability checks counters and mana independently. A creature whose mana output depends on counters (none in the catalog) could leave mana unpayable after removals have committed.
 
-## Remaining work
-
-### Pre-gate alignment pass (`db3f8e6738`..`04f31e8f90`)
+### Pre-gate alignment pass (`db3f8e6738`..`1673a6e053`)
 
 1. Counter-removal progress: `effect_execution::project_pending_payment` owns the announcement frame's payment projection (policy and text passes); a `RemoveCounters` cost emits `"counters remaining"` and "N counters left to remove." and no longer sets `frame.mode`. `fdn::quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters` asserts `chosen_mode` None and 6 → 5.
 2. `action::PLAY_ROUTE` documents 9 printed graveyard (1..9). `resolved_play_route` reads no route under a suspended decision even when the action names one; `CastDuringResolution` accepts only `route: None` (`identity_tests::a_resolution_cast_never_inherits_a_priority_route` rejects a forged `Grant(0)`).
@@ -69,13 +67,17 @@ Behavior review of items 4–5 at `4bd8f23023` (2026-11-24). Items 4–5 behave 
 - Also: `tests/verify/test_effect_execution_input.py` compared 49-wide evidence with 50-wide relations since `be71091782`; it now compares the recorded prefix.
 - Validation (debug): cards 916, `managym --lib` 361, `rules_tests` 193 (2 ignored); extension rebuilt at `04f31e8f90`: text observation, trigger order, recording narration, continuation/effect-execution/capacity verify, `test_pinned_pilot` (unchanged), choice navigation, casting profiles (174 pass, 1 skipped), restricted/pooled mana, skip-forced, bracelet offers, game snapshot (51 pass).
 
-After that pass, **gate** owns:
+## Remaining work
+
+Next is **gate**. It owns:
 
 - Clippy, the full debug workspace, the measured 10% Engine Budget (search/decision digests move: new card, new routes, `play_lands` in state hashes), `conformance/` receipts for the final catalog.
 - Compare against main: `tests/academy/test_play_modes.py::test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture` and four `tests/belief` tests stop at the opening Keep/Mulligan decision (opening procedure from main `d12eb496b3`); `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails (16 Islands make Islandcycling ask for a manual tap; Slice 5 does not touch payment).
 - Grants that serialize `play_lands` change the state hash and `PlayGrantExtension` tokens of positions holding them; frozen recordings with such a grant will not reproduce stored hashes. Say so in the PR.
 - `scripts/refresh_card_fixture.py` now drops null face fields but was not rerun (it downloads Scryfall bulk data).
 - File the split-out Tasks below, plus a bug Task for the missing first-strike damage step priority (CR 510.4; behavior review of items 4–5).
+
+Nit (concept, same shape as item 1): a multi-tap cost (`CostComponent::Tap` with `count > 1`, `agent/continuation.rs` ~714) still reports taps owed through `frame.mode`. If gate review agrees, move it into `project_pending_payment` as a pending-payment fact; it predates MTG-419.
 
 Latent nit: `fill_slots` keeps a chosen card in its own slot, biased only if two hidden slots of one kind carry distinguishable terms (none in the catalog). If a second foretell card arrives, pair the slots with the shuffled picks in order.
 
