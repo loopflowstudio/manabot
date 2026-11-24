@@ -193,7 +193,10 @@ records admission and host preparation, full loss and gradients, and clipping
 plus Adam. Two controls replay the same loss at the same weights. The first
 reuses the catalog table. The second also reuses the attention and MLP outputs,
 passing gradients through to the object inputs. Differences between controls
-estimate the cost of the skipped work. Only the full gradient advances Adam.
+estimate the cost of the skipped work. Each sample records its maximum control
+loss difference. Repeated bfloat16 forwards can vary at fixed weights, so the
+bfloat16 controls use the existing 1% relative loss tolerance. Only the full
+gradient advances Adam.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).

@@ -27,7 +27,7 @@ import numpy as np
 from manabot.backends import resolve
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import ObjectAttention
-from manabot.backends.parity import minibatch_loss, minibatches
+from manabot.backends.parity import TOLERANCES, minibatch_loss, minibatches
 from manabot.env.observation import ObservationBuffers
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.training.updates.backend import UpdateBackend
@@ -44,6 +44,7 @@ class BatchProfile:
     catalog_steps: int
     load: float
     loss: float
+    control_loss_max_abs: float
     norm: float
     host_prepare_ms: float
     catalog_forward_ms: float
@@ -113,8 +114,10 @@ def profile_step(
             mx.synchronize()
             times[mode] = (perf_counter() - start) * 1000
             losses.append(float(loss))
+    # Repeated ordinary bfloat16 losses can differ at identical weights.
+    rtol = TOLERANCES["bfloat16"].loss if policy.precision == "bfloat16" else 1e-6
     np.testing.assert_allclose(
-        losses, losses[-1], rtol=1e-6, atol=1e-7, equal_nan=False
+        losses, losses[-1], rtol=rtol, atol=1e-7, equal_nan=False
     )
     start = perf_counter()
     norm = learner.step(loss, settings.max_grad_norm)
@@ -130,6 +133,7 @@ def profile_step(
         catalog_steps=len(programs.schedule.sizes),
         load=load,
         loss=losses[-1],
+        control_loss_max_abs=max(abs(value - losses[-1]) for value in losses[:-1]),
         norm=float(norm),
         host_prepare_ms=1000 * prep,
         catalog_forward_ms=1000 * catalog_forward,
