@@ -179,6 +179,9 @@ With identical closed lists, substituting Plains for Island changed the caster�
 
 **Next slice.** Start Bakersbane Duo at three mana spent casting spells. Cross four with a discounted cast, counter that spell and resolve the Duo trigger. Compare the same spend with the Duo entering after the crossing. Read committed spell payment from the existing receipt and check the public spend fact through the viewer projection. Keep Unravel’s target-specific comparison as the separate obligation below.
 
+Use a crossing that skips the threshold in the first fixture: three already spent plus two actually paid yields five. Bind the pre-cast and post-cast totals at the same commit that retains the spell’s PaymentReceipt. Match the crossing once for each eligible listener present then. Restore with the trigger pending, counter its spell and resolve the trigger. A second cast above four, an activation paid between casts, and a Duo entering after the crossing must each add zero Duo triggers. Reset the payer’s total at the next turn. Expose the current total to both viewers through native turn history, v11 and text. Keep Unravel reading the target spell’s receipt after an intervening cast changes the total. This choice avoids reconstructing payment order from presentation history or giving each Duo a private spend counter.
+
+
 ## Evidence to carry forward
 
 Eight of 81 primary rows have definitions and directed fixtures. Hunter, Hatcher, Prowler and Blast are cost-primary witnesses. The 73 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
