@@ -212,12 +212,18 @@ keeps that identity after the source leaves. A countered trigger adds zero.
 It also records the winning seat for a card-instructed victory, private
 opening progress and simultaneous loss causes. Version 30 adds a
 `PermanentUntapped` event to the hashed event ledger for each permanent that
-becomes untapped, and records a draw by mandatory loop (CR 104.4b): when the
-resolutions of one priority round with only automatic passes run 64 times
-without unwinding the stack, shrinking a library, adding poison or lowering
-the life of a player who can lose, the game ends as
-`GameOutcome::Draw { mandatory_loop: true }` and Env reports
-`draw_reason: "mandatory_loop"`.
+becomes untapped. Version 31 hashes the draw-by-mandatory-loop watch (CR
+104.4b) on `PriorityState`. It follows resolutions while players only pass,
+and ends on any other action at priority, a decision with several choices, a
+new step, or a resolution that leaves nothing on the stack or waiting to
+trigger. After 64 resolutions it fingerprints the state with life totals,
+event logs, priority and identity allocation masked
+(`GameState::loop_fingerprint`). A repeated fingerprint with no new low of
+life or high of poison for a player who can lose ends the game as
+`GameOutcome::Draw { mandatory_loop: true }`, and Env reports
+`draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
+permanents never repeats a fingerprint, so it is never drawn; 10,000
+resolutions draw a loop that grows something without bound.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

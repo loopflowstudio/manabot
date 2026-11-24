@@ -638,7 +638,18 @@ The working phase for this slice is **not satisfied**: Finding 10 below (a false
 
 Remaining for this slice: implement concept-review items 1–3 with Finding 10, then re-record hash v31 evidence as planned.
 
-### Next slice · Closing-slice concept alignment (persistent CR 104.4b watch, draw orientation, grantor-cost authority and state-trigger identity)
+### Implemented slice · Closing-slice concept alignment (persistent CR 104.4b watch, draw orientation, grantor-cost authority and state-trigger identity)
+
+Built in `86c6f44a8a` on hash contract **v31**. Items 1–3 and Finding 10 below are implemented as planned, with these choices:
+
+- The watch (`priority.rs::MandatoryLoopWatch`) counts resolutions; after `UNWATCHED` (64) it records `GameState::loop_fingerprint` (`state/hash.rs`): the canonical match state minus life totals, event logs, priority, id/timestamp allocation and waiting-trigger enqueue ids, with turn-history counts saturated at 16. A loop is a repeated fingerprint with no new life low or poison high for a seat that can lose; `CAP` (10,000) still ends unbounded growth. A probe of the Herald loop showed only waiting-trigger ids differing between cycles once those fields were masked.
+- Cleared by: any non-pass priority action (`execute_action`), mana abilities (`on_non_pass_action`), `reset`, `on_step_start`, publishing a non-priority space with more than one action (a real choice), and a resolution leaving the stack, pending triggers and placement empty.
+- Python: `viewer_view(obs, viewer, *, winner)` and `normalize_observation_to_hero(observation, human_seat, *, winner)` (and `person_board`) take the winning seat; the unused `hero_view` is removed.
+- Tap-grantor text: "pay {1}, {T}, and tap Fishing Pole (permanent N)"; exile-grantor text is unchanged.
+
+Tests: `fdn.rs` `bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices`, `bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain`, `a_finite_chain_over_counters_is_no_mandatory_loop` (Finding 10, 100 counters), `two_fishing_poles_on_one_creature_offer_activations_naming_each_pole`; `m21.rs` `mazemind_tome_state_trigger_is_not_held_by_another_trigger_of_the_tome`; `priority.rs` unit tests; `tests/academy/test_play_modes.py` viewer and trace draw cases. The grantor tap reservation has no catalog witness (no grantor taps for mana or waterbends), so it is covered only by reading.
+
+#### Planned form (kept for reference)
 
 The post-closure full-branch concept review at `65cebaf342` (`scratch/concept-review.html`) reviewed the entire MTG-418 surface against base `88ce96bd6b`. The core turn-history, LKI, query, CDA, mana-split, state-trigger and untap models align across rules, v11, text and refreshed conformance evidence. Three conceptual mismatches in the closing slice break real player interactions and must be fixed before behavior review and gate:
 
