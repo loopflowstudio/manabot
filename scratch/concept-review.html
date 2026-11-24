@@ -26,16 +26,16 @@ pre{overflow-x:auto;padding:.65rem .8rem;border-radius:.35rem;background:color-m
 </style>
 <main>
 <h1>Do the product’s concepts and the code’s concepts line up?</h1>
-<p><strong>Area reviewed:</strong> The complete MTG-421 branch against its base (<code>88ce96bd..ffbd50d5</code>) — all 222 Foundations cohort rows (207 defined, 15 explicitly deferred, 0 awaiting audit), the decomposition phase (<code>68ecc906</code>, <code>430cd595</code>), and every shared native rules, CR 613 layer, v11 observation/encoder, possible-world search, heuristic knowledge, LLM text, structured-offer, combat-preview, recording, and Academy UI authority touched on the branch. <strong>Why:</strong> Both the full card cohort (including Alignments 1–5) and the decomposition phase have now landed; reviewing the whole branch against its base as a fresh reader verifies whether any conceptual mismatch remains before gate.</p>
+<p><strong>Area reviewed:</strong> The complete MTG-421 branch against its base (<code>88ce96bd..1b467bae</code>) — all 222 Foundations cohort rows (207 defined, 15 explicitly deferred, 0 awaiting audit), Alignments 1–5, the decomposition phase (<code>68ecc906</code>, <code>430cd595</code>), the performance phase (<code>d591dd25</code>, <code>bf265721</code>), and every shared native rules, CR 613 layer, v11 observation/encoder, possible-world search, heuristic knowledge, LLM text, structured-offer, combat-preview, recording, benchmark-state, and Academy UI authority touched on the branch. <strong>Why:</strong> The full card cohort, decomposition phase, and performance phase have all landed; reviewing the whole branch against its base as a fresh reader verifies whether any conceptual mismatch remains before gate.</p>
 
 <div class="callout">
 <strong>Verdict · Aligned (nothing to change in <code>scratch/plan.md</code>).</strong><br>
-Every product concept introduced or reshaped on MTG-421 — including the decomposition phase’s single Aura enchant clause and unified continuous static-grant spelling — lines up with its native state, CR 613 evaluation, v11 tensor encoding, possible-world search, LLM text, recording narration, and Academy UI across normal, failure, and recovery paths. No conceptual mismatch blocks gate.
+Every product concept introduced or reshaped on MTG-421 — across card authoring, CR 613 layer evaluation, combat declarations and damage assignment, replacement ordering and prevention shields, library reveal/knowledge, v11 tensor encoding, possible-world search, LLM text, recording narration, Academy UI, and the Engine Budget benchmark states — lines up with its code concepts across normal, failure, and recovery paths. No conceptual mismatch blocks gate.
 </div>
 
 <h2>Whole-area concept alignment <span class="tag existing">Existing</span></h2>
 <table>
-<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>ffbd50d5</code></caption>
+<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>1b467bae</code></caption>
 <tr><th>Product concept</th><th>Code concept</th><th>Aligned?</th></tr>
 <tr>
   <td><strong>Aura “Enchant [quality]”</strong> (CR 702.5 / 303.4a / 704.5m). An Aura states what it enchants once; that single restriction governs cast targeting, attachment legality on the battlefield, and heuristic target extraction.</td>
@@ -73,9 +73,14 @@ Every product concept introduced or reshaped on MTG-421 — including the decomp
   <td><span class="yes">Yes</span> · Alignment 3 landed (<code>51b89332</code>, <code>1759e827</code>).</td>
 </tr>
 <tr>
-  <td><strong>First-strike / double-strike damage step, per-source lifelink, death-exile, and stun counters</strong> (CR 510.4, 702.15, <code>ExileIfWouldDie</code>, <code>CounterKind::Stun</code>). A second combat damage step is publicly visible across every consumer; lifelink groups committed damage per source and controller; death-exile and stun counters compose cleanly on existing replacement authorities.</td>
-  <td><code>CombatState.first_strikers</code> and <code>regular_damage_step</code> project to <code>TurnData.another_damage_step</code> and <code>PermanentData.first_strike_participant</code> across v11, JSON, all 6 protocol schemas, <code>experience_projection.py</code>, <code>text_observation.py</code>, and Academy (<code>"To regular damage"</code>, card chips, inspect, unpiling). Lifelink totals committed damage per source/controller. 5g’s <code>ExileIfWouldDie</code> and <code>CounterKind::Stun</code> cards compose without new primitives.</td>
-  <td><span class="yes">Yes</span> · End-to-end parity across all consumers.</td>
+  <td><strong>First-strike / double-strike damage step, per-source lifelink, death-exile, and stun counters</strong> (CR 510.4, 702.15, <code>ExileIfWouldDie</code>, <code>CounterKind::Stun</code>). A second combat damage step is publicly visible across every consumer; checking for a second step does not invalidate caches when none follows; lifelink groups committed damage per source and controller; death-exile and stun counters compose cleanly on existing replacement authorities.</td>
+  <td><code>CombatState.first_strikers</code> and <code>regular_damage_step</code> project to <code>TurnData.another_damage_step</code> and <code>PermanentData.first_strike_participant</code> across v11, JSON, all 6 protocol schemas, <code>experience_projection.py</code>, <code>text_observation.py</code>, and Academy (<code>"To regular damage"</code>, card chips, inspect, unpiling). <code>tick.rs</code> reads <code>self.state.combat.as_ref()</code> before mutating so single-pass combat avoids spurious <code>TrackedState</code> revision bumps (<code>d591dd25</code>). Lifelink totals committed damage per source/controller. 5g’s <code>ExileIfWouldDie</code> and <code>CounterKind::Stun</code> cards compose without new primitives.</td>
+  <td><span class="yes">Yes</span> · End-to-end parity across all consumers and clean cache discipline.</td>
+</tr>
+<tr>
+  <td><strong>Engine Budget measurement of branch mechanics</strong> (<code>bench_states.rs</code>). Benchmark states exercise real Foundations trigger/replacement cascades alongside existing TLA boards, and the combat-damage benchmark measures damage resolution rather than pausing on multi-blocker damage assignment.</td>
+  <td><code>entry-cascade</code> exercises branch-authored <code>Arahbo</code>, <code>Impact Tremors</code>, <code>Doubling Season</code>, <code>Gratuitous Violence</code>, <code>Goblin Oriflamme</code>, <code>Helpful Hunter</code>, <code>Ajani’s Pridemate</code>, <code>Hinterland Sanctifier</code>, <code>Felidar Savior</code>, and <code>Fog Bank</code>. <code>damage()</code> assigns one blocker per attacker so <code>step:damage</code> completes damage resolution instead of stopping at <code>AssignCombatDamage</code>.</td>
+  <td><span class="yes">Yes</span> · Performance phase landed (<code>d591dd25</code>, <code>bf265721</code>); CI Engine Budget adoption remains with gate.</td>
 </tr>
 <tr>
   <td><strong>222-card Foundations readiness boundary</strong>. Ready-now cards compose from native primitives with Scryfall-matched first printings and directed fixtures; larger engine gaps carry an explicit deferral and exact rules obligation in the ledger.</td>
@@ -104,7 +109,7 @@ layers.rs::node(StaticAbility::Continuous):
   // layerless Modification::CantBlock silently ignored</pre>
 </div>
 <div class="panel">
-<h3>Delivered on HEAD (<code>ffbd50d5</code>)</h3>
+<h3>Delivered on HEAD (<code>1b467bae</code>)</h3>
 <pre>Unflinching Courage (Aura):
   spell_effects: [Effect::enchant(TargetSpec::Creature)]
   // one source for Object::enchant, target_requirements,
@@ -137,7 +142,7 @@ layers.rs::node(StaticAbility::Continuous):
     recording.py -&gt; multi-blocker steps split into separate moves</pre>
 </div>
 <div class="panel">
-<h3>Delivered on HEAD (<code>ffbd50d5</code>)</h3>
+<h3>Delivered on HEAD (<code>1b467bae</code>)</h3>
 <pre>17/3 trampling War Mammoth blocked by 1/1 Llanowar Elves:
   v11 actions (no layout/width change):
     action::HAS_X = 1.0, action::X = amount / 10.0  (1.5 vs 1.6 vs 1.7)
@@ -154,9 +159,9 @@ layers.rs::node(StaticAbility::Continuous):
 
 <h3>Normal, failure, and recovery checks</h3>
 <ul>
-  <li><strong>Normal paths:</strong> Branch Auras cast, attach, and recheck CR 704.5m from their single <code>Effect::enchant(spec)</code> clause; all new continuous static grants evaluate through <code>StaticAbility::continuous</code>; 17/3 trampling <code>War Mammoth</code> blocked by <code>Llanowar Elves</code> produces 17 offers with distinct <code>has_x = 1.0</code>, <code>x = 0.1..1.7</code>, exact <code>[mammoth, elves]</code> permanent focus rows, admitted possible worlds, prompt rail buttons highlighting both combatants, and single-move narration across multi-blockers.</li>
+  <li><strong>Normal paths:</strong> Branch Auras cast, attach, and recheck CR 704.5m from their single <code>Effect::enchant(spec)</code> clause; all new continuous static grants evaluate through <code>StaticAbility::continuous</code>; 17/3 trampling <code>War Mammoth</code> blocked by <code>Llanowar Elves</code> produces 17 offers with distinct <code>has_x = 1.0</code>, <code>x = 0.1..1.7</code>, exact <code>[mammoth, elves]</code> permanent focus rows, admitted possible worlds, prompt rail buttons highlighting both combatants, and single-move narration across multi-blockers. Single-pass combat damage ends without mutating <code>TrackedState</code> (<code>d591dd25</code>), while first-strike combat still transitions into the regular damage step with <code>another_damage_step</code> visible across all consumers.</li>
   <li><strong>Failure &amp; recovery:</strong> A layerless <code>Modification</code> placed inside <code>StaticAbility::Continuous</code> trips the <code>debug_assert!</code> on first evaluation instead of silently no-oping; out-of-range combat damage modes fail with <code>AgentError("illegal combat damage assignment")</code> leaving <code>suspended_decision</code> intact; stale revisions fail Command binding; pre-existing base/TLA card definitions keep identical serialized values so stored v11 TLA pilots are unchanged (gate’s release-extension rebuild re-verifies <code>430cd595</code> against <code>test_pinned_pilot.py</code>, <code>test_record_vocabulary.py</code>, and <code>test_static_ability_tokens.py</code>).</li>
-  <li><strong>Minor non-blocking observations:</strong> <code>ActionSpace.focus</code> at <code>decision.rs:1612</code> still holds card object IDs while per-action <code>Observation::action_focus</code> holds permanent IDs (matching <code>DeclareBlocker</code>); no consumer reads <code>ActionSpace.focus</code> for <code>Modal</code> spaces. Similarly, <code>OrderReplacement</code> offers anchor directly onto their replacement-source permanent on the board (with every offer also listed in the rail), distinct from <code>AssignCombatDamage</code>’s numeric rail buttons.</li>
+  <li><strong>Minor non-blocking observations:</strong> <code>ActionSpace.focus</code> at <code>decision.rs:1612</code> still holds card object IDs while per-action <code>Observation::action_focus</code> holds permanent IDs (matching <code>DeclareBlocker</code>); no consumer reads <code>ActionSpace.focus</code> for <code>Modal</code> spaces. <code>OrderReplacement</code> focuses <code>state[candidate.source()].id</code> so both battlefield replacement sources and entering cards resolve uniformly in v11’s <code>object_to_index</code> and <code>decision_offer_subjects</code>. Similarly, <code>OrderReplacement</code> offers anchor directly onto their replacement-source permanent on the board (with every offer also listed in the rail), distinct from <code>AssignCombatDamage</code>’s numeric rail buttons.</li>
 </ul>
 
 <h2>Outside this work (noted plainly, not part of MTG-421)</h2>
