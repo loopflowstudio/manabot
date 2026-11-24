@@ -393,25 +393,23 @@ def test_bucketed_admission_keeps_effect_order_bounds_and_batch_strides() -> Non
 
 
 def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
-    case = _policy()
-    agent = _bucketed(case.agent)
-    batch = collect(case.collector, agent, 1)
+    case = _policy(bucketed_shapes=True)
+    batch = collect(case.collector, case.agent, 1)
     row = batch.recorded.index[0]
     batch.recorded.rows["facts"][row, -1, column("facts", "valid")] = 2
     with pytest.raises(ValueError, match="^fact validity must be binary$"):
-        AdmittedRollout(agent, batch).admit_rows(np.array([0]), 1)
+        AdmittedRollout(case.agent, batch).admit_rows(np.array([0]), 1)
 
 
 @pytest.mark.parametrize("recorded", [True, False], ids=["mixed", "absent-table"])
 def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
-    case = _policy()
-    agent = _bucketed(case.agent)
-    mask = case.obs["actions_valid"][0]
-    legal_slots = np.flatnonzero(mask)
+    case = _policy(bucketed_shapes=True)
+    masks = case.obs["actions_valid"]
+    legal_slots = [np.flatnonzero(mask) for mask in masks]
     # Collection measures this continuation before packing drops the masked action.
-    masked_slot = np.flatnonzero(mask == 0)[0]
+    masked_slot = np.flatnonzero(masks[0] == 0)[0]
     case.obs["actions"][0, masked_slot, column("actions", "continuation")] = 64
-    batch = collect(case.collector, agent, 1)
+    batch = collect(case.collector, case.agent, 1)
     needs = batch.recorded.needs
     assert needs is not None
     first, second = batch.recorded.index[:2]
@@ -421,15 +419,20 @@ def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
     else:
         batch.recorded = replace(batch.recorded, needs=None)
 
-    prepared = []
-    for width in (1, 2):
-        rollout = AdmittedRollout(agent, batch)
-        rollout.admit_rows(np.array([0, 1]), width)
-        row, _ = rollout.prepare_rows(np.array([0]))
-        assert row.relation_features.shape[1] == (64 if recorded else 8)
-        np.testing.assert_array_equal(row.legal_slots, legal_slots)
-        prepared.append(row)
-    np.testing.assert_equal(asdict(prepared[0]), asdict(prepared[1]))
+    indexes = np.array([0, 1])
+    separate = AdmittedRollout(case.agent, batch)
+    grouped = AdmittedRollout(case.agent, batch)
+    separate.admit_rows(indexes, 1)
+    grouped.admit_rows(indexes, 2)
+
+    for index, slots in enumerate(legal_slots):
+        selection = np.array([index])
+        single, _ = separate.prepare_rows(selection)
+        together, _ = grouped.prepare_rows(selection)
+        expected_relations = 64 if recorded and index == 0 else 8
+        assert single.relation_features.shape[1] == expected_relations
+        np.testing.assert_array_equal(single.legal_slots, slots)
+        np.testing.assert_equal(asdict(single), asdict(together))
 
 
 def test_reference_to_padding_object_is_kept() -> None:
@@ -474,13 +477,11 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
 
 
 def test_collection_records_each_rows_measured_needs() -> None:
-    """A bucketed collector records the needs it measured for every learner row,
-    equal to measuring the recorded rows again, so learning reuses them."""
-    case = _policy(history=True)
-    agent = _bucketed(case.agent)
-    batch = collect(case.collector, agent, 12)
+    """These decisions retain all measured extents after legal-action packing."""
+    case = _policy(history=True, bucketed_shapes=True)
+    batch = collect(case.collector, case.agent, 12)
     rows = np.arange(batch.actions.size)
     recorded = batch.recorded.gather_needs(rows)
     assert recorded is not None
     host = batch.observations(rows).observation
-    assert np.array_equal(recorded, row_needs(host, agent.observation_space))
+    assert np.array_equal(recorded, row_needs(host, case.agent.observation_space))
