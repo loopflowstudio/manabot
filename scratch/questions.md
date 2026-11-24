@@ -50,3 +50,5 @@ Use a castable Lightning Bolt to issue a public target address for the Angel bef
 Use the pending Waypoint activation as the first fork for repeat preparation. Compare exact links and copy movements before adding a stored reverse index.
 
 Use an ordinary-play Voxmancer alongside the constructed Angel for the Waypoint replay. Its upkeep can renew its spell between activations.
+
+Use blink for the Emeritus source-loss branch. Resolving the original trigger with the same card back in play distinguishes source appearance from physical card identity.
