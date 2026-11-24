@@ -187,6 +187,16 @@ impl SourceReservation {
             sacrifice: false,
         }
     }
+
+    /// `permanent` is owed to a cost that taps it or makes it leave. Either
+    /// way it cannot also leave to pay another cost.
+    fn owed(permanent: PermanentId, tap: bool, leaves: bool) -> Self {
+        Self {
+            permanent,
+            tap,
+            sacrifice: tap || leaves,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1611,12 +1621,11 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
         return None;
     };
     let owes = |how| payment.owes(&CostComponent::Source(how));
-    let tap = owes(How::Tapped);
-    Some(SourceReservation {
+    Some(SourceReservation::owed(
         permanent,
-        tap,
-        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
-    })
+        owes(How::Tapped),
+        owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
+    ))
 }
 
 impl Game {
@@ -1723,11 +1732,7 @@ impl Game {
             life: self.payable_life(player).max(0) as u32,
         };
         if let Some(source) = sacrifice {
-            model.reserve(SourceReservation {
-                permanent: source,
-                tap: false,
-                sacrifice: true,
-            });
+            model.reserve(SourceReservation::owed(source, false, true));
         }
         // An announcement survives nested mana decisions in pending_choice;
         // its resources are owed in every phase, not only mana spending.
@@ -1752,11 +1757,11 @@ impl Game {
                 } => {
                     let ability =
                         &game.characteristics(*permanent).activated_abilities[*ability_index];
-                    model.reserve(SourceReservation {
-                        permanent: *permanent,
-                        tap: ability.tap_source,
-                        sacrifice: ability.tap_source || ability.source_leaves(),
-                    });
+                    model.reserve(SourceReservation::owed(
+                        *permanent,
+                        ability.tap_source,
+                        ability.source_leaves(),
+                    ));
                     if let Some(next) = resume {
                         reserve(next, game, model);
                     }
@@ -1880,13 +1885,7 @@ impl Game {
             .map(|object| (object, false));
         for (object, tap) in sacrificed.chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
-                // A permanent owed for tapping cannot leave to pay another
-                // cost either.
-                model.reserve(SourceReservation {
-                    permanent,
-                    tap,
-                    sacrifice: true,
-                });
+                model.reserve(SourceReservation::owed(permanent, tap, true));
             }
         }
     }
@@ -1910,11 +1909,11 @@ impl Game {
         {
             let ability = self.activation_ability(*source, *ability_index)?;
             if ability.has_grantor_cost() {
-                model.reserve(SourceReservation {
-                    permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
-                    tap: ability.tap_grantor,
-                    sacrifice: true,
-                });
+                model.reserve(SourceReservation::owed(
+                    self.state.permanent_of(ability.granted_by?.grantor)?,
+                    ability.tap_grantor,
+                    ability.exile_grantor,
+                ));
             }
             model.life = model.life.checked_sub(ability.life_cost)?;
         }
@@ -1931,11 +1930,11 @@ impl Game {
                 ..
             } => {
                 let ability = &self.characteristics(*permanent).activated_abilities[*ability_index];
-                Some(SourceReservation {
-                    permanent: *permanent,
-                    tap: ability.tap_source,
-                    sacrifice: ability.tap_source || ability.source_leaves(),
-                })
+                Some(SourceReservation::owed(
+                    *permanent,
+                    ability.tap_source,
+                    ability.source_leaves(),
+                ))
             }
             _ => None,
         }
@@ -2052,11 +2051,11 @@ impl Game {
             .iter()
             .find(|ability| ability.ability_index == ability_index)
             .cloned()?;
-        model.reserve(SourceReservation {
+        model.reserve(SourceReservation::owed(
             permanent,
-            tap: ability.tap_source,
-            sacrifice: ability.tap_source || ability.sacrifice_source,
-        });
+            ability.tap_source,
+            ability.sacrifice_source,
+        ));
         let obligations = PaymentModel::activation_obligations(&ability);
         if ability.limited {
             for source in Arc::make_mut(&mut model.sources) {
@@ -2482,11 +2481,7 @@ impl Game {
             return false;
         };
         if let Some(permanent) = sacrifice {
-            model.reserve(SourceReservation {
-                permanent,
-                tap: false,
-                sacrifice: true,
-            });
+            model.reserve(SourceReservation::owed(permanent, false, true));
         }
         model.payable(
             self.pooled_mana(player),

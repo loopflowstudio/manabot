@@ -408,9 +408,9 @@ impl GameState {
         }
         // A waiting trigger's or stack object's id is its allocation order,
         // renumbered each cycle.
-        fn forget_id(trigger: &mut Value) {
-            if let Some(trigger) = trigger.as_object_mut() {
-                trigger.remove("id");
+        fn forget_id(value: &mut Value) {
+            if let Some(fields) = value.as_object_mut() {
+                fields.remove("id");
             }
         }
         if let Some(Value::Array(pending)) = state.get_mut("pending_triggers") {
