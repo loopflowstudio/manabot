@@ -602,6 +602,35 @@ and added five counters. With the rebuilt CPython 3.13 extension,
 chosen Giant gives 3 in the public label and 0.3 in both packed v11 rows.
 The remaining measurement belongs to the Engine Budget and stress-state pass.
 
+**Decomposition re-review at `d87fe6e918` (2026-11-24): criterion not met.**
+Followed Lunar Convocation and Bakersbane Duo end to end. Both compose
+through one owner: `PlayerTurnHistory.life_gained` is written only at
+`flow/zones.rs:549` and read only through `EffectValue::LifeGainedThisTurn`
+(`flow/resolution.rs:176`, encoder `turn_state::LIFE_GAINED`, description);
+`TriggerCondition::Expend` has one matcher (`flow/triggers.rs:1835`). No card
+key appears in engine `src/` or `state/src/`. Three defects from the
+post-merge concept review are confirmed in code and block this phase:
+
+- One fact, two carriers: Quilled Greatwurm (`cards/src/fdn.rs:3407`) reads
+  `EffectValue::X`, fed by the `CombatDamageTotals` arm at
+  `flow/triggers.rs:1010` that clamps the total to `u8::MAX`, while
+  `trigger.triggering_amount` (`flow/triggers.rs:1058`) already carries the
+  same total for Drake Hatcher, Lathril and the others. `bound_x`'s
+  `DealsCombatDamage { to: None }` case is the description-side adapter for
+  that second carrier. Rules defect above 255 damage.
+- `TriggerCondition::once_each_turn` (`state/src/ability.rs:3048`) has a
+  wildcard and omits `Prepared`; three wrapper walkers (`once_each_turn`,
+  `wrapped_bound_x`, the trigger matcher) each list wrappers by hand. Only
+  Codie uses `Prepared` today and without `OnceEachTurn`, so the panic at
+  `flow/triggers.rs:911` is latent.
+- `SpellLki` drops `SpellProfile`, so departed-spell predicates read the front
+  face (item 2 below).
+
+Kept, as before: `TargetSpec::GraveyardCardYouOwnWithinSourcePower` (one
+reader, six references, three cards). Next step: implement items 1–4 below,
+rerun the Greatwurm, Drake Hatcher and observability fixtures, then repeat
+this review before `gate`.
+
 ## Post-merge concept alignment (Next slice before gate)
 
 Full-branch concept review at `8838269f91` against merged `main` (`610370233c`, recorded in `scratch/concept-review.html`) verified that turn history, permanent LKI, paid-cost stack projection (Ayli and station), CR 603.8 state triggers, untap events, draw outcome projection, packed/dense v11 layouts, and Finding 18's stabilized CR 104.4b loop watch all align. Three post-merge concept mismatches remain to close in one focused `implement` pass on hash contract **v31** before `gate`:
