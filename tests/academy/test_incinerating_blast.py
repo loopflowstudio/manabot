@@ -10,6 +10,7 @@ import pytest
 
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.semantic.text_observation import capture_text_decision
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.server import GameSession
@@ -23,12 +24,13 @@ def pending_blast(hidden: str) -> managym.Env:
         10,
     )
     env = managym.Env(seed=23)
-    env.reset(
+    obs, _ = env.reset(
         managym.GameSetup(
             [managym.PlayerConfig(name, deck) for name in ("caster", "opponent")],
             decklists="closed",
         )
     )
+    keep_opening_hands(env, obs)
     env.scenario_clear_hand(0)
     for name in ("Incinerating Blast", "Forest", hidden):
         env.scenario_force_card_in_hand(0, name)
