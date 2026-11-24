@@ -72,7 +72,7 @@ impl Game {
                     ),
                     PlayRoute::Grant(key) => {
                         let grant = self.grant_by_key(*object, *key)?;
-                        let price = self.grant_cost_for_spell(grant, card).map(|cost| {
+                        let price = self.grant_cast_cost(grant, card).map(|cost| {
                             if cost.mana_value == 0 && cost.x == 0 {
                                 "{0}".into()
                             } else {

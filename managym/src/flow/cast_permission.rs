@@ -469,14 +469,28 @@ impl Game {
         })
     }
 
-    /// What casting `card` under `grant` costs: its foretell cost, the
-    /// grant's alternative, or its mana cost. `None` when it has no cost to
-    /// pay (a land is played, not cast).
-    pub(crate) fn grant_cast_cost(&self, grant: &PlayGrant) -> Option<ManaCost> {
-        self.grant_cost_for_spell(grant, &self.state[grant.object])
+    /// What casting `definition` under `grant` shows as its cost: the base
+    /// cost, spent with any type of mana when the grant allows it. `None`
+    /// when it has no cost to pay (a land is played, not cast).
+    pub(crate) fn grant_cast_cost(
+        &self,
+        grant: &PlayGrant,
+        definition: &crate::state::card::PrintedCharacteristics,
+    ) -> Option<ManaCost> {
+        let cost = self.grant_base_cost(grant, definition)?;
+        // Spending permission changes colors, not the announced X cost.
+        Some(if grant.any_mana {
+            cost.pay_with_any_mana()
+        } else {
+            cost
+        })
     }
 
-    pub(super) fn grant_cost_for_spell(
+    /// The mana or alternative cost `grant` selects for `definition`: its
+    /// foretell cost, the grant's alternative, or its mana cost. Additional
+    /// costs and reductions apply to these colored pips (CR 601.2f) before
+    /// any-type spending (CR 601.2h, `Game::effective_spell_cost`).
+    pub(super) fn grant_base_cost(
         &self,
         grant: &PlayGrant,
         definition: &crate::state::card::PrintedCharacteristics,
@@ -484,21 +498,11 @@ impl Game {
         if definition.types.is_land() {
             return None;
         }
-        let cost = if grant.foretold {
-            definition.foretell().cloned()?
+        if grant.foretold {
+            definition.foretell().cloned()
         } else {
-            grant
-                .cost
-                .clone()
-                .or_else(|| definition.mana_cost.clone())?
-        };
-        // Any type of mana pays every pip, as generic (CR 609.4b-style).
-        Some(if grant.any_mana {
-            // Spending permission changes colors, not the announced X cost.
-            cost.pay_with_any_mana()
-        } else {
-            cost
-        })
+            grant.cost.clone().or_else(|| definition.mana_cost.clone())
+        }
     }
 
     /// The permission naming this exact card, whatever its timing,

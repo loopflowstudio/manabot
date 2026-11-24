@@ -19,7 +19,8 @@ use crate::support::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
         library, library_card, library_top, offered_cards, offered_targets, permanent,
-        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, zone_of,
+        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, top_spell,
+        zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -978,6 +979,79 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .state
         .zones
         .contains(now(&s, ogre_card), ZoneType::Graveyard, PlayerId(1)));
+}
+
+/// Azula's any-type spending applies to the total cost (CR 601.2h), after
+/// reductions and additional costs settle it (CR 601.2f): an exiled
+/// Lightning Strike ({1}{R}) under Glamdring on a 2/2 costs {R}, so one mana
+/// of any type, never nothing; a kicked Into the Roil ({1}{U} + {1}{U})
+/// takes four colorless.
+#[test]
+fn azula_spends_any_mana_on_the_cost_after_reductions_and_kicker() {
+    use managym::state::player::ManaPayment;
+    let exiled_by_azula = |spell: &str| {
+        let mut s = five_color_setup(&[
+            "Azula, Cunning Usurper",
+            "Lightning Strike",
+            "Into the Roil",
+            "Gray Ogre",
+            "Glamdring, Foe-hammer",
+        ]);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let ogre_card = s.game().state.permanents[ogre].as_ref().unwrap().object;
+        let card = library_card(&s, 1, spell);
+        let card = move_card(&mut s, card, ZoneType::Graveyard);
+        cast(&mut s, "Azula, Cunning Usurper");
+        spend_colorless(&mut s);
+        advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre_card),
+        );
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == card),
+        );
+        settle(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        (s, card)
+    };
+
+    let (mut s, strike) = exiled_by_azula("Lightning Strike");
+    let glamdring = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Glamdring, Foe-hammer", true)
+        .unwrap();
+    let bearer = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, glamdring, 0);
+    assert!(s.choose_target(Target::Permanent(bearer)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, strike), "{{R}} remains to pay");
+    s.set_player_mana_pool(0, "1");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, strike));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    s.assert_life(1, 17);
+
+    let (mut s, roil) = exiled_by_azula("Into the Roil");
+    let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "4");
+    cast_card(&mut s, roil);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Permanent(target)));
+    assert!(top_spell(&s).kicked);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    let drawn = hand(&s, 0).len();
+    settle(&mut s);
+    assert!(s.game().state.permanents[target].is_none());
+    assert_eq!(hand(&s, 0).len(), drawn + 1, "kicked: draw a card");
 }
 
 /// Badgermole Cub earthbends 1 on entering; tapping a creature for mana adds

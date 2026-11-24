@@ -444,7 +444,7 @@ impl Game {
             match cast.route? {
                 PlayRoute::PrintedFlashback => spell.flashback().cloned(),
                 PlayRoute::GrantedFlashback => self.granted_flashback_cost(object),
-                PlayRoute::Grant(_) => self.grant_cost_for_spell(cast.grant(self, object)?, spell),
+                PlayRoute::Grant(_) => self.grant_base_cost(cast.grant(self, object)?, spell),
                 _ => spell.mana_cost.clone(),
             }
         }
@@ -540,8 +540,11 @@ impl Game {
                 cost = cost.reduced_generic(reduction.generic);
             }
         }
-        // Tinybones: "mana of any type can be spent to cast those spells".
-        let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)));
+        // CR 601.2h: any-type spending applies to the total cost, once
+        // additional costs and reductions are settled (CR 601.2f): Tinybones's
+        // stash, an exact grant's permission, or a static ability.
+        let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)))
+            || cast.grant(self, object).is_some_and(|grant| grant.any_mana);
         for (source, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             for ability in &view.static_abilities {
                 if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
