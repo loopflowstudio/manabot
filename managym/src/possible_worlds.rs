@@ -589,25 +589,25 @@ impl HiddenHandConstraints {
             new_hand.sort_unstable_by_key(|c| c.slot());
             new_library.shuffle(&mut rng);
 
-            if commitments.constrains()
-                && !source.prepare_selection_foretell(
+            let manifests = if commitments.constrains() {
+                source.prepare_selection_hidden_slots(
                     &commitments,
                     &world.hand,
                     &mut new_library,
                     &mut rng,
                 )
-            {
-                return Err(MaterializeError::InconsistentWorld);
+            } else {
+                source.draw_manifests(opponent, self.viewer, &mut new_library, &mut rng)
             }
-            if !branch.fill_manifest_slots(
+            .ok_or(MaterializeError::InconsistentWorld)?;
+            branch.fill_manifest_slots(
                 opponent,
                 self.viewer,
+                manifests,
                 &mut new_library,
                 &mut new_hand,
                 &mut reserved,
-            ) {
-                return Err(MaterializeError::InconsistentWorld);
-            }
+            );
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
@@ -923,7 +923,7 @@ impl PossibleWorldSpace {
                 // The prior measure includes every foretold fill; replace only
                 // that factor, preserving the exact hand-subset multiplicity.
                 world.weight = world.weight / falling(bearers, space.foretold)
-                    * game.selection_foretold_weight(&commitments, &world.hand);
+                    * game.selection_hidden_weight(&commitments, &world.hand);
             }
             space.worlds.retain(|world| world.weight > 0);
             space.total_weight = space.worlds.iter().map(|world| world.weight).sum();

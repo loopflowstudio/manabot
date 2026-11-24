@@ -59,11 +59,13 @@ struct InspectionSlot {
     definition: Option<CardDefId>,
 }
 
-/// One name allocation to face-down slots and its ordered physical-copy count.
-/// Retained selections condition this measure by feasibility, not by the number
-/// of ways a player could have chosen the private subset.
-struct ForetoldAllocation {
-    counts: BTreeMap<String, u32>,
+/// One name allocation to the hidden non-hand slots, foretold exile and
+/// face-down manifests, and its ordered physical-copy count. Retained
+/// selections condition this measure by feasibility, not by the number of
+/// ways a player could have chosen the private subset.
+struct HiddenAllocation {
+    foretold: BTreeMap<String, u32>,
+    manifest: BTreeMap<String, u32>,
     ways: u128,
 }
 
@@ -219,36 +221,62 @@ impl Game {
         })
     }
 
-    /// Consume one residual printing per hidden battlefield slot. Foretell gets
-    /// its first eligible cards from the shuffled deal. The other slots have
-    /// no printing restriction. Only the backing changes underneath a target.
+    /// Draw the cards whose printings back `owner`'s hidden manifests from
+    /// the shuffled deal `pool`, removing them from it. The first foretell
+    /// cards that `fill_foretold_slots` will take are set aside, then the
+    /// manifests are a uniform draw from the rest: taking the rest's first
+    /// cards would favor non-foretell cards, which precede the set-aside ones.
+    /// `None` when too few cards remain.
+    pub(crate) fn draw_manifests(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+        pool: &mut Vec<ObjectId>,
+        rng: &mut ChaCha8Rng,
+    ) -> Option<Vec<ObjectId>> {
+        let count = self.hidden_manifests(owner, viewer).count();
+        if count == 0 {
+            return Some(Vec::new());
+        }
+        let foretold = self.foretold_cards(owner).count();
+        let set_aside: Vec<_> = pool
+            .iter()
+            .copied()
+            .filter(|object| self.state[*object].retained_base().1.foretell().is_some())
+            .take(foretold)
+            .collect();
+        if set_aside.len() != foretold {
+            return None;
+        }
+        let rest: Vec<_> = pool
+            .iter()
+            .copied()
+            .filter(|object| !set_aside.contains(object))
+            .collect();
+        if rest.len() < count {
+            return None;
+        }
+        let drawn: Vec<_> = rest.choose_multiple(rng, count).copied().collect();
+        pool.retain(|object| !drawn.contains(object));
+        Some(drawn)
+    }
+
+    /// Back `owner`'s hidden battlefield slots with the printings of `chosen`,
+    /// one per slot in order, already removed from the deal. Only the backing
+    /// changes underneath a target.
     pub(crate) fn fill_manifest_slots(
         &mut self,
         owner: PlayerId,
         viewer: PlayerId,
-        pool: &mut Vec<ObjectId>,
+        chosen: Vec<ObjectId>,
+        pool: &mut [ObjectId],
         hand: &mut [ObjectId],
         reserved: &mut [(usize, ObjectId)],
-    ) -> bool {
+    ) {
         let slots: Vec<_> = self.hidden_manifests(owner, viewer).collect();
+        assert_eq!(chosen.len(), slots.len(), "one printing per hidden slot");
         if slots.is_empty() {
-            return true;
-        }
-        let mut foretold = self.foretold_cards(owner).count();
-        let mut chosen = Vec::new();
-        pool.retain(|object| {
-            if foretold > 0 && self.state[*object].retained_base().1.foretell().is_some() {
-                foretold -= 1;
-                true
-            } else if chosen.len() < slots.len() {
-                chosen.push(*object);
-                false
-            } else {
-                true
-            }
-        });
-        if chosen.len() != slots.len() || foretold != 0 {
-            return false;
+            return;
         }
 
         // Complete the permutation: displaced printings go into the vacated
@@ -277,7 +305,6 @@ impl Game {
                 .chain(reserved.iter_mut().map(|(_, o)| o)),
             &mapping,
         );
-        true
     }
 
     /// Capture current membership once. Re-capturing Remembered preserves its
@@ -592,33 +619,39 @@ impl Game {
         }
     }
 
-    /// Exact ordered foretold fills that leave the selected subsets realizable.
-    /// Unlike a feasibility-only filter, this removes the mass of impossible
-    /// foretold assignments within an otherwise compatible hand-count world.
-    pub(crate) fn selection_foretold_weight(
+    /// Exact ordered foretold and manifest fills that leave the selected
+    /// subsets realizable. Unlike a feasibility-only filter, this removes the
+    /// mass of impossible hidden-slot assignments within an otherwise
+    /// compatible hand-count world. With manifests the measure also counts
+    /// their ordered fills, a factor shared by every world of one space.
+    pub(crate) fn selection_hidden_weight(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
     ) -> u128 {
-        self.selection_foretold_allocations(commitments, hand)
+        self.selection_hidden_allocations(commitments, hand)
             .iter()
             .map(|allocation| allocation.ways)
             .sum()
     }
 
-    /// Order one compatible foretold fill before the remaining shuffled pool.
-    /// The existing slot mover still owns grants and exact exile membership.
-    pub(crate) fn prepare_selection_foretell(
+    /// Draw one compatible foretold and manifest fill by its measure. The
+    /// foretold cards go before the remaining shuffled pool, where
+    /// `fill_foretold_slots` takes them; the manifest cards are removed and
+    /// returned, in slot order, for `fill_manifest_slots`. Those movers still
+    /// own backings, grants and exact exile membership. `None` when no fill
+    /// leaves the retained selections realizable.
+    pub(crate) fn prepare_selection_hidden_slots(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
         pool: &mut Vec<ObjectId>,
         rng: &mut ChaCha8Rng,
-    ) -> bool {
-        let allocations = self.selection_foretold_allocations(commitments, hand);
+    ) -> Option<Vec<ObjectId>> {
+        let allocations = self.selection_hidden_allocations(commitments, hand);
         let total: u128 = allocations.iter().map(|allocation| allocation.ways).sum();
         if total == 0 {
-            return false;
+            return None;
         }
         let mut draw = rng.gen_range(0..total);
         let allocation = allocations
@@ -632,31 +665,38 @@ impl Game {
                 }
             })
             .expect("draw is within the compatible measure");
-        let mut counts = allocation.counts;
-        let mut chosen = Vec::new();
-        pool.retain(|object| {
-            let Some(count) = counts.get_mut(&self.state[*object].retained_base().1.name) else {
-                return true;
-            };
-            if *count == 0 {
-                return true;
-            }
-            *count -= 1;
-            chosen.push(*object);
-            false
-        });
-        debug_assert!(counts.values().all(|count| *count == 0));
-        chosen.shuffle(rng);
-        chosen.append(pool);
-        *pool = chosen;
-        true
+        // The pool is shuffled, so each name's first copies are a uniform
+        // choice of its physical cards.
+        let mut take = |mut counts: BTreeMap<String, u32>, pool: &mut Vec<ObjectId>| {
+            let mut chosen = Vec::new();
+            pool.retain(|object| {
+                let Some(count) = counts.get_mut(&self.state[*object].retained_base().1.name)
+                else {
+                    return true;
+                };
+                if *count == 0 {
+                    return true;
+                }
+                *count -= 1;
+                chosen.push(*object);
+                false
+            });
+            debug_assert!(counts.values().all(|count| *count == 0));
+            chosen.shuffle(rng);
+            chosen
+        };
+        let mut foretold = take(allocation.foretold, pool);
+        let manifests = take(allocation.manifest, pool);
+        foretold.append(pool);
+        *pool = foretold;
+        Some(manifests)
     }
 
-    fn selection_foretold_allocations(
+    fn selection_hidden_allocations(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
-    ) -> Vec<ForetoldAllocation> {
+    ) -> Vec<HiddenAllocation> {
         let owner = PlayerId(1 - commitments.viewer.0);
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
         let mut unseen = commitments.unseen_objects(self, owner);
@@ -695,14 +735,51 @@ impl Game {
             })
             .collect();
         let count = self.foretold_cards(owner).count() as u32;
+        let manifests = self.hidden_manifests(owner, commitments.viewer).count() as u32;
+        let mut foretold_fills = Vec::new();
+        enumerate_names(
+            &bearers,
+            count,
+            1,
+            &mut BTreeMap::new(),
+            &mut foretold_fills,
+        );
+        // Manifests take any printing the hand and foretold slots left.
         let mut allocations = Vec::new();
-        enumerate_foretold(&bearers, count, 1, &mut BTreeMap::new(), &mut allocations);
-        let orders: u128 = (1..=count).map(u128::from).product();
+        for (foretold, ways) in foretold_fills {
+            let residual: Vec<_> = pool
+                .iter()
+                .map(|(name, objects)| {
+                    let used = hand.get(name).copied().unwrap_or(0)
+                        + foretold.get(name).copied().unwrap_or(0);
+                    (name.clone(), objects.len() as u32 - used)
+                })
+                .collect();
+            let mut manifest_fills = Vec::new();
+            enumerate_names(
+                &residual,
+                manifests,
+                ways,
+                &mut BTreeMap::new(),
+                &mut manifest_fills,
+            );
+            allocations.extend(manifest_fills.into_iter().map(|(manifest, ways)| {
+                HiddenAllocation {
+                    foretold: foretold.clone(),
+                    manifest,
+                    ways,
+                }
+            }));
+        }
+        let factorial = |n: u32| (1..=n).map(u128::from).product::<u128>();
+        let orders = factorial(count) * factorial(manifests);
         allocations.retain_mut(|allocation| {
             let mut slots = Vec::new();
             for (name, objects) in &pool {
                 let in_hand = hand.get(name).copied().unwrap_or(0) as usize;
-                let foretold = allocation.counts.get(name).copied().unwrap_or(0) as usize;
+                let foretold = (allocation.foretold.get(name).copied().unwrap_or(0)
+                    + allocation.manifest.get(name).copied().unwrap_or(0))
+                    as usize;
                 let pinned_hand = objects
                     .iter()
                     .filter(|object| {
@@ -1025,21 +1102,19 @@ fn assign<T: Copy + Ord>(
     false
 }
 
-/// Enumerate name allocations, counting physical subsets without enumerating
-/// their permutations. Slot order contributes the factorial once, at the caller.
-fn enumerate_foretold(
+/// Enumerate name allocations of `remaining` slots, counting physical subsets
+/// without enumerating their permutations. Slot order contributes the
+/// factorial once, at the caller.
+fn enumerate_names(
     names: &[(String, u32)],
     remaining: u32,
     ways: u128,
     counts: &mut BTreeMap<String, u32>,
-    out: &mut Vec<ForetoldAllocation>,
+    out: &mut Vec<(BTreeMap<String, u32>, u128)>,
 ) {
     let Some(((name, available), rest)) = names.split_first() else {
         if remaining == 0 {
-            out.push(ForetoldAllocation {
-                counts: counts.clone(),
-                ways,
-            });
+            out.push((counts.clone(), ways));
         }
         return;
     };
@@ -1047,7 +1122,7 @@ fn enumerate_foretold(
         if count > 0 {
             counts.insert(name.clone(), count);
         }
-        enumerate_foretold(
+        enumerate_names(
             rest,
             remaining - count,
             ways * crate::possible_worlds::binom(*available, count),

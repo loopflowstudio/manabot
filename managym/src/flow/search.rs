@@ -123,7 +123,8 @@ impl Game {
     ///   only the remaining order is shuffled, for both players.
     ///
     /// - the opponent's face-down foretold slots are filled from the same
-    ///   unseen pool's first foretell-bearing cards, as possible-world
+    ///   unseen pool's first foretell-bearing cards, and their hidden
+    ///   manifests from a uniform draw of the rest, as possible-world
     ///   materialization fills them.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
@@ -201,13 +202,17 @@ impl Game {
                     residual.sort_unstable_by_key(|object| object.slot());
                 }
                 residual.shuffle(&mut rng);
-                assert!(self.fill_manifest_slots(
+                let manifests = self
+                    .draw_manifests(opponent, perspective, &mut residual, &mut rng)
+                    .expect("hidden slots draw from their own pool");
+                self.fill_manifest_slots(
                     opponent,
                     perspective,
+                    manifests,
                     &mut residual,
                     &mut known,
-                    &mut reserved
-                ));
+                    &mut reserved,
+                );
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
                     "foretold cards are in their own pool"

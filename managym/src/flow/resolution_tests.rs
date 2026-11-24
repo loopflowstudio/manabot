@@ -4849,3 +4849,168 @@ fn departed_copy_source_keeps_catalog_faces_only_on_a_transforming_card() {
     assert_eq!(token_after(false), "Cecil, Redeemed Paladin");
     assert_eq!(token_after(true), "Cecil, Dark Knight");
 }
+
+/// A root whose `player` has moved every card to the graveyard, so tests can
+/// place exactly the hidden cards they need.
+fn emptied_root(player: PlayerId) -> (Game, Vec<ObjectId>) {
+    let (mut root, _, _) = fixture(player);
+    let objects: Vec<_> = root
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.owner == player)
+        .map(|(id, _)| id)
+        .collect();
+    for object in &objects {
+        root.move_object(*object, ZoneType::Graveyard);
+    }
+    let objects = objects
+        .iter()
+        .map(|object| root.state.now(*object))
+        .collect();
+    (root, objects)
+}
+
+fn named(root: &Game, objects: &[ObjectId], name: &str, count: usize) -> Vec<ObjectId> {
+    objects
+        .iter()
+        .copied()
+        .filter(|object| root.state[*object].name == name)
+        .take(count)
+        .collect()
+}
+
+/// The printing behind `owner`'s one face-down manifest.
+fn manifest_printing(game: &Game, owner: PlayerId) -> String {
+    let mut printings = game
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .filter_map(|permanent| {
+            let object = &game.state[permanent.object];
+            (object.is_face_down() && object.owner == owner)
+                .then(|| object.retained_base().1.name.clone())
+        });
+    let printing = printings.next().expect("one manifest");
+    assert!(printings.next().is_none());
+    printing
+}
+
+/// A pending library selection holds one creature and still needs another,
+/// so both of the opponent's creatures must stay in their library. The space
+/// counts only manifest fills that leave them there, and every sampler
+/// realizes such a world on its first draw.
+#[test]
+fn hidden_selection_manifest_fill_leaves_the_committed_library_cards() {
+    use crate::{
+        flow::decision::{Decision, EffectFrame},
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, objects) = emptied_root(player);
+    let ogres = named(&root, &objects, "Gray Ogre", 2);
+    let mountains = named(&root, &objects, "Mountain", 2);
+    for object in ogres.iter().chain(&mountains) {
+        root.move_object(*object, ZoneType::Library);
+    }
+    root.state.players[player.0].known_library.forget_order();
+    let library = root.state.now(mountains[0]);
+    root.manifest(library, player);
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+            min: 2,
+            max: EffectValue::Fixed(2),
+            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            if_declined: vec![],
+        }],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let ogre = root.state.now(ogres[0]);
+    checked_command(
+        &mut root,
+        Action::SelectCard {
+            player,
+            object: ogre,
+        },
+    );
+
+    let space = PossibleWorldSpace::for_viewer(&root, viewer);
+    assert_eq!(space.worlds().len(), 1);
+    // Either Mountain may back the manifest; neither Ogre can.
+    assert_eq!(space.total_weight(), 2);
+    for seed in 0..8 {
+        let exact = space
+            .materialize_index(&root, 0, seed, MaterializeMode::RefreshOpponentCommitment)
+            .expect("a positive-weight world materializes on the first draw");
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, seed).unwrap();
+        for branch in [exact, sampled] {
+            assert_eq!(manifest_printing(&branch, player), "Mountain");
+            let Decision::SelectCards { selected, .. } =
+                &branch.state.suspended_decision.as_ref().unwrap().decision
+            else {
+                panic!("selection remains pending");
+            };
+            assert_eq!(selected.len(), 1);
+            assert_eq!(branch.state[selected[0]].name, "Gray Ogre");
+            assert!(branch
+                .state
+                .zones
+                .contains(selected[0], ZoneType::Library, player));
+        }
+    }
+}
+
+/// With one foretold slot over two foretell cards and one manifest, the
+/// manifest is a uniform draw from the cards foretell left: the Ogre backs it
+/// half the time, never the two thirds a shared shuffled prefix gives it.
+#[test]
+fn foretold_and_manifest_slots_fill_without_prefix_bias() {
+    use crate::{
+        flow::cast_permission::ExileCastGrant,
+        state::{card::StaticAbility, mana::ManaCost},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, objects) = emptied_root(player);
+    let bolts = named(&root, &objects, "Lightning Bolt", 2);
+    for (bolt, zone) in bolts.iter().zip([ZoneType::Exile, ZoneType::Hand]) {
+        root.state[*bolt]
+            .statics
+            .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
+        root.move_object(*bolt, zone);
+    }
+    let foretold = root.state.now(bolts[0]);
+    let foretold = root.state.live(foretold).unwrap();
+    root.state
+        .cast_permissions
+        .exile_grants
+        .push(ExileCastGrant {
+            foretold: true,
+            ..ExileCastGrant::new(foretold, player)
+        });
+    let ogre = named(&root, &objects, "Gray Ogre", 1)[0];
+    let ogre = root.move_object(ogre, ZoneType::Library);
+    root.manifest(ogre, player);
+    root.state.players[player.0].known_library.forget_order();
+    root.state.players[player.0].known_hand.clear();
+
+    let samples = 400;
+    let ogre_manifests = (0..samples)
+        .filter(|seed| {
+            let mut sampled = root.clone();
+            sampled.determinize(viewer, *seed).unwrap();
+            assert_eq!(sampled.foretold_cards(player).count(), 1);
+            manifest_printing(&sampled, player) == "Gray Ogre"
+        })
+        .count();
+    let share = ogre_manifests as f64 / samples as f64;
+    assert!((share - 0.5).abs() < 0.08, "Ogre manifest share {share}");
+}
