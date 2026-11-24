@@ -80,7 +80,7 @@ Four directed debug fixtures passed again: Panda snapshot and Command replay, li
 
 The review at `11f107c0` found “Its pending activation still omits that public value.” The correction at `f9a251a9` reads power through `permanent_power_or_lki` for a pending activation with a direct source-power damage instruction. The M21 fixture checks the value after source reentry. In `tests/verify/test_immolator_source_power.py`, base and prowess activations showed two and three to both viewers in the native observation, JSON round trip, v11 tensor and Academy stack label. The acting viewer’s history-free text showed the same value. Craw Wurm took two and three damage respectively. The fixture at `e2e8318d` leaves one untapped Mountain for either activation.
 
-The observation matches the damage expression to decide when to expose power. If another pending instruction needs that value, move recognition of the expression into the shared query vocabulary before extending the stack projection. The exact-source lookup already owns the value.
+The initial projection matched a direct damage expression. The unified query slice below replaced that branch with the shared recursive program reader.
 
 Behavior review at `64eaa87c` reproduced both M21 damage outcomes after reentry and both history-free Python projection cases. The Panda engine snapshot test also passed with both target outcomes. The pending-power defect is closed. Payment rules and authored tokens did not change in this correction. Integrated stale-Command and hidden-card permutation checks remain open.
 
@@ -161,7 +161,7 @@ At `7ada41e6`, the graveyard move in `flow/zones.rs`, delayed death watchers and
 
 Restoring the native game clone after Hunter's sacrifice choice reproduced the end-step hash. Both viewers saw Prowler's pending ability only after sacrifice, and only that branch added a counter. The next turn started with the fact clear. Paying ward let Lightning Strike kill Prowler and declining kept it alive.
 
-The v11 fact joins the active player row for either viewer. The turn owns one boolean. The native restore fixture at `556b0dc2` compares end-step hashes for sacrifice and decline. Command replay and Academy parity remain integrated checks.
+The initial v11 projection used a scalar fact on the active player row. The unified `player_turn_state.creatures_died` column now carries each seat’s deaths. The native restore fixture at `556b0dc2` compares end-step hashes for sacrifice and decline. Command replay and Academy parity remain integrated checks.
 
 Behavior review at `9a119c98`: five focused Rust tests passed (both Hunter fixtures, Prowler ward, copied Island death versus exile, and default catalog token spans). Three Python controls passed for the public death fact in text, tensors and serialized observations, hidden-hand permutations, and manual mana Commands with stale rejection. Prowler uses the shared controller end-step condition, counter effect and ward payment. Both ward choices reached their expected outcomes. The Prowler working slice is satisfied. The restored branches exercised native clones; end-to-end Command replay and Academy parity remain open.
 
@@ -182,7 +182,7 @@ Behavior review at `bca1f2d9` reproduced the native Blast fixture (1 passed) and
 
 The native BLB fixture casts Gray Ogre for three, spends two on a Food activation, then casts Tolarian Terror for two with five instant cards in the graveyard. Both Duos present get one +1/+1 trigger. Restoring with the triggers pending and countering the Terror gives the same two pumps as letting it resolve. Casting a third Duo brings the total to seven. A subsequent full-price Hill Giant brings it to eleven and leaves the late Duo at 2/2. Both players’ totals and the pumps reset on the following turn.
 
-`commit_spell_payment` binds the caster and the before/after totals from the spell’s retained receipt. Cast listeners use that caster directly. Native turn history participates in canonical hash v24. V11 fact 19 joins each positive spend to the payer’s player row. The card uses `TriggerCondition::Expend(4)`, the existing Food token, and the existing temporary pump. Raccoon is classified in the native subtype table.
+`commit_spell_payment` binds the caster and the before/after totals from the spell’s retained receipt. Cast listeners use that caster directly. Native turn history participates in canonical hash v24. The initial v11 projection used fact 19. The unified `player_turn_state.mana_spent_casting` column now carries the payer’s total. The card uses `TriggerCondition::Expend(4)`, the existing Food token, and the existing temporary pump. Raccoon is classified in the native subtype table.
 
 The directed native crossing and the trigger learning-token check passed. After rebuilding the CPython 3.13 extension, the named fact-layout check and the live two-viewer text/tensor test passed. The latter cast Serra Angel for five with a Duo in play, then passed priority. Each chooser saw five mana spent in the text and one fact joined to the caster, first as self and then as opponent.
 
@@ -196,80 +196,81 @@ Exact battlefield departure records retain altered copiable values for copied or
 
 **Behavior review at `de5a9f62`.** All six debug `cards` fixtures selected by `second_draw` passed, including the FDN interaction above and five existing TLA controls. The draw commit in `flow/zones.rs` supplies the ordinal. Trigger matching checks that ordinal and the drawer against the source controller. Placement offers one ChooseTrigger per remaining candidate in the controller’s group. The Lunar Insight text/v11 fixture passed through that ordering decision. The nine `reaches_the_learning_tokens` observability controls passed for the shared expression vocabulary.
 
-The stale-object search fork control and Academy’s original Command import and stale-rejection control passed. These are shared boundary checks. The departed Clone fixture restores an in-memory clone of the pending game. Recorded Watch playback of this interaction remains an integrated check. Payment behavior was outside this diff. The second-draw slice meets its working obligations. Continue the working phase with Linden and Chart a Course before decomposition or performance review.
+The stale-object search fork control and Academy’s original Command import and stale-rejection control passed. These are shared boundary checks. The departed Clone fixture restores an in-memory clone of the pending game. Recorded Watch playback of this interaction remains an integrated check. Payment behavior was outside this diff. The second-draw slice meets its working obligations. The shared declaration work followed in the next slice.
 
-## Unified architecture (concept review target)
+## Implemented slice · Unified queries and attack declaration
 
-Before authoring the remaining 15 mechanic batches (68 primary FDN rows plus cross-set witnesses), unify the event-history and contextual-query layers so every subsequent batch composes cleanly without adding scalar `FactKind` churn, card-shaped query enums, or ad-hoc observation branches. See `scratch/concept-review.html` for the full alignment matrix and counterexamples.
+The four query changes and all twelve attack/raid rows are implemented at
+`5be4b4d5ba`, `8498836e03` and `c9bdc388ba`. Linden and Chart a Course were
+already authored. MTG-422 is integrated: match-state hash v26 reconciles both
+changes, and v11 permanent column 51 remains `entered_this_turn`. The
+opening-hand conformance case and suspended Clone hash witness were refreshed.
 
-### Prerequisite: sync with `main` (MTG-422)
+- **Turn history.** `flow/turn.rs::PlayerTurnHistory` owns closed per-seat
+  counters. The v11 `player_turn_state` suffix replaced scalar fact kinds
+  for life gains, creature deaths and casting spend. Counts and amounts
+  have separate columns, deaths and departures follow the departing
+  controller, and turn-wide predicates read both seats. Sparse object and
+  frame facts retain their own rows. `TriggeringDamage` became kind 16
+  before release. Legacy v9/v10 layouts keep their eight-column prefix.
+- **Declaration and placement.** `flow/tick.rs` commits raid and
+  exact-object attack ordinals from the declared attackers. Creatures that
+  entered attacking stay in combat without contributing to that suffix.
+  `flow/triggers.rs` shares occurrence emission for declared attackers and
+  combat hits. The doubler fixture changed from the earlier failure of
+  three triggers to four, with two per attacker. First-attack conditions
+  read `attacks_this_turn`, which records declarations made while an
+  ability was absent. Printed once-per-turn triggers and resolutions key
+  by object, printed face and ability index. `AttackSize::AtLeast` supplies
+  count thresholds.
+- **Common readers.** Counted mana outputs and stack effects use
+  `Game::select` through `effect_value`. `Condition::Compare` reads shared
+  amounts. Targeted spell spend and stack mana value are captured in the
+  resolution targets, so the comparison survives the counter instruction.
+  The discounted and full-price Tolarian Terror fixture verifies this
+  primitive. The authored Unravel interaction is still open.
+- **Stack and target authority.** `agent/observation.rs` uses
+  `Effect::reads_source_power` for activated and triggered programs and
+  exposes each spell’s actual `mana_spent`. Activated target selection now
+  excludes the source when the clause says “another”. Deserter’s Disciple,
+  North Pole Patrol and Earth Kingdom Protectors needed explicit
+  `TargetRequirement::another` to preserve their printed options.
 
-Sibling Task MTG-422 (`d12eb496b3`, opening hands, terminal outcomes, and `permanent::ENTERED_THIS_TURN` at v11 permanent column 51) merged to `main`. Run `lf sync main` first before starting the next implementation pass, place MTG-418’s appended `permanent` columns after `ENTERED_THIS_TURN`, and reconcile `MATCH_STATE_HASH_VERSION` once.
+The FDN ledger links all twelve definitions to the shared
+`managym/cards/tests/cards/fdn.rs::attack_batch_*` fixtures. The 0/2/3
+declaration fixture covers Armasaur Guide, Skyship Buccaneer, Midnight
+Snack, Battlesong Berserker, Goblin Boarders, Gorehorn Raider, Searslicer
+Goblin, Ancestor Dragon, Jazal Goldmane and Storm Fleet Spy. Separate cases
+cover Alesha’s departed-source target bound and Aurelia’s ability loss,
+blink, entered-attacking case, restored partial declaration and next-turn
+reset. The earlier Linden/Chart forks verified both completing and
+declining the rest of a declaration, early raid remaining false, and an
+empty extra combat preserving committed raid. The existing firebending
+and native Command controls passed during that review.
 
-### Choices made for review
+The debug native workspace run at the initial unification passed 1,551
+tests after the three TLA target clauses, Alesha’s Minotaur subtype and
+the refreshed witnesses were in place. Compression at `c9bdc388ba` passed
+34 focused native and 12 focused Python checks, including both bundled
+pilot replays. The optional frontier checkpoint was unset. The
+`PlayerTurnHistory` Python round trip retained all 13 fields without
+changing the live game. The two-viewer Midnight Snack checks showed
+two gains totaling five. In the constructed Alesha game, an end-step
+trigger returned Immolator after Lightning Bolt killed Alesha. Both
+viewers saw source power 3 in the Academy label and history-free decision
+text, and 0.3 in the v11 stack row. The native cases and Python text
+fixtures are in `cards/tests/cards/fdn.rs` and
+`tests/semantic/test_text_observation.py`.
 
-1. **One `PlayerTurnHistory` owner and fixed `[2, D]` `player_turn_state` v11 projection (replacing branch-local scalar `FactKind`s 16/18/19).**
-   - *Chosen:* Store every closed per-turn event accumulator on `TurnState.history: [PlayerTurnHistory; 2]` (`attacked`, `permanents_sacrificed`, `land_entered`, `cards_drawn`, `bent`, `life_lost`, `life_gains`, `life_gained`, `mana_spent_casting`, `creatures_died`, `permanents_left`, `nonland_permanents_left`, `warped_this_turn`). Delete the separate `TurnState.creature_died_this_turn` boolean. Recording `creatures_died`, `permanents_left` and `nonland_permanents_left` per departing controller seat answers turn-wide Morbid and Void by summing both seats and per-player Disappear (Michelangelo) by reading the controller’s seat.
-   - *Projection:* Append the new scalar columns (`life_gains`, `life_gained`, `mana_spent_casting`, `creatures_died`, `permanents_left`, `nonland_permanents_left`, `warped_this_turn`) to `player_turn_state` for `InputLayout::OneToken` (v11) only, via a `turn_state_columns(layout)` helper mirroring `permanent_columns` and `action_columns` (`InputLayout::Legacy` stays frozen at its 8-column prefix; pinned pilots slice their saved prefix in `manabot/policy/prepare.py`). Delete the unmerged branch-local scalar `FactKind` variants (`LifeGains`, `CreatureDied`, `ManaSpentCasting`). Keep `facts` strictly for sparse per-object and per-frame records (`AbilityResolution`, `TriggeringDamage`, counters, effects, copy exceptions).
-   - *Passed over & why:* Continuing to add one `FactKind` per scalar turn counter. That consumes scarce `facts` sequence slots (quadratic attention cost and typed capacity overflow), widens `fact::KIND` one-hots, mixes unscaled and `/10` floats in `ValueKind::Tagged`, and forces turn-wide facts onto a dummy `active_player_id` join. Fixed `[2, D]` `player_turn_state` costs 0 extra tokens and gives every column its native `ValueKind` reading.
-
-2. **Unified per-attacker trigger emission, threshold `AttackSize`, and exact-object `attacks_this_turn`.**
-   - *Chosen:*
-     - Emit one `FiredTrigger` per matching declared attacker for `TriggerCondition::Attacks` with `Per::Object` (carrying that attacker as the trigger’s `context`, matching `DealsCombatDamage`) and multiply by `copies = 1 + additional_trigger_times(source)` instead of adding `matching + additional_trigger_times(source)`.
-     - Generalize `AttackSize` to `Any | Alone | AtLeast(u8)` (migrating `WithAnother` to `AtLeast(2)` with `token_renames.rs` compatibility; retain the alias only if a pinned pilot hash requires distinct token bytes).
-     - Add `TurnState.attacks_this_turn: Vec<(ObjectId, u32)>` (sorted by exact `ObjectId`, like `DamageHistory`), incremented when `AttackersDeclared` commits, cleared at turn advance, included in canonical hash, and derived into `PermanentData.attacked_this_turn` + one v11 `permanent::ATTACKED_THIS_TURN` flag column (no duplicate mutable field on `Permanent`).
-     - Add `nth: Option<u32>` to `TriggerCondition::Attacks` (matching `Casts`, `Draws`, `GainsLife`) so Aurelia’s “attacks for the first time each turn” reads exact-object declared attack ordinals rather than `OnceEachTurn` (handling ability loss in Combat 1 + Combat 2, blink reentry, and CR 508.4 entered-attacking creatures).
-     - Key `TurnState.ability_triggers_this_turn` by `(ObjectId, CardDefId, usize)` to match `ability_resolutions_this_turn` across face changes.
-   - *Passed over & why:* Reusing `OnceEachTurn` for Aurelia (misfires if abilities were lost during Combat 1 and leaves no observable `attacked_this_turn` flag) and leaving `Attacks` on `repeat_n` (drops `ObjectSelector::Triggering` with 2+ attackers and miscounts trigger doublers).
-
-3. **Composable counting and numeric comparison across spells, triggers, activations, and mana abilities.**
-   - *Chosen:*
-     - Evaluate controller-only amounts through `effect_value` with a controller-bound frame. `Game::select` then reads board objects for mana abilities and stack resolutions alike. Author all new permanent-counting cards (Ancestor Dragon, Jazal Goldmane, Hare Apparent, Brass’s Bounty, Krenko, Inspiring Call, etc.) through `ObjectSelector::each(...).count()` rather than adding new `EffectValue` counting variants.
-     - Add one `Condition::Compare { left: Box<EffectValue>, op: CompareOp, right: Box<EffectValue> }` (`Eq | Ge | Le | Lt | Gt`) plus the core value atoms (`EffectValue::LifeTotal(PlayerSelector)`, `LifeGainedThisTurn(PlayerSelector)`, `LifeLostThisTurn(PlayerSelector)`, `SpellManaSpent(ObjectSelector)`, `SpellManaValue(ObjectSelector)`), with `reads_source()`, `reads_mana_pools()`, and `is_resolution_only()` delegating recursively to `EffectValue`.
-   - *Passed over & why:* Minting single-card `Condition` and `EffectValue` variants (`AttackingCreatures`, `TargetPlayerLifeEquals`, `LifeGainedAtLeast`, `SpellSpentLessThanManaValue`), which duplicates dispatch across `statics.rs`, `resolution.rs`, `ability_description.rs`, `tokens.rs`, and `observability.rs`.
-
-4. **Query-driven stack projection (`reads_source_power` and `stack::MANA_SPENT`).**
-   - *Chosen:* Replace the Immolator-only `ActivatedAbility` + `DealDamage` check in `managym/src/agent/observation.rs` with recursive `Effect::reads_source_power()` + `TargetRequirement::reads_source_power()` applied to both `StackObject::ActivatedAbility` and `StackObject::TriggeredAbility` (covering Immolator, Alesha, and Ashroot Animist through one rule). Expose `StackObjectData.mana_spent` from `SpellOnStack.spent.total()` and append `stack::MANA_SPENT` for v11 (covering Unravel and discounted-spell visibility).
-   - *Passed over & why:* Adding per-card AST pattern matches in `observation.rs`.
-
-### Next implementation slice (unification + 12-card Attack Declaration & Raid batch)
-
-Start with `lf sync main`, land the four unifications above, and author and verify all **12 remaining Attack Declaration & Raid cards** in one pass:
-
-- **Armasaur Guide** (`AttackSize::AtLeast(3)`, `Per::Batch`)
-- **Skyship Buccaneer** (raid ETB draw)
-- **Midnight Snack** (raid end-step Food + sacrifice losing `EffectValue::LifeGainedThisTurn(PlayerSelector::You)`)
-- **Battlesong Berserker** (`Attacks { you_control(creature), Per::Batch, Any }` targeting any creature you control, including itself for +1/+0 and menace)
-- **Goblin Boarders** (`ReplacementEffect::EntersWithPlusOneCounters { count: 1, condition: Some(Condition::AttackedThisTurn) }`)
-- **Gorehorn Raider** (raid ETB 2 damage to any target)
-- **Searslicer Goblin** (raid end-step intervening-if creating 1/1 red Goblin token via `token_catalog()`)
-- **Alesha, Who Laughs at Fate** (first strike + a +1/+1 counter when Alesha attacks + raid end-step intervening-if graveyard reanimation within source power, with departed source power projected on the stack)
-- **Ancestor Dragon** (flying + batch attack trigger gaining `ObjectSelector::each(Scope::Battlefield, attacking creature).count()`)
-- **Jazal Goldmane** (first strike + `{3}{W}{W}` pumping attacking creatures you control by `ObjectSelector::each(Scope::Battlefield, attacking creature).count()`)
-- **Storm Fleet Spy** (raid ETB draw)
-- **Aurelia, the Warleader** (flying, vigilance, haste + `Attacks { subject: This, per: Per::Object, attackers: Any, nth: Some(1) }` untapping all creatures you control and adding an additional combat phase)
-
-Directed verification for this slice must exercise:
-1. **Aurelia counterexamples:** ability loss in Combat 1 then regained in Combat 2 (no second trigger); blink reentry with haste in Combat 2 (triggers again); creature entering combat already attacking in Combat 1 then declared in Combat 2 (triggers); snapshot/fork during partial DeclareAttackers (`attacked_this_turn == false` until commit); extra combat preserving raid and next turn resetting both `attacked` and `attacks_this_turn`.
-2. **Batch trigger multiplicity & identity:** two declared attackers with a trigger doubler emit `2 × 2 = 4` triggers with distinct `ObjectSelector::Triggering` contexts (not `2 + 1 = 3` with `None`).
-3. **Combined attack/raid + lifegain total:** 0 attackers (negative control for all raid triggers, Goblin Boarders entry, and Armasaur Guide), 2 attackers (triggers Battlesong/Ancestor/Jazal/raid, not Armasaur Guide), 3 attackers (triggers Armasaur Guide), two separate life gains of 3 and 2 (verifying `life_gains == 2` and `life_gained == 5` in Midnight Snack and both viewers’ v11 `player_turn_state` + LLM text), and Alesha pending trigger after Alesha leaves the battlefield (verifying `stack::SOURCE_POWER`, text, and Academy stack description).
-4. **Shared board selection:** a mana ability using `ObjectSelector::each_you_control(...).count()` produces the live count rather than 0, and bundled v9/v11 pinned pilots still pass with the appended v11 `player_turn_state` / `permanent` / `stack` columns.
-
-**Unification and attack/raid batch · implemented.** Synced onto main `dca0a901b6` (hash v26, `ENTERED_THIS_TURN` kept at permanent column 51). All twelve rows are authored (FDN in `fdn.rs`; Ancestor Dragon `gs1.rs`, Jazal Goldmane `c14.rs`, Storm Fleet Spy `xln.rs`, Aurelia `gtc.rs`) with the eight `attack_batch_*` fixtures in `managym/cards/tests/cards/fdn.rs`; their ledger rows are recorded. The full debug native workspace run passed (1551 tests) after three repairs this pass taught:
-- Activated targets now go through `targets_for_source`, which excludes the source only for `another` clauses (main excluded an activated ability's own permanent unconditionally, which is wrong for "target creature"). Deserter's Disciple, North Pole Patrol and Earth Kingdom Protectors print "another target" and now author `TargetRequirement::another` in a `TargetClause`.
-- Alesha's Minotaur subtype needed its CR 205.3 row.
-- The semantic-kernel `evidence-opening-v1.json` was re-recorded under hash v26 and the grown catalog; the Clone suspended-entry hash witness in `lea.rs` was re-pinned for the same reason.
-A dynamic mana output (`AddMana` with a counted amount) finalizes to one `ManaChoice`; trivial skipping removes it in play, and the constructed fixture takes it explicitly.
-
-After the CPython 3.13 rebuild, `tests/semantic/test_text_observation.py`, `tests/env/test_named_observation_layout.py`, `tests/verify/test_input_v10.py` and `tests/model/test_pinned_pilot.py` passed (v9/v11 pilots unchanged). Turn-history text now names creature deaths and departures in sentence form ("had 1 creature they controlled die"). `FactKind::TriggeringDamage` moved from 17 to 16 to close the gap the deleted branch-local `LifeGains` kind left; no merged pilot used either number.
-
-**Compression at `c9bdc388ba`.** The 34 focused native checks passed, including all eight `attack_batch_*` cases. Two Ogres attacking with a doubled per-creature listener each received two counters. The batch damage listener in Invasion Tactics drew once. The shared departure snapshot passed its serialized-byte control and Hunter’s simultaneous-death fixture. All twelve ledger rows link to their card definitions and fixtures. Ancestor Dragon’s evidence is the threshold and raid scenario.
-
-The rebuilt CPython 3.13 extension passed 12 focused Python checks, including both bundled pilot replays. The optional frontier checkpoint was unset. All 13 writable `PlayerTurnHistory` fields survived a Python constructor, assignment to a player observation and JSON round trip. A fresh observation still read the live game’s original history.
-
-In a constructed game, Heartfire Immolator targeted itself and was sacrificed. Alesha attacked, grew to power three and targeted Immolator at the end step. Lightning Bolt killed Alesha in response. Both seats saw “source power 3” on Academy’s pending stack label and in history-free decision text, and 0.3 in the v11 stack column. Resolving the trigger returned Immolator.
-
-The attack and raid batch is ready for behavior review. Recorded Watch playback of a partial declaration and the Engine Budget stay in integrated validation.
+The latest merge `074bc49a64` adds main’s shared Torch/MLX host admission
+and native extent measurement from `b9b09bc6d9`. The evidence above predates
+that merge. Check the history rows and saved v9/v11 prefixes on the merged
+preparation path with the next extension rebuild. Recorded Watch playback
+of partial declaration remains open. The heuristic’s block map still
+populates empty entries from `CombatAttackersDeclared`, so an unblocked
+creature already attacking before declaration is absent from that map.
+Exercise this case with a live attacker projection if the cohort makes it
+reachable; keep declaration events scoped to the declared attackers.
 
 ## Remaining mechanic batches
 
@@ -277,29 +278,64 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-**Attack declaration commit · implemented (`f31f360cbe`).** Linden and Chart a Course share the completed declaration. The combat list also contains creatures that entered attacking before the declaration step. Combat now remembers the length of that prefix during selection, including across a fork. Only the declared suffix emits attack triggers and sets the existing raid bit. The existing turn hash field and both viewer projections still read that bit. An intermediate replay fingerprint after the first yes can change because the old state reported raid early.
+The FDN ledger has 25 of 81 primary rows with definitions and native
+fixture evidence. The 56 pending primary rows each appear once below.
+Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
+witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
+witnesses. Daggers identify pending cost candidates whose full ledger
+obligation decides delivery. Keep the established cross-set and integration
+boundaries. Later batch order is provisional.
 
-Two native FDN fixtures passed. A fork after one yes preserved the native offer, chosen creature and tap state. Both viewers and their v11 player columns showed raid false until commitment. Completing with two white attackers put two Linden triggers on the stack. Countering one left one life gained. An empty extra combat preserved raid, Chart drew two after both creatures left, and the next turn reset raid. The opposite-seat fixture included a Soldier already attacking and a declared Gray Ogre. Only the declared white creature triggered Linden. Declining all declarations on that fork left raid false and Chart discarded after drawing. Continue with the unified architecture and twelve remaining attack and raid rows above.
+### Next slice · Power at attack, combat and resolution
 
-**Behavior review at `f31f360cbe`.** Both Linden/Chart fixtures and 58 other debug `cards` fixtures selected by `linden`, `attack`, `raid` and `firebend` passed, as did the lib `combat`/`attack`/`preview`/`heuristic` selection and `search_state_contract` plus `canonical_replay_tests`. The rules readings match CR 508.1/508.3a/508.4: only the declared suffix triggers Linden and sets raid, and an empty declaration leaves raid false even when a creature is already attacking. Granted firebending also reads `AttackersDeclared`, so it now excludes entered-attacking creatures, which is correct. `CombatAttackersDeclared` and Academy's `declared_attackers` preview narrow in the same way, and the README states this. Text, tensor and the native heuristic read the one `turn_history.attacked` bit. Structured offers and stale Commands use `attackers_to_declare` unchanged. The Linden and Chart ledger rows are updated. No payment, privacy or new token vocabulary is involved.
+Implement the seven primary rows and one cost candidate together using
+`Condition::Compare`, the existing selectors and layered characteristics.
+Use the current native flashback path for Bulk Up. If a specific printed
+obligation is blocked, record the missing dependency and complete the
+independent rows.
 
-Concrete findings, none of which block the working phase:
-1. `fdn.rs::linden_the_steadfast_queen` is unformatted. Its inline `text_box` string exceeds rustfmt's width, so `cargo fmt --check` silently skips the whole expression and returns 0. Required fix: bind `let text_box = ...;` as the guidelines require, then rerun `cargo fmt --all`.
-2. The native heuristic's `blocks` map (`agent/heuristic/mod.rs:265-273`) learns attackers from `CombatAttackersDeclared`. As a result, a creature that entered attacking during beginning of combat is not counted among its unblocked attackers or pump candidates. Only constructed fixtures reach this state today. If a pool card creates attackers before declaration, the heuristic should read live `attacking` permanents instead.
-3. Combat's canonical form gained `already_attacking` (nonzero only during selection), and `attacked` now commits later. Both changes land inside the branch's unreleased v25. The planned single reconciliation with main must still bump the version once.
-4. Linden's `Per::Object` trigger still goes through the additive `repeat_n` path. A doubler gives 2 + 1 rather than 2 × 2, as planned in unification choice 2. Linden's own predicate reads layered color only at the event, and no fixture changes a creature's color.
+- **Courageous Goblin and Ruby, Daring Tracker†** exercise the attack-time
+  threshold. In a paired fork, change power before declaration and after
+  the trigger is on the stack. The former changes whether the trigger
+  fires. The latter leaves the attack-time qualification intact. For Ruby,
+  branch the native red and green mana choices and verify the committed
+  output. `collect_occurrences` currently expands only top-level
+  `Attacks` and `DealsCombatDamage`. A wrapper that falls through to the
+  boolean matcher emits one event occurrence per copy and loses its member.
+  If the attack-time condition uses a wrapper, preserve per-attacker
+  matches, including context and doubling, through that same matcher.
+- **Nessian Hornbeetle and Surrak, the Hunt Caller** exercise intervening
+  conditions at both beginning-of-combat and resolution. Check the
+  threshold on each side of a buff or departure. The Hornbeetle’s own
+  power cannot satisfy its condition. Surrak reads total controlled
+  creature power and retains the complete legal haste target offer.
+- **Ashroot Animist and Halana and Alena, Partners** exercise source-power
+  amounts. From the same targeted trigger, change live power or remove
+  and return the source, then compare the resulting pump or counters and
+  remaining keywords. Check the public pending value in both native
+  views, v11, LLM text and Academy, and reject a Command using a stale
+  target identity. Keep one source-power program reader across Immolator,
+  Alesha and these effects.
+- **Bulk Up and Bite Down** exercise selected-target power. Change power
+  between announcement and resolution. Bulk Up captures the resulting
+  increment at resolution, and the graveyard cast uses the same effect.
+  Bite Down checks the casting player’s damage source and the opposing
+  target independently. Fork when each announced target leaves and
+  returns, and exercise the existing Felling Blow control.
 
-The working phase for this batch is satisfied. Later phases include the unified architecture, the twelve remaining attack/raid rows, recorded Watch/replay playback of a partial declaration, Python-built extension checks and the Engine Budget.
+Record source and fixture paths for the whole batch. Run the focused
+native card and learning-token checks, then rebuild CPython 3.13 and
+check the named observation layout, semantic text and bundled pinned
+pilots on the synced revision. A larger query refactor belongs with the
+counterexample that requires it.
 
-Each pending FDN primary row appears once below. A dagger marks a cost-primary candidate for the existing newly-expressible-cost review. Its complete ledger obligation decides whether it can ship. The cross-set witnesses are named alongside their mechanic. Implement each batch as one cohesive pass using the unified architecture above, record a specific missing dependency for any blocked row, and review the batch together. The order of later batches is provisional.
+### Later slices
 
-- **Attack declaration and raid** — Armasaur Guide; Skyship Buccaneer; Midnight Snack; Battlesong Berserker; Goblin Boarders; Gorehorn Raider; Searslicer Goblin; Alesha, Who Laughs at Fate; Ancestor Dragon; Jazal Goldmane; Storm Fleet Spy; Aurelia, the Warleader.
-- **Power at attack, combat or resolution** — Bulk Up; Courageous Goblin; Ashroot Animist; Bite Down; Nessian Hornbeetle; Ruby, Daring Tracker†; Halana and Alena, Partners; Surrak, the Hunt Caller.
 - **Life events, totals and payment thresholds** — Vanguard Seraph; Bloodthirsty Conqueror; Stromkirk Bloodthief; Hidetsugu's Second Rite; Sanguine Indulgence†; Ayli, Eternal Pilgrim†; Exemplar of Light; Bloodtithe Collector.
 - **Draw-step and individual draw listeners** — Scrawling Crawler; Dictate of Kruphix.
 - **Creature deaths and turn death history** — Tragic Banshee; Vengeful Bloodwitch; Slumbering Cerberus; Needletooth Pack; Wardens of the Cycle; Midnight Reaper; Garna, Bloodfist of Keld; Kalastria Highborn†; Massacre Wurm.
 - **Filtered casts, targets and spell attributes** — Archmage of Runes†; Brineborn Cutthroat; Painful Quandary†; Mindsparker; Gnarlback Rhino; Mold Adder; Ovika, Enigma Goliath†; Ramos, Dragon Engine†; Firespitter Whelp.
-- **Stack payment and counter results** — An Offer You Can't Refuse; Unravel (EOE, discounted and full-price targets after an intervening cast).
+- **Stack payment and counter results** — An Offer You Can't Refuse; Unravel (EOE, discounted and full-price targets after an intervening cast, with announced X included in stack mana value).
 - **Damage recipients, amounts and results** — Goblin Negotiation; Quilled Greatwurm†; Koma, World-Eater†; Niv-Mizzet, Visionary; Lathril, Blade of the Elves†; Gateway Sneak; Trygon Predator.
 - **Count or filter live permanents** — Hare Apparent; Brass's Bounty; Krenko, Mob Boss; Dwynen's Elite; Elvish Archdruid†; Inspiring Call; Ingenious Leonin; Leonin Vanguard; Volley Veteran; Archway Angel; Dragonmaster Outcast; Cryptic Caves†.
 - **Graveyard thresholds, counts and characteristic definitions** — Kiora, the Rising Tide; Crypt Feaster; Revenge of the Rats; Consuming Aberration; Enigma Drake; Crusader of Odric.
@@ -310,30 +346,35 @@ Each pending FDN primary row appears once below. A dagger marks a cost-primary c
 - **Activation costs, thresholds, mana and tap events** — Zul Ashur, Lich Lord†; Fishing Pole†; Ravenous Amulet†; Wishclaw Talisman†; Immersturm Predator†; Savage Ventmaw†; Mazemind Tome; Three Tree Mascot†.
 - **Turn departures and alternative casts** — Plasma Bolt (EOE) and Michelangelo, Game Master (TMT). The interaction table below distinguishes each predicate and retains the warp integration check.
 
-Bakersbane Duo is complete as a cross-set witness. Its receipt-backed crossing supplies the integrated Unravel control. Keep the spell’s own receipt as the payment authority when implementing that batch. No additional spend accumulator is needed for Unravel.
+Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
-## Evidence to carry forward
+## Remaining shared work
 
-Thirteen of 81 primary rows have definitions and directed fixtures. Hunter, Hatcher, Prowler and Blast are cost-primary witnesses. The 68 remaining primary rows, integrated replay/privacy checks and Engine Budget measurements are open. Once the cohort stabilizes, refresh the semantic kernel, authored-match and Academy parity receipts in `conformance/README.md`. The historical v17 witnesses predate the catalog and hash changes.
-
-Earlier payment controls passed for Ally-only automatic spend, Animal Attendant manual spend, spend-rider receipts and mana floated during Uncle's Musings. Bakersbane Duo covers the Expend crossing and counter interaction. The combined Unravel interaction remains open.
-
-Checkpoint construction at `7334e781` uses the saved fact embedding width. The merge at `a41f9b08` brought in live game snapshots. Its existing restore checks live in `tests/env/test_game_snapshot.py`. The Fumigate, Exsanguinate, Collector and Connoisseur results above predate that merge. The Panda fixture exercises the merged snapshot path.
-
-## Remaining native work
-
-1. **Count at the event that establishes the fact.** `flow/event.rs::GameEvent`, `zones.rs::emit`, and the draw, combat, cast and resolution commit sites supply the facts. Keep all closed per-player turn accumulators inside `flow/turn.rs::PlayerTurnHistory` (`attacked`, `permanents_sacrificed`, `land_entered`, `cards_drawn`, `bent`, `life_lost`, `life_gains`, `life_gained`, `mana_spent_casting`, `creatures_died`, `permanents_left`, `nonland_permanents_left`, `warped_this_turn`) and exact-object turn history in `TurnState` (`damage_pairs`, `attacks_this_turn`, `ability_triggers_this_turn` keyed with `CardDefId`, `ability_resolutions_this_turn`). Retain the event-time ordinal or threshold crossing when a trigger will be matched later. Track occurrences and amounts separately. Attribute departures using pre-move controller and characteristics. Key damage relations by exact source and recipient. Reset turn facts for both players at the turn boundary, including extra turns. An extra combat uses the same turn. A game-scoped query retains its fact across turns and starts empty in a new game. The presentation ledger can be drained and optional policy memory can be disabled while these rules still work.
-2. **Use one vocabulary at each query site.** Extend `managym/state/src/ability.rs` (`EffectValue`, `Condition::Compare`, `AttackSize::AtLeast`, selectors and target clauses) and `predicate.rs::CardPredicate` with composable subjects, filters and aggregates. Route controller-only values through `effect_value` so `EffectValue::Objects` works identically in spells, triggers, activations, and mana abilities. Emit per-subject `FiredTrigger` occurrences for batch `Attacks` (matching `DealsCombatDamage`) and multiply by `1 + additional_trigger_times`. Bind controller, exact source, trigger object/player, announced target, paid contribution or scoped result in the calling context. Share characteristic lookup and comparison across `flow/resolution.rs`, `statics.rs`, `trigger.rs` and `triggers.rs`. Use live layered characteristics or the exact departed object's last-known information (LKI) as the instruction requires. Target offers evaluate at announcement and recheck on resolution. A snapshot or a committed result retains its original value.
-3. **Read actual payment.** `managym/state/src/payment.rs::PaymentReceipt` already owns mana units, colors, life and contributing objects. Read the receipt of the spell or ability identified by the question. Expend accumulates committed mana spent casting spells by that player. Mana floated, ability costs, rolled-back spends and uncast copies contribute zero. Unravel compares the target spell's own spend and stack mana value (including X) even after the counter instruction via `Condition::Compare`. Preserve manual source/pip/unit alternatives, automatic restricted-mana priority, native chooser and ordinary forced-action skipping.
-4. **Project the rules state once per viewer.** Include decision-relevant facts and pending result bindings in native observations, exact forks/search and the canonical state witness (`src/state/hash.rs`, with its hash-version contract). Project closed per-player turn accumulators as appended v11 `player_turn_state` columns (`InputLayout::OneToken` only; keep `InputLayout::Legacy` at its 8-column prefix), per-permanent turn flags on `permanent`, and stack context (`reads_source_power` across activated and triggered abilities, plus `mana_spent` on spells) on `stack`. Reserve sparse `facts` rows strictly for sparse per-object/per-frame records (`AbilityResolution`, `TriggeringDamage`, counters, effects, copy exceptions). Project through `agent/observation*.rs`, `src/python/*bindings.rs`, `manabot/semantic/text_observation.py`, and Academy's native decision projection. Extend `src/cards/tokens.rs`, `agent/ability_description.rs` and `record_vocabulary.rs` for new authored expressions and record kinds. Keep saved learning-token meanings, column prefixes, v9/v10 and frozen checkpoints intact. Use public object joins for visible relations. Keep hidden identities and raw storage IDs out of both text and tensors.
-
-### Delete when the shared reader takes over
-
-- Delete `TurnState.creature_died_this_turn` and the branch-local scalar `FactKind` variants (`LifeGains = 16`, `CreatureDied = 18`, `ManaSpentCasting = 19`) when `PlayerTurnHistory` + v11 `player_turn_state` suffix takes over (updating the existing Prowler/Collector/Duo tests to read `player_turn_state` instead of those deleted `FactKind` rows).
-- Delete the Immolator-only `StackObject::ActivatedAbility` + `DealDamage` AST match in `agent/observation.rs` when recursive `reads_source_power()` takes over for both activated and triggered abilities.
-- Delete `Attacks`’s `repeat_n` / additive `additional_trigger_times` branch when per-attacker `FiredTrigger` emission takes over.
-- Source power, power tapped to pay and the graveyard target bound share `permanent_power_or_lki`. Triggering power and target toughness still use a battlefield slot and its departure record. Preserve Combustion Man's existing reentry behavior and Sandbender Scavengers' graveyard-target bound. Replace the bespoke bound in `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared clause can express its full behavior. Preserve authored token bytes for existing definitions, including compatibility mappings in `token_renames.rs` if representation changes.
-- Preserve `PaymentReceipt`, ordered `EventResult` and the shared event ledger. New aggregates can extend those owners directly.
+- Replace `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared
+  target clause can express its complete bound, including announcement,
+  retarget and resolution reads. The special case still sits in
+  `flow/resolution.rs::target_meets_requirement`, and the stack projection
+  recognizes it by variant. Source power and power tapped to pay share
+  `permanent_power_or_lki`. Triggering power and target toughness use the
+  battlefield slot and its departure record. Preserve the Combustion Man,
+  Panda and Sandbender controls and existing learning-token meanings.
+- Keep occurrence and amount queries with their event, turn, game or
+  instruction owners. Extra combats keep turn history and extra turns reset
+  both seats. Payment queries read committed receipts. Floated mana,
+  ability costs, rolled-back spends and uncast copies contribute zero to
+  Expend. Preserve native chooser, complete targets, manual spend
+  alternatives and restricted-first auto payment. History remains
+  independent of presentation and optional decision memory.
+- Keep public object joins and pending history consistent through native
+  projections, Python, v11 and text as new queries land. Save prefixes and
+  frozen evidence, and keep hidden identities out of both projections.
+  The 81-row reconciliation, integrated replay and privacy checks, and
+  Engine Budget remain open. Six early ledger rows record native passes
+  without fixture pointers: Cat Collector, Venom Connoisseur, Predator
+  Ooze, Steel Hellkite, Fumigate and Exsanguinate. Their fixtures are
+  recorded above. Add links during ledger reconciliation. Once the cohort
+  stabilizes, refresh the current semantic-kernel, authored-match and
+  Academy parity receipts in `conformance/README.md`.
 
 ## Directed interactions for integrated validation
 

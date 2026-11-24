@@ -41,11 +41,4 @@ The Blast privacy fixture uses identical closed lists for both substitutions and
 
 Bakersbane Duo uses Tolarian Terror discounted by five graveyard spells for the three-to-five crossing. Counterspell supplies the countered branch while Unravel remains its own slice.
 
-For the next batch, use the three second-draw listeners together. Their shared crossing and three different outcomes can be checked from one draw sequence.
-
-The two-viewer text fixture uses Lunar Insight to draw three in one resolution. Wizard, Horde and Mystic supply its three distinct nonland mana values.
-Start the attack batch with Linden and Chart a Course to distinguish per-attacker triggers from raid across a partial declaration and restore.
-
-Sync onto main (dca0a901b6): state hash is now v26, combining main's v19 opening/victory fields with the branch's history fields. Main's `entered_this_turn` keeps permanent column 51; the two combat-damage flags move to 52 and 53. Incubation counters are appended after main's Poison and Plan. Two kinds of failure in the debug workspace run do not come from conflict resolution. First, four TLA activated-target tests (`disciple_*`, `north_pole_patrol_*`, `protectors_sacrifice_*`) fail because `activated_ability_targets` now calls `targets_for_source`, which leaves out the source only for `another` clauses. Main always left out an activated ability's own permanent. Second, the frozen semantic conformance cases (`evidence-opening-v1.json`) need re-recording under hash v26.
-
-The attack and raid fixtures stay together in `managym/cards/tests/cards/fdn.rs`, including the Aurelia cases. They share the declaration helpers and all twelve ledger rows link here.
+The power batch follows attack and raid because its four paired cases exercise the new query readers at declaration, trigger placement and resolution. Bulk Up can try the existing printed flashback path while the other seven rows proceed independently.
