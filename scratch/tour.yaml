@@ -1,4 +1,4 @@
-at: eb05d70f33ba01135e4f60b0eb49c21e2ba02ec2
+at: 25bf25d7c6a345e0fbc6eb1f2c9b035c34badaf7
 first:
   - path: docs/engine.md
     why: Follow the linked copy from entry through casting
@@ -15,5 +15,7 @@ first:
   - path: managym/src/agent/observation.rs
     why: Join each cast offer to its source
   - path: managym/src/flow/resolution_tests.rs
-    why: Select the surviving cast after either counter
+    why: Check both viewers, stale Commands and fixed-player access
+  - path: tests/env/test_game_snapshot.py
+    why: Replay the transferred Angel’s cast and payment
 hide: []
