@@ -51,3 +51,7 @@
 ## Pre-existing lib failure (2026-11-24)
 
 - `agent::observation_json::tests::historical_captures_move_battlefield_and_spell_rows_onto_their_records` fails at its last assertion (`!historical.agent_permanents.is_empty() && !historical.stack_objects.is_empty()`) on the base commit `25ba418a2a` too, before any of this slice's edits. It belongs to the merged observation/legacy-input work; left for gate.
+
+## Post-Batch 2 cohort concept review (2026-11-24)
+
+- `scratch/concept-review.html` updated after Batch 2 finish (`8dd3afd0`–`37026461`). Four new mismatches folded into Batch 3: (1) align `StackObjectData.chosen_mode` (`stacked_trigger_mode`), `StackObjectData.x` (`stack_object.x()`) and `ability_description.rs` (`chosen_trigger_effects`) with `ContinuationFrame.mode`; (2) carry `#[serde(skip)] combat: bool` on `GameEvent::DamageDealt` and add `TriggerCondition::SourceDealsCombatDamage` for Dropkick Bomber's combat-damage sacrifice (blockers or players, never noncombat damage); (3) retain correlated subtypes via `SubtypeCategory` in `Modification::SetTypes` when `subtypes` is empty so Imprisoned in the Moon keeps Forest/Island subtypes on enchanted lands (CR 205.1a/205.3d); (4) read layered `Characteristics` (Aura subtype + `abilities_lost`) in `sba.rs` attachment checks and classify `SetName` / `AllCreatureTypes` in `layers.rs` `Operation::writes()`.
