@@ -47,6 +47,13 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            copiable: (definition.copy.is_some() || definition.front_face().is_some()).then(|| {
+                std::sync::Arc::new(crate::state::game_object::ChangedCopiableValues {
+                    printed: definition.copiable_definition(),
+                    front: definition.front_face().cloned(),
+                    copy: definition.copy.clone(),
+                })
+            }),
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics

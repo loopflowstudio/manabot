@@ -842,13 +842,20 @@ fn felling_blow_reads_power_after_the_counter_and_keeps_both_targets_bound() {
 
 /// Cast a constructed one-mana instant targeting the top pending ability.
 fn counter_top_ability(s: &mut crate::support::game::Scenario) {
+    let target = s.game().state.stack_objects.last().unwrap().id();
+    counter_ability(s, target);
+}
+
+fn counter_ability(
+    s: &mut crate::support::game::Scenario,
+    target: managym::state::game_object::PublicId,
+) {
     use crate::support::{game::force_new_card_in_hand, play::cast_card};
     use managym::state::{
         ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
         game_object::Target,
     };
 
-    let target = s.game().state.stack_objects.last().unwrap().id();
     let instant = force_new_card_in_hand(s, 0, "Lightning Bolt");
     s.game_mut().state[instant].targeting = vec![TargetRequirement::one(TargetSpec::Ability)];
     s.game_mut().state[instant].spell_effects = vec![Effect::CounterAbility {
@@ -1178,4 +1185,136 @@ fn incinerating_blast_offers_discard_only_after_damaging_a_legal_target() {
         [first, second]
     );
     assert_eq!(state.zones.size(ZoneType::Library, caster), library);
+}
+
+#[test]
+fn second_draw_listeners_share_the_ordinal_and_resolve_independently() {
+    use crate::support::{
+        inspect::counters_of,
+        play::{cast, resolve_top, resolve_until_priority},
+    };
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        state::{game_object::Target, permanent::CounterKind::PlusOnePlusOne},
+    };
+
+    let mut s = five_color_setup(&[
+        "Clone",
+        "Homunculus Horde",
+        "Erudite Wizard",
+        "Mischievous Mystic",
+        "Lightning Bolt",
+    ]);
+    let original = s.force_permanent_on_battlefield(1, "Homunculus Horde");
+    let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    let clone = card_of(&s, permanent_of(&s, clone).unwrap());
+    let wizard = s.force_permanent_on_battlefield(0, "Erudite Wizard");
+    s.force_permanent_on_battlefield(0, "Mischievous Mystic");
+    s.game_mut().draw_cards(PlayerId(0), 3);
+    let ordinals: Vec<_> = s
+        .game()
+        .state
+        .observation_events
+        .iter()
+        .filter_map(|event| match event {
+            managym::flow::event::GameEvent::CardDrawn {
+                player: PlayerId(0),
+                nth_this_turn,
+            } => Some(*nth_this_turn),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ordinals, [1, 2, 3]);
+    s.advance_until(
+        |s| {
+            s.action_space().kind == ActionSpaceKind::Priority
+                && s.game().state.stack_objects.len() == 3
+        },
+        "expected three second-draw triggers".into(),
+    );
+    let root = s.game().clone();
+    for (departed, countered) in [(false, false), (true, false), (false, true)] {
+        *s.game_mut() = root.clone();
+        if departed {
+            move_card(&mut s, clone, ZoneType::Hand);
+            let pending = s.game().clone();
+            *s.game_mut() = pending;
+        }
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            let drawer = if viewer == PlayerId(0) {
+                &obs.agent
+            } else {
+                &obs.opponent
+            };
+            assert_eq!(drawer.turn_history.cards_drawn, 3);
+            assert!(obs
+                .opponent_cards
+                .iter()
+                .all(|card| card.zone != ZoneType::Hand));
+            for name in ["Erudite Wizard", "Homunculus Horde", "Mischievous Mystic"] {
+                assert_eq!(
+                    obs.stack_objects
+                        .iter()
+                        .filter(|entry| entry
+                            .description
+                            .as_deref()
+                            .is_some_and(|text| text.starts_with(name)))
+                        .count(),
+                    1
+                );
+            }
+        }
+        if countered {
+            let target = s
+                .game()
+                .state
+                .stack_objects
+                .iter()
+                .find(|entry| entry.source_object() == clone)
+                .unwrap()
+                .id();
+            counter_ability(&mut s, target);
+        }
+        settle(&mut s);
+        assert_eq!(counters_of(&s, wizard, PlusOnePlusOne), 1);
+        let faeries = s.battlefield_permanents_named(0, "Faerie");
+        assert_eq!(faeries.len(), 1);
+        let faerie = s.game().characteristics(faeries[0]);
+        assert!(faerie.keywords.has(Keyword::Flying));
+        assert_eq!(faerie.pt(), (1, 1));
+        let hordes = s.battlefield_permanents_named(0, "Homunculus Horde");
+        assert_eq!(
+            hordes
+                .iter()
+                .filter(|id| !s.game().state[card_of(&s, **id)].is_card())
+                .count(),
+            usize::from(!countered)
+        );
+        assert_eq!(
+            s.battlefield_permanents_named(1, "Homunculus Horde").len(),
+            1
+        );
+    }
+    let late = s.force_permanent_on_battlefield(0, "Erudite Wizard");
+    s.game_mut().draw_cards(PlayerId(0), 1);
+    s.game_mut().draw_cards(PlayerId(1), 2);
+    resolve_until_priority(&mut s);
+    assert_eq!(counters_of(&s, late, PlusOnePlusOne), 0);
+    assert_eq!(
+        s.battlefield_permanents_named(1, "Homunculus Horde").len(),
+        2
+    );
+    s.advance_to_active_step(1, StepKind::Main);
+    s.game_mut().draw_cards(PlayerId(0), 1);
+    resolve_until_priority(&mut s);
+    assert_eq!(counters_of(&s, late, PlusOnePlusOne), 0);
+    s.game_mut().draw_cards(PlayerId(0), 1);
+    resolve_until_priority(&mut s);
+    assert_eq!(counters_of(&s, late, PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, wizard, PlusOnePlusOne), 2);
 }

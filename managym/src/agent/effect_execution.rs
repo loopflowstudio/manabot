@@ -617,6 +617,7 @@ impl<'a> Projection<'a> {
             )
         });
         let ObjectLki {
+            copiable,
             transforms,
             inherited_from,
             granted_abilities,
@@ -637,6 +638,21 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if let Some(values) = copiable {
+            self.field(
+                "copy exceptions",
+                &values.copy.as_ref().map(|copy| &copy.exceptions),
+            );
+            if let Some((id, _)) = &values.front {
+                self.reference(
+                    "copy front face",
+                    VisibleReference {
+                        definition: Some(id.0),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
         if *was_creature {
             self.field("last known creature", &true);
         }

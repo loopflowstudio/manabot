@@ -42,3 +42,5 @@ The Blast privacy fixture uses identical closed lists for both substitutions and
 Bakersbane Duo uses Tolarian Terror discounted by five graveyard spells for the three-to-five crossing. Counterspell supplies the countered branch while Unravel remains its own slice.
 
 For the next batch, use the three second-draw listeners together. Their shared crossing and three different outcomes can be checked from one draw sequence.
+
+The two-viewer text fixture uses Lunar Insight to draw three in one resolution. Wizard, Horde and Mystic supply its three distinct nonland mana values.

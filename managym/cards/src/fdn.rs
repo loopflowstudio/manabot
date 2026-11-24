@@ -22,14 +22,17 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         cat_collector(),
         claws_out(),
         drake_hatcher(),
+        erudite_wizard(),
         felling_blow(),
         fiendish_panda(),
         high_society_hunter(),
+        homunculus_horde(),
         hungry_ghoul(),
         incinerating_blast(),
         kellan_planar_trailblazer(),
         luminous_rebuke(),
         lunar_insight(),
+        mischievous_mystic(),
         sire_of_seven_deaths(),
     ]
 }
@@ -531,6 +534,98 @@ fn incinerating_blast() -> CardDefinition {
                 Effect::discard_draw(1, 1),
             ],
             text_box: "Incinerating Blast deals 6 damage to target creature.\nYou may discard a card. If you do, draw a card.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn erudite_wizard() -> CardDefinition {
+    let text_box =
+        "Whenever you draw your second card each turn, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "fdn.erudite_wizard",
+        scryfall_id: "9273c417-0fcd-4273-b24e-afff76336d0c",
+        printed: PrintedCharacteristics {
+            name: "Erudite Wizard".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(3),
+
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn homunculus_horde() -> CardDefinition {
+    let text_box = "Whenever you draw your second card each turn, create a token that's a copy of this creature.";
+    CardDefinition {
+        key: "fdn.homunculus_horde",
+        scryfall_id: "470c4d03-340a-4e0e-a59f-f19d05497785",
+        printed: PrintedCharacteristics {
+            name: "Homunculus Horde".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Homunculus".into()],
+            power: Some(2),
+            toughness: Some(2),
+
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                intervening_if: None,
+                effects: vec![Effect::CreateTokenCopy {
+                    of: ObjectSelector::This,
+                    exceptions: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mischievous_mystic() -> CardDefinition {
+    let text_box = "Flying\nWhenever you draw your second card each turn, create a 1/1 blue Faerie creature token with flying.";
+    CardDefinition {
+        key: "fdn.mischievous_mystic",
+        scryfall_id: "20d89cec-528b-4b2a-87db-e11ce0000622",
+        printed: PrintedCharacteristics {
+            name: "Mischievous Mystic".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.faerie", 1)],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

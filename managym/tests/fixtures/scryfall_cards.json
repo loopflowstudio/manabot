@@ -1895,6 +1895,18 @@
       "B"
     ]
   },
+  "Homunculus Horde": {
+    "name": "Homunculus Horde",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Homunculus",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, create a token that's a copy of this creature.",
+    "colors": [
+      "U"
+    ]
+  },
   "Honest Work": {
     "name": "Honest Work",
     "mana_cost": "{U}",
@@ -2493,6 +2505,20 @@
     ],
     "oracle_text": "When this Equipment enters, destroy target permanent.\nEquipped creature gets +3/+3.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
     "colors": []
+  },
+  "Mischievous Mystic": {
+    "name": "Mischievous Mystic",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you draw your second card each turn, create a 1/1 blue Faerie creature token with flying.",
+    "colors": [
+      "U"
+    ]
   },
   "Misty Palms Oasis": {
     "name": "Misty Palms Oasis",
@@ -6678,6 +6704,18 @@
     "oracle_text": "As an additional cost to cast this spell, sacrifice a creature or pay {3}{B}.\nExile target creature or planeswalker.",
     "colors": [
       "B"
+    ]
+  },
+  "Erudite Wizard": {
+    "name": "Erudite Wizard",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, put a +1/+1 counter on this creature.",
+    "colors": [
+      "U"
     ]
   },
   "Evolving Wilds": {

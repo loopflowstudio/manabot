@@ -97,6 +97,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Gold", Artifact),
     ("Hero", Creature),
     ("Hippo", Creature),
+    ("Homunculus", Creature),
     ("Horse", Creature),
     ("Human", Creature),
     ("Hyena", Creature),

@@ -276,6 +276,14 @@ pub enum ObjectLookupError {
     WrongZone,
 }
 
+/// Copiable values changed by a copy effect or by turning a back face up.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ChangedCopiableValues {
+    pub printed: Arc<PrintedCharacteristics>,
+    pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
+    pub copy: Option<crate::effect::CopyEffect>,
+}
+
 /// Battlefield facts retained for a departed exact object.
 ///
 /// This deliberately stores identity and mutable facts, not a cloned card
@@ -283,6 +291,8 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copiable: Option<Arc<ChangedCopiableValues>>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]

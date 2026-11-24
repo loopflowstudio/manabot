@@ -27,6 +27,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dragon(),
         drake(),
         elf_warrior(),
+        faerie(),
         food(),
         human(),
         human_soldier(),
@@ -172,6 +173,18 @@ fn drake() -> TokenDefinition {
         PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Flying]),
             ..creature(base, 2, 2, [Color::Blue])
+        },
+    )
+}
+
+fn faerie() -> TokenDefinition {
+    let base = face("Faerie", [CardType::Creature], &["Faerie"], "Flying");
+    token(
+        "token.faerie",
+        "bcd82cb0-ff4b-4f4d-b3d0-3ac53883b099",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 1, 1, [Color::Blue])
         },
     )
 }
