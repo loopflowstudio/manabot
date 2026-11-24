@@ -21,6 +21,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         biblioplex_tomekeeper(),
         abigale_poet_laureate(),
         emeritus_of_abundance(),
+        emeritus_of_truce(),
         emeritus_of_conflict(),
         encouraging_aviator(),
         scathing_shadelock(),
@@ -1044,6 +1045,53 @@ fn biblioplex_tomekeeper() -> CardDefinition {
                     ],
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn emeritus_of_truce() -> CardDefinition {
+    CardDefinition {
+        key: "sos.emeritus_of_truce",
+        scryfall_id: "9869a753-5e41-4098-ab41-e75b4396ec50",
+        printed: PrintedCharacteristics {
+            name: "Emeritus of Truce".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Cleric".into()],
+            power: Some(3),
+            toughness: Some(3),
+            text_box: "When this creature enters, target player creates a 1/1 white and black Inkling creature token with flying. Then if an opponent controls more creatures than you, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
+                intervening_if: None,
+                effects: vec![
+                    Effect::ForPlayer {
+                        player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
+                        effects: vec![Effect::create_tokens("token.inkling", 1)],
+                    },
+                    Effect::If {
+                        condition: Condition::OpponentControlsMoreCreatures,
+                        then: vec![Effect::Prepare { what: ObjectSelector::This }],
+                        otherwise: vec![],
+                    },
+                ],
+            }],
+            inset: Some(InsetSpell::Prepared(PrintedCharacteristics {
+                name: "Swords to Plowshares".into(),
+                mana_cost: Some(ManaCost::parse("{W}")),
+                types: CardTypes::new([CardType::Instant]),
+                text_box: "Exile target creature. Its controller gains life equal to its power.".into(),
+                spell_effects: vec![
+                    Effect::exile(ObjectSelector::Target(TargetSpec::Creature)),
+                    Effect::ForPlayer {
+                        player: PlayerSelector::TargetController,
+                        effects: vec![Effect::gain_life(EffectValue::TargetPower)],
+                    },
+                ],
+                ..Default::default()
+            }.into())),
             ..Default::default()
         },
         ..Default::default()

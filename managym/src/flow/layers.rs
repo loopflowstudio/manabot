@@ -169,6 +169,7 @@ impl ReadSet {
                     self.fields |= NAME;
                 }
             }
+            Condition::OpponentControlsMoreCreatures => self.fields |= CARD_TYPES,
             Condition::BattlefieldAtLeast { predicate, .. }
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
@@ -851,6 +852,18 @@ impl<'a> Context<'a> {
     }
     fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
         match condition {
+            Condition::OpponentControlsMoreCreatures => {
+                let count = |player| {
+                    self.objects
+                        .iter()
+                        .filter(|(id, object)| {
+                            self.controller(**id) == player && object.view.is_creature()
+                        })
+                        .count()
+                };
+                let controller = self.controller(source);
+                count(PlayerId(1 - controller.0)) > count(controller)
+            }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 self.objects
                     .keys()

@@ -362,6 +362,9 @@ fn condition_text(condition: &Condition) -> String {
                 ""
             }
         ),
+        Condition::OpponentControlsMoreCreatures => {
+            "an opponent controls more creatures than you".into()
+        }
         Condition::BattlefieldAtLeast { count, predicate } => format!(
             "there are {count} or more {}s on the battlefield",
             predicate_description(predicate, "permanent")
@@ -826,6 +829,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::TriggeringPower => "that creature's power".into(),
         EffectValue::PowerTappedToPay => "the power of the creatures tapped to pay".into(),
         EffectValue::TriggeringManaValue => "that spell's mana value".into(),
+        EffectValue::TargetPower => "its power".into(),
         EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",

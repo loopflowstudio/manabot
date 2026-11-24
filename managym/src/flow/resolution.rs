@@ -80,6 +80,7 @@ impl Game {
                     .map_or(0, |object| i32::from(self.object_mana_value(object))),
                 _ => 0,
             },
+            EffectValue::TargetPower => self.power_toughness_or_lki(frame.primary_target()).0,
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::PowerTappedToPay => frame
@@ -138,6 +139,7 @@ impl Game {
             | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
             | EffectValue::TriggeringManaValue
+            | EffectValue::TargetPower
             | EffectValue::TargetToughness
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self

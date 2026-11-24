@@ -1313,6 +1313,11 @@ check the link both when upkeep begins and when their trigger resolves.
 Infinite Coursework taps and unprepares its attached creature when the Aura’s
 entry trigger resolves. Only that creature’s linked copy ceases to exist.
 
+Emeritus of Truce gives the chosen player a flying Inkling before comparing
+creature counts. Its trigger can prepare only the battlefield appearance that
+triggered it. Its prepared Swords to Plowshares exiles the target creature
+and uses its last known power for the life its controller gains.
+
 An ordinary token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and

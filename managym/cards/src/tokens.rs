@@ -41,6 +41,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         fractal(),
         heartwood(),
         blue_red_elemental(),
+        inkling(),
         red_white_spirit(),
     ]
 }
@@ -485,6 +486,21 @@ fn villain() -> TokenDefinition {
         PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Menace]),
             ..creature(base, 2, 1, [Color::Black])
+        },
+    )
+}
+fn inkling() -> TokenDefinition {
+    token(
+        "token.inkling",
+        "bab52920-9d67-4cd4-9015-6e645ff9764f",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(
+                face("Inkling", [CardType::Creature], &["Inkling"], "Flying"),
+                1,
+                1,
+                [Color::White, Color::Black],
+            )
         },
     )
 }

@@ -1229,6 +1229,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::OpponentControlsMoreCreatures => "Condition::OpponentControlsMoreCreatures",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
@@ -1275,6 +1276,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
+        Condition::OpponentControlsMoreCreatures,
         Condition::TargetDealtDamageThisTurn,
         Condition::SourceCountersAtLeast {
             kind: CounterKind::Quest,

@@ -5375,3 +5375,112 @@ fn preparation_resolution_tomekeeper_modes_target_a_creature_before_resolution()
         assert_eq!(game.prepared_copy(source).is_some(), mode == 0);
     }
 }
+
+#[test]
+fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
+    use crate::flow::card_capture::{snapshots, CaptureMode, CardCapture};
+    let mut root = preparation_position(&["Emeritus of Truce", "Savannah Lions"]);
+    let player = root.active_player();
+    let opponent = PlayerId(1 - player.0);
+    let lions = root
+        .scenario_force_battlefield(opponent, "Savannah Lions", true)
+        .unwrap();
+    let card = root
+        .state
+        .latest_objects()
+        .find(|(_, o)| o.owner == player && o.name == "Emeritus of Truce")
+        .unwrap()
+        .0;
+    let source = root.move_object(card, ZoneType::Battlefield);
+    root.collect_waiting_triggers();
+    assert_eq!(root.flush_triggers().unwrap().actions.len(), 2);
+    for recipient in [player, opponent] {
+        let mut pending = root.clone();
+        pending
+            .choose_trigger_target(player, Target::Player(recipient))
+            .unwrap();
+        pending.flush_triggers();
+        for blink in [false, true] {
+            let mut game = pending.clone();
+            let live = if blink {
+                let exile = game.move_object(source, ZoneType::Exile);
+                let returned = game.move_object(exile, ZoneType::Battlefield);
+                game.collect_waiting_triggers();
+                game.flush_triggers().unwrap();
+                game.choose_trigger_target(player, Target::Player(opponent))
+                    .unwrap();
+                game.flush_triggers();
+                assert_eq!(game.state.stack_objects.len(), 2);
+                game.resolve_top_of_stack();
+                assert!(game.prepared_copy(returned).is_some());
+                // Leave a qualifying but unprepared new appearance on one fork.
+                // Idempotent prepare would otherwise hide a stale source lookup.
+                if recipient == opponent {
+                    game.unprepare_inset(returned);
+                }
+                returned
+            } else {
+                source
+            };
+            let grants = game.state.cast_permissions.grants.clone();
+            game.card_capture = Some(CardCapture::new(
+                &game,
+                snapshots(&game),
+                CaptureMode::Cards,
+            ));
+            let mut restored = game.rollback_snapshot();
+            for branch in [&mut game, &mut restored] {
+                branch.resolve_top_of_stack();
+                assert!(branch.state.stack_objects.is_empty());
+                let moves = &branch.card_capture.as_ref().unwrap().moves;
+                let tokens: Vec<_> = moves
+                    .iter()
+                    .filter(|m| {
+                        m.object.name == "Inkling" && m.object.zone == Some(ZoneType::Battlefield)
+                    })
+                    .collect();
+                assert_eq!(tokens.len(), 1);
+                assert_eq!(tokens[0].controller, recipient.0);
+                if blink {
+                    assert_eq!(branch.state.cast_permissions.grants, grants);
+                } else {
+                    assert_eq!(branch.prepared_copy(live).is_some(), recipient == opponent);
+                }
+            }
+            assert_eq!(
+                game.state.cast_permissions.grants,
+                restored.state.cast_permissions.grants
+            );
+            assert_eq!(
+                serde_json::to_value(&game.card_capture.as_ref().unwrap().moves).unwrap(),
+                serde_json::to_value(&restored.card_capture.as_ref().unwrap().moves).unwrap()
+            );
+            if !blink && recipient == opponent {
+                let copy = game.prepared_copy(live).unwrap();
+                let object = game.permanent_object(lions).unwrap();
+                game.skip_trivial = false;
+                game.state.players[player.0].mana_pool =
+                    crate::state::mana::Mana::parse("W").into();
+                game.publish_action_space(game.priority_action_space(player));
+                let cast = cast_offer(&game, copy).unwrap();
+                checked_command(&mut game, cast);
+                checked_command(
+                    &mut game,
+                    Action::ChooseTarget {
+                        player,
+                        target: Target::Permanent(lions),
+                    },
+                );
+                let life = game.state.players[opponent.0].life;
+                game.resolve_top_of_stack();
+                assert_eq!(
+                    game.state
+                        .zones
+                        .zone_of(game.state.zones.successor(object).unwrap()),
+                    Some(ZoneType::Exile)
+                );
+                assert_eq!(game.state.players[opponent.0].life, life + 2);
+            }
+        }
+    }
+}

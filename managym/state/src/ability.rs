@@ -176,6 +176,7 @@ pub enum TriggerCondition {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Condition {
     YourTurn,
+    OpponentControlsMoreCreatures,
     Always,
     CardsDrawnAtLeast {
         count: u32,
@@ -359,6 +360,7 @@ impl Condition {
             | Condition::SourceSaddled
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
+            | Condition::OpponentControlsMoreCreatures
             | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
@@ -590,6 +592,7 @@ pub enum EffectValue {
     /// information once it has left ("you gain life equal to its
     /// toughness").
     TargetToughness,
+    TargetPower,
     /// Permanents `controller` owns that an opponent controls.
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
@@ -1824,7 +1827,10 @@ impl Effect {
                 .iter()
                 .chain(if_declined)
                 .find_map(Effect::target_spec),
-            Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
+            Effect::ForPlayer { player, effects } => player
+                .target_spec()
+                .or_else(|| effects.iter().find_map(Effect::target_spec)),
+            Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateTokenCopy { of, .. } => of.target_spec(),

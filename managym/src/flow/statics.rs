@@ -823,6 +823,14 @@ impl Game {
                     view.name.clone()
                 })
             }
+            Condition::OpponentControlsMoreCreatures => {
+                let count = |player| {
+                    self.layer_views(self.iter_battlefield_permanents(player))
+                        .filter(|(_, view)| view.is_creature())
+                        .count()
+                };
+                count(PlayerId(1 - controller.0)) > count(controller)
+            }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 [PlayerId(0), PlayerId(1)]
