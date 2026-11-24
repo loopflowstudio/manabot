@@ -173,7 +173,18 @@ The post-merge concept review ([concept-review.html](concept-review.html), at `6
 
 Built: `EntryFace` with a flattened serializer (`transformed` bool plus `modal_back` when true); the commit asserts a modal back shows instead of falling back to transform. Witness `agent::effect_execution::tests::a_pending_modal_back_entry_never_reads_as_entering_transformed`. `cr_712_modal_faces::spell_land_back_face_is_played_back_face_up_once` asserted main's `is_transformed()` for a played modal back; it now asserts the opposite (CR 712.11). Engine suites green apart from the known `historical_captures…`; the cards crate fails nine tests identically at base (merge breaks, `questions.md`); Python checks pass.
 
-## Next: `gate`
+## Next: entry face owns manifest and meld (post-build concept review)
+
+The post-build review ([concept-review.html](concept-review.html), at `876e2f49a1`) found `EntryFace` correct but incomplete: `ZoneEntry` still answers "what does the entering permanent show?" with three fields, `manifested: bool`, `meld: Option<(CardId, CardDefId)>` and `face: EntryFace`, which no writer combines and no rule allows together (a manifest is face down, CR 708.2; a meld result is the combined card, CR 712.4c). Each reader re-derives the precedence. Choices made for review: 1a, 2a, 3a on the page.
+
+1. Add `Manifested` and `Melded { partner: CardId, result: CardDefId }` to `EntryFace` (`flow/proposed_event.rs`); delete `ZoneEntry.manifested` and `ZoneEntry.meld`.
+   - Writers: `Game::manifest` (`zones.rs:764`) writes `Manifested`; the meld resolution (`resolution.rs:1334`) writes `Melded`; fixture `resolution_tests.rs:5283`.
+   - Readers become one `match entry.face`: `battlefield_entry_face` (`zones.rs:830`, doc names the variants' CR rules, not only 712.14), the entering mana value (`statics.rs:720`: `Manifested` → 0, `Melded` → `meld_mana_value`, otherwise the row), the commit (`zones.rs:983`–1000: join + `show_melded`, `turn_face_down`, show modal back, transform as arms of one match; `permanent.manifested = entry.face == EntryFace::Manifested`), `ZoneEntry::is_face_down` (`proposed_event.rs:141`).
+   - Serialization unchanged byte for byte: the flattened `EntryFace` sits where `face` is, between today's `manifested` and `meld`, so the custom serializer emits `manifested` (only when true), `transformed`, `modal_back` (only when true), `meld` (only when present, same tuple encoding). Extend the wire witness `a_pending_modal_back_entry_never_reads_as_entering_transformed` (or rename it to cover the face keys) to all five variants.
+2. `SpellProfile` (stack) stays separate from `EntryFace` (battlefield); `EntryFace::played_as` is the one bridge.
+3. Checks: debug nextest lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests`, cards crate (`dsk` manifest and `fin` meld tests in particular; the nine known failures stay identical); `cargo fmt --all`; rebuild the cp313 extension; `tests/semantic/test_manifest_text.py`, `tests/model/test_pinned_pilot.py`, `tests/academy/test_manifest_recovery.py`.
+
+## Then: `gate`
 
 CI at `39da9aef8d` (run before the entry-face commits; `03a71493ac` was cancelled; `6af5e5d458` queued at realign) failed these jobs. Start gate from this list, rechecking each against the head run:
 
