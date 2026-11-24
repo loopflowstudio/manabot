@@ -42,3 +42,5 @@ The Blast privacy fixture uses identical closed lists for both substitutions and
 Bakersbane Duo uses Tolarian Terror discounted by five graveyard spells for the three-to-five crossing. Counterspell supplies the countered branch while Unravel remains its own slice.
 
 The power batch follows attack and raid because its four paired cases exercise the new query readers at declaration, trigger placement and resolution. Bulk Up can try the existing printed flashback path while the other seven rows proceed independently.
+
+For the power batch and later queries, add one composable `EffectValue::Property` (`Power | Toughness | ManaValue`, `Sum | Max`, live-or-LKI for single-object selectors) while preserving legacy TLA variants for pinned pilots. Unify `collect_occurrences` recursively over trigger wrappers with per-member `intervening_if` and a CR 101.2 cap of 1 on `OnceEachTurn` triggers under doublers. Wire `Condition::Compare` into `layers.rs` so static abilities can share the same vocabulary without re-entering `layer_board()`, and reuse `TargetCreaturesDealPowerDamageToLastTarget` for Bite Down.

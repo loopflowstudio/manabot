@@ -288,46 +288,23 @@ boundaries. Later batch order is provisional.
 
 ### Next slice · Power at attack, combat and resolution
 
-Implement the seven primary rows and one cost candidate together using
-`Condition::Compare`, the existing selectors and layered characteristics.
-Use the current native flashback path for Bulk Up. If a specific printed
-obligation is blocked, record the missing dependency and complete the
-independent rows.
+Land four shared rules/layer/projection unifications first, then author and verify all seven primary rows and one cost candidate in the same batch. Use the existing native `StaticAbility::Flashback` path for Bulk Up and `Effect::TargetCreaturesDealPowerDamageToLastTarget` for Bite Down. If a specific printed obligation is blocked, record the missing dependency and complete the independent rows.
 
-- **Courageous Goblin and Ruby, Daring Tracker†** exercise the attack-time
-  threshold. In a paired fork, change power before declaration and after
-  the trigger is on the stack. The former changes whether the trigger
-  fires. The latter leaves the attack-time qualification intact. For Ruby,
-  branch the native red and green mana choices and verify the committed
-  output. `collect_occurrences` currently expands only top-level
-  `Attacks` and `DealsCombatDamage`. A wrapper that falls through to the
-  boolean matcher emits one event occurrence per copy and loses its member.
-  If the attack-time condition uses a wrapper, preserve per-attacker
-  matches, including context and doubling, through that same matcher.
-- **Nessian Hornbeetle and Surrak, the Hunt Caller** exercise intervening
-  conditions at both beginning-of-combat and resolution. Check the
-  threshold on each side of a buff or departure. The Hornbeetle’s own
-  power cannot satisfy its condition. Surrak reads total controlled
-  creature power and retains the complete legal haste target offer.
-- **Ashroot Animist and Halana and Alena, Partners** exercise source-power
-  amounts. From the same targeted trigger, change live power or remove
-  and return the source, then compare the resulting pump or counters and
-  remaining keywords. Check the public pending value in both native
-  views, v11, LLM text and Academy, and reject a Command using a stale
-  target identity. Keep one source-power program reader across Immolator,
-  Alesha and these effects.
-- **Bulk Up and Bite Down** exercise selected-target power. Change power
-  between announcement and resolution. Bulk Up captures the resulting
-  increment at resolution, and the graveyard cast uses the same effect.
-  Bite Down checks the casting player’s damage source and the opposing
-  target independently. Fork when each announced target leaves and
-  returns, and exercise the existing Felling Blow control.
+#### Shared unifications (before card authoring)
 
-Record source and fixture paths for the whole batch. Run the focused
-native card and learning-token checks, then rebuild CPython 3.13 and
-check the named observation layout, semantic text and bundled pinned
-pilots on the synced revision. A larger query refactor belongs with the
-counterexample that requires it.
+1. **Recursive trigger matcher (`flow/triggers.rs`).** Unify `collect_occurrences` so it recursively peels all `TriggerCondition` wrappers (`WasCast`, `FromZone`, `WhileSourceAttacking`, `ActiveIf`, `OnceEachTurn`) before expanding leaf events (`Attacks { per: Per::Object }`, `DealsCombatDamage { per: Per::Object }`, or single-event `trigger_condition_fires`). Thread `once_each_turn: bool` through the recursion, evaluate `intervening_if` per matched member (passing the member's `Target::Permanent` when present rather than pre-evaluating once with `triggering_permanent(event)`), enforce `OnceEachTurn` for both printed and granted triggers, and cap `OnceEachTurn` emissions at 1 even with a trigger doubler (CR 101.2 vs. CR 603.2d). Add directed unit/rule tests for wrapped multi-attacker `ActiveIf` + doubler and `OnceEachTurn` + doubler.
+2. **Composable object-property & aggregate queries (`ability.rs`, `resolution.rs`).** Add one composable `EffectValue::Property { of: Box<ObjectSelector>, property: ObjectProperty, aggregate: Aggregate }` with `ObjectProperty::{Power, Toughness, ManaValue}` and `Aggregate::{Sum, Max}`. For single-object selectors (`This`, `Target(_)`, `Triggering`), read live characteristics or CR 608.2h departed LKI (using signed values for `Sum`, so negative-power doubling obeys CR 701.10b and post-destruction mana value works for later Feed the Swarm); for `Each`, aggregate over `selected_permanents`. Keep legacy `EffectValue` variants (`SourcePower`, `TriggeringPower`, `TargetToughness`, `GreatestPowerYouControl`, etc.) intact so pinned TLA pilot tokens stay byte-identical. Teach `EffectValue::reads_source_power`, `reads_source`, and `is_resolution_only` to handle `Property` (recognizing `Property { of: This, property: Power, .. }` alongside `SourcePower`), and pass `self.source_permanent_id(frame)` from `Game::select` into `permanent_matches_with_source` so `CardPredicate::namesake` works in `ObjectSelector::Each`.
+3. **Layer-safe `Condition::Compare` (`flow/layers.rs`, `flow/statics.rs`).** Handle `Condition::Compare { left, op, right }` in `layers.rs::ReadSet::condition` (via `ReadSet::value`, recording `POWER`, `CARD_TYPES`, `SUBTYPES`, `tapped`, and `mana` dependencies) and in `layers.rs::Context::condition` (evaluating board-reading `EffectValue`s against `self.objects` without re-entering `layer_board()`, while delegating state-only values safely). Guard `statics.rs::layer_state_condition` against board-reading `Compare`. Add a directed `layers.rs` / `statics.rs` test covering a static ability gated by `Condition::Compare` over creature power and tap state.
+4. **Stack & Academy projection alignment (`agent/observation.rs`, `academy/ui/src/lib/types.ts`).** Include `intervening_if.as_ref().is_some_and(Condition::reads_source_power)` in `observation.rs::stack_object_data` so pending triggers whose intervening-if reads source power also expose `stack::SOURCE_POWER`. Sync `academy/ui/src/lib/types.ts` with `experience.rs` (`PlayerTurnHistory` fields `life_gained`, `creatures_died`, `permanents_left`, `nonland_permanents_left`, `warped_this_turn`; `PermanentState.attacked_this_turn`; `StackEntryView.mana_spent`).
+
+#### Batch cards & directed checks (8 cards)
+
+- **Courageous Goblin and Ruby, Daring Tracker†** exercise the attack-time power threshold (`ActiveIf` wrapping `Attacks { subject: This, per: Object }`) through the unified recursive `collect_occurrences`. In a paired fork, change power before declaration and after the trigger is on the stack: the former changes whether the trigger fires, while the latter leaves the attack-time qualification intact. For Ruby, branch the native red and green mana choices (`Effect::mana_choice`) and verify the committed output.
+- **Nessian Hornbeetle and Surrak, the Hunt Caller** exercise intervening-if conditions at both beginning-of-combat and resolution. Hornbeetle uses `Condition::Compare(ObjectSelector::each_other_you_control(min_power: 4).count(), Ge, 1)` so its own power cannot satisfy its condition. Surrak uses `Condition::Compare(EffectValue::Property { of: Each(YouControl, creature), property: Power, aggregate: Sum }, Ge, 8)` (verifying signed total power including a negative-power creature) and retains the complete legal haste target offer. Check each threshold on both sides of a buff or departure.
+- **Ashroot Animist and Halana and Alena, Partners** exercise source-power amounts (`SourcePower` / `Property(This, Power, Sum)`). From the same targeted trigger, change live power or remove and return the source, then compare the resulting pump or counters and remaining keywords. Check the public pending value in both native views, v11 `stack::SOURCE_POWER`, LLM text and Academy, and reject a Command using a stale target identity. Keep one `reads_source_power` reader across Immolator, Alesha and these effects.
+- **Bulk Up and Bite Down** exercise target power at resolution. Bulk Up uses `EffectValue::Property { of: Target(Creature), property: Power, aggregate: Sum }` for `+power/+0` until end of turn and `StaticAbility::Flashback`: verify changing power between announcement and resolution, doubling negative power (CR 701.10b: `-2` becomes `-4`), and casting via flashback from the graveyard (exiling on leave-stack). Bite Down reuses `Effect::TargetCreaturesDealPowerDamageToLastTarget` with `CreatureYouControl` and `PermanentOpponentControls(creature or planeswalker)`: fork when each announced target leaves and returns, verify planeswalker loyalty loss, and exercise the existing Felling Blow control.
+
+Record source and fixture paths in `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl` for the whole batch. Run the focused native card, trigger-wrapper, layer-condition and learning-token checks, then rebuild CPython 3.13 and check the merged Torch/MLX host preparation path (`074bc49a64`), named observation layout, semantic text, Academy `svelte-check`, and bundled v9/v11 pinned pilots.
 
 ### Later slices
 

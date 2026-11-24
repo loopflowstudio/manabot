@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Unified Event History &amp; Contextual Queries</title>
+<title>MTG-418 Concept Review · Trigger Wrappers, Object-Property Queries &amp; Layer Conditions</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    max-width: 66rem;
+    max-width: 68rem;
     margin: 2.5rem auto;
     padding: 0 1.25rem 4rem;
     font: 16px/1.55 system-ui, -apple-system, sans-serif;
@@ -70,7 +70,7 @@
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
   th, td { padding: .6rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   th { font-weight: 700; background: var(--card); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin: 1rem 0; }
   .panel {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -96,195 +96,253 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Engine / RL / Search Concept Review · HEAD f31f360cbe</div>
-  <h1>Do the caller’s queries and the engine’s history records line up?</h1>
+  <div class="eyebrow">Managym · MTG-418 · Post-Unification Concept Review · HEAD 7949f55bb2</div>
+  <h1>Do MTG-418’s rules queries, trigger wrappers, and layer readers line up?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s full event-history, contextual-query, and turn-fact architecture
-    (rules state in <code>TurnState</code>/<code>EffectFrame</code>, query ASTs in <code>ability.rs</code>,
-    trigger matching in <code>triggers.rs</code>, and v11 policy/text/Academy projection in <code>observation*.rs</code>) —
-    widened from the latest attack-declaration slice to the entire MTG-418 surface (13 delivered primary FDN rows + 68 pending rows across 15 batches).
-    Judged from the algorithm/caller perspective (policy encoders, search forks, deterministic hashing, and card authoring composability).
+    <strong>Area reviewed:</strong> <code>managym</code>’s full event-history, contextual-query, trigger-matching,
+    layer-condition, and stack/observation projection surface
+    (<code>ability.rs</code>, <code>turn.rs</code>, <code>triggers.rs</code>, <code>statics.rs</code>,
+    <code>resolution.rs</code>, <code>layers.rs</code>, <code>observation*.rs</code>, <code>experience.rs</code>,
+    and <code>academy/ui/src/lib/types.ts</code>) — widened from the next 8-card power slice
+    (<em>Courageous Goblin, Ruby, Nessian Hornbeetle, Surrak, Ashroot Animist, Halana and Alena, Bulk Up, Bite Down</em>)
+    to the whole MTG-418 cohort (25 delivered + 56 pending primary FDN rows, cost candidates, and cross-set witnesses).
+  </p>
+  <p class="small">
+    The prior review’s four unifications (<code>PlayerTurnHistory</code> + v11 <code>player_turn_state</code> suffix,
+    per-attacker <code>FiredTrigger</code> + <code>AttackSize::AtLeast</code> + <code>attacks_this_turn</code>,
+    <code>Condition::Compare</code> + shared <code>effect_value</code>, and <code>reads_source_power</code> + <code>stack::MANA_SPENT</code>)
+    are now landed. This review inspects the whole surface as it stands at <code>7949f55bb2</code> before the next batch lands.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at f31f360cbe</span></h2>
-  <p>
-    Each row pairs a concept that callers (policy encoders, search/replay harnesses, and card authors) rely on against the types and APIs that implement it today.
-  </p>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 7949f55bb2</span></h2>
   <table>
     <thead>
       <tr>
-        <th style="width:22%">Caller / Algorithm Concept</th>
-        <th style="width:42%">Code Concept (<code>managym</code> at <code>f31f360cbe</code>)</th>
-        <th style="width:10%">Line up?</th>
-        <th style="width:26%">Mismatch</th>
+        <th style="width:21%">Product / Rules Concept</th>
+        <th style="width:41%">Code Concept (<code>managym</code> at <code>7949f55bb2</code>)</th>
+        <th style="width:9%">Line up?</th>
+        <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Player &amp; turn event accumulators</strong><br><span class="small">Closed per-turn facts (“gained life?”, “how much?”, “creature died?”, “mana spent?”, “permanent left?”)</span></td>
+        <td><strong>Per-player turn history &amp; v11 turn state</strong><br><span class="small">Closed per-seat counters for life gains/amount, deaths, departures, casting spend, raid, warp</span></td>
         <td>
-          Split across 5 state owners: <code>TurnState.history: [PlayerTurnHistory; 2]</code>,
-          <code>TurnState.spells_cast</code>, <code>TurnState.creature_died_this_turn</code>,
-          <code>TurnState.graveyard_from_battlefield</code>, and <code>Permanent.dealt_damage_this_turn</code>.<br>
-          Projected across 3 v11 channels: <code>player</code> columns (63–70), <code>player_turn_state</code> (0–1), and branch-local <code>FactKind</code> 16/18/19 (<code>LifeGains</code>, <code>CreatureDied</code> on dummy <code>active_player_id</code>, <code>ManaSpentCasting</code>).
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>One concept split across 5 state owners and 3 tensor channels; each new counter burns scarce <code>facts</code> slots, adds unscaled <code>Tagged</code> floats, and risks capacity overflow. <code>life_gained</code> (amount) is missing for Midnight Snack.</td>
-      </tr>
-      <tr>
-        <td><strong>Batch attack triggers &amp; exact-object attack history</strong><br><span class="small">Per-attacker identity, trigger doublers, N+ attackers, and “first time this creature attacks each turn”</span></td>
-        <td>
-          <code>collect_occurrences</code> handles <code>DealsCombatDamage</code> per hit (binding <code>hit</code> and multiplying by <code>1 + additional_trigger_times</code>),
-          but handles <code>Attacks</code> with <code>repeat_n(occurrence, matching + additional_trigger_times)</code> and <code>triggering_permanent</code> only when <code>attackers.len() == 1</code>.<br>
-          <code>AttackSize</code> is <code>Any | Alone | WithAnother</code>.
-          <code>ability_triggers_this_turn</code> keys <code>(ObjectId, usize)</code> without face <code>CardDefId</code>; no exact-object attack count exists.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>Two incompatible batch-trigger paths; live rules bug (adds instead of multiplies doublers, drops attacker identity for 2+ attackers); card-shaped <code>AttackSize</code> blocks Armasaur Guide (3+); no exact-object attack history for Aurelia.</td>
-      </tr>
-      <tr>
-        <td><strong>Composable counts &amp; numeric thresholds</strong><br><span class="small">One expression grammar for spells, triggers, activations, and mana abilities</span></td>
-        <td>
-          <code>EffectValue</code> has 6 overlapping object-counting variants (<code>Objects</code>, <code>BattlefieldMatching</code>, <code>CreaturesWithCounters</code>, <code>AttackingMatching</code>, <code>OwnedPermanentsOpponentsControl</code>, <code>GraveyardMatching</code>).
-          <code>controller_value</code> returns <code>0</code> for <code>EffectValue::Objects</code>.<br>
-          <code>Condition</code> has 30+ flat card-shaped variants and no numeric comparison.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>Silent-zero trap when a mana ability (e.g. Elvish Archdruid) uses <code>ObjectSelector::each(...).count()</code>; one idea under 6 names; no composable comparison for Hidetsugu, Ayli, Unravel, or life-gained thresholds.</td>
-      </tr>
-      <tr>
-        <td><strong>Pending stack resolution context</strong><br><span class="small">What a resolving spell or ability on the stack will read</span></td>
-        <td>
-          <code>observation.rs:1720</code> matches only <code>StackObject::ActivatedAbility</code> with <code>Effect::DealDamage { amount: SourcePower }</code>.
-          <code>StackObjectData</code> omits <code>mana_spent</code> for spells even though <code>SpellOnStack.spent</code> already owns it.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>Ad-hoc single-card AST match (Immolator) silently omits <code>source_power</code> on triggered abilities (Alesha, Ashroot Animist) and omits spell spend (Unravel).</td>
-      </tr>
-      <tr>
-        <td><strong>Instruction results &amp; child scopes</strong><br><span class="small">Committed destruction, life lost, excess damage, discard/mill results</span></td>
-        <td>
-          <code>EventBinding</code> + <code>EffectFrame</code> (<code>moved</code>, <code>life_lost</code>, <code>excess_damage</code>, <code>this_way</code>, <code>created</code>, <code>selected</code>, <code>triggering_damage</code>, <code>spent</code>) with hash + continuation projection.
+          <code>TurnState.history: [PlayerTurnHistory; 2]</code> owns all 13 fields; v11 <code>player_turn_state</code>
+          appends cols 8–14 (<code>ValueLayout::COUNT</code> → <code>Reading.LOG</code>, <code>FLAG</code> → <code>AS_IS</code>);
+          legacy v9/v10 keeps its 8-column prefix; scalar <code>FactKind</code>s 16/18/19 are deleted.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Clean single owner; extend directly for counter-result and move-LKI readers.</td>
+        <td>Single state owner and fixed-width tensor channel; no sparse fact-overflow risk.</td>
       </tr>
       <tr>
-        <td><strong>Exact-object identity, LKI &amp; damage relations</strong><br><span class="small">Generation-checked <code>ObjectId</code>, departure LKI, sorted <code>DamageHistory</code></span></td>
+        <td><strong>Instruction results, exact LKI &amp; damage history</strong><br><span class="small">Committed destruction, life loss, excess damage, exact pairs, combat-player hits</span></td>
         <td>
-          <code>DamageHistory(Vec&lt;DamagePair&gt;)</code>, <code>ObjectLki</code>, <code>permanent_power_or_lki</code>, v11 relation kind 11 and permanent/stack combat-hit flags.
+          <code>EventBinding</code> + <code>EffectFrame</code> + <code>ResolutionTarget.spell</code>;
+          sorted <code>DamageHistory</code>; <code>ObjectLki</code> with copiable values and departure types;
+          v11 relation kind 11 + permanent/stack combat-hit flags.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Compact, clone-cheap, hash-exact. Only minor LKI generalization needed when non-creature departure types/colors appear.</td>
+        <td>Clean single owners; later slices extend <code>ObjectLki</code> additively (e.g. <code>was_attacking</code> for Garna).</td>
+      </tr>
+      <tr>
+        <td><strong>Attack commit &amp; exact-object attack count</strong><br><span class="small">Raid and first-attack history commit at declaration completion only</span></td>
+        <td>
+          <code>flow/tick.rs</code> records <code>history[active].attacked</code> and <code>attacks_this_turn</code>
+          only for newly declared attackers; entered-attacking creatures stay excluded; <code>AttackSize::AtLeast(n)</code>.
+        </td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Exact match to CR 508.1 and Aurelia/Linden/Chart a Course counterexamples.</td>
+      </tr>
+      <tr>
+        <td><strong>Trigger wrappers, per-member events, <code>intervening_if</code> &amp; doublers</strong><br><span class="small">Wrappers qualify inner events without erasing per-attacker / per-hit identity or breaking CR 101.2</span></td>
+        <td>
+          <strong>Two interpreters in <code>flow/triggers.rs</code>:</strong>
+          <code>collect_occurrences</code> (L1121) expands only unwrapped top-level <code>Attacks</code> and <code>DealsCombatDamage</code>.
+          Any wrapper (<code>ActiveIf</code>, <code>OnceEachTurn</code>, <code>WhileSourceAttacking</code>, <code>WasCast</code>, <code>FromZone</code>)
+          falls through to boolean <code>trigger_condition_fires</code> → emits one <code>TriggerMember::Event</code>.<br>
+          <code>firing_battlefield_triggers</code> (L945–965) checks <code>OnceEachTurn</code> only as outermost <code>Printed</code> syntax,
+          evaluates <code>intervening_if</code> <em>before</em> member expansion with <code>triggering_permanent(event)</code> (<code>None</code> for 2+ attackers),
+          and lets doublers multiply <code>OnceEachTurn</code> triggers.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Two half-implementations for one concept.</strong>
+          Blocks wrapped attack/combat triggers (Courageous Goblin &amp; Ruby in the very next slice; any multi-attacker <code>ActiveIf</code> or <code>OnceEachTurn</code> combat-damage trigger loses member binding &amp; count); breaks CR 101.2 when a trigger doubler meets <code>OnceEachTurn</code>; breaks member-reading <code>intervening_if</code> on multi-attacker combat.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Object-property &amp; aggregate quantities</strong><br><span class="small">Read or aggregate power, toughness, or mana value of selected object(s) with CR 608.2h LKI</span></td>
+        <td>
+          <code>EffectValue</code> has 6 separate property/aggregate variants (<code>SourcePower</code>, <code>TriggeringPower</code>,
+          <code>TargetToughness</code>, <code>TriggeringManaValue</code>, <code>SpellManaValue</code>, <code>GreatestPowerYouControl</code>)
+          and no general <code>(ObjectSelector, Property, Aggregate)</code> reader.<br>
+          <code>Game::select</code> (<code>resolution.rs:2306</code>) calls <code>permanent_matches_predicate</code> with <code>source = None</code>,
+          ignoring <code>CardPredicate::namesake</code>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>One idea under 6 card-shaped names, still missing the next slice’s queries:</strong>
+          cannot express target power (<em>Bulk Up</em>), total controlled creature power (<em>Surrak</em>, <em>Ghalta</em>),
+          or destroyed target mana value (<em>Feed the Swarm</em>); <code>namesake</code> silently returns 0 in <code>ObjectSelector::Each</code> (<em>Hare Apparent</em>).
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Unified <code>Condition</code> across layers &amp; resolution</strong><br><span class="small"><code>Condition::Compare</code> works in statics, <code>ActiveIf</code>, <code>intervening_if</code>, and <code>Effect::If</code></span></td>
+        <td>
+          <code>statics.rs:799</code> implements <code>Condition::Compare</code> via <code>effect_value</code> → <code>select</code> → <code>layer_view</code>.
+          <code>layers.rs::ReadSet::condition</code> (L160) and <code>Context::condition</code> (L852) ignore <code>Condition::Compare</code>:
+          <code>ReadSet</code> reports <code>fields = 0, tapped = false</code>; <code>Context</code> delegates to <code>layer_state_condition</code>,
+          which calls back into <code>layer_board()</code> <em>during</em> <code>Context::evaluate</code>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Latent re-entrancy panic &amp; stale-cache bug:</strong>
+          any static ability using <code>Condition::Compare</code> over battlefield permanents either panics with a re-entrant <code>RefCell</code> borrow inside <code>layer_board()</code> or silently misses layer dependency / tap invalidation.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Pending stack &amp; Academy parity</strong><br><span class="small">All consumers expose the same source-power and turn-history contract</span></td>
+        <td>
+          <code>observation.rs:1730</code> checks <code>reads_source_power</code> on <code>effects</code> only (omits <code>intervening_if</code>).<br>
+          <code>academy/ui/src/lib/types.ts</code> declares <code>PlayerTurnHistory</code> only through <code>mana_spent_casting</code>
+          and omits <code>life_gained</code>, <code>creatures_died</code>, <code>permanents_left</code>, <code>nonland_permanents_left</code>,
+          <code>warped_this_turn</code>, <code>attacked_this_turn</code>, and <code>StackEntryView.mana_spent</code> that <code>experience.rs</code> already emits.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Schema drift between producer and browser consumer</strong> plus a silent omission if a trigger’s <code>intervening_if</code> reads source power.
+        </td>
       </tr>
     </tbody>
   </table>
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch · Scalar Turn History Pushed into Sparse <code>facts</code> + Split Trigger/Query Paths</h2>
+  <h2>2. Biggest Mismatches · Before vs. After</h2>
   <div class="callout">
     <p>
-      <strong>Why this matters before authoring the remaining 68 FDN rows:</strong>
-      MTG-418’s goal is <em>one typed query vocabulary without per-keyword history stores or card-shaped enums</em>.
-      Across 11 one-card slices, each new turn counter was appended as another <code>FactKind</code> (16, 18, 19),
-      while <code>PlayerTurnHistory</code>, <code>TurnState</code>, <code>EffectValue</code>, <code>Condition</code>, and <code>observation.rs</code>
-      accumulated card-shaped branches. Repeating that pattern across the next 15 batches will multiply:
+      <strong>Why fix these three architecture seams right now (before the Power slice and remaining 56 FDN rows):</strong>
+      Every single one is already hit by the next 8-card slice (<em>Courageous Goblin, Ruby, Nessian Hornbeetle, Surrak, Ashroot Animist, Halana and Alena, Bulk Up, Bite Down</em>) or the batches right after it (<em>Ghalta, Feed the Swarm, Hare Apparent</em>).
+      Patching around them would add four more ad-hoc <code>EffectValue</code> variants, leak the wrapper bug onto every wrapped attack/combat trigger, and leave <code>Condition::Compare</code> a trap inside static abilities.
     </p>
-    <ul>
-      <li><strong>Training/RL cost:</strong> 6–10 extra <code>facts</code> tokens per step on every ordinary turn, wider <code>fact::KIND</code> one-hots on every fact row, mixed unscaled/scaled <code>Tagged</code> payloads, and typed capacity-overflow crashes.</li>
-      <li><strong>Rules/search correctness:</strong> <code>Attacks</code> drops attacker identity for 2+ attackers, adds instead of multiplies trigger doublers, lacks exact-object attack counts for Aurelia, and <code>controller_value</code> silently returns <code>0</code> for <code>EffectValue::Objects</code>.</li>
-      <li><strong>Observation blindness:</strong> Triggered abilities reading source power (Alesha, Ashroot Animist) and discounted spells on the stack (Unravel) hide their resolving quantities from policy, text, and Academy.</li>
-    </ul>
   </div>
 
-  <h3>Before vs. After · Turn History &amp; v11 Projection</h3>
+  <h3>A. One Recursive Trigger Occurrence Matcher (<code>flow/triggers.rs</code>)</h3>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · f31f360cbe</div>
-      <h3>5 state owners → 3 tensor channels</h3>
-<pre>TurnState
-├── history: [PlayerTurnHistory; 2]
-│   ├── attacked, cards_drawn, ... → player cols
-│   ├── life_lost                  → player_turn_state[0]
-│   ├── life_gains                 → FactKind::LifeGains (16)
-│   ├── mana_spent_casting         → FactKind::ManaSpentCasting (19)
-│   └── (life_gained missing!)
-├── spells_cast                    → player_turn_state[1]
-└── creature_died_this_turn: bool  → FactKind::CreatureDied (18)
-                                     (dummy join: active_player_id)
-
-Cost: +1 FactKind &amp; +1..2 sparse tokens per new turn counter</pre>
+      <div class="badge existing">Existing · 7949f55bb2</div>
+      <h3>Two disconnected matchers + pre-member <code>intervening_if</code></h3>
+<pre>// firing_battlefield_triggers (L945–966)
+1. OnceEachTurn checked only if outermost on Printed ability
+   (ignored on Granted or nested wrappers).
+2. intervening_if evaluated ONCE with triggering_permanent(event)
+   → None whenever attackers.len() &gt; 1!
+3. collect_occurrences (L1144):
+   - Top-level Attacks { per: Object } → per-attacker Attacker(id)
+   - Top-level DealsCombatDamage { per: Object } → per-hit CombatHit
+   - ANY wrapper (ActiveIf, OnceEachTurn, WhileSourceAttacking, ...)
+     → falls through to boolean trigger_condition_fires!
+     → collapses N members to 1 TriggerMember::Event
+     → drops attacker/hit context &amp; triggering_damage
+     → still multiplies OnceEachTurn by (1 + extra_triggers) (CR 101.2 bug!)</pre>
     </div>
     <div class="panel proposed-box">
       <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>1 <code>PlayerTurnHistory</code> → fixed <code>[2, D]</code> <code>player_turn_state</code></h3>
-<pre>TurnState
-└── history: [PlayerTurnHistory; 2]  (Copy, hashed &amp; reset once)
-    ├── life_lost, spells_cast     → player_turn_state[0..8] (v10 prefix)
-    ├── life_gains                 → player_turn_state[8]  Count/10
-    ├── life_gained                → player_turn_state[9]  Count/20
-    ├── mana_spent_casting         → player_turn_state[10] Count/10
-    ├── creatures_died             → player_turn_state[11] Count/10
-    ├── permanents_left            → player_turn_state[12] Count/10
-    ├── nonland_permanents_left    → player_turn_state[13] Count/10
-    └── warped_this_turn           → player_turn_state[14] Flag
+      <h3>One recursive <code>collect_occurrences</code> over wrappers &amp; leaves</h3>
+<pre>// Recursive matcher: peel wrappers, expand leaves, check intervening_if per member
+collect_occurrences(condition, intervening_if, once_each_turn, event, source, ability, fired):
+  WasCast { inner }              =&gt; if source_was_cast { recurse(inner) }
+  FromZone { zone, inner }       =&gt; if event_origin == zone { recurse(inner) }
+  WhileSourceAttacking { inner } =&gt; if source_attacking { recurse(inner) }
+  ActiveIf { active_if, inner }  =&gt; if check_intervening_if(active_if, source) { recurse(inner) }
+  OnceEachTurn { inner }         =&gt; if !already_used_this_turn { recurse(inner, once_each_turn = true) }
+  Attacks { per: Object, .. }    =&gt; for attacker in matching: emit(Attacker(attacker))
+  DealsCombatDamage { per: Obj } =&gt; for hit in matching: emit(CombatHit(hit))
+  other leaf                     =&gt; if leaf_fires(other) { emit(Event) }
 
-Sparse facts reserved strictly for per-object / per-frame records
-(AbilityResolution, TriggeringDamage, Counters, Effects, Copy).
-Pinned pilots keep their 8-column prefix via prepare.py.</pre>
+emit(member):
+  if intervening_if fails for member_target(member, event) { return; }
+  let count = if once_each_turn { 1 } else { 1 + additional_trigger_times(source) };
+  push `count` occurrences; if once_each_turn { stop further matches for this ability }</pre>
     </div>
   </div>
-  <p class="small">
-    <strong>Why per-seat departure counters beat global booleans:</strong>
-    Summing both seats answers turn-wide Morbid (“if a creature died this turn” = <code>h[0].creatures_died + h[1].creatures_died &gt; 0</code>)
-    and Void (“a nonland permanent left” = <code>h[0].nonland_permanents_left + h[1].nonland_permanents_left &gt; 0</code>),
-    while reading <code>h[you].permanents_left &gt; 0</code> answers Disappear (Michelangelo) with zero extra state or dummy joins.
-    Cost in v11: 2 fixed rows × 7 floats = 56 bytes, <strong>0 extra attention tokens</strong>, <strong>0 fact-overflow risk</strong>.
-  </p>
 
-  <h3>Before vs. After · Attack Batch Triggers, Queries &amp; Stack Context</h3>
+  <h3>B. Composable <code>EffectValue::Property</code> + Source-Aware <code>Game::select</code></h3>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · f31f360cbe</div>
-      <h3>Split paths &amp; card-shaped enums</h3>
-<pre>// triggers.rs
-DealsCombatDamage → per-hit FiredTrigger, × (1 + extra)
-Attacks           → repeat_n, + extra  (BUG!), no attacker context
+      <div class="badge existing">Existing · 7949f55bb2</div>
+      <h3>Card-shaped property variants + missing Bulk Up / Surrak / Ghalta / Feed the Swarm</h3>
+<pre>enum EffectValue {
+  SourcePower,
+  TriggeringPower,
+  TargetToughness,
+  TriggeringManaValue,
+  SpellManaValue(Box&lt;ObjectSelector&gt;),
+  GreatestPowerYouControl { predicate },
+  // Missing:
+  // - TargetPower (Bulk Up)
+  // - TotalPower (Surrak, Ghalta)
+  // - TargetManaValue after Destroy (Feed the Swarm)
+}
 
-// ability.rs
-enum AttackSize { Any, Alone, WithAnother } // blocks 3+
-Condition: 30+ flat variants (no Compare)
-EffectValue::Objects → 0 in controller_value (silent-zero trap!)
-
-// observation.rs:1720
-StackObject::ActivatedAbility + Effect::DealDamage { SourcePower }
-  → misses TriggeredAbility (Alesha, Ashroot) &amp; spell.spent (Unravel)</pre>
+// resolution.rs:2306
+ObjectSelector::Each =&gt;
+  .filter(|id| self.permanent_matches_predicate(*id, predicate))
+  // passes source = None → CardPredicate::namesake returns 0!</pre>
     </div>
     <div class="panel proposed-box">
       <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>One per-subject emitter &amp; composable queries</h3>
-<pre>// triggers.rs + turn.rs
-TurnState.attacks_this_turn: Vec&lt;(ObjectId, u32)&gt;  // sorted, exact
-Attacks { subject, per, attackers: AttackSize, nth: Option&lt;u32&gt; }
-  → per-attacker FiredTrigger (binds context), × (1 + extra)
-enum AttackSize { Any, Alone, AtLeast(u8) }
-ability_triggers_this_turn keyed by (ObjectId, CardDefId, usize)
+      <h3>One <code>EffectValue::Property</code> primitive + source passed to <code>select</code></h3>
+<pre>pub enum ObjectProperty { Power, Toughness, ManaValue }
+pub enum Aggregate { Sum, Max }
 
-// ability.rs + resolution.rs
-select_board(Scope, predicate, controller, source) shared by
-  effect_value AND controller_value (Objects works in mana abilities!)
-Condition::Compare { left: EffectValue, op: CompareOp, right: EffectValue }
-EffectValue::{LifeTotal, LifeGainedThisTurn, LifeLostThisTurn,
-              SpellManaSpent, SpellManaValue}
+EffectValue::Property {
+  of: Box&lt;ObjectSelector&gt;,
+  property: ObjectProperty,
+  aggregate: Aggregate,
+}
+// • Bulk Up:  Property { of: Target(Creature), Power, Sum } (signed; CR 701.10b!)
+// • Surrak:   Compare(Property { of: Each(YouControl, creature), Power, Sum }, Ge, 8)
+// • Ghalta:   total power via the exact same Property expression
+// • Feed the Swarm: Property { of: Target(..), ManaValue, Sum } (reads LKI after Destroy!)
+// • Legacy variants stay untouched so pinned TLA pilot tokens remain byte-identical.
+// • reads_source_power() recognizes both SourcePower and Property(This, Power, _).
+// • Game::select passes self.source_permanent_id(frame) to permanent_matches_with_source.</pre>
+    </div>
+  </div>
 
-// observation.rs
-Effect::reads_source_power() + TargetRequirement::reads_source_power()
-  for BOTH ActivatedAbility and TriggeredAbility
-StackObjectData.mana_spent → v11 stack::MANA_SPENT
-PermanentData.attacked_this_turn → v11 permanent::ATTACKED_THIS_TURN</pre>
+  <h3>C. Layer-Safe <code>Condition::Compare</code> (<code>flow/layers.rs</code> &amp; <code>flow/statics.rs</code>)</h3>
+  <div class="grid">
+    <div class="panel existing-box">
+      <div class="badge existing">Existing · 7949f55bb2</div>
+      <h3><code>Condition::Compare</code> invisible to layers</h3>
+<pre>// layers.rs::ReadSet::condition (L160)
+Condition::Compare { .. } =&gt; falls into `_`!
+  fields = 0, tapped = false  // misses POWER/CARD_TYPES/tapped deps!
+
+// layers.rs::Context::condition (L852)
+Condition::Compare { .. } =&gt; game.layer_state_condition(...)
+  → effect_value → select → layer_view → layer_board()
+  → RE-ENTRANT RefCell::borrow_mut PANIC during Context::evaluate!</pre>
+    </div>
+    <div class="panel proposed-box">
+      <div class="badge proposed">Proposed · MTG-418 Target</div>
+      <h3><code>ReadSet::value</code> + layer-internal <code>Context::value</code></h3>
+<pre>// layers.rs::ReadSet::condition
+Condition::Compare { left, right, .. } =&gt; {
+  self.value(left);  // marks POWER / CARD_TYPES / SUBTYPES / tapped / mana
+  self.value(right);
+}
+
+// layers.rs::Context::condition
+Condition::Compare { left, op, right } =&gt;
+  op.test(self.value(left, source), self.value(right, source))
+// Evaluates board-reading Objects / Property directly against self.objects,
+// and delegates pure state values (LifeTotal, TurnHistory, Graveyard) safely.
+// statics.rs::layer_state_condition asserts !condition.reads_battlefield().</pre>
     </div>
   </div>
 </section>
@@ -294,90 +352,101 @@ PermanentData.attacked_this_turn → v11 permanent::ATTACKED_THIS_TURN</pre>
   <table>
     <thead>
       <tr>
-        <th style="width:22%">Interaction / Path</th>
-        <th style="width:28%">Failure / Recovery / Counterexample</th>
-        <th style="width:25%">Existing (<code>f31f360cbe</code>)</th>
-        <th style="width:25%">Proposed Model</th>
+        <th style="width:21%">Interaction / Card</th>
+        <th style="width:29%">Normal Path, Failure &amp; Counterexample</th>
+        <th style="width:24%">Existing (<code>7949f55bb2</code>)</th>
+        <th style="width:26%">Proposed Model</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Aurelia, the Warleader</strong><br><span class="small">“attacks for the first time each turn”</span></td>
+        <td><strong>Courageous Goblin &amp; Ruby, Daring Tracker</strong><br><span class="small">Attack-time power check + wrapped <code>Attacks</code></span></td>
         <td>
-          <strong>1. Ability loss:</strong> Aurelia loses abilities, attacks in Combat 1, regains abilities, attacks in Combat 2.<br>
-          <strong>2. Blink:</strong> Attacks in Combat 1, blinks, gains haste, attacks in Combat 2.<br>
-          <strong>3. Entered attacking:</strong> Put onto battlefield attacking in Combat 1, declared in Combat 2.<br>
-          <strong>4. Fork mid-declaration:</strong> Snapshot with Aurelia chosen and Ogre still open.
+          <strong>1. Pre-declare buff:</strong> Grow another creature to 4 before declaring attackers → triggers.<br>
+          <strong>2. Post-trigger shrink/removal:</strong> Remove the 4-power creature while trigger is on the stack → still resolves (not intervening-if).<br>
+          <strong>3. Wrapped multi-attacker + doubler:</strong> <code>ActiveIf</code> wrapping <code>Attacks { per: Object }</code> with 2 attackers + doubler.
         </td>
         <td>
-          <code>OnceEachTurn</code> would misfire on (1); no observable <code>attacked_this_turn</code> flag on the permanent in Combat 2.
+          <code>ActiveIf</code> falls through to boolean matcher: drops <code>TriggerMember::Attacker</code> and collapses 2 attackers to 1 occurrence.
         </td>
         <td>
-          <code>attacks_this_turn</code> increments on <code>AttackersDeclared</code> commit only:<br>
-          (1) ordinal 2 → no trigger;<br>
-          (2) new <code>ObjectId</code>, ordinal 1 → triggers;<br>
-          (3) skipped by <code>already_attacking</code>, Combat 2 ordinal 1 → triggers;<br>
-          (4) <code>attacked_this_turn == false</code> until commit.
+          Recursive <code>collect_occurrences</code> checks <code>ActiveIf</code> once, expands per matching attacker, preserves <code>Attacker(id)</code> context, and multiplies by <code>1 + extra</code> (4 triggers for 2 attackers + doubler).
         </td>
       </tr>
       <tr>
-        <td><strong>2 attackers + trigger doubler</strong><br><span class="small">Per-object attack trigger + CR 603.2d</span></td>
+        <td><strong><code>OnceEachTurn</code> + trigger doubler</strong><br><span class="small">CR 101.2 vs CR 603.2d</span></td>
         <td>
-          Declare 2 matching creatures while a trigger doubler is in play; ability references “that creature” (<code>ObjectSelector::Triggering</code>).
+          A permanent with <code>OnceEachTurn</code> (including a wrapped <code>OnceEachTurn { ActiveIf { Attacks } }</code> or <code>DealsCombatDamage</code>) triggers while a trigger doubler is on the battlefield.
         </td>
         <td>
-          Emits <code>2 + 1 = 3</code> triggers (wrong) and <code>context = None</code> on all 3 (drops attacker identity).
+          Doubler emits 2 occurrences (violates “triggers only once each turn”), and wrapped combat damage drops <code>CombatHit</code>.
         </td>
         <td>
-          Emits <code>2 × 2 = 4</code> triggers: 2 bound to attacker A, 2 bound to attacker B.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Midnight Snack + Armasaur Guide + Ancestor Dragon + Jazal</strong></td>
-        <td>
-          Gain 3 then 2 life (<code>life_gains = 2</code>, <code>life_gained = 5</code>), attack with 3 creatures, fork with triggers pending, sacrifice Midnight Snack.
-        </td>
-        <td>
-          Cannot express <code>AtLeast(3)</code> or <code>life_gained</code> amount; <code>life_gains</code> consumes a <code>facts</code> slot while <code>life_lost</code> sits in <code>player_turn_state</code>.
-        </td>
-        <td>
-          <code>AttackSize::AtLeast(3)</code> fires once; Ancestor &amp; Jazal use <code>ObjectSelector::each(YouControl, attacking).count()</code>; Midnight Snack reads <code>LifeGainedThisTurn(You) == 5</code>; both viewers see <code>life_gains = 2, life_gained = 5</code> in <code>player_turn_state</code>.
+          <code>once_each_turn = true</code> threads through recursion, keeps exact <code>CombatHit</code> / <code>Attacker</code> context, emits exactly 1 occurrence, and stops further matches for that ability.
         </td>
       </tr>
       <tr>
-        <td><strong>Alesha &amp; Ashroot Animist</strong><br><span class="small">Triggered source-power LKI</span></td>
+        <td><strong>Bulk Up (positive, zero, and negative power + flashback)</strong><br><span class="small">CR 701.10b signed doubling</span></td>
         <td>
-          Attack/end-step trigger goes on stack; remove source before resolution; fork on priority response.
+          <strong>1. Mid-stack buff:</strong> Pump 2/2 to 4/4 before Bulk Up resolves → gets +4/+0 (becomes 8/4).<br>
+          <strong>2. Negative power counterexample:</strong> Target is -2/2 → doubling gives -2/-0 (becomes -4/2, not +0/+0).<br>
+          <strong>3. Flashback:</strong> Cast from graveyard for <code>{3}{R}</code>, shares same effect, exiles on leave-stack.
         </td>
         <td>
-          <code>stack::SOURCE_POWER</code> is <code>0</code> / absent because <code>observation.rs:1720</code> only checks <code>ActivatedAbility</code> + <code>DealDamage</code>.
+          No <code>EffectValue</code> can read target creature’s power.
         </td>
         <td>
-          <code>reads_source_power()</code> exposes exact LKI power in <code>stack::SOURCE_POWER</code>, text, and Academy for both activated and triggered abilities.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Elvish Archdruid</strong><br><span class="small">Mana ability using unified counter</span></td>
-        <td>
-          Author <code>{T}: Add {G}</code> with <code>ObjectSelector::each_you_control(Elf).count()</code>.
-        </td>
-        <td>
-          <code>controller_value</code> hits <code>EffectValue::Objects =&gt; 0</code> and silently adds 0 mana.
-        </td>
-        <td>
-          Shared <code>select_board</code> evaluates pure board scopes in both <code>effect_value</code> and <code>controller_value</code>; adds exact Elf count.
+          <code>Property { of: Target(Creature), Power, Sum }</code> returns signed power at resolution (4 → +4/+0; -2 → -2/+0); <code>StaticAbility::Flashback</code> handles graveyard cast and exile replacement.
         </td>
       </tr>
       <tr>
-        <td><strong>Main sync (MTG-422 <code>d12eb496b3</code>)</strong><br><span class="small">Pinned pilots &amp; hash compatibility</span></td>
+        <td><strong>Surrak, the Hunt Caller &amp; Nessian Hornbeetle</strong><br><span class="small">Combat intervening-if total &amp; other-creature power</span></td>
         <td>
-          Sync with <code>main</code> (which added <code>permanent::ENTERED_THIS_TURN</code> at col 51); replay bundled v9/v11 pinned pilots.
+          <strong>1. Surrak:</strong> Total controlled creature power crosses 8 (including a negative-power creature: e.g. 5 + 4 + (-1) = 8 qualifies; 5 + 3 + (-1) = 7 does not). Check both trigger time and resolution time.<br>
+          <strong>2. Hornbeetle:</strong> Buff Hornbeetle itself to 4/4 alone → does NOT trigger (<code>Except::This</code>); buff another creature to 4+ → triggers; kill that creature before resolution → intervening-if fails.
         </td>
         <td>
-          Branch currently predates MTG-422; permanent col 51 collides until synced.
+          No total-power <code>EffectValue</code> for Surrak; Hornbeetle works via <code>Compare(each_other_you_control.count(), Ge, 1)</code> but static reuse of <code>Compare</code> would crash layers.
         </td>
         <td>
-          <code>lf sync main</code> first; append MTG-418 permanent cols after <code>ENTERED_THIS_TURN</code> and v11 <code>player_turn_state</code> cols after col 7; pinned pilots slice saved prefixes cleanly.
+          Surrak uses <code>Compare(Property(Each(YouControl, creature), Power, Sum), Ge, 8)</code>; Hornbeetle uses <code>Compare(each_other_you_control(min_power: 4).count(), Ge, 1)</code>; both are safe in intervening-if AND layers.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Ashroot Animist &amp; Halana and Alena, Partners</strong><br><span class="small">Source-power LKI + consumer parity</span></td>
+        <td>
+          Trigger targets another creature; before resolution, fork to (a) pump source, (b) remove and blink source. Check native views, v11 <code>stack::SOURCE_POWER</code>, LLM text, Academy label, and stale target Command rejection.
+        </td>
+        <td>
+          Works via <code>SourcePower</code> for effects, but <code>observation.rs</code> skips <code>intervening_if</code> and <code>types.ts</code> lags <code>experience.rs</code>.
+        </td>
+        <td>
+          <code>SourcePower</code> and <code>Property(This, Power, _)</code> share <code>permanent_power_or_lki</code> and <code>reads_source_power</code> (including <code>intervening_if</code>); <code>types.ts</code> matches <code>experience.rs</code>.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Feed the Swarm &amp; Hare Apparent</strong><br><span class="small">Post-destruction target LKI &amp; namesake count</span></td>
+        <td>
+          <strong>1. Feed the Swarm:</strong> Destroy target creature/enchantment (normal death, exile replacement, or indestructible survivor), then lose life equal to its mana value.<br>
+          <strong>2. Hare Apparent:</strong> Count other creatures you control sharing its current layered name.
+        </td>
+        <td>
+          <code>SpellManaValue</code> only reads stack spells; <code>Game::select</code> passes <code>source = None</code> so <code>namesake</code> returns 0.
+        </td>
+        <td>
+          <code>Property(Target(..), ManaValue, Sum)</code> falls back to LKI / printing provenance after departure; <code>Game::select</code> passes <code>self.source_permanent_id(frame)</code> to <code>permanent_matches_with_source</code>.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Static ability with <code>Condition::Compare</code></strong><br><span class="small">Layer re-entrancy &amp; invalidation check</span></td>
+        <td>
+          Grant or author a static ability gated by <code>Condition::Compare</code> reading controlled creature power or tapped count; mutate power or tap state and query <code>game.characteristics(id)</code>.
+        </td>
+        <td>
+          Re-entrant <code>layer_board()</code> panic inside <code>Context::evaluate</code>, or stale cache on tap/power change.
+        </td>
+        <td>
+          <code>ReadSet::condition</code> tracks <code>POWER</code> / <code>CARD_TYPES</code> / <code>tapped</code> / <code>mana</code>; <code>Context::condition</code> evaluates against <code>self.objects</code> with zero re-entrancy.
         </td>
       </tr>
     </tbody>
@@ -387,40 +456,48 @@ PermanentData.attacked_this_turn → v11 permanent::ATTACKED_THIS_TURN</pre>
 <section>
   <h2>4. Scope Boundary &amp; Rollout Slice <span class="badge proposed">Proposed</span></h2>
   <div class="callout info">
-    <p><strong>Inside MTG-418 (next implementation slice):</strong></p>
+    <p><strong>Inside MTG-418 (next implementation slice — Power at attack, combat and resolution):</strong></p>
     <ol>
-      <li><code>lf sync main</code> to bring in MTG-422 (opening hands, terminal outcomes, <code>permanent::ENTERED_THIS_TURN</code>).</li>
-      <li>Land the 4 architectural unifications above once (<code>PlayerTurnHistory</code> + v11 <code>player_turn_state</code> suffix, per-attacker <code>FiredTrigger</code> + <code>AttackSize::AtLeast</code> + <code>attacks_this_turn</code>, shared <code>select_board</code> + <code>Condition::Compare</code> + core <code>EffectValue</code>s, generalized <code>reads_source_power</code> + <code>stack::MANA_SPENT</code>).</li>
-      <li>Author and verify all <strong>12 remaining Attack Declaration &amp; Raid cards</strong> in one cohesive batch: Armasaur Guide, Skyship Buccaneer, Midnight Snack, Battlesong Berserker, Goblin Boarders, Gorehorn Raider, Searslicer Goblin, Alesha Who Laughs at Fate, Ancestor Dragon, Jazal Goldmane, Storm Fleet Spy, Aurelia the Warleader.</li>
-      <li>Continue through the remaining mechanic batches using this single vocabulary with zero new scalar <code>FactKind</code>s or card-shaped <code>Condition</code>/<code>EffectValue</code> variants.</li>
+      <li><strong>Shared rules &amp; layer fixes (4 small, cohesive changes):</strong>
+        (a) Unified recursive <code>collect_occurrences</code> in <code>flow/triggers.rs</code> (wrappers, per-member <code>intervening_if</code>, granted/nested <code>OnceEachTurn</code> + CR 101.2 cap);
+        (b) Composable <code>EffectValue::Property { of, property, aggregate }</code> with CR 608.2h live-or-LKI reads + passing <code>source_permanent_id</code> in <code>Game::select</code>;
+        (c) <code>Condition::Compare</code> support in <code>layers.rs::ReadSet</code> and <code>layers.rs::Context</code> (with board-read guard in <code>layer_state_condition</code>);
+        (d) <code>intervening_if</code> in <code>observation.rs</code> <code>reads_source_power</code> + syncing <code>academy/ui/src/lib/types.ts</code> with <code>experience.rs</code>.
+      </li>
+      <li><strong>Author and verify all 8 cards in the Power batch together:</strong>
+        Courageous Goblin, Ruby Daring Tracker, Nessian Hornbeetle, Surrak the Hunt Caller, Ashroot Animist, Halana and Alena Partners, Bulk Up, and Bite Down (reusing <code>TargetCreaturesDealPowerDamageToLastTarget</code> for Bite Down’s creature-or-planeswalker punch, plus <code>StaticAbility::Flashback</code> for Bulk Up).
+      </li>
+      <li><strong>Rebuild CPython 3.13 extension &amp; verify post-merge host preparation:</strong>
+        Validate the merged Torch/MLX preparation path (<code>074bc49a64</code>), named observation layout, semantic text, Academy types (<code>svelte-check</code>), and bundled v9/v11 pinned pilots.
+      </li>
     </ol>
-    <p><strong>Outside MTG-418:</strong> Deleting legacy v9/v10 buffers (gated on v11 pilot parity, not before 0.4.0); replacing legacy <code>BattlefieldMatching</code>/<code>AttackingMatching</code> tokens on already-pinned TLA cards if token renames would alter frozen pilot hashes; casting permissions (Task 02) and battlefield forms/transform/meld (Task 05).</p>
+    <p><strong>Outside this slice / MTG-418:</strong> Deleting legacy <code>EffectValue</code> variants already baked into pinned TLA pilots (preserve byte-identical pilot tokens); generalizing multi-clause target cross-references for hypothetical player-targeting punch spells not in the cohort; casting permissions (Task 02) and battlefield forms/transform/meld (Task 05).</p>
   </div>
 </section>
 
 <section>
   <h2>5. Choices Made for Review</h2>
-  <p>In headless graph mode, the bold option is selected and recorded in <code>scratch/plan.md</code>; reply with a number+letter (e.g. <code>1b</code>) to override any choice.</p>
+  <p>In headless graph mode, the bold option is selected and written into <code>scratch/plan.md</code>; reply with a number+letter (e.g. <code>2a</code>) to override any choice.</p>
   <ol class="questions">
     <li>
-      <strong>Where should closed per-player turn accumulators live in v11 observations?</strong>
-      <div class="choice"><b>1a</b> Keep adding one <code>FactKind</code> per counter (<code>LifeGains</code>, <code>CreatureDied</code>, <code>ManaSpentCasting</code>, <code>LifeGained</code>, …).</div>
-      <div class="choice"><span class="selected">1b (selected)</span> Append them to fixed <code>[2, D]</code> <code>player_turn_state</code> (v11 only, preserving legacy’s 8-col prefix) and delete branch-local scalar <code>FactKind</code>s 16/18/19; keep <code>facts</code> strictly for sparse per-object/per-frame rows.</div>
+      <strong>How should Bulk Up (target power), Surrak/Ghalta (total power), and Feed the Swarm (destroyed target mana value) be expressed in <code>EffectValue</code>?</strong>
+      <div class="choice"><b>1a</b> Add separate flat variants (<code>TargetPower</code>, <code>TotalPowerYouControl</code>, <code>TargetManaValue</code>) as each card arrives.</div>
+      <div class="choice"><span class="selected">1b (selected)</span> Add one composable <code>EffectValue::Property { of: Box&lt;ObjectSelector&gt;, property: ObjectProperty, aggregate: Aggregate }</code> (<code>Power | Toughness | ManaValue</code>, <code>Sum | Max</code>) with CR 608.2h live-or-LKI fallback for single-object selectors and signed sums, while leaving existing TLA legacy variants intact for pinned pilots.</div>
     </li>
     <li>
-      <strong>How should “attacks for the first time each turn” (Aurelia) be represented?</strong>
-      <div class="choice"><b>2a</b> Reuse <code>TriggerCondition::OnceEachTurn</code> (counts ability triggers; breaks on ability-loss + Combat 2).</div>
-      <div class="choice"><span class="selected">2b (selected)</span> Track exact-object declared attacks in <code>TurnState.attacks_this_turn</code>, match via <code>TriggerCondition::Attacks { nth: Some(1), .. }</code>, and derive <code>permanent::ATTACKED_THIS_TURN</code>.</div>
+      <strong>How should wrapped batch triggers (<code>ActiveIf</code> / <code>OnceEachTurn</code> over <code>Attacks</code> / <code>DealsCombatDamage</code>) and CR 603.2d trigger doublers interact?</strong>
+      <div class="choice"><b>2a</b> Special-case <code>ActiveIf</code> inside <code>collect_occurrences</code> and leave <code>OnceEachTurn</code> / <code>intervening_if</code> outside it.</div>
+      <div class="choice"><span class="selected">2b (selected)</span> Unify <code>collect_occurrences</code> as one recursive matcher over all <code>TriggerCondition</code> wrappers, evaluate <code>intervening_if</code> per matched member, enforce <code>OnceEachTurn</code> for both printed and granted triggers, and cap <code>OnceEachTurn</code> emissions at 1 even with a trigger doubler (CR 101.2).</div>
     </li>
     <li>
-      <strong>How should upcoming numeric threshold conditions (Hidetsugu, Ayli, Unravel, life-gained, power) be modeled?</strong>
-      <div class="choice"><b>3a</b> Add dedicated <code>Condition</code> variants per mechanic as each batch arrives.</div>
-      <div class="choice"><span class="selected">3b (selected)</span> Add one composable <code>Condition::Compare { left, op, right }</code> over <code>EffectValue</code> and share <code>select_board</code> between <code>effect_value</code> and <code>controller_value</code>.</div>
+      <strong>How should <code>Bite Down</code> (“target creature you control deals damage equal to its power to target creature or planeswalker you don’t control”) be authored?</strong>
+      <div class="choice"><b>3a</b> Add a new multi-clause target-index selector (<code>ObjectSelector::ClauseTarget(usize)</code>) so <code>Effect::DealDamage</code> can reference clause 0 from clause 1.</div>
+      <div class="choice"><span class="selected">3b (selected)</span> Reuse existing <code>Effect::TargetCreaturesDealPowerDamageToLastTarget</code> (already shared by <em>Allies at Last</em> and <em>Felling Blow</em>, and already handles planeswalker victims via <code>Target::Permanent</code>) with <code>TargetSpec::PermanentOpponentControls</code> for creature or planeswalker; defer clause-indexed selectors unless a cohort card actually requires cross-clause non-damage or player-target punch.</div>
     </li>
     <li>
-      <strong>When should <code>AttackSize::WithAnother</code> be normalized?</strong>
-      <div class="choice"><b>4a</b> Keep <code>WithAnother</code> alongside <code>AtLeast(u8)</code> so TLA definitions stay untouched.</div>
-      <div class="choice"><span class="selected">4b (selected)</span> Replace <code>WithAnother</code> with <code>AtLeast(2)</code> (retaining pinned pilot compatibility via <code>token_renames.rs</code>; fall back to keeping the alias only if a pinned pilot hash requires distinct bytes).</div>
+      <strong>Should <code>layers.rs</code> support <code>Condition::Compare</code> now or forbid it in static abilities?</strong>
+      <div class="choice"><b>4a</b> Keep <code>Condition::Compare</code> forbidden in static abilities via a debug assert and require separate static-only <code>Condition</code> variants later.</div>
+      <div class="choice"><span class="selected">4b (selected)</span> Wire <code>Condition::Compare</code> into <code>layers.rs::ReadSet::condition</code> and <code>Context::condition</code> now so <code>Condition</code> truly remains one vocabulary across statics, <code>ActiveIf</code>, <code>intervening_if</code>, and <code>Effect::If</code> with zero re-entrancy or stale-cache traps.</div>
     </li>
   </ol>
 </section>
