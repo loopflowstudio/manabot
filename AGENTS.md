@@ -223,8 +223,9 @@ work (an executor, trainer, manager, runner or collector) is the shape to
 avoid; write the loop as a function whose body shows each step
 (`manabot/training/loops/self_play.py`:
 `row = step(settings, learner, ema, collector, counts, rng, out=run.out)`).
-That step updates the registered learner, EMA and counters in place because
-Etude saves those same objects through `run.resume`.
+That step updates the learner, EMA and counters in place. Etude restores the
+registered counts before calling the self-play restore callback. Register the
+live exporter with `run.save(export=...)` once the collector has opened.
 
 Where classes are valuable here, with the examples to copy:
 
@@ -928,10 +929,12 @@ Etude launched source is an extracted commit without `.git`. Read its revision
 through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
+`etude continue` queues the child in the parent's pool with its rental settings.
+A backend or device config override must be runnable in that pool.
 
-The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
-for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
-errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+The repository requires `etude-sdk>=0.4.6,<0.5` from PyPI for training
+continuation callbacks and versioned storage listing. Etude's shared records,
+storage and errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
 A resumed tracker uses `resume=True`; its first logged row sets the supersession

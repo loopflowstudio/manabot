@@ -1,45 +1,108 @@
-"""MLX continuation and numerical evidence for tracked self-play.
+"""MLX policy, Adam and sampling arrays for portable self-play recovery.
 
-Etude commits the host continuation, backend tensors and state.json together.
-Its state.json owns the counts, model settings and column readings. Restore checks the
-complete array layout before changing either policy or Adam.
+Numerical incidents retain native MLX tensors and failure-time sampling keys.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-import hashlib
 import json
 import math
 from pathlib import Path
 import random
 from typing import TYPE_CHECKING, BinaryIO
 
-from etude.train.state import read_state
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
-from manabot.backends.mlx.arrays import all_finite
+from manabot.backends.mlx.checkpoint import (
+    canonical_from_mlx,
+    canonical_groups,
+    mlx_names,
+    mlx_parameters,
+    policy_arrays as policy_arrays,
+    policy_buffers as policy_buffers,
+)
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
-from manabot.infra.identity import canonical_sha256
 from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
-from manabot.training.state.continuation import (
-    HOST_FILE,
-    HostContinuation,
-    StagedContinuation,
-    host_sha256,
-    read_host,
-)
+from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
 
 if TYPE_CHECKING:
-    from etude.train.tracking import TrainingRun
-
-    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
+
+
+def parameter_shapes(agent: MLXActorCritic) -> dict[str, tuple[int, ...]]:
+    native = dict(tree_flatten(agent.trainable_parameters()))
+    shapes = {}
+    for name, leaves in canonical_groups(native.keys()).items():
+        shape = native[leaves[0]].shape
+        shapes[name] = (
+            shape if len(leaves) == 1 else (len(leaves) * shape[0], *shape[1:])
+        )
+    return shapes
+
+
+def load_policy_arrays(agent: MLXActorCritic, arrays: Mapping[str, np.ndarray]) -> None:
+    """Install validated master weights and drop cached inference programs."""
+    admit_policy_arrays(arrays, parameter_shapes(agent))
+    agent.update(
+        tree_unflatten([(k, mx.array(v)) for k, v in mlx_parameters(arrays).items()])
+    )
+    agent.clear_cache()
+    mx.eval(agent.parameters())
+
+
+def adam_state(learner: Learner, *, step: int) -> AdamState:
+    state = dict(tree_flatten(learner.optimizer.state))
+    if int(state["step"]) != step:
+        raise ValueError("adam/step differs from the optimizer count")
+    steps: dict[str, int] = {}
+    first: dict[str, np.ndarray] = {}
+    second: dict[str, np.ndarray] = {}
+    shapes = parameter_shapes(learner.agent)
+    if step:
+        for name in shapes:
+            leaves = mlx_names(name)
+            ages = {step - int(state.get(f"{leaf}.lag", 0)) for leaf in leaves}
+            if len(ages) != 1:
+                raise ValueError(f"adam/param_steps/{name}: split projections differ")
+            steps[name] = ages.pop()
+            if steps[name]:
+                for leaf in leaves:
+                    first[leaf] = np.asarray(state[f"{leaf}.m"])
+                    second[leaf] = np.asarray(state[f"{leaf}.v"])
+    adam = AdamState(step, steps, canonical_from_mlx(first), canonical_from_mlx(second))
+    admit_adam(adam, shapes, step=step)
+    return adam
+
+
+def load_adam(learner: Learner, adam: AdamState) -> int:
+    """Retain each leaf's bias-correction clock across dense MLX updates."""
+    shapes = parameter_shapes(learner.agent)
+    admit_adam(adam, shapes, step=adam.step)
+    native = dict(tree_flatten(learner.agent.trainable_parameters()))
+    first, second = mlx_parameters(adam.exp_avg), mlx_parameters(adam.exp_avg_sq)
+    state = {
+        "step": mx.array(adam.step, dtype=mx.uint64),
+        "learning_rate": learner.optimizer.learning_rate,
+    }
+    for name, count in adam.param_steps.items():
+        for leaf in mlx_names(name):
+            state[f"{leaf}.m"] = (
+                mx.array(first[leaf]) if count else mx.zeros_like(native[leaf])
+            )
+            state[f"{leaf}.v"] = (
+                mx.array(second[leaf]) if count else mx.zeros_like(native[leaf])
+            )
+            if count < adam.step:
+                state[f"{leaf}.lag"] = mx.array(adam.step - count, dtype=mx.uint64)
+    learner.optimizer.state = tree_unflatten(state)
+    return sum(count < adam.step for count in adam.param_steps.values())
 
 
 def framework() -> dict[str, str | None]:
@@ -55,141 +118,40 @@ def training_arrays(
     return dict(tree_flatten(trees))
 
 
-def restore(
-    run: TrainingRun, learner: Learner, ema: MLXActorCritic | None, counts: Counts
-) -> StagedContinuation:
-    """Admit the committed snapshot and supply the writer for Etude's staged folder."""
-    filename = "training.safetensors"
-    agent = learner.agent
-    # These lookup tables are reconstructed by policy creation. A table with the
-    # same shape but a changed vocabulary would silently reinterpret the weights.
-    binding = canonical_sha256(
-        {
-            "observation": agent.observation_space.config.model_dump(mode="json"),
-            "precision": agent.precision,
-            "buffers": {
-                name: [
-                    str(value.dtype),
-                    value.shape,
-                    hashlib.sha256(value.tobytes()).hexdigest(),
-                ]
-                for name, value in agent.buffers().items()
-            },
-        }
+def sampling_domain(device: str) -> str:
+    return "mlx"
+
+
+def sampling_state(session: CollectionSession) -> dict[str, np.ndarray]:
+    return {
+        "rng.collector": np.asarray(session.snapshot_rng()),
+        "rng.mlx": np.asarray(mx.random.state[0]),
+    }
+
+
+def validate_sampling(device: str, arrays: Mapping[str, np.ndarray]) -> None:
+    if differing := arrays.keys() ^ {"rng.collector", "rng.mlx"}:
+        raise ValueError(f"sampling.safetensors: incompatible keys {sorted(differing)}")
+    for name, key in arrays.items():
+        if key.shape != (2,) or key.dtype != np.uint32:
+            raise ValueError(f"sampling.safetensors: {name} needs a uint32 key pair")
+
+
+def restore_sampling(
+    session: CollectionSession, arrays: Mapping[str, np.ndarray]
+) -> None:
+    session.restore_rng(arrays["rng.collector"])
+    high, low = arrays["rng.mlx"].tolist()
+    mx.random.seed((high << 32) | low)
+
+
+def restore_legacy(
+    folder: Path, learner: Learner, ema: MLXActorCritic | None, *, step: int
+) -> None:
+    raise ValueError(
+        "learner.pt: this save was written by Torch object registration; "
+        "resume once on Torch to write a portable save"
     )
-
-    def metadata() -> dict[str, str]:
-        return {
-            "backend": "mlx",
-            "binding": binding,
-            "counts": canonical_sha256(counts.model_dump(mode="json")),
-        }
-
-    host = None
-    sampling: dict[str, mx.array] = {}
-    found = read_state(run.out / "state")
-    if found is not None:
-        path = found.path / filename
-        if found.record.files or not path.is_file():
-            raise ValueError("expected an MLX callback save for tracked self-play")
-        if (
-            counts.updates != found.record.at["updates"]
-            or counts.model is None
-            or counts.readings is None
-        ):
-            raise ValueError("incompatible MLX saved counts or input contract")
-        arrays, saved = mx.load(path, return_metadata=True)
-        header = metadata() | {"schema": "1"}
-        payload = None
-        if saved.get("schema") == "2":
-            payload = read_host(found.path)
-            if payload is None:
-                raise ValueError(f"missing MLX {HOST_FILE}")
-            for key in ("rng.collector", "rng.mlx"):
-                value = arrays.pop(key, None)
-                if value is None or value.shape != (2,) or value.dtype != mx.uint32:
-                    raise ValueError(
-                        f"incompatible MLX snapshot RNG shape or dtype for {key}"
-                    )
-                sampling[key] = value
-            header |= {
-                "schema": "2",
-                "continuation_sha256": host_sha256(payload),
-                "rng_sha256": sampling_digest(sampling),
-            }
-        elif (found.path / HOST_FILE).exists():
-            raise ValueError("incompatible MLX snapshot schema with host continuation")
-        # The header binds the host bytes, so a damaged file fails here by name
-        # rather than as a JSON decoding error.
-        verify_header(saved, header)
-        if payload is not None:
-            host = HostContinuation.model_validate_json(payload)
-        expected = training_arrays(learner, ema)
-        # Adam creates its two moments lazily on the first accepted step.
-        if counts.optimizer_updates:
-            for name, value in tree_flatten(agent.trainable_parameters()):
-                expected[f"adam.{name}.m"] = value
-                expected[f"adam.{name}.v"] = value
-        if arrays.keys() != expected.keys():
-            raise ValueError("incompatible MLX snapshot parameter or Adam keys")
-        for name, value in arrays.items():
-            if (
-                value.shape != expected[name].shape
-                or value.dtype != expected[name].dtype
-            ):
-                raise ValueError(f"incompatible MLX snapshot shape or dtype for {name}")
-        if int(arrays["adam.step"]) != counts.optimizer_updates:
-            raise ValueError("MLX Adam step differs from the saved optimizer count")
-        if not all_finite(arrays.values()):
-            raise ValueError("nonfinite MLX training snapshot")
-        trees = tree_unflatten(arrays)
-        agent.update(trees["learner"])
-        agent.clear_cache()
-        if ema is not None:
-            ema.update(trees["ema"])
-            ema.clear_cache()
-        learner.optimizer.state = trees["adam"]
-
-    def restore_sampling(session: CollectionSession) -> None:
-        if sampling:
-            session.restore_rng(sampling["rng.collector"])
-            high, low = sampling["rng.mlx"].tolist()
-            mx.random.seed((high << 32) | low)
-
-    def export(folder: Path, host_sha256: str, session: CollectionSession) -> None:
-        keys = {
-            "rng.collector": mx.array(session.snapshot_rng()),
-            "rng.mlx": mx.random.state[0],
-        }
-        header = metadata() | {
-            "schema": "2",
-            "continuation_sha256": host_sha256,
-            "rng_sha256": sampling_digest(keys),
-        }
-        mx.save_safetensors(
-            folder / filename, training_arrays(learner, ema) | keys, header
-        )
-
-    return StagedContinuation(host, restore_sampling, export)
-
-
-def verify_header(saved: dict[str, str], expected: dict[str, str]) -> None:
-    if saved != expected:
-        differing = sorted(
-            key
-            for key in saved.keys() | expected.keys()
-            if saved.get(key) != expected.get(key)
-        )
-        raise ValueError(
-            "incompatible MLX snapshot: saved header differs in " + ", ".join(differing)
-        )
-
-
-def sampling_digest(keys: dict[str, mx.array]) -> str:
-    """Bind the two small RNG payloads, including same-shape bit corruption."""
-    return hashlib.sha256(
-        b"".join(np.asarray(keys[k]).tobytes() for k in sorted(keys))
-    ).hexdigest()
 
 
 @dataclass

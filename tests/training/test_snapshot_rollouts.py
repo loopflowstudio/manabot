@@ -52,6 +52,7 @@ from manabot.training.loops.self_play import (
     SelfPlay,
     create,
     learn,
+    resume_training,
     self_play,
     self_play_collector,
     step,
@@ -1927,12 +1928,7 @@ def test_native_snapshot_self_play(
                 initial, _ = create(settings, seed=run.seed)
                 restored, averaged = create(settings, seed=run.seed + 1)
                 assert averaged is not None
-                run.resume(
-                    learner=restored.agent,
-                    optimizer=restored.optimizer,
-                    ema=averaged,
-                    extra=Counts(),
-                )
+                resume_training(settings, run, backend, restored, averaged)
                 assert not restored.optimizer.state
                 for policy in (restored.agent, averaged):
                     for name, value in policy.state_dict().items():

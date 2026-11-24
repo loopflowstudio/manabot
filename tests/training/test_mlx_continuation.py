@@ -2,7 +2,6 @@
 
 from contextlib import nullcontext
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,23 +22,6 @@ if TYPE_CHECKING:
     from manabot.training.state.backend import SelfPlayBackend, SelfPlayLearner
 
 
-def bounded_self_play() -> "SelfPlay":
-    from manabot.recipes import baseline
-
-    return baseline.settings(
-        baseline.BaselineConfig(backend="mlx", device="mps")
-    ).model_copy(
-        update={
-            "streams": 2,
-            "transitions": 8,
-            "learning_seats": "one",
-            "batch_closure": "exact-quota",
-            "bucketed_shapes": True,
-            "checkpoint_every": 1,
-        }
-    )
-
-
 @pytest.mark.parametrize(
     "width,precision,device",
     [
@@ -56,6 +38,7 @@ def test_mlx_iteration_uses_recipe_precision(
     pytest.importorskip("mlx.core")
     from manabot.backends import resolve
     from manabot.training.loops.self_play import fresh_iteration
+    from tests.fixtures.self_play import bounded_self_play
 
     recipe = bounded_self_play()
     settings = recipe.model_copy(
@@ -76,56 +59,6 @@ def test_mlx_iteration_uses_recipe_precision(
     assert result.checkpoint.is_file()
 
 
-@pytest.mark.parametrize(
-    "writer,reader,message",
-    [
-        ("torch", "mlx", "expected an MLX callback save"),
-        ("mlx", "torch", "saved state has no object"),
-    ],
-)
-def test_tracked_state_refuses_a_different_framework(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    writer: str,
-    reader: str,
-    message: str,
-) -> None:
-    pytest.importorskip("mlx.core")
-    from manabot.backends import resolve
-    from manabot.training.loops.self_play import CLOCKS, self_play
-    from tests.fixtures.training_records import recording
-
-    out = tmp_path / "out"
-    monkeypatch.setenv("ETUDE_OUT", str(out))
-    settings = bounded_self_play().model_copy(update={"device": "cpu"})
-    with recording(
-        experiment="test", run="cross", directory=tmp_path / "track", clocks=CLOCKS
-    ) as run:
-        policy = self_play(settings, run, updates=1, backend=resolve(writer))
-    before = (out / "state/current.json").read_bytes(), policy.read_bytes()
-    with recording(
-        experiment="test",
-        run="cross",
-        directory=tmp_path / "track",
-        clocks=CLOCKS,
-        resume=True,
-    ) as run:
-        with pytest.raises(ValueError, match=message):
-            self_play(settings, run, updates=2, backend=resolve(reader))
-    assert before == ((out / "state/current.json").read_bytes(), policy.read_bytes())
-    assert not policy.with_name("00000002-raw.safetensors").exists()
-
-
-def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
-    if importlib.util.find_spec("mlx") is None:
-        pytest.skip("requires MLX")
-    subprocess.run(
-        [sys.executable, "-m", "tests.training.test_mlx_continuation", str(tmp_path)],
-        check=True,
-        timeout=120,
-    )
-
-
 def exercise_continuation(root: Path) -> None:
     from etude.train.state import read_state
     import mlx.core as mx
@@ -135,6 +68,7 @@ def exercise_continuation(root: Path) -> None:
     from manabot.backends.mlx import state
     from manabot.backends.mlx.rl import NumericalError
     from manabot.training.loops import self_play as loop
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
 
     backend = resolve("mlx")
@@ -157,7 +91,7 @@ def exercise_continuation(root: Path) -> None:
 
     milestone = attempt(1, resume=False)
     original = milestone.read_bytes()
-    with pytest.raises(ValueError, match="incompatible MLX snapshot"):
+    with pytest.raises(ValueError, match="learner.safetensors: saved precision"):
         attempt(2, recipe=settings.model_copy(update={"precision": "float32"}))
     # A portable policy can start a fresh learner in the recipe's precision.
     portable, _ = backend.load_policy(milestone)
@@ -169,16 +103,20 @@ def exercise_continuation(root: Path) -> None:
     for name, value in tree_flatten(portable.parameters()):
         np.testing.assert_array_equal(restored_weights[name], value, err_msg=name)
     saved = read_state(out / "state")
-    assert saved is not None and not saved.record.files
+    assert saved is not None
+    assert {p.name for p in saved.path.iterdir()} == {
+        "state.json",
+        "learner.safetensors",
+        "sampling.safetensors",
+        "continuation.json",
+    }
     counts = loop.Counts.model_validate(saved.record.extra)
     assert counts.updates == 1 and counts.optimizer_updates > 0 and counts.readings
-    snapshot = saved.path / "training.safetensors"
+    snapshot = saved.path / "learner.safetensors"
     arrays, metadata = mx.load(snapshot, return_metadata=True)
-    assert int(arrays["adam.step"]) == counts.optimizer_updates
-    assert any(key.startswith("ema.") for key in arrays)
-    moments = [
-        v for k, v in arrays.items() if k.startswith("adam.") and k.endswith(".m")
-    ]
+    assert int(arrays["adam/step"]) == counts.optimizer_updates
+    assert any(key.startswith("ema/") for key in arrays)
+    moments = [v for k, v in arrays.items() if k.startswith("adam/exp_avg/")]
     assert any(bool(mx.any(v != 0)) for v in moments)
     # Rebuild independently so the comparisons also catch an omitted restore.
     with recording(
@@ -190,26 +128,32 @@ def exercise_continuation(root: Path) -> None:
         resume=True,
     ) as run:
         learner, ema = loop.create(settings, seed=37, backend=backend)
-        restored = state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
-        assert restored.host is not None
-        # The original schema-2 writer bound these exact bytes in its header.
+        _, restored = loop.resume_training(settings, run, backend, learner, ema)
+        assert restored.host is not None and restored.sampling is not None
         host_file = saved.path / "continuation.json"
         payload = host_file.read_bytes()
         assert restored.host.model_dump_json().encode() == payload
         assert metadata["continuation_sha256"] == hashlib.sha256(payload).hexdigest()
-        live = state.training_arrays(learner, ema)
-        assert live.keys() == arrays.keys() - {"rng.collector", "rng.mlx"}
-        for name, value in live.items():
-            np.testing.assert_array_equal(value, arrays[name], err_msg=name)
+        assert ema is not None
+        adam = state.adam_state(learner, step=counts.optimizer_updates)
+        assert adam.param_steps == json.loads(metadata["param_steps"])
+        for prefix, values in (
+            ("raw", state.policy_arrays(learner.agent)),
+            ("ema", state.policy_arrays(ema)),
+            ("adam/exp_avg", adam.exp_avg),
+            ("adam/exp_avg_sq", adam.exp_avg_sq),
+        ):
+            for name, value in values.items():
+                np.testing.assert_array_equal(
+                    value, arrays[f"{prefix}/{name}"], err_msg=name
+                )
 
-    moment = next(
-        name for name in arrays if name.startswith("adam.") and name.endswith(".m")
-    )
+    moment = next(name for name in arrays if name.startswith("adam/exp_avg/"))
     for invalid, header, match in (
-        (arrays, {**metadata, "backend": "torch"}, "backend"),
+        (arrays, {**metadata, "precision": "float16"}, "precision"),
         (arrays, {**metadata, "schema": "0"}, "schema"),
-        ({k: v for k, v in arrays.items() if k != "adam.step"}, metadata, "keys"),
-        ({**arrays, "adam.step": mx.array([1])}, metadata, "shape or dtype"),
+        ({k: v for k, v in arrays.items() if k != "adam/step"}, metadata, "adam/step"),
+        ({**arrays, "adam/step": mx.array([1])}, metadata, "shape or dtype"),
         (
             {**arrays, moment: mx.full_like(arrays[moment], float("nan"))},
             metadata,
@@ -221,9 +165,9 @@ def exercise_continuation(root: Path) -> None:
             attempt(2)
     current = (out / "state/current.json").read_bytes()
     for damaged, message in (
-        (None, r"^missing MLX continuation\.json$"),
-        (payload + b" ", "saved header differs in continuation_sha256$"),
-        (payload[:-1], "saved header differs in continuation_sha256$"),
+        (None, "missing"),
+        (payload + b" ", "continuation_sha256"),
+        (payload[:-1], "continuation_sha256"),
     ):
         mx.save_safetensors(snapshot, arrays, metadata)
         if damaged is None:
@@ -242,12 +186,42 @@ def exercise_continuation(root: Path) -> None:
     with pytest.raises(ValueError, match="Invalid JSON"):
         attempt(2)
     host_file.write_bytes(payload)
-    corrupt = arrays | {
-        "rng.collector": arrays["rng.collector"] ^ mx.array([0, 1], mx.uint32)
-    }
-    mx.save_safetensors(snapshot, corrupt, metadata)
-    with pytest.raises(ValueError, match="incompatible MLX snapshot"):
+    sampling_file = saved.path / "sampling.safetensors"
+    original_sampling = sampling_file.read_bytes()
+    sampling_file.write_bytes(original_sampling[:-1])
+    mx.save_safetensors(snapshot, arrays, metadata)
+    with pytest.raises(ValueError, match="sampling_sha256"):
         attempt(2)
+    # Even a correctly bound sampling file must be admissible before Adam or
+    # either live policy changes. Start from unrelated weights to detect copying.
+    mx.save_safetensors(
+        sampling_file, {"rng.collector": mx.array(0), "rng.mlx": mx.array(0)}
+    )
+    mx.save_safetensors(
+        snapshot,
+        arrays,
+        metadata
+        | {"sampling_sha256": hashlib.sha256(sampling_file.read_bytes()).hexdigest()},
+    )
+    with recording(
+        experiment="test",
+        run="mlx",
+        seed=19,
+        clocks=loop.CLOCKS,
+        directory=root / "track",
+        resume=True,
+    ) as run:
+        probe, probe_ema = loop.create(settings, seed=41, backend=backend)
+        before = {
+            k: np.array(v) for k, v in state.training_arrays(probe, probe_ema).items()
+        }
+        with pytest.raises(ValueError, match=r"sampling.safetensors: rng"):
+            loop.resume_training(settings, run, backend, probe, probe_ema)
+        after = state.training_arrays(probe, probe_ema)
+        assert after.keys() == before.keys()
+        for name, value in before.items():
+            np.testing.assert_array_equal(after[name], value, err_msg=name)
+    sampling_file.write_bytes(original_sampling)
     changed_host = json.loads(payload)
     changed_host["collector"]["streams"][0]["recipe"]["actions"].pop()
     changed_bytes = json.dumps(changed_host).encode()
@@ -270,45 +244,12 @@ def exercise_continuation(root: Path) -> None:
     assert (out / "state/current.json").read_bytes() == current
     assert milestone.read_bytes() == original
     assert not milestone.with_name("00000002-raw.safetensors").exists()
-    # A historical writer supplied weights and Adam, with no stream state.
-    historical = {
-        k: v
-        for k, v in metadata.items()
-        if k not in ("rng_sha256", "continuation_sha256")
-    }
-    mx.save_safetensors(
-        snapshot,
-        {k: v for k, v in arrays.items() if not k.startswith("rng.")},
-        historical | {"schema": "1"},
-    )
-    with (
-        patch.object(
-            state, "read_host", side_effect=AssertionError("legacy host read")
-        ),
-        pytest.raises(
-            ValueError, match="incompatible MLX snapshot schema with host continuation"
-        ),
-    ):
+    # The retired MLX-only writer did not provide portable optimizer state.
+    old = saved.path / "training.safetensors"
+    old.touch()
+    with pytest.raises(ValueError, match="training.safetensors"):
         attempt(2)
-    host_file.unlink()
-    with recording(
-        experiment="test",
-        run="mlx",
-        seed=19,
-        clocks=loop.CLOCKS,
-        directory=root / "track",
-        resume=True,
-    ) as run:
-        learner, ema = loop.create(settings, seed=37, backend=backend)
-        restored = state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
-        assert restored.host is None
-        for name, value in state.training_arrays(learner, ema).items():
-            np.testing.assert_array_equal(value, arrays[name], err_msg=name)
-    host_file.write_bytes(payload)
-    snapshot.unlink()
-    with pytest.raises(ValueError, match="MLX callback save"):
-        attempt(2)
-    mx.save_safetensors(snapshot, arrays, metadata)
+    old.unlink()
     manifest = saved.path / "state.json"
     original_manifest = manifest.read_bytes()
     changed = json.loads(original_manifest)
@@ -356,7 +297,7 @@ def exercise_continuation(root: Path) -> None:
     resumed = loop.Counts.model_validate(latest.record.extra)
     assert resumed.updates == 2 and resumed.optimizer_updates > counts.optimizer_updates
     assert (
-        int(mx.load(latest.path / snapshot.name)["adam.step"])
+        int(mx.load(latest.path / snapshot.name)["adam/step"])
         == resumed.optimizer_updates
     )
 
@@ -393,7 +334,7 @@ def test_safe_stop_matches_uninterrupted(
     assert control is not None
     if scenario == "complete":
         assert control.record.extra["optimizer_updates"] == 2
-    expected = mx.load(control.path / "training.safetensors")
+    expected = mx.load(control.path / "learner.safetensors")
     for arm in ["split", "repeat"] if scenario == "metal" else ["split"]:
         actual = read_state(tmp_path / arm / "out/state")
         assert actual is not None
@@ -403,10 +344,13 @@ def test_safe_stop_matches_uninterrupted(
         assert (tmp_path / "control/entry.json").read_bytes() == (
             tmp_path / arm / "entry.json"
         ).read_bytes()
-        arrays = mx.load(actual.path / "training.safetensors")
+        assert (actual.path / "sampling.safetensors").read_bytes() == (
+            control.path / "sampling.safetensors"
+        ).read_bytes()
+        arrays = mx.load(actual.path / "learner.safetensors")
         assert arrays.keys() == expected.keys()
         for name, value in arrays.items():
-            if scenario == "metal" and name.startswith(("learner.", "ema.", "adam.")):
+            if scenario == "metal" and name.startswith(("raw/", "ema/", "adam/")):
                 np.testing.assert_allclose(
                     value, expected[name], rtol=0, atol=1e-6, err_msg=name
                 )
@@ -455,6 +399,7 @@ def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) ->
     from manabot.training.loops import self_play as loop
     from manabot.training.rollout.collection import capture_collector
     from manabot.training.state.game_errors import GameErrorPolicy
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
 
     root.mkdir(exist_ok=True)
@@ -467,6 +412,16 @@ def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) ->
             "workers": 1 if phase == "resume" else 2,
         }
     )
+    if scenario == "metal":
+        # Compare device repeatability on one small optimizer batch.
+        settings = settings.model_copy(
+            update={
+                "transitions": 4,
+                "model": settings.model.model_copy(
+                    update={"hidden_dim": 32, "attention_layers": 1}
+                ),
+            }
+        )
     if scenario == "random":
         settings = settings.model_copy(
             update={

@@ -5,7 +5,7 @@ Incident payloads use Any: their nested tensors belong to the framework.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,16 +18,13 @@ from manabot.policy.protocol import Backend, BackendName, BackendPolicy, PolicyL
 from manabot.training.updates.backend import Learner, LearnerFile, Policy, UpdateBackend
 
 if TYPE_CHECKING:
-    from etude.train.tracking import TrainingRun
-
     from manabot.infra.config import ModelConfig
     from manabot.policy.readings import Readings
     from manabot.training.learning import Precision
-    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor
-    from manabot.training.state.continuation import StagedContinuation
+    from manabot.training.state.optimizer import AdamState
     from managym import PlayerConfig
 
 
@@ -191,18 +188,32 @@ class SelfPlayBackend(UpdateBackend, Protocol):
 
 @runtime_checkable
 class Continuation(TrainingState, Protocol):
-    """Objects Etude can restore together, plus this framework's incident evidence."""
+    """Framework-owned tensors in a portable self-play save."""
 
-    def restore(
+    def parameter_shapes(self, agent: BackendPolicy) -> dict[str, tuple[int, ...]]: ...
+    def policy_arrays(self, agent: BackendPolicy) -> dict[str, np.ndarray]: ...
+    def policy_buffers(self, agent: BackendPolicy) -> dict[str, np.ndarray]: ...
+    def load_policy_arrays(
+        self, agent: BackendPolicy, arrays: Mapping[str, np.ndarray]
+    ) -> None: ...
+    def adam_state(self, learner: SelfPlayLearner, *, step: int) -> AdamState: ...
+    def load_adam(self, learner: SelfPlayLearner, adam: AdamState) -> int: ...
+    def sampling_domain(self, device: str) -> str: ...
+    def sampling_state(self, session: CollectionSession) -> dict[str, np.ndarray]: ...
+    def validate_sampling(
+        self, device: str, arrays: Mapping[str, np.ndarray]
+    ) -> None: ...
+    def restore_sampling(
+        self, session: CollectionSession, arrays: Mapping[str, np.ndarray]
+    ) -> None: ...
+    def restore_legacy(
         self,
-        run: TrainingRun,
+        folder: Path,
         learner: SelfPlayLearner,
         ema: BackendPolicy | None,
-        counts: Counts,
-    ) -> StagedContinuation | None:
-        """Restore the live objects and supply a staged export for callback saves."""
-        ...
-
+        *,
+        step: int,
+    ) -> None: ...
     def framework(self) -> dict[str, str | None]: ...
 
 
