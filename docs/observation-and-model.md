@@ -560,7 +560,10 @@ An ability has no spell characteristics and retains its captured source
 definition/reference after the source leaves. A pending ability that reads source power reports that value. This includes
 Heartfire Immolator’s damage and Alesha’s graveyard target limit. After sacrifice this is the power of the departed permanent, even if
 the card returns. The v11 stack column `source_power` stores it in tenths.
-The LLM prompt and Academy stack label show the unscaled value. `Permanent.name` keeps its old
+The LLM prompt and Academy stack label show the unscaled value. An activation that reads the objects that paid its cost (Ayli’s
+sacrificed creature’s toughness) reports that amount from their last known
+information as `paid_amount`, stored in the v11 stack column `paid_amount` in
+tenths and shown in its description. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
