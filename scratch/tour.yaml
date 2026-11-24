@@ -1,4 +1,4 @@
-at: 24ac46fe41a18bb00b77fc8f9ecad852c0ccdeab
+at: 56b5ac6c2d4950235609bc16fc3ae046d88115bc
 first:
   - path: docs/engine.md
     why: Play the graveyard returns and battlefield form examples.
@@ -12,6 +12,16 @@ first:
     why: Stack objects retain sources, target clauses and announced X.
   - path: managym/state/src/permanent.rs
     why: Spell choices and payment survive battlefield entry.
+  - path: managym/state/src/effect.rs
+    why: Layer 3 SetName names a permanent.
+  - path: managym/state/src/subtype.rs
+    why: Which subtypes survive a SetTypes change.
+  - path: managym/state/src/card.rs
+    why: Statics that can change another permanent's mana.
+  - path: managym/src/flow/layers.rs
+    why: Apply SetName and subtype-preserving SetTypes.
+  - path: managym/src/flow/statics.rs
+    why: One summoning-sickness reading of layered characteristics.
   - path: managym/src/flow/resolution.rs
     why: Check each target against its clause and exact source.
   - path: managym/src/flow/triggers.rs
@@ -20,6 +30,8 @@ first:
     why: Replace one target within its original clause.
   - path: managym/src/agent/continuation.rs
     why: Project stack choices and targets for each viewer.
+  - path: managym/src/agent/ability_description.rs
+    why: Trigger text describes the effects it will run.
   - path: managym/src/flow/proposed_event.rs
     why: Commit entries and simultaneous life gains.
   - path: managym/src/flow/zones.rs
