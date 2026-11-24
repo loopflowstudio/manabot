@@ -587,8 +587,6 @@ The working phase for this batch is satisfied; no new finding. Finding 9 is clos
 - Constraint, not a defect: the engine has no deck copy limit, so Hare Apparent's deck-construction line has nothing to override. A future four-copy rule needs that exception.
 - Payment: no payment path changed. Cryptic Caves' sacrifice-and-tap cost and Ghalta's discount use existing paths.
 
-Next: the post-v29 concept review at `256d8ac310` (`scratch/concept-review.html`) identified that `ActivatedAbilityDefinition::mana_choices` conflates CR 605.1a classification with finalized mana outputs (which caused a real Layer 6 `lose_nonmana_abilities` bug on dynamic mana abilities and falsely blocked *Elvish Archdruid*†, since `finalize_characteristics` + `current_mana_output` already materialize board-counted `AddMana` — verified at `fdn.rs:1926`), and that `trigger_context` still leaves `DamageDealt` unbound. Both repairs fold into Slice 1 below (12 primary rows → **80/81** + *Elvish Archdruid*†), followed by Slice 2 for state triggers, counter costs/LKI queries, remaining cost rows, CR 104.4b draw, and closure (**81/81**).
-
 ### Implemented slice · Mana-ability split, `DealsDamage` source binding, all-zone `*/*` CDAs, move results and multi-player mill
 
 Built in `f5e7244bf4` and `965b0e0ea1` on hash contract **v29** (no serialization or state change; only the Clone catalog-order witness in `lea.rs` moved). Twelve primary FDN rows (Kiora, the Rising Tide, Crypt Feaster and Revenge of the Rats `fdn`; Enigma Drake `akh`, new module; Crusader of Odric `m13`; Consuming Aberration `gtc`; Stroke of Midnight `woe`; Feed the Swarm `znr`, new module; Scavenging Ooze `cmd`, new module; Cemetery Recruitment `emn`; Dread Summons `c15`, new module; Maelstrom Pulse `arb`, new module) and the cost-primary Elvish Archdruid (`m10`) link to their first-printing modules and directed tests. New tokens: `token.rat` (tSHM), `token.zombie` (tUGL) and `token.scion_of_the_deep` (tFDN). `Horror` and `Octopus` joined the subtype table. The FDN ledger has **80 of 81** primary rows with source definitions; Mazemind Tome remains.
@@ -618,6 +616,14 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
 
 ## Remaining shared work
 
+- Two serialized duplications wait for one deliberate token-rename step
+  (each changes card serialization and learning tokens, so each needs a
+  `token_renames.rs` entry and a pinned-pilot check):
+  `Effect::MillCards` carries both `target: Option<TargetSpec>` and
+  `player: Option<PlayerSelector>`, which `PlayerSelector::Target` already
+  covers; `StaticAbility::CharacteristicPower` and `CharacteristicPt` differ
+  only in whether the CDA also sets toughness (`Operation::Cda.sets_toughness`).
+  Do it in the closing slice or leave both recorded as known debt.
 - Replace `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared
   target clause can express its complete bound, including announcement,
   retarget and resolution reads. The special case still sits in
