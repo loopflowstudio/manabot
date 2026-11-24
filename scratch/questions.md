@@ -70,3 +70,10 @@ Use the original M11, M13 and Time Spiral printing keys for the Foundations repr
 Keep the prior opening authority and parity receipts by recording the casting catalog in new files. Their definition ordinals come from the catalog at `d12eb496b3`. Comparing the retained and current Commands by printed name also resolves the source of each CARD_REVEALED event.
 
 Use Heartwood Crafter and Codie for the next casting-provenance slice. An exile cast of a linked prepared spell exercises both the spending restriction and Codie's copy. Use the existing Burst Lightning fixture for manual kicker, with one red unit spent on the generic cost.
+
+Post-build concept review (`a5c3c68beb` vs `82c5d1d1b7`) records five reversible choices in `scratch/concept-review.html` and `scratch/plan.md`:
+- Unify priority and resolution `CastChoices` construction behind one shared builder where `resolving: true` for ALL `CastDuringResolution` casts (free and paid) and `free: true` strictly means "without paying its mana cost" (fixing Harbinger of the Tides under Yue/Etali/Cascade and giving `from_prepared` one owner).
+- Keep single-route `Action.route = None` on the wire for retained Command compatibility, and add `Game::resolved_play_route` so solitary `GraveyardType` (Muldrotha) plays always project `quota_type`, Muldrotha focus, and route description.
+- Decouple `PlayGrant.face_down` and `PlayGrant.condition: Option<Condition>` from `PlayGrant.foretold`, replacing the 5 visibility calls to `is_foretold` with `is_face_down_in_exile` / `can_view_face_down_exile` while keeping `is_foretold` strictly for Foretell cost and determinization (unblocking Gandalf's Flameshape).
+- Publish Tinybones's static exile-counter permission on `LayerBoard.play_permissions.exile_counter_plays` as `PlayRoute::ExileCounter(CounterKind)`, backed by sparse `GameState.object_counters`.
+- Keep `Action::SelectCard` for front-face `CastDuringResolution` offers and `Action::CastSpell` for non-front profiles to preserve retained replay captures.

@@ -11,11 +11,13 @@ profile supplies the spell's characteristics, targets and printed costs. The
 route supplies permission, timing and any alternative price. Additional costs
 apply to the selected combination.
 
-- `ContentPack::spell_definition` resolves the front, Adventure, Omen or modal back for the physical object. Priority and resolution offers use it before filtering. Announcement, payment and targeting use the same definition through `CastChoices::spell`.
-- A modal back enters the battlefield back face up. Moving it to another zone restores the front. An Adventure or Omen instead follows its own rule on leaving the stack.
-- `PlayRoute` distinguishes ordinary hand casts, free hand casts, top-of-library permission, printed or granted flashback, exact-object grants and Muldrotha's per-type permission. Exact grants separately record who may cast, their duration, preparation and flashback. A land's chosen route determines whether it may be played and who controls it on entry.
-- Omniscience replaces the mana cost. A free cast still permits kicker and bargain and requires mandatory additional costs. Harbinger's surcharge buys flash when required. An independent source of flash leaves the surcharge optional.
-- Compound casts bind the chosen target with its spell profile and permission. `ContinuationFrame` records the selected profile during announcement. `DecisionContextView` names the spell the acting player chose. The v11 action row carries a single spell-profile category.
+- **One casting authority (`CastChoices`).** Both priority plays (`cast_choices_for_priority`) and resolution plays (`cast_choices_for_resolution`) construct `CastChoices` through one shared builder with orthogonal flags: `resolving: bool` is true for *all* `CastDuringResolution` casts (both free and paid, CR 608.2g), `free: bool` strictly means "without paying its mana cost" (CR 118.9), `flash_surcharge: bool` is required only when `!resolving` and no other instant timing holds, `flashback: bool` marks stack-exit exile (CR 702.34a), and `from_prepared: bool` captures prepared-copy provenance from `PlayGrant.prepared` before the copy leaves exile. `SpellOnStack.from_prepared` carries that provenance onto the stack and `copy_stack_object` clears it (`false`) on stack copies alongside `flashback` and `exile_instead_of_graveyard`.
+- **Printed profiles (`SpellProfile`).** `ContentPack::spell_definition` resolves `Front`, `Adventure`, `Omen`, or `BackFace` for the physical object. Priority and resolution offers evaluate eligibility, land vs. spell type checks (`permits_spell` and `cast_spell_action`), announcement, payment, and targeting against `cast.spell(...)`, never front-face shortcuts. A modal back enters the battlefield back face up (`ZoneEntry { transformed: true }`) and restores the front on leaving. Adventures and Omens follow their own stack-exit rules (CR 715.3d / shuffle). `ContinuationFrame` and `DecisionContextView` project the selected profile through announcement; the v11 action and relation rows carry one `SPELL_PROFILE` category (size 4).
+- **Play routes & layered permissions (`PlayRoute` + `LayerBoard.play_permissions`).** `PlayRoute` covers `Hand`, `FreeFromHand` (Omniscience), `LibraryTop` (Vizier), `PrintedFlashback`, `GrantedFlashback` (Iroh), `Grant(usize)` (exact-object grants), `GraveyardType` (Muldrotha per-type quota), and `ExileCounter(CounterKind)` (Tinybones). Static play permissions — `free_from_hand`, `library_spells`, `graveyard_flashback`, `opponents_hand_only`, `flash_spells`, `exile_counter_plays`, and controller-specific `extra_land_plays` — live together on `StaticPlayPermissions` in `LayerBoard`. A land's chosen route authorizes foreign ownership and sets `ZoneEntry { controller: Some(player) }`.
+- **Single-route wire compatibility vs. route inspection.** `Action::{CastSpell, PlayLand}` keeps `route: None` when only one route exists so retained single-route `Command`s stay wire-compatible, while `Game::resolved_play_route(action)` resolves the actual `PlayRoute` for observation projection, `action_focus`, and `action_description` so solitary `GraveyardType` (Muldrotha) plays always expose `quota_type`, grantor focus, and route description (not only on overlap). `Decision::CastDuringResolution` keeps `Action::SelectCard` for front-face offers and `Action::CastSpell` for non-front profiles to preserve retained replay captures.
+- **Exact grants & private face-down exile (`PlayGrant`).** Exact grants keep orthogonal fields: caster/liveness (`player`, `source`, `follows_source_controller`, `condition: Option<Condition>`), timing/duration (`this_turn`, `through_next_turn`, `own_turn_only`, `after_turn`, `flash`), cost/payment (`cost`, `any_mana`, `waterbend`), visibility (`face_down`), Foretell semantics (`foretold`), profile restriction (`on_adventure`), stack-exit (`flashback`), and linked copy survival (`prepared`). `face_down` and `can_view_face_down_exile` govern all private face-down exile visibility (`zones.rs`, `continuation.rs`, `observation.rs`, `policy_history.rs`); `is_foretold` is reserved strictly for Foretell cost lookup and `fill_foretold_slots` determinization.
+- **Sparse exiled-object counters & spending origin.** Non-battlefield counters live in sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` (projected to `CardData.counters`, v11 `FactKind::Counter`, LLM text, and Academy) so normal objects stay unchanged and CR 400.7 zone moves automatically stale old keys. `SpendingContext::Cast { spell: SpellSnapshot, from: ZoneType }` supplies the casting zone to `ManaRestriction::allows` (one spending authority for `ExceptFromHand` and all other restrictions).
+- **Additional costs & dynamic pricing.** Omniscience replaces the mana cost while still permitting Kicker/Bargain (CR 118.9d) and requiring mandatory additional costs. Harbinger's `AdditionalCost::FlashSurcharge` buys flash only when required at priority and is skipped during resolution. `StaticAbility::SpellsCostLess` supports dynamic `EffectValue` reductions (equipped creature power for Glamdring). Compound priority offers bind the chosen target with its spell profile and route while keeping compact priority precondition ordering stable.
 
 ## Delivered
 
@@ -25,68 +27,64 @@ Muldrotha, Vizier, Etali, Smaug, Bilbo, Twinmaw and Scavenger Regent. The
 first 44 preparation rows include linked copies, source transfers, preparation
 during resolution and Emeritus of Truce.
 
-- Yue offers Spew Flame from hand and Solstice Revelations offers Charring Bite from exile. Evaluating the card's front face before enumerating its spell profiles suppressed both legal casts. `f3d84a7abe` moved the restrictions into the per-profile check. The two fixtures in `tla.rs` check the legal offer, the selected spell in the caster's announcement frame and decision context, and the spell's resolution and departure.
-- Monica Rambeau and Photon use one front/back definition pair. Photon pays its printed cost, enters back face up and returns to Monica on leaving. A compound cast binds its own face, permission and payable target. The compact priority API retains its recorded candidate addresses.
-- The Foundations fixtures cover 11 of 17 rows. Omniscience supplies an alternative hand route. A free Burst Lightning still allows manual spending on kicker. High Fae Trickster supplies timing. Harbinger's surcharge and required sacrifices still apply on a free cast. Sphinx adds an exact-object flashback route alongside Think Twice's printed route. Reassembling Skeleton and Suspicious Shambler exercise graveyard activation and exact source identity.
-- Harmonized Trio and Joined Researchers bring preparation to 46 of 62. Their fixtures exercise the complete tap cost, choosing the library order, intervening-if checks and the two players drawing.
-- The HOB fixtures cover 12 of 17 Adventures plus Bilbo's separate permission. The TDM fixtures cover 12 of 13 Omens. They exercise both the permanent and the inset. Feral Deathgorger binds both targets to the same graveyard. Till and Tend stacks extra land plays until cleanup. Multiple Omnisciences grant one free route.
+- Yue offers Spew Flame from hand and Solstice Revelations offers Charring Bite from exile (`f3d84a7abe`, `be71091782`). The two fixtures in `tla.rs` verify the legal offer, the selected spell in `ContinuationFrame` and `DecisionContextView`, and resolution/departure.
+- Monica Rambeau // Photon uses one front/back definition pair. Photon pays its printed cost, enters back face up and returns to Monica on leaving. Compound casts bind face, permission and payable target; compact priority preconditions retain recorded candidate addresses.
+- Foundations covers 11 of 17 rows: Omniscience (`FreeFromHand` + manual Kicker on Burst Lightning, deduplicated across copies), High Fae Trickster (timing), Harbinger of the Tides (surcharge + required sacrifices on free cast), Sphinx of Forgotten Lore (exact-object `flashback` grant alongside Think Twice's printed route), Reassembling Skeleton, and Suspicious Shambler.
+- Harmonized Trio and Joined Researchers bring preparation to 46 of 62 rows.
+- HOB covers 12 of 17 Adventures plus Bilbo's competing exile replacement. TDM covers 12 of 13 Omens (Feral Deathgorger same-graveyard targeting, Till and Tend stacked extra land plays).
 
-## Remaining shared rules
+## Execution plan for remaining cohorts
 
-The 31 rows in `be46a3fc8c` close the batch expressible with the casting
-profiles, permissions, costs and targeting implemented here. Twenty-two
-MTG-419 rows remain across six Foundations cards, five HOB cards, one TDM
-card and ten preparation cards.
-For example, Claim Territory needs both found cards revealed while the
-caster chooses which one enters tapped. The existing library search reveals
-a card as it moves to hand, too late for that decision. These rows split at
-the shared rules listed below. Six further preparation rows belong to MTG-418.
+Twenty-two MTG-419 rows remain (10 core casting/permission/payment rows across Slices 1–3, plus 12 non-casting shared-rules rows). Six further preparation rows belong to MTG-418. Post-build concept review (`scratch/concept-review.html`) sequences the core casting-authority fixes first so every remaining permission card plugs into one clean model.
 
-| Cohort | Cards | Shared rule still needed |
+### Slice 1 — Casting-authority alignment & provenance (3 cards: Heartwood Crafter, Codie, Sanar)
+
+Fix the structural mismatches in the built casting layer and land the provenance cohort together:
+
+1. **Unify `CastChoices` construction & fix `resolving`:** Share one builder between `cast_choices_for_priority` and `cast_choices_for_resolution` with `resolving: true` for *both* free and paid `CastDuringResolution` casts (fixing Harbinger of the Tides under Yue/Etali/Cascade). Derive `from_prepared` from `PlayGrant.prepared` in the same builder. Route `mana/preview.rs` (`payment_preview`) through the same builder for both `Action::CastSpell` and front-face `Action::SelectCard` during `CastDuringResolution`, so paid front-face resolution casts preview identically to non-front profiles.
+2. **Stack provenance (`SpellOnStack.from_prepared`):** Copy `cast.from_prepared` onto `SpellOnStack`, clear `spell.from_prepared = false` in `copy_stack_object` (`retarget.rs`), expose it to trigger matching (Codie) and viewer projections (observation/text/Academy as needed).
+3. **Resolved single-route projection (`Game::resolved_play_route`):** Keep single-route `Action.route = None` on the wire, but resolve `GraveyardType` in `observation.rs`, `action_focus`, and `action_description` so solitary Muldrotha plays retain `quota_type`, Muldrotha focus, and route description (verify zero pinned-pilot break on `test_pinned_pilot.py`).
+4. **Per-profile land check:** Evaluate `is_land()` on `cast.spell(...)` in `permits_spell` and `cast_spell_action` rather than front-face `self.state[object].types`, preventing `FreeFromHand` / `LibraryTop` / `Flashback` from colliding with modal land faces.
+5. **Zone-aware spending context:** Change `SpendingContext::Cast` to `Cast { spell: SpellSnapshot, from: ZoneType }` (keeping the `SpendingContext::cast` test helper) and add `ManaRestriction::ExceptFromHand` (or `ExceptSpellsFrom(ZoneType)`).
+6. **Cards & regressions:**
+   - **Heartwood Crafter // Soul Tether** (FRA) + **Codie, Ravenous Codex** (FRA): Cast linked prepared Soul Tether from exile with Heartwood Crafter's restricted `{C}` -> Codie copies and retargets -> copy has `from_prepared == false` and cannot re-trigger Codie; fork to ordinary hand spell rejecting the restricted `{C}`; cold replay from pending announcement.
+   - **Sanar, Unfinished Genius // Wild Idea** (SOS): Gate Treasure activation on an instant/sorcery in `TurnState.spells_cast` (same source as first-spell discount in `flow/play.rs`); Wild Idea searches and reveals instant/sorcery then shuffles.
+   - **Alignment regressions:** (a) Harbinger of the Tides cast via a free Yue/Etali resolution offer with `{2}` open does *not* offer a flash-surcharge `KickerChoice`; (b) solitary Muldrotha graveyard play (no Zul Ashur) still projects `quota_type`, Muldrotha `action_focus`, and route description.
+   - Update `fra.jsonl` and `sos.jsonl` ledgers.
+
+### Slice 2 — Counter-marked exile, private conditional exile & dynamic pricing (5 cards: Tinybones, Gandalf, Glamdring, Loot, Redcap)
+
+1. **Tinybones, Bauble Burglar (FDN):** Add sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` (projected to `CardData.counters`, v11 `FactKind::Counter`, LLM text, Academy), `StaticPlayPermissions.exile_counter_plays`, `PlayRoute::ExileCounter(CounterKind)` (visited in `priority_candidate_objects`), and discard-event trigger. Deliver the full required interaction-evidence fixture (see table below).
+2. **Gandalf, Goblins' Bane // Flameshape (HOB):** Decouple `PlayGrant.face_down: bool` and `PlayGrant.condition: Option<Condition>` from `PlayGrant.foretold`. Replace the 5 visibility calls to `is_foretold` (`zones.rs`, `continuation.rs`, `observation.rs`, `policy_history.rs`) with `is_face_down_in_exile` (for public-source, history, and `CardData.face_down`) and `can_view_face_down_exile(object, viewer)` (which enforces both viewer information-sharing and the grant's live `condition`, so losing the last Wizard hides the cards even from their owner). Keep `is_foretold` strictly for Foretell cost lookup and `foretold_cards` / `fill_foretold_slots` determinization (`search.rs`, `possible_worlds.rs`, `selection_sampling.rs`). Test Wizard persistence across Gandalf dying with another Wizard, losing all Wizards (hidden & unplayable), and regaining a Wizard (visible & playable again).
+3. **Glamdring, Foe-hammer // Gleam of Death (HOB):** Extend `SpellsCostLess` (or dynamic reduction in `effective_spell_cost`) with `EffectValue` reading equipped creature's current power; Gleam of Death mills six and returns instants/sorceries before Adventure exile.
+4. **Loot, Exuberant Explorer (FDN):** Add controller-specific `StaticAbility::AdditionalLandPlay` on `StaticPlayPermissions.extra_land_plays` + private look-six selection bounded by resolution-time land count.
+5. **Redcap Gutter-Dweller (FDN):** Commit optional another-creature sacrifice before +1/+1 counter and `exile_top_cards_to_play(ThisTurn)`; create printed nonblocking Rat tokens.
+6. Update `fdn.jsonl` and `hob.jsonl` ledgers.
+
+### Slice 3 — Graveyard counter-payment, TDM completion & non-casting split boundary
+
+1. **Quilled Greatwurm (FDN):** Graveyard casting permission with distributed `CostComponent::RemoveCounters` payment in `payment.rs` + combat-damage counter trigger.
+2. **Bloomvine Regent // Claim Territory (TDM — closes TDM 13/13):** Split-destination library search revealing both found cards before choosing which enters tapped and which goes to hand.
+3. **Remaining 12 non-casting shared-rules rows (concrete split boundary):** None of these 12 rows exercises new casting-profile or play-permission concepts; batch only the small clean ones that fit within the 10% Engine Budget, and split cleanly at the named shared-rules boundary for any remaining family (recording the reason and rows per the 2026-11-24 steering):
+
+| Cohort | Cards | Shared rule needed (outside casting/permission core) |
 |---|---|---|
-| HOB | An Unexpected Party | Choose and retain a creature type as the permanent enters. |
-| HOB | Bilbo, Luckwearer | Target two permanents sharing a card type and exchange control only if both sides can change. |
-| HOB | Great Ugly-Looking Goblin | Amass handles both creating an Army and choosing an existing Army. |
-| HOB | Gandalf, Goblins' Bane | Privately inspect face-down exiled cards and grant conditional play while the caster controls a Wizard. |
-| HOB | Glamdring, Foe-hammer | Price an instant or sorcery from its controller's equipped creature's current power. |
-| TDM | Bloomvine Regent | Reveal the cards found in a single search, choose one to enter tapped and put the other in hand. |
-| Foundations | Tinybones, Bauble Burglar | Discard events and counters on exact exile appearances. A second Tinybones uses the same counter marks, including on foreign lands. |
-| Foundations | Loot, Exuberant Explorer | Controller-specific land allowance and private look-six selection whose mana-value limit is the land count at resolution. |
-| Foundations | Flamewake Phoenix and Gate Colossus | Identify the graveyard source of a beginning-of-combat or land-entry trigger and retain that appearance through an optional return. |
-| Foundations | Quilled Greatwurm | Pay a graveyard casting cost by removing a distributed total of counters from creatures. |
-| Foundations | Redcap Gutter-Dweller | Commit the optional sacrifice before the counter and impulse permission. Create the printed Rats with their blocking restriction. |
-| Preparation | Spiritcall Enthusiast and Kirol, History Buff | Trigger once per batch of matching entries or graveyard departures. `process_event_batch` currently matches each movement separately. |
-| Preparation | Grave Researcher | Surveil before the graveyard count. Charge life from the reanimated object's mana value. |
-| Preparation | Emeritus of Ideation and Lluwen, Exchange Student | Distinct graveyard cards as actual costs for an attack trigger or a sorcery-speed activation. Lluwen also creates the printed Pest. |
-| Preparation | Variable Chaser | Separate optional whole-hand discards and draws for the two players in order. |
-| Preparation | Pyre Rhymer | A turn-scoped mana trigger applies to each Mountain its controller taps for mana, including later arrivals. |
-| Preparation | Heartwood Crafter | Restricted mana reads the spell's casting zone in the spending context. |
-| Preparation | Sanar, Unfinished Genius | Gate Treasure activation on an instant or sorcery actually cast this turn. Use the cast appearances in `TurnState.spells_cast`, as the first-spell discount already does in `flow/play.rs`. |
-| Preparation | Codie, Ravenous Codex | Preserve prepared-cast provenance through announcement and the stack. Copy and retarget the cast spell without granting its copies that provenance. |
+| Foundations (2) | Flamewake Phoenix, Gate Colossus | Graveyard-zone triggers (beginning-of-combat / landfall) retaining exact graveyard appearance through optional return. |
+| Preparation (2) | Spiritcall Enthusiast, Kirol, History Buff | Batch-collapsed triggers ("one or more" entries or graveyard departures) in `process_event_batch`. |
+| Preparation (3) | Grave Researcher, Emeritus of Ideation, Lluwen, Exchange Student | Surveil-before-count + MV life loss; distinct graveyard-card exile costs for attack trigger / sorcery activation + Pest token. |
+| Preparation (2) | Variable Chaser, Pyre Rhymer | Separate APNAP optional whole-hand discard/draw; turn-scoped delayed mana trigger on tapping any Mountain for mana. |
+| HOB (3) | An Unexpected Party, Bilbo, Luckwearer, Great Ugly-Looking Goblin | Chosen creature type retained on entry; shared-card-type control exchange; Amass (create or grow existing Army). |
 
-**Next slice.** Build the casting-provenance cohort with Heartwood Crafter
-and Codie. Use the same linked prepared spell cast from exile as the positive
-case for restricted mana and Codie's copy trigger. Fork to an ordinary hand
-spell for the spending restriction, then choose separate targets for the
-original and stack copy and check that the copy cannot trigger Codie. Pay
-through the normal announcement and payment path and restore a pending
-Command across replay. Update the FRA ledger after the native fixtures pass.
+### Deferred to MTG-418 (6 preparation rows)
 
-MTG-418 owns six history-dependent rows. Emeritus of Woe and Bloodline
-Recollector need creature deaths this turn. Leech Collector needs the first
-life gain, Scheming Silvertongue the total life gained, Whiplash Wordsmith
-noncombat damage to an opponent, and Hexhaven Dueling Arena the specific
-creature that attacked. The unblock is MTG-418's merged history and query
-authority with these facts available to trigger conditions. On that merged
-revision, start with
-`cargo test --manifest-path managym/Cargo.toml -p managym --lib preparation_resolution`
-as the preparation control before adding the six directed fixtures.
+MTG-418 owns six history-dependent rows: Emeritus of Woe and Bloodline Recollector (creature deaths this turn), Leech Collector (first life gain this turn), Scheming Silvertongue (total life gained this turn), Whiplash Wordsmith (noncombat damage to an opponent), and Hexhaven Dueling Arena (specific creature that attacked). On that merged revision, start with `cargo test --manifest-path managym/Cargo.toml -p managym --lib preparation_resolution` as the preparation control before adding the six directed fixtures.
 
 ## Interaction evidence still owed
 
 | Position | Required fork or outcome |
 |---|---|
-| Tinybones, opposing discarded land and spell with stash counters, second Tinybones | The current controller plays foreign cards that an earlier Tinybones exiled. Check own-turn timing, foreign land control (enters under Tinybones’s controller, not owner), ownership versus control, mana spending, High Fae Trickster non-bypass of own-turn timing, and a hand-only prohibition (blocks spell, allows land). Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
+| Tinybones, opposing discarded land and spell with stash counters, second Tinybones | Current controller plays foreign cards exiled by an earlier Tinybones. Check own-turn timing, foreign land control (enters under Tinybones’s controller, not owner), ownership versus control, mana spending, High Fae Trickster non-bypass of own-turn timing, and `HandOnly` (blocks spell, allows land). Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
+| Gandalf’s Flameshape vs. Foretell | Private face-down exile visible only to caster while controlling a Wizard; persists when Gandalf dies and another Wizard remains; hides and locks when last Wizard leaves; restores when a new Wizard enters; never enters `fill_foretold_slots` determinization. |
 
 ## Validation
 
@@ -100,32 +98,13 @@ cargo test --manifest-path managym/Cargo.toml -p managym --lib preparation_resol
 uv run pytest tests/semantic/test_text_observation.py tests/academy/test_choice_navigation.py tests/model/test_pinned_pilot.py -q
 ```
 
-The 31 new ledger rows passed their directed checks in a 148-test native
-card/observation run. Another ten structured-offer tests, five preparation
-resolution tests, the execution vocabulary test and the real-card Scryfall
-check passed. Clone Legion copied a prepared creature without duplicating
-its cast, and Honest Work removed its abilities while its linked spell
-remained castable. Seed Suture was chosen through ordinary naming Commands
-and the choice replayed from the same root. The five Academy navigation positions retained all 252 Commands
-and offers. The authored match retained its 193 Commands, revealed cards,
-costs, terminal board and both presentation tracks. Live, headless and replay
-agreed at 194 checkpoints across 1,164 viewer projections; stale object and
-stale revision Commands were rejected. The casting-catalog receipts are
-stored alongside the original opening receipts.
-
-MTG-422's opening and terminal procedure is already in the branch
-(`d12eb496b3`). The later upstream sync at `edee24dad5` changed native snapshot
-and replay plumbing. Eight focused Python checks on that merge passed,
-covering semantic casting profiles and cold restores for the pending Adventure,
-Exude Toxin, Etali, transferred Seed Suture and Waypoint. The native `offers_`
-filter passed 11 tests including both nested announcements and the manual
-Omniscience payment.
+The 31 ledger rows in `be46a3fc8c` passed their directed checks in a 148-test native card/observation run, plus 10 structured-offer tests, 5 preparation resolution tests, the execution vocabulary test, and the Scryfall check. Clone Legion copied a prepared creature without duplicating its cast; Honest Work removed abilities while its linked spell remained castable; Seed Suture replayed through ordinary naming Commands. The five Academy navigation positions retained all 252 Commands/offers, and the authored match retained 193 Commands across 194 checkpoints and 1,164 viewer projections with stale rejection. After merging `edee24dad5`, 8 focused Python checks and 11 native `offers_` tests passed.
 
 Gate owns the full debug workspace, Clippy and the measured 10% Engine Budget.
 
 ## Later phases
 
-**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Omniscience and Harbinger from hand, Tinybones from counter-marked exile, and an Adventure, Modal BackFace, and linked prepare copy through stack and departure. One permission owner (`PlayRoute`) and one profile owner (`SpellProfile`) must explain all of them, including airbend, flashback and modal regressions. Priority currently derives `CastChoices.free` and `flashback` from the route, while resolution casts set them from the effect. When adding provenance, check whether one cast-choice constructor can derive that treatment for both paths before eligibility and announcement. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
+**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Omniscience and Harbinger from hand (and Harbinger via free resolution cast), Tinybones from counter-marked exile, Gandalf from conditional face-down exile, and an Adventure, Modal BackFace, and linked prepare copy through stack and departure. One permission owner (`PlayRoute` + `LayerBoard.play_permissions`), one profile owner (`SpellProfile`), and one `CastChoices` builder must explain all of them, including airbend, flashback, foretell, and modal regressions. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
 
 **Performance.** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
 - Muldrotha with a graveyard of duplicate artifact creatures, overlapped by a Zul grant.
