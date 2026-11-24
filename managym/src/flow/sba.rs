@@ -248,7 +248,8 @@ impl Game {
         }
 
         // CR 704.5d-e — A token in a zone other than the battlefield, or a
-        // copy of a spell in a zone other than the stack, ceases to exist.
+        // spell copy outside the stack, ceases to exist. A prepared copy stays
+        // in exile while its battlefield source keeps it prepared.
         // This runs after the move to the graveyard, so death triggers from
         // tokens have already been enqueued.
         let mut tokens_to_remove = Vec::new();
