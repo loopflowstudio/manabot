@@ -17,14 +17,13 @@ import importlib
 from pathlib import Path
 import tempfile
 from types import ModuleType
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from etude.train.records import CheckpointRecord
 import numpy as np
 import torch
 
-from manabot.backends.torch import arrays, learner, rl
-from manabot.backends.torch.learner import Learner
+from manabot.backends.torch import arrays, rl
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
@@ -55,6 +54,9 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.prepare import Tables
 import managym
+
+if TYPE_CHECKING:
+    from manabot.backends.torch.learner import Learner
 
 
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
@@ -280,10 +282,17 @@ def save_checkpoint(
 
 
 class TorchBackend:
-    name = "torch"
+    name: Literal["torch"] = "torch"
     arrays = arrays
-    learner = learner
     rl = rl
+
+    @staticmethod
+    def configure_cpu_inference() -> None:
+        torch.set_num_threads(1)
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.learner")
 
     @property
     def runtime(self) -> ModuleType:
@@ -349,9 +358,9 @@ class TorchBackend:
         minibatch_rows: int = 1,
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
-    ) -> tuple[ActorCritic, Learner]:
+    ) -> tuple[ActorCritic, "Learner"]:
         agent = assemble(checkpoint)
-        return agent, Learner(
+        return agent, self.learner.Learner(
             agent,
             "cpu",
             minibatch_rows=minibatch_rows,

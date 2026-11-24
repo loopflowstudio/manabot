@@ -51,6 +51,75 @@ def test_column_constants_are_read_from_the_native_layout() -> None:
     assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
 
 
+@pytest.mark.parametrize("version", [9, 10, 11])
+def test_axis_extents_use_the_configured_layout(version: int) -> None:
+    layout = managym.ObservationLayout(
+        policy_input_version=version, max_stack_objects=32 if version == 11 else 0
+    )
+    obs = layout.allocate(3)
+    # Reverse the row and column strides and broadcast the batch stride.
+    deck = obs["decklists"][:, :, ::-1, ::-1]
+    deck[0, 1, 9, 0] = np.nan
+    obs["decklists"] = np.broadcast_to(deck[:1], deck.shape)
+    obs["action_focus"].fill(-1)
+    obs["actions_valid"][1, 2] = 1
+    obs["action_focus"][:, 2, 0] = 11
+    obs["action_focus"][:, 3, 0] = 31  # beyond every mask prefix
+    obs["actions"][2, 4, 0] = 1  # extends action rows, never eligible focus
+    extents = layout.axis_extents(obs)
+    assert extents is not None and ("stack" in extents) == (version == 11)
+    np.testing.assert_array_equal(
+        extents["cards"], np.array([0, 10, 0], np.int64), strict=True
+    )
+    np.testing.assert_array_equal(extents["actions"], [0, 3, 5])
+    np.testing.assert_array_equal(extents["decklists"], [10, 10, 10])
+    empty = layout.axis_extents(layout.allocate(0))
+    assert empty is not None and all(value.shape == (0,) for value in empty.values())
+
+
+@pytest.mark.parametrize("version", [9, 10, 11])
+def test_axis_buffers_locate_each_measured_row_dimension(version: int) -> None:
+    layout = managym.ObservationLayout(policy_input_version=version)
+    buffers = layout.axis_buffers
+    rows = layout.allocate(1)
+    extents = layout.axis_extents(rows)
+    assert extents is not None and extents.keys() == buffers.keys()
+    shapes = layout.shapes
+    # Plant only the final row of each companion, including seat-major buffers.
+    for axis, companions in buffers.items():
+        for key, dim in companions:
+            row = rows[key]
+            capacity = shapes[key][dim]
+            last = [0] * row.ndim
+            last[dim + 1] = capacity - 1
+            row[tuple(last)] = 1
+            if key == "action_focus":
+                rows["actions_valid"][0, -1] = 1
+            measured = layout.axis_extents(rows)
+            assert measured is not None and measured[axis][0] == capacity, key
+            row[tuple(last)] = 0
+            rows["actions_valid"][0, -1] = 0
+
+
+def test_axis_extents_require_matching_batched_arrays() -> None:
+    layout = managym.ObservationLayout(
+        max_decision_records=2,
+        max_decision_references=2,
+        max_decision_reference_details=2,
+        max_decision_members=2,
+    )
+    obs = layout.allocate(1)
+    del obs["decision_records"]
+    assert layout.axis_extents(obs) is None
+    assert layout.axis_extents(obs, omit_decision_memory=True) is not None
+    obs["extra"] = obs["facts"]
+    assert layout.axis_extents(obs, omit_decision_memory=True) is None
+    del obs["extra"]
+    obs["decision_members"] = obs["decision_members"][:, :1]
+    assert layout.axis_extents(obs, omit_decision_memory=True) is None
+    assert layout.axis_extents(layout.allocate()) is None
+
+
 def test_fact_kinds_are_named_native_row_kinds() -> None:
     facts = managym.observation_layout()["facts"]
     names = facts["row_kind_names"]

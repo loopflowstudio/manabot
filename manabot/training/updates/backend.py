@@ -39,6 +39,7 @@ from manabot.training.updates.objective import Array, CategoricalValueLoss, Loss
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import RolloutBatch
+    from manabot.training.updates.health import StepRecorder
 
 # A backend's array, device and admitted observation minibatch. `Any` because
 # the update applies the framework's own operators to arrays, and only the
@@ -259,12 +260,12 @@ class Learner(Protocol):
         loss: Array,
         max_grad_norm: float,
         *,
-        recorder: Any = None,
+        recorder: StepRecorder | None = None,
         accumulated: bool = False,
     ) -> Array:
         """One clipped optimizer step on `loss`: the pre-clip gradient norm.
         `recorder` is the update's `OptimizerHealth`, which each backend
-        reads through its own `StepRecorder`."""
+        reads through the shared `StepRecorder`."""
         ...
 
 

@@ -167,6 +167,9 @@ checkpoints or experiment evidence.
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Standalone local checkpoint admission and scalar games can run with
+  `manabot.training` unavailable. Load the backend learner on first training
+  use so opening a policy in these children needs only inference.
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -457,6 +460,9 @@ Optional statistics and private recording share native setup, movement and
 committed-choice facts. Search clones omit those sinks and their copy provenance;
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
+Install retained vector roots with `reset_each_into_buffers(setups, seeds=seeds)`.
+An ordinary reset followed by a seed reset creates a separate interrupted game
+in recording and statistics. Enable native statistics before the first reset.
 
 `protocol/*.schema.json` has no generator. Patch the files when a protocol
 type changes; the Rust schema tests compare them byte for byte with what
@@ -483,7 +489,9 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 **No test runs for five minutes.** Keep learning tests bounded under CI's
 parallel workers. Use bucketed shapes for small boards when they preserve the
 comparison, and restore any Torch thread limit changed by the test.
-Run targeted tests of the change and its existing consumers.
+Run targeted tests of the change and its existing consumers. For Python edits
+under `managym/` with a wheel already installed, run `uv run python -m pytest`
+from the repository root so the tests import the checkout’s Python modules.
 When policy input width or scale changes, include model tests that call
 projections directly. Dense reference tests should apply the model's saved
 readings before projection and keep the control that proves the behavior.
@@ -904,8 +912,8 @@ through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
 
-The repository depends on the released Etude SDK from PyPI (0.4.4 or newer
-for fixed behaviour curve ranges). Etude's shared records, storage and
+The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
+for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
 errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
