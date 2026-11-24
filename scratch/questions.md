@@ -32,3 +32,10 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
   runs sparse loads on the calling thread. Independent worker commits could
   spend a seed and publish a recording on the first shard even when the
   second shard rejected a setup or observation.
+
+- **Diagnostic roots:** Target practice accepts only a fresh load of its
+  configured match. The read-only `SlotLoad.uses_slot_setup` distinguishes
+  that request from a setup override or a snapshot before any root is built.
+- **Collector refill:** Plain and adaptive games share one pending refill set.
+  The collector finalizes pending learner decisions before checking the active
+  mask, since finalization can itself satisfy an exact quota.

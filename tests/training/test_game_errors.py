@@ -92,7 +92,7 @@ class ScriptedFailures:
             )
 
     def current_agent_indices(self) -> list[int]:
-        return [position % 2 for position in self.positions]
+        return [-1 if position == 5 else position % 2 for position in self.positions]
 
     def current_game_seeds(self) -> list[int]:
         return [row + self.generation[row] * 2 for row in (0, 1)]
@@ -125,8 +125,6 @@ class ScriptedFailures:
                 continue
             self.positions[row] += 1
             if self.positions[row] == 5:
-                self.positions[row] = 0
-                self.generation[row] += 1
                 self.buffers["terminated"][row] = 1
                 self.infos[row] = {"winner_index": 1}
         self.encode()
@@ -723,7 +721,7 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
     batch = collect(collector, model, 1)
     assert collector.game_error_state.completed == collector.stats.games == 2
     assert collector.game_error_state.crashed == collector.stats.truncations == 1
-    assert scripted.generation == [1, 2]
+    assert scripted.generation == [0, 1]
     assert batch.actions.size == 10 and int(batch.dones.sum()) == 4
 
 

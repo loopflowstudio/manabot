@@ -141,7 +141,11 @@ class CapturedSnapshot:
 
 @runtime_checkable
 class SnapshotVector(Protocol):
-    """Capture returns one owned handle per slot. Release relinquishes those references."""
+    """Capture returns one owned handle per slot. Release relinquishes those references.
+
+    Vectors used with game-error recovery also supply game_inputs(slot) to
+    materialize the failed branch's committed replay and attempted actions.
+    """
 
     def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]: ...
 

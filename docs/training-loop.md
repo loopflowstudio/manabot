@@ -401,9 +401,12 @@ cache for all siblings and later draws.
 
 Native vectors leave finished and failed slots parked until the collector
 refills active streams via `load_slots_into_buffers`, avoiding unused
-replacement games at batch boundaries. Fresh slots keep their own seed sequence
-and recording; overwriting an untouched fresh root with a branch rewinds its
-fresh seed without writing an interrupted record or partial statistics. When a
+replacement games at batch boundaries. Adaptive collection assigns the next
+batch's roots when the learner commits its target errors. The lethal-target
+practice vector accepts fresh loads of its configured match. Each fresh slot
+keeps its own seed sequence and recording. Replacing an untouched fresh root
+with a branch rewinds its seed without writing an interrupted game record or
+partial statistics. When a
 branch fails, its `GameAttempt` and `RecordedVectorEnv` failure record
 materialize branch `interventions` lazily so `manabot.training.state.game_errors`
 and `managym.replay` reproduce the failure cold after hot handles are closed.

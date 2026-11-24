@@ -117,7 +117,7 @@ no deprecated shims.
 3. **`action_limit` under `game_errors`:**
    `action_limit` is detected in Python while the native slot is still `Playing`
    (`acting >= 0`). Because `Collector` tracks ended rows in `_needs_refill` (or
-   `_needs_assignment` / `snapshots.ready`) rather than inferring only from
+   `snapshots.ready` for a snapshot allocation) rather than inferring only from
    `acting < 0`, and `SlotLoad.fresh` accepts `Playing` slots, `action_limit`
    reloads cleanly in plain, adaptive, and snapshot modes.
 4. **`exact-quota` terminal on the last step of a batch:**
@@ -136,35 +136,16 @@ no deprecated shims.
    failed-game replacement (immediately, inside `_settle_step`) and snapshot
    installs.
 
-2. **Next — `Collector` + `MemoryStore` + `TargetPracticeVector`.**
-   Known gap: plain (non-adaptive, non-snapshot) collection does not refill
-   `done` rows at all now, so a second game on a stream steps a `Terminal`
-   slot and raises. Remaining work in this slice:
-   - `collection.py`: add `_needs_refill: set[int]`; `_settle_step` adds
-     `closed | failed` to it in plain mode (drop the immediate failed refill
-     at `_settle_step`'s end); at the top of each `_collect` round refill
-     `sorted(r for r in _needs_refill if needed[r])` in one
-     `load_slots_into_buffers` call, then `_refresh_roots` and
-     `_expose(..., "game_roots")`. `commit_adaptive` refills batch-end
-     `_needs_assignment` the same way. Simplify `fresh_ready` to "untouched
-     since `open_collector`".
-   - Replace `hasattr(collector._env, "game_inputs")` in `_settle_attempt`
-     with an unconditional call if every snapshot-mode vector provides it
-     (both `RecordedVectorEnv` and `BufferedStreams` do).
-   - `target_practice.py`: park finished rows (`envs[row] = None`, chooser
-     `-1`) instead of `self._reset(row)` at line ~142; add
-     `load_slots_into_buffers` for `SlotLoad.fresh`.
-   - `memory_store.py`: reject negative seats in `capture_live_rows`;
-     `collection._capture_memory` gives parked rows an empty
-     `Prefix(PrefixIdentity(f"terminal-{row}", 0, "terminal"), None)`.
-   - Tests: rename `test_closed_fixed_roots_survive_auto_reset`
-     (`tests/training/test_training_decks.py:489`); add plain/adaptive seed,
-     record and statistics parity against pinned pre-change values, zero
-     `CONSTRUCTIONS` for batch-end terminals, `complete-games` and
-     `exact-quota` terminal-on-last-step with `decision_memory=True`, and
-     adaptive + `game_errors` `action_limit` on a `Playing` slot.
+2. **Done — collector refill, memory, and target practice.** Ordinary and adaptive
+   collection load only active ended rows after finalizing pending decisions.
+   Adaptive commit draws its next assignments after updating sampler scores.
+   Target practice parks the resolved observation and stages fresh roots before
+   spending seeds. Parked bootstrap rows retain empty decision-memory prefixes.
+   The seven-land exact-quota fixture leaves a live bootstrap beside a terminal
+   one. The eight-land two-stream fixture binds seeds 197–200 to four records
+   and four terminal statistics, leaving 201 and 202 unspent at batch close.
 
-3. **`run_vector_games` (`manabot/sim/rollout.py`) and
+3. **Next — `run_vector_games` (`manabot/sim/rollout.py`) and
    `scripts/bench_sharded_collection.py`** refill finished streams via
    `load_slots_into_buffers` (sim passes an `active` mask for seats still
    needing games); then the full acceptance check below.

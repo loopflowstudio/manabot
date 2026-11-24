@@ -118,6 +118,12 @@ impl PySlotLoad {
         Self(self.0.with_slot(slot))
     }
 
+    /// A fresh game using the setup already configured for this slot.
+    #[getter]
+    fn uses_slot_setup(&self) -> bool {
+        matches!(self.0, SlotLoad::Fresh(_, None))
+    }
+
     /// Detached replay authority for a recording wrapper, including the intervention.
     #[getter]
     fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
