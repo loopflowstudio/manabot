@@ -6,19 +6,16 @@
 #[test]
 fn foundations_5f_mischievous_pup() {
     use crate::support::game::five_color_setup;
-    use crate::support::inspect::{card_of, library_card, offered_targets, permanent_of, zone_of};
-    use crate::support::play::{choose, pass_until, settle};
-    use managym::agent::action::{Action, ActionSpaceKind};
+    use crate::support::inspect::{card_of, offered_targets, permanent_of, zone_of};
+    use crate::support::play::{choose, enter_until_target, settle};
+    use managym::agent::action::Action;
     use managym::state::game_object::Target;
     use managym::state::zone::ZoneType;
     let mut s = five_color_setup(&["Mischievous Pup", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let pup = library_card(&s, 0, "Mischievous Pup");
-    crate::support::game::move_card(&mut s, pup, ZoneType::Battlefield);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let pup = enter_until_target(&mut s, "Mischievous Pup");
     let source = permanent_of(&s, pup).unwrap();
     let offers = offered_targets(&s);
     assert!(offers.contains(&Target::Permanent(ogre)));

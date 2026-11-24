@@ -496,16 +496,11 @@ fn enter_choosing(
     offers: &[managym::state::game_object::Target],
     choice: managym::state::game_object::Target,
 ) -> managym::state::game_object::ObjectId {
-    use managym::agent::action::ActionSpaceKind;
     use support::{
-        game::move_card,
-        inspect::{library_card, now, offered_targets},
-        play::{pass_until, settle},
+        inspect::{now, offered_targets},
+        play::{enter_until_target, settle},
     };
-    let card = library_card(s, 0, name);
-    move_card(s, card, managym::state::zone::ZoneType::Battlefield);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    pass_until(s, ActionSpaceKind::ChooseTarget);
+    let card = enter_until_target(s, name);
     let mut offered = offered_targets(s);
     offered.sort_by_key(|target| format!("{target:?}"));
     let mut wanted = offers.to_vec();

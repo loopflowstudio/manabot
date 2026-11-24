@@ -1,4 +1,4 @@
-at: 1199f2f502e77b249cd2f3579a4250454a4457cd
+at: PLACEHOLDER
 first:
   - path: scratch/plan.md
     why: Tracks verified card batches and remaining rules work.
@@ -22,10 +22,16 @@ first:
     why: Resolves attachments, library choices and target legality.
   - path: managym/src/flow/proposed_event.rs
     why: Commits replacements and reveals library cards entering hand.
+  - path: managym/src/state/knowledge.rs
+    why: Keeps known library positions when a card goes to the bottom.
+  - path: managym/src/flow/combat_actions.rs
+    why: Holds the one blocking test and the attack requirement.
   - path: managym/src/cards/token_renames.rs
     why: Preserves learned identities for earlier checkpoints.
   - path: managym/src/flow/target_authority_tests.rs
     why: Exercises mode and target selection after source departure.
+  - path: managym/cards/tests/cards.rs
+    why: Shares entry, attack and block fixtures across set tests.
   - path: managym/cards/tests/cards/fdn.rs
     why: Forks placement, discard and surveil choices.
   - path: managym/cards/tests/cards/tla.rs

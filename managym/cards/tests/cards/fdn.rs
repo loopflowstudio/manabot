@@ -1614,9 +1614,9 @@ fn foundations_5f_elementalist_adept() {
 /// the other still gets its counter.
 #[test]
 fn foundations_5f_felidar_savior() {
-    use crate::support::inspect::{counters, library_card, offered_targets};
-    use crate::support::play::{choose, pass_until, settle};
-    use managym::agent::action::{Action, ActionSpaceKind};
+    use crate::support::inspect::{counters, offered_targets};
+    use crate::support::play::{choose, enter_until_target, settle};
+    use managym::agent::action::Action;
     use managym::state::game_object::Target;
     let mut s = five_color_setup(&["Felidar Savior", "Gray Ogre"]);
     let mut empty = s.clone();
@@ -1628,10 +1628,7 @@ fn foundations_5f_felidar_savior() {
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
     ];
     let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let savior = library_card(&s, 0, "Felidar Savior");
-    move_card(&mut s, savior, ZoneType::Battlefield);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let savior = enter_until_target(&mut s, "Felidar Savior");
     let offers = offered_targets(&s);
     assert!(offers.contains(&Target::Permanent(ogres[0])));
     assert!(offers.contains(&Target::Permanent(ogres[1])));

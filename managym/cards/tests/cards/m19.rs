@@ -123,18 +123,13 @@ fn foundations_5f_herald_of_faith() {
 #[test]
 fn foundations_5f_skeleton_archer() {
     use crate::support::game::five_color_setup;
-    use crate::support::inspect::{library_card, offered_targets};
-    use crate::support::play::{pass_until, settle};
-    use managym::agent::action::ActionSpaceKind;
+    use crate::support::inspect::offered_targets;
+    use crate::support::play::{enter_until_target, settle};
     use managym::state::game_object::{PlayerId, Target};
-    use managym::state::zone::ZoneType;
     let mut s = five_color_setup(&["Skeleton Archer", "Gray Ogre"]);
     let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let archer = library_card(&s, 0, "Skeleton Archer");
-    crate::support::game::move_card(&mut s, archer, ZoneType::Battlefield);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    enter_until_target(&mut s, "Skeleton Archer");
     let offers = offered_targets(&s);
     for target in [
         Target::Player(PlayerId(0)),

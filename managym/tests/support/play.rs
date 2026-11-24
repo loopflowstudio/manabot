@@ -742,6 +742,17 @@ pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     move_and_settle(s, id, ZoneType::Battlefield)
 }
 
+/// Move player 0's library copy onto the battlefield through the zone-change
+/// authority and stop at its entry trigger's target choice. Returns the
+/// library appearance; `now` follows it to the battlefield.
+pub fn enter_until_target(s: &mut Scenario, name: &str) -> ObjectId {
+    let id = library_card(s, 0, name);
+    crate::support::game::move_card(s, id, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+    id
+}
+
 /// Resolve any triggers from moving the card to its destination.
 pub fn move_and_settle(s: &mut Scenario, id: ObjectId, zone: ZoneType) -> ObjectId {
     crate::support::game::move_card(s, id, zone);
