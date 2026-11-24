@@ -88,6 +88,19 @@ Advance between slices when the ledger gives each completed row a directed witne
 | Angel and Phytomedic with Seed Suture | Not yet run: remove abilities (stays prepared), copy the permanent (no copied preparation), naming Seed Suture, and Codie's copied prepared spell retargeting (non-recursive). |
 | Monica Rambeau // Photon & Exude Toxin announcement | Offer both faces in hand; Photon enters back-face up and returns to Monica off battlefield; mid-announcement `ContinuationFrame` and `DecisionContextView` show the selected profile rather than the front face. |
 
+## Behavior review findings (2026-11-23, at `1018a342`)
+
+Delivered rows hold their directed outcomes: 28 card fixtures (Zul, Muldrotha, Vizier, Etali, Smaug/Bilbo, Charring Bite, Exude Toxin, Volcanic Torrent, airbend, Iroh flashback, foretell spending), 5 `preparation_resolution` lib tests and 90 Python checks (text observation, casting profiles, Academy navigation, pinned pilot) pass in debug. Spending context is built from the selected profile (`effective_spell_cost`, `play.rs:337`), and Vizier's any-type rule reaches Twinmaw's front but not Charring Bite. Muldrotha and printed or granted flashback admit only `Front`; an Adventure exile grant admits only the permanent spell (CR 715.4). The complete Command surface (`compound_offers`) keeps non-`Front` casts as ordinary offers.
+
+Two defects reproduced with temporary probes (now removed). Both are missing legal choices from resolution-time hand and exile casts, and slice 1's `ResolutionCastOffer::{Hand, Exiled}` item must fix them:
+
+1. **Yue cannot cast an Adventure or Omen.** Board: Yue with Smaug, the Great Calamity in hand, an opposing Gray Ogre and {5} paid. Yue's waterbend ability resolves with no decision. Spew Flame is a noncreature sorcery and is legal (CR 715.3a). Cause: the `Hand` filter in `resolution_cast_candidates` (`decision.rs:3344`) checks the predicate against the front object, and the profile loop then breaks on non-`Front` profiles. Fix: check the predicate per profile against `cast.spell(definition)`, the way Cascade checks mana value.
+2. **Solstice Revelations cannot reach Charring Bite.** Board: Twinmaw Stormbrood on top of the library and three Mountains. Twinmaw goes to hand, although Charring Bite (MV 2 < 3) is castable for free. Cause: `ExileUntilNonlandCastFree` compares the front's `object_mana_value` before building candidates (`resolution.rs:1349`), and the `Exiled` offer drops non-`Front` profiles. Fix: move the "spell's mana value" bound into the per-profile candidate filter, as `Cascade { below }` does, and send the card to hand only when no profile qualifies.
+
+Add both as directed fixtures (`tla.rs`) beside the existing Yue and Solstice controls. The mid-announcement front-face labels in `decision_context.rs` and on `ContinuationFrame`, which the concept review recorded, are still unprobed. Slice 1's Exude Toxin/Spew Flame announcement check covers them.
+
+**Phase status.** The delivered batch's rows are satisfied. Slice 1 (alignment and probes) has not started: none of `BackFace`, `FreeFromHand`, `object_counters`, `SPELL_PROFILE`, `from_prepared` or `FlashSurcharge` exists in code. Slices 2–5, decomposition and the Engine Budget remain. Gate owns the full debug workspace, fmt and Clippy.
+
 **Consumer checks per slice.** Compare native observations for both viewers with the Python bindings, semantic capture/LLM text and Academy offers at priority, at mid-announcement (`AnnounceX`/`ChooseTargets`/`Pay`), with a spell on the stack, and at a nested decision. Use v11 rows and learning tokens. Keep hidden information out of the other viewer's data. Fork-and-replay checks need exact preconditions and stale rejection. Existing controls:
 
 ```sh
