@@ -55,15 +55,24 @@ impl Game {
             })
     }
 
+    /// A target permanent's or spell's property as it is, or as it last
+    /// existed (CR 608.2h). A spell's power and toughness are not read.
     fn target_property(&self, target: Option<Target>, property: ObjectProperty) -> i32 {
-        let Some(Target::Permanent(id)) = target else {
-            return 0;
-        };
-        if self.permanent_object(id).is_some() {
-            self.live_property(id, property)
-        } else {
-            self.departed_permanent_lki(id)
-                .map_or(0, |lki| self.departed_property(lki, property))
+        match target {
+            Some(Target::Permanent(id)) if self.permanent_object(id).is_some() => {
+                self.live_property(id, property)
+            }
+            Some(Target::Permanent(id)) => self
+                .departed_permanent_lki(id)
+                .map_or(0, |lki| self.departed_property(lki, property)),
+            Some(Target::StackSpell(object)) => {
+                self.spell_info(object).map_or(0, |spell| match property {
+                    ObjectProperty::ManaValue => i32::from(spell.mana_value),
+                    ObjectProperty::Colors => spell.colors.len() as i32,
+                    ObjectProperty::Power | ObjectProperty::Toughness => 0,
+                })
+            }
+            _ => 0,
         }
     }
 
@@ -72,6 +81,7 @@ impl Game {
             ObjectProperty::Power => self.layer_view(id).power,
             ObjectProperty::Toughness => self.layer_view(id).toughness,
             ObjectProperty::ManaValue => self.permanent_mana_value(id),
+            ObjectProperty::Colors => self.layer_view(id).colors.len() as i32,
         }
     }
 
@@ -92,18 +102,8 @@ impl Game {
                     .as_ref()
                     .map_or(0, |cost| i32::from(cost.mana_value))
             }
+            ObjectProperty::Colors => lki.colors.len() as i32,
         }
-    }
-
-    fn spell_payment(&self, object: ObjectId) -> Option<crate::flow::decision::SpellPayment> {
-        let index = self.find_spell_on_stack_index(object)?;
-        let StackObject::Spell(spell) = &self.state.stack_objects[index] else {
-            return None;
-        };
-        Some(crate::flow::decision::SpellPayment {
-            mana_value: self.object_mana_value(object),
-            spent: spell.spent.total(),
-        })
     }
 
     /// Resolve a quantity against the frame's targets, payments and instruction results.
@@ -173,17 +173,25 @@ impl Game {
                 })
                 .sum(),
             EffectValue::SpellManaSpent(of) | EffectValue::SpellManaValue(of) => {
-                let payment = match of.as_ref() {
-                    ObjectSelector::Target(_) => frame
-                        .active_targets()
-                        .find(|slot| slot.legal)
-                        .and_then(|slot| slot.spell),
+                let spell = match of.as_ref() {
+                    // The target as chosen, even once it has left the stack.
+                    ObjectSelector::Target(_) => match frame.active_targets().find(|t| t.legal) {
+                        Some(ResolutionTarget {
+                            target: Target::StackSpell(object),
+                            ..
+                        }) => self.spell_info(object),
+                        _ => None,
+                    },
+                    ObjectSelector::Triggering => match frame.context_target {
+                        Some(Target::StackSpell(object)) => self.spell_info(object),
+                        _ => None,
+                    },
                     _ => self
                         .select(of, frame)
                         .first()
-                        .and_then(|object| self.spell_payment(*object)),
+                        .and_then(|object| self.spell_info(*object)),
                 };
-                payment.map_or(0, |spell| match value {
+                spell.map_or(0, |spell| match value {
                     EffectValue::SpellManaSpent(_) => i32::from(spell.spent),
                     _ => i32::from(spell.mana_value),
                 })
@@ -192,15 +200,9 @@ impl Game {
             EffectValue::TriggeringPower => {
                 self.target_property(frame.context_target, ObjectProperty::Power)
             }
-            EffectValue::TriggeringManaValue => match frame.context_target {
-                // A spell that has left the stack is read as the card it became.
-                Some(Target::StackSpell(spell)) => self
-                    .state
-                    .live(spell)
-                    .or_else(|| self.state.zones.successor(spell))
-                    .map_or(0, |object| i32::from(self.object_mana_value(object))),
-                _ => 0,
-            },
+            EffectValue::TriggeringManaValue => {
+                self.target_property(frame.context_target, ObjectProperty::ManaValue)
+            }
             EffectValue::TargetToughness => {
                 self.target_property(frame.primary_target(), ObjectProperty::Toughness)
             }
@@ -642,10 +644,6 @@ impl Game {
             .map(|(index, target)| {
                 let requirement = indices.get(index).copied().unwrap_or(0);
                 ResolutionTarget {
-                    spell: match target {
-                        Target::StackSpell(object) => self.spell_payment(*object),
-                        _ => None,
-                    },
                     target: *target,
                     requirement,
                     legal: requirements.get(requirement).is_some_and(|req| {
@@ -734,6 +732,7 @@ impl Game {
         match selector {
             PlayerSelector::You => vec![frame.controller],
             PlayerSelector::EachOpponent => vec![PlayerId(1 - frame.controller.0)],
+            PlayerSelector::EachPlayer => vec![self.active_player(), self.non_active_player()],
             PlayerSelector::TriggeringPlayer => frame.triggering_player.into_iter().collect(),
             PlayerSelector::TriggeringPlayersOpponents => frame
                 .triggering_player
@@ -754,6 +753,12 @@ impl Game {
                         .into_iter()
                         .collect(),
                 },
+                // A countered, uncounterable, copied or stolen spell alike.
+                Some(Target::StackSpell(object)) => self
+                    .spell_info(object)
+                    .map(|spell| spell.controller)
+                    .into_iter()
+                    .collect(),
                 _ => Vec::new(),
             },
         }
@@ -1849,14 +1854,21 @@ impl Game {
                 None
             }
             Effect::ForPlayer { player, effects } => {
-                let [player] = self.selected_players(player, frame)[..] else {
-                    return None;
-                };
+                // Each player's run ends with a cursor naming the next
+                // resolving player; the last restores the controller. The
+                // cursors live in the queue, so a choice inside one run
+                // suspends and restores with no other frame state.
+                let players = self.selected_players(player, frame);
+                let (&first, rest) = players.split_first()?;
                 frame
                     .queue
                     .push_front(Effect::RestoreController(frame.controller));
+                for &next in rest.iter().rev() {
+                    frame.prepend_effects(effects.iter().cloned());
+                    frame.queue.push_front(Effect::RestoreController(next));
+                }
                 frame.prepend_effects(effects.iter().cloned());
-                frame.controller = player;
+                frame.controller = first;
                 None
             }
             Effect::RestoreController(player) => {
@@ -1878,7 +1890,6 @@ impl Game {
                     return None;
                 }
                 frame.targets = vec![crate::flow::decision::ResolutionTarget {
-                    spell: None,
                     target: Target::GraveyardCard(became),
                     requirement: 0,
                     legal: true,

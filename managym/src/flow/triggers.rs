@@ -17,7 +17,8 @@ use crate::{
     state::{
         ability::{
             Ability, Actor, DelayedFrequency, Effect, EffectiveTrigger, KeywordAction, Per,
-            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            TurnStep,
         },
         effect::{EffectDuration, Modification},
         game_object::{AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, Target},
@@ -1056,21 +1057,18 @@ impl Game {
                     (0, &grant.ability, Some(inline), grant.program)
                 }
             };
+            // The object whose event triggered the ability: the member
+            // permanent, or the cast spell (CR 603.10a, 608.2h).
             let context = if matches!(member, TriggerMember::Attacker(_))
-                || trigger.reads_triggering_permanent()
+                || trigger.reads_triggering_object()
             {
                 self.member_permanent(member, event)
-                    .or_else(|| self.trigger_context_for_event(event))
-            } else if let (
-                true,
-                GameEvent::SpellCast {
-                    object_id: object, ..
-                },
-            ) = (
-                trigger.effects().iter().any(Effect::asks_triggering_spell),
-                event,
-            ) {
-                Some(Target::StackSpell(*object))
+                    .or_else(|| match event {
+                        GameEvent::SpellCast { object_id, .. } => {
+                            Some(Target::StackSpell(*object_id))
+                        }
+                        _ => self.trigger_context_for_event(event),
+                    })
             } else {
                 self.trigger_context_for_event(event)
             };
@@ -1242,16 +1240,16 @@ impl Game {
 
     /// Whether a stacked trigger asks about the permanent whose event fired
     /// it, in its effects or its intervening-if clause.
-    pub(crate) fn stacked_trigger_reads_triggering_permanent(
+    pub(crate) fn stacked_trigger_reads_triggering_object(
         &self,
         ability: &crate::state::stack_object::TriggeredAbilityOnStack,
     ) -> bool {
         match &ability.inline_effects {
-            Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
+            Some(effects) => effects.iter().any(Effect::reads_triggering_object),
             None => self
                 .source_face(ability.source_object(), ability.source_definition_id)
                 .and_then(|face| face.abilities.get(ability.ability_index))
-                .is_some_and(Ability::reads_triggering_permanent),
+                .is_some_and(Ability::reads_triggering_object),
         }
     }
 
@@ -2081,16 +2079,25 @@ impl Game {
                     who,
                     predicate,
                     nth,
+                    targets: filter,
                 },
                 GameEvent::SpellCast {
                     object_id: object,
                     caster,
+                    targets,
                     ..
                 },
             ) => {
                 let caster = *caster;
                 who.includes(source_controller, caster)
                     && self.object_matches_predicate(*object, predicate)
+                    && match filter {
+                        SpellTargetFilter::Any => true,
+                        SpellTargetFilter::TargetsThis => {
+                            let this = self.state.permanent_of(source_object);
+                            this.is_some_and(|id| targets.contains(&Target::Permanent(id)))
+                        }
+                    }
                     && nth.is_none_or(|n| {
                         self.state.turn.spells_cast[caster.0]
                             .iter()

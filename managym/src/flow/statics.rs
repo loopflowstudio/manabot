@@ -451,6 +451,7 @@ impl Game {
                 | Condition::BattlefieldAtLeast { .. }
                 | Condition::AllOf(_)
                 | Condition::AnyOf(_)
+                | Condition::Not(_)
         ));
         self.condition_holds(
             condition,
@@ -923,6 +924,9 @@ impl Game {
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)
             }),
+            Condition::Not(condition) => {
+                !self.condition_holds(condition, controller, frame, source, triggering)
+            }
             Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))

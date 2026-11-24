@@ -232,6 +232,7 @@ impl ReadSet {
                     self.condition(condition);
                 }
             }
+            Condition::Not(condition) => self.condition(condition),
             Condition::SourceTapped => self.tapped = true,
             _ => self.mana |= condition.reads_mana_pools(),
         }
@@ -922,6 +923,7 @@ impl<'a> Context<'a> {
             ObjectProperty::Power => self.objects[&id].view.power,
             ObjectProperty::Toughness => self.objects[&id].view.toughness,
             ObjectProperty::ManaValue => self.game.permanent_mana_value(id),
+            ObjectProperty::Colors => self.objects[&id].view.colors.len() as i32,
         }
     }
 
@@ -1075,6 +1077,7 @@ impl<'a> Context<'a> {
             Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
             Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
             Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),
+            Condition::Not(condition) => !self.condition(condition, source),
             // All other static conditions read state, not characteristics.
             _ => self
                 .game

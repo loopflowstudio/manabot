@@ -7,8 +7,8 @@ use crate::state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
         DistinctSearchEnd, Effect, EffectValue, KeywordAction, LinkedChooser, LinkedExile,
-        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
+        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, SpellTargetFilter,
+        TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
@@ -159,23 +159,24 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Casts {
             who,
             predicate,
-            nth: None,
-        } => format!(
-            "Whenever {} a {}",
-            actor_does(*who, "cast", "casts"),
-            predicate_description(predicate, "spell")
-        ),
-        TriggerCondition::Casts {
-            who,
-            predicate,
-            nth: Some(n),
-        } => format!(
-            "Whenever {} {} {} {} each turn",
-            actor_does(*who, "cast", "casts"),
-            actor_possessive(*who),
-            ordinal(*n),
-            predicate_description(predicate, "spell")
-        ),
+            nth,
+            targets,
+        } => {
+            let spell = predicate_description(predicate, "spell");
+            let spell = match targets {
+                SpellTargetFilter::Any => spell,
+                SpellTargetFilter::TargetsThis => format!("{spell} that targets this"),
+            };
+            match nth {
+                None => format!("Whenever {} a {spell}", actor_does(*who, "cast", "casts")),
+                Some(n) => format!(
+                    "Whenever {} {} {} {spell} each turn",
+                    actor_does(*who, "cast", "casts"),
+                    actor_possessive(*who),
+                    ordinal(*n),
+                ),
+            }
+        }
         TriggerCondition::LosesLife { who } => format!("Whenever {} life", actor_does(*who, "lose", "loses")),
         TriggerCondition::GainsLife { who, nth } => format!("Whenever {} life{}", actor_does(*who,"gain","gains"), nth.map_or_else(String::new, |n| format!(" for the {} time each turn",ordinal(n)))),
         TriggerCondition::Draws { who, nth: None } => {
@@ -437,6 +438,10 @@ fn condition_text(condition: &Condition) -> String {
             .map(condition_text)
             .collect::<Vec<_>>()
             .join(" or "),
+        Condition::Not(condition) => match condition.as_ref() {
+            Condition::YourTurn => "it's an opponent's turn".into(),
+            condition => format!("not ({})", condition_text(condition)),
+        },
         Condition::Kicked => "it was kicked".into(),
         Condition::TargetMatches(predicate) => format!(
             "that target is a {}",
@@ -686,6 +691,7 @@ fn player_description(player: &PlayerSelector) -> String {
     match player {
         PlayerSelector::You => "you".into(),
         PlayerSelector::EachOpponent => "each opponent".into(),
+        PlayerSelector::EachPlayer => "each player".into(),
         PlayerSelector::TriggeringPlayer => "that player".into(),
         PlayerSelector::TriggeringPlayersOpponents => "each of that player's opponents".into(),
         PlayerSelector::TargetController => "its controller".into(),
@@ -840,6 +846,7 @@ fn value_description(value: &EffectValue) -> String {
                 ObjectProperty::Power => "power",
                 ObjectProperty::Toughness => "toughness",
                 ObjectProperty::ManaValue => "mana value",
+                ObjectProperty::Colors => "number of colors",
             };
             let how = match of.as_ref() {
                 ObjectSelector::This | ObjectSelector::Target(_) | ObjectSelector::Triggering => "",
@@ -1425,6 +1432,7 @@ mod tests {
         let cases = [
             (
                 TriggerCondition::Casts {
+                    targets: SpellTargetFilter::Any,
                     who: Actor::Opponent,
                     predicate: CardPredicate::creature(),
                     nth: Some(2),

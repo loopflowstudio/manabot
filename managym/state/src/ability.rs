@@ -58,8 +58,8 @@ impl Ability {
         self.reads(ContextRead::SourcePower)
     }
 
-    pub fn reads_triggering_permanent(&self) -> bool {
-        self.reads(ContextRead::TriggeringPermanent)
+    pub fn reads_triggering_object(&self) -> bool {
+        self.reads(ContextRead::TriggeringObject)
     }
 
     fn reads(&self, read: ContextRead) -> bool {
@@ -198,6 +198,10 @@ pub enum TriggerCondition {
         who: Actor,
         predicate: CardPredicate,
         nth: Option<u32>,
+        /// What the spell must target as it is cast ("a spell that targets
+        /// this creature").
+        #[serde(skip_serializing_if = "SpellTargetFilter::is_any")]
+        targets: SpellTargetFilter,
     },
     /// "Whenever [who] draws a card"; with `nth`, only that player's Nth
     /// draw this turn (see `PlayerTurnHistory::cards_drawn`). The drawer is
@@ -343,6 +347,9 @@ pub enum Condition {
     /// turn").
     AnyOf(Vec<Condition>),
     AllOf(Vec<Condition>),
+    /// The condition does not hold ("during an opponent's turn" is not
+    /// `YourTurn`).
+    Not(Box<Condition>),
     CreatureDiedThisTurn,
     GainedLifeThisTurn,
     LostLifeThisTurn,
@@ -403,6 +410,7 @@ impl TriggerCondition {
             who,
             predicate,
             nth: None,
+            targets: SpellTargetFilter::Any,
         }
     }
 
@@ -419,6 +427,20 @@ impl TriggerCondition {
             attackers: AttackSize::Any,
             nth: None,
         }
+    }
+}
+
+/// What a cast spell targets, for a cast trigger.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SpellTargetFilter {
+    Any,
+    /// At least one of its targets is the trigger's source permanent.
+    TargetsThis,
+}
+
+impl SpellTargetFilter {
+    pub fn is_any(&self) -> bool {
+        *self == Self::Any
     }
 }
 
@@ -453,11 +475,17 @@ impl CompareOp {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ContextRead {
     SourcePower,
-    TriggeringPermanent,
+    /// The permanent or spell whose event triggered the ability, which may
+    /// have left its zone by the time the ability resolves.
+    TriggeringObject,
     PaidCost,
 }
 
 impl Condition {
+    pub fn not(condition: Condition) -> Self {
+        Self::Not(Box::new(condition))
+    }
+
     pub fn compare(
         left: impl Into<EffectValue>,
         op: CompareOp,
@@ -474,9 +502,10 @@ impl Condition {
         match self {
             Self::Compare { left, right, .. } => left.reads(read) || right.reads(read),
             Self::AllOf(items) | Self::AnyOf(items) => items.iter().any(|item| item.reads(read)),
-            Self::TriggeringHadCounters | Self::TriggeringMatches(_) => {
-                read == ContextRead::TriggeringPermanent
-            }
+            Self::TriggeringHadCounters
+            | Self::TriggeringMatches(_)
+            | Self::TriggeringSpellMatches(_) => read == ContextRead::TriggeringObject,
+            Self::Not(inner) => inner.reads(read),
             _ => false,
         }
     }
@@ -497,6 +526,7 @@ impl Condition {
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 conditions.iter().any(Condition::reads_source)
             }
+            Condition::Not(condition) => condition.reads_source(),
             _ => false,
         }
     }
@@ -512,6 +542,7 @@ impl Condition {
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 conditions.iter().any(Condition::reads_mana_pools)
             }
+            Condition::Not(condition) => condition.reads_mana_pools(),
             _ => false,
         }
     }
@@ -534,6 +565,7 @@ impl Condition {
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 conditions.iter().any(Condition::is_resolution_only)
             }
+            Condition::Not(condition) => condition.is_resolution_only(),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -703,6 +735,8 @@ pub enum PlayerSelector {
     You,
     /// Each opponent of the controller.
     EachOpponent,
+    /// Each player, in APNAP order (CR 101.4).
+    EachPlayer,
     /// The trigger's player ("they": the caster of the triggering spell).
     TriggeringPlayer,
     /// "each of that player's opponents" (Standstill): the opponents of the
@@ -710,8 +744,8 @@ pub enum PlayerSelector {
     TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
-    /// The controller of the frame's primary target permanent, as it is or
-    /// last existed ("its controller").
+    /// The controller of the frame's primary target permanent or spell, as
+    /// it is or last existed ("its controller").
     TargetController,
     /// The owner of the object an instruction moves ("under its owner's
     /// control"); only [`Effect::Move`] reads it.
@@ -724,6 +758,7 @@ impl PlayerSelector {
             Self::Target(spec) => Some(spec),
             Self::You
             | Self::EachOpponent
+            | Self::EachPlayer
             | Self::TriggeringPlayer
             | Self::TriggeringPlayersOpponents
             | Self::TargetController
@@ -738,6 +773,8 @@ pub enum ObjectProperty {
     Power,
     Toughness,
     ManaValue,
+    /// How many of the five colors it is (CR 105.2), `0..=5`.
+    Colors,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1513,7 +1550,8 @@ pub enum Effect {
     },
     /// "[player] [effects]": the effects resolve with that player as "you"
     /// ("Its controller may search their library"), then the controller
-    /// returns to the resolving one.
+    /// returns to the resolving one. Several players ("each player draws a
+    /// card") each run the effects in turn, in the selector's order.
     ForPlayer {
         player: PlayerSelector,
         effects: Vec<Effect>,
@@ -1842,7 +1880,7 @@ pub struct TargetRequirement {
 impl ObjectSelector {
     fn reads(&self, read: ContextRead) -> bool {
         match self {
-            Self::Triggering => read == ContextRead::TriggeringPermanent,
+            Self::Triggering => read == ContextRead::TriggeringObject,
             Self::Paid(_) => read == ContextRead::PaidCost,
             Self::Each {
                 exact_mana_value,
@@ -1949,8 +1987,8 @@ impl Effect {
     pub fn reads_source_power(&self) -> bool {
         self.reads(ContextRead::SourcePower)
     }
-    pub fn reads_triggering_permanent(&self) -> bool {
-        self.reads(ContextRead::TriggeringPermanent)
+    pub fn reads_triggering_object(&self) -> bool {
+        self.reads(ContextRead::TriggeringObject)
     }
 
     fn reads(&self, read: ContextRead) -> bool {
@@ -1979,7 +2017,9 @@ impl Effect {
             return amount.reads(read);
         }
         match self {
-            Self::MayExileTriggeringWithSource => read == ContextRead::TriggeringPermanent,
+            Self::MayExileTriggeringWithSource
+            | Self::CopyTriggeringObject
+            | Self::CopyTriggeringSpellForEach { .. } => read == ContextRead::TriggeringObject,
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
             Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
             Self::If { condition, .. } if condition.reads(read) => true,
@@ -2106,36 +2146,6 @@ impl Effect {
                 })?;
         let optional = matches!(self, Effect::Sacrifice { optional: true, .. });
         Some((predicate, except, optional))
-    }
-
-    /// Whether the effect asks about the spell whose casting triggered it,
-    /// which the trigger then keeps as its context.
-    pub fn asks_triggering_spell(&self) -> bool {
-        match self {
-            Effect::If {
-                condition,
-                then,
-                otherwise,
-            } => {
-                matches!(condition, Condition::TriggeringSpellMatches(_))
-                    || then
-                        .iter()
-                        .chain(otherwise)
-                        .any(Effect::asks_triggering_spell)
-            }
-            Effect::TargetClause { effects, .. } => {
-                effects.iter().any(Effect::asks_triggering_spell)
-            }
-            // "Copy that spell": the cast spell is the context.
-            Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
-            // "Equal to its mana value".
-            Effect::LoseLife {
-                amount: EffectValue::TriggeringManaValue,
-                ..
-            } => true,
-            Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
-            _ => false,
-        }
     }
 
     /// One immediate mana output per mode, preserving the authored color order.
@@ -2521,7 +2531,9 @@ impl EffectValue {
                 ..
             } if **of == ObjectSelector::This => read == ContextRead::SourcePower,
             Self::SourcePower => read == ContextRead::SourcePower,
-            Self::TriggeringPower => read == ContextRead::TriggeringPermanent,
+            Self::TriggeringPower | Self::TriggeringManaValue => {
+                read == ContextRead::TriggeringObject
+            }
             Self::Half(inner) => inner.reads(read),
             Self::Property { of, .. }
             | Self::Objects { of, .. }

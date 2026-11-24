@@ -20,7 +20,7 @@ use crate::{
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
-        stack_object::{SpellOnStack, StackObject},
+        stack_object::{SpellLki, SpellOnStack, StackObject},
         zone::ZoneType,
     },
 };
@@ -656,6 +656,10 @@ impl Game {
             .then(|| self.find_spell_on_stack_index(prior_object))
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
+        if let Some(StackObject::Spell(spell)) = &cast_spell {
+            let lki = self.spell_lki(spell);
+            self.state.spell_lki_mut().insert(spell.object, lki);
+        }
         let carry = CarryOver {
             cast: match cast_spell {
                 Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
@@ -936,6 +940,33 @@ impl Game {
                 stack_spell_objects,
                 "stack/zone spell mismatch: zone={zone_spell_objects:?}, stack={stack_spell_objects:?}"
             );
+        }
+    }
+
+    /// A spell as it is on the stack now, or as it last existed there
+    /// (CR 608.2h): countered, resolved, copied or stolen spells alike.
+    pub(crate) fn spell_info(&self, object: ObjectId) -> Option<SpellLki> {
+        match self.find_spell_on_stack_index(object) {
+            Some(index) => match &self.state.stack_objects[index] {
+                StackObject::Spell(spell) => Some(self.spell_lki(spell)),
+                _ => None,
+            },
+            None => self.state.spell_lki.get(&object).cloned(),
+        }
+    }
+
+    fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
+        let object = &self.state[spell.object];
+        SpellLki {
+            object: spell.object,
+            definition_id: object.definition_id,
+            controller: spell.controller,
+            mana_value: object.mana_value_cost().map_or(0, |cost| {
+                cost.mana_value
+                    .saturating_add(cost.x.saturating_mul(spell.x))
+            }),
+            spent: spell.spent.total(),
+            colors: object.colors(),
         }
     }
 

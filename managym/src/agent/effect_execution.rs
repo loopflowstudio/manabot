@@ -32,6 +32,7 @@ use crate::{
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
         payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
+        stack_object::SpellLki,
     },
 };
 
@@ -119,6 +120,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "last known land",
     "last known tapped",
     "last known definition",
+    "last known spell",
     "legend group",
     "legends kept",
     "library end",
@@ -297,11 +299,48 @@ impl<'a> Projection<'a> {
     }
 
     fn retained_target(&mut self, target: Target) {
-        if let Target::Permanent(id) = target {
-            if let Some(lki) = self.game.departed_permanent_lki(id) {
-                self.lki(lki);
+        match target {
+            Target::Permanent(id) => {
+                if let Some(lki) = self.game.departed_permanent_lki(id) {
+                    self.lki(lki);
+                }
             }
+            // A live spell's stack row already carries these facts.
+            Target::StackSpell(object) if self.game.find_spell_on_stack_index(object).is_none() => {
+                if let Some(spell) = self.game.state.spell_lki.get(&object) {
+                    self.spell_lki(spell);
+                }
+            }
+            _ => {}
         }
+    }
+
+    /// A departed spell as it last existed on the stack (CR 608.2h): what a
+    /// trigger reading "that spell" will see after it is countered.
+    fn spell_lki(&mut self, spell: &SpellLki) {
+        if self.last_known.contains(&spell.object) {
+            return;
+        }
+        self.last_known.push(spell.object);
+        let definition = VisibleReference {
+            definition: Some(spell.definition_id.0),
+            ..Default::default()
+        };
+        self.reference("pre-event object", definition);
+        self.field("last known definition", &spell.definition_id);
+        self.field(
+            "last known spell",
+            &(spell.mana_value, &spell.colors, spell.spent),
+        );
+        self.summary(|| {
+            format!(
+                "Last known spell {}: mana value {}, {} color(s), {} mana spent.",
+                Self::label(definition),
+                spell.mana_value,
+                spell.colors.len(),
+                spell.spent
+            )
+        });
     }
 
     fn object_id(&mut self, name: &str, object_id: ObjectId) {
@@ -1088,7 +1127,7 @@ pub(crate) fn project_stack_object(
 ) {
     let mut out = Projection::new(game, viewer, text);
     if let crate::state::stack_object::StackObject::TriggeredAbility(ability) = object {
-        if game.stacked_trigger_reads_triggering_permanent(ability) {
+        if game.stacked_trigger_reads_triggering_object(ability) {
             if let Some(context) = ability.context {
                 out.retained_target(context);
             }
@@ -1109,7 +1148,7 @@ pub(crate) fn project_pending_trigger(
     frame: &mut ContinuationFrame,
 ) {
     let reads = match &trigger.inline_effects {
-        Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
+        Some(effects) => effects.iter().any(Effect::reads_triggering_object),
         None => game
             .source_face(
                 trigger.source_object(),
@@ -1119,7 +1158,7 @@ pub(crate) fn project_pending_trigger(
                 ),
             )
             .and_then(|face| face.abilities.get(trigger.ability_index))
-            .is_some_and(|ability| ability.reads_triggering_permanent()),
+            .is_some_and(|ability| ability.reads_triggering_object()),
     };
     let Some(context) = trigger.context.filter(|_| reads) else {
         return;

@@ -341,11 +341,19 @@ impl Game {
                     ..VisibleReference::default()
                 },
             },
+            // A departed spell keeps its public definition (CR 608.2h).
             Target::StackSpell(object_id) => {
                 if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
                     self.object_reference(object_id, viewer)
                 } else {
-                    VisibleReference::default()
+                    VisibleReference {
+                        definition: self
+                            .state
+                            .spell_lki
+                            .get(&object_id)
+                            .map(|spell| spell.definition_id.0),
+                        ..VisibleReference::default()
+                    }
                 }
             }
             Target::StackAbility(id) => self

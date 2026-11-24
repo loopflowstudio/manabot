@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 27;
+pub const MATCH_STATE_HASH_VERSION: u32 = 28;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -185,6 +185,12 @@ struct CanonicalMatchState<'a> {
     object_incarnations: Vec<u32>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
     object_lki: Vec<(ObjectId, ObjectLki)>,
+    /// Omitted when empty: no spell has left the stack.
+    #[serde(
+        serialize_with = "crate::state::game_object::exact",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    spell_lki: Vec<(ObjectId, &'a crate::state::stack_object::SpellLki)>,
     players: &'a [crate::state::player::Player; 2],
     zones: &'a crate::state::zone::ZoneManager,
     turn: CanonicalTurn<'a>,
@@ -228,6 +234,7 @@ impl<'a> CanonicalMatchState<'a> {
             permanents,
             object_to_permanent,
             object_lki,
+            spell_lki,
             players,
             zones,
             turn,
@@ -260,6 +267,10 @@ impl<'a> CanonicalMatchState<'a> {
                 owner: object.owner,
             })
             .collect();
+        let spell_lki = spell_lki
+            .iter()
+            .map(|(&object, lki)| (object, lki))
+            .collect();
         let object_lki = object_lki
             .iter()
             .map(|(&object_ref, lki)| (object_ref, lki.clone()))
@@ -281,6 +292,7 @@ impl<'a> CanonicalMatchState<'a> {
             object_to_permanent,
             object_incarnations: zones.generations().collect(),
             object_lki,
+            spell_lki,
             players,
             zones,
             turn: CanonicalTurn::from(turn),

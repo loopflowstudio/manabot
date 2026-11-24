@@ -103,18 +103,9 @@ impl FrameCompletion {
 /// chosen object as the final target. Presence is checked separately on use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ResolutionTarget {
-    /// The announced mana value and actual spend of a targeted spell, retained after countering.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spell: Option<SpellPayment>,
     pub target: Target,
     pub requirement: usize,
     pub legal: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct SpellPayment {
-    pub mana_value: u8,
-    pub spent: u16,
 }
 
 /// Everything a resolving spell/ability needs while its effects execute,

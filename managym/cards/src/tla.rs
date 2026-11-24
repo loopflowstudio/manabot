@@ -6,7 +6,8 @@ use managym_state::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
         DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -9665,6 +9666,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
                     who: Actor::You,
                     predicate: CardPredicate::default(),
                     nth: Some(2),
+                    targets: SpellTargetFilter::Any,
                 },
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {

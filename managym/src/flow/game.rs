@@ -33,7 +33,7 @@ use crate::{
         knowledge::LibraryKnowledge,
         mana::{Mana, ManaPool},
         permanent::{CounterKind, Permanent},
-        stack_object::StackObject,
+        stack_object::{SpellLki, StackObject},
         zone::{ZoneManager, ZoneType},
     },
 };
@@ -97,6 +97,8 @@ pub struct GameState {
     pub object_to_permanent: ObjectVec<Option<PermanentId>>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
+    /// Each spell that has left the stack, as it last existed there.
+    pub spell_lki: BTreeMap<ObjectId, SpellLki>,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
     /// Physical appearances whose library rank was observed or chosen since the
@@ -530,6 +532,10 @@ impl TrackedState {
 
     pub(crate) fn object_lki_mut(&mut self) -> &mut ObjectLkiLog {
         &mut self.state.object_lki
+    }
+
+    pub(crate) fn spell_lki_mut(&mut self) -> &mut BTreeMap<ObjectId, SpellLki> {
+        &mut self.state.spell_lki
     }
 
     pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {

@@ -4022,7 +4022,6 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 "iteration" => {
                     frame.iteration = Some(TargetIteration {
                         remaining: vec![ResolutionTarget {
-                            spell: None,
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
@@ -5037,7 +5036,6 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
     let mut frame = EffectFrame::new(player, vec![]);
     frame.source_identity = Some(AbilitySource::new(source, Some(source)));
     frame.targets = vec![ResolutionTarget {
-        spell: None,
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,

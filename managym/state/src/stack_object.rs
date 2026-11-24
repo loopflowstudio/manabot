@@ -33,6 +33,25 @@ pub struct SpellOnStack {
     pub spent: PaymentReceipt,
 }
 
+/// A spell as it is on the stack or last existed there (CR 608.2h): what
+/// "its controller", "the mana spent to cast that spell" and "its mana value"
+/// read after the spell is countered, resolves or otherwise leaves. Copies of
+/// spells are spells too (CR 707.10); one cast without paying mana spent none.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SpellLki {
+    #[serde(serialize_with = "super::game_object::exact")]
+    pub object: ObjectId,
+    pub definition_id: CardDefId,
+    pub controller: PlayerId,
+    /// Including its announced X (CR 202.3e).
+    pub mana_value: u8,
+    /// Total mana actually spent to cast it (CR 601.2h).
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub spent: u16,
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub colors: crate::mana::Colors,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityOnStack {
     /// Chosen effects, captured before costs; resolution never re-reads a source.

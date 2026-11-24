@@ -68,7 +68,8 @@ use managym::{
             Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
             DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser,
             LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector,
-            Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            Scope, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
+            TriggerSubject, TurnStep,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardType, Keyword,
@@ -1158,6 +1159,13 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             who: Actor::Opponent,
             predicate: CardPredicate::creature(),
             nth: Some(2),
+            targets: SpellTargetFilter::Any,
+        },
+        TriggerCondition::Casts {
+            who: Actor::You,
+            predicate: CardPredicate::default(),
+            nth: None,
+            targets: SpellTargetFilter::TargetsThis,
         },
         TriggerCondition::GainsLife {
             who: Actor::You,
