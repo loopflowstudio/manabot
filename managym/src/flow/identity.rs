@@ -7,7 +7,10 @@ use crate::{
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::{CardDefId, ObjectDefinition},
-        game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId, PublicId},
+        game_object::{
+            BattlefieldFacts, ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId,
+            PublicId,
+        },
         zone::ZoneType,
     },
 };
@@ -102,7 +105,7 @@ impl Game {
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
-            battlefield: std::sync::Arc::new(crate::state::game_object::BattlefieldFacts {
+            battlefield: std::sync::Arc::new(BattlefieldFacts {
                 types: characteristics.types.clone(),
                 subtypes: characteristics.subtypes.clone(),
                 supertypes: definition.supertypes.clone(),

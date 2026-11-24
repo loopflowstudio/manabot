@@ -1190,9 +1190,7 @@ impl Game {
                         }
                         _ => None,
                     })
-                    .filter(|predicate| {
-                        super::layers::matches_departure(&source.lki, predicate, None)
-                    })
+                    .filter(|predicate| super::layers::matches_departure(&source.lki, predicate))
                     .count()
             })
             .sum()
@@ -2130,7 +2128,7 @@ impl Game {
                     && !(*another && is_source)
                     && lki.map_or_else(
                         || self.object_matches_predicate(moved_object, predicate),
-                        |lki| super::layers::matches_departure(lki, predicate, None),
+                        |lki| super::layers::matches_departure(lki, predicate),
                     )
             }
             // The Aura is still attached to the departed object as the

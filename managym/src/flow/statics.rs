@@ -522,7 +522,7 @@ impl Game {
             return self.object_matches_predicate(object, predicate);
         }
         if let Some(lki) = self.object_lki(object) {
-            return super::layers::matches_departure(lki, predicate, None);
+            return super::layers::matches_departure(lki, predicate);
         }
         let (_, printing) = self.state.source_base(object);
         let (_, owner, kind) = self
@@ -896,15 +896,19 @@ impl Game {
                     matches!(target, Target::Permanent(id)
                         if self.permanent_matches_predicate(id, predicate))
                 }),
-            Condition::SourceCountersAtLeast { kind, count } => {
-                source_permanent().map(|permanent| permanent.counter_count(*kind))
-                    .or_else(|| Some(self.object_lki(source?)?.counters.get(*kind)))
-                    .is_some_and(|n| n >= *count)
-            }
+            // A departed source answers from its last known information
+            // (CR 603.10a; Nine-Lives Familiar's intervening-if).
+            Condition::SourceCountersAtLeast { kind, count } => source_permanent()
+                .map(|permanent| permanent.counter_count(*kind))
+                .or_else(|| source.and_then(|object| self.object_lki(object)).map(|lki| lki.counters.get(*kind)))
+                .is_some_and(|n| n >= *count),
             Condition::SourceMatches(predicate) => source.is_some_and(|object| {
-                self.lookup_current_permanent(object).map_or_else(
-                    |_| self.object_lki(object).is_some_and(|lki| super::layers::matches_departure(lki, predicate, None)),
-                    |id| self.permanent_matches_predicate(id, predicate))
+                match self.lookup_current_permanent(object) {
+                    Ok(id) => self.permanent_matches_predicate(id, predicate),
+                    Err(_) => self
+                        .object_lki(object)
+                        .is_some_and(|lki| super::layers::matches_departure(lki, predicate)),
+                }
             }),
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::SourceSaddled => source

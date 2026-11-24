@@ -6,9 +6,9 @@ use crate::cards::content_pack::default_content_pack;
 use crate::state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
-        DistinctSearchEnd, Effect, EffectValue, KeywordAction, LinkedChooser, LinkedExile,
-        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
+        DistinctSearchEnd, Effect, EffectValue, EntryCounters, KeywordAction, LinkedChooser,
+        LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope,
+        TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardType, Keyword, Keywords},
     effect::{CopyException, EffectDuration, Modification},
@@ -750,7 +750,7 @@ fn move_description(
     tapped: bool,
     transformed: bool,
     under: Option<&PlayerSelector>,
-    with_counter: Option<&crate::state::ability::EntryCounters>,
+    with_counter: Option<&EntryCounters>,
     linked: Option<LinkedExile>,
 ) -> String {
     // A card returning itself (Earthbend, flicker) reads as a return; its

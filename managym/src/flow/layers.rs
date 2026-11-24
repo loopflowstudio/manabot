@@ -7,13 +7,13 @@ use crate::{
     state::{
         ability::{Condition, Effect, EffectiveTrigger},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, CardType, Keyword, Keywords, LayerValue,
-            PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
+            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
-        game_object::{Object, ObjectKind, PermanentId, PlayerId, PublicId},
-        mana::{Mana, SpendingContext, SpendingObject},
-        permanent::{CounterKind, Permanent},
+        game_object::{Object, ObjectKind, ObjectLki, PermanentId, PlayerId, PublicId},
+        mana::{Colors, Mana, SpendingContext, SpendingObject},
+        permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
         subtype::is_creature_type,
         zone::ZoneType,
@@ -1242,11 +1242,13 @@ pub(super) fn matches_view(
     .matches(p, source_name)
 }
 
+/// The characteristics and permanent status a battlefield predicate reads,
+/// borrowed from a live permanent or a departed object's last known facts.
 struct CharacteristicView<'a> {
-    types: &'a crate::state::card::CardTypes,
+    types: &'a CardTypes,
     subtypes: &'a [String],
     supertypes: &'a [String],
-    colors: &'a crate::state::mana::Colors,
+    colors: &'a Colors,
     name: &'a str,
     keywords: Keywords,
     power: i32,
@@ -1256,14 +1258,13 @@ struct CharacteristicView<'a> {
     attacking: bool,
     tapped: bool,
     in_combat: bool,
-    counters: &'a crate::state::permanent::Counters,
+    counters: &'a Counters,
 }
 
-pub(super) fn matches_departure(
-    lki: &crate::state::game_object::ObjectLki,
-    p: &CardPredicate,
-    source_name: Option<&str>,
-) -> bool {
+/// A departed object's predicate match against its last battlefield
+/// characteristics (CR 603.10a), never the card it became. Namesake
+/// predicates name a live source, so a departure has none.
+pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
     let facts = &lki.battlefield;
     CharacteristicView {
         types: &facts.types,
@@ -1281,7 +1282,7 @@ pub(super) fn matches_departure(
         in_combat: facts.in_combat,
         counters: &lki.counters,
     }
-    .matches(p, source_name)
+    .matches(p, None)
 }
 
 impl CharacteristicView<'_> {

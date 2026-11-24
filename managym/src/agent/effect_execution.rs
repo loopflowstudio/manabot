@@ -675,6 +675,8 @@ impl<'a> Projection<'a> {
                     creature_types,
                 ),
                 (
+                    // A tuple, not the struct: field names would be
+                    // unregistered execution tokens.
                     (
                         &battlefield.types,
                         &battlefield.subtypes,
