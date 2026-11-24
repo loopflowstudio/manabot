@@ -72,6 +72,8 @@ mod emn;
 mod eoe;
 #[path = "cards/fdn.rs"]
 mod fdn;
+#[path = "cards/fra.rs"]
+mod fra;
 #[path = "cards/frf.rs"]
 mod frf;
 #[path = "cards/fut.rs"]
@@ -192,6 +194,8 @@ mod shm;
 mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/sos.rs"]
+mod sos;
 #[path = "cards/spm.rs"]
 mod spm;
 #[path = "cards/sth.rs"]

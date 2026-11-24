@@ -176,6 +176,13 @@ pub enum GameEvent {
     CombatDamageToPlayers {
         creatures: Vec<PermanentId>,
     },
+    /// Each permanent that dealt combat damage in one combat damage step,
+    /// to any recipients, with its total (CR 510.2): a trailing trample
+    /// split is one entry. Trigger-only (`Game::emit_trigger_event`); the
+    /// ledger records the same damage as `DamageDealt`.
+    CombatDamageTotals {
+        dealt: Vec<(PermanentId, u32)>,
+    },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {
         objects: Vec<ObjectEventRef>,
@@ -215,6 +222,7 @@ pub enum EventKind {
     Scried,
     LibrarySearched,
     CombatDamageToPlayers,
+    CombatDamageTotals,
     PermanentsDied,
     TurnStarted,
     StepStarted,
@@ -256,6 +264,7 @@ impl GameEvent {
             GameEvent::Surveilled { .. } => EventKind::Surveilled,
             GameEvent::LibrarySearched { .. } => EventKind::LibrarySearched,
             GameEvent::CombatDamageToPlayers { .. } => EventKind::CombatDamageToPlayers,
+            GameEvent::CombatDamageTotals { .. } => EventKind::CombatDamageTotals,
             GameEvent::PermanentsDied { .. } => EventKind::PermanentsDied,
             GameEvent::TurnStarted { .. } => EventKind::TurnStarted,
             GameEvent::StepStarted { .. } => EventKind::StepStarted,

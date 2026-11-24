@@ -6,7 +6,9 @@ use super::{
 };
 
 /// Counter kinds the engine knows (CR 122). A new kind is one variant here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CounterKind {
     PlusOnePlusOne,
@@ -41,6 +43,9 @@ pub enum CounterKind {
     Charge,
     Poison,
     Plan,
+    /// No rules meaning of its own; Tinybones lets its controller play the
+    /// exiled cards that have one.
+    Stash,
 }
 
 impl CounterKind {
@@ -64,6 +69,7 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Charge => "charge",
+            CounterKind::Stash => "stash",
         }
     }
 
@@ -75,7 +81,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 17] = [
+    pub const ALL: [CounterKind; 18] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -93,6 +99,7 @@ impl CounterKind {
         CounterKind::Charge,
         CounterKind::Poison,
         CounterKind::Plan,
+        CounterKind::Stash,
     ];
 }
 

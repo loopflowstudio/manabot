@@ -22,6 +22,7 @@ use super::{
 /// A v9/v10 permanent row ends at `dealt_damage_this_turn`, then validity.
 pub const PERMANENT_VALID: usize = 37;
 pub const PERMANENT_DIM: usize = PERMANENT_VALID + 1;
+pub const RELATION_DIM: usize = 49;
 
 /// `obs` with v9/v10 card lists: after each side's v11 cards, that side's
 /// stack spells (by owner, top first), then its battlefield objects (by

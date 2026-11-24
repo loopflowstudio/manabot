@@ -171,6 +171,7 @@ impl ReadSet {
                     self.fields |= NAME;
                 }
             }
+            Condition::OpponentControlsMoreCreatures => self.fields |= CARD_TYPES,
             Condition::BattlefieldAtLeast { predicate, .. }
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
@@ -834,6 +835,12 @@ impl<'a> Context<'a> {
             }
         }
     }
+    fn creature_count(&self, controller: PlayerId) -> usize {
+        self.objects
+            .iter()
+            .filter(|(id, object)| self.controller(**id) == controller && object.view.is_creature())
+            .count()
+    }
     fn cda(&self, cda: &PowerCda, source: PermanentId) -> i32 {
         let controller = self.controller(source);
         match cda {
@@ -847,11 +854,7 @@ impl<'a> Context<'a> {
                         .counter_count(CounterKind::PlusOnePlusOne)
                 })
                 .sum(),
-            PowerCda::CreaturesYouControl => self
-                .objects
-                .iter()
-                .filter(|(id, o)| self.controller(**id) == controller && o.view.is_creature())
-                .count() as i32,
+            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
             PowerCda::GraveyardMatching(p) => {
                 self.game.count_graveyard_matching(controller, p) as i32
             }
@@ -859,6 +862,10 @@ impl<'a> Context<'a> {
     }
     fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
         match condition {
+            Condition::OpponentControlsMoreCreatures => {
+                let controller = self.controller(source);
+                self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
+            }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 self.objects
                     .keys()

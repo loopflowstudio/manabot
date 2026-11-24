@@ -84,6 +84,12 @@ reset behavior, Commands and hidden-information boundaries, and
 [encoded observations](engine.md#encoded-observations) for reading the native
 arrays by column name and joining card definition IDs.
 
+In a viewer observation, `card.cast_permissions` lists the grants on that
+visible card, including grants the player cannot currently afford.
+`player.spent_graveyard_types` lists each granting permanent's public ID and
+the permanent type already played through it this turn. It stays available
+when the graveyard is empty. Use the current action space to choose a cast.
+
 ## Collect in-game statistics
 
 Give a capture a private statistics file to count every game, independently of

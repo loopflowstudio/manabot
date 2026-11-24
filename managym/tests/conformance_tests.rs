@@ -32,7 +32,14 @@ use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
 /// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
-const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
+const NOT_REAL_CARDS: &[&str] = &[
+    "Crossroads of Destiny",
+    "Kelp Hollow",
+    "Kelp Warden",
+    "Tidal Errand",
+    "Tidal Haven",
+    "Thornwood Arbor",
+];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall
 /// cost. Suki: hybrid {G/W} pips are registered as {G}{W} (no hybrid-mana

@@ -2306,6 +2306,20 @@
           ],
           "default": null
         },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
+        "counters": {
+          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
         "face_down": {
           "default": false,
           "title": "Face Down",
@@ -2414,6 +2428,13 @@
           "title": "Any Mana",
           "type": "boolean"
         },
+        "condition": {
+          "description": "What must hold for the player to use it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cost": {
           "anyOf": [
             {
@@ -2426,14 +2447,27 @@
           "default": null,
           "title": "Cost"
         },
+        "face_down": {
+          "description": "Face down in exile without Foretell.",
+          "type": "boolean"
+        },
         "flash": {
           "default": false,
           "title": "Flash",
           "type": "boolean"
         },
+        "flashback": {
+          "type": "boolean"
+        },
+        "follows_source_controller": {
+          "type": "boolean"
+        },
         "foretold": {
           "default": false,
           "title": "Foretold",
+          "type": "boolean"
+        },
+        "on_adventure": {
           "type": "boolean"
         },
         "own_turn_only": {
@@ -2446,6 +2480,9 @@
           "minimum": 0,
           "title": "Player Id",
           "type": "integer"
+        },
+        "prepared": {
+          "type": "boolean"
         },
         "source_permanent_id": {
           "anyOf": [
@@ -3200,6 +3237,24 @@
           "minimum": 0,
           "title": "Spells Cast",
           "type": "integer"
+        },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "stack": {
           "items": {
@@ -4151,6 +4206,14 @@
           "minimum": 0,
           "title": "Controller",
           "type": "integer"
+        },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
         },
         "id": {
           "maximum": 18446744073709551615,

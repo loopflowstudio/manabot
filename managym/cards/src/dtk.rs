@@ -1,8 +1,8 @@
 //! Dragons of Tarkir.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, PlayerSelector, Scope, TargetSpec,
-        TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, Scope,
+        TargetSpec, TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, PrintedCharacteristics, SpellCostReduction,
@@ -87,7 +87,7 @@ fn dragonlords_servant() -> CardDefinition {
                 first_on_own_turn: false,
                 predicate: CardPredicate::subtype("Dragon"),
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             text_box: text_box.into(),
             ..Default::default()

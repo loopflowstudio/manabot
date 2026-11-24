@@ -54,6 +54,10 @@ const STATES: &[(&str, &str)] = &[
     ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
     ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
     ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
+    ("graveyard-routes", "Muldrotha and Zul Ashur over N graveyard cards cycling artifact, creature, Zombie and land kinds; the granted checkpoint overlaps Zul's exact-object grant with Muldrotha's type routes on one Zombie"),
+    ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
+    ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
+    ("unprepared-copies", "prepared-copies' board with the Phytomedics forced onto the battlefield unprepared; the zero-link control"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -133,6 +137,9 @@ struct Seat {
     hand: Vec<String>,
     graveyard: Vec<String>,
     tokens: Vec<String>,
+    /// Moved from hand to the battlefield through the zone move, so entry
+    /// replacements ("enters prepared") apply.
+    entered: Vec<String>,
 }
 impl Seat {
     fn add(&mut self, name: &str, count: usize) {
@@ -250,6 +257,63 @@ fn recipe(name: &str, size: usize) -> Recipe {
             seat.hand
                 .extend(["Archon's Glory".into(), "Feed the Cycle".into()]);
             seat.fill_graveyard(size);
+        }
+        "graveyard-routes" => {
+            let seat = &mut seats[0];
+            for card in ["Muldrotha, the Gravetide", "Zul Ashur, Lich Lord"] {
+                seat.add(card, 1);
+            }
+            for land in ["Swamp", "Forest", "Island"] {
+                seat.add(land, 3);
+            }
+            let kinds = [
+                "Cityscape Leveler",
+                "Hungry Ghoul",
+                "Prophetic Prism",
+                "Forest",
+                "Suspicious Shambler",
+                "Gray Ogre",
+                "Kyoshi Battle Fan",
+            ];
+            seat.graveyard
+                .extend(kinds.iter().cycle().take(size).map(|name| name.to_string()));
+        }
+        "profile-hand" => {
+            let cards = [
+                "Twinmaw Stormbrood",
+                "Smaug, the Great Calamity",
+                "Sagu Wildling",
+                "Dirgur Island Dragon",
+                "Bofur, Reliable Guardian",
+                "Disruptive Stormbrood",
+            ];
+            seats[0]
+                .hand
+                .extend(cards.iter().cycle().take(size).map(|name| name.to_string()));
+            seats[0].cycle(
+                &[
+                    "Mountain",
+                    "Island",
+                    "Forest",
+                    "Plains",
+                    "Jasmine Dragon Tea Shop",
+                    "White Lotus Hideout",
+                ],
+                size + 6,
+            );
+            seats[1].add("Gray Ogre", size);
+        }
+        "prepared-copies" | "unprepared-copies" => {
+            for seat in &mut seats {
+                seat.add("Gray Ogre", size);
+                seat.add("Plains", size);
+            }
+            let medics = std::iter::repeat_n("Emergency Phytomedic".to_string(), size);
+            if name == "prepared-copies" {
+                seats[0].entered.extend(medics);
+            } else {
+                seats[0].battlefield.extend(medics);
+            }
         }
         "diverse-mana" | "restricted-filter" | "distinct-restrictions" | "float-origins" => {
             let names = if matches!(name, "diverse-mana" | "float-origins") {
@@ -377,6 +441,7 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .chain(&seat.hand)
                 .chain(&seat.graveyard)
+                .chain(&seat.entered)
             {
                 *deck.entry(name.clone()).or_default() += 1;
             }
@@ -417,6 +482,17 @@ fn build(recipe: &Recipe) -> Env {
             state
                 .zones
                 .move_object(&state.objects, card, PlayerId(i), ZoneType::Graveyard);
+        }
+        for name in &seat.entered {
+            env.scenario_force_card_in_hand(i, name).unwrap();
+            let game = env.benchmark_game_mut();
+            let card = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, PlayerId(i))
+                .last()
+                .unwrap();
+            game.move_object(card, ZoneType::Battlefield);
         }
         for token in &seat.tokens {
             let game = env.benchmark_game_mut();
@@ -580,6 +656,29 @@ fn float_everything(root: &Env) -> Env {
     }
     panic!("mana sources were still offered after 256 decisions")
 }
+/// Activate the first permanent ability (Zul Ashur's) and take the first
+/// target, returning to priority with its grant in place.
+fn granted(root: &Env) -> Env {
+    let mut env = root.fork().unwrap();
+    let index = actions(&mut env)
+        .iter()
+        .position(|a| matches!(a, Action::ActivateAbility { .. }))
+        .expect("Zul Ashur's ability is offered");
+    env.step(index as i64).unwrap();
+    for _ in 0..16 {
+        if env.action_space_kind() == Some(ActionSpaceKind::Priority)
+            && env.benchmark_game_mut().state.stack_objects.is_empty()
+        {
+            return env;
+        }
+        let pass = actions(&mut env)
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        env.step(pass as i64).unwrap();
+    }
+    panic!("Zul Ashur's grant never resolved")
+}
 /// Reach combat by passing priority and declaring every attacker. Bound the
 /// preparation trace, not the rules search; error if it never reaches combat.
 fn combat(root: &Env, block: bool) -> Option<Env> {
@@ -730,6 +829,9 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     };
     for (label, path) in cost_choices {
         result.push(((*label).into(), follow(root, path)));
+    }
+    if recipe.state == "graveyard-routes" {
+        result.push(("granted".into(), granted(root)));
     }
     if recipe.state == "float-origins" {
         result.push(("floated".into(), float_everything(root)));

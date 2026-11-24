@@ -25,9 +25,23 @@ use crate::{
 /// How a card enters its new zone.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct ZoneEntry {
+    /// The resolving Adventure proposes a graveyard move. Only its own
+    /// replacement transfers the right to cast to the exile successor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolving_adventure: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adventure_player: Option<PlayerId>,
+    #[serde(
+        rename = "cast_adventure",
+        skip_serializing_if = "crate::state::card::SpellProfile::is_front"
+    )]
+    pub profile: crate::state::card::SpellProfile,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
-    /// Battlefield: enters with these counters.
+    /// Battlefield or exile: enters with these counters ("exile it with a
+    /// stash counter on it").
     pub counters: Counters,
     /// Battlefield: the announced X of the resolving spell becoming this
     /// permanent.
@@ -55,16 +69,26 @@ pub(crate) struct ZoneEntry {
 }
 
 impl ZoneEntry {
-    /// The terms `zone` takes: battlefield terms only for the battlefield,
-    /// face down only for exile.
+    /// The terms `zone` takes: battlefield terms only for the battlefield;
+    /// face down and counters for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {
         let mut entry = match zone {
             ZoneType::Battlefield => Self {
                 face_down: false,
                 ..self.clone()
             },
+            ZoneType::Stack => Self {
+                profile: self.profile,
+                ..Default::default()
+            },
+            ZoneType::Graveyard => Self {
+                resolving_adventure: self.resolving_adventure,
+                ..Default::default()
+            },
             ZoneType::Exile => Self {
+                adventure_player: self.adventure_player,
                 face_down: self.face_down,
+                counters: self.counters.clone(),
                 ..Self::default()
             },
             _ => Self::default(),
@@ -342,6 +366,11 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
+            ReplacementEffect::ExileInsteadOfGraveyard => {
+                "Exile without Adventure permission".into()
+            }
+            ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
+            ReplacementEffect::EntersPrepared => "Enter prepared".into(),
             ReplacementEffect::PreventCombatDamageToOrFromSelf
             | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
@@ -658,6 +687,7 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        let mut totals: Vec<(PermanentId, u32)> = Vec::new();
         // CR 119.9: all simultaneous damage from one lifelink source is one gain.
         let mut lifelink = std::collections::BTreeMap::new();
         // Sacrifice is committed with this batch, after all replacement
@@ -731,18 +761,22 @@ impl Game {
             } else {
                 None
             };
-            let hit = if matches!(batch.binding, EventBinding::Combat) {
-                match &event {
+            // Combat damage a permanent dealt: its total joins the step's
+            // totals, and damage to a player is also a hit.
+            let dealt = match (&batch.binding, &event) {
+                (
+                    EventBinding::Combat,
                     ProposedEvent::Damage {
                         source: Some(source),
-                        target: ProposedDamageTarget::Player(_),
+                        target,
                         amount,
                         ..
-                    } if *amount > 0 => self.lookup_current_permanent(*source).ok(),
-                    _ => None,
-                }
-            } else {
-                None
+                    },
+                ) if *amount > 0 => self.lookup_current_permanent(*source).ok().map(|source| {
+                    let to_player = matches!(target, ProposedDamageTarget::Player(_));
+                    (source, *amount as u32, to_player)
+                }),
+                _ => None,
             };
             let known_hand_entry = match (&batch.binding, &event) {
                 (
@@ -800,7 +834,15 @@ impl Game {
                     self.set_known_hand_count(owner, definition, count);
                 }
                 died.extend(death);
-                hits.extend(hit);
+                if let Some((source, amount, to_player)) = dealt {
+                    if to_player {
+                        hits.push(source);
+                    }
+                    match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
+                        Some((_, total)) => *total += amount,
+                        None => totals.push((source, amount)),
+                    }
+                }
             }
             results.push(EventResult {
                 committed,
@@ -844,6 +886,9 @@ impl Game {
         }
         if !hits.is_empty() {
             self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
+        }
+        if !totals.is_empty() {
+            self.emit_trigger_event(GameEvent::CombatDamageTotals { dealt: totals });
         }
         self.process_event_batch(&sources);
         BatchProgress::Complete { results, followups }
@@ -1117,6 +1162,36 @@ impl Game {
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
+            ProposedEvent::ZoneMove {
+                object_id,
+                from: Some(ZoneType::Stack),
+                to: ZoneType::Graveyard,
+                entry,
+            } => {
+                let mut choices = Vec::new();
+                for (index, replacement) in [
+                    entry
+                        .resolving_adventure
+                        .map(|_| ReplacementEffect::AdventureExile),
+                    self.find_spell_on_stack_index(*object_id)
+                        .and_then(|index| match &self.state.stack_objects[index] {
+                            crate::state::stack_object::StackObject::Spell(spell)
+                                if spell.exile_instead_of_graveyard =>
+                            {
+                                Some(ReplacementEffect::ExileInsteadOfGraveyard)
+                            }
+                            _ => None,
+                        }),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(effect) = replacement {
+                        choices.push(ReplacementCandidate::printed(*object_id, index, effect));
+                    }
+                }
+                choices
+            }
             ProposedEvent::CreateTokens {
                 controller, count, ..
             } if *count > 0 => {
@@ -1251,7 +1326,8 @@ impl Game {
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
-                            ReplacementEffect::EntersTapped
+                            ReplacementEffect::EntersPrepared
+                            | ReplacementEffect::EntersTapped
                             | ReplacementEffect::EntersWithXCounters { .. }
                             | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
@@ -1413,6 +1489,17 @@ impl Game {
         pending.applied.push(candidate.identity);
         match (&mut pending.event, &candidate.effect) {
             (
+                ProposedEvent::ZoneMove { to, entry, .. },
+                ReplacementEffect::ExileInsteadOfGraveyard,
+            ) => {
+                *to = ZoneType::Exile;
+                *entry = ZoneEntry::default();
+            }
+            (ProposedEvent::ZoneMove { to, entry, .. }, ReplacementEffect::AdventureExile) => {
+                *to = ZoneType::Exile;
+                entry.adventure_player = entry.resolving_adventure.take();
+            }
+            (
                 ProposedEvent::Damage { amount, .. },
                 ReplacementEffect::PreventCombatDamageToOrFromSelf
                 | ReplacementEffect::PreventCombatDamage,
@@ -1479,6 +1566,9 @@ impl Game {
                 },
             ) => {
                 *amount = amount.saturating_mul(2);
+            }
+            (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersPrepared) => {
+                entry.prepared = true;
             }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersTapped) => {
                 entry.tapped = true;

@@ -1,6 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use crate::state::card::SpellProfile;
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
@@ -118,13 +119,20 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Counters on objects off the battlefield (CR 122.1: "exile it with a
+    /// stash counter on it"), by exact appearance; a permanent's are on its
+    /// `Permanent`. A zone change ends the appearance and its counters (CR
+    /// 400.7), so only live objects have entries.
+    pub object_counters: BTreeMap<ObjectId, crate::state::permanent::Counters>,
     /// Continuous effects from resolved spells and abilities, in timestamp
     /// order (`state::effect`).
     pub effects: crate::state::effect::EffectRecords,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
-    pub cast_permissions: CastPermissions,
+    pub cast_permissions: Box<CastPermissions>,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
+    /// Effect waiting for its announced spell to commit (CR 608.2g).
+    pub cast_caller: Option<Box<SuspendedResolution>>,
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
@@ -316,18 +324,34 @@ pub enum ActivationSource {
 /// when unset so ordinary casts keep their shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastChoices {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<crate::flow::cast_permission::PlayRoute>,
+    /// Casting via flashback replaces any departure from the stack with exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
+    /// Cast from a prepared copy: a prepared spell (Codie). Read from the
+    /// preparation grant while the copy is still in exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    /// The caster chose or needed the printed permission to cast with flash.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flash_surcharge: bool,
     /// The optional additional cost (kicker, or a waterbend additional cost)
     /// is paid (CR 702.33).
     pub kicked: bool,
     /// The announced value of X (CR 107.3, 601.2b).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
-    /// Cast without paying its mana cost (CR 118.9), as an effect directs;
-    /// timing and zone permissions don't apply (CR 608.2g).
+    /// Cast without paying its mana cost (CR 118.9): a resolving effect's
+    /// free offer or a permission such as Omniscience.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
-    /// Cast, paying its costs, as a resolving effect directs ("you may
-    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    /// Cast as a resolving effect directs, paid or free: timing and zone
+    /// permissions don't apply (CR 608.2g), so no flash surcharge is owed.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub resolving: bool,
 }
@@ -527,6 +551,10 @@ impl TrackedState {
         &mut self.state.delayed_triggers
     }
 
+    pub(crate) fn cast_caller_mut(&mut self) -> &mut Option<Box<SuspendedResolution>> {
+        &mut self.state.cast_caller
+    }
+
     pub(crate) fn suspended_decision_mut(&mut self) -> &mut Option<SuspendedResolution> {
         &mut self.state.suspended_decision
     }
@@ -669,8 +697,8 @@ impl TrackedState {
         let cast = self.state.turn.spells_cast[player.0]
             .last_mut()
             .expect("a recorded cast");
-        debug_assert_eq!(cast.slot(), spell.slot(), "the cast's own spell");
-        *cast = spell;
+        debug_assert_eq!(cast.object.slot(), spell.slot(), "the cast's own spell");
+        cast.object = spell;
     }
 
     // Zone changes feed the derivations that read the zones they touch.
@@ -701,6 +729,7 @@ impl TrackedState {
             self.state.zones.is_latest(object),
             "retired mint appearance"
         );
+        self.state.object_counters.remove(&object);
         self.state.objects[object.slot()].mint_appearance(from_zone, to_zone, entry_copy);
         self.state
             .zones

@@ -304,11 +304,25 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert!(s.choose_target(Target::Permanent(villager)));
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
-    // Pin the prospective copy and replacement continuation in the canonical
-    // state. Definition ids depend on the name-ordered catalog.
+    // The prospective copy is on the suspended entry, and both copied
+    // replacements wait as the modes of the order choice.
+    let villager_def = s.game().state[source].definition_id;
     assert_eq!(
-        s.game().state.deterministic_hash().to_string(),
-        "v19:b80332d7a711b8087c3a434fdb769d6faeb7f71b2dd3971da88a191d17a2080a"
+        current_object(&s, clone).copy.as_ref().map(|copy| copy.of),
+        Some(villager_def)
+    );
+    assert_eq!(
+        current_object(&s, clone).replacement_effects.len(),
+        2,
+        "the copy carries the source's replacements"
+    );
+    assert_eq!(
+        s.action_space()
+            .actions
+            .iter()
+            .filter(|action| matches!(action, Action::ChooseMode { .. }))
+            .count(),
+        2
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();

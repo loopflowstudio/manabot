@@ -20,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         zetalpa_primal_dawn(),
         swab_goblin(),
         gleaming_barrier(),
+        etali_primal_storm(),
         fanatical_firebrand(),
         thrashing_brontodon(),
     ]
@@ -225,6 +226,35 @@ fn kitesail_corsair() -> CardDefinition {
                 vec![Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))],
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn etali_primal_storm() -> CardDefinition {
+    use managym_state::ability::{Ability, AttackSize, Per, TriggerCondition, TriggerSubject};
+    CardDefinition {
+        key: "rix.etali_primal_storm",
+        scryfall_id: "1d3d8bb4-0430-45bb-930d-5d6db6521945",
+        printed: PrintedCharacteristics {
+            name: "Etali, Primal Storm".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elder".into(), "Dinosaur".into()],
+            power: Some(6),
+            toughness: Some(6),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                    per: Per::Object,
+                    attackers: AttackSize::Any,
+                },
+                effects: vec![Effect::ExileEachLibraryTopCastFree],
+            }],
+            text_box: "Whenever Etali attacks, exile the top card of each player's library, then you may cast any number of spells from among those cards without paying their mana costs.".into(),
             ..Default::default()
         },
         ..Default::default()

@@ -105,7 +105,7 @@ fn stromkirk_noble() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::This,
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 effects: vec![Effect::put_counters(
