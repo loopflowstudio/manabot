@@ -127,7 +127,7 @@ class ObservationRows:
     copies used rows once. Beside the observation fields it keeps each row's
     bucket needs as admission measured them for the acting policy
     (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
-    learner regroups them instead of measuring the rows again. Opponent memory
+    learner can preserve the original extents after packing legal actions. Opponent memory
     is retained only as immutable prefix references in the collector's shared
     MemoryStore; it never enters these dense per-update arrays.
     """
@@ -271,12 +271,10 @@ class RecordedObservations:
         return rows
 
     def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
-        """Bucket needs of rollout `indexes` measured at collection, or None if
-        any of those rows has none."""
+        """Select collection extents, preserving -1 for unmeasured entries."""
         if self.needs is None:
             return None
-        needs = self.needs[self.index[indexes]]
-        return needs if bool((needs >= 0).all()) else None
+        return self.needs[self.index[indexes]]
 
     def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
         """Ordinary fields in trajectory order; memory requires selected indexes."""
@@ -1286,11 +1284,16 @@ def _capture_memory(
         )
 
 
-def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffers:
-    """Freeze bootstrap fields and prefix versions without padded memory."""
+def _retain_obs_rows(
+    collector: Collector, rows: np.ndarray, *, bootstrap: bool = False
+) -> ObservationBuffers:
+    """Borrow live buffers for this decision, or own them across later bootstrap reads."""
     with collector.profiler.track("Observation retention"):
+        indexes: np.ndarray | slice = rows
+        if not bootstrap and np.array_equal(rows, np.arange(collector.num_envs)):
+            indexes = slice(None)
         obs = {
-            key: collector._buffers[key][rows]
+            key: collector._buffers[key][indexes]
             for key in collector.observation_space.shapes
             if key not in MEMORY_FIELDS
         }
@@ -1300,8 +1303,6 @@ def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationBuffe
                 _capture_memory(collector, rows, collector._buffers),
                 collector._memory_store.capacities,
             )
-        # Training convention (VectorEnv): action_focus as float32.
-        obs["action_focus"] = obs["action_focus"].astype(np.float32)
         return obs
 
 
@@ -2300,11 +2301,7 @@ def _sample_learning_rows(
             else (),
         )
         packed = PackedActions.pack(
-            {
-                key: collector._buffers[key][rows]
-                for key in ACTION_FIELDS
-                if key in collector._buffers
-            },
+            observation,
             sampled.log_probabilities,
             validator=collector.numerics,
         )
@@ -2421,9 +2418,6 @@ def frozen_bootstraps(
     if frozen is None:
         return {}, tuple(spans), 0
     observations = frozen.arrays()
-    observations["action_focus"] = observations["action_focus"].astype(
-        np.float32, copy=False
-    )
     if frozen.memory_capacities is not None:
         observations = PrefixObservation(
             observations, frozen.memory, frozen.memory_capacities
@@ -2457,7 +2451,7 @@ def _build_batch(
     trajectories = None
     provenance: dict[str, np.ndarray] = {}
     if snapshots is None:
-        next_obs = _retain_obs_rows(collector, np.arange(shape[1]))
+        next_obs = _retain_obs_rows(collector, np.arange(shape[1]), bootstrap=True)
         next_done = dones[-1].copy()
     else:
         assert spans is not None

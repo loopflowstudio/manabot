@@ -16,13 +16,12 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.learning import Precision
-from manabot.training.rollout.numerics import SampledRows
+from manabot.training.rollout.numerics import SampledRows, prepared_chunks
 from manabot.training.rollout.selection_data import SelectionDraw
 
 
@@ -93,24 +92,14 @@ class CollectionScope:
         *,
         execution_rows: int | None = None,
     ) -> SampledRows:
-        if execution_rows is not None and execution_rows < 1:
-            raise ValueError("execution rows must be positive")
-        count = len(observation["actions_valid"])
-        width = execution_rows or count
-        if width < 1:
-            raise ValueError("execution rows must be positive")
         logs_parts: list[torch.Tensor] = []
         value_parts: list[torch.Tensor] = []
         outcome_parts: list[np.ndarray] = []
         needs_parts: list[np.ndarray] = []
         with torch.no_grad():
-            for start in range(0, count, width):
-                with profiler.track("Observation preparation"):
-                    obs = self.inference.prepare(
-                        select_rows(
-                            observation, np.arange(start, min(start + width, count))
-                        )
-                    )
+            for obs in prepared_chunks(
+                observation, execution_rows, self.inference.prepare, profiler
+            ):
                 with profiler.track("Policy inference and action selection"):
                     with forward_precision(self.session.precision, self.session.device):
                         logits, value = self.agent.forward_distribution(obs)
@@ -128,7 +117,7 @@ class CollectionScope:
                     )
                     value_parts.append(value.reshape(-1))
                     if obs.bucket_needs is not None:
-                        needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+                        needs_parts.append(obs.bucket_needs)
                 # Only small outputs survive a chunk, never Prepared or activations.
                 del obs, logits, value
             logs = torch.cat(logs_parts)

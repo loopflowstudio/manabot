@@ -5,7 +5,7 @@ Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import time
@@ -69,6 +69,7 @@ from manabot.env.match import Match
 from manabot.env.observation import (
     STACK_SOURCE_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import (
@@ -77,7 +78,6 @@ from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
 )
-from manabot.policy.buckets import bucket_sizes, trim_observation
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     canonical_parameters,
@@ -682,6 +682,27 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
             changed.infer(inputs)
 
 
+def test_mlx_scope_rejects_a_changed_observation_binding(tmp_path: Path) -> None:
+    _, _, agent = _converted(tmp_path)
+    policy = assemble(policy_weights(agent), bucketed_shapes=True)
+    space = policy.observation_space
+    obs = space.allocate(1)
+    obs["actions_valid"][0, 0] = obs["agent_player_valid"][0, 0] = 1
+    with policy.inference_scope() as scope:
+        prepared = scope.prepare(obs)
+        space.config.max_facts = 8
+        with pytest.raises(
+            RuntimeError, match="inference policy changed within its scope"
+        ):
+            scope.prepare(obs)
+    with pytest.raises(
+        ValueError, match="prepared batch belongs to another policy configuration"
+    ):
+        policy.evaluate(prepared)
+    with pytest.raises(ValueError, match=r"expected \[batch, 8, \d+\] facts"):
+        policy.prepare(obs)
+
+
 def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
     _, target, _ = _converted(tmp_path)
     policy, _ = resolve("mlx", precision="bfloat16").load_policy(target)
@@ -725,18 +746,25 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     obs["action_focus"][:, 1, 0] = (
         2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
     )
-    sizes = bucket_sizes(obs, space, objects=True)
-    assert sizes is not None and sizes.trims_objects
-    trimmed = trim_observation(obs, sizes)
-    policy = assemble(policy_weights(agent))
-    learner = MLXLearner(policy, minibatch_rows=2)
+    checkpoint = policy_weights(agent)
+    expected_logits, expected_values = agent.evaluate(agent.prepare(obs))
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
-    policy.check_observation(obs)
     results = []
-    for tensors in (obs, trimmed):
-        prepared = policy.prepare_admitted(tensors)
+    for bucketed in (False, True):
+        policy = assemble(checkpoint, bucketed_shapes=bucketed)
+        learner = MLXLearner(policy, minibatch_rows=2)
+        prepared = policy.prepare(obs)
+        assert (prepared.bucket_needs is not None) == bucketed
+        assert (prepared.agent_cards.shape[1] < obs["agent_cards"].shape[1]) == bucketed
         assert prepared.is_agent.shape == prepared.validity.shape
         logits, values = policy.evaluate(prepared)
+        np.testing.assert_allclose(logits, expected_logits, atol=LOGIT_TOLERANCE)
+        np.testing.assert_allclose(values, expected_values, atol=LOGIT_TOLERANCE)
+        # Learner rows can reuse the measured extents from admission.
+        needs = policy.check_observation(obs)
+        np.testing.assert_equal(
+            asdict(prepared), asdict(policy.prepare_admitted(obs, needs=needs))
+        )
         legal = prepared.legal
         logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
         reference = np.where(legal, 0.5, 0).astype(np.float32)
@@ -759,6 +787,42 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         np.testing.assert_allclose(
             actual[3][key], expected[3][key], atol=2e-6, err_msg=key
         )
+
+
+def test_mlx_bucketed_rejections_match_padded_and_torch(tmp_path: Path) -> None:
+    _, _, torch_policy = _converted(tmp_path)
+    space = torch_policy.observation_space
+    checkpoint = policy_weights(torch_policy)
+    policies = (
+        torch_policy,
+        ActorCritic(space, torch_policy.config, bucketed_shapes=True),
+        assemble(checkpoint),
+        assemble(checkpoint, bucketed_shapes=True),
+    )
+    for case, message in (
+        ("padding", "state record validity must be binary"),
+        ("fractional", "invalid fact object reference"),
+        ("shape", "facts"),
+        ("mask", "invalid_action_mask"),
+    ):
+        obs = space.allocate(1)
+        obs["actions_valid"][0, 0] = 1
+        if case == "padding":
+            obs["effects"][0, -1, column("effects", "valid")] = np.nan
+        elif case == "fractional":
+            obs["facts"][0, 0, column("facts", "valid")] = 1
+            obs["facts"][0, 0, column("facts", "object")] = 1e-12
+        elif case == "shape":
+            obs["facts"] = obs["facts"][:, :-1]
+        else:
+            obs["actions_valid"][0, -1] = 0.25
+        errors = []
+        for policy in policies:
+            for admit in (policy.check_observation, policy.prepare):
+                with pytest.raises(ValueError, match=message) as exc:
+                    admit(obs)
+                errors.append((type(exc.value).__name__, str(exc.value)))
+        assert len(set(errors)) == 1
 
 
 def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:

@@ -245,6 +245,9 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         def dtypes(self) -> dict[str, str]:
             return self._inner.dtypes
 
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
     # The space derives its shapes from the layout, so it grows with it.
     monkeypatch.setattr(managym, "ObservationLayout", ExtendedLayout)
     monkeypatch.setattr(buckets, "_EVENT_WIDTH", space.shapes["events"][-1] + 1)
