@@ -1,4 +1,4 @@
-at: 865b67175cdd2aab9ab55abf55a6bda967bbb882
+at: 9da47a7a552a8c663e6478699c03b0ac17d634c9
 first:
   - path: managym/src/flow/combat.rs
     why: Distinguish creatures already attacking when declaration begins
