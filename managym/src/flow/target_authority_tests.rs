@@ -1192,3 +1192,52 @@ fn retained_departure_recorded_card_and_spell_predicates_ignore_later_copy() {
     assert!(game.recorded_object_matches_predicate(bolt, &predicate));
     assert!(!game.object_matches_predicate(later, &predicate));
 }
+
+/// "That share a creature type" holds for every clause target: a trigger
+/// placement rejects a non-sharing second target, and retargeting offers
+/// only replacements sharing a type with the clause's other targets.
+#[test]
+fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
+    let (mut game, source, _, Target::Permanent(ogre), _) = fixture() else {
+        unreachable!()
+    };
+    let mut force_ogre = |game: &mut Game| {
+        game.scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap()
+    };
+    let second = force_ogre(&mut game);
+    let third = force_ogre(&mut game);
+    let giant = force_ogre(&mut game);
+    let giant_object = game.state.permanents[giant].as_ref().unwrap().object;
+    game.state[giant_object].subtypes = vec!["Giant".into()];
+    game.state.pending_triggers.push(trigger(
+        source,
+        vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement {
+                    shares_creature_type: true,
+                    min: 2,
+                    max: 2,
+                    ..TargetRequirement::one(TargetSpec::Creature)
+                },
+                effects: vec![],
+            },
+            Effect::gain_life(1),
+        ],
+        0,
+    ));
+    assert!(game.flush_triggers().is_some());
+    game.choose_trigger_target(PlayerId(0), Target::Permanent(ogre))
+        .unwrap();
+    assert!(game
+        .choose_trigger_target(PlayerId(0), Target::Permanent(giant))
+        .is_err());
+    game.choose_trigger_target(PlayerId(0), Target::Permanent(second))
+        .unwrap();
+    assert!(game.flush_triggers().is_none());
+    let stacked = game.state.stack_objects.last().unwrap().as_target();
+    assert_eq!(
+        game.retarget_candidates(stacked, 1),
+        [Target::Permanent(third)]
+    );
+}

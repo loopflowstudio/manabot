@@ -1419,10 +1419,9 @@ impl Game {
             .iter()
             .enumerate()
             .all(|(index, requirement)| {
-                requirement.min == 0
-                    || !self
-                        .activated_ability_targets(player, source, ability_index, index, &[])
-                        .is_empty()
+                self.activated_ability_targets(player, source, ability_index, index, &[])
+                    .len()
+                    >= requirement.min
             })
     }
 
@@ -1518,7 +1517,9 @@ impl Game {
             .copied()
             .filter(|target| {
                 let with = |extra: &[Target]| {
-                    self.targets_share_creature_type(chosen.iter().chain([target]).chain(extra))
+                    self.targets_share_creature_type(
+                        chosen.iter().chain([target]).chain(extra).copied(),
+                    )
                 };
                 with(&[])
                     && (!needs_partner
@@ -1531,13 +1532,16 @@ impl Game {
 
     /// Whether the permanents among `targets` have a creature type in common
     /// ("that share a creature type").
-    fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
+    pub(super) fn targets_share_creature_type(
+        &self,
+        targets: impl Iterator<Item = Target>,
+    ) -> bool {
         let mut common: Option<Vec<String>> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.characteristics(*id).creature_types.clone();
+            let types = self.characteristics(id).creature_types.clone();
             common = Some(match common {
                 None => types,
                 Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),

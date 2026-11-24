@@ -264,3 +264,59 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         1
     );
 }
+
+/// CR 700.2a, 603.3c: a triggered ability's mode that needs two targets is
+/// not offered while only one legal target exists.
+#[test]
+fn trigger_mode_needs_as_many_legal_targets_as_its_clause_minimum() {
+    use crate::support::{inspect::card_of, play::cast};
+    use managym::{
+        agent::action::Action,
+        state::{
+            ability::{Ability, Actor, Effect, TargetRequirement, TargetSpec, TriggerCondition},
+            player::ManaPayment,
+            predicate::CardPredicate,
+        },
+    };
+    let modes = |s: &Scenario| {
+        let mut s = s.clone();
+        cast(&mut s, "Llanowar Elves");
+        let offered: Vec<usize> = s
+            .action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::ChooseMode { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .collect();
+        offered
+    };
+    let mut s = five_color_setup(&["Hill Giant", "Gray Ogre", "Llanowar Elves"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let object = card_of(&s, giant);
+    s.game_mut().state[object].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::casts(Actor::You, CardPredicate::creature()),
+        intervening_if: None,
+        effects: vec![Effect::TriggerModes {
+            modes: vec![
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 2,
+                        max: 2,
+                        ..TargetRequirement::one(TargetSpec::CreatureOpponentControls)
+                    },
+                    effects: Vec::new(),
+                }],
+                vec![Effect::gain_life(1)],
+            ],
+            up_to: None,
+            unchosen: false,
+        }],
+    }];
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(modes(&s), [1], "one opposing creature, two targets");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(modes(&s), [0, 1]);
+}

@@ -255,9 +255,12 @@ impl Game {
             && (!requirement.total_mana_value_x
                 || self.target_mana_value(target)
                     + chosen
+                        .clone()
                         .map(|target| self.target_mana_value(target))
                         .sum::<u32>()
                     <= u32::from(x))
+            && (!requirement.shares_creature_type
+                || self.targets_share_creature_type(chosen.chain([target])))
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -481,8 +484,9 @@ impl Game {
                             trigger.controller,
                             trigger.source_identity,
                         )
-                        .next()
-                        .is_some()
+                        .take(requirement.min)
+                        .count()
+                            >= requirement.min
                     })
             })
             .collect()
