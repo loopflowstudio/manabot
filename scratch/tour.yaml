@@ -1,17 +1,9 @@
-at: 052344c4d99ac3dfd781831dcdbfe59210827529
+at: 5f44d41dce34de39e793c08f433e5d19427af37e
 first:
   - path: managym/cards/tests/cards/dsk.rs
-    why: Follow two Clone Legions across the original’s departure.
-  - path: managym/state/src/game_object.rs
-    why: Inspect the definition carried by a copiable face.
-  - path: managym/src/flow/zones.rs
-    why: Trace manifest entry and token creation.
+    why: Compare paired opponent decklists and controller inspection.
+  - path: managym/src/agent/observation.rs
+    why: Count hidden battlefield printings in their owner's decklist.
   - path: managym/src/flow/identity.rs
-    why: Find each viewer’s permitted printing and public identity.
-  - path: managym/src/decision_capture.rs
-    why: Bind the public alias in a decision capture.
-  - path: manabot/semantic/text_observation.py
-    why: Bind object and permanent identities to one public name.
-  - path: tests/semantic/test_manifest_text.py
-    why: Target the same nameless creature from both seats.
+    why: Determine who can inspect a manifested card.
 hide: []
