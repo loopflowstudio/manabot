@@ -3600,6 +3600,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         spell_profile => [column(Action, action::SPELL_PROFILE)],
         route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
         quota_type => [column(Action, action::QUOTA_TYPE)],
+        play_route => [column(Action, action::PLAY_ROUTE)],
         announces_x => [column(Action, action::HAS_X)],
     }));
     fields.extend(encoding!(EventData {

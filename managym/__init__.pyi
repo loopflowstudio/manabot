@@ -1187,6 +1187,8 @@ class Action:
     spell_profile: int
     route_mana_value: int | None
     quota_type: int | None
+    # The permission a play uses (play_route_code); None for an ordinary hand play.
+    play_route: int | None
     announces_x: bool
 
 class ActionSpace:

@@ -1886,8 +1886,13 @@ fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
         play::{activate, choose, resolve_top},
     };
     use managym::{
-        agent::action::Action,
-        flow::cast_permission::{PlayGrant, PlayRoute},
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+            observation_layout::action as action_columns,
+        },
+        flow::cast_permission::{play_route_code, PlayGrant, PlayRoute},
         state::permanent::CounterKind,
     };
     let mut s = five_color_setup(&["Tinybones, Bauble Burglar"]);
@@ -1962,6 +1967,40 @@ fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
         .filter(|a| matches!(a, Action::PlayLand { object, .. } if *object == exiled))
         .count();
     assert_eq!(exile_offers, 2, "one card, listed once per route");
+
+    // Both routes are free land plays; only `play_route` tells them apart
+    // in the encoded action rows.
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let indices: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| matches!(a, Action::PlayLand { object, .. } if *object == exiled))
+        .map(|(index, _)| index)
+        .collect();
+    let codes: Vec<_> = indices
+        .iter()
+        .map(|&index| observation.action_space.actions[index].play_route)
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            Some(play_route_code(offered[0].unwrap())),
+            Some(play_route_code(offered[1].unwrap()))
+        ]
+    );
+    assert_ne!(codes[0], codes[1]);
+    let input = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    let rows: Vec<&[f32]> = indices
+        .iter()
+        .map(|&index| &input.actions[index * ACTION_DIM..(index + 1) * ACTION_DIM])
+        .collect();
+    assert_ne!(rows[0], rows[1]);
+    let differing: Vec<usize> = (0..ACTION_DIM)
+        .filter(|&column| rows[0][column] != rows[1][column])
+        .collect();
+    assert_eq!(differing, [action_columns::PLAY_ROUTE]);
 }
 
 /// Loot gives its controller, and only them, a second land play each turn.

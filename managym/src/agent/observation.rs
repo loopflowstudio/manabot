@@ -1,4 +1,5 @@
 use crate::cards::names::NameOption;
+use crate::flow::cast_permission::play_route_code;
 use crate::state::card::SpellProfile;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
@@ -980,6 +981,10 @@ pub struct ActionOption {
     /// CardType + 1 when this play spends that permanent type for its source.
     #[serde(default)]
     pub quota_type: Option<u8>,
+    /// The permission this play uses, as [`play_route_code`]; absent for an
+    /// ordinary hand play and every other action.
+    #[serde(default)]
+    pub play_route: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -1111,7 +1116,8 @@ impl Observation {
                                 _ => (None, None, None),
                             };
                             let profile = action.spell_profile();
-                            let (route_mana_value, quota_type) = match (action, game.resolved_play_route(action)) {
+                            let route = game.resolved_play_route(action);
+                            let (route_mana_value, quota_type) = match (action, route) {
                                 (
                                     Action::CastSpell { object, .. } | Action::PlayLand { object, .. },
                                     Some(route),
@@ -1131,6 +1137,7 @@ impl Observation {
                                 spell_profile: spell_profile_code(profile),
                                 route_mana_value,
                                 quota_type,
+                                play_route: route.map(play_route_code),
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
@@ -2694,6 +2701,7 @@ mod characteristics_tests {
             spell_profile: 0,
             route_mana_value: None,
             quota_type: None,
+            play_route: None,
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();

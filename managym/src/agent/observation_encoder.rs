@@ -2323,6 +2323,9 @@ fn encode_actions(
         if let Some(profile) = row.get_mut(action::SPELL_PROFILE) {
             *profile = f32::from(action.spell_profile);
         }
+        if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
+            *route = f32::from(action.play_route.unwrap_or_default());
+        }
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -2512,6 +2515,7 @@ mod tests {
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
+                        play_route: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2529,6 +2533,7 @@ mod tests {
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
+                        play_route: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2546,6 +2551,7 @@ mod tests {
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
+                        play_route: None,
                     },
                 ],
                 focus: Vec::new(),
@@ -2696,6 +2702,7 @@ mod tests {
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
+                play_route: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -3008,6 +3015,7 @@ mod tests {
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
+                play_route: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

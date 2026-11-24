@@ -44,6 +44,7 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         spell_profile: 0,
         route_mana_value: None,
         quota_type: None,
+        play_route: None,
     }
 }
 fn card(id: i32, name: &str, mv: u8) -> CardData {

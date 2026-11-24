@@ -686,8 +686,14 @@ neither; their X offers differ only in `mode`.
 
 When several permissions apply to one play, its action row gives the selected
 base mana value (`has_route_cost`, `route_mana_value`) and the permanent
-type it spends (`quota_type`, zero for none). A type-limited offer focuses
-the card first and the permanent granting the allowance second.
+type it spends (`quota_type`, zero for none). `play_route` names the
+permission itself (`play_route_code`: 1 hand, 2 free from hand, 3 library
+top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type,
+8 exile counter; zero for an ordinary hand play), so two routes with the
+same cost, such as Tinybones's stash and an exact grant, stay distinct. The
+column is appended; a checkpoint trained before it does not read it. A
+type-limited offer focuses the card first and the permanent granting the
+allowance second.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1

@@ -2612,6 +2612,9 @@ pub struct PyAction {
     pub route_mana_value: Option<u8>,
     #[pyo3(get)]
     pub quota_type: Option<u8>,
+    /// The permission a play uses (`play_route_code`); None for an ordinary hand play.
+    #[pyo3(get)]
+    pub play_route: Option<u8>,
 }
 
 #[cfg(feature = "python")]
@@ -2730,6 +2733,7 @@ impl From<ActionOption> for PyAction {
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }
@@ -2753,6 +2757,7 @@ impl From<PyAction> for ActionOption {
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }

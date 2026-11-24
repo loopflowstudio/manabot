@@ -52,6 +52,22 @@ pub enum PlayRoute {
     ExileCounter(crate::state::permanent::CounterKind),
 }
 
+/// The observed code of a route (0 is an ordinary hand play): offers name
+/// overlapping routes by it, and the `play_route` action column reads it, so
+/// a new route appends a code.
+pub fn play_route_code(route: PlayRoute) -> u8 {
+    match route {
+        PlayRoute::Hand => 1,
+        PlayRoute::FreeFromHand => 2,
+        PlayRoute::LibraryTop => 3,
+        PlayRoute::PrintedFlashback => 4,
+        PlayRoute::GrantedFlashback => 5,
+        PlayRoute::Grant(_) => 6,
+        PlayRoute::GraveyardType { .. } => 7,
+        PlayRoute::ExileCounter(_) => 8,
+    }
+}
+
 /// Permission for one player to cast, or with `play_lands` play, a card in one exact zone appearance.
 /// The granting effect determines the eligible object and the duration.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

@@ -152,6 +152,9 @@ impl Serialize for ActionJson<'_> {
         if let Some(kind) = value.quota_type {
             map.serialize_entry("quota_type", &kind)?;
         }
+        if let Some(route) = value.play_route {
+            map.serialize_entry("play_route", &route)?;
+        }
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }
