@@ -382,7 +382,7 @@ The working phase for the life batch is satisfied except Finding 6 below. These 
 5. Six early ledger rows lack fixture pointers (Cat Collector, Venom
    Connoisseur, Predator Ooze, Steel Hellkite, Fumigate, Exsanguinate). Their
    fixtures are named in the slices above.
-6. **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
+6. **Closed in the death slice.** **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
 
 Still open beyond findings: recorded Watch playback of a partial
 declaration, the full debug and browser gate, frozen pilot compatibility on
@@ -394,8 +394,8 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 38 of 81 primary rows with definitions and native
-fixture evidence. The 43 pending primary rows are in the later batches below.
+The FDN ledger has 46 of 81 primary rows with definitions and native
+fixture evidence. The 35 pending primary rows are in the later batches below.
 Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
 witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
 witnesses. Daggers identify pending cost candidates whose full ledger
@@ -440,52 +440,34 @@ Not built in this slice:
 
 Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent cleanup for the working review.
 
-### Next slice · Creature deaths and turn death history
+### Implemented slice · Creature deaths and turn death history
 
-Concept review at `3da933e53b` ([concept-review.html](concept-review.html)) widened from the Life batch and Death batch across departed LKI, trigger contexts, player bindings, and modal trigger lifecycles. Follow this exact sequence so every conformance drift and structural seam is resolved before authoring the nine cards:
+Eight primary rows (Tragic Banshee, Vengeful Bloodwitch, Needletooth Pack, Slumbering Cerberus, Wardens of the Cycle, Midnight Reaper `grn`, Massacre Wurm `mbs`, Garna `dmu`) and the cost-primary Kalastria Highborn (`wwk`, a new set module) link to their first-printing modules and directed tests. The FDN ledger has 46 of 81 primary rows.
 
-#### Step 0 · Re-record semantic-kernel evidence once the catalog settles
+Shared changes:
 
-Diagnosed at review (see the life slice): the frozen cases moved only because the catalog grew. Command sequences are identical to `5be4b4d5ba`. Re-record after the last card lands, and again after any hash-version bump, rather than bisecting.
+- Finding 6 closed: damage results carry their lifelink gain and the batch commits one gain per source (`commit_lifelink_gains`). Sire of Seven Deaths trampling through two Lions gives one gain and one Exemplar counter; two Healer's Hawks give two.
+- `ObjectLki` records layered `name`, `types`, `subtypes`, `colors`, `is_legendary` and `was_attacking`/`was_in_combat`/`was_tapped`; `was_creature`, `was_land` and `creature_types` became methods. One `PermanentFacts` matcher (`flow/layers.rs::matches_permanent_facts`) answers live permanents and `Game::lki_matches_predicate`. Moved-object subjects and `additional_trigger_times` read LKI, never the printing. Hash contract v27. `retained_departure_predicate_uses_last_known_copy_after_reentry` now asserts the copied type (an Ogre copying a land left as a land).
+- `Condition::TriggeringMatches(CardPredicate)` (Garna's "if it was attacking"); legacy `TriggeringHadCounters` kept.
+- Stacked and pending trigger frames that read their triggering permanent project its departed LKI (`effect_execution::project_stack_object`, `project_pending_trigger`); the summary says "attacking"/"blocking". Departed `Target::Permanent` references keep their definition.
+- `event_player`: dies/leaves/enters/sacrificed bind the controller as it last existed; graveyard triggers keep the owner.
+- Printed modal triggers keep `inline_effects: None` and carry `chosen_modes` (stack) / `modes_chosen` (placement). `with_chosen_modes` expands them at resolution, retarget and requirements. This fixed a pre-existing gap: modal triggers skipped the CR 603.4 recheck. A single chosen mode fills `StackObjectData.chosen_mode` (v11 `stack::MODE`) and `ContinuationFrame.mode`; several project their program; descriptions read "chosen mode N".
+- `Phyrexian` joined the subtype table; `play::bolt` is a shared fixture primitive.
 
-#### Step 1 · Four shared unifications (land before authoring the Death batch)
+Checks: debug cards target (899), engine lib (359), rules (188), content pack, engine, match-state hash, scenario, `search_state_contract`, `canonical_replay_tests` passed. The Clone hash in `lea.rs` moved to v27. After rebuilding the cp313 extension, the focused Python selection passed (116 passed, 1 skipped optional checkpoint).
 
-Fix Finding 6 first: batch lifelink gains per source. The Death batch then authors on a correct gain ledger.
+Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
-1. **Complete `ObjectLki` + one live/departed `CardPredicate` matcher + `Condition::TriggeringMatches(CardPredicate)`** (`state/src/game_object.rs`, `state/src/ability.rs`, `flow/identity.rs`, `flow/layers.rs`, `flow/triggers.rs`, `flow/statics.rs`, `state/hash.rs`).
-   - Capture the permanent’s complete layered characteristics and combat/tap status in `snapshot_current_permanent`: `name: String`, `types: CardTypes`, `subtypes: Vec<String>`, `colors: Colors`, `is_legendary: bool`, plus `was_attacking: bool`, `was_tapped: bool`, and `was_in_combat: bool` (`skip_serializing_if = "Not::not"`). Delete the redundant partial fields `was_creature`, `was_land`, and `creature_types` on `ObjectLki` (`lki.types.is_creature()`, `lki.types.is_land()`, and a derived `lki.creature_types()` helper replace them). Bump `hash_contract_version` to v27.
-   - Extract one shared `matches_permanent_facts` predicate matcher used by both `layers.rs::matches_view` (live permanents) and `Game::lki_matches_predicate` (departed permanents).
-   - Route `subject_matches_moved_object` (`flow/triggers.rs`) and `additional_trigger_times` (`flow/triggers.rs`) through `lki_matches_predicate`, deleting the destination-card fallback (`&self.state[moved_object]`) and `matches_printing` fallback that broke Clones, transformed faces, layer-4 subtypes (Vampire, Ally), layer-4 types, colors, keywords, counters, and combat status.
-   - Add `Condition::TriggeringMatches(CardPredicate)` (live `permanent_matches_predicate` if still on the battlefield, else `departed_permanent_lki` + `lki_matches_predicate`; return `true` for `ContextRead::TriggeringPermanent` in `Condition::reads` so `triggers.rs` binds `context` automatically). Keep legacy `Condition::TriggeringHadCounters` untouched for pinned TLA pilots.
-2. **Departed trigger-context visibility in `continuation.rs` and `effect_execution.rs`.**
-   - In `continuation.rs::target_reference`, when `Target::Permanent(id)` has departed, look up `self.departed_permanent_lki(id)` so `VisibleReference.definition` preserves the departed card’s public definition (consistent with `visible_reference`).
-   - In `continuation.rs::stack_frame`, pending-trigger frames, and `describe_effect_execution`, when a triggered ability reads its triggering permanent (`reads_triggering_permanent()`) and its `context` is a departed `Target::Permanent(id)`, project that `ObjectLki` through `effect_execution::Projection::lki` (extended to encode `was_attacking`, `was_tapped`, `was_in_combat`, `types`, `subtypes`, `colors` and include `"attacking"` in its plain-language summary when `was_attacking` holds). Both viewers then distinguish Garna’s attacking-death (draw) and non-attacking-death (1 damage) stack triggers across v11 `ContinuationProgram`, LLM text, and Academy without adding bespoke stack columns.
-3. **Condition-aware `event_player(leaf, event, hit)` in `flow/triggers.rs`.**
-   - Replace the event-only `player` match in `check_triggers_for_event` with `event_player(leaf, event, hit)`: `TriggerCondition::PutIntoGraveyard` binds graveyard owner (`self.state[*object].owner`), while `Dies`, `LeavesTheBattlefield`, `EntersTheBattlefield`, and `Sacrificed` bind the permanent’s controller (`*controller`, which `commit_zone_move` sets to `lki.controller` on departure). Fixes Massacre Wurm when an opponent controls a creature you own.
-4. **Keep printed modal trigger identity off `inline_effects`** (`flow/trigger.rs`, `state/src/stack_object.rs`, `flow/triggers.rs`, `flow/resolution.rs`, `agent/observation.rs`, `agent/continuation.rs`, `agent/ability_description.rs`).
-   - Carry `chosen_modes: Vec<usize>` (`skip_serializing_if = "Vec::is_empty"`) onto `TriggeredAbilityOnStack` and keep `inline_effects: None` for printed `Effect::TriggerModes` triggers; reserve `inline_effects` strictly for genuinely non-printed triggers (delayed, granted, reflexive `WhenYouDo`).
-   - In `resolve_triggered_ability`, printed modal triggers now recheck CR 603.4 `intervening_if`, keep `ability = Some(triggered.ability_index)`, and expand `chosen_modes` in printed order from the printed `Effect::TriggerModes`.
-   - In `observation.rs` and `continuation.rs`, populate `StackObjectData.chosen_mode` and `ContinuationFrame.mode` from `chosen_modes[0]` for single-mode triggers (filling v11 `stack::MODE` just like modal spells!), and project multi-mode (`up_to`) chosen effects in `ContinuationProgram` when `chosen_modes.len() > 1`. Render chosen mode(s) from `chosen_modes` in `ability_description::trigger_description`.
-
-#### Step 2 · Author and verify all nine Death-batch cards
-
-Eight primary rows plus the cost-primary Kalastria Highborn; put each single-card fixture in its first-printing set module under `managym/cards/tests/cards/` and record verified source and fixture rows in `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl`:
-
-- **Tragic Banshee** (`fdn.rs`): `EntersTheBattlefield(This)` with `Effect::If { condition: CreatureDiedThisTurn, then: -13/-13, otherwise: -3/-3 }` on one `Target(Creature)` chosen at placement. Check a creature dying between trigger and resolution.
-- **Vengeful Bloodwitch** (`fdn.rs`): `Dies(you_control(creature))` targeting an opponent (`LoseLife` + `GainLife`), including its own death and animated noncreature/Clone deaths in a simultaneous batch.
-- **Midnight Reaper** (`grn.rs`): `Dies(you_control(nontoken creature))` dealing 1 damage to `You` and drawing 1, including its own death and animated nontoken creatures; verify a creature token death does not trigger.
-- **Massacre Wurm** (`mbs.rs`): entry `-2/-2` to opponents’ creatures kills several in one SBA batch; `Dies(opponent creature)` makes `TriggeringPlayer` lose 2 life. Include a stolen-creature control where opponent controls a creature *you* own and opponent loses 2 life.
-- **Garna, Bloodfist of Keld** (`dmu.rs`): `Dies(another_you_control(creature))` with `Effect::If { condition: TriggeringMatches(attacking), then: Draw(1), otherwise: DealDamageToPlayer(EachOpponent, 1) }`. Test simultaneous combat deaths (one attacking, one non-attacking), postcombat death (non-attacking), simultaneous death with Garna, and two-viewer v11/text/Academy stack distinction.
-- **Needletooth Pack** (`fdn.rs`), **Slumbering Cerberus** (`fdn.rs`), **Wardens of the Cycle** (`fdn.rs`): end-step `intervening_if: Some(CreatureDiedThisTurn)` triggers — two targeted counters, untapping Cerberus past `Restriction::DoesntUntap` on either end step while its untap step stays locked, and Wardens’ two-mode `TriggerModes` (gain 2 vs. draw 1 / lose 1). Distinguish no death, opponent’s creature death, and prior-turn death. Include a directed CR 603.4 control for a modal trigger whose non-monotonic `intervening_if` fails before resolution, and verify Wardens’ chosen mode in v11 `stack::MODE`, `ContinuationFrame.mode`, text, and Academy.
-- **Kalastria Highborn†** (`wwk.rs`): `Dies(you_control(Vampire))` with `OptionalPayment({B}, [LoseLife(Target(Player), 2), GainLife(2)])`. Verify target player is announced on placement before deciding to pay `{B}`, a dying Clone copying a Vampire (or granted Vampire subtype) triggers, and a Vampire stripped of Vampire by *Honest Work* does not.
-
-Rebuild the CPython 3.13 extension and run the focused Python checks (including Garna departed-context projection, Wardens modal trigger v11/text parity, `observability.rs`, and bundled v9/v11 pinned pilots). A row the batch cannot finish keeps its concrete missing interaction in the ledger.
+Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5.
 
 #### Deferred dedicated slice · CR 104.4b mandatory-loop draw
 
 Keep `GameOutcome::Draw` and zero-choice CR 104.4b mandatory-loop detection (`flow/tick.rs`, `winner_index`, Env rewards, Academy game-over rendering) as its own slice paired with a loop partner such as *Vito, Thorn of the Dusk Rose* so *Bloodthirsty Conqueror*’s remaining pending obligation closes cleanly without mixing loop-outcome API churn into the Death batch.
 
 ### Later slices
+
+Next: the draw-step and individual draw listeners batch.
+
 
 - **Draw-step and individual draw listeners** — Scrawling Crawler; Dictate of Kruphix.
 - **Filtered casts, targets and spell attributes** — Archmage of Runes†; Brineborn Cutthroat; Painful Quandary†; Mindsparker; Gnarlback Rhino; Mold Adder; Ovika, Enigma Goliath†; Ramos, Dragon Engine†; Firespitter Whelp.
