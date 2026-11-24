@@ -1,0 +1,21 @@
+at: 9e51ef11c5871c98b143e531c175dda78922feed
+first:
+  - path: experiments/reports/mini_baseline_backends.md
+    why: Measured throughput, workload and limits on the M1
+  - path: experiments/mini_baseline_backends.py
+    why: Each cell joins parity, live timing and reported rates
+  - path: manabot/backends/README.md
+    why: Execution targets, tolerances and parity CLI
+  - path: manabot/backends/parity.py
+    why: Checkpoint pair, observed dtype and numerical comparisons
+  - path: manabot/backends/torch/checkpoint.py
+    why: Torch placement and precision for the candidate
+  - path: manabot/backends/mlx/checkpoint.py
+    why: MLX placement and precision for the candidate
+  - path: tests/training/test_mini_backend_measurements.py
+    why: Rejection cases and warmup accounting
+  - path: tests/model/test_backend_capture.py
+    why: Real capture through the parity CLI
+hide:
+  - path: experiments/data.manifest.json
+    why: Generated paths, byte counts and hashes for retained evidence
