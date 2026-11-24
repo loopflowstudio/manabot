@@ -456,6 +456,8 @@ Shared changes:
 
 Checks: debug cards target (899), engine lib (359), rules (188), content pack, engine, match-state hash, scenario, `search_state_contract`, `canonical_replay_tests` passed. The Clone hash in `lea.rs` moved to v27. After rebuilding the cp313 extension, the focused Python selection passed (116 passed, 1 skipped optional checkpoint).
 
+Compression (`e4579800a7`) gave stacked triggers one effects reader, `Game::stacked_trigger_effects` (`flow/resolution.rs`), used by retarget and the continuation projection. Pending triggers keep their own reader in `flow/triggers.rs::trigger_requirements` because their source definition comes from a different place.
+
 Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
 Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5.
