@@ -179,3 +179,10 @@ The public stack entry already carries the exact amount. Keep the pending
 decision narration with the acting seat, as the wire validators require.
 
 The local measurement uses Fumigate and Panda in one position: the same resolution produces the destruction count, leaves indestructible survivors and opens Panda's target decision. The new-card positions have no equivalent playable reference on the budget revision. Use existing board controls for paired comparisons.
+
+## Damage-history measurement
+
+Use the final pre-change fixture binary for both constructed-board comparisons,
+including Connoisseur's two trigger-order offers. Reuse the budget reference
+binaries built on this Mac for the preceding measurement. All 541 retained tracked inputs under
+`managym/` and `content/` matched their git blobs at `f299750a45`.

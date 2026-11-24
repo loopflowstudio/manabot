@@ -690,9 +690,8 @@ casting-only conformance receipts retain their original revisions.
 1. Integrated replay and privacy checks (below), including recorded Watch
    playback of a partial attack declaration and of the departed-Clone
    interaction.
-2. Search-64 exceeded the local 10% budget at `369696da5f`. The step and
-   search digests reproduced the reference exactly. Start with the measured
-   damage-history invalidations, then repeat the paired comparison. See the
+2. The paired local Engine Budget passed at `b62f8b7ece` after the
+   damage-history change. Gate still owns the hosted result. See the
    [engine measurement](#engine-measurement--2026-11-24).
 3. The four Academy failures in `scratch/questions.md`: gate confirms whether
    they also fail on main.
@@ -774,7 +773,7 @@ The Academy seed-0 casting-history tape verified in 13.56 s end to end (five-min
 
 ### Paired Engine Budget
 
-**Search-64 failed both timing checks.** All four benchmark invocations reproduced 512 completed games, 118,559 decisions, the decision digest `10601622128491155944` and search-score digests `13638875039089371439`, `5466143068363283977` and `9998925852575961750` (seeds 1–3). The searches made 7,680 / 8,064 / 7,424 simulations across 40 decisions per seed, with zero cap hits. Keep the existing reference and measure the first implementation slice before publishing.
+**Before the damage-history change, Search-64 failed both timing checks.** All four benchmark invocations reproduced 512 completed games, 118,559 decisions, the decision digest `10601622128491155944` and search-score digests `13638875039089371439`, `5466143068363283977` and `9998925852575961750` (seeds 1–3). The searches made 7,680 / 8,064 / 7,424 simulations across 40 decisions per seed, with zero cap hits. The paired result after the damage-history change is recorded below.
 
 | Budget measure | Reference | Candidate | Result |
 |---|---:|---:|---|
@@ -820,9 +819,29 @@ The 216 paired control cells agree on reported outputs (including simulated coun
 
 ### Implementation order and deletion targets
 
-1. **Stop damage-history writes from rebuilding the characteristics board.** On the duplicate-creature damage step the reference rebuilt five boards at all three sizes. The candidate rebuilt 14 / 22 / 38, with zero payment plans and zero trigger sources. In `flow/damage.rs`, both damage-pair writers mutate `TrackedState` through `DerefMut`, which invalidates characteristics, triggers, mana and taps. Replace just those broad mutations with narrow damage-history writes beside `TrackedState::mark_damage`. Keep the existing sorted `DamageHistory`, life/counter mutations, exact appearance IDs and event ordering. Audit the reads in `flow/triggers.rs`, `resolution.rs`, observation and hashing before assigning revision dependencies. Keep real changes to characteristic-dependent state on their own invalidation paths. Accept the slice when the extra two boards per pair disappear across 4/8/16, timing and allocation traffic fall, and the paired candidate runs preserve the ordered decisions, search scores, payment witnesses and state digests on the final fixtures. Run debug cache recomputation, Predator Ooze, Steel Hellkite, trample/Greatwurm, prevention and fork/replay tests. Recheck both ordinary budgets on one runner.
+1. **Implemented at `b62f8b7ece`.** The permanent-hit and combat-player-hit writers in `commit_damage` borrow only `DamageHistory` through `TrackedState::damage_history_mut`. Trigger matching and resolution look up hits when they run. Observations and the canonical hash also read the committed pairs directly. The layer board and trigger source index depend on other fields. The life, counter, and marked-damage writes retain their existing revision behavior.
 
-2. **Build the chosen-tap payment inputs once per pending decision.** Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
+   On the same Mac, the final pre-change fixture binary and the new release binary produced the following results at the duplicate-creature combat damage checkpoint. Times are medians of three steps. Allocation bytes come from a separate run.
+
+   | Ogres per seat | Board evaluations before → after | Step time before → after | Allocated bytes before → after |
+   |---:|---:|---:|---:|
+   | 4 | 14 → 6 | 0.0332 → 0.0226 ms | 74,609 → 65,849 |
+   | 8 | 22 → 6 | 0.0582 → 0.0293 ms | 126,833 → 105,209 |
+   | 16 | 38 → 6 | 0.1007 → 0.0478 ms | 247,857 → 188,217 |
+
+   This removes two board evaluations per opposing pair. At size 16 the eight-simulation search at the same checkpoint went from 1.155 to 0.636 ms and from 2,831,498 to 1,963,594 allocated bytes. The controls (216 cells) and final card fixtures (587 cells) each reproduced their pre-change digest across all four timing and allocation runs, including ordered offers, payment witnesses, step state hashes and search scores. The focused debug run passed 25 tests covering cache reuse and stale-board detection, Ooze and Hellkite snapshots, trample, Greatwurm, prevention, forks and canonical replay. The rebuilt CPython 3.13 extension reproduced the Academy receipt for all 174 Commands, 175 checkpoints per surface and 1,050 viewer checks, including both stale rejections.
+
+   The paired Engine Budget passed on the M4 Max against `f299750a45`. In candidate/reference/reference/candidate order, every run matched the recorded step digest over 118,559 decisions and all three Search-64 score digests. The existing 10% tolerance applied to both engines on this runner.
+
+   | Budget measure | Reference | After damage-history change |
+   |---|---:|---:|
+   | Search-64 total | 61.668 s | 60.820 s |
+   | Worst reply | 1.564 s | 1.477 s |
+   | Headless steps/s | 41,062 | 45,645 |
+
+   The [damage-history measurement archive](damage-history-measurements.zip) contains the eight before/after fixture files, raw budget samples, scheduling counters, paired comparison, debug results and Academy replay check.
+
+2. **Next measured slice.** Build the chosen-tap payment inputs once per pending decision. Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
 
 Fumigate examined 29 / 89 / 305 trigger sources for one match. At 16 the measured resolution still took .042 ms. Keep that observation for a workload where simultaneous departures dominate before changing pre-batch LKI matching. First-gain matching examined exactly one source per offer on both listener boards. Neither result justifies another history store. Keep all choices, overflow errors and configured capacity behavior, native trivial skipping and debug cache assertions through both planned slices.
 

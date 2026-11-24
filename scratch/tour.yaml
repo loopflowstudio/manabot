@@ -1,5 +1,7 @@
-at: a721dc4cbb1e1476b971d6097099d796c47eb799
+at: b62f8b7ece2a93667cf6796ac85b0edb78793032
 first:
+  - path: scratch/plan.md
+    why: Measured combat and search costs before and after
   - path: docs/engine.md
     why: When a mandatory chain ends in a draw
   - path: managym/README.md
@@ -12,6 +14,10 @@ first:
     why: Spell profile retained when the spell leaves the stack
   - path: managym/src/flow/turn.rs
     why: Attack history and once-per-turn ability use
+  - path: managym/src/flow/game.rs
+    why: Which state changes invalidate derived rules data
+  - path: managym/src/flow/damage.rs
+    why: Record permanent and combat player hits at commitment
   - path: managym/src/flow/priority.rs
     why: The loop watch and its pending resolution count
   - path: managym/src/flow/tick.rs
