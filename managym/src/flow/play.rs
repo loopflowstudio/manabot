@@ -23,7 +23,7 @@ use crate::{
     state::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{AbilitySource, CardId, ObjectId, PermanentId, PlayerId, Target},
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
         stack_object::ActivatedAbilityOnStack,
@@ -1474,6 +1474,16 @@ impl Game {
             .collect()
     }
 
+    /// The exact object an activation of `source` comes from, as its stacked
+    /// ability will record it; `None` once a permanent source has left.
+    fn activation_ability_source(&self, source: ActivationSource) -> Option<AbilitySource> {
+        let object = match source {
+            ActivationSource::Permanent(permanent) => self.permanent_object(permanent)?,
+            ActivationSource::Card(card) => self.state.object_of(card),
+        };
+        Some(AbilitySource::new(object, Some(object)))
+    }
+
     /// Targets clause `requirement` of `player`'s activation can choose
     /// next, given those already `chosen` (all clauses). Legality is from
     /// `player`'s side whoever chooses. Under "that share a creature type",
@@ -1491,19 +1501,13 @@ impl Game {
         else {
             return Vec::new();
         };
+        let Some(ability_source) = self.activation_ability_source(source) else {
+            return Vec::new();
+        };
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&clause.spec, player)
-            .into_iter()
-            .filter(|target| {
-                let is_source = match source {
-                    ActivationSource::Permanent(permanent) => {
-                        *target == Target::Permanent(permanent)
-                    }
-                    ActivationSource::Card(_) => false,
-                };
-                !is_source && !chosen.contains(target)
-            })
+            .legal_clause_targets(&clause, player, ability_source)
+            .filter(|target| !chosen.contains(target))
             .collect();
         if !clause.shares_creature_type {
             return candidates;

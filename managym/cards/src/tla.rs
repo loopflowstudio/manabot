@@ -2793,6 +2793,13 @@ fn deadly_precision() -> CardDefinition {
 fn deserter_s_disciple() -> CardDefinition {
     let text_box =
         "{T}: Another target creature you control with power 2 or less can't be blocked this turn.";
+    let target = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Creature),
+            max_power: Some(2),
+            ..Default::default()
+        },
+    };
 
     CardDefinition {
         key: "tla.deserter_s_disciple",
@@ -2806,16 +2813,16 @@ fn deserter_s_disciple() -> CardDefinition {
             toughness: Some(2),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            max_power: Some(2),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::CantBeBlocked,
-                )],
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::one(target.clone())
+                    },
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(target),
+                        Modification::CantBeBlocked,
+                    )],
+                }],
                 ..Default::default()
             }],
             text_box: text_box.into(),
@@ -3007,6 +3014,9 @@ fn earth_kingdom_jailer() -> CardDefinition {
 
 fn earth_kingdom_protectors() -> CardDefinition {
     let text_box = "Vigilance\nSacrifice this creature: Another target Ally you control gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)";
+    let target = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::subtype("Ally"),
+    };
 
     CardDefinition {
         key: "tla.earth_kingdom_protectors",
@@ -3021,15 +3031,16 @@ fn earth_kingdom_protectors() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Vigilance]),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 sacrifice_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            subtype: Some("Ally".into()),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                )],
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::one(target.clone())
+                    },
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(target),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                    )],
+                }],
                 ..Default::default()
             }],
             text_box: text_box.into(),
@@ -6866,11 +6877,19 @@ fn north_pole_patrol() -> CardDefinition {
                 },
                 ActivatedAbilityDefinition {
                     tap_source: true,
-                    effects: vec![Effect::untap(ObjectSelector::Target(
-                        TargetSpec::PermanentYouControl {
-                            predicate: CardPredicate::default(),
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            another: true,
+                            ..TargetRequirement::one(TargetSpec::PermanentYouControl {
+                                predicate: CardPredicate::default(),
+                            })
                         },
-                    ))],
+                        effects: vec![Effect::untap(ObjectSelector::Target(
+                            TargetSpec::PermanentYouControl {
+                                predicate: CardPredicate::default(),
+                            },
+                        ))],
+                    }],
                     ..Default::default()
                 },
             ],
