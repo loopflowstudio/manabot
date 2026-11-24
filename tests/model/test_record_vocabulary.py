@@ -7,11 +7,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DIM,

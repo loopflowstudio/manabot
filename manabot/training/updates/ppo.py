@@ -5,8 +5,7 @@ shuffled minibatches, advantage filtering and normalization, a scalar value
 target and optional reference and collection KL penalties. Like the damped
 rule it is written once over a backend module: array math through
 `backend.rl`, `backend.learner` and `backend.arrays`, row bookkeeping in
-NumPy. It needs a `PPOBackend` (`manabot.training.updates.backend`), which
-only `manabot.backends.torch` provides.
+NumPy.
 """
 
 import math
@@ -19,11 +18,10 @@ from manabot.training.learning import Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
     Array,
+    Learner,
     Observations,
-    PPOBackend,
-    PPOLearner,
-    PPOPolicy,
-    ppo_rl,
+    Policy,
+    UpdateBackend,
 )
 from manabot.training.updates.decision_weights import (
     actor_term,
@@ -42,22 +40,22 @@ from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 
 
 def update_iteration(
-    backend: PPOBackend,
-    learner: PPOLearner,
+    backend: UpdateBackend,
+    learner: Learner,
     batch: RolloutBatch,
     learning: Learning,
     progress: float,
     rng: np.random.Generator,
     *,
     iteration: int = 1,
-    bootstrap_agent: PPOPolicy | None = None,
+    bootstrap_agent: Policy | None = None,
     targets: BatchTargets | None = None,
 ) -> UpdateDiagnostics:
     """Optimize one fresh collector batch on the shared learner and Adam owner.
 
     `backend` is the module whose arrays `learner` holds.
     """
-    rl, to_device = ppo_rl(backend.rl), backend.arrays.from_numpy
+    rl, to_device = backend.rl, backend.arrays.from_numpy
     dev = learner.device
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
@@ -186,14 +184,6 @@ def update_iteration(
                                 ),
                                 dev,
                             )
-                            with learner.forward_precision():
-                                logits, value = learner.agent(obs)
-                            logits, value = logits.float(), value.float()
-                            logs = rl.policy_logs(logits, valid)
-                            log_ratio = (
-                                rl.action_logs(logs, actions[indices])
-                                - old_logs[indices]
-                            )
                             actor_mask = mask[indices]
                             policy_weight = int(actor_rows[rows_host].sum()) / max(
                                 1, actor_count
@@ -204,43 +194,84 @@ def update_iteration(
                                 if weights is None
                                 else weights[offset : offset + execution_rows]
                             )
-                            policy = actor_term(
-                                rl,
-                                rl.clipped_surrogate(
-                                    log_ratio, advantages[indices], learning.clip
-                                ),
-                                actor_mask,
-                                policy_weight,
-                                coefficients,
-                            )
-                            kl_ref = actor_term(
-                                rl,
-                                rl.reverse_kl(
-                                    logs, rl.reference_logs(reference, valid), valid
-                                ),
-                                actor_mask,
-                                policy_weight,
-                                coefficients,
-                            )
-                            kl_behavior = actor_term(
-                                rl,
-                                rl.reverse_kl(logs, behavior_logs, valid),
-                                actor_mask,
-                                policy_weight,
-                                coefficients,
-                            )
-                            value_loss = 0.5 * critic_term(
-                                rl,
-                                rl.squared_value_loss(value, returns[indices]),
-                                value_weight,
-                                coefficients,
-                            )
-                            loss = (
-                                policy
-                                + learning.value_weight * rl.float64_operand(value_loss)
-                                + diagnostics["tau"] * kl_ref
-                                + learning.collection_kl * kl_behavior
-                            )
+
+                            def _objective(
+                                obs: Observations = obs,
+                            ) -> tuple[Array, ...]:
+                                with learner.forward_precision():
+                                    logits, value = learner.agent.forward_distribution(
+                                        obs
+                                    )
+                                logits, value = (
+                                    backend.arrays.float32(logits),
+                                    backend.arrays.float32(value).squeeze(-1),
+                                )
+                                logs = rl.policy_logs(logits, valid)
+                                log_ratio = (
+                                    rl.action_logs(logs, actions[indices])
+                                    - old_logs[indices]
+                                )
+                                policy = actor_term(
+                                    rl,
+                                    rl.clipped_surrogate(
+                                        log_ratio, advantages[indices], learning.clip
+                                    ),
+                                    actor_mask,
+                                    policy_weight,
+                                    coefficients,
+                                )
+                                kl_ref = actor_term(
+                                    rl,
+                                    rl.reverse_kl(
+                                        logs, rl.reference_logs(reference, valid), valid
+                                    ),
+                                    actor_mask,
+                                    policy_weight,
+                                    coefficients,
+                                )
+                                kl_behavior = actor_term(
+                                    rl,
+                                    rl.reverse_kl(logs, behavior_logs, valid),
+                                    actor_mask,
+                                    policy_weight,
+                                    coefficients,
+                                )
+                                value_loss = 0.5 * critic_term(
+                                    rl,
+                                    rl.squared_value_loss(value, returns[indices]),
+                                    value_weight,
+                                    coefficients,
+                                )
+                                loss = (
+                                    policy
+                                    + learning.value_weight
+                                    * rl.float64_operand(value_loss)
+                                    + diagnostics["tau"] * kl_ref
+                                    + learning.collection_kl * kl_behavior
+                                )
+                                return (
+                                    loss,
+                                    policy,
+                                    value_loss,
+                                    kl_ref,
+                                    kl_behavior,
+                                    logits,
+                                    value,
+                                    logs,
+                                    log_ratio,
+                                )
+
+                            (
+                                loss,
+                                policy,
+                                value_loss,
+                                kl_ref,
+                                kl_behavior,
+                                logits,
+                                value,
+                                logs,
+                                log_ratio,
+                            ) = learner.loss(_objective)
 
                             def _failure(
                                 logits: Array = logits,
@@ -278,15 +309,15 @@ def update_iteration(
                                 float(rl.clip_fraction(log_ratio, learning.clip))
                                 * value_weight
                             )
-                            totals["loss"] += float(loss.detach())
-                            totals["policy_loss"] += float(policy.detach())
-                            totals["value_loss"] += float(value_loss.detach())
+                            totals["loss"] += float(rl.constant(loss))
+                            totals["policy_loss"] += float(rl.constant(policy))
+                            totals["value_loss"] += float(rl.constant(value_loss))
                             totals["entropy"] += (
-                                float(rl.entropy(logs, valid).mean().detach())
+                                float(rl.entropy(rl.constant(logs), valid).mean())
                                 * value_weight
                             )
-                            totals["reference_kl"] += float(kl_ref.detach())
-                            totals["collection_kl"] += float(kl_behavior.detach())
+                            totals["reference_kl"] += float(rl.constant(kl_ref))
+                            totals["collection_kl"] += float(rl.constant(kl_behavior))
                         del (
                             obs,
                             rows,
@@ -299,6 +330,7 @@ def update_iteration(
                             kl_ref,
                             kl_behavior,
                             log_ratio,
+                            _objective,
                             _failure,
                         )
                 health["clip_fraction"] = totals.pop("clip_fraction")

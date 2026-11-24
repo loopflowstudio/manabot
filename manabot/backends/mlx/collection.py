@@ -15,6 +15,8 @@ from manabot.backends.mlx.policy import MLXActorCritic, PolicyInference
 from manabot.backends.mlx.rl import (
     NumericalError,
     action_logs,
+    expected_outcome,
+    outcome_probabilities,
     policy_logs,
     require,
 )
@@ -106,6 +108,7 @@ class CollectionScope:
     ) -> SampledRows:
         logs_parts: list[mx.array] = []
         value_parts: list[mx.array] = []
+        outcome_parts: list[np.ndarray] = []
         needs_parts: list[np.ndarray] = []
         agent = self.inference.agent
         for obs in prepared_chunks(
@@ -115,6 +118,10 @@ class CollectionScope:
                 logits, value = agent.forward_distribution(obs)
                 logs_parts.append(self._policy_logs(logits, obs))
                 value = value.astype(mx.float32)
+                if agent.config.value_kind == "categorical_wdl":
+                    outcomes = outcome_probabilities(value)
+                    value = expected_outcome(outcomes)
+                    outcome_parts.append(to_numpy(outcomes))
                 require(
                     mx.isfinite(value),
                     "nonfinite_collection_values",
@@ -136,7 +143,7 @@ class CollectionScope:
             to_numpy(selected),
             to_numpy(values),
             to_numpy(logs),
-            None,
+            np.concatenate(outcome_parts) if outcome_parts else None,
             np.concatenate(needs_parts) if needs_parts else None,
         )
 

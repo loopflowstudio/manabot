@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import (
     FACT_DIM,
     FACT_EFFECT_PROGRAM,

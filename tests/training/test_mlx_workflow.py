@@ -2,8 +2,10 @@
 
 from collections import Counter
 from contextlib import suppress
+import hashlib
 import importlib.util
 from itertools import count
+import json
 import os
 from pathlib import Path
 import signal
@@ -41,6 +43,99 @@ def check_policy_loads() -> None:
         return policy, space
 
     MLXBackend.load_policy = checked_load
+
+
+def test_linked_belief_jobs_register_portable_checkpoints_without_torch(
+    tmp_path: Path,
+) -> None:
+    if importlib.util.find_spec("mlx") is None:
+        pytest.skip("requires MLX")
+    (tmp_path / "sitecustomize.py").write_text(
+        'import sys\nsys.modules["torch"] = None\n'
+    )
+    track = tmp_path / "track"
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join((str(tmp_path), str(Path.cwd()))),
+        "ETUDE_TRACK_DIR": str(track),
+        "ETUDE_HOME": str(tmp_path),
+    }
+    for job, config in (
+        ("policy", {"backend": "mlx", "device": "mps"}),
+        ("sampler", {"backend": "mlx"}),
+    ):
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "etude",
+                "train",
+                "experiments/belief.py",
+                "--experiment",
+                "belief-mlx",
+                "--job",
+                job,
+                "--config",
+                json.dumps(config),
+            ],
+            env=env,
+            check=True,
+            timeout=120,
+        )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from tests.training.test_mlx_workflow import verify_belief_jobs; verify_belief_jobs()",
+        ],
+        env=env,
+        check=True,
+        timeout=30,
+    )
+
+
+def verify_belief_jobs() -> None:
+    from etude.experiment import observe
+
+    from experiments.belief import training_jobs
+    from manabot.backends import resolve
+    from manabot.belief.checkpoint import read_belief_sampler
+    from manabot.belief.sampling_data import read_dataset
+
+    assert "torch" in sys.modules and sys.modules["torch"] is None
+    track = Path(os.environ["ETUDE_TRACK_DIR"])
+    experiment = track / "belief-mlx"
+    policy_run = experiment / "policy@0"
+    policy = json.loads((policy_run / "checkpoints/updates-1.json").read_bytes())
+    assert policy["at"]["updates"] == 1 and policy["at"]["learner_transitions"] > 0
+    behavior = policy_run / policy["file"]
+    digest = hashlib.sha256(behavior.read_bytes()).hexdigest()
+    assert digest == policy["artifact"]["sha256"]
+    backend = resolve("mlx")
+    backend.load_policy(behavior)
+    (start,) = training_jobs(observe(track, "belief-mlx"))[1].plain().inputs
+    assert (start.name, start.run, start.sha256) == (
+        "start",
+        "belief-mlx/policy@0",
+        digest,
+    )
+    sampler_run = experiment / "sampler@0"
+    record = json.loads((sampler_run / "checkpoints/steps-4.json").read_bytes())
+    assert record["at"]["steps"] == 4
+    path = sampler_run / record["file"]
+    dataset = read_dataset(sampler_run / "out/histories.json")
+    assert path.suffix == ".safetensors" and dataset.policy_identity == digest
+    admitted = read_belief_sampler(
+        path,
+        codec=backend.belief,
+        expected_dataset_identity=dataset.identity,
+        expected_policy_identity=digest,
+        expected_schema_identity=dataset.schema.identity,
+        expected_world_identity=dataset.world_identity,
+        expected_checkpoint_identity=record["artifact"]["sha256"],
+    )
+    assert admitted.model.schema == dataset.schema
+    assert admitted.training_seed == 0
 
 
 @pytest.mark.parametrize("width", [64, 256])
