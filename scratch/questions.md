@@ -40,3 +40,5 @@ Use an unrelated exiled spell copy as the negative cleanup control in the two-so
 For the two-copy fixture, both branches cast Counterspell through a native Command and then cast the surviving Seed Suture targeting the Angel. This checks that the surviving offer still executes after the counter.
 
 The transfer review selects a fixed-player source-conditioned grant as the comparison. Transfer holds both object identities constant while distinguishing a change of caster from a loss of access.
+
+The ordinary-play transfer replay uses Agent of Treachery to take the Angel and Spectral Sailor to keep a response available after payment.

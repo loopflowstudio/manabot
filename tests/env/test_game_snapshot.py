@@ -943,3 +943,102 @@ def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
         s.characteristics.name for s in env.observation_for_player(0).stack_objects
     ] == ["Gray Ogre", "Charring Bite"]
     assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
+    angel = "Blossom-Blessed Angel"
+    medic = "Emergency Phytomedic"
+    thief = "Agent of Treachery"
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig(
+                    "owner",
+                    {
+                        "Plains": 20,
+                        "Island": 8,
+                        angel: 8,
+                        medic: 8,
+                        "Spectral Sailor": 8,
+                    },
+                ),
+                managym.PlayerConfig("caster", {"Island": 20, "Plains": 12, thief: 12}),
+            ]
+        )
+    )
+    for _ in range(400):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(0)
+        names = {p.characteristics.name for p in obs.agent_permanents}
+        suture = next(
+            (
+                o
+                for o in frame.offers
+                if o["verb"] == "cast" and "Seed Suture" in o["label"]
+            ),
+            None,
+        )
+        if frame.actor == 1 and suture:
+            break
+        acting = env.observation_for_player(frame.actor)
+        angels = {p.id for p in obs.agent_permanents if p.characteristics.name == angel}
+
+        def preference(index: int) -> int:
+            offer = frame.offers[index]
+            card = (offer.get("public_commitment") or {}).get("card")
+            if offer["verb"] == "play_land":
+                return 0
+            if offer["verb"] == "cast" and (
+                (card in (angel, medic) and card not in names)
+                or (card == thief and {angel, medic} <= names)
+            ):
+                return 1
+            if offer["verb"] == "choose_target" and angels.intersection(
+                acting.action_space.actions[index].focus
+            ):
+                return 2
+            return 3 if offer["verb"] == "pass_priority" else 4
+
+        env.step(min(range(len(frame.offers)), key=preference))
+    else:
+        pytest.fail("ordinary play never offered the transferred Angel's Seed Suture")
+
+    restored = cold_restore(env)
+    assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+    before = env.observation_for_player(1)
+    untapped = {p.id for p in before.agent_permanents if not p.tapped}
+    command = Command("cast-suture", frame.revision, suture["id"]).to_json()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    target = decision_frame(env)
+    command = Command("target", target.revision, target.offers[0]["id"]).to_json()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    payment = decision_frame(env)
+    pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
+    command = Command("pay", payment.revision, pay["id"]).to_json()
+    assert restored.execute_semantic_command_json(
+        command
+    ) == env.execute_semantic_command_json(command)
+    for branch in (env, restored):
+        obs = branch.observation_for_player(1)
+        [paid] = [p for p in obs.agent_permanents if p.tapped and p.id in untapped]
+        assert paid.characteristics.name == "Plains"
+        [spell] = obs.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Seed Suture"
+        assert spell.controller_id == obs.agent.id
+        [source] = [
+            p for p in obs.opponent_permanents if p.characteristics.name == medic
+        ]
+        [copy] = [
+            c
+            for c in obs.opponent_cards
+            if c.cast_permissions and c.characteristics.name == "Seed Suture"
+        ]
+        assert copy.cast_permissions[0].source_permanent_id == source.id
+        assert copy.cast_permissions[0].player_id == obs.opponent.id
+    assert restored.search_witness_json() == env.search_witness_json()

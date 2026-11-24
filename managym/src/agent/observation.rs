@@ -1685,11 +1685,8 @@ impl Observation {
             face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permissions: game
                 .play_grants_on(object_id)
-                .map(|grant| CastPermissionData {
-                    player_id: game.state.players
-                        [game.grant_player(grant).expect("visible grant").0]
-                        .id
-                        .0 as i32,
+                .map(|(grant, caster)| CastPermissionData {
+                    player_id: game.state.players[caster.0].id.0 as i32,
                     cost: game.grant_cast_cost(grant),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),

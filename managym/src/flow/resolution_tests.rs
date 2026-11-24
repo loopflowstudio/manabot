@@ -1717,9 +1717,7 @@ fn nested_iteration_defers_state_based_actions_until_root_completion() {
     );
 }
 
-/// Apply one ordinary bound Command, checking replay and stale rejection at
-/// each choice boundary rather than calling a decision helper.
-fn checked_command(game: &mut Game, action: Action) {
+fn bound_command(game: &Game, action: Action) -> Command {
     let index = game
         .action_space()
         .unwrap()
@@ -1728,13 +1726,17 @@ fn checked_command(game: &mut Game, action: Action) {
         .position(|candidate| *candidate == action)
         .expect("action must be a legal offer");
     let frame = game.semantic_decision_frame().unwrap();
-    let command = Command {
+    Command {
         command_id: format!("choice-{}", frame.revision),
         expected_revision: frame.revision,
         offer_id: frame.offers[index].id.0,
         answers: vec![],
         object_preconditions: vec![],
-    };
+    }
+}
+
+fn checked_command(game: &mut Game, action: Action) {
+    let command = bound_command(game, action);
     let mut replay = game.clone();
     game.execute_semantic_command(&command).unwrap();
     replay.execute_semantic_command(&command).unwrap();
@@ -4663,8 +4665,7 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
 
-#[test]
-fn prepared_seed_sutures_survive_priority_and_counter_independently() {
+fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
     use crate::state::mana::Mana;
 
     let deck = BTreeMap::from([
@@ -4735,14 +4736,24 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
         }
         copy
     });
-    let cast = |game: &Game, object| {
-        game.action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .find(|a| matches!(a, Action::CastSpell {object: offered,..} if *offered == object))
-            .cloned()
-    };
+    (game, sources, copies)
+}
+
+fn cast_offer(game: &Game, object: ObjectId) -> Option<Action> {
+    game.action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(
+            |action| matches!(action, Action::CastSpell {object: offered,..} if *offered == object),
+        )
+        .cloned()
+}
+
+#[test]
+fn prepared_seed_sutures_survive_priority_and_counter_independently() {
+    let (game, sources, copies) = prepared_seed_sutures();
+    let player = game.active_player();
     let observation = crate::agent::observation::Observation::for_player(&game, player);
     let config = crate::agent::observation_encoder::ObservationEncoderConfig::default();
     let encoded = crate::agent::observation_encoder::encode(&observation, &config).unwrap();
@@ -4776,7 +4787,7 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
     assert_ne!(joins[0][1], joins[1][1]);
     for (chosen, other) in [(copies[0], copies[1]), (copies[1], copies[0])] {
         let mut fork = game.clone();
-        checked_command(&mut fork, cast(&game, chosen).unwrap());
+        checked_command(&mut fork, cast_offer(&game, chosen).unwrap());
         let target = Action::ChooseTarget {
             player,
             target: Target::Permanent(game.lookup_current_permanent(sources[0]).unwrap()),
@@ -4786,9 +4797,9 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
         checked_command(&mut fork, counter);
         assert!(fork.state.stack_objects.is_empty());
         assert!(fork.state.events.iter().any(|event| matches!(event, GameEvent::SpellCountered { object_id,.. } if object_id.slot()==chosen.slot())));
-        assert!(cast(&fork, chosen).is_none());
+        assert!(cast_offer(&fork, chosen).is_none());
         let life = fork.state.players[player.0].life;
-        let surviving_offer = cast(&fork, other).expect("other Seed Suture remains castable");
+        let surviving_offer = cast_offer(&fork, other).expect("other Seed Suture remains castable");
         checked_command(&mut fork, surviving_offer);
         checked_command(&mut fork, target);
         assert_eq!(fork.state.players[player.0].life, life + 1);
@@ -4801,4 +4812,98 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
             1
         );
     }
+}
+
+#[test]
+fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
+    use crate::state::{ability::LinkedGrant, mana::Mana};
+
+    let (mut game, sources, copies) = prepared_seed_sutures();
+    let owner = game.active_player();
+    let caster = PlayerId(1 - owner.0);
+    let angel = game.lookup_current_permanent(sources[0]).unwrap();
+    let stale = bound_command(&game, cast_offer(&game, copies[0]).unwrap());
+
+    // Azula's fixed-player permission on a Counterspell shares the Angel as source.
+    let fixed_spell = game
+        .state
+        .latest_objects()
+        .find(|(_, o)| o.owner == owner && o.name == "Counterspell")
+        .unwrap()
+        .0;
+    game.exile_linked(
+        fixed_spell,
+        owner,
+        Some(sources[0]),
+        LinkedGrant::FlashAnyMana,
+    );
+    let fixed_spell = game.state.now(fixed_spell);
+    assert!(game.live_grants(owner, fixed_spell).next().is_some());
+    game.change_control(angel, caster);
+    game.finish_action_step();
+    assert!(cast_offer(&game, copies[0]).is_none());
+    assert!(cast_offer(&game, copies[1]).is_some());
+    assert!(game.live_grants(owner, fixed_spell).next().is_none());
+
+    game.state.turn.active_player = caster;
+    game.state.priority.holder = caster;
+    game.state.players[caster.0].mana_pool = Mana::parse("W").into();
+    game.state.players[owner.0].mana_pool = Mana::parse("UU").into();
+    game.scenario_force_card_in_hand(owner, "Counterspell")
+        .unwrap();
+    game.finish_action_step();
+    assert!(game.state.stack_objects.is_empty());
+    assert!(game.live_grants(caster, fixed_spell).next().is_none());
+    assert!(cast_offer(&game, copies[1]).is_none());
+    assert_eq!(game.state[copies[0]].owner, owner);
+    for viewer in [owner, caster] {
+        let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+        let fixed = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .find(|row| row.id == game.state[fixed_spell].id.0 as i32)
+            .unwrap();
+        assert!(fixed.cast_permissions.is_empty());
+        for (copy, entitled) in copies.into_iter().zip([caster, owner]) {
+            let row = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|row| row.id == game.state[copy].id.0 as i32)
+                .unwrap();
+            assert_eq!(row.owner_id, game.state.players[owner.0].id.0 as i32);
+            assert_eq!(
+                row.cast_permissions[0].player_id,
+                game.state.players[entitled.0].id.0 as i32
+            );
+        }
+    }
+    let before = game.state.deterministic_hash();
+    assert!(matches!(
+        game.execute_semantic_command(&stale),
+        Err(crate::decision::SemanticError::StaleRevision { .. })
+    ));
+    assert_eq!(game.state.deterministic_hash(), before);
+    let cast = bound_command(&game, cast_offer(&game, copies[0]).unwrap());
+    game.execute_semantic_command(&cast).unwrap();
+    let target = bound_command(
+        &game,
+        Action::ChooseTarget {
+            player: caster,
+            target: Target::Permanent(game.lookup_current_permanent(sources[0]).unwrap()),
+        },
+    );
+    game.execute_semantic_command(&target).unwrap();
+    let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
+        panic!("opponent can respond to Seed Suture")
+    };
+    assert_eq!(spell.controller, caster);
+    assert_eq!(spell.object.slot(), copies[0].slot());
+    assert_eq!(spell.spent.mana().len(), 1);
+    assert_eq!(
+        spell.spent.mana()[0].color,
+        crate::state::mana::Color::White as u8
+    );
+    assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
 }

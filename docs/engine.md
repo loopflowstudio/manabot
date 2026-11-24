@@ -1294,8 +1294,11 @@ let zone = game.state.zones.zone_of(game.state.object_of(card));
 
 A prepared permanent links its battlefield appearance to a spell copy in exile.
 The copy belongs to the controller at preparation. Its casting permission follows
-the permanent’s current controller. Casting moves the copy to the stack and ends
-the link, even if the spell is subsequently countered. A source that leaves the
+the permanent’s current controller. If Agent of Treachery takes Blossom-Blessed
+Angel, its new controller can pay for the linked Seed Suture and cast it during
+their main phase with an empty stack. Emergency Phytomedic’s controller can
+still cast its own Seed Suture. Casting moves the copy to the stack and ends the
+link, even if the spell is subsequently countered. A source that leaves the
 battlefield loses its link, and the next state-based check removes the exile copy.
 
 An ordinary token or copy that leaves the battlefield or stack is briefly in another

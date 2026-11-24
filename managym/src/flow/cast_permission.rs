@@ -67,8 +67,8 @@ pub struct PlayGrant {
     /// it ends in the cleanup step of `player`'s first turn after that one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub through_next_turn: Option<u32>,
-    /// The grant lasts while `player` controls this battlefield object
-    /// ("for as long as you control Hama", "cards exiled with Azula").
+    /// Exact battlefield source. Preparation follows its controller. Other
+    /// source-conditioned grants require the recorded player to control it.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub source: Option<ObjectId>,
@@ -423,17 +423,21 @@ impl Game {
         {
             return None;
         }
-        self.play_grants_on(object)
-            .find(|grant| grant.prepared)?
-            .source
+        let (grant, _) = self
+            .play_grants_on(object)
+            .find(|(grant, _)| grant.prepared)?;
+        grant.source
     }
 
-    pub(crate) fn grant_player(&self, grant: &PlayGrant) -> Option<PlayerId> {
-        if grant.prepared {
-            let source = self.lookup_current_permanent(grant.source?).ok()?;
-            return self.state.permanents[source].as_ref().map(|p| p.controller);
-        }
-        Some(grant.player)
+    /// Resolve the caster independently of timing and payment. Preparation follows
+    /// its source, while a fixed-player grant may require continued control.
+    fn grant_player(&self, grant: &PlayGrant) -> Option<PlayerId> {
+        let Some(source) = grant.source else {
+            return (!grant.prepared).then_some(grant.player);
+        };
+        let permanent = self.lookup_current_permanent(source).ok()?;
+        let controller = self.state.permanents[permanent].as_ref()?.controller;
+        (grant.prepared || controller == grant.player).then_some(controller)
     }
 
     /// The live grant letting `player` play this exact card now.
@@ -450,13 +454,6 @@ impl Game {
                 && grant
                     .after_turn
                     .is_none_or(|turn| self.state.turn.turn_number > turn)
-                && grant.source.is_none_or(|source| {
-                    self.lookup_current_permanent(source).is_ok_and(|id| {
-                        self.state.permanents[id]
-                            .as_ref()
-                            .is_some_and(|permanent| permanent.controller == player)
-                    })
-                })
         })
     }
 
@@ -495,12 +492,12 @@ impl Game {
     /// The permission naming this exact card, whatever its timing,
     /// for viewers to inspect. A grant tied to a source that has left the
     /// battlefield can never be used again and is not shown.
-    pub(crate) fn play_grants_on(&self, object: ObjectId) -> impl Iterator<Item = &PlayGrant> {
-        self.grants_naming(object).filter(|grant| {
-            grant
-                .source
-                .is_none_or(|source| self.lookup_current_permanent(source).is_ok())
-        })
+    pub(crate) fn play_grants_on(
+        &self,
+        object: ObjectId,
+    ) -> impl Iterator<Item = (&PlayGrant, PlayerId)> {
+        self.grants_naming(object)
+            .filter_map(|grant| Some((grant, self.grant_player(grant)?)))
     }
 
     /// The player whose next turn ends `player`'s hand-only casting
