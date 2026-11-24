@@ -1298,7 +1298,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
         Condition::OwnsMeldPair {
-            partner: String::new(),
+            partner: "Fang, Fearless l'Cie".into(),
         },
         Condition::AtMostHalfStartingLife,
         Condition::TargetDealtDamageThisTurn,

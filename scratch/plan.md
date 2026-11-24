@@ -92,7 +92,14 @@ Build in three slices (rationale and counterexamples in [the concept review](con
    - Taught: `decision_context` announcement targets are empty once payment finishes on its own, so target labels are witnessed through `decision_offer_subjects` at the target choice. Incarnation 0 also reaches Python/Academy subject refs and EventData for every manifest, face-up ones included: item 4 must check that Academy's subject/history joins tolerate it.
    - Compress: `ObjectRenderId: From<ObjectEventRef>` replaces five hand-built conversions (`decision_context`, `combat_preview`); the mana-payment preview source now reads `object_event_ref` and `observed_object_name` too. Debug after compress (at `ccd7de48fa`; the merge brought only Python backend and experiment files): lib `decision|structured_offer|combat|mana|observation|identity|resolution` 228/229 (known base failure), cards `dsk::|fin::` 33/33.
    - Debug at `a16fb39e35`: lib 359/360 (known base failure), `rules_tests` + `canonical_replay_tests` + `scenario_tests` 206 (2 ignored), cards 905/905, `cargo fmt --check` clean.
-4. **Closing pass · one `implement` run.** No engine mechanism is expected to change; an engine edit here means a check found a defect, and the defect gets a native witness beside the fix.
+4. **Closing pass · built** (`6d594bf58f`..HEAD). One engine defect found and fixed with its witness; everything else added consumers.
+   - Built: `tests/semantic/test_manifest_two_roots.py` (two search-determinized roots with different manifest printings are byte-equal to the opponent across PyO3 observation JSON, v11 buffers, LLM text and capture, semantic frame and Academy `decision_surface_view`; each root replays from its seed; closed disclosure refuses determinization, so `dsk::manifest_dread_hides_the_printing_at_opponent_priority` now runs under both disclosures and compares the full opponent observation JSON). `tests/academy/test_manifest_recovery.py` follows the turned-up Llanowar Elves: attack offer subject/focus `85:0`, combat presentation events, reconnect frame and recording history labels all join incarnation 0. LLM text for a dead manifest's granted Undying Malice trigger (both seats alike, no printing) and a transformed Ember Island Production token copy of Cecil (`test_manifest_text.py`, `test_text_observation.py`). `tests/env/test_game_snapshot.py::test_private_choices_fork_commit_once_and_replay_from_the_seed`: natural seed-4 games reach the manifest selection, Healer's kicker and Lost Days' owner position; only the chooser is offered it, each offer's Command commits once on a fork, stale resubmission is rejected, branches and the pending root replay from their seed.
+   - Defect: meld clauses (`OwnsMeldPair`/`ExileMeldPair`/`MeldExiled`) wrote Fang/Vanille/Ragnarok's printed names as text tokens (`test_learning_projection::test_tokens_are_the_engine_definition…` failed). `CARD_NAME_FIELDS` in `src/cards/tokens.rs` now writes them as definition references (witness `cards::tokens::tests::card_names_in_programs_are_definition_references_never_text`); `manabot/policy/catalog.py` inlines a referenced definition once per path instead of refusing the Fang↔Vanille cycle. Pinned pilot passes unchanged.
+   - Academy fixtures refreshed with `scripts/refresh_academy_fixtures.py` (labels unchanged; catalog ids, digests, frame hashes moved).
+   - Gate list on the rebuilt extension (incl. `tests/model`, trigger order, current-world list): 1013 passed, 18 skipped, 8 failed — the 8 fail identically at base (`questions.md`).
+   - Taught: seed replay needs a journaled prefix, so no constructed fixture can replay from its seed; replay evidence comes from natural games (`questions.md` lists what keeps only native fork checks).
+
+   The original pass description follows.
 
    **Decomposition (2026-11-24, at `fba56295e9`): already met; this pass adds consumers, not owners.** One owner per fact, checked by grep at HEAD:
    - Form and transformability: `Object.form` (`state/src/game_object.rs`), `ContentPack::transforming_faces`/`catalog_faces`/`departed_copiable_values` (`cards/content_pack.rs`), `Game::turn_over` (`flow/zones.rs`).
@@ -122,13 +129,9 @@ Build in three slices (rationale and counterexamples in [the concept review](con
 
 ## Open checks on finished work
 
-- Lost Days: the order choice should be visible only to its owner, and the game should replay from its record.
-- Horde, Driver and Fire Crystal still need viewer projections and replay of their recorded Commands from a recorded root. Their native fork and restore checks already pass.
-- The named Coil setup has no seed-to-position replay file.
-- Manifest sampling: there is no pending private selection in the fixture. Constrained sampling, paired seeded searches and comparative viewer trace exports remain open.
-- Batch 1's constructed fixtures still need viewer projections, text, tokens and Command replay from a recorded root.
-- At gate, on the rebuilt extension: Python trigger-order and observation tests and Engine Budget digests. Serialized bytes changed for modal trigger stacks (`chosen_modes`), triggered stack rows' `stack::X`/`stack::MODE`, `summoning_sick` on noncreature and printed-haste permanents, and removing `mana_cache` from `CanonicalMatchState`, `AllCreatureTypes` in `MODIFICATION_NAMES`, `once_only` on activated abilities and `exhausted_abilities` no longer counting power-up spends, and `creature_types`/`temp_subtypes` projections for replaced creature types. `observation_json::…historical_captures_move_battlefield_and_spell_rows_onto_their_records` also fails at base `25ba418a2a` (`questions.md`).
-- Run the pinned pilot after rebuilding. Earth Kingdom Jailer's explicit optional `TargetClause` changed its learning program. Check any mismatch before recording an intentional break with `uv run python scripts/pinned_pilot.py record --reason "<why>"`.
+- Ragnarok's meld order, Horde/Driver/Fire Crystal trigger orders, the named Coil and Batch 1 fixtures have native restore-based fork/stale/commit-once checks but no seed replay (constructed positions are unjournaled; `questions.md`).
+- Constrained sampling with a pending private selection and paired seeded searches: native witness only (`questions.md`).
+- Engine Budget digests at gate: serialized bytes changed as listed in git history of this section, plus meld program tokens (definition references instead of text). `observation_json::…historical_captures_move_battlefield_and_spell_rows_onto_their_records` fails at base too.
 
 ## Representation review
 
@@ -154,6 +157,14 @@ Native owners: `managym/state/src/{game_object,permanent,ability,effect,zone}.rs
 - Planeswalkers, emblems and castable spell-copy links stay with their milestone owners.
 
 After the cohort, review Clone, Electroduplicate, Hoarding Dragon, Valkyrie's Call, Manifest Dread and Ragnarok together for shared movement, snapshot, ability, LKI and observation owners. Remove superseded fields and callers, and keep the directed regressions.
+
+**Cohort read (closing pass, 2026-11-24).** Owners are those listed under item 4's decomposition; this pass added no second store.
+- Clone: copiable values from `ContentPack::transforming_faces`/`departed_copiable_values`; a Clone of either Cecil face is single-faced (`fin::clone_of_either_cecil_face_is_single_faced`); departed Clone via LKI (`lea.rs`).
+- Electroduplicate: token copy through `CreateTokenCopy` with exceptions applied once by `Object::show_transforming_face`; scheduled sacrifice and flashback under Doubling Season (`fdn::copy_sacrifice`); the transformed token copy reaches LLM text by its shown face (new Python test, via Ember Island Production's same copy path).
+- Hoarding Dragon / Valkyrie's Call: `WithSource` exile links and exact-arrival delayed returns (Batch 1/2), LKI effective characteristics through the live matcher; native viewer checks only (no seed replay, `questions.md`).
+- Manifest Dread: `Object.form` face-down backing; viewer identity only through `flow/identity.rs`; two-root byte equality across every opponent consumer (Python, open) and natively (open and closed); incarnation-0 joins in Academy after turn-up; private selection seed-replays.
+- Ragnarok: one permanent over two cards (`ZoneManager.melded_cards`); meld names now reach tokens as definition references; the policy catalog admits the partner cycle. Meld order keeps its native fork checks only.
+No card key appears in `src/flow`, `src/agent`, `content_pack.rs` or `state/src` (grep at HEAD).
 
 ## Consumer checks
 
