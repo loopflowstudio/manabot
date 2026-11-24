@@ -553,8 +553,8 @@ def run_mlx_updates(
 ) -> None:
     from manabot.backends import resolve
     from manabot.training.loops.self_play import CLOCKS, self_play
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
-    from tests.training.test_mlx_continuation import bounded_self_play
 
     base = bounded_self_play()
     settings = base.model_copy(
@@ -596,11 +596,14 @@ def test_mlx_health_preserves_draws_and_weights(tmp_path: Path) -> None:
     assert (sampled.path / "continuation.json").read_bytes() == (
         unsampled.path / "continuation.json"
     ).read_bytes()
-    expected = mx.load(sampled.path / "training.safetensors")
-    actual = mx.load(unsampled.path / "training.safetensors")
-    assert expected.keys() == actual.keys() and int(expected["adam.step"]) > 0
-    for name, value in expected.items():
-        np.testing.assert_array_equal(actual[name], value, err_msg=name)
+    for file in ("learner.safetensors", "sampling.safetensors"):
+        expected = mx.load(sampled.path / file)
+        actual = mx.load(unsampled.path / file)
+        assert expected.keys() == actual.keys()
+        if file == "learner.safetensors":
+            assert int(expected["adam/step"]) > 0
+        for name, value in expected.items():
+            np.testing.assert_array_equal(actual[name], value, err_msg=name)
 
 
 @pytest.mark.parametrize(

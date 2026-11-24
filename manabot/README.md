@@ -14,7 +14,7 @@ interface, including encoder selection, replay and checkpoint compatibility.
 ## Quickstart
 
 Start in the [checkout environment](../docs/development.md#environment-and-commands)
-with Etude SDK 0.4.1 or newer.
+with Etude SDK 0.4.6 or newer.
 
 ```bash
 uv run etude train manabot/recipes/local.py      # local production-path smoke

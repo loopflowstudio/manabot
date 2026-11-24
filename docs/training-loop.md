@@ -391,15 +391,21 @@ workers without replaying the prefix; with `decision_memory`, siblings restored
 at the same boundary share their immutable pre-fork `MemoryStore` chunks while
 diverging independently afterwards.
 
-Etude saves the generation and cold recipes in `Counts.snapshot_bank` alongside
-the learner under `out/state/save-*/state.json`. New captures store
+Etude saves the generation and cold recipes as `Counts.snapshot_bank` in
+`out/state/save-*/state.json`, beside `learner.safetensors`. New captures store
 `managym-snapshot-v1` (`replay_json`) as cold authority (preserving
 interventions when `fresh_only=False`), while earlier exact recipes retain
-their schema and `root_id`s. Resume restores them with an empty hot cache and
-new fresh-game and policy sampling seeds; supply runtime predicates and scorers
-again. On a cold miss, `SnapshotBank` reconstructs each distinct root once,
+their schema and `root_id`s. Resume restores the bank with an empty hot cache.
+On a cold miss, `SnapshotBank` reconstructs each distinct root once,
 verifies its digest and chooser, and promotes the `GameSnapshot` into the hot
-cache for all siblings and later draws.
+cache for all siblings and later draws. Supply runtime predicates and scorers
+again when resuming.
+
+At a save boundary, the collector opens the fresh game that the next allocation
+would install in each slot awaiting a fresh root. Portable resume reconstructs
+those live streams and restores the host RNGs from `continuation.json`. Policy
+sampling RNGs restore within the same sampling domain and reseed when it
+changes. A legacy Torch `.pt` save starts fresh games and sampling streams.
 
 Native vectors leave finished and failed slots parked until the collector
 refills active streams via `load_slots_into_buffers`, avoiding unused
