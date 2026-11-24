@@ -71,9 +71,11 @@ Behavior review of the alignment pass at `e2327b6a59` (2026-11-24). Items 1 and 
 - Checked: the Greatwurm's own route reports "6 counters left to remove." then 5, with `chosen_mode` None. `resolved_play_route` reads no route for a forged `Grant(0)` under a suspended `CastDuringResolution`, and the decision rejects it without unsuspending. Stacked Greatwurm triggers carry x 7 and 2, both viewers' text names the event creature, and the kind-3 frames join distinct context objects. The event label goes through `visible_reference`, which the frame context already used for both viewers, so it exposes nothing new. Debug reruns: cards `quilled_greatwurm` 3, `--lib identity_tests` 5. Python controls were not rerun; Rust changes after the `04f31e8f90` rebuild are compress-only.
 - **D7 (this pass): a trigger that chooses X while it resolves now shows "that many (0)".** The probe was Wildborn Preserver with a Gray Ogre entering. Its stacked trigger reads "Choose X. You may pay {X}. If you do, When you do: Put that many (0) +1/+1 counters on this", in both the stack entry and the trigger-placement text, while X is still unchosen (CR 107.3: it is chosen as the trigger resolves). `with_trigger_x` substitutes the trigger's `x` for every `EffectValue::X` in the rendered text whatever the event, and an `OptionalManaPaymentX` payload has `x` 0 until it resolves. Fix: substitute only when the trigger's event binds X: the source's own entering (CR 107.3m), `CountersPut` and the per-creature combat-damage occurrence, the same cases `flow/triggers.rs` (~1151) assigns. Decide that from the condition next to `enters_itself`, not from rendered text. Leave X inside `OptionalManaPaymentX` as "X". Add a directed `eld::wildborn_preserver_*` assertion that the stacked trigger keeps "X" and shows no "(0)". The reflexive trigger that follows reads "that many (3)" with x 3; Oracle says "put X", so "X (3)" would match better (nit).
 
-## Remaining work
+### D7 (`2c213d9525`..`be574531c2`)
 
-D7 delivered: `trigger_description` fills X only where `bound_x` names an amount: "X" for the source's own entering, "that many" for counters put (`PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper) and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`. Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
+`trigger_description` fills X only where `bound_x` names an amount: "X" for the source's own entering, "that many" for counters put (`PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper) and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`. Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
+
+## Remaining work
 
 Next is **gate**. Gate owns:
 
@@ -84,6 +86,8 @@ Next is **gate**. Gate owns:
 - File the split-out Tasks below, plus a bug Task for the missing first-strike damage step priority (CR 510.4; behavior review of items 4–5).
 
 Nit (concept, same shape as item 1): a multi-tap cost (`CostComponent::Tap` with `count > 1`, `agent/continuation.rs` ~714) still reports taps owed through `frame.mode`. If gate review agrees, move it into `project_pending_payment` as a pending-payment fact; it predates MTG-419.
+
+Nit (concept, D7): whether a trigger binds X has two owners. `flow/triggers.rs` (~1151) decides it from the event when the trigger fires; `ability_description.rs::bound_x` re-derives it from the condition. They agree today, but a new X-binding event must be added to both. If gate review agrees, have `FiredTrigger`/`TriggeredAbilityOnStack` carry `x: Option<u8>` (None = chosen while resolving) and let `bound_x` choose only the wording.
 
 Latent nit: `fill_slots` keeps a chosen card in its own slot, biased only if two hidden slots of one kind carry distinguishable terms (none in the catalog). If a second foretell card arrives, pair the slots with the shuffled picks in order.
 
