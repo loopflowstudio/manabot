@@ -33,8 +33,14 @@ during resolution and Emeritus of Truce.
 
 ## Remaining shared rules
 
-Each row below identifies the interaction the next implementation and fixture
-must handle. Only the last six require MTG-418.
+The 31 rows in `be46a3fc8c` close the batch expressible with the casting
+profiles, permissions, costs and targeting implemented here. Twenty-two
+MTG-419 rows remain across six Foundations cards, five HOB cards, one TDM
+card and ten preparation cards.
+For example, Claim Territory needs both found cards revealed while the
+caster chooses which one enters tapped. The existing library search reveals
+a card as it moves to hand, too late for that decision. These rows split at
+the shared rules listed below. Six further preparation rows belong to MTG-418.
 
 | Cohort | Cards | Shared rule still needed |
 |---|---|---|
@@ -68,9 +74,9 @@ creature that attacked.
 
 | Position | Required fork or outcome |
 |---|---|
-| Muldrotha, artifact creature and a Zul-eligible Zombie | Fork the type choice. Check a new Muldrotha that turn, the next-turn reset, land allowance and a prohibition. With Omniscience, compare paid and free hand casts, required additional costs, Kicker/Bargain on a free cast, and manual spending. |
+| Muldrotha and Omniscience | Manual spending on an optional cost under Omniscience. The directed fixtures already cover Muldrotha/Zul overlap, both type quotas, a fresh Muldrotha, next-turn reset and land allowance. The free-cast forks cover paid or free kicker, bargain, required sacrifices and printed X. |
 | Tinybones, opposing discarded land and spell with stash counters, second Tinybones | The current controller plays foreign cards that an earlier Tinybones exiled. Check own-turn timing, foreign land control (enters under Tinybones’s controller, not owner), ownership versus control, mana spending, High Fae Trickster non-bypass of own-turn timing, and a hand-only prohibition (blocks spell, allows land). Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
-| Angel and Phytomedic with Seed Suture | Not yet run: remove abilities (stays prepared), copy the permanent (no copied preparation), naming Seed Suture, and Codie's copied prepared spell retargeting (non-recursive). |
+| Codie and a prepared spell | Copy and retarget the spell after the original cast. The copy must not trigger Codie again. |
 
 ## Resolution-cast review
 
@@ -91,7 +97,20 @@ cargo test --manifest-path managym/Cargo.toml -p managym --lib preparation_resol
 uv run pytest tests/semantic/test_text_observation.py tests/academy/test_choice_navigation.py tests/model/test_pinned_pilot.py -q
 ```
 
-Gate owns the full debug workspace, fmt, Clippy and consumer suites.
+The 31 new ledger rows passed their directed checks in a 148-test native
+card/observation run. Another ten structured-offer tests, five preparation
+resolution tests, the execution vocabulary test and the real-card Scryfall
+check passed. Clone Legion copied a prepared creature without duplicating
+its cast, and Honest Work removed its abilities while its linked spell
+remained castable. Seed Suture was chosen through ordinary naming Commands
+and the choice replayed from the same root. The five Academy navigation positions retained all 252 Commands
+and offers. The authored match retained its 193 Commands, revealed cards,
+costs, terminal board and both presentation tracks. Live, headless and replay
+agreed at 194 checkpoints across 1,164 viewer projections; stale object and
+stale revision Commands were rejected. The casting-catalog receipts are
+stored alongside the original opening receipts.
+
+Gate owns the full debug workspace, Clippy and the measured 10% Engine Budget.
 
 ## Later phases
 

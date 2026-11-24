@@ -195,3 +195,56 @@ fn joined_researchers_rechecks_hand_sizes_and_both_players_draw_three() {
         assert_eq!(hand(&s, p).len(), before + 3);
     }
 }
+
+#[test]
+fn copying_a_prepared_creature_and_removing_its_abilities_preserve_one_cast() {
+    use crate::support::{game::move_from_library, play::cast};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+
+    // The Researchers prepare at end step. A copy entering later has the
+    // printed trigger, but hasn't resolved it or prepared a spell of its own.
+    let mut s = five_color_setup(&["Joined Researchers", "Clone Legion", "Honest Work"]);
+    let original = s.force_permanent_on_battlefield(0, "Joined Researchers");
+    move_from_library(&mut s, 1, "Island", ZoneType::Hand);
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    let prepared = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, PlayerId(0))[0];
+    let mut copied = s.clone();
+    copied.advance_to_active_step(0, StepKind::Main);
+    copied.set_player_mana_pool(0, "7UU");
+    cast(&mut copied, "Clone Legion");
+    assert!(copied.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut copied);
+    assert_eq!(
+        copied
+            .battlefield_permanents_named(0, "Joined Researchers")
+            .len(),
+        2
+    );
+    copied.assert_zone_size(0, ZoneType::Exile, 1);
+    copied.set_player_mana_pool(0, "1WW");
+    assert!(castable(&mut copied, prepared));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    let aura = move_from_library(&mut s, 1, "Honest Work", ZoneType::Hand);
+    s.set_player_mana_pool(1, "U");
+    cast_card(&mut s, aura);
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(original).name, "Humble Merchant");
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "1WW");
+    let before = [0, 1].map(|p| s.zone_size(p, ZoneType::Hand));
+    cast_card(&mut s, prepared);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    for (p, hand_size) in before.into_iter().enumerate() {
+        s.assert_zone_size(p, ZoneType::Hand, hand_size + 3);
+    }
+    s.assert_zone_size(0, ZoneType::Exile, 0);
+}
