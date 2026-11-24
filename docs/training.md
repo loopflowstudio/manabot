@@ -172,8 +172,9 @@ message naming both versions. An unavailable device fails explicitly. Float64
 loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
-inputs and frozen opponents are unsupported on MPS. Evaluation and search stay on CPU. On Apple Silicon, the baseline, local and
-Elemental recipes accept `backend="mlx"` for tracked scalar damped self-play.
+inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
+on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
+`backend="mlx"` for tracked scalar damped self-play.
 They read and write the same portable policies, preserve live streams and RNGs
 across stops between updates in an
 [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
@@ -368,7 +369,8 @@ def self_play(
                     staged.restore_sampling(collector.numerics)
 
                 def export(folder: Path) -> None:
-                    staged.export(folder, capture_host(collector, rng), collector.numerics)
+                    host_sha256 = write_host(folder, capture_host(collector, rng))
+                    staged.export(folder, host_sha256, collector.numerics)
 
                 run.save(export=export)
             for update in run.steps("updates", to=updates):

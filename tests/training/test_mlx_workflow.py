@@ -1,10 +1,12 @@
 """Verify trained MLX exports through local CPU game children and the baseline report."""
 
 from collections import Counter
+from contextlib import suppress
 import importlib.util
 from itertools import count
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 from typing import TYPE_CHECKING
@@ -52,7 +54,9 @@ def test_mlx_local_evaluation_and_verification(tmp_path: Path, width: int) -> No
         "    from tests.training.test_mlx_workflow import check_policy_loads\n"
         "    check_policy_loads()\n"
     )
-    subprocess.run(
+    # The report starts the CLI and game children. Terminate the entire test
+    # process group if the outer deadline expires while any are still running.
+    with subprocess.Popen(
         [
             sys.executable,
             "-m",
@@ -64,9 +68,16 @@ def test_mlx_local_evaluation_and_verification(tmp_path: Path, width: int) -> No
             **os.environ,
             "PYTHONPATH": os.pathsep.join((str(tmp_path), str(Path.cwd()))),
         },
-        check=True,
-        timeout=240,
-    )
+        start_new_session=True,
+    ) as process:
+        try:
+            returncode = process.wait(timeout=240)
+            if returncode:
+                raise subprocess.CalledProcessError(returncode, process.args)
+        except BaseException:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            raise
 
     # The independent reference admits the very same bytes and registrations.
     if importlib.util.find_spec("torch") is not None:

@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from functools import partial
+from operator import index
 from pathlib import Path
 from typing import Any, Literal
 
@@ -203,6 +204,10 @@ class BufferedStreams:
         self._rows(len(players))
         if seeds is not None:
             self._rows(len(seeds))
+            # Admit the whole list before any producer replaces its streams.
+            seeds = [index(seed) for seed in seeds]
+            if any(not 0 <= seed < 2**64 for seed in seeds):
+                raise ValueError("native seed must fit uint64")
         self._run(
             [
                 partial(

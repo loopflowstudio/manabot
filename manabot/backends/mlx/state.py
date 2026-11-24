@@ -178,8 +178,9 @@ def restore(
             raise ValueError("incompatible MLX saved counts or input contract")
         arrays, saved = mx.load(path, return_metadata=True)
         header = metadata() | {"schema": "1"}
-        payload = read_host(found.path)
+        payload = None
         if saved.get("schema") == "2":
+            payload = read_host(found.path)
             if payload is None:
                 raise ValueError(f"missing MLX {HOST_FILE}")
             for key in ("rng.collector", "rng.mlx"):
