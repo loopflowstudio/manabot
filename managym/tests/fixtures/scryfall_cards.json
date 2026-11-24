@@ -1,4 +1,17 @@
 {
+  "Fiendish Panda": {
+    "name": "Fiendish Panda",
+    "mana_cost": "{2}{W}{B}",
+    "type_line": "Creature — Bear Demon",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
   "Valkyrie's Call": {
     "name": "Valkyrie's Call",
     "mana_cost": "{3}{W}{W}",

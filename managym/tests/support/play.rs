@@ -465,6 +465,15 @@ pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     now(s, id)
 }
 
+pub fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
+    let clone = cast(s, "Clone");
+    spend_colorless(s);
+    resolve_top(s);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+    clone
+}
+
 /// Cast `id` from whichever zone currently permits it, refreshing priority.
 pub fn cast_card(s: &mut Scenario, id: ObjectId) {
     s.game_mut().scenario_refresh_priority().unwrap();

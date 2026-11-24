@@ -21,6 +21,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fiendish_panda(),
         sun_blessed_healer(),
         kykar_zephyr_awakener(),
         infernal_vessel(),
@@ -37,6 +38,58 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         leyline_axe(),
         sire_of_seven_deaths(),
     ]
+}
+
+fn fiendish_panda() -> CardDefinition {
+    let text_box = "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.";
+    let target = TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+        predicate: CardPredicate {
+            not_subtypes: vec!["Bear".into()],
+            ..CardPredicate::creature()
+        },
+    };
+    CardDefinition {
+        key: "fdn.fiendish_panda",
+        scryfall_id: "4e434d74-cad0-45f5-bc8d-f34aa5e1d879",
+        printed: PrintedCharacteristics {
+            name: "Fiendish Panda".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bear".into(), "Demon".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::GainsLife { who: Actor::You },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            another: true,
+                            ..TargetRequirement::one(target.clone())
+                        },
+                        effects: vec![Effect::return_to_battlefield(
+                            ObjectSelector::Target(target),
+                            false,
+                        )],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn sire_of_seven_deaths() -> CardDefinition {

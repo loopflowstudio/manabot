@@ -637,6 +637,7 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        let mut lifelink = std::collections::BTreeMap::new();
         // Sacrifice is committed with this batch, after all replacement
         // choices. Match its subjects while every pre-batch permanent still
         // exists: moving a Food first would erase the predicate it satisfied.
@@ -742,6 +743,16 @@ impl Game {
                 self.emit(GameEvent::CardRevealed { owner, definition });
                 (owner, definition, known_before)
             });
+            let gain = match event {
+                ProposedEvent::Damage {
+                    source: Some(source),
+                    amount,
+                    ..
+                } => self
+                    .lifelink_controller(source)
+                    .map(|player| ((source, player), amount)),
+                _ => None,
+            };
             let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
             if let Some(second_first) = pending.second_card_first {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
@@ -760,10 +771,19 @@ impl Game {
                 if let Some((owner, definition, known_before)) = revealed_hand {
                     self.set_known_hand_count(owner, definition, known_before + 1);
                 }
+                if let Some((key, amount)) = gain {
+                    let total = lifelink.entry(key).or_insert(0i32);
+                    *total = total.saturating_add(amount);
+                }
                 died.extend(death);
                 hits.extend(hit);
             }
             results.push(result);
+        }
+        // CR 119.9, 702.15: simultaneous damage gains life once per source,
+        // even if one creature dealt damage to several recipients.
+        for ((_, player), amount) in lifelink {
+            self.commit_life_change(player, amount);
         }
         if let EventBinding::Moved {
             linked: Some((source, returns)),

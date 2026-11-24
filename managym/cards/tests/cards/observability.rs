@@ -1099,6 +1099,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::NthCounter { .. } => "TriggerCondition::NthCounter",
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
+        TriggerCondition::GainsLife { .. } => "TriggerCondition::GainsLife",
         TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
         TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
@@ -1122,6 +1123,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::creature(),
             nth: Some(2),
         },
+        TriggerCondition::GainsLife { who: Actor::You },
         TriggerCondition::Draws {
             who: Actor::AnyPlayer,
             nth: None,

@@ -828,10 +828,8 @@ impl Game {
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.within_target_mana_budget(requirement, x, chosen.iter().copied(), *target)
+                self.can_add_clause_target(requirement, x, chosen.iter().copied(), *target)
             })
-            // Distinctness and the budget are local to this clause.
-            .filter(|target| !chosen.contains(target))
             .collect()
     }
 

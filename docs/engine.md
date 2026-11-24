@@ -1114,6 +1114,13 @@ X. Only the cast spell has a payment receipt, including when its cost was zero.
 A battlefield copy takes its characteristics from the permanent and starts with
 its own entry choices. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
 
+Fiendish Panda gets one counter each time its controller gains life. When it
+dies, its last battlefield power limits which non-Bear creature cards it can
+return. A Clone that dies as a 4-power Panda can return Driver of the Dead
+(mana value four). It cannot return itself, even though it is a Shapeshifter
+in the graveyard. Changing the trigger's target uses the same restrictions.
+[Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+
 Token creation replacements finish before the allocator assigns the token's
 viewer id, owner and kind. Spell copies use `Object::spell_copy`. The zone
 allocator supplies each copy's `ObjectId`.

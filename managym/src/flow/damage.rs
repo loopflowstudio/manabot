@@ -59,12 +59,6 @@ impl Game {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
         });
-        let lifelink_controller = source.and_then(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Lifelink))
-                .then(|| self.source_controller(object_ref))
-                .flatten()
-        });
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
@@ -145,9 +139,6 @@ impl Game {
             }
         }
 
-        if let Some(controller) = lifelink_controller {
-            self.commit_life_change(controller, amount);
-        }
         true
     }
 
@@ -209,7 +200,10 @@ impl Game {
         Some(self.state.source_base(source).1.keywords)
     }
 
-    fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
+    pub(super) fn lifelink_controller(&self, source: ObjectId) -> Option<PlayerId> {
+        if !self.source_keywords(source)?.has(Keyword::Lifelink) {
+            return None;
+        }
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return self.state.permanents[permanent_id]
                 .as_ref()

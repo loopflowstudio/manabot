@@ -132,6 +132,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
+        TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
         TriggerCondition::NthCounter { .. }
         | TriggerCondition::PutsCounters { .. }
@@ -241,49 +242,22 @@ impl Game {
         Some(crate::state::ability::effect_target_requirements(effects))
     }
 
-    /// Apply this occurrence's source and clause limits to a legal target.
-    fn fits_trigger_clause(
-        &self,
-        trigger: &PendingTrigger,
-        requirement: &TargetRequirement,
-        target: Target,
-    ) -> bool {
-        if requirement.another
-            && trigger
-                .source_ref()
-                .and_then(|object| self.lookup_current_permanent(object).ok())
-                .is_some_and(|id| target == Target::Permanent(id))
-        {
-            return false;
-        }
-        !trigger.clause_targets().any(|previous| previous == target)
-            && self.within_target_mana_budget(
-                requirement,
-                trigger.x,
-                trigger.clause_targets(),
-                target,
-            )
-            && self.within_source_bound(
-                target,
-                &requirement.spec,
-                trigger.source_object(),
-                trigger.source_ref(),
-            )
-    }
-
-    pub(crate) fn within_target_mana_budget(
+    /// Distinctness and the announced X budget apply within one clause
+    /// while choosing targets, including when replacing one chosen slot.
+    pub(super) fn can_add_clause_target(
         &self,
         requirement: &TargetRequirement,
         x: u8,
-        chosen: impl Iterator<Item = Target>,
+        chosen: impl Iterator<Item = Target> + Clone,
         target: Target,
     ) -> bool {
-        !requirement.total_mana_value_x
-            || self.target_mana_value(target)
-                + chosen
-                    .map(|target| self.target_mana_value(target))
-                    .sum::<u32>()
-                <= u32::from(x)
+        !chosen.clone().any(|previous| previous == target)
+            && (!requirement.total_mana_value_x
+                || self.target_mana_value(target)
+                    + chosen
+                        .map(|target| self.target_mana_value(target))
+                        .sum::<u32>()
+                    <= u32::from(x))
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -315,8 +289,8 @@ impl Game {
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         if trigger.controller != player
-            || !self.target_is_legal(target, &requirement.spec, player)
-            || !self.fits_trigger_clause(trigger, requirement, target)
+            || !self.target_fits_clause(target, requirement, player, Some(trigger.source_identity))
+            || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -427,9 +401,15 @@ impl Game {
                 let count = trigger.clause_targets().count();
                 let controller = trigger.controller;
                 let mut actions: Vec<_> = self
-                    .legal_targets_for_spec(&requirement.spec, controller)
-                    .into_iter()
-                    .filter(|target| self.fits_trigger_clause(&trigger, requirement, *target))
+                    .legal_clause_targets(requirement, controller, Some(trigger.source_identity))
+                    .filter(|target| {
+                        self.can_add_clause_target(
+                            requirement,
+                            trigger.x,
+                            trigger.clause_targets(),
+                            *target,
+                        )
+                    })
                     .map(|target| Action::ChooseTarget {
                         player: controller,
                         target,
@@ -496,12 +476,13 @@ impl Game {
                     .iter()
                     .filter(|requirement| requirement.min > 0)
                     .all(|requirement| {
-                        self.legal_targets_for_spec(&requirement.spec, trigger.controller)
-                            .into_iter()
-                            .any(|target| {
-                                !(requirement.another
-                                    && source.is_some_and(|id| target == Target::Permanent(id)))
-                            })
+                        self.legal_clause_targets(
+                            requirement,
+                            trigger.controller,
+                            Some(trigger.source_identity),
+                        )
+                        .next()
+                        .is_some()
                     })
             })
             .collect()
@@ -691,6 +672,23 @@ impl Game {
         target_spec: &TargetSpec,
         controller: PlayerId,
     ) -> Vec<Target> {
+        let mut candidates = self.target_candidates(target_spec, controller);
+        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
+        candidates
+    }
+
+    pub(super) fn legal_clause_targets<'a>(
+        &'a self,
+        requirement: &'a TargetRequirement,
+        controller: PlayerId,
+        source: Option<AbilitySource>,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.target_candidates(&requirement.spec, controller)
+            .into_iter()
+            .filter(move |target| self.target_fits_clause(*target, requirement, controller, source))
+    }
+
+    fn target_candidates(&self, target_spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {
         let mut candidates: Vec<Target> = match target_spec {
             TargetSpec::GraveyardCardYouOwn { .. }
             | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
@@ -769,7 +767,6 @@ impl Game {
                 }
             }
         }
-        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
         candidates
     }
 
@@ -1053,7 +1050,9 @@ impl Game {
                 GameEvent::SpellCast {
                     object_id: object, ..
                 } => Some(self.spell_caster(*object)),
-                GameEvent::CardDrawn { player, .. } => Some(*player),
+                GameEvent::CardDrawn { player, .. } | GameEvent::LifeChanged { player, .. } => {
+                    Some(*player)
+                }
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
                     object_id: object,
@@ -1898,6 +1897,9 @@ impl Game {
                             .position(|cast| cast == object)
                             == Some(n as usize - 1)
                     })
+            }
+            (TriggerCondition::GainsLife { who }, GameEvent::LifeChanged { player, old, new }) => {
+                new > old && who.includes(source_controller, *player)
             }
             (
                 TriggerCondition::Draws { who, nth },

@@ -186,7 +186,7 @@ impl PendingTrigger {
     }
 
     /// Targets already committed to the requirement being filled.
-    pub(super) fn clause_targets(&self) -> impl Iterator<Item = Target> + '_ {
+    pub(super) fn clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
         self.targets
             .iter()
             .zip(&self.target_req_indices)

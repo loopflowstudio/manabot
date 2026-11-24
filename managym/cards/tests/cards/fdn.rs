@@ -1700,3 +1700,199 @@ fn departure_granted_returns_follow_owner_controller_and_one_incarnation() {
 fn kicked_healer_returns_only_cheap_nonland_permanents() {
     super::check_kicked_return("Sun-Blessed Healer", "2WW", "Sol Ring", "Gray Ogre");
 }
+
+/// Clone dies as a 4-power Panda but is a non-Bear in the graveyard.
+#[test]
+fn fiendish_panda_and_driver_choose_exact_graveyard_targets() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{counters, offered_targets, zone_of},
+        play::{cast, cast_clone_as, command, pass_until, resolve_top},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, player::ManaPayment},
+    };
+
+    let mut s = five_color_setup(&[
+        "Fiendish Panda",
+        "Clone",
+        "Koala-Sheep",
+        "Driver of the Dead",
+        "Craw Wurm",
+        "Llanowar Elves",
+        "Gray Ogre",
+        "Redirect Lightning",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let panda = s.force_permanent_on_battlefield(1, "Fiendish Panda");
+    let clone = cast_clone_as(&mut s, panda);
+    enter_and_settle(&mut s, "Koala-Sheep");
+    assert_eq!(counters(&s, permanent_of(&s, clone).unwrap()), 1);
+    assert_eq!(counters(&s, panda), 0);
+
+    let mut grave = |owner, name| move_from_library(&mut s, owner, name, ZoneType::Graveyard);
+    let elf = grave(0, "Llanowar Elves");
+    let ogre = grave(0, "Gray Ogre");
+    let driver = grave(0, "Driver of the Dead");
+    grave(0, "Craw Wurm");
+    grave(0, "Koala-Sheep");
+    grave(0, "Forest");
+    grave(1, "Llanowar Elves");
+
+    let dead_clone = move_card(&mut s, clone, ZoneType::Graveyard);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert_eq!(
+        offered_targets(&s),
+        [elf, ogre, driver].map(Target::GraveyardCard)
+    );
+    assert!(s.choose_target(Target::GraveyardCard(ogre)));
+    let trigger = s.game().state.stack_objects.last().unwrap().as_target();
+    let root = s.snapshot();
+    for reentered in [false, true] {
+        s.restore(&root);
+        let mut replacements = vec![elf, driver];
+        if reentered {
+            move_card(&mut s, dead_clone, ZoneType::Hand);
+            replacements.push(move_card(&mut s, dead_clone, ZoneType::Graveyard));
+        }
+        cast(&mut s, "Redirect Lightning");
+        command(&mut s, |a| matches!(a, Action::Decline { .. }));
+        assert!(s.choose_target(trigger));
+        resolve_top(&mut s);
+        assert_eq!(
+            offered_targets(&s),
+            replacements
+                .into_iter()
+                .map(Target::GraveyardCard)
+                .collect::<Vec<_>>()
+        );
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseTarget { target: Target::GraveyardCard(card), .. } if *card == driver),
+        );
+        settle(&mut s);
+        assert_eq!(zone_of(&s, driver), Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+
+        move_card(&mut s, driver, ZoneType::Graveyard);
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert_eq!(offered_targets(&s), [Target::GraveyardCard(elf)]);
+        assert!(s.choose_target(Target::GraveyardCard(elf)));
+        settle(&mut s);
+        assert_eq!(zone_of(&s, elf), Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, clone), Some(ZoneType::Graveyard));
+    }
+}
+
+/// Panda normally dies before choosing a target. Put its power condition on
+/// a live modal source to check the mode offer and the resolution recheck.
+#[test]
+fn source_power_limits_trigger_modes_and_is_rechecked_after_savor() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{offered_targets, zone_of},
+        play::{cast, choose_mode, resolve_top},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{
+            ability::{Ability, Actor, Effect, ObjectSelector, TargetSpec, TriggerCondition},
+            game_object::Target,
+            player::ManaPayment,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&[
+        "Hill Giant",
+        "Gray Ogre",
+        "Llanowar Elves",
+        "Driver of the Dead",
+        "Savor",
+    ]);
+    let source = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let object = card_of(&s, source);
+    let return_creature = |min_mana_value| {
+        Effect::return_to_battlefield(
+            ObjectSelector::Target(TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+                predicate: CardPredicate {
+                    min_mana_value,
+                    ..CardPredicate::creature()
+                },
+            }),
+            false,
+        )
+    };
+    s.game_mut().state[object].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::casts(Actor::You, CardPredicate::creature()),
+        intervening_if: None,
+        effects: vec![Effect::TriggerModes {
+            modes: vec![
+                vec![return_creature(Some(4))],
+                vec![return_creature(None)],
+                vec![Effect::gain_life(1)],
+            ],
+            up_to: None,
+            unchosen: false,
+        }],
+    }];
+    let ogre = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+    move_from_library(&mut s, 0, "Driver of the Dead", ZoneType::Graveyard);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    cast(&mut s, "Llanowar Elves");
+    let modes: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(modes, [1, 2]);
+    choose_mode(&mut s, 1);
+    assert_eq!(offered_targets(&s), [Target::GraveyardCard(ogre)]);
+    assert!(s.choose_target(Target::GraveyardCard(ogre)));
+    let root = s.snapshot();
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+
+    s.restore(&root);
+    cast(&mut s, "Savor");
+    assert!(s.choose_target(Target::Permanent(source)));
+    resolve_top(&mut s);
+    assert_eq!(s.game().characteristics(source).pt(), (1, 1));
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+}
+
+#[test]
+fn fiendish_panda_gains_one_counter_per_lifelink_source_in_combat() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::counters,
+        play::{attack_with_group, choose, pass_until},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut s = five_color_setup(&["Fiendish Panda", "Sire of Seven Deaths", "Gray Ogre"]);
+    let panda = s.force_permanent_on_battlefield(0, "Fiendish Panda");
+    let split = s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+    let unblocked = s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+    for attacker in [split, unblocked] {
+        clear_summoning_sickness(&mut s, attacker);
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with_group(&mut s, &[split, unblocked]);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    for _ in 0..2 {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::DeclareBlocker { attacker: Some(id), .. } if *id == split),
+        );
+    }
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.life(0), 34);
+    assert_eq!(s.life(1), 10);
+    assert_eq!(counters(&s, panda), 2);
+}

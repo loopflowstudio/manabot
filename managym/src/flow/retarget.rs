@@ -11,7 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{PlayerId, Target},
+        game_object::{AbilitySource, PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -65,44 +65,29 @@ impl Game {
         let stacked = &self.state.stack_objects[index];
         let controller = stacked.controller();
         let targets = stacked.targets();
-        let indices: Vec<usize> = match stacked {
-            StackObject::Spell(spell) => spell.target_req_indices.clone(),
-            StackObject::TriggeredAbility(triggered) => triggered.target_req_indices.clone(),
-            StackObject::ActivatedAbility(ability) => (0..targets.len())
-                .map(|slot| ability.target_req_indices.get(slot).copied().unwrap_or(0))
-                .collect(),
+        let (indices, x) = match stacked {
+            StackObject::Spell(s) => (&s.target_req_indices, s.x),
+            StackObject::ActivatedAbility(a) => (&a.target_req_indices, a.x),
+            StackObject::TriggeredAbility(t) => (&t.target_req_indices, t.x),
         };
-        let x = match stacked {
-            StackObject::Spell(s) => s.x,
-            StackObject::ActivatedAbility(a) => a.x,
-            StackObject::TriggeredAbility(t) => t.x,
-        };
+        let clause = |slot: usize| indices.get(slot).copied().unwrap_or(0);
         let current = targets.get(*slot).copied();
-        let source = stacked.source_ref();
-        let source_object = stacked.source_object();
+        let source = Some(AbilitySource::new(
+            stacked.source_object(),
+            stacked.source_ref(),
+        ));
         let self_target = stacked.as_target();
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
         let other_targets = targets
             .iter()
-            .zip(&indices)
             .enumerate()
-            .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
-            .map(|(_, (target, _))| *target);
-        self.legal_targets_for_spec(&requirement.spec, controller)
-            .into_iter()
+            .filter(|(other, _)| other != slot && clause(*other) == clause(*slot))
+            .map(|(_, target)| *target);
+        self.legal_clause_targets(&requirement, controller, source)
             .filter(|target| Some(*target) != current && *target != self_target)
             .filter(|target| {
-                self.within_target_mana_budget(&requirement, x, other_targets.clone(), *target)
-            })
-            .filter(|target| !other_targets.clone().any(|chosen| chosen == *target))
-            .filter(|target| {
-                !requirement.another
-                    || !matches!((target, source), (Target::Permanent(id), Some(source))
-                        if self.permanent_object(*id) == Some(source))
-            })
-            .filter(|target| {
-                self.within_source_bound(*target, &requirement.spec, source_object, source)
+                self.can_add_clause_target(&requirement, x, other_targets.clone(), *target)
             })
             .collect()
     }

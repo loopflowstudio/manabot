@@ -140,6 +140,8 @@ pub enum TriggerCondition {
         predicate: CardPredicate,
         nth: Option<u32>,
     },
+    /// One occurrence per life-gain event, regardless of the amount (CR 119.9).
+    GainsLife { who: Actor },
     /// "Whenever [who] draws a card"; with `nth`, only that player's Nth
     /// draw this turn (see `PlayerTurnHistory::cards_drawn`). The drawer is
     /// "that player".

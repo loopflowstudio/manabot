@@ -26,7 +26,7 @@ use crate::{
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, CopyException, EffectDuration, Modification},
-        game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
+        game_object::{AbilitySource, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
@@ -81,6 +81,15 @@ impl Game {
         }
     }
 
+    /// CR 608.2h: an exact battlefield object's live power or its final power
+    /// on departure. Other zones have no battlefield value.
+    fn battlefield_power(&self, object: ObjectId) -> Option<i32> {
+        self.lookup_current_permanent(object)
+            .ok()
+            .map(|id| self.characteristics(id).power)
+            .or_else(|| self.object_lki(object).map(|lki| lki.power))
+    }
+
     /// A quantity read by a resolving instruction: it sees the frame's
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
@@ -119,26 +128,13 @@ impl Game {
                 .contributions()
                 .iter()
                 .filter(|paid| paid.how == How::Tapped)
-                .map(|paid| {
-                    let power = self
-                        .state
-                        .permanent_of(paid.object)
-                        .map(|id| self.characteristics(id).power)
-                        .or_else(|| self.object_lki(paid.object).map(|lki| lki.power));
-                    power.unwrap_or(0).max(0)
-                })
+                .map(|paid| self.battlefield_power(paid.object).unwrap_or(0).max(0))
                 .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
             EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
-            EffectValue::SourcePower => self
-                .source_permanent_id(frame)
-                .map(|id| self.characteristics(id).power)
-                .or_else(|| {
-                    frame
-                        .source_ref()
-                        .and_then(|source| self.object_lki(source))
-                        .map(|lki| lki.power)
-                })
+            EffectValue::SourcePower => frame
+                .source_ref()
+                .and_then(|source| self.battlefield_power(source))
                 .unwrap_or(0),
             EffectValue::AttackingMatching { predicate } => self
                 .battlefield_permanents(frame.controller)
@@ -255,11 +251,13 @@ impl Game {
             crate::state::ability::bind_effect_clauses(card_ref.spell_effects_for_mode(spell.mode));
         let requirements = card_ref.target_requirements_for_mode(spell.mode);
 
+        let source = AbilitySource::optional(Some(object), self.state.live(object));
         let Some(targets) = self.resolution_targets(
             &spell.targets,
             &spell.target_req_indices,
             &requirements,
             spell.controller,
+            source,
         ) else {
             self.move_object(object, ZoneType::Graveyard);
             self.emit(GameEvent::SpellCountered {
@@ -270,10 +268,7 @@ impl Game {
         };
 
         let frame = EffectFrame {
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(object),
-                self.state.live(object),
-            ),
+            source_identity: source,
             kicked: spell.kicked,
             trigger_damage: 0,
             x: spell.x,
@@ -380,11 +375,16 @@ impl Game {
             .attached
             .and_then(|object| self.lookup_current_permanent(object).ok())
             .map(Target::Permanent);
+        let source = Some(AbilitySource::new(
+            ability.source_object,
+            Some(ability.source_object),
+        ));
         let Some(targets) = self.resolution_targets(
             &ability.targets,
             &ability.target_req_indices,
             &requirements,
             ability.controller,
+            source,
         ) else {
             return;
         };
@@ -394,10 +394,7 @@ impl Game {
         // independent effects (such as drawing) resolve after that object leaves.
         let frame = EffectFrame {
             program,
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(ability.source_object),
-                Some(ability.source_object),
-            ),
+            source_identity: source,
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             trigger_damage: 0,
@@ -450,6 +447,7 @@ impl Game {
             &triggered.target_req_indices,
             &requirements,
             triggered.controller,
+            Some(triggered.source_identity),
         ) else {
             return;
         };
@@ -457,10 +455,7 @@ impl Game {
         let mut frame = EffectFrame {
             program,
             remembered: triggered.remembered,
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(source_object),
-                triggered.source_identity.reference(),
-            ),
+            source_identity: Some(triggered.source_identity),
             inherited_from: triggered
                 .source_lki
                 .as_ref()
@@ -514,6 +509,7 @@ impl Game {
         indices: &[usize],
         requirements: &[TargetRequirement],
         controller: PlayerId,
+        source: Option<AbilitySource>,
     ) -> Option<Vec<ResolutionTarget>> {
         let mut slots: Vec<_> = targets
             .iter()
@@ -523,9 +519,9 @@ impl Game {
                 ResolutionTarget {
                     target: *target,
                     requirement,
-                    legal: requirements
-                        .get(requirement)
-                        .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller)),
+                    legal: requirements.get(requirement).is_some_and(|req| {
+                        self.target_fits_clause(*target, req, controller, source)
+                    }),
                 }
             })
             .collect();
@@ -2299,7 +2295,9 @@ impl Game {
                 Some(Target::Permanent(id)) => self.permanent_object(id).map_or_else(
                     || {
                         self.departed_permanent_lki(id)
-                            .map_or_else(Vec::new, |lki| self.departure_arrivals(lki.object))
+                            .map_or_else(Vec::new, |lki| {
+                                self.departure_arrivals(lki.object).collect()
+                            })
                     },
                     |object| vec![object],
                 ),
@@ -2457,7 +2455,7 @@ impl Game {
 
     /// CR 400.7, 713. A departed permanent can become two cards. Each
     /// arrival remains identifiable only until its own next zone change.
-    fn departure_arrivals(&self, departed: ObjectId) -> Vec<ObjectId> {
+    fn departure_arrivals(&self, departed: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
         std::iter::once(departed)
             .chain(self.object_lki(departed).and_then(|lki| lki.meld_partner))
             .filter_map(|previous| self.state.zones.successor(previous))
@@ -2467,15 +2465,14 @@ impl Game {
                     Some(ZoneType::Graveyard | ZoneType::Exile)
                 )
             })
-            .collect()
     }
 
     fn source_objects(&self, frame: &EffectFrame) -> Vec<ObjectId> {
         match frame.source_ref() {
-            Some(source) => self
-                .state
-                .live(source)
-                .map_or_else(|| self.departure_arrivals(source), |object| vec![object]),
+            Some(source) => self.state.live(source).map_or_else(
+                || self.departure_arrivals(source).collect(),
+                |object| vec![object],
+            ),
             None => frame
                 .source()
                 .filter(|source| self.spell_on_stack(*source).is_some())
@@ -2611,32 +2608,48 @@ impl Game {
         }
     }
 
-    /// The bound a spec places with the ability's exact source (CR 608.2h:
-    /// its last known information once it has left), beyond
-    /// `target_is_legal`.
-    pub(crate) fn within_source_bound(
+    /// Target legality shared by trigger modes, placement, changes of target
+    /// and the resolution-start check (CR 608.2b).
+    pub(super) fn target_fits_clause(
         &self,
         target: Target,
-        spec: &TargetSpec,
-        source_object: ObjectId,
-        source: Option<ObjectId>,
+        requirement: &TargetRequirement,
+        controller: PlayerId,
+        source: Option<AbilitySource>,
     ) -> bool {
-        let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = spec else {
-            return true;
-        };
-        let Target::GraveyardCard(object) = target else {
+        if !self.target_is_legal(target, &requirement.spec, controller)
+            || (requirement.another
+                && source.is_some_and(|source| self.target_is_source(target, source)))
+        {
             return false;
-        };
-        let power = source
-            .and_then(|source| {
-                self.object_lki(source).map(|lki| lki.power).or_else(|| {
-                    self.lookup_current_permanent(source)
-                        .ok()
-                        .map(|id| self.characteristics(id).power)
-                })
-            })
-            .unwrap_or_else(|| self.object_power(source_object));
-        i32::from(self.object_mana_value(object)) <= power
+        }
+        if let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = requirement.spec {
+            let (Target::GraveyardCard(card), Some(source)) = (target, source) else {
+                return false;
+            };
+            let power = source
+                .reference()
+                .and_then(|object| self.battlefield_power(object))
+                .unwrap_or_else(|| self.object_power(source.object()));
+            return i32::from(self.object_mana_value(card)) <= power;
+        }
+        true
+    }
+
+    fn target_is_source(&self, target: Target, source: AbilitySource) -> bool {
+        match target {
+            Target::Permanent(id) => self.permanent_object(id) == Some(source.object()),
+            Target::GraveyardCard(card) => {
+                card == source.object()
+                    || source.reference().is_some_and(|object| {
+                        self.object_lki(object).is_some()
+                            && self
+                                .departure_arrivals(object)
+                                .any(|arrival| arrival == card)
+                    })
+            }
+            _ => false,
+        }
     }
 
     /// Whether a battlefield permanent matches a spec's characteristics and

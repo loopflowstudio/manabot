@@ -4,8 +4,8 @@ use crate::support::{
     game::{deck, deck_of, five_color_setup, move_card, ready, Scenario},
     inspect::{card_of, current_object, library_card, now, permanent_named, permanent_of, zone_of},
     play::{
-        activate_named, cast, cast_card, choose, enter_and_settle, resolve_top, settle,
-        spend_colorless,
+        activate_named, cast, cast_card, cast_clone_as, choose, enter_and_settle, resolve_top,
+        settle, spend_colorless,
     },
 };
 use managym::{
@@ -15,7 +15,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        game_object::{ObjectId, PermanentId, PlayerId, Target},
+        game_object::{PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -190,15 +190,6 @@ fn sol_ring_taps_for_two_colorless() {
         s.battlefield_permanents_named(0, "Prophetic Prism").len(),
         1
     );
-}
-
-fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
-    let clone = cast(s, "Clone");
-    spend_colorless(s);
-    resolve_top(s);
-    assert!(s.choose_target(Target::Permanent(creature)));
-    settle(s);
-    clone
 }
 
 /// Clone offers every creature on the battlefield, enters as the chosen one
