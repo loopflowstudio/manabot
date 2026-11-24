@@ -70,7 +70,7 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     (
         tla_frontier_snapshots,
         (),
-        {"plr-vine-rloo": 2},
+        {"plr-vine-rloo": 2, "warm-h20": 1, "warm-h60": 1, "warm-terminal": 1},
     ),
     (tla_trophies, (), {"trophy-w64-raw": 3}),
     (
