@@ -1,9 +1,15 @@
-at: 5f44d41dce34de39e793c08f433e5d19427af37e
+at: 4547c080e3db9bc0429875e0b58ec984a5801a4e
 first:
   - path: managym/cards/tests/cards/dsk.rs
-    why: Compare paired opponent decklists and controller inspection.
-  - path: managym/src/agent/observation.rs
-    why: Count hidden battlefield printings in their owner's decklist.
+    why: Follow paired deals, payment forks and both copies.
+  - path: managym/src/flow/selection_sampling.rs
+    why: Assign hidden printings under fixed battlefield identities.
+  - path: managym/src/flow/action.rs
+    why: Offer turn-up and commit its mana payment.
+  - path: managym/src/flow/decision.rs
+    why: Reveal the exact appearance when payment completes.
   - path: managym/src/flow/identity.rs
-    why: Determine who can inspect a manifested card.
+    why: Preserve public references across inspection and reveal.
+  - path: tests/academy/test_manifest_recovery.py
+    why: Reconnect, reveal and reopen the replay archive.
 hide: []
