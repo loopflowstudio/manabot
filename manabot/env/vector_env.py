@@ -8,7 +8,7 @@ from typing import Any, Dict, Literal, Optional, Tuple
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
@@ -75,8 +75,8 @@ class VectorEnv:
                 "opponent_player",
             )
 
-    def _build_rust_env(self, seed: int) -> CapturedVector:
-        return CapturedVector(
+    def _build_rust_env(self, seed: int) -> RecordedVectorEnv:
+        return RecordedVectorEnv(
             num_envs=self.num_envs,
             decision_memory=self.observation_space.config.max_decision_records > 0,
             decision_memory_include_own=self.observation_space.config.decision_memory_include_own,

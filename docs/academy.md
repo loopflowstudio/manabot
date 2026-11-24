@@ -398,7 +398,7 @@ collector = open_collector(..., games_path=Path("runs/jace/games/0.jsonl"))
 ```
 
 or, with no manabot at all, by stepping through a
-[`ScalarCapture` or `CapturedVector`](engine-python.md#record-games).
+[`ScalarCapture` or `RecordedVectorEnv`](engine-python.md#record-games).
 
 **Who played.** The heading takes the players' names from the record: the
 recipe's learner and opponents, first seat first. In one-model self-play both
