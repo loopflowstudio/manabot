@@ -22,15 +22,14 @@ import json
 from pathlib import Path
 import re
 from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
-from manabot.backends.mlx import arrays, learner, rl
+from manabot.backends.mlx import arrays, rl
 from manabot.backends.mlx.arrays import flat_numpy, precision_dtype, to_mlx
-from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.belief.encoding import BeliefEncodingSchema
 from manabot.env.observation import ObservationSpace
@@ -50,6 +49,7 @@ from manabot.policy.checkpoint import (
 from manabot.policy.protocol import Precision
 
 if TYPE_CHECKING:
+    from manabot.backends.mlx.learner import Learner
     from manabot.backends.mlx.runtime import Runtime
     import managym
 
@@ -225,10 +225,17 @@ class MLXBackend:
     (`manabot.backends.mlx.arrays.default_precision`).
     """
 
-    name = "mlx"
+    name: Literal["mlx"] = "mlx"
     arrays = arrays
-    learner = learner
     rl = rl
+
+    @staticmethod
+    def configure_cpu_inference() -> None:
+        mx.set_default_device(mx.cpu)
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.learner")
 
     @property
     def runtime(self) -> "Runtime":
@@ -304,9 +311,9 @@ class MLXBackend:
         minibatch_rows: int = 1,
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
-    ) -> tuple[MLXActorCritic, Learner]:
+    ) -> tuple[MLXActorCritic, "Learner"]:
         policy = assemble(checkpoint, precision=self.precision)
-        return policy, Learner(
+        return policy, self.learner.Learner(
             policy,
             minibatch_rows=minibatch_rows,
             execution_rows=execution_rows,

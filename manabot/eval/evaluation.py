@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import fields
-from functools import partial
 from itertools import batched
 import json
 import math
@@ -38,6 +37,7 @@ from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_int
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
+from manabot.policy.protocol import BackendName
 from manabot.sim.agent import GamePlayer
 from manabot.sim.execution import EvalExecutionV1, RecordedExecution
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup, selected_decks
@@ -188,6 +188,7 @@ def _execute_attempt(
     *,
     out_dir: Path,
     evaluation_id: str,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     card_evidence_dir: Path | None = None,
@@ -205,8 +206,10 @@ def _execute_attempt(
     started = time.perf_counter()
     performance = EvalPerformance("evaluation")
     try:
-        runner = partial(play_cell, agents=agents, deadline=deadline)
-        rows, trace, replay = runner(
+        rows, trace, replay = play_cell(
+            agents=agents,
+            deadline=deadline,
+            backend_name=backend_name,
             key=request.key,
             player_a=request.candidate,
             player_b=request.opponent,
@@ -262,6 +265,7 @@ def evaluate(
     request: EvaluationRequest,
     *,
     out_dir: Path,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     card_evidence_dir: Path | None = None,
@@ -279,6 +283,7 @@ def evaluate(
             request,
             out_dir=out_dir,
             evaluation_id=uuid4().hex,
+            backend_name=backend_name,
             agents=agents,
             deadline=deadline,
             card_evidence_dir=card_evidence_dir,
@@ -458,6 +463,7 @@ def evaluation_status(directory: Path) -> EvaluationResult:
 def continue_evaluation(
     directory: Path,
     *,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     checkpoint_paths: dict[str, str] | None = None,
@@ -521,6 +527,7 @@ def continue_evaluation(
             pending,
             out_dir=out,
             evaluation_id=result.evaluation_id,
+            backend_name=backend_name,
             agents=agents,
             deadline=deadline,
             card_evidence_dir=Path(result.card_evidence_dir)
@@ -531,7 +538,13 @@ def continue_evaluation(
 
 
 def evaluate_local(
-    request: EvaluationRequest, *, deadline: float, out_dir: Path
+    request: EvaluationRequest,
+    *,
+    deadline: float,
+    out_dir: Path,
+    backend_name: BackendName = "torch",
 ) -> EvaluationResult:
     """Run a scalar local comparison under one absolute wall-clock deadline."""
-    return evaluate(request, out_dir=out_dir, deadline=deadline)
+    return evaluate(
+        request, out_dir=out_dir, deadline=deadline, backend_name=backend_name
+    )
