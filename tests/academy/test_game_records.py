@@ -34,6 +34,7 @@ def test_mixed_disclosure_record_replays_and_imports(
                 break
         else:
             raise AssertionError("bounded fixture did not complete")
+        capture.reset_all(setup)
         capture.step([0])
         capture.close()
     else:
@@ -117,7 +118,7 @@ def test_retained_exposure_receipt_opens_without_export(
             break
     else:
         raise AssertionError("bounded fixture did not complete")
-    game = json.loads(vector.take_exposure()[0][0])
+    game = json.loads(vector.current_exposure([True])[0])
     receipt = {
         "schema": "training-exposure-v1",
         "phase": "training",

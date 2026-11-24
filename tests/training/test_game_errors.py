@@ -131,11 +131,11 @@ class ScriptedFailures:
                 self.infos[row] = {"winner_index": 1}
         self.encode()
 
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
-        for row, enabled in enumerate(failed):
-            if enabled:
-                self.generation[row] += 1
-                self.positions[row] = 0
+    def load_slots_into_buffers(self, requests: list[managym.SlotLoad]) -> None:
+        for request in requests:
+            row = request.slot
+            self.generation[row] += 1
+            self.positions[row] = 0
         self.encode()
 
     def get_last_info(self) -> list[dict[str, Any]]:
@@ -458,7 +458,7 @@ def _assert_native_failure_replay(collector: Collector) -> None:
     assert native["post_error_state"] is not None
     assert replay["frame"] == row.frame_json
     advanced = {k: v.copy() for k, v in collector._buffers.items()}
-    collector._env.replace_failed_into_buffers([False, True, False])
+    collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(1)])
     assert collector._env.current_game_seeds() == [0, 4, 2]
     for key in before:
         np.testing.assert_array_equal(
@@ -714,8 +714,6 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
             if "game_error" in self.infos[1]:
                 self.infos[1] = {}
                 self.buffers["truncated"][1] = 1
-                # Native terminal/truncation calls already auto-reset the row.
-                self.replace_failed_into_buffers([False, True])
 
     model = agent()
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", GameErrorPolicy())
@@ -940,7 +938,7 @@ def test_replay_resource_limit_on_a_restored_memory_boundary() -> None:
     source.reset(match.to_rust())
     for _ in range(4):
         source.step(0)
-    vector = RecordedVectorEnv(num_envs=1, decision_memory=True, auto_reset=False)
+    vector = RecordedVectorEnv(num_envs=1, decision_memory=True)
     vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
     vector.reset_all_into_buffers(match.to_rust())
     vector.load_slots_into_buffers(

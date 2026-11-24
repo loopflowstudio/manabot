@@ -212,10 +212,7 @@ class InMemorySnapshotVector:
     def __new__(
         cls, observation_space: ObservationSpace, num_envs: int, seed: int
     ) -> "BufferedStreams":
-        from manabot.training.rollout.producers import (
-            BufferedStreams,
-            open_native_streams,
-        )
+        from manabot.training.rollout.producers import open_native_streams
 
         warnings.warn(
             "InMemorySnapshotVector is deprecated and will be removed in 0.4.0; "
@@ -224,13 +221,10 @@ class InMemorySnapshotVector:
             stacklevel=2,
         )
         memory = observation_space.config
-        streams = open_native_streams(
+        return open_native_streams(
             num_envs,
             seed,
             workers=1,
-            auto_reset=False,
             decision_memory=memory.max_decision_records > 0,
             decision_memory_include_own=memory.decision_memory_include_own,
         )
-        assert isinstance(streams, BufferedStreams)
-        return streams

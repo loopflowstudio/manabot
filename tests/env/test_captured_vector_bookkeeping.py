@@ -150,6 +150,9 @@ def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
                 break
         else:
             pytest.fail("bounded tiny-deck fixture did not terminate")
+        assert vector.current_game_generations()[0] == generation
+        assert vector.games[0].actions
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert vector.current_game_seeds() == [_MAX_SEED]
         assert vector.current_game_generations()[0] != generation
         (game,) = vector.games
@@ -202,6 +205,35 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
         vector.close()
 
 
+def test_torch_terminal_step_keeps_outcome_and_returns_next_opening() -> None:
+    match = Match(MatchConfig(hero_deck={"Mountain": 8}, villain_deck={"Island": 8}))
+    space = ObservationSpace()
+    vector = TorchVectorEnv(
+        1, match, space, Reward(RewardConfig(managym=True)), "cpu", seed=42
+    )
+    scalar = managym.Env(seed=42)
+    scalar.reset(match.to_rust())
+    try:
+        vector.reset()
+        for _ in range(120):
+            _, expected_reward, done, truncated, info = scalar.step(0)
+            obs, rewards, ends, cuts, _ = vector.step(torch.zeros(1, dtype=torch.int64))
+            assert (rewards.item(), ends.item(), cuts.item()) == (
+                expected_reward,
+                done,
+                truncated,
+            )
+            if done:
+                assert vector.get_last_info()["winner_index"][0] == info["winner_index"]
+                assert vector.hand_snapshots([0])[0].seed == 43
+                assert obs["actions_valid"][0].any()
+                break
+        else:
+            pytest.fail("tiny deck did not finish")
+    finally:
+        vector.close()
+
+
 @pytest.mark.parametrize(
     "policies", [("heuristic", "agent"), ("heuristic", "heuristic")]
 )
@@ -231,7 +263,9 @@ def test_captured_per_seat_configuration_and_terminal_rewards(
             assert bool(buffers["terminated"][0]) == done
             assert bool(buffers["truncated"][0]) == truncated
             if done or truncated:
-                assert vector.games[0].actions == []
+                assert vector.games[0].actions and vector.current_agent_indices() == [
+                    -1
+                ]
                 break
             assert vector.current_agent_indices() == [scalar.current_agent_index()]
         else:

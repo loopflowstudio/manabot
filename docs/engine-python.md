@@ -558,7 +558,9 @@ for finished, live, untouched or poisoned slots:
 restore options and encoding capacity for the entire request before changing
 any row. Each `SlotLoadResult` gives the slot, new generation, seed, acting
 player, terminal flag and source digest in request order. `next_fresh_seeds()`
-reports the next unspent seed for each slot.
+reports the next unspent seed for each slot. A sharded load admits every
+selected shard before it writes any buffer or advances a seed. A rejected
+load can be corrected and retried on the same vector.
 
 Stepping a parked terminal or poisoned slot raises until it is reloaded with
 `load_slots_into_buffers` or reset (`reset_all` for readable `VectorEnv.step`).

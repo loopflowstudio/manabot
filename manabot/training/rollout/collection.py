@@ -101,7 +101,7 @@ from manabot.training.state.game_errors import (
     GameOutcome,
     RecordAttempt,
 )
-from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig
+from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig, SlotLoad
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -862,7 +862,6 @@ def open_collector(
             num_envs,
             seed,
             workers,
-            auto_reset=not snapshots,
             decision_memory=capture_decisions,
             decision_memory_include_own=memory.decision_memory_include_own,
             games_path=games_path,
@@ -1515,10 +1514,10 @@ def _reassign(collector: Collector, rows: set[int]) -> None:
         return
     assert collector._sampler is not None
     chosen = {row: collector._sampler.draw() for row in sorted(rows)}
-    collector._env.reassign_roots_into_buffers(
+    collector._env.load_slots_into_buffers(
         [
-            _assigned_match(collector, chosen[row]).to_rust() if row in chosen else None
-            for row in range(collector.num_envs)
+            SlotLoad.fresh(row, _assigned_match(collector, assignment).to_rust())
+            for row, assignment in chosen.items()
         ]
     )
     for row, assignment in chosen.items():
@@ -1869,7 +1868,6 @@ def _settle_step(
     complete_games = collector.batch_closure == "complete-games"
     done = active & ((buffers["terminated"] > 0) | (buffers["truncated"] > 0))
     infos = env.get_last_info() if collector.game_errors or done.any() else []
-    replace = np.zeros(collector.num_envs, dtype=bool)
     failed = np.zeros(collector.num_envs, dtype=bool)
     if collector.game_errors:
         for row in np.flatnonzero(active):
@@ -1905,8 +1903,6 @@ def _settle_step(
             )
             failed[row] = True
             done[row] = False
-            # Native truncation already reset this stream.
-            replace[row] = not bool(buffers["truncated"][row])
     for row in np.flatnonzero(done):
         winner = infos[row].get("winner_index")
         winner = int(winner) if winner is not None else None
@@ -1982,9 +1978,10 @@ def _settle_step(
     # Deferred slots keep their scheduler allocation until the next start.
     if collector.game_error_state.stop_reason:
         raise GameErrorLimit(collector.game_error_state.stop_reason)
-    auto_reset = getattr(env, "auto_reset", True)
-    if replace.any() and auto_reset:
-        env.replace_failed_into_buffers(replace.tolist())
+    if failed.any() and snapshots is None and collector._sampler is None:
+        env.load_slots_into_buffers(
+            [SlotLoad.fresh(int(row)) for row in np.flatnonzero(failed)]
+        )
     closed = done
     if cuts:
         assert snapshots is not None and collector.stats.snapshot is not None
@@ -2010,9 +2007,6 @@ def _settle_step(
             {row for row in collector._needs_assignment if not completed[row]},
         )
     if snapshots is not None:
-        for row in ended:
-            episode = collector._episodes[row]
-            episode.fresh_ready = auto_reset and episode.branch is None
         plan = snapshots.plan
         if plan is None:
             snapshots.ready.extend(int(row) for row in ended if not completed[row])
@@ -2110,7 +2104,7 @@ def _settle_attempt(
     actions: list[int | str] = [] if completed else list(collector._game_actions[row])
     inputs = None
     if branch is not None and not completed:
-        if not getattr(collector._env, "auto_reset", True):
+        if hasattr(collector._env, "game_inputs"):
             inputs = collector._env.game_inputs(row)
             actions = inputs.actions
         else:

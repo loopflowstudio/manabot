@@ -247,19 +247,15 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
             method = {
                 "reset_each": "reset_each_into_buffers",
                 "reset_seeds": "reset_seeds_into_buffers",
-                "reassign_roots": "reassign_roots_into_buffers",
-                "replace_failed": "replace_failed_into_buffers",
-                "reassign_preparing": "current_game_seeds",
+                "load_slots": "load_slots_into_buffers",
             }[operation]
             vector.native = _ExitNative(vector.native, method)
             if operation == "reset_each":
                 vector.reset_each_into_buffers([_players(), _players()])
             elif operation == "reset_seeds":
                 vector.reset_seeds_into_buffers([31, 32])
-            elif operation in {"reassign_roots", "reassign_preparing"}:
-                vector.reassign_roots_into_buffers([list(reversed(_players())), None])
             else:
-                vector.replace_failed_into_buffers([True, False])
+                vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
     raise AssertionError("injected reset boundary was not reached")
 
 
@@ -271,9 +267,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
         ("reset_each", "prior"),
         ("reset_each", "first"),
         ("reset_seeds", "prior"),
-        ("reassign_roots", "prior"),
-        ("replace_failed", "prior"),
-        ("reassign_preparing", "prior"),
+        ("load_slots", "prior"),
     ],
 )
 def test_interrupted_reset_replays_prior_game_without_binding_claim(
@@ -284,16 +278,8 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
     evidence = read_record(cursor)
     boundary = evidence.boundary
     assert boundary is not None
-    assert boundary.phase == (
-        "preparing" if operation == "reassign_preparing" else "executing"
-    )
-    assert boundary.operation == (
-        "reset"
-        if operation == "scalar_reset"
-        else "reassign_roots"
-        if operation == "reassign_preparing"
-        else operation
-    )
+    assert boundary.phase == "executing"
+    assert boundary.operation == ("reset" if operation == "scalar_reset" else operation)
     assert not boundary.returned
     assert evidence.execution_outcome == "execution_outcome_unknown"
     assert [game.seed for game in evidence.games] == (
@@ -308,7 +294,7 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
         assert evidence.games[0].players[0].name == "a"
         assert boundary.proposed_players[0][0].name == "b"
     else:
-        assert not boundary.setup_known or operation.startswith("reassign")
+        assert not boundary.setup_known
         assert evidence.games[0].players[0].name in {
             player.name for player in _roster()
         }
@@ -561,7 +547,9 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         vector = RecordedVectorEnv(num_envs=2, seed=24)
         vector.set_buffers(_buffers(2), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
-        vector.reassign_roots_into_buffers([list(reversed(_players())), None])
+        vector.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(0, list(reversed(_players())))]
+        )
         cursor = next(_cursors(scope.journal_directory))
         reassigned = read_record(cursor)
         assert reassigned.games[0].players[0].name == "b"
@@ -570,18 +558,20 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         assert failed.boundary is not None and failed.boundary.returned
         assert failed.execution_outcome == "execution_outcome_unknown"
         assert replay_failure_inputs(failed)[0]["status"] == "failed"
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         replaced = read_record(cursor)
         assert replaced.games[0].actions == []
         assert replaced.games[1].actions == [0]
         assert (
             replaced.boundary is not None
-            and replaced.boundary.operation == "replace_failed"
+            and replaced.boundary.operation == "load_slots"
         )
         vector.close()
 
 
-def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) -> None:
+def test_explicit_refill_replaces_prefix_and_bounds_retained_files(
+    tmp_path: Path,
+) -> None:
     scope = CaptureScope(
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
@@ -597,6 +587,9 @@ def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) ->
         else:
             pytest.fail("tiny native game did not settle")
         cursor = next(_cursors(scope.journal_directory))
+        evidence = read_record(cursor)
+        assert evidence.games[0].seed == 24 and evidence.games[0].actions
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         evidence = read_record(cursor)
         assert evidence.games[0].seed == 25
         assert evidence.games[0].actions == []
