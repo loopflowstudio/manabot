@@ -97,6 +97,8 @@ Build in three slices (rationale and counterexamples in [the concept review](con
    - Defect: meld clauses (`OwnsMeldPair`/`ExileMeldPair`/`MeldExiled`) wrote Fang/Vanille/Ragnarok's printed names as text tokens (`test_learning_projection::test_tokens_are_the_engine_definition…` failed). `CARD_NAME_FIELDS` in `src/cards/tokens.rs` now writes them as definition references (witness `cards::tokens::tests::card_names_in_programs_are_definition_references_never_text`); `manabot/policy/catalog.py` inlines a referenced definition once per path instead of refusing the Fang↔Vanille cycle. Pinned pilot passes unchanged.
    - Academy fixtures refreshed with `scripts/refresh_academy_fixtures.py` (labels unchanged; catalog ids, digests, frame hashes moved).
    - Gate list on the rebuilt extension (incl. `tests/model`, trigger order, current-world list): 1013 passed, 18 skipped, 8 failed — the 8 fail identically at base (`questions.md`).
+   - Debug at `14b0ecdd70`: nextest `--profile ci` over lib, cards, `rules_tests`, `canonical_replay_tests`, `scenario_tests`: 1472 run, 2 skipped, all pass except the known base `observation_json::…historical_captures…` (the observability witness failure is fixed in `14b0ecdd70`, 77/77 rerun); `cargo fmt --check` clean.
+   - Next: `engine-optimization` (Measurement below), then `pr-publish`.
    - Taught: seed replay needs a journaled prefix, so no constructed fixture can replay from its seed; replay evidence comes from natural games (`questions.md` lists what keeps only native fork checks).
 
    The original pass description follows.
