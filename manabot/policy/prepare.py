@@ -520,6 +520,15 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class CompactAttention[A]:
+    """Place packed tokens into [batch, longest live sequence] for batched SDPA."""
+
+    batches: A
+    slots: A
+    key_mask: A  # [B,1,1,max_live], additive zero for a live key, -inf for padding
+
+
+@dataclass(frozen=True)
 class Prepared[A]:
     """One admitted observation batch, ready for a backend policy."""
 
@@ -574,8 +583,11 @@ class Prepared[A]:
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
     memory: MemoryRows[A] | None = None
-    live_index: A | None = None  # flat valid slots, including memory/value tokens
+    live_index: A | None = None  # flat valid slots, including the optional value token
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
+    compact_attention: CompactAttention[Array] | None = field(
+        default=None, metadata={"host_only": True}
+    )
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
@@ -746,9 +758,18 @@ def prepare(
         ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)
     if belief is not None:
         ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
-    present = validity != 0
-    if value_token:
-        present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
+    live_index = live_offsets = compact_attention = None
+    if live_tokens:
+        present = validity != 0
+        if value_token:
+            present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
+        live_index = np.flatnonzero(present)
+        lengths = present.sum(1)
+        live_offsets = np.concatenate(([0], lengths.cumsum()))
+        keys = np.arange(lengths.max(initial=0)) < lengths[:, None]
+        batches, slots = np.nonzero(keys)
+        mask = np.where(keys, f32(0), f32(-np.inf))
+        compact_attention = CompactAttention(batches, slots, mask[:, None, None, :])
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -829,10 +850,9 @@ def prepare(
         belief=belief,
         events=_events(obs, tables, objects, object_remap) if history else None,
         memory=memory,
-        live_index=np.flatnonzero(present) if live_tokens else None,
-        live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
-        if live_tokens
-        else None,
+        live_index=live_index,
+        live_offsets=live_offsets,
+        compact_attention=compact_attention,
     )
 
 

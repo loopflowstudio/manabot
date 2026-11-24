@@ -41,7 +41,7 @@ from manabot.backends.mlx.arrays import (
 )
 from manabot.backends.mlx.decision_memory import DecisionMemory
 from manabot.backends.mlx.gru import PackedGRU, packed_steps
-from manabot.backends.mlx.live_tokens import LiveTokens
+from manabot.backends.mlx.live_tokens import attend_live
 from manabot.backends.mlx.rl import (
     NumericalError,
     expected_outcome,
@@ -59,6 +59,7 @@ from manabot.policy.buckets import (
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
+    CompactAttention,
     EventRows,
     Packed,
     Prepared,
@@ -162,7 +163,7 @@ class ObjectAttention(nn.Module):
         sign: mx.array,
         mask: mx.array,
         keep: mx.array,
-        live: LiveTokens | None = None,
+        live: CompactAttention[mx.array] | None = None,
         summaries: mx.array | None = None,
     ) -> mx.array:
         """Attend over padded [B,N,D] or packed [L,D] objects. The sign is
@@ -182,7 +183,7 @@ class ObjectAttention(nn.Module):
         attended = (
             self.mha(attention_input, attention_input, attention_input, mask)
             if live is None
-            else live.attend(self.mha, attention_input)
+            else attend_live(self.mha, attention_input, live)
         )
         residual = owned + attended
         if self.pre_norm:
@@ -1115,13 +1116,18 @@ class MLXActorCritic(nn.Module):
                 count += 1
         shape = attended.shape
         live = None
+        index = None
         if batch.live_index is not None:
-            assert batch.live_offsets is not None
-            live = LiveTokens.from_offsets(batch.live_index, batch.live_offsets)
-            attended = attended.reshape(-1, shape[-1])[live.index]
-            sign = sign.reshape(-1, 1)[live.index]
+            compact = batch.compact_attention
+            assert compact is not None
+            index = mx.array(batch.live_index)
+            mask = mx.array(compact.key_mask, dtype=objects.dtype)
+            live = CompactAttention(
+                mx.array(compact.batches), mx.array(compact.slots), mask
+            )
+            attended = attended.reshape(-1, shape[-1])[index]
+            sign = sign.reshape(-1, 1)[index]
             keep = mx.array(1, dtype=objects.dtype)
-            mask = live.mask
         else:
             keep = attended_validity[..., None].astype(objects.dtype)
             mask = mx.where(attended_validity != 0, 0.0, -mx.inf).astype(objects.dtype)[
@@ -1132,9 +1138,9 @@ class MLXActorCritic(nn.Module):
         encoded_objects = (
             self.final_norm(attended) * keep if "final_norm" in self else attended
         )
-        if live is not None:
+        if index is not None:
             restored = mx.zeros((shape[0] * shape[1], shape[-1]), objects.dtype)
-            restored[live.index] = encoded_objects
+            restored[index] = encoded_objects
             return restored.reshape(shape)
         if columns is not None:
             # Restore the original coordinates; unused columns are zero.

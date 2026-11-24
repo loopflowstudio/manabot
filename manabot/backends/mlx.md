@@ -28,7 +28,7 @@ logits, values = policy.evaluate(policy.prepare(observation, inference=True))
 `prepare` checks it as the PyTorch policy does and builds the same `Prepared`
 batch (`manabot.policy.prepare`): every integer lookup (definition rows, record
 vocabulary, legal actions, packed GRU schedules, shared-effect routes, belief
-rows, recent events, decision-memory prefixes and live-token offsets) happens
+rows, recent events, decision-memory prefixes and live-token coordinates) happens
 on the host, so the MLX graph holds only gathers, scatters and arithmetic.
 `inference=True` drops the object and fact
 columns no row uses, exactly as PyTorch CPU inference does. `evaluate` returns
@@ -232,11 +232,11 @@ in the torch state dict:
   and shared-effect encoders;
 - optional `recent_events` and `decision_memory` (`gru` or `transformer`)
   encoders;
-- the optional attention stack (with `live_tokens=True` packing valid objects to
-  `[L, D]` across projections, norms, memory gating and MLP, and compacting
-  Q/K/V to `[B, H, max_live, d]` around fused
-  `mx.fast.scaled_dot_product_attention` from host `live_offsets` with zero
-  device sync);
+- the optional attention stack. With `live_tokens=True`, projections, norms,
+  memory gating and the MLP operate on `[L, D]` packed objects. Fused
+  `mx.fast.scaled_dot_product_attention` uses `[B, H, max_live, d]` Q/K/V.
+  Each forward reuses the compact batch and slot coordinates and additive
+  key mask stored in `Prepared`.
 - action heads, name candidates and the scalar or `categorical_wdl` critic with
   every `value_aggregation` mode.
 

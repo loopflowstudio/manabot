@@ -331,17 +331,18 @@ but slow: at w160l8 a 256-row collection forward took about 0.86 s against
 ([measurement](../experiments/reports/eval_forward_layout.md)). On MLX, every
 per-object layer runs on packed `[L, D]` tokens and, around
 `mx.fast.scaled_dot_product_attention` only, Q/K/V are compacted to
-`[B, H, max_live, d]` using host-derived offsets (complexity `O(B * max_live^2)`,
-zero device sync). Self-play therefore admits `live_tokens` per backend in
+`[B, H, max_live, d]` using the prepared batch and slot coordinates, for
+`O(B * max_live^2)` attention. A broadcast key mask excludes the shorter
+sequences' padding. Self-play admits `live_tokens` per backend in
 `backend.runtime.admit_execution` before opening a run, rather than in
 `SelfPlay` settings validation: Torch refuses `live_tokens=True` when
 `device != "cuda"` (`live tokens require CUDA on the torch backend`), while
 MLX accepts `live_tokens=True` on both `mps` and `cpu`.
 
-Packing needs one host read per forward, the batch's total number of valid
-objects, to size the packed sequence. The policy's `prepare` measures it on the
-host with the token offsets, as it does bucket sizes, for collection and
-learning alike, so the device forward reads nothing back.
+For both collection and learning, `prepare` measures the live lengths on the
+host once per batch. Torch uses the flat object index and sequence offsets.
+MLX reuses the compact coordinates and key mask on each forward without a
+device readback.
 
 The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either

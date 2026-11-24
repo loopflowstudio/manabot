@@ -59,3 +59,12 @@
 - The memory gate is a rank-zero checkpoint parameter. NumPy's
   `ascontiguousarray` promotes it to shape `(1,)`; requesting C order in
   `asarray` preserves the scalar through the MLX checkpoint mapping.
+
+## Slice 5
+
+- Used the compact key mask's row-major live positions for the batch and slot
+  coordinates. The shorter-board fixture checked that each packed index,
+  including the critic token, maps to its original board.
+- The preparation file, four unequal-length memory parity cases and both CPU
+  and MPS memory warm starts passed together on Apple Silicon (36 tests in
+  66.78 seconds).

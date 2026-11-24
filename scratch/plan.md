@@ -25,19 +25,11 @@ prefix identity and native epoch even when branches share record nodes.
 2. **Done (`ec62204d49`)** — Remaining critic readouts, attention off, and shared categorical returns with seven architecture parity cases.
 3. **Done (`a95bdce183`)** — Belief-row parity, portable samplers, legacy Torch reads, and linked Torch-blocked policy and sampler jobs.
 4. **Done (`230c18b879`, evidence in `dc864d6c9f`)** — History encoders, shared GRU serving cache, packed live-token attention, backend device admission and memory warm starts.
+5. **Done** — Host preparation stores compact attention coordinates and the additive key mask in `Prepared`. MLX reuses them across forwards. Torch transfers the flat index and offsets and keeps the compact schedule on the host.
 
-## Next — Prepare packed attention coordinates once
+## Next — Apple Silicon gate
 
-`manabot/policy/prepare.py` currently prepares the flat live index and sequence
-offsets. `LiveTokens.from_offsets` in `manabot/backends/mlx/live_tokens.py`
-still derives packed batch and slot coordinates and the additive key mask
-inside each forward. Move that derivation into host preparation so repeated
-forwards of one `Prepared` reuse it. Keep the MLX compact schedule on the host
-through Torch transfer and preserve Torch's existing index and offsets.
-Remove the reconstruction from the MLX forward. Check the schedule in
-`tests/model/test_prepare_rows.py` and run the existing unequal-length
-live-token parity and memory warm-start cases in
-`tests/model/test_mlx_backend.py`.
+Run the full backend suite and captured parity check below.
 
 ## Acceptance
 
