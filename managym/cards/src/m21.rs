@@ -10,10 +10,57 @@ use managym_state::{
     },
     effect::Modification,
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![heartfire_immolator(), sanguine_indulgence()]
+    vec![heartfire_immolator(), mazemind_tome(), sanguine_indulgence()]
+}
+
+fn mazemind_tome() -> CardDefinition {
+    let text_box = "{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{2}, {T}, Put a page counter on this artifact: Draw a card.\nWhen there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.";
+    let page = Some((CounterKind::Page, 1));
+    CardDefinition {
+        key: "m21.mazemind_tome",
+        scryfall_id: "9fd761f3-6b43-4150-8595-dc3abd85b06c",
+        printed: PrintedCharacteristics {
+            name: "Mazemind Tome".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Book".into()],
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    add_counters: page,
+                    effects: vec![Effect::Scry { count: 1 }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{2}"),
+                    tap_source: true,
+                    add_counters: page,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+            ],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::State(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Page,
+                    count: 4,
+                }),
+                effects: vec![
+                    Effect::exile(ObjectSelector::This),
+                    Effect::if_you_do(vec![Effect::gain_life(4)]),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn sanguine_indulgence() -> CardDefinition {

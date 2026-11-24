@@ -105,6 +105,9 @@ pub enum CostComponent {
     /// paid rather than its other cost.
     Life(u32),
     RemoveCounters(CounterKind, u16),
+    /// "Put N [kind] counters on this" (CR 118.3): always payable while the
+    /// source is on the battlefield.
+    AddCounters(CounterKind, u16),
     /// What the source itself pays: its own {T} (`Tapped`), "sacrifice this"
     /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
     /// functions from hand, "discard this card" (`Discarded`).
@@ -547,6 +550,9 @@ impl Game {
                 if let Some((kind, count)) = ability.remove_counters {
                     owed.push(CostComponent::RemoveCounters(kind, count));
                 }
+                if let Some((kind, count)) = ability.add_counters {
+                    owed.push(CostComponent::AddCounters(kind, count));
+                }
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
@@ -904,6 +910,7 @@ impl Game {
             }
             CostComponent::Life(_)
             | CostComponent::RemoveCounters(..)
+            | CostComponent::AddCounters(..)
             | CostComponent::Source(_)
             | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
@@ -1071,6 +1078,16 @@ impl Game {
                             target: source_object,
                             kind,
                             delta: -i32::from(count),
+                            by: Some(player),
+                        });
+                        continue;
+                    }
+                    if let CostComponent::AddCounters(kind, count) = *component {
+                        source_costs.push(ProposedEvent::CounterChange {
+                            provenance: CounterProvenance::new(EventCause::Cost),
+                            target: source_object,
+                            kind,
+                            delta: i32::from(count),
                             by: Some(player),
                         });
                         continue;

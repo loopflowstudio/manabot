@@ -679,6 +679,7 @@ impl ActivatedAbilityDefinition {
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
             || self.remove_counters.is_some()
+            || self.add_counters.is_some()
             || self.source_leaves()
             || self.sacrifice.is_some()
             || self.discard_source
@@ -818,6 +819,10 @@ pub struct ActivatedAbilityDefinition {
     pub tap_cost: Option<TapCost>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remove_counters: Option<(CounterKind, u16)>,
+    /// "Put N [kind] counters on this" as an activation cost (CR 118.3,
+    /// 602.2b): paid with the other costs, before the ability is on the stack.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add_counters: Option<(CounterKind, u16)>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,

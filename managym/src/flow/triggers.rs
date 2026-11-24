@@ -75,12 +75,15 @@ impl serde::Serialize for TriggerSourceSnapshot {
     }
 }
 
-/// A set of `EventKind`s, one bit per variant.
+/// A set of `EventKind`s, one bit per variant, and a bit of its own for
+/// state triggers (CR 603.8), which are asked of their source, never an
+/// event.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct EventKinds(u32);
 
 impl EventKinds {
     const NONE: Self = Self(0);
+    const STATE_TRIGGER: Self = Self(1 << 31);
 
     fn of(kind: EventKind) -> Self {
         Self(1 << kind as u32)
@@ -116,9 +119,10 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
-        // Indexed with counter changes; `check_state_triggers` asks it, never
-        // an event.
-        TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
+        // `check_state_triggers` asks these, never an event.
+        TriggerCondition::NoCounters { .. } | TriggerCondition::State(_) => {
+            EventKinds::STATE_TRIGGER
+        }
         TriggerCondition::Casts { .. }
         | TriggerCondition::Expend(_)
         | TriggerCondition::YouCastThis
@@ -1447,7 +1451,7 @@ impl Game {
     /// unless that exact source's occurrence is still waiting or on the stack.
     fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
-        for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
+        for source in self.indexed_sources(EventKinds::STATE_TRIGGER) {
             let Some(permanent) = self
                 .state
                 .permanent_of(source.lki.object)
@@ -1455,25 +1459,27 @@ impl Game {
             else {
                 continue;
             };
+            if source.lki.abilities_lost {
+                continue;
+            }
             let face = self
                 .source_face(source.lki.object, source.lki.definition_id)
                 .expect("source face");
+            let object = Some(source.lki.object);
             for (ability_index, ability) in face.abilities.iter().enumerate() {
-                let Ability::Triggered {
-                    condition: TriggerCondition::NoCounters { kind },
-                    ..
-                } = ability
-                else {
-                    continue;
+                let Ability::Triggered { condition, .. } = ability;
+                let holds = match condition {
+                    TriggerCondition::NoCounters { kind } => permanent.counter_count(*kind) == 0,
+                    TriggerCondition::State(condition) => self.condition_holds(
+                        condition,
+                        source.lki.controller,
+                        None,
+                        object,
+                        None,
+                    ),
+                    _ => continue,
                 };
-                let object = Some(source.lki.object);
-                let waiting = self.state.pending_triggers.iter().any(|trigger| {
-                    trigger.source_ref() == object && trigger.ability_index == ability_index
-                }) || self.state.stack_objects.iter().any(|item| {
-                    matches!(item, StackObject::TriggeredAbility(trigger)
-                        if trigger.source_ref() == object && trigger.ability_index == ability_index)
-                });
-                if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
+                if holds && !self.state_trigger_waiting(object, ability_index) {
                     fired.push((source.clone(), ability_index));
                 }
             }
@@ -1506,6 +1512,22 @@ impl Game {
                 inline_effects: None,
             });
         }
+    }
+
+    /// CR 603.8: a state trigger doesn't trigger again while that exact
+    /// source's occurrence waits to be put on the stack or is on it.
+    fn state_trigger_waiting(&self, source: Option<ObjectId>, ability_index: usize) -> bool {
+        let same = |trigger: &PendingTrigger| {
+            trigger.source_ref() == source && trigger.ability_index == ability_index
+        };
+        let placing = self.state.trigger_placement.as_deref().into_iter().flat_map(|placement| {
+            placement.remaining.iter().chain(placement.placing.as_ref())
+        });
+        self.state.pending_triggers.iter().chain(placing).any(same)
+            || self.state.stack_objects.iter().any(|item| {
+                matches!(item, StackObject::TriggeredAbility(trigger)
+                    if trigger.source_ref() == source && trigger.ability_index == ability_index)
+            })
     }
 
     /// "When you cast this spell" abilities of the spell just cast; the spell
@@ -1852,7 +1874,12 @@ impl Game {
             }
             // `check_state_triggers` and `cast_triggers` own these; a
             // battlefield source never fires them from an event.
-            (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
+            (
+                TriggerCondition::NoCounters { .. }
+                | TriggerCondition::State(_)
+                | TriggerCondition::YouCastThis,
+                _,
+            ) => false,
             (
                 TriggerCondition::SpellTargetsOnlyThis { predicate },
                 GameEvent::SpellCast {

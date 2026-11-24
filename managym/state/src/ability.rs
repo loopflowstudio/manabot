@@ -96,6 +96,12 @@ pub enum TriggerCondition {
     NoCounters {
         kind: CounterKind,
     },
+    /// "When [condition]": a state trigger (CR 603.8) of a battlefield
+    /// source, asked of its source rather than an event ("When there are
+    /// four or more page counters on Mazemind Tome"). It triggers whenever
+    /// the condition holds and not again while its last occurrence waits or
+    /// is on the stack.
+    State(Condition),
     /// "When you cast this spell" (CR 603.2): functions while the source is
     /// a spell on the stack, and its caster controls the trigger.
     YouCastThis,

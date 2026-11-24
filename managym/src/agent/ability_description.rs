@@ -128,6 +128,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::NoCounters { kind } => {
             format!("When this has no {} counters on it", counter_description(*kind))
         }
+        TriggerCondition::State(condition) => {
+            format!("When {}", condition_text("this", condition))
+        }
         TriggerCondition::SpellTargetsOnlyThis { predicate } => format!(
             "Whenever a player casts a {} that targets only this",
             predicate_description(predicate, "spell")

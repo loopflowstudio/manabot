@@ -8187,5 +8187,17 @@
       "B",
       "G"
     ]
+  },
+  "Mazemind Tome": {
+    "name": "Mazemind Tome",
+    "mana_cost": "{2}",
+    "type_line": "Artifact — Book",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{2}, {T}, Put a page counter on this artifact: Draw a card.\nWhen there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.",
+    "colors": []
   }
 }

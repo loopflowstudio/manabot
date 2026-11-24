@@ -269,6 +269,7 @@ impl Game {
                     | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
                     | CostComponent::RemoveCounters(..)
+                    | CostComponent::AddCounters(..)
                     | CostComponent::Source(_)
                     | CostComponent::ExileGrantor(_) => None,
                 });
@@ -955,6 +956,7 @@ impl Game {
             ),
             CostComponent::Life(_)
             | CostComponent::RemoveCounters(..)
+            | CostComponent::AddCounters(..)
             | CostComponent::Source(_)
             | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")

@@ -42,6 +42,11 @@ pub enum CounterKind {
     Poison,
     Plan,
     Incubation,
+    /// No rules meaning of their own; cards count them (Mazemind Tome,
+    /// Ravenous Amulet, Fishing Pole).
+    Page,
+    Soul,
+    Bait,
 }
 
 impl CounterKind {
@@ -65,6 +70,9 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Incubation => "incubation",
+            CounterKind::Page => "page",
+            CounterKind::Soul => "soul",
+            CounterKind::Bait => "bait",
             CounterKind::Charge => "charge",
         }
     }
@@ -77,7 +85,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 18] = [
+    pub const ALL: [CounterKind; 21] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -96,6 +104,9 @@ impl CounterKind {
         CounterKind::Poison,
         CounterKind::Plan,
         CounterKind::Incubation,
+        CounterKind::Page,
+        CounterKind::Soul,
+        CounterKind::Bait,
     ];
 }
 

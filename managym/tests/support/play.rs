@@ -886,12 +886,14 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
     );
 }
 
-/// Answer the sole stacked ability with a scenario permanent's counter ability.
+/// Answer the topmost stacked ability with a scenario permanent's counter
+/// ability.
 pub fn counter_stacked_ability(s: &mut Scenario) {
     use managym::state::{
         ability::{Effect, ObjectSelector, TargetSpec},
         card::ActivatedAbilityDefinition,
     };
+    let top = Target::StackAbility(s.game().state.stack_objects.last().unwrap().id());
     let seat = s.action_space().player.unwrap().0;
     let source = s.force_permanent_on_battlefield(seat, "Gray Ogre");
     let object = card_of(s, source);
@@ -904,8 +906,7 @@ pub fn counter_stacked_ability(s: &mut Scenario) {
             ..Default::default()
         });
     activate(s, source, 0);
-    let targets = crate::support::inspect::offered_targets(s);
-    assert!(matches!(targets.as_slice(), [Target::StackAbility(_)]));
-    assert!(s.choose_target(targets[0]));
+    assert!(crate::support::inspect::offered_targets(s).contains(&top));
+    assert!(s.choose_target(top));
     settle(s);
 }

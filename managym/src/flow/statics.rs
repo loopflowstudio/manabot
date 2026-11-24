@@ -853,7 +853,7 @@ impl Game {
     /// The source questions read `source`, the ability's exact object, which
     /// answers nothing once it has left the battlefield; the triggering
     /// questions read `triggering`, as it is or last existed.
-    fn condition_holds(
+    pub(crate) fn condition_holds(
         &self,
         condition: &Condition,
         controller: PlayerId,

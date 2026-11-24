@@ -2707,14 +2707,19 @@ impl Game {
             self.tap_permanent(permanent, true);
             tapped = Some(self.tapped_for_mana(permanent));
         }
-        if let (Some((kind, count)), Some(target)) =
-            (ability.remove_counters, self.permanent_object(permanent))
-        {
+        let counter_costs = [
+            ability.remove_counters.map(|(kind, count)| (kind, -i32::from(count))),
+            ability.add_counters.map(|(kind, count)| (kind, i32::from(count))),
+        ];
+        for (kind, delta) in counter_costs.into_iter().flatten() {
+            let Some(target) = self.permanent_object(permanent) else {
+                break;
+            };
             self.apply_immediate_event(ProposedEvent::CounterChange {
                 provenance: CounterProvenance::new(EventCause::Cost),
                 target,
                 kind,
-                delta: -i32::from(count),
+                delta,
                 by: Some(player),
             });
         }

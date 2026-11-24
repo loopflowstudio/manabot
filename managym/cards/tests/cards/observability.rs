@@ -1131,6 +1131,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Expend(_) => "TriggerCondition::Expend",
         TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
+        TriggerCondition::State(_) => "TriggerCondition::State",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
@@ -1269,6 +1270,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::NoCounters {
             kind: CounterKind::Ice,
         },
+        TriggerCondition::State(Condition::SourceCountersAtLeast {
+            kind: CounterKind::Page,
+            count: 4,
+        }),
         TriggerCondition::WhileSourceAttacking {
             condition: Box::new(TriggerCondition::casts(
                 Actor::You,
