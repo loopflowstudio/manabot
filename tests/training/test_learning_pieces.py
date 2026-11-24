@@ -203,7 +203,7 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
 
 
 def test_legacy_torch_step_recorder_names_shared_protocol() -> None:
-    with pytest.warns(DeprecationWarning, match="removal in 0.4.0"):
+    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
         from manabot.backends.torch.learner import StepRecorder as LegacyRecorder
 
     assert LegacyRecorder is StepRecorder

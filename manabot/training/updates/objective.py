@@ -6,7 +6,7 @@ logical minibatch. Both operate directly on the learner's differentiable arrays.
 This module can also be used independently of game, rollout and model code.
 """
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol
 
 from manabot.training.updates.decision_weights import actor_term, critic_term
 
@@ -15,7 +15,7 @@ type Array = Any
 
 
 class LossTerms(Protocol):
-    """Framework operations composing the actor and scalar critic objective."""
+    """Framework operations composing the actor and critic objective."""
 
     def float64_operand(self, tensor: Array) -> Array: ...
 
@@ -39,6 +39,8 @@ class LossTerms(Protocol):
 
     def squared_value_loss(self, values: Array, targets: Array) -> Array: ...
 
+    def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
+
     def check_logs(self, logs: Array, valid: Array) -> None: ...
 
     def check_probabilities(
@@ -50,11 +52,6 @@ class LossTerms(Protocol):
     def weighted_sum(self, values: Array, weights: Array) -> Array: ...
 
     def selected_mean(self, values: Array, selected: Array) -> Array: ...
-
-
-@runtime_checkable
-class CategoricalValueLoss(Protocol):
-    def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
 
 
 def damped_policy_loss(
@@ -171,10 +168,6 @@ def minibatch_objective(
         weights,
     )
     if categorical:
-        if not isinstance(rl, CategoricalValueLoss):
-            raise TypeError(
-                f"{getattr(rl, '__name__', type(rl).__name__)} has no categorical critic"
-            )
         value_rows = rl.categorical_value_loss(value_logits, value_targets)
     else:
         # Representation ablation, not the paper's outcome objective.

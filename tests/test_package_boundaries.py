@@ -562,6 +562,7 @@ _BACKEND_ENTRYPOINTS = {
     "manabot/recipes/elemental.py": {"train"},
     "manabot/recipes/local.py": {"train"},
     "manabot/training/loops/self_play.py": {"default_backend"},
+    "manabot/recipes/belief_policy.py": {"train"},
     "manabot/recipes/belief_sampler.py": {"train"},
     "manabot/reports/belief.py": {"main"},
     "manabot/verify/checkpoint_scenarios.py": {"main"},
@@ -691,7 +692,7 @@ with warnings.catch_warnings(record=True) as seen:
     import academy.server as old
     import managym.academy.server as current
 assert old is current
-assert any('0.4.0' in str(row.message) for row in seen)
+assert any('0.3.0' in str(row.message) for row in seen)
 """
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 

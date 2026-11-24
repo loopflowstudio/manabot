@@ -39,10 +39,11 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
-Every observation batch is prepared once, on the host, before any forward:
-`agent.prepare(obs)` checks shapes, references, programs and the legal-action
-mask of the NumPy buffers, does every integer lookup and returns a `Prepared`
-batch, the same one every [backend](../manabot/backends/README.md) reads. The
+Before a forward, `agent.prepare(obs)` admits the input on the host and
+builds the integer lookups in a `Prepared` batch shared by every backend.
+For a dense mapping it checks shapes, references, programs and legal-action
+masks. For a native v11 batch it reads the exact spans and checks the
+model layout and vocabulary. The
 forward reads only a prepared batch on its device, raises `TypeError` for an
 observation dictionary and does no validation or lookups of its own
 ([observation admission](../manabot/model/agent.md#observation-admission)).
@@ -212,19 +213,23 @@ checkpoint therefore computes what it did. The field cannot be changed on a
 trained model, since it adds parameters and moves the norms. The `baseline`
 and Elemental self-play recipes set it; frozen recipes and experiment files
 are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
-refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
+supports both `stream_norm` and `focus_film` with matching weights and outputs.
 
 ### Bucketed padding
 
-Each buffer arrives padded to its declared capacity, but a real batch uses
-little of it. Across 300 captured collection batches the median batch needed 59
+A dense observation mapping reserves the declared capacity of every table.
+A v11 `managym.ObservationBatch` carries each table's typed live rows with int32
+offsets. Its native record fields keep integer joins and full signed words exact
+through vocabulary lookup. Both transports use the same logical object and
+action coordinates and saved numeric readings. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding is the default for CUDA training. The host measures the last
-occupied or referenced row on each variable axis, including actions, objects
-and effect spans. It rounds each extent up to a power of two, with a minimum
+Bucketed padding is the default for CUDA training. For a native batch the
+host takes per-axis counts from the offsets. For an external mapping it
+measures the last occupied or referenced row on each variable axis, including
+actions, objects and effect spans. It rounds each extent up to a power of two, with a minimum
 of 8 rows and a maximum of the declared capacity. Admission validates these
 prefixes in the original object coordinates. Raw buffers keep those coordinates
 throughout collection and learning. Preparation translates the integer gathers
@@ -232,9 +237,11 @@ into the trimmed object table. Models with belief rows or
 `historical_mean` value aggregation keep the full object table. Logits retain
 the original action slots.
 
-Torch and MLX collection borrow the original group or a contiguous slice
-while preparing it. Both sample once in the original row order and keep the
-measured extents on the host. The learner checks the
+Torch and MLX prepare v11 decisions from the live spans of each selected
+stream. A masked step can leave several native batches represented in the
+same group. Both backends sample once in original group order, even when
+preparation splits it across execution chunks. The rollout retains the
+collection extents and shares immutable decision-memory prefixes. The learner checks the
 current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.
@@ -270,13 +277,16 @@ The baseline recipe does this when its `device` is `cuda` and
 `padded_shapes` is false; to compare the paths on CUDA, run it with
 `--config '{"device": "cuda", "padded_shapes": true}'`
 ([run training](training.md#run-training)). Nothing resolves the switches
-from the device: `live_tokens=True` off CUDA fails validation, and bucketed
-shapes may be written explicitly on CPU or MPS, where they are slower to
-learn, as described above.
+from the device: self-play checks `live_tokens` per backend at run admission
+(CUDA-only on Torch; `mps` and `cpu` on MLX), and bucketed shapes may be
+written explicitly on CPU or MPS, where they are slower to learn on Torch CPU,
+as described above.
 
 The loop's collection and learner policies use the settings' layout. Code
-that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
-off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
+that builds a policy outside a loop chooses it itself: `ActorCritic(...)`,
+`MLXActorCritic(...)`, `load_checkpoint(...)` and `backend.load_policy(...)`
+default both switches to off; pass `bucketed_shapes=True` or `live_tokens=True`
+to enable them.
 [Served evaluation](evaluation.md#shared-inference) accepts both switches and
 leaves them off: its batches are small, and the padded forward was the faster
 one there. Search players load their policies padded.
@@ -320,26 +330,34 @@ names. The catalog encoder, shared-effect routing, fact programs and the action
 head run as they do without the setting; with `bucketed_shapes=True` their axes
 are still trimmed to buckets.
 
-Attention within each observation uses `scaled_dot_product_attention` on
-jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
-CPU it falls back to one attention call per observation, which is correct but
-slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
-padded on a laptop CPU
-([measurement](../experiments/reports/eval_forward_layout.md)). A stage therefore uses
-live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
-`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
-as a reduced precision does.
+On Torch, attention within each observation uses `scaled_dot_product_attention`
+on jagged nested tensors. On CUDA that runs the fused variable-length kernels;
+on CPU it falls back to one attention call per observation, which is correct
+but slow: at w160l8 a 256-row collection forward took about 0.86 s against
+0.46 s padded on a laptop CPU
+([measurement](../experiments/reports/eval_forward_layout.md)). On MLX, every
+per-object layer runs on packed `[L, D]` tokens and, around
+`mx.fast.scaled_dot_product_attention` only, Q/K/V are compacted to
+`[B, H, max_live, d]` using the prepared batch and slot coordinates, for
+`O(B * max_live^2)` attention. A broadcast key mask excludes the shorter
+sequences' padding. Self-play admits `live_tokens` per backend in
+`backend.runtime.admit_execution` before opening a run, rather than in
+`SelfPlay` settings validation: Torch refuses `live_tokens=True` when
+`device != "cuda"` (`live tokens require CUDA on the torch backend`), while
+MLX accepts `live_tokens=True` on both `mps` and `cpu`.
 
-Packing needs one host read per forward, the batch's total number of valid
-objects, to size the packed sequence. The policy's `prepare` measures it on the
-host with the token offsets, as it does bucket sizes, for collection and
-learning alike, so the device forward reads nothing back.
+For both collection and learning, `prepare` measures the live lengths on the
+host once per batch. Torch uses the flat object index and sequence offsets.
+MLX reuses the compact coordinates and key mask on each forward without a
+device readback.
 
 The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either
 may be on without the other. Code that builds a policy directly passes
-`ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
-which allow it on any device so CPU tests can compare the layouts. Like
+`ActorCritic(..., live_tokens=True)`, `MLXActorCritic(..., live_tokens=True)`,
+`load_checkpoint(..., live_tokens=True)` or
+`backend.load_policy(..., live_tokens=True)`, which allow it on CPU so tests
+and `.to("cuda")` callers can compare or move the layouts. Like
 bucketed shapes, it changes no model, checkpoint or input contract. Action
 probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
@@ -554,7 +572,7 @@ definition/reference after the source leaves. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
-compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+compatibility aliases, warn, and are removed in 0.3.0. Frozen viewer JSON
 keeps its existing fields and bytes; those wire records are normalized on read.
 Historical captures whose object identity is missing or ambiguous are refused.
 Academy's retained `base_power`/`base_toughness` fields still mean effective
@@ -574,7 +592,7 @@ Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
 stack spell was also a card row, permanent rows (38 columns) had no
 characteristics and stack abilities had no row. Selecting v9 or v10 warns
 (`DeprecationWarning`). They are removed once a v11 player is at least as
-strong as the strongest v9 one, and not before 0.4.0. Their rows are rebuilt from
+strong as the strongest v9 one, and not before 0.3.0. Their rows are rebuilt from
 the same observation by `agent/legacy_input.rs` and
 `manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
 byte; the model reads them through the same `ActorCritic`, without a stack
@@ -901,7 +919,7 @@ changed colors and keyword-counter timestamps; members keep one-based public
 object joins, and duplicate memberships survive. No rules record is deleted or
 semantically coalesced. The layout, routing and sum/normalization tradeoff are
 in the torch backend's shared-effect encoder
-([`manabot/backends/torch/_shared_effects.py`](../manabot/backends/torch/_shared_effects.py)) and
+([`manabot/backends/torch/shared_effects.py`](../manabot/backends/torch/shared_effects.py)) and
 [shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
 is an engineering result; it establishes no learning-quality advantage.
 
@@ -974,10 +992,10 @@ positions represented once). Deprecated inputs v9/v10 omit these facts and prese
 so their checkpoints never read them.
 
 The encoder writes definition joins and one-based positions. Prepared resolves definitions once and weights each by the
-reciprocal of its one-based position. Torch projects this separate pooled
-vector, divided by 60, before adding it to hand and decklist knowledge, so a
-known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
-these rows do not extend the deprecated layout. It is a minimal live
+reciprocal of its one-based position. Both Torch and MLX project this separate
+pooled vector, divided by 60, before adding it to hand and decklist knowledge,
+so a known top card and a known hand card have distinct representations;
+these rows do not extend the deprecated v9/v10 layout. It is a minimal live
 read, with no measured claim about learning or an ability to infer joint
 constraints. The text observation states each exact position in words.
 
@@ -1003,8 +1021,8 @@ complete decision history, and no training benefit has been measured.
 
 ## Whole-game decision memory
 
-**Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
-encoders are implemented with bounded execution rows. Memory stays opt-in.
+**Unreleased.** Whole-game native logs, shared immutable prefixes, and Torch
+and MLX encoders are implemented with bounded execution rows. Memory stays opt-in.
 The [cost report](../experiments/opponent_memory.md) records the current
 suffix A40 calibration: control costs 1.105× incumbent time and GRU-K1 1.201×. These are exploratory cost measurements;
 matched training and paired strength evaluation have not run. These CUDA receipts
@@ -1034,7 +1052,7 @@ capture even for a log-only control. Direct native callers opt in with
 `decision_memory_include_own=True` also enables it. Search clones retain existing
 facts and never append hypothetical decisions.
 
-To let a Torch policy use the opponent's earlier choices, select an encoder and
+To let a policy use the opponent's earlier choices, select an encoder and
 one or four summaries in its model configuration:
 
 ```python
@@ -1138,8 +1156,12 @@ width 64 and projects its final valid state to the selected summaries. Both
 return zero summaries for an empty history. Record embeddings use absolute
 ordinal and span features. The GRU reads their chronological order; the
 transformer adds a learned projection of prefix-relative recency (rank / 128)
-as a sequence position signal, outside the shared record embedding. Memory
-requires the Torch backend; MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
+as a sequence position signal, outside the shared record embedding. Both the
+Torch and MLX backends support both decision-memory encoders (`gru` and
+`transformer`, 1 or 4 summaries) and control-trunk branching. During
+collection, both GRU encoders can reuse stable records for the same viewer
+prefix and native epoch. A restored branch can share record content while
+requiring a fresh recurrent state. The latest record is recomputed on every draw.
 
 ### What a record means
 
@@ -1498,6 +1520,6 @@ this proof first.
 | Observation space and layout | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
-| Recent events | [`manabot/backends/torch/_recent_events.py`](../manabot/backends/torch/_recent_events.py) |
-| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/_semantic_cards.py`](../manabot/backends/torch/_semantic_cards.py) |
+| Recent events | [`manabot/backends/torch/recent_events.py`](../manabot/backends/torch/recent_events.py) |
+| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/semantic_cards.py`](../manabot/backends/torch/semantic_cards.py) |
 | Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

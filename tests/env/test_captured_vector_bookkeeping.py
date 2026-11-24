@@ -7,7 +7,11 @@ import torch
 from manabot import managym
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    step_buffers,
+)
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from managym.recording import GameRecord
@@ -33,8 +37,8 @@ def _captured(
         opponent_policy=opponent_policy,
     )
     space = ObservationSpace()
-    buffers = allocate_vector_buffers(space, 1)
-    vector.set_buffers(buffers, layout=space.layout)
+    buffers = step_buffers(1)
+    vector.set_observation_layout(buffers, layout=space.layout)
     return vector, buffers
 
 
@@ -301,7 +305,7 @@ def test_captured_vector_deprecated_alias_warns_and_resolves() -> None:
     import manabot.env.failures as failures
     import managym.recording as recording
 
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert recording.CapturedVector is recording.RecordedVectorEnv
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert failures.CapturedVector is failures.RecordedVectorEnv

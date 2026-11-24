@@ -25,25 +25,23 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from manabot.backends.torch._continuation import ContinuationEncoder
-from manabot.backends.torch._decision_memory import CollectionMemory, DecisionMemory
-from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
-from manabot.backends.torch._name_candidates import NameCandidateEncoder
-from manabot.backends.torch._numerics import buffer_on
-from manabot.backends.torch._recent_events import RecentEventEncoder
-from manabot.backends.torch._semantic_cards import (
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
+from manabot.backends.torch.continuation import ContinuationEncoder
+from manabot.backends.torch.decision_memory import DecisionMemory
+from manabot.backends.torch.facts import FactEncoder, RecordVocabulary
+from manabot.backends.torch.live_tokens import LiveTokens
+from manabot.backends.torch.name_candidates import NameCandidateEncoder
+from manabot.backends.torch.numerics import buffer_on
+from manabot.backends.torch.recent_events import RecentEventEncoder
+from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
-
-# Local imports
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
-from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.rl import NumericalError
-from manabot.belief.range import BeliefError
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
+    PolicyObservation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
@@ -56,9 +54,15 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
+from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
 import managym
 
 if TYPE_CHECKING:
@@ -144,28 +148,7 @@ class ActorCritic(nn.Module):
         )
         self.logger = getLogger(__name__)
 
-        if (
-            config.decision_memory != "none"
-            and not observation_space.config.max_decision_records
-        ):
-            raise ValueError(
-                "decision-memory model requires explicit observation capacities"
-            )
-        if config.decision_memory != "none" and not config.catalog_records():
-            raise ValueError("decision memory requires a catalog world")
-        if config.decision_memory != "none" and not observation_space.one_token:
-            raise ValueError("decision memory requires policy input v11")
-        if config.recent_events and (
-            config.world is None or observation_space.config.policy_history_version != 1
-        ):
-            raise ValueError("recent events require world and policy_history_version=1")
-        if (
-            not config.recent_events
-            and observation_space.config.policy_history_version != 0
-        ):
-            raise ValueError(
-                "history observation contract requires recent_events ActorCritic"
-            )
+        admission.history_config(config, observation_space)
         # A model built without a checkpoint reads its inputs by kind.
         self.readings: Readings = (
             fresh_readings(observation_space) if readings is None else readings
@@ -453,29 +436,7 @@ class ActorCritic(nn.Module):
 
     def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
         """Admit a host belief vocabulary against this policy's input embeddings."""
-        if self.belief_count_buckets != belief_schema.count_buckets:
-            raise BeliefError("ActorCritic and belief encoding count buckets differ")
-        if self.belief_card_embedding is None:
-            raise BeliefError(
-                "Manabot requires an ActorCritic with belief input enabled"
-            )
-        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
-        if maximum_card_id >= self.belief_card_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
-        if self.belief_owner_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
-        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
-        if maximum_owner_id >= self.belief_owner_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic owner-role vocabulary"
-            )
-        if self.belief_zone_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
-        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
-        if maximum_zone_id >= self.belief_zone_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
-            )
+        belief_schema.admit_model(self.config)
 
     def _binding(self) -> str:
         return self._binding_cache.get(
@@ -515,7 +476,7 @@ class ActorCritic(nn.Module):
 
     def prepare(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         memory_roots: Mapping[str, int] | None = None,
@@ -524,14 +485,19 @@ class ActorCritic(nn.Module):
         bucketed, tables = self._admit_observation(obs)
         return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
-    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
+    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
         bucketed, _ = self._admit_observation(obs)
         return None if bucketed is None else bucketed.needs
 
     def _admit_observation(
-        self, obs: ObservationBuffers
-    ) -> tuple[BucketedObservation | None, Tables]:
+        self, obs: PolicyObservation
+    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
+        spec = self._admission_spec()
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            return admission.admit_native(
+                obs, spec, bucketed=self.bucketed_shapes
+            ), spec.tables
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -540,16 +506,18 @@ class ActorCritic(nn.Module):
             failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
             raise NumericalError(
                 "invalid_action_mask",
-                {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
+                {
+                    "mask": torch.from_numpy(mask.copy()),
+                    "failed": torch.from_numpy(failed),
+                },
             ) from error
-        spec = self._admission_spec()
         return admission.admit(
             obs, spec, legal, bucketed=self.bucketed_shapes
         ), spec.tables
 
     def prepare_admitted(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
@@ -560,6 +528,17 @@ class ActorCritic(nn.Module):
         `inference` selects compaction and catalog coverage independently of
         autograd mode; bucketed batches always use the full catalog schedule.
         """
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            rows = observation_spans(
+                obs,
+                self.observation_space,
+                bucketed=self.bucketed_shapes,
+                objects=self.object_trimming(),
+                minimum_needs=needs,
+            )
+            return self._prepare_rows(
+                rows, self._admission_spec().tables, inference, memory_roots
+            )
         bucketed = (
             bucket_observation(
                 obs, self.observation_space, needs, objects=self.object_trimming()
@@ -573,7 +552,7 @@ class ActorCritic(nn.Module):
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
         tables: Tables,
         inference: bool,
         memory_roots: Mapping[str, int] | None,
@@ -1251,7 +1230,9 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
-        self.memory = CollectionMemory()
+        self.memory = CollectionMemory[torch.Tensor](
+            torch.cat, torch.stack, lambda states, i: states[i].detach().clone()
+        )
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()
@@ -1303,7 +1284,7 @@ class PolicyInference:
     @torch.no_grad()
     def infer(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         span: Callable[[str], AbstractContextManager[object]] | None = None,
     ) -> InferenceResult:
@@ -1318,24 +1299,24 @@ class PolicyInference:
             )
 
     @torch.no_grad()
-    def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
+    def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if any(not isinstance(value, np.ndarray) for value in obs.values()):
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
+            not isinstance(value, np.ndarray) for value in obs.values()
+        ):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(
-            obs,
-            inference=True,
-            memory_roots=self.memory.roots(obs)
+        roots = (
+            self.memory.roots(obs)
             if self.agent.config.decision_memory == "gru"
-            else None,
+            else None
         )
+        batch = self.agent.prepare(obs, inference=True, memory_roots=roots)
         if self.cache_catalog:
             batch = replace(batch, programs=None)
         moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
-        return replace(
-            self.memory.bind(moved, obs),
-            guard=self._forward_check,
-        )
+        if roots is not None:
+            moved = self.memory.bind(moved, obs, roots)
+        return replace(moved, guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------

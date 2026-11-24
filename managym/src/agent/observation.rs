@@ -2433,7 +2433,7 @@ impl Observation {
     }
 
     /// Deprecated compatibility records; non-card objects are synthesized only here.
-    #[deprecated(note = "use object_records; removed in 0.4.0")]
+    #[deprecated(note = "use object_records; removed in 0.3.0")]
     pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
         self.agent_cards
             .iter()

@@ -10,6 +10,7 @@ Admission is recorded per row, so later epochs do not repeat the checks.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,13 @@ class AdmittedRollout(AdmittedRows):
         distributions."""
         return self.prepare_rows(indexes)
 
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: object
+    ) -> AbstractContextManager[
+        Iterator[tuple[NDArray[np.int64], Prepared[np.ndarray], ActionRows]]
+    ]:
+        return self.prefetch_minibatches(order, size)
+
     def legal(self, obs: Prepared) -> mx.array:
         """The legal-action mask [B,A] of rows this rollout returned."""
         return mx.array(obs.legal)
@@ -66,7 +74,7 @@ def packing_mask(
     mask: NDArray[np.generic], logs: NDArray[np.generic]
 ) -> NDArray[np.bool_]:
     """Validate legal support and padding before the host drops padding rows."""
-    valid = np.array(legal_mask(mx.array(mask)))
+    valid = mask if mask.dtype == np.bool_ else np.array(legal_mask(mx.array(mask)))
     if valid.ndim != 2 or logs.shape != valid.shape:
         raise ValueError("packed actions require matching [B,A] distributions")
     if np.any(~np.isneginf(logs[~valid])):
@@ -103,7 +111,7 @@ def check_packed(
         )
     for start in range(0, len(packed.offsets) - 1, 32):
         indexes = np.arange(start, min(start + 32, len(packed.offsets) - 1))
-        rows = packed.unpack(indexes)
+        rows = packed.behavior(indexes)
         try:
             check_behavior(
                 mx.array(rows.log_probabilities),

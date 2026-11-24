@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
+from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS
 from manabot.env.observation import column, column_names
 from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
 from manabot.policy.readings import signed_log
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
     from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Packed, Tables
+    from manabot.policy.spans import ObservationSpans
 
 
 def _span(array: str, first: str, last: str) -> slice:
@@ -123,6 +124,16 @@ class MemoryLevel[A]:
     record_nodes: A | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ServingRecord:
+    """A record's one-based parent state and its slice of the reference table."""
+
+    key: str
+    parent: int
+    reference_start: int
+    reference_count: int
+
+
 @dataclass(frozen=True)
 class MemoryFold[A]:
     """One causal node tree; index zero is the zero initial state.
@@ -137,11 +148,7 @@ class MemoryFold[A]:
     levels: tuple[MemoryLevel[A], ...]
     tails: A
     node_count: int
-    keys: tuple[str, ...] = field(default=(), metadata={"host_only": True})
-    reference_slices: tuple[tuple[int, int], ...] = field(
-        default=(), metadata={"host_only": True}
-    )
-    record_slices: tuple[tuple[int, int], ...] = field(
+    serving_records: tuple[ServingRecord, ...] = field(
         default=(), metadata={"host_only": True}
     )
     root_nodes: A | None = None
@@ -245,28 +252,29 @@ def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
 
 
 def record_chunks(
-    rows: tuple[np.ndarray, ...], size: int = 32, cursor: MemoryCursor = MemoryCursor()
+    rows: tuple[np.ndarray, ...], size: int = 32, *, reference_offset: int = 0
 ) -> list[tuple[np.ndarray, ...]]:
     """Partition records with their owned members and newly introduced snapshots.
 
+    Rows begin at one record boundary. Member joins retain absolute reference
+    indexes, including references introduced before this suffix.
     Check slicing bounds before conversion: malformed imports cannot allocate
     from counts or hide an unowned companion suffix outside the final chunk.
     """
     records, details, references, members = rows
     result = []
-    member_start, reference_start, detail_start = (
-        cursor.members,
-        cursor.references,
-        cursor.details,
-    )
-    for start in range(cursor.records, len(records), size):
+    member_start = reference_start = detail_start = 0
+    for start in range(0, len(records), size):
         headers = records[start : start + size]
         count = headers[:, _RECORD_COUNTS].sum(dtype=np.float64)
         if count < 0 or count > len(members) - member_start:
             raise ValueError("invalid decision-memory member partition")
         member_end = member_start + int(count)
         joins = members[member_start:member_end]
-        last = joins[:, _MEMBER_REFERENCE].max(initial=reference_start)
+        last = (
+            joins[:, _MEMBER_REFERENCE].max(initial=reference_offset + reference_start)
+            - reference_offset
+        )
         if last < reference_start or last > len(references):
             raise ValueError("invalid decision-memory member join")
         reference_end = int(last)
@@ -461,41 +469,47 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
 
 def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
     """Validate only owned values, including for a control without learned heads."""
-    from manabot.policy.prepare import record_word
-
     if _RECORDS not in obs:
         return
-    programs = definition_programs()
     for batch in range(obs[_RECORDS].shape[0]):
         count, detail_count, reference_count, _ = memory_lengths(obs, batch)
-        references = obs[_REFERENCES][batch, :reference_count]
-        for definition in references[
-            references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
-        ].astype(np.int64):
-            if (
-                not 0 < definition <= len(programs)
-                or not programs[int(definition) - 1].eligible
-            ):
-                raise ValueError("ineligible decision-memory definition shortcut")
-        headers = obs[_RECORDS][batch, :count]
-        details = obs[_DETAILS][batch, :detail_count]
-        if not np.isin(
-            record_word(headers, _RECORD_KIND), decision_name_values()
-        ).all():
-            raise ValueError("unadmitted decision-memory kind")
-        chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
-        if not np.isin(
-            record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()
-        ).all():
-            raise ValueError("unadmitted decision-memory choice")
-        program = details[:, _DETAIL_FIELD] == 0
-        tables.tokens(
-            details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
-            record_word(details[program, _DETAIL_VALUE], 0),
+        memory_vocabulary(
+            obs[_RECORDS][batch, :count],
+            obs[_DETAILS][batch, :detail_count],
+            obs[_REFERENCES][batch, :reference_count],
+            tables,
         )
-        named = record_word(headers, _RECORD_NAME)
-        if (named < 0).any() or (named >= len(tables.name_definitions)).any():
-            raise ValueError("invalid decision-memory name row")
+
+
+def memory_vocabulary(
+    headers: np.ndarray, details: np.ndarray, references: np.ndarray, tables: "Tables"
+) -> None:
+    from manabot.policy.prepare import record_word
+
+    programs = definition_programs()
+    for definition in references[
+        references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
+    ].astype(np.int64):
+        if (
+            not 0 < definition <= len(programs)
+            or not programs[int(definition) - 1].eligible
+        ):
+            raise ValueError("ineligible decision-memory definition shortcut")
+    if not np.isin(record_word(headers, _RECORD_KIND), decision_name_values()).all():
+        raise ValueError("unadmitted decision-memory kind")
+    chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
+    if not np.isin(
+        record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()
+    ).all():
+        raise ValueError("unadmitted decision-memory choice")
+    program = details[:, _DETAIL_FIELD] == 0
+    tables.tokens(
+        details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
+        record_word(details[program, _DETAIL_VALUE], 0),
+    )
+    named = record_word(headers, _RECORD_NAME)
+    if (named < 0).any() or (named >= len(tables.name_definitions)).any():
+        raise ValueError("invalid decision-memory name row")
 
 
 @dataclass(frozen=True)
@@ -521,11 +535,11 @@ def _catalog_program_rows() -> _ProgramRows:
         counts = np.array([len(program.tokens) for program in source], np.int64)
         rows = np.array(
             [
-                [0, kind, *integer_words(value), ordinal, 1]
+                [0, kind, value, 0, ordinal, 1]
                 for program in source
                 for ordinal, (kind, value) in enumerate(program.tokens)
             ],
-            np.float32,
+            np.int32,
         ).reshape(-1, 6)
         _program_rows = _ProgramRows(source, rows, counts.cumsum() - counts, counts)
     return _program_rows
@@ -556,7 +570,7 @@ def _expand_details(
         expanded_counts.cumsum() - expanded_counts, expanded_counts
     )
     catalog = positions < shortcut_counts[owners]
-    expanded = np.empty((len(owners), 6), np.float32)
+    expanded = np.empty((len(owners), 6), np.int32)
     if programs is not None:
         expanded[catalog] = programs.rows[
             shortcut_starts[owners[catalog]] + positions[catalog]
@@ -589,9 +603,12 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     return arrays
 
 
-def retained_memory(obs: "ObservationBuffers") -> "PrefixObservation | None":
+def retained_memory(obs: object) -> "PrefixObservation | None":
     from manabot.env.memory_store import PrefixObservation
+    from manabot.policy.spans import ObservationSelection
 
+    if type(obs) is ObservationSelection:
+        return obs.memory
     return (
         obs
         if isinstance(obs, PrefixObservation)
@@ -727,7 +744,7 @@ def _featurize_records(nodes: list[RecordNode], tables: Tables) -> None:
         for key in blocks:
             blocks[key].append(local[key])
         detail_base += len(_node_rows(node)[1])
-    prepared = _prepare_dense_memory(
+    prepared = _prepare_memory_rows(
         {key: np.concatenate(parts, axis=1) for key, parts in blocks.items()}, tables
     )
     assert prepared is not None
@@ -779,7 +796,7 @@ def _chunk_features(
 
 def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
     """The dense encoder owns the canonical empty shapes and dtypes."""
-    empty = _prepare_dense_memory(
+    empty = _prepare_memory_rows(
         {
             key: np.zeros((0, 0, width), np.float32)
             for key, width in MEMORY_WIDTHS.items()
@@ -865,49 +882,40 @@ def _prepare_fold(
             node = node.previous
         for node in reversed(pending):
             selected_nodes[node.key] = node
-    cached = [node for node in selected_nodes.values() if node.key in roots]
-    root_offsets: dict[str, int] = {}
-    reference_base = 0
-    for node in cached:
-        root_offsets[node.key] = reference_base
-        reference_base += roots[node.key]
-    root_reference_count = reference_base
-    nodes: list[Tail | RecordNode] = []
-    reference_slices: list[tuple[int, int]] = []
-    record_slices: list[tuple[int, int]] = []
-    indexes: dict[str, int] = {}
+    nodes = list(selected_nodes.values())  # Parents precede their children.
+    indexes = {node.key: index for index, node in enumerate(nodes, start=1)}
+    cached = [node for node in nodes if node.key in roots]
+    root_reference_count = sum(roots[node.key] for node in cached)
+    # All cached reference slices precede newly embedded references.
+    root_start = 0
+    reference_base = root_reference_count
+    serving_records: list[ServingRecord] = []
     depths: list[int] = []
     references: list[np.ndarray] = [np.empty(0, np.int64)]
     record_starts: list[int] = []
     arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
     record_base = 0
     parents: list[int] = []
-    _prepare_chunk_features(
-        [node for node in selected_nodes.values() if node.key not in roots], tables
-    )
-    for node in selected_nodes.values():
+    _prepare_chunk_features([node for node in nodes if node.key not in roots], tables)
+    for node in nodes:
         parent = (
             indexes[node.previous.key] if node.previous and node.key not in roots else 0
         )
+        parents.append(parent)
         if node.key in roots:
             count = roots[node.key]
-            start = root_offsets[node.key]
-            joined = np.concatenate(
-                (references[parent], np.arange(start, start + count))
-            )
+            references.append(np.arange(root_start, root_start + count, dtype=np.int64))
+            serving_records.append(ServingRecord(node.key, parent, root_start, count))
+            root_start += count
             record_starts.append(-1)
-            reference_slices.append((start, count))
-            record_slices.append((-1, 0))
-            nodes.append(node)
-            indexes[node.key] = len(nodes)
-            references.append(joined)
-            parents.append(parent)
             depths.append(-1)
             continue
         fragment = _chunk_features(node, tables)
         count = len(fragment.reference_numbers)
-        reference_slices.append((reference_base, count))
-        record_slices.append((record_base, len(fragment.numbers)))
+        if collection:
+            serving_records.append(
+                ServingRecord(node.key, parent, reference_base, count)
+            )
         joined = np.concatenate(
             (references[parent], np.arange(reference_base, reference_base + count))
         )
@@ -926,10 +934,7 @@ def _prepare_fold(
         record_starts.append(record_base)
         reference_base += count
         record_base += len(fragment.numbers)
-        nodes.append(node)
-        indexes[node.key] = len(nodes)
         references.append(joined)
-        parents.append(parent)
         depths.append(depths[parent - 1] + 1 if parent else 0)
     # Sequence lengths retain original policy row order; the fold owns routes.
     empty = _empty_memory(tables)
@@ -1006,9 +1011,7 @@ def _prepare_fold(
             tuple(levels),
             np.array([indexes[tail.key] if tail else 0 for tail in tails], np.int64),
             len(nodes),
-            keys=tuple(node.key for node in nodes),
-            reference_slices=tuple(reference_slices),
-            record_slices=tuple(record_slices),
+            serving_records=tuple(serving_records),
             root_nodes=np.array([indexes[node.key] for node in cached], np.int64),
         ),
     )
@@ -1020,6 +1023,7 @@ def prepare_memory(
     *,
     fold: bool = False,
     roots: Mapping[str, int] | None = None,
+    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
     retained = retained_memory(obs)
     return (
@@ -1029,24 +1033,40 @@ def prepare_memory(
             else _prepare_retained(retained, tables)
         )
         if retained is not None
-        else _prepare_dense_memory(obs, tables)
+        else _prepare_memory_rows(obs, tables, native=native)
     )
 
 
-def _prepare_dense_memory(
-    obs: "ObservationBuffers", tables: "Tables"
+def _prepare_memory_rows(
+    obs: "ObservationBuffers",
+    tables: "Tables",
+    *,
+    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
     from manabot.policy.prepare import pack, record_word
+    from manabot.policy.spans import full_word
 
-    if _RECORDS not in obs:
-        return None
-    headers = obs[_RECORDS]
-    lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
-    batches, slots = np.nonzero(headers[..., _RECORD_VALID])
-    selected = headers[batches, slots]
+    if native is None:
+        if _RECORDS not in obs:
+            return None
+        headers = obs[_RECORDS]
+        lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
+        batches, slots = np.nonzero(headers[..., _RECORD_VALID])
+        selected = headers[batches, slots]
+    else:
+        if _RECORDS not in native.tables:
+            return None
+        spans = native.tables[_RECORDS]
+        lengths = spans.counts.astype(np.int64)
+        batches, slots = spans.coordinates
+        selected = spans.integers
+
+    word = record_word if native is None else full_word
 
     def word_pairs(rows: np.ndarray, span: slice) -> np.ndarray:
         halves = rows[:, span]
+        if native is not None:
+            return halves[:, ::2].view(np.uint32).astype(np.int64)
         return record_word(halves.reshape(len(rows), halves.shape[1] // 2, 2), 0)
 
     temporal = word_pairs(selected, _RECORD_TEMPORAL)
@@ -1056,7 +1076,7 @@ def _prepare_dense_memory(
     for index, offset in enumerate(_RECORD_SELECTORS):
         selectors[:, index * 2] = selected[:, offset]
         if offset in _RECORD_NUMBERED_SELECTORS:
-            selectors[:, index * 2 + 1] = signed_log(record_word(selected, offset + 1))
+            selectors[:, index * 2 + 1] = signed_log(word(selected, offset + 1))
     selectors[:, 8:] = selected[:, _RECORD_DECLARATION]
     numbers = np.concatenate(
         (
@@ -1068,13 +1088,11 @@ def _prepare_dense_memory(
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, record_word(selected, _RECORD_KIND))
+    kinds = tables.names(1, word(selected, _RECORD_KIND))
     choices = np.zeros(len(selected), np.int64)
     present = selected[:, _RECORD_CHOICE_PRESENT] == 1
-    choices[present] = tables.names(
-        1, record_word(selected[present, _RECORD_CHOICE_KIND], 0)
-    )
-    choice_names = record_word(selected, _RECORD_NAME)
+    choices[present] = tables.names(1, word(selected[present, _RECORD_CHOICE_KIND], 0))
+    choice_names = word(selected, _RECORD_NAME)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
     detail_routes: list[np.ndarray] = []
@@ -1083,33 +1101,44 @@ def _prepare_dense_memory(
     positions: list[np.ndarray] = []
     reference_base = record_base = 0
     for batch, length in enumerate(lengths):
-        _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
-        references = obs[_REFERENCES][batch, :reference_count]
+        if native is None:
+            _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
+            records = obs[_RECORDS][batch, :length]
+            references = obs[_REFERENCES][batch, :reference_count]
+            raw_details = obs[_DETAILS][batch, :detail_count].astype(np.int32)
+            raw_details[:, _DETAIL_VALUE_HIGH] = (
+                record_word(raw_details, _DETAIL_VALUE_HIGH)
+                .astype(np.uint32)
+                .view(np.int32)
+            )
+            members = obs[_MEMBERS][batch, :member_count]
+        else:
+            records, raw_details, references, members = (
+                native.tables[key].group(batch) for key in MEMORY_FIELDS
+            )
         references_list.append(references)
-        raw_details = obs[_DETAILS][batch, :detail_count]
         expanded, owners = _expand_details(references, raw_details)
         details_list.append(expanded)
         detail_routes.append(owners + reference_base)
-        members = obs[_MEMBERS][batch, :member_count]
         member_routes.append(
             members[:, _MEMBER_REFERENCE].astype(np.int64) - 1 + reference_base
         )
-        counts = headers[batch, :length, _RECORD_COUNTS].astype(np.int64).ravel()
+        counts = records[:, _RECORD_COUNTS].astype(np.int64).ravel()
         groups.append(
             np.repeat(np.arange(length * 3, dtype=np.int64) + record_base * 3, counts)
         )
         positions.append((members[:, _MEMBER_ORDINAL, None] / 128).astype(np.float32))
-        reference_base += reference_count
+        reference_base += len(references)
         record_base += int(length)
     references = (
         np.concatenate(references_list)
         if references_list
-        else np.zeros((0, MEMORY_WIDTHS[_REFERENCES]), np.float32)
+        else np.zeros((0, MEMORY_WIDTHS[_REFERENCES]), np.int32)
     )
     details = (
         np.concatenate(details_list)
         if details_list
-        else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.float32)
+        else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.int32)
     )
     numeric = word_pairs(references, _REFERENCE_WORDS).astype(np.uint32).view(np.int32)
     reference_numbers = np.concatenate(
@@ -1121,7 +1150,7 @@ def _prepare_dense_memory(
         ),
         -1,
     ).astype(np.float32)
-    payloads = record_word(details, _DETAIL_VALUE_HIGH)
+    payloads = full_word(details, _DETAIL_VALUE_HIGH)
     token_kinds = details[:, _DETAIL_TOKEN_KIND].astype(np.int64)
     values = np.zeros(len(details), np.int64)
     program = details[:, _DETAIL_FIELD] == 0

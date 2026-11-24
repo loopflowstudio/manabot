@@ -15,9 +15,14 @@ from manabot.backends.torch.learner import Learner, apply_matmul_precision
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.policy.checkpoint import pretrained_memory_branch
+from manabot.policy.checkpoint import memory_parameter, pretrained_memory_branch
 from manabot.training.learning import Precision
 from manabot.training.mps import mps_torch_error
+
+
+def admit_execution(device: str, *, live_tokens: bool) -> None:
+    if live_tokens and device != "cuda":
+        raise ValueError("live tokens require CUDA on the torch backend")
 
 
 def require_device(device: str) -> None:
@@ -107,12 +112,7 @@ def load_pretrained(
         agent.load_state_dict(weights, strict=True)
         return
     fresh = agent.state_dict()
-    memory = {
-        name
-        for name in fresh
-        if name.startswith("decision_memory.")
-        or name.endswith((".memory_gate", ".memory_projection.weight"))
-    }
+    memory = {name for name in fresh if memory_parameter(name)}
     if set(fresh) - set(weights) != memory or set(weights) - set(fresh):
         raise ValueError(
             "pretrained copy would leave non-memory parameters unused or uninitialized"

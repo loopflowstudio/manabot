@@ -402,3 +402,119 @@ class TestObservationSpace:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_native_batch_freezes_live_rows_and_retains_first_legal(
+    player_configs: list[managym.PlayerConfig],
+) -> None:
+    env = managym.Env(seed=17)
+    env.reset(player_configs)
+    space = ObservationSpace(ObservationConfig(max_actions=1))
+    with pytest.raises(managym.ObservationCapacity):
+        managym.encode_observation_batch([env], space.layout)
+    batch = managym.encode_observation_batch([env, env], space.layout, "first-legal")
+    assert batch.action_counts == [1, 1]
+    tables = batch.tables()
+    seat_axis, offsets, data = tables["actions"]
+    assert not seat_axis
+    np.testing.assert_array_equal(np.frombuffer(offsets, np.int32), [0, 1, 2])
+    fields = batch.layout.csr_fields["actions"]
+    dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+    values = np.frombuffer(data, dtype)
+    assert values.shape == (2,)
+    assert dtype["valid"] == np.uint8
+    assert dtype["mode"] == np.int32
+    assert dtype["x"] == np.float32
+    assert values["valid"].tolist() == [1, 1]
+    for source in (values, np.frombuffer(offsets, np.int32)):
+        with pytest.raises(ValueError):
+            source.setflags(write=True)
+    tables.clear()
+    env.step(0)
+    assert batch.tables()["actions"] == (False, offsets, data)
+    with pytest.raises(TypeError):
+        managym.ObservationBatch()
+
+
+def test_vector_step_batch_keeps_outcomes_and_emitted_events(
+    player_configs: list[managym.PlayerConfig],
+) -> None:
+    space = ObservationSpace()
+    dense, packed = (managym.VectorEnv(2, seed=19) for _ in range(2))
+    for env in (dense, packed):
+        env.reset_all(player_configs)
+    for actions in ([0, 1], [0, 0]):
+        expected = dense.step(actions)
+        batch, rewards, terminated, truncated = packed.step_observation_batch(
+            actions, space.layout
+        )
+        for i, (obs, reward, terminal, limit, _) in enumerate(expected):
+            assert (rewards[i], terminated[i], truncated[i]) == (
+                reward,
+                terminal,
+                limit,
+            )
+            encoded = encode_observation(space, obs)
+            table = batch.tables()["events"]
+            offsets = np.frombuffer(table[1], np.int32)
+            values = np.frombuffer(table[2], np.int32).reshape(
+                -1, space.shapes["events"][-1]
+            )
+            np.testing.assert_array_equal(
+                values[offsets[i] : offsets[i + 1]],
+                encoded["events"][encoded["events_valid"] == 1],
+            )
+            assert batch.action_counts[i] == int(encoded["actions_valid"].sum())
+
+
+def test_csr_fields_cover_every_logical_column_and_optional_table() -> None:
+    for history in (False, True):
+        layout = managym.ObservationLayout(
+            policy_history=history,
+            max_decision_records=8,
+            max_decision_references=8,
+            max_decision_reference_details=16,
+            max_decision_members=16,
+        )
+        arrays = layout.arrays
+        assert set(layout.csr_fields) == {
+            key for key in arrays if not key.endswith("_valid")
+        }
+        for key, fields in layout.csr_fields.items():
+            columns = arrays[key]["columns"]
+            if not columns:
+                assert fields == [
+                    ("value", "uint8" if key == "card_turn_state" else "int32", 0)
+                ]
+                continue
+            names = list(columns)
+            logical = []
+            for name, dtype, index in fields:
+                assert index == len(logical)
+                if names[index] == name + "_high":
+                    assert dtype == "int32"
+                    logical.extend((name + "_high", name + "_low"))
+                else:
+                    logical.append(name)
+                    kind = columns[name]
+                    if kind["kind"] == "flag" or (
+                        key.startswith("decision_")
+                        and (
+                            name.endswith("_present")
+                            or name
+                            in (
+                                "valid",
+                                "declared",
+                                "tapped",
+                                "ready",
+                                "attacking",
+                                "blocking",
+                            )
+                        )
+                    ):
+                        assert dtype == "uint8"
+                    elif kind.get("scale", 1) > 1:
+                        assert dtype == "float32"
+                    else:
+                        assert dtype == "int32"
+            assert logical == names

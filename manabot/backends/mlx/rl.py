@@ -7,12 +7,11 @@ samples [B]; distributions are over action slots [B,A] with `valid` marking
 the legal support. Targets, behavior likelihoods and references are
 constants: gradients reach only the current policy and value outputs.
 
-Three differences from torch are deliberate. MLX's GPU has no float64, so the
-surrogate ratio is float32 (`clipped_surrogate` states the limit) and
+MLX's GPU has no float64, so the surrogate ratio is float32
+(`clipped_surrogate` states the limit) and
 `float64_operand` is the identity. Returns and advantage selection run on the
 host through `manabot.policy.returns`, whose NumPy functions match torch's
-bit for bit. The categorical critic's functions are absent: the backend
-refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_supported`).
+bit for bit.
 """
 
 from collections.abc import Mapping
@@ -20,6 +19,7 @@ import sys
 from typing import Literal
 
 import mlx.core as mx
+import mlx.nn as nn
 import numpy as np
 from typing_extensions import deprecated
 
@@ -28,7 +28,7 @@ from manabot.policy import returns
 
 @deprecated(
     "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
-    "The backend-bound function will be removed in 0.4.0."
+    "The backend-bound function will be removed in 0.3.0."
 )
 def damped_policy_loss(
     logits: mx.array,
@@ -219,6 +219,46 @@ def transition_gae(
     return mx.array(advantages), mx.array(value_targets)
 
 
+def standardized_advantages(
+    advantages: mx.array, over: mx.array | None = None
+) -> mx.array:
+    """Standardize every row using the selected rows' population statistics."""
+    reference = advantages if over is None else advantages[over]
+    mean = reference.mean()
+    deviation = mx.sqrt(mx.square(reference - mean).mean())
+    return (advantages - mean) / mx.maximum(deviation, 1e-8)
+
+
+def expected_outcome(probabilities: mx.array) -> mx.array:
+    """Expected signed result of a loss/draw/win mixture."""
+    return probabilities[..., 2] - probabilities[..., 0]
+
+
+def outcome_probabilities(value_logits: mx.array) -> mx.array:
+    return mx.softmax(value_logits, axis=-1)
+
+
+def categorical_lambda_returns(
+    probabilities: mx.array,
+    rewards: mx.array,
+    ends: mx.array,
+    bootstrap: mx.array,
+    trace_lambda: float,
+    bootstrap_indexes: np.ndarray | None = None,
+) -> mx.array:
+    """Frozen loss/draw/win lambda targets from the shared host estimator."""
+    return mx.array(
+        returns.categorical_lambda_returns(
+            np.array(probabilities),
+            np.array(rewards),
+            np.array(ends),
+            np.array(bootstrap),
+            trace_lambda,
+            bootstrap_indexes,
+        )
+    )
+
+
 # -- Losses --------------------------------------------------------------------
 # Per-row loss terms over one minibatch; the caller reduces, masks and weights.
 
@@ -267,6 +307,16 @@ def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
     return mx.square(values - targets)
 
 
+def categorical_value_loss(value_logits: mx.array, targets: mx.array) -> mx.array:
+    """Cross entropy per decision against its frozen loss/draw/win mixture."""
+    if value_logits.ndim != 2 or value_logits.shape[-1] != 3:
+        raise ValueError("categorical values require [B,3] logits")
+    if targets.shape != value_logits.shape:
+        raise ValueError("categorical targets require [B,3]")
+    logs = nn.log_softmax(value_logits, axis=-1)
+    return -(mx.stop_gradient(targets) * logs).sum(-1)
+
+
 def entropy(logs: mx.array, valid: mx.array) -> mx.array:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(mx.exp(logs) * mx.where(valid, logs, 0.0)).sum(-1)
@@ -292,6 +342,25 @@ def selected_magnitudes(
         np.array(advantages), kind, fraction, minimum
     )
     return mx.array(rows), cutoff
+
+
+def selected_rows(
+    advantages: mx.array,
+    fraction: float,
+    minimum: float,
+    *,
+    kind: Literal["top_count", "quantile"] = "top_count",
+) -> mx.array:
+    return selected_magnitudes(advantages, kind, fraction, minimum)[0]
+
+
+def magnitude_quantile(advantages: mx.array, quantile: float) -> float:
+    return returns.magnitude_quantile(np.array(advantages), quantile)
+
+
+def selected_moves(advantages: mx.array, quantile: float, minimum: float) -> mx.array:
+    threshold = max(magnitude_quantile(advantages, quantile), minimum)
+    return mx.abs(advantages) >= threshold
 
 
 def selection_mask(

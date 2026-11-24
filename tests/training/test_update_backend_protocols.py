@@ -33,15 +33,9 @@ from manabot.training.state.backend import (
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
-    CategoricalRL,
     Learner,
     LearnerFile,
-    PPOAdmittedRollout,
-    PPOBackend,
-    PPOLearner,
     UpdateBackend,
-    categorical_rl,
-    ppo_rl,
 )
 from tests.training.backend_fixtures import installed_backend, legacy_capture
 
@@ -135,7 +129,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))
-def test_backend_provides_what_the_damped_update_calls(
+def test_backend_provides_what_the_updates_call(
     name: str, captured: tuple[PolicyCheckpoint, RolloutBatch]
 ) -> None:
     module = installed_backend(name)
@@ -152,25 +146,6 @@ def test_backend_provides_what_the_damped_update_calls(
     )
     assert _violations(learner, Learner, f"{name}.Learner") == []
     assert _violations(admitted, AdmittedRollout, f"{name}.AdmittedRollout") == []
-
-
-def test_torch_provides_what_ppo_calls(
-    captured: tuple[PolicyCheckpoint, RolloutBatch],
-) -> None:
-    module = resolve("torch")
-    _, learner = module.load(captured[0], minibatch_rows=4)
-    assert _violations(module, PPOBackend, "torch") == []
-    assert _violations(learner, PPOLearner, "torch.Learner") == []
-    assert (
-        _violations(
-            module.rollout.AdmittedRollout(learner.agent, captured[1]),
-            PPOAdmittedRollout,
-            "torch.AdmittedRollout",
-        )
-        == []
-    )
-    assert categorical_rl(module.rl) is module.rl
-    assert ppo_rl(module.rl) is module.rl
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
@@ -253,15 +228,6 @@ def test_prefetch_propagates_admission_failure_and_can_stop_early(
     with pytest.raises(ValueError, match="must be positive"):
         with admitted.minibatches(order, 0, device):
             pass
-
-
-def test_a_backend_without_a_categorical_critic_is_refused() -> None:
-    module = installed_backend("mlx")
-    assert not isinstance(module.rl, CategoricalRL)
-    with pytest.raises(TypeError, match="no categorical critic"):
-        categorical_rl(module.rl)
-    with pytest.raises(TypeError, match="no PPO update"):
-        ppo_rl(module.rl)
 
 
 def test_the_conformance_check_sees_a_wrong_signature() -> None:

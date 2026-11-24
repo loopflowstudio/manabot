@@ -173,9 +173,9 @@ impl RolloutPool {
 
     /// Encode the current observation of every active slot via `write`,
     /// returning the active slot indices (ascending).
-    pub fn encode_active_into<F>(&mut self, write: F) -> Result<Vec<usize>, AgentError>
+    pub fn encode_active_into<F>(&mut self, mut write: F) -> Result<Vec<usize>, AgentError>
     where
-        F: Fn(usize, &Observation) -> Result<(), AgentError>,
+        F: FnMut(usize, &Observation) -> Result<(), AgentError>,
     {
         let mut active = Vec::with_capacity(self.active_count);
         for (index, slot) in self.slots.iter_mut().enumerate() {
@@ -197,10 +197,10 @@ impl RolloutPool {
     pub fn step_active_into<F>(
         &mut self,
         actions: &[i64],
-        write: F,
+        mut write: F,
     ) -> Result<Vec<usize>, AgentError>
     where
-        F: Fn(usize, &Observation) -> Result<(), AgentError>,
+        F: FnMut(usize, &Observation) -> Result<(), AgentError>,
     {
         if actions.len() != self.slots.len() {
             return Err(AgentError(format!(

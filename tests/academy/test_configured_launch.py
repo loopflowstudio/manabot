@@ -641,4 +641,4 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
     )
     query = parse_qs(urlparse(targets[-1]).query)
     assert json.loads(query["search"][0]) == [config["mirror"], None]
-    assert "removed in 0.4.0" not in capsys.readouterr().err
+    assert "removed in 0.3.0" not in capsys.readouterr().err

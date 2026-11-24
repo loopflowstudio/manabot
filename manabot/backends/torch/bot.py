@@ -20,15 +20,18 @@ def evaluate_observation(
     count = len(observation.action_space.actions)
     if count > space.config.max_actions:
         space = ObservationSpace(space.config.model_copy(update={"max_actions": count}))
-    encoded = encode_observation(space, observation)
-    with torch.no_grad():
-        logits, value = scope.agent(
-            scope.prepare(
-                {
-                    key: np.asarray(value, dtype=np.float32)[None]
-                    for key, value in encoded.items()
-                }
-            )
+    if space.one_token:
+        obs_input: object = managym.encode_observation_batch(
+            [observation], space.layout, space.config.action_overflow
         )
+    else:
+        # Deprecated v9/v10 dense path; removed in 0.3.0.
+        encoded = encode_observation(space, observation)
+        obs_input = {
+            key: np.asarray(value, dtype=np.float32)[None]
+            for key, value in encoded.items()
+        }
+    with torch.no_grad():
+        logits, value = scope.agent(scope.prepare(obs_input))  # type: ignore[arg-type]
         probabilities = tuple(torch.softmax(logits, dim=-1)[0, :count].tolist())
     return probabilities, float(value.item())

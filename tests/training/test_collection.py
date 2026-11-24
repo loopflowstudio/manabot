@@ -8,6 +8,7 @@ from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env import target_practice
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -15,16 +16,19 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.collection import (
     Collector,
     ObservationRows,
     RolloutBatch,
     close_collector,
     collect,
+    live_observations,
     open_collector,
 )
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
+from tests.fixtures.dense_collector import dense_collector
 from tests.model.prepared_routes import device_input
 
 
@@ -172,32 +176,32 @@ def test_update_boundary_has_no_banked_or_sampled_actions() -> None:
     assert collector.stats.learner_transitions == 28
     assert not any(collector._streams)
     assert all(pending is None for pending in collector._pending)
+    live = live_observations(collector)
     for key in first.next_obs:
-        np.testing.assert_array_equal(first.next_obs[key], collector._buffers[key])
+        np.testing.assert_array_equal(first.next_obs[key], live[key])
     collect(collector, agent, 7)
     assert collector.stats.learner_transitions == 56
 
 
-def test_paused_buffer_rows_are_unchanged_and_clear_step_flags():
+def test_paused_buffer_rows_are_unchanged_and_clear_step_flags() -> None:
     collector = _make_collector("self", num_envs=2)
-    before = {k: v[0].copy() for k, v in collector._buffers.items()}
+    before = {k: v[0].copy() for k, v in live_observations(collector).items()}
     collector._buffers["terminated"][0] = 1
     collector._buffers["rewards"][0] = 7
     collector._env.step_into_buffers([-999, 0], [False, True])
-    for key in collector._buffers:
-        if key in {"terminated", "truncated", "rewards"}:
-            assert collector._buffers[key][0] == 0
-        else:
-            np.testing.assert_array_equal(collector._buffers[key][0], before[key])
+    for key in ("terminated", "truncated", "rewards"):
+        assert collector._buffers[key][0] == 0
+    for key, value in live_observations(collector).items():
+        np.testing.assert_array_equal(value[0], before[key])
 
 
 def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collect(collector, agent, 7)
+    live = live_observations(collector)
     assert all(
-        not np.shares_memory(data, collector._buffers[key])
-        for key, data in first.next_obs.items()
+        not np.shares_memory(data, live[key]) for key, data in first.next_obs.items()
     )
     first_logs = first.observations().log_probabilities
     with torch.no_grad():
@@ -251,6 +255,65 @@ def test_recorded_rows_survive_growth_and_later_appends() -> None:
         store.arrays()["x"],
         [[6, 7, 8], [0, 1, 2], [109, 110, 111], [103, 104, 105], [103, 104, 105]],
     )
+
+
+def test_typed_self_play_matches_dense_actions_values_replay_and_learner_gathers() -> (
+    None
+):
+    model = _make_agent()
+    typed, dense = (_make_collector("self", num_envs=3, seed=24) for _ in range(2))
+    try:
+        dense_collector(dense)
+        for collector in (typed, dense):
+            collector.execution_rows = 2
+        actual, expected = (collect(c, model, 5) for c in (typed, dense))
+        assert typed._env.state_digests() == dense._env.state_digests()
+        assert [g.actions for g in typed._env.games] == [
+            g.actions for g in dense._env.games
+        ]
+        assert not actual.action_data.fields
+        for key in ("actions", "values", "logprobs", "dones", "rewards", "next_done"):
+            np.testing.assert_allclose(
+                getattr(actual, key), getattr(expected, key), atol=1e-6
+            )
+        indexes = np.array([9, 0, 7, 9])
+        exported = actual.action_data.unpack(indexes)
+        expected_offers = expected.action_data.unpack(indexes)
+        assert exported.observation.keys() == expected_offers.observation.keys()
+        for key in exported.observation:
+            np.testing.assert_array_equal(
+                exported.observation[key], expected_offers.observation[key]
+            )
+        left = actual.policy_rows(indexes)
+        right = expected.policy_rows(indexes)
+        assert isinstance(left.observation, ObservationSelection)
+        assert not left.observation["actions_valid"].flags.writeable
+        editable = actual.observations(indexes).observation
+        editable["actions_valid"][0, 0] = 0.25
+        assert left.observation["actions_valid"][0, 0] == 1
+        with pytest.raises(ValueError, match="invalid_action_mask"):
+            model.check_observation(editable)
+        for key in right.observation:
+            np.testing.assert_array_equal(
+                left.observation[key], right.observation[key], err_msg=key
+            )
+        np.testing.assert_allclose(
+            left.log_probabilities, right.log_probabilities, atol=1e-6
+        )
+        for batch in (actual, expected):
+            admitted = AdmittedRollout(model, batch)
+            admitted.admit_rows(indexes, 2)
+            prepared, _ = admitted.rows(indexes, torch.device("cpu"))
+            with torch.no_grad():
+                logits, values = model(prepared)
+            if batch is actual:
+                actual_logits, actual_values = logits, values
+            else:
+                torch.testing.assert_close(actual_logits, logits)
+                torch.testing.assert_close(actual_values, values)
+    finally:
+        close_collector(typed)
+        close_collector(dense)
 
 
 def test_target_practice_constructs_only_requested_games(

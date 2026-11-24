@@ -7,8 +7,7 @@ branch's execution state and independent RNG; immutable `RolloutReceipt` values
 carry its evidence into the local-update receipt. Full rollout evidence (v3
 receipts) keeps per-Command native witnesses and actor viewer hashes; opt-in
 compact evidence (v4) keeps Command counts reconciled with native counters.
-Opt-in native frontier encoding writes every live branch's view into
-teacher-owned buffers with one `managym.encode_observations_into` call.
+Native frontier encoding returns one immutable v11 batch per ply.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -39,6 +38,7 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
+from manabot.env.observation import PolicyObservation
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
@@ -79,7 +79,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
-        "manabot/backends/torch/_facts.py",
+        "manabot/backends/torch/facts.py",
         "manabot/backends/torch/belief.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
@@ -196,12 +196,14 @@ class LocalUpdateTeacher:
 
     def _encode_native(
         self, engines: Sequence[managym.Env]
-    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
-        """One native call writes every actor view into the reused frontier buffers.
-
-        The returned arrays are views of the first `len(engines)` rows and are
-        valid until the next frontier encoding.
-        """
+    ) -> tuple[PolicyObservation, list[int]]:
+        """Encode the full frontier; search requires every legal offer to fit."""
+        if self.space.one_token:
+            batch = managym.encode_observation_batch(engines, self.space.layout)
+            counts = batch.action_counts
+            if 0 in counts:
+                raise ValueError("policy cannot represent complete legal offers")
+            return batch, counts
         capacity = len(self._frontier_buffers.get("actions_valid", ()))
         if len(engines) > capacity:
             capacity = len(engines)

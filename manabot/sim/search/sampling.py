@@ -55,6 +55,8 @@ class HandDistribution(Protocol):
 
 class LearnedDistribution(HandDistribution, Protocol):
     schema: SamplerSchema
+    hidden_size: int
+    history_dropout: float
 
 
 def _batch(

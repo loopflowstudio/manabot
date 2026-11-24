@@ -1,4 +1,4 @@
-"""Deprecated import name for managym.academy; removed in 0.4.0."""
+"""Deprecated import name for managym.academy; removed in 0.3.0."""
 
 from collections.abc import Sequence
 from importlib import import_module
@@ -10,7 +10,7 @@ from types import ModuleType
 import warnings
 
 warnings.warn(
-    "academy is deprecated; use managym.academy. Removed in 0.4.0.",
+    "academy is deprecated; use managym.academy. Removed in 0.3.0.",
     DeprecationWarning,
     stacklevel=2,
 )

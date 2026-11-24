@@ -10,10 +10,12 @@ from pydantic import BaseModel, Field
 
 from manabot.belief.collect import collect_belief
 from manabot.belief.train import SamplerConfig, train_belief
+from manabot.policy.protocol import BackendName
 from manabot.recipes import belief_policy
 
 
 class BeliefConfig(BaseModel):
+    backend: BackendName = "torch"
     games: int = Field(default=3, ge=3)
     max_steps: int = Field(default=1000, ge=1)
     sampler: SamplerConfig = SamplerConfig(
@@ -23,9 +25,8 @@ class BeliefConfig(BaseModel):
 
 def train(config: BeliefConfig) -> None:
     from manabot.backends import resolve
-    from manabot.backends.torch import belief_fit
 
-    backend = resolve("torch")
+    backend = resolve(config.backend)
     with track(clocks=["steps"], config=config) as run:
         policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
@@ -39,10 +40,10 @@ def train(config: BeliefConfig) -> None:
         )
         sampler = train_belief(
             histories,
-            run.out / "belief.pt",
+            run.out / "belief.safetensors",
             config.sampler,
             seed=run.seed,
-            backend=belief_fit,
+            backend=backend.belief_fit,
             codec=backend.belief,
         )
         run.checkpoint(sampler, steps=config.sampler.steps)
