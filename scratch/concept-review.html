@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Full-Branch Audit at HEAD b817943ea0</title>
+<title>MTG-418 Concept Review · Post-Merge Full-Branch Audit at HEAD 8838269f91</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    max-width: 76rem;
+    max-width: 78rem;
     margin: 2.5rem auto;
     padding: 0 1.25rem 4rem;
     font: 16px/1.55 system-ui, -apple-system, sans-serif;
@@ -70,7 +70,7 @@
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
   th, td { padding: .6rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   th { font-weight: 700; background: var(--card); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; margin: 1rem 0; }
   .panel {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -87,54 +87,65 @@
     margin: 1rem 0;
   }
   ol.questions { padding-left: 1.35rem; }
-  ol.questions li { margin: .9rem 0; }
-  .choice { margin-top: .25rem; }
+  ol.questions li { margin: .95rem 0; }
+  .choice { margin-top: .3rem; }
   .selected { font-weight: 700; color: var(--prop-fg); }
   .small { font-size: .88rem; color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Full-Branch Concept Review · HEAD b817943ea0</div>
-  <h1>Do MTG-418’s event-history, query, state-trigger, untap, draw, and CR 104.4b loop models line up?</h1>
+  <div class="eyebrow">Managym, Manabot &amp; Academy · MTG-418 · Post-Merge Full-Branch Concept Review · HEAD 8838269f91</div>
+  <h1>Do MTG-418’s event-history and contextual-query concepts line up after syncing onto <code>main</code>?</h1>
   <p>
-    <strong>Area reviewed:</strong> The entire built MTG-418 surface across <code>managym</code>,
-    <code>manabot</code>, and <code>managym.academy</code> / <code>academy/ui</code> against merged base
-    <code>a40a5ee146</code> (including the Finding 17 <code>resolution_owed</code> pass in
-    <code>31a2d7dbd3</code> / <code>0b592982ee</code> and the <code>1633beec4d</code> packed v11
-    <code>ObservationBatch</code> merge; <strong>81/81 primary FDN rows</strong>, <strong>15/17 cost-primary
-    rows</strong>, all 5 cross-set query families on hash contract <strong>v31</strong>):
+    <strong>Area reviewed:</strong> The entire built MTG-418 event-history and contextual-query surface across
+    <code>managym</code>, <code>manabot</code>, <code>managym.academy</code> / <code>academy/ui</code>, and
+    <code>docs</code> against merged base <code>610370233c</code> (incorporating Finding 18’s stabilized loop watch
+    in <code>b5bbe85dca</code>/<code>d3486c59fb</code>, the <code>88fe2ebf6c</code> combat-damage merge, the
+    <code>635e54710f</code>/<code>cdfd651ff5</code> decomposition passes, the <code>31588d944d</code> compression,
+    and the <code>60908f4ccf</code> casting-authority + <em>Quilled Greatwurm</em> + <code>SpellProfile</code>
+    merge; <strong>81/81 primary FDN rows</strong>, <strong>16/17 cost-primary rows</strong>, all 5 cross-set query
+    families on hash contract <strong>v31</strong>):
     <code>state/src/{ability,card,game_object,permanent,stack_object}.rs</code>,
-    <code>src/flow/{action,damage,decision,game,layers,mana,payment,play,priority,proposed_event,resolution,sba,stabilization,statics,tick,triggers,turn,zones}.rs</code>,
-    <code>src/agent/{ability_description,continuation,effect_execution,env,observation,observation_encoder,observation_layout,observation_rows}.rs</code>,
-    <code>src/state/{hash,loop_fingerprint_tests,player}.rs</code>,
-    <code>manabot/policy/{prepare,readings}.py</code>,
-    <code>managym/academy/{recording,server,trace}.py</code>, and
-    <code>academy/ui/src/lib/recording.ts</code>.
+    <code>src/flow/{action,damage,decision,event,game,layers,mana,payment,play,priority,proposed_event,resolution,retarget,sba,statics,tick,trigger,triggers,turn,zones}.rs</code>,
+    <code>src/agent/{ability_description,continuation,effect_execution,env,observation,observation_encoder,observation_layout}.rs</code>,
+    <code>src/state/hash.rs</code>,
+    <code>manabot/{policy/{checkpoint,prepare,readings},semantic/text_observation}.py</code>,
+    <code>managym/academy/{recording,server,trace}.py</code>,
+    <code>academy/ui/src/lib/{recording,types,board/*}</code>, and
+    <code>docs/{engine,observation-and-model}.md</code>.
   </p>
   <p class="small">
-    <strong>Outcome: The plan changed.</strong> Six of seven product/rules concepts line up cleanly (including
-    the newly merged packed v11 CSR observation path). One concept does <strong>not</strong> line up:
-    <strong>CR 104.4b mandatory-loop detection</strong> still counts a finished resolution <em>before</em>
-    CR 117.5 / 704.3 / 603.8 post-resolution stabilization runs, and clears <code>loop_watch</code> in three
-    places without clearing <code>resolution_owed</code>. As a result, mandatory loops driven by the very
-    mechanisms MTG-418 just built — <strong>CR 603.8 state triggers</strong>, <strong><code>BecomesUntapped</code>
-    / non-batch <code>emit()</code> events</strong>, and <strong>SBA deaths</strong> — clear the watch to
-    <code>None</code> on every single cycle and hang forever without even reaching <code>CAP</code>.
-    The fix moves <code>end_mandatory_loop()</code> after <code>stabilize_before_priority()</code> and unifies
-    clearing behind <code>PriorityState::clear_loop_watch()</code>, staying on hash contract <strong>v31</strong>.
+    <strong>Outcome: The plan changed.</strong> Five of eight product/rules concepts line up cleanly (including
+    Finding 18’s stabilized CR 104.4b loop watch, unified paid-cost stack projection for both <em>Ayli</em> and
+    <em>Lumen-Class Frigate</em>, and <em>Lunar Convocation</em>’s <code>Condition::Compare</code> cleanup).
+    <strong>Three concepts do not line up</strong> — all exposed where MTG-418’s history/query model meets
+    the newly merged casting-authority and <em>Quilled Greatwurm</em> paths:
+    (1) <strong>Event-bound trigger amounts</strong> are split across <code>EffectValue::TriggeringAmount</code>
+    (<code>i32</code>) and <code>EffectValue::X</code> (<code>u8</code>, clamped at 255) on
+    <em>Quilled Greatwurm</em>’s <code>CombatDamageTotals</code>, double-encoding one number into both
+    <code>stack::X</code> and <code>FactKind::TriggeringAmount</code> while leaving <em>Drake Hatcher</em>,
+    <em>Bloodthirsty Conqueror</em>, <em>Niv-Mizzet</em>, and <em>Lathril</em> without numbers in
+    <code>OrderTriggers</code> and stack labels;
+    (2) <strong>Departed spell LKI</strong> (<code>SpellLki</code>, <code>TriggeringSpellMatches</code>,
+    <code>subject_matches_damage_source</code>) drops <code>SpellProfile</code> (Adventures, Omens, modal back
+    faces), reverting departed inset spells to their Creature front face; and
+    (3) <strong><code>TriggerCondition</code> wrapper recursion</strong> has five manual copies, and
+    <code>once_each_turn()</code> missed the merged <code>TriggerCondition::Prepared</code> wrapper (panicking on
+    any granted prepared once-each-turn trigger). All three close on hash contract <strong>v31</strong> without
+    breaking pinned pilots.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at b817943ea0 vs. Base a40a5ee146</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 8838269f91 vs. Base 610370233c</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:42%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>b817943ea0</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>8838269f91</code>)</th>
         <th style="width:9%">Line up?</th>
-        <th style="width:28%">What Works or What Is Wrong</th>
+        <th style="width:29%">What Works or What Is Wrong</th>
       </tr>
     </thead>
     <tbody>
@@ -145,102 +156,128 @@
           <code>DamageHistory</code> (sorted exact source&rarr;permanent &amp; combat-player pairs),
           <code>attacks_this_turn</code>, <code>ability_triggers_this_turn</code>,
           <code>used_trigger_grants</code>, and <code>ability_resolutions_this_turn</code>.
+          <em>Lunar Convocation</em> reads <code>Condition::Compare</code> over
+          <code>LifeGainedThisTurn</code> / <code>LifeLostThisTurn</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Single owner, single turn reset, exact CR 400.7 identity, viewer-safe v11 projections and LLM text.
+          Single owner, single turn reset, duplicate life conditions deleted in <code>635e54710f</code>,
+          viewer-safe v11 projections and LLM text aligned.
         </td>
       </tr>
       <tr>
-        <td><strong>Instruction results, LKI, queries, CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
+        <td><strong>Instruction results, permanent LKI, paid-cost stack reads, CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
         <td>
           <code>EventBinding</code> + <code>EffectFrame</code>; <code>ObjectLki.renamed</code> +
           <code>lki_face_printing</code> / <code>lki_mana_printing</code> + <code>matches_permanent_facts</code>;
-          <code>SpellLki</code> + <code>Game::spell_info</code>; <code>ObjectProperty</code>;
-          <code>ContextRead</code>; <code>is_mana_ability</code> vs. <code>mana_choices</code>;
-          all-zone <code>Game::object_pt</code>; unified <code>DealsDamage</code>,
-          <code>triggering_amount</code>, and threaded <code>triggering_noun</code>.
+          <code>ObjectProperty</code>; <code>PaymentReceipt::paid_as</code> +
+          <code>StackObjectData.paid_amount</code> (covering both <em>Ayli</em> and <em>Lumen-Class Frigate</em>
+          station); <code>is_mana_ability</code> vs. <code>mana_choices</code>; all-zone <code>Game::object_pt</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Aligned across rules, hash v31, v11 tensors, text, and pinned pilots (legacy serialized variants stay
-          for TLA token stability and route through shared readers).
+          Single live/LKI reader across resolution, layers, stack projection, v11 tensors, and text. Station
+          alignment landed in <code>cdfd651ff5</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Packed &amp; dense v11 observation projection</strong><br><span class="small">Merged <code>ObservationBatch</code> CSR + checkpoint compatibility</span></td>
+        <td><strong>CR 104.4b mandatory-loop watch &amp; stabilized fingerprint</strong><br><span class="small">CR 104.4b, 117.5, 603.8, 704.3</span></td>
         <td>
-          <code>observation_encoder.rs::encode_rows</code> emits <code>Cell</code> rows into both dense
-          buffers and <code>observation_rows.rs::PackedRows</code>; <code>FactKind::payload_divisor</code>
-          maps <code>AbilityResolution</code> and <code>TriggeringAmount</code> to divisor 1;
-          <code>manabot/policy/prepare.py::_facts</code> filters <code>&lt;= tables.fact_kinds</code>
-          synchronously on <code>valid</code> and <code>live</code>.
+          <code>PriorityState.{loop_watch, resolution_owed}</code> + single <code>clear_loop_watch()</code>;
+          <code>tick_priority()</code> runs <code>end_mandatory_loop()</code> after
+          <code>stabilize_before_priority()</code> and <code>is_game_over()</code>;
+          <code>GameState::loop_fingerprint()</code> masks life, poison, logs, priority, allocators, and
+          stack-object IDs and saturates turn counts at 16.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Post-merge audit of <code>1633beec4d</code> confirms dense, packed CSR, compact routing, and older
-          checkpoint fact-kind filtering all align on the same layout metadata.
+          Finding 18 landed in <code>b5bbe85dca</code>/<code>d3486c59fb</code>. State-trigger, untap, poison,
+          suspending, and finite counter-chain controls all pass.
         </td>
       </tr>
       <tr>
-        <td><strong>Untap transitions &amp; CR 603.8 state triggers</strong><br><span class="small">CR 122.1d, 502.3, 603.3a, 603.8</span></td>
+        <td><strong>Untap transitions, CR 603.8 state triggers, grantor costs &amp; draw outcome</strong><br><span class="small">CR 104.4b, 122.1d, 602.2b, 603.8</span></td>
         <td>
-          Single <code>Game::untap_permanent</code> emits <code>PermanentUntapped</code> (respecting stun
-          counters); <code>TriggerCondition::State(Condition)</code> + <code>NoCounters</code> share
-          <code>EventKinds::STATE_TRIGGER</code> and <code>state_trigger_waiting</code> (requiring
-          <code>inline_effects.is_none()</code> across pending, placement, and stack).
+          Single <code>Game::untap_permanent</code>; <code>TriggerCondition::State(Condition)</code> on
+          <code>EventKinds::STATE_TRIGGER</code> with <code>inline_effects.is_none()</code>;
+          <code>has_grantor_cost()</code> + <code>SourceReservation::owed</code>;
+          <code>GameOutcome::Draw { mandatory_loop }</code> with explicit <code>winner: int | None</code>
+          through Rust, Python Academy, and Svelte <code>orientBoard</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Trigger semantics and waiting checks line up — <em>except</em> when either mechanism feeds a
-          mandatory loop (see CR 104.4b row below).
+          Single owners across rules, payment, and consumer projections; draws never flip <code>won</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Draw outcome projection across consumers</strong><br><span class="small">In a draw (<code>winner = None</code>), neither player won</span></td>
+        <td><strong>Packed CSR &amp; dense v11 observation layout and checkpoint prefixes</strong><br><span class="small">Append-only columns + fact-kind gating</span></td>
         <td>
-          <code>GameOutcome::Draw { mandatory_loop }</code> flows through <code>env.rs</code>,
-          <code>recording.ts::orientBoard</code>, <code>server.py::viewer_view</code>,
-          <code>trace.py::normalize_observation_to_hero</code>, and <code>recording.py::person_board</code>
-          with explicit <code>winner: int | None</code>.
+          <code>encode_rows</code> writes <code>player_turn_state</code> (15 v11 / 8 legacy),
+          <code>permanent</code> (56 v11: MTG-418 at 53–55 after main’s 52), <code>stack</code> (46 v11:
+          MTG-418 at 40–45 after main’s 37–39), <code>relations</code> kind 11, and
+          <code>FactKind::{AbilityResolution, TriggeringAmount}</code> (filtered by <code>&lt;= tables.fact_kinds</code>).
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Neither seat flips to <code>won: true</code> in native observations, live play, Watch, or saved traces.
+          Code and schemas align cleanly. Minor doc lag: <code>docs/observation-and-model.md</code> layout table
+          (lines 724–726) still prints <code>40 &times; 53</code>, <code>32 &times; 40</code>, and
+          <code>2 &times; 8</code> instead of <code>40 &times; 56</code>, <code>32 &times; 46</code>, and
+          <code>2 &times; 15</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Grantor-cost activated abilities &amp; owed source reservations</strong><br><span class="small">CR 302.6, 602.2b</span></td>
+        <td><strong>Event-bound trigger amounts (&ldquo;that much&rdquo; / &ldquo;that many&rdquo;)</strong><br><span class="small">CR 510.2, 603.2, 608.2h · One committed amount per trigger occurrence, shown wherever triggers are ordered or inspected</span></td>
         <td>
-          <code>ActivatedAbilityDefinition::has_grantor_cost()</code> unifies focus, descriptions, and
-          <code>announced_model</code>; <code>SourceReservation::owed(p, tap, leaves)</code> is the single
-          constructor across all eight owed-source sites.
-        </td>
-        <td><span class="badge yes">Yes</span></td>
-        <td>
-          Single owner for both tap and exile grantors across offer, reservation, and description.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>CR 104.4b mandatory-loop watch lifecycle</strong><br><span class="small">A mandatory loop step ends only after resolution <em>and</em> CR 117.5 / 704.3 / 603.8 stabilization settle; any real choice breaks both the watch and the owed count</span></td>
-        <td>
-          <code>PriorityState.{loop_watch, resolution_owed}</code>;
-          <code>tick_priority()</code> runs <code>end_mandatory_loop()</code> at lines <code>479&ndash;487</code>
-          <em>before</em> <code>stabilize_before_priority()</code> at line <code>490</code>;
-          <code>tick.rs:114</code>, <code>action.rs:1005</code>, and <code>priority.rs:63</code> clear
-          <code>loop_watch = None</code> without clearing <code>resolution_owed</code>.
+          Split across <code>EffectValue::TriggeringAmount</code> (<code>trigger.triggering_amount: i32</code>,
+          used by <em>Drake Hatcher</em>, <em>Lathril</em>, <em>Niv-Mizzet</em>, <em>Bloodthirsty Conqueror</em>)
+          and <code>EffectValue::X</code> (<code>trigger.x: u8</code>, used by <em>Quilled Greatwurm</em> on
+          <code>CombatDamageTotals</code>). <code>triggers.rs:938,1010,1058,1061</code> writes
+          <code>CombatDamageTotals</code> into <strong>both</strong> fields. <code>trigger_description()</code>
+          renders only <code>x</code> via a <code>bound_x</code> special case, never <code>triggering_amount</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Two mismatches:</strong>
-          (1) <em>Wrong lifecycle point:</em> checking &ldquo;empty stack &amp; no pending triggers&rdquo; before
-          <code>stabilize_before_priority()</code> clears <code>loop_watch</code> every cycle on state-trigger,
-          non-batch <code>emit()</code> (<code>PermanentUntapped</code>), and SBA-death loops (infinite hang!),
-          and can declare a <code>CAP</code> draw before a terminal SBA loss (life &le; 0, poison &ge; 10, empty
-          library draw).
-          (2) <em>No single clear owner:</em> a real choice clears <code>loop_watch</code> while leaving
-          <code>resolution_owed = true</code>, immediately seeding a fresh watch at 1 for a player-chosen
-          resolution.
+          <strong>Biggest mismatch — one idea under two names and two encodings:</strong>
+          (1) <em>Quilled Greatwurm</em> double-encodes one damage total into both <code>stack::X</code>
+          (pretending announced X) and <code>FactKind::TriggeringAmount</code>, and silently clamps resolution at
+          <code>255</code> (<code>u8::MAX</code>) while observations report the unclamped <code>i32</code>.
+          (2) Simultaneous <em>Drake Hatcher</em> / <em>Bloodthirsty Conqueror</em> triggers with different amounts
+          have <strong>identical</strong> <code>OrderTriggers</code> buttons and Academy stack labels because
+          <code>trigger_description</code> ignores <code>triggering_amount</code>.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Departed spell LKI &amp; cast-profile queries</strong><br><span class="small">CR 608.2h, 702.181, 712.11, 715.3 · &ldquo;That spell&rdquo; keeps the profile it was cast as (front, Adventure, Omen, back face)</span></td>
+        <td>
+          <code>TurnState::spells_cast</code> stores <code>RecordedCast { object, profile }</code> with
+          <code>recorded_cast_matches_predicate()</code>, but <code>SpellLki</code>
+          (<code>stack_object.rs:49</code>) stores front-card <code>definition_id</code> with <strong>no
+          <code>profile</code></strong>. <code>Condition::TriggeringSpellMatches</code>
+          (<code>statics.rs:1185</code>) and <code>subject_matches_damage_source</code>
+          (<code>triggers.rs:2285</code>) call <code>recorded_object_matches_predicate()</code> (front face only).
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Split spell-history authority after <code>60908f4ccf</code>:</strong>
+          An Adventure or Omen countered before a cast trigger resolves reverts to its Creature front face for
+          <code>TriggeringSpellMatches</code>, returning <code>false</code> for an instant/sorcery/Lesson check
+          even though <code>SpellLki</code> holds the Adventure’s mana value and colors and
+          <code>effect_execution::spell_lki</code> labels it with the front creature’s name.
+        </td>
+      </tr>
+      <tr>
+        <td><strong><code>TriggerCondition</code> wrapper transparency</strong><br><span class="small">Every wrapper (<code>WasCast</code>, <code>FromZone</code>, <code>Prepared</code>, <code>ActiveIf</code>, <code>OnceEachTurn</code>, &hellip;) delegates uniformly to its inner condition</span></td>
+        <td>
+          Five independent wrapper matches across <code>triggers.rs</code>, <code>ability_description.rs</code>,
+          and <code>ability.rs</code>. <code>TriggerCondition::once_each_turn()</code>
+          (<code>ability.rs:3048</code>) omits <code>Self::Prepared { condition }</code>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>No single owner for wrapper recursion:</strong>
+          A granted/static trigger wrapping <code>OnceEachTurn</code> inside <code>Prepared</code> gets
+          <code>clock: None</code> in <code>layers.rs:1285</code> and <strong>panics</strong> at
+          <code>triggers.rs:911</code> (<code>.expect("limited grant clock")</code>) when it fires.
         </td>
       </tr>
     </tbody>
@@ -248,176 +285,272 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch &mdash; Watch Lifecycle Runs Before Stabilization &amp; Splits Its Clear</h2>
+  <h2>2. Biggest Mismatch &mdash; Event-Bound Trigger Amounts Split Across <code>TriggeringAmount</code> and <code>X</code></h2>
   <div class="callout">
-    <strong>Why the code diverges from Magic&rsquo;s rules:</strong>
-    Under CR 117.5, 608.2m, 704.3, 603.3b, and 603.8, one cycle of a stack chain is not done when
-    <code>resolve_top_of_stack()</code> finishes (or its suspended decision resumes). State-based actions run,
-    <code>pending_events</code> (including <code>PermanentUntapped</code> from <code>untap_permanent</code>) are
-    matched into triggers, CR 603.8 state triggers (<code>check_state_triggers</code>) are evaluated, and waiting
-    triggers are placed on the stack &mdash; all inside <code>stabilize_before_priority()</code>.
-    Because <code>tick_priority()</code> calls <code>end_mandatory_loop()</code> <em>before</em>
-    <code>stabilize_before_priority()</code>, the watch judges the game at an unfinished, pre-SBA, pre-trigger
-    snapshot. Whenever the next trigger in a mandatory loop comes from a state trigger, a non-batch
-    <code>emit()</code> event, or an SBA death, <code>stack_is_empty() &amp;&amp; pending_triggers.is_empty()</code>
-    is temporarily true, so <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> every single
-    cycle.
+    <strong>Why the code diverges from the product concept:</strong>
+    A person playing or reading a replay sees one idea across <em>Drake Hatcher</em>, <em>Lathril</em>,
+    <em>Niv-Mizzet, Visionary</em>, <em>Bloodthirsty Conqueror</em>, and <em>Quilled Greatwurm</em>: an event
+    committed a number, and the triggered ability uses &ldquo;that much&rdquo; / &ldquo;that many&rdquo;.
+    Announced <code>X</code> (CR 107.3) is a completely different thing: a number chosen when casting a spell or
+    activating an ability (and carried into an entering permanent’s own ETB trigger under CR 107.3m).
+    Because <em>Quilled Greatwurm</em> was authored on <code>main</code> before MTG-418’s
+    <code>EffectValue::TriggeringAmount</code> existed, the <code>60908f4ccf</code> merge kept Greatwurm on
+    <code>EffectValue::X</code> and copied <code>CombatDamageTotals</code> into <em>both</em>
+    <code>trigger.x</code> (<code>u8</code>) and <code>trigger.triggering_amount</code> (<code>i32</code>).
+    Meanwhile, <code>trigger_description()</code> only formats <code>x</code>, so the four cards that DO use
+    <code>TriggeringAmount</code> print generic, numberless <code>OrderTriggers</code> buttons and stack labels!
   </div>
 
   <div class="grid">
     <div class="panel no-box">
-      <h3>Before <span class="badge existing">Existing at b817943ea0</span></h3>
-      <pre>// tick.rs:479-513 (WRONG ORDER)
-if self.state.priority.resolution_owed {
-    self.state.priority_mut().resolution_owed = false;
-    // Runs BEFORE SBAs, process_game_events(), check_state_triggers()!
-    if self.end_mandatory_loop() {
-        return None;
-    }
-    stabilized = false;
+      <h3>Before <span class="badge existing">Existing at 8838269f91</span></h3>
+      <pre>// managym/cards/src/fdn.rs:3404-3408
+effects: vec![Effect::put_counters(
+    ObjectSelector::Triggering,
+    CounterKind::PlusOnePlusOne,
+    EffectValue::X, // &lt;-- clamped u8! Pretends announced X!
+)],
+
+// managym/src/flow/triggers.rs:937-951, 1009-1012, 1058-1061
+let total = match member {
+    TriggerMember::CombatTotal(_, total) =&gt; Some(total as i32),
+    _ =&gt; None,
+};
+// ...
+GameEvent::CombatDamageTotals { .. } =&gt; {
+    (u8::try_from(amount).unwrap_or(u8::MAX), Default::default())
 }
-if !stabilized {
-    if let Some(space) = self.stabilize_before_priority() {
-        return Some(space);
-    }
-    ...
-    stabilized = true;
-}
-// tick.rs:112-115 (LEAVES resolution_owed = true!)
-if space.kind != ActionSpaceKind::Priority &amp;&amp; space.actions.len() &gt; 1 {
-    self.state.priority_mut().loop_watch = None;
-}
-// action.rs:1005 &amp; priority.rs:63 also clear only loop_watch.</pre>
+trigger.triggering_amount = amount; // i32 -&gt; FactKind::TriggeringAmount
+trigger.x = x;                      // u8  -&gt; stack::HAS_X + stack::X !!
+
+// managym/src/agent/ability_description.rs:45-51, 133-144
+// Special-case `bound_x` ONLY for Greatwurm; ignores `triggering_amount`!
+// Drake Hatcher OrderTriggers offers for 1 dmg and 3 dmg:
+//   [0] "Put on stack next — Drake Hatcher ... put the amount of the
+//        triggering event (damage dealt or life lost) incubation counters"
+//   [1] "Put on stack next — Drake Hatcher ... put the amount of the
+//        triggering event (damage dealt or life lost) incubation counters"
+// (Both buttons are BYTE-IDENTICAL!)</pre>
     </div>
     <div class="panel prop-box">
       <h3>After <span class="badge proposed">Proposed (Still Hash Contract v31)</span></h3>
-      <pre>// priority.rs — one owner for clearing the watch + owed count
-pub fn clear_loop_watch(&amp;mut self) {
-    self.loop_watch = None;
-    self.resolution_owed = false;
-}
+      <pre>// managym/cards/src/fdn.rs:3404-3408
+effects: vec![Effect::put_counters(
+    ObjectSelector::Triggering,
+    CounterKind::PlusOnePlusOne,
+    EffectValue::TriggeringAmount, // &lt;-- one i32 event amount!
+)],
 
-// tick.rs::tick_priority() — count AFTER stabilization settles
-if !stabilized {
-    if let Some(space) = self.stabilize_before_priority() {
-        return Some(space);
-    }
-    if !TurnState::step_has_priority(step) &amp;&amp; !self.state.turn.cleanup_priority {
-        return None;
-    }
-    stabilized = true;
-}
-if self.is_game_over() {
-    return None; // Terminal SBAs always win before any CAP draw
-}
-if self.state.priority.resolution_owed {
-    self.state.priority_mut().resolution_owed = false;
-    if self.end_mandatory_loop() { // Only needs `if self.stack_is_empty()`!
-        return None;
-    }
-}
-// At resolve_top_of_stack(): set resolution_owed = true; stabilized = false;
-// At tick.rs:114, action.rs:1005, priority.rs:{50,63}, on_step_start:
-// call priority.clear_loop_watch().</pre>
+// managym/src/flow/triggers.rs:1009-1028
+// Delete CombatDamageTotals from `trigger.x`!
+// `trigger.triggering_amount = amount;` is the sole carrier (i32).
+// `trigger.x` remains strictly CR 107.3m ETB spell X + legacy TLA CountersPut.
+
+// managym/src/agent/ability_description.rs
+// Delete the DealsCombatDamage { to: None } split from `bound_x`.
+// Thread `triggering_amount: i32` into `trigger_description(...)`
+// (from both `pending_trigger_description` and `observation.rs:1963`):
+//   triggering_amount == 0 -&gt; symbolic card text (unchanged)
+//   triggering_amount &gt; 0  -&gt; "that many (N)" / "that much (N)"
+//
+// Drake Hatcher OrderTriggers &amp; stack entries for 1 dmg and 3 dmg:
+//   [0] "...put that many (1) incubation counters on Drake Hatcher"
+//   [1] "...put that many (3) incubation counters on Drake Hatcher"
+// Quilled Greatwurm stack entries for 2 dmg and 300 dmg:
+//   trigger.x == 0, trigger.triggering_amount == 300 (no 255 clamp!)
+//   "...put that many (300) +1/+1 counters on that permanent — event: ..."</pre>
     </div>
   </div>
 
-  <h3>Concrete Counterexamples Tested Against the Proposal</h3>
+  <h3>Concrete Interactions &amp; Counterexamples</h3>
   <table>
     <thead>
       <tr>
-        <th style="width:27%">Scenario / Counterexample</th>
-        <th style="width:35%">Behavior at <code>b817943ea0</code> <span class="badge existing">Existing</span></th>
+        <th style="width:26%">Scenario / Counterexample</th>
+        <th style="width:36%">Behavior at <code>8838269f91</code> <span class="badge existing">Existing</span></th>
         <th style="width:38%">Behavior After Fix <span class="badge proposed">Proposed</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>CR 603.8 state-trigger loop</strong><br><span class="small">Permanent with 4 page counters and <code>State(SourceCountersAtLeast(Page, 4))</code> &rarr; <code>gain_life(1)</code></span></td>
-        <td><span class="badge no">Hangs forever</span><br>After trigger resolves, stack &amp; pending triggers are empty &rarr; <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> &rarr; <code>check_state_triggers()</code> re-stacks it. Never even hits <code>CAP</code>.</td>
-        <td><span class="badge yes">Draws &le; <code>LOOP_RECOGNIZED_WITHIN</code></span><br><code>stabilize_before_priority()</code> re-stacks the state trigger first; <code>end_mandatory_loop()</code> sees non-empty stack, counts &amp; fingerprints the stabilized state, draws at resolution ~66.</td>
+        <td><strong>Two simultaneous <em>Drake Hatcher</em> hits (1 and 3 damage) or two <em>Bloodthirsty Conqueror</em> triggers</strong></td>
+        <td><span class="badge no">Identical offers &amp; stack labels</span><br>Both <code>OrderTriggers</code> buttons and both Academy stack items print the exact same generic phrase without the number; <code>decision_context.pending</code> lists detached amounts.</td>
+        <td><span class="badge yes">Each offer &amp; stack item names its amount</span><br><code>trigger_description</code> formats <code>EffectValue::TriggeringAmount</code> with <code>(1)</code> and <code>(3)</code> directly in both <code>OrderTriggers</code> and <code>StackObjectData.description</code>.</td>
       </tr>
       <tr>
-        <td><strong><code>BecomesUntapped</code> / non-batch <code>emit()</code> loop</strong><br><span class="small"><code>BecomesUntapped</code> &rarr; <code>Tap(This)</code>, <code>Untap(This)</code></span></td>
-        <td><span class="badge no">Hangs forever</span><br><code>untap_permanent()</code> pushes <code>PermanentUntapped</code> to <code>pending_events</code> (not <code>pending_triggers</code>); <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> before <code>process_game_events()</code> runs.</td>
-        <td><span class="badge yes">Draws &le; <code>LOOP_RECOGNIZED_WITHIN</code></span><br><code>stabilize_before_priority()</code> converts <code>pending_events</code> to the stacked trigger first; <code>end_mandatory_loop()</code> counts, fingerprints, and draws promptly.</td>
+        <td><strong><em>Quilled Greatwurm</em> with a creature dealing &gt; 255 combat damage (e.g. <em>Bulk Up</em> doubling)</strong></td>
+        <td><span class="badge no">Silent clamp &amp; observation lie</span><br><code>trigger.x</code> clamps to <code>255</code> so only 255 counters are placed, while <code>FactKind::TriggeringAmount</code> and <code>decision_context</code> report <code>300</code>.</td>
+        <td><span class="badge yes">Exact <code>i32</code> everywhere</span><br><code>EffectValue::TriggeringAmount</code> puts all <code>300</code> counters; <code>trigger.x == 0</code> (no fake <code>stack::HAS_X</code>); <code>FactKind::TriggeringAmount</code>, stack text, and resolution all say <code>300</code>.</td>
       </tr>
       <tr>
-        <td><strong>SBA-death reanimation loop</strong><br><span class="small">0/0 creature enters &rarr; CR 704.5f dies &rarr; death trigger returns it</span></td>
-        <td><span class="badge no">Hangs forever</span><br>When reanimation resolves, 0/0 is still alive on battlefield; <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> before SBA kills it.</td>
-        <td><span class="badge yes">Draws</span><br><code>stabilize_before_priority()</code> kills 0/0 and stacks its death trigger first; watch counts every cycle (reaches <code>CAP</code> since incarnations grow).</td>
+        <td><strong><em>Quilled Greatwurm</em> with trampling creature splitting 2 to blocker + 5 to player</strong></td>
+        <td><span class="badge yes">One trigger for 7</span><br><code>CombatDamageTotals</code> sums per source across recipients (CR 510.2).</td>
+        <td><span class="badge yes">Preserved (one trigger for 7)</span><br><code>DealsCombatDamage { to: None }</code> + <code>CombatDamageTotals</code> stays intact; only the amount field unifies onto <code>TriggeringAmount</code>.</td>
       </tr>
       <tr>
-        <td><strong>Terminal SBA loss on the <code>CAP</code> resolution</strong><br><span class="small">Life &le; 0, poison &ge; 10, or empty-library draw on resolution 10,000</span></td>
-        <td><span class="badge no">False Draw</span><br><code>end_mandatory_loop()</code> declares <code>Draw { mandatory_loop: true }</code> before <code>commit_state_based_losses()</code> runs.</td>
-        <td><span class="badge yes">Correct Win/Loss</span><br><code>stabilize_before_priority()</code> runs SBAs and sets <code>GameOutcome::Losses</code>; <code>is_game_over()</code> returns before <code>end_mandatory_loop()</code>.</td>
-      </tr>
-      <tr>
-        <td><strong>Real 2-option mid-resolution choice with another object on stack</strong><br><span class="small">Trigger suspends on 2 legal choices while another spell/trigger sits below it</span></td>
-        <td><span class="badge no">False watch = 1</span><br><code>tick.rs:114</code> clears <code>loop_watch = None</code>, but leaves <code>resolution_owed = true</code>; once player chooses, watch immediately allocates at <code>resolutions = 1</code>.</td>
-        <td><span class="badge yes"><code>loop_watch</code> stays <code>None</code></span><br><code>clear_loop_watch()</code> clears both <code>loop_watch</code> and <code>resolution_owed</code> on any real choice; finishing the player-steered resolution starts no watch.</td>
-      </tr>
-      <tr>
-        <td><strong>All-suspending forced 1-choice loop (Finding 17) &amp; suspension check (d)</strong><br><span class="small">Conqueror + Ogre tap-chosen-Ogre + gain 1; Ogre 1-card discard</span></td>
-        <td><span class="badge yes">Passing</span><br>Suspension check sees count 2; all-suspending forced loop draws within <code>LOOP_RECOGNIZED_WITHIN</code>.</td>
-        <td><span class="badge yes">Preserved</span><br><code>suspended_decision_action_space()</code> still returns before stabilization/counting (count stays 2 while suspended); forced 1-action completion stabilizes and counts once.</td>
-      </tr>
-      <tr>
-        <td><strong>Forced 1-target trigger placement (<code>skip_trivial = false</code>)</strong><br><span class="small">Trigger with 1 legal target pauses stabilization for <code>ChooseTarget</code></span></td>
-        <td>Counted <em>before</em> target placement; watch survives the 1-action prompt.</td>
-        <td><span class="badge yes">Counted once placed</span><br>1-action prompt does not clear <code>clear_loop_watch()</code>; once submitted, stabilization finishes and counts the resolution. (2+ target options clear both watch and <code>resolution_owed</code>.)</td>
+        <td><strong>Static card text &amp; <code>observability.rs</code> (un-fired trigger, <code>triggering_amount == 0</code>)</strong></td>
+        <td>Symbolic text: <code>"the amount of the triggering event (damage dealt or life lost)"</code>.</td>
+        <td><span class="badge yes">Unchanged when 0</span><br>Only occurrences with <code>triggering_amount &gt; 0</code> render the concrete <code>(N)</code>; static descriptions stay symbolic.</td>
       </tr>
     </tbody>
   </table>
 </section>
 
 <section>
-  <h2>3. Intentional Boundaries Kept Outside This Change</h2>
+  <h2>3. Two Additional Post-Merge Mismatches Closed in the Same Pass</h2>
+  <div class="grid">
+    <div class="panel no-box">
+      <h3>Mismatch 2 &middot; <code>SpellLki</code> &amp; <code>TriggeringSpellMatches</code> drop <code>SpellProfile</code> <span class="badge existing">Existing</span></h3>
+      <pre>// state/src/stack_object.rs:49-61 — NO profile field!
+pub struct SpellLki {
+    pub object: ObjectId,
+    pub definition_id: CardDefId, // front card for Adventures/Omens!
+    pub controller: PlayerId,
+    pub mana_value: u8,           // Adventure's MV
+    pub spent: u16,
+    pub colors: Colors,           // Adventure's colors
+}
+// statics.rs:1183-1186 — ignores SpellProfile after departure!
+Condition::TriggeringSpellMatches(predicate) =&gt; matches!(
+    frame.and_then(|frame| frame.context_target),
+    Some(Target::StackSpell(id))
+        if self.recorded_object_matches_predicate(id, predicate)
+),</pre>
+      <p class="small">
+        <strong>Counterexample:</strong> Cast an Instant/Sorcery Adventure or Omen on a Creature card &rarr;
+        cast trigger with <code>TriggeringSpellMatches(instant_or_sorcery)</code> fires &rarr; spell is countered
+        &rarr; <code>recorded_object_matches_predicate</code> reads <code>source_base</code> (Creature front face)
+        and returns <strong>false</strong>! Same gap in <code>triggers.rs:2285</code>
+        (<code>subject_matches_damage_source</code>) and <code>effect_execution.rs:353</code> (prints Creature name
+        with Adventure MV).
+      </p>
+    </div>
+    <div class="panel prop-box">
+      <h3>Fix 2 &middot; Carry <code>profile</code> on <code>SpellLki</code> &amp; share one departed-spell matcher <span class="badge proposed">Proposed</span></h3>
+      <pre>// state/src/stack_object.rs — zero hash change for front-face spells!
+pub struct SpellLki {
+    pub object: ObjectId,
+    pub definition_id: CardDefId,
+    #[serde(default, skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
+    pub controller: PlayerId,
+    pub mana_value: u8,
+    pub spent: u16,
+    pub colors: Colors,
+}
+// statics.rs — ONE departed-spell matcher shared by:
+//   1. recorded_cast_matches_predicate(RecordedCast, pred)
+//   2. Condition::TriggeringSpellMatches(pred)  (via spell_info(id))
+//   3. triggers.rs::subject_matches_damage_source (via spell_info(id))
+// effect_execution.rs::spell_lki — resolve inset printing name when
+// !spell.profile.is_front() (front-face summaries &amp; tokens unchanged).</pre>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel no-box">
+      <h3>Mismatch 3 &middot; <code>once_each_turn()</code> omits <code>Prepared</code> <span class="badge existing">Existing</span></h3>
+      <pre>// managym/state/src/ability.rs:3048-3057
+pub fn once_each_turn(&amp;self) -&gt; bool {
+    match self {
+        Self::OnceEachTurn { .. } =&gt; true,
+        Self::WasCast { condition }
+        | Self::FromZone { condition, .. }
+        | Self::InGraveyard { condition }
+        | Self::ActiveIf { condition, .. }
+        | Self::WhileSourceAttacking { condition } =&gt; condition.once_each_turn(),
+        _ =&gt; false, // &lt;-- Prepared missed! Panics in triggers.rs:911!
+    }
+}</pre>
+    </div>
+    <div class="panel prop-box">
+      <h3>Fix 3 &middot; Exhaustive <code>TriggerCondition::inner(&amp;self)</code> <span class="badge proposed">Proposed</span></h3>
+      <pre>// managym/state/src/ability.rs — NO wildcard `_`!
+pub fn inner(&amp;self) -&gt; Option&lt;&amp;Self&gt; {
+    match self {
+        Self::WasCast { condition }
+        | Self::OnceEachTurn { condition }
+        | Self::FromZone { condition, .. }
+        | Self::Prepared { condition }
+        | Self::InGraveyard { condition }
+        | Self::ActiveIf { condition, .. }
+        | Self::WhileSourceAttacking { condition } =&gt; Some(condition),
+        Self::Sacrificed { .. } | Self::NoCounters { .. } | ... =&gt; None,
+    }
+}
+// once_each_turn, condition_event_kinds, triggering_noun, and bound_x
+// all delegate through inner(), so no future wrapper can drift.</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>4. Intentional Boundaries Kept Outside This Change</h2>
   <ul>
-    <li><strong><code>resolution_owed</code> stays <code>#[serde(skip)]</code> on hash contract v31:</strong> At every priority action space and every multi-option decision, <code>resolution_owed</code> is guaranteed <code>false</code>. It is <code>true</code> only while a forced 1-action <code>suspended_decision</code> or <code>trigger_placement</code> (both hashed in <code>CanonicalMatchState</code>) waits, and is preserved by <code>Clone</code> across all <code>GameSnapshot</code> forks. Hashing it would force a v32 contract bump with no replay or fork soundness gain.</li>
-    <li><strong>Pinned-pilot serialized compatibility:</strong> Legacy serialized shapes (<code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>PutsCounters</code>, <code>DealsCombatDamage</code>, <code>TriggeringHadCounters</code>, <code>NoCounters</code>) stay intact so <code>tests/model/test_pinned_pilot.py</code> remains unbroken; runtime logic shares the unified readers.</li>
-    <li><strong>Pre-existing <code>TurnState::graveyard_from_battlefield</code> omission in <code>CanonicalTurn</code>:</strong> Predates MTG-418 and stays outside this Task.</li>
-    <li><strong>Two blocked cost-primary FDN rows:</strong> <em>Quilled Greatwurm</em> and <em>Ovika, Enigma Goliath</em> remain explicitly documented in <code>fdn.jsonl</code>.</li>
+    <li><strong><code>DealsCombatDamage { to: None }</code> + <code>CombatDamageTotals</code> stay separate from <code>DamageDealt</code>:</strong> Under CR 510.2, a trampling creature dealing 2 to a blocker and 5 to the defending player triggers <em>Quilled Greatwurm</em> once for 7, not twice for 2 and 5. Only its amount channel unifies onto <code>TriggeringAmount</code>.</li>
+    <li><strong>Legacy serialized variants stay intact for pinned TLA pilots:</strong> <code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>TriggerCondition::{PutsCounters, DealsCombatDamage, NoCounters}</code>, <code>Condition::TriggeringHadCounters</code>, and <code>CountersPut</code>’s legacy <code>trigger.x</code> binding (used by TLA <code>tla.rs:2960</code>) remain unchanged so <code>tests/model/test_pinned_pilot.py</code> stays unbroken.</li>
+    <li><strong><code>TargetSpec::GraveyardCardYouOwnWithinSourcePower</code>:</strong> Kept as one shared reader across <em>Fiendish Panda</em>, <em>Alesha</em>, and <em>Sandbender</em> until a second dynamic target bound requires a frameless target evaluator.</li>
+    <li><strong>Two external boundaries documented in the ledger:</strong> <em>Ovika, Enigma Goliath</em> waits on composite mana-and-life ward costs; <em>Plasma Bolt</em>’s actual warp cast writer belongs at warp cast commit in the casting-permissions work.</li>
+    <li><strong>Doc sync bundled with this pass:</strong> Update <code>docs/observation-and-model.md</code> lines 724–726 (<code>40 &times; 56</code>, <code>32 &times; 46</code>, <code>2 &times; 15</code>) so the v11 layout table matches <code>observation_layout.rs</code>.</li>
   </ul>
 </section>
 
 <section>
-  <h2>4. Review Decisions (Reply with e.g. &ldquo;1a&rdquo;)</h2>
+  <h2>5. Review Decisions (Reply with e.g. &ldquo;1a&rdquo;)</h2>
   <p class="small">
     Running headless in a Graph step: the selected choices below are written directly into
-    <code>scratch/plan.md</code> as Finding 18 for the next <code>implement</code> pass.
+    <code>scratch/plan.md</code> as the post-merge alignment slice for the next <code>implement</code> pass
+    before <code>gate</code>.
   </p>
   <ol class="questions">
     <li>
-      <strong>Move <code>end_mandatory_loop()</code> after <code>stabilize_before_priority()</code> and unify clearing in <code>PriorityState::clear_loop_watch()</code> before <code>gate</code>?</strong>
+      <strong>Unify <em>Quilled Greatwurm</em> onto <code>EffectValue::TriggeringAmount</code> and render <code>triggering_amount</code> in <code>trigger_description()</code> for every card?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Yes &mdash; run <code>end_mandatory_loop()</code> at
-        the stabilized CR 117.5 / 704.3 pre-priority boundary (simplifying its empty check to
-        <code>self.stack_is_empty()</code>), route all watch-clearing sites through
-        <code>PriorityState::clear_loop_watch()</code>, add directed tests for a state-trigger loop, an
-        untap-event loop, and a real mid-resolution choice cancelling <code>resolution_owed</code>, and
-        re-record any moved <code>semantic-kernel-w17-v6</code> trace hashes on v31 before <code>gate</code>.
+        <span class="selected">1a (Selected):</span> Yes &mdash; switch <code>fdn.quilled_greatwurm</code> to
+        <code>EffectValue::TriggeringAmount</code>, stop writing <code>trigger.x</code> for
+        <code>CombatDamageTotals</code>, collapse <code>bound_x</code>, and thread <code>triggering_amount</code>
+        into <code>trigger_description()</code> so <em>Drake Hatcher</em>, <em>Lathril</em>,
+        <em>Niv-Mizzet</em>, <em>Bloodthirsty Conqueror</em>, and <em>Quilled Greatwurm</em> all show their exact
+        <code>i32</code> amount in <code>OrderTriggers</code> and stack labels without clamping at 255 or
+        double-encoding into <code>stack::X</code>. Refresh the hash-v31 receipts whose <code>content_digest</code>
+        moves with <code>fdn.quilled_greatwurm</code>.
       </div>
       <div class="choice">
-        1b: Ship <code>b817943ea0</code> directly to <code>gate</code> without moving
-        <code>end_mandatory_loop()</code>. (Passed over: state-trigger and untap-event loops &mdash; two
-        mechanisms introduced in MTG-418 itself &mdash; hang forever without even hitting <code>CAP</code>.)
+        1b: Keep <em>Quilled Greatwurm</em> on <code>EffectValue::X</code> and leave <code>TriggeringAmount</code>
+        out of <code>trigger_description()</code>. (Passed over: preserves a 255-damage clamp/observation
+        contradiction, double-encodes one amount into <code>stack::X</code> and <code>FactKind::TriggeringAmount</code>,
+        and leaves simultaneous <em>Drake Hatcher</em> / <em>Bloodthirsty Conqueror</em> triggers indistinguishable
+        in <code>OrderTriggers</code> and Academy stack labels.)
       </div>
     </li>
     <li>
-      <strong>Keep <code>PriorityState.resolution_owed</code> as <code>#[serde(skip)]</code> on hash contract v31, or hash it and bump to v32?</strong>
+      <strong>Carry <code>profile: SpellProfile</code> on <code>SpellLki</code> (omitted when front face) and unify departed-spell predicate matching?</strong>
       <div class="choice">
-        <span class="selected">2a (Selected):</span> Keep <code>#[serde(skip)]</code> on hash contract
-        <strong>v31</strong>. <code>resolution_owed</code> is always <code>false</code> at every priority or
-        multi-option decision, appears only beside hashed <code>suspended_decision</code> or
-        <code>trigger_placement</code> on forced 1-action stops, and is preserved by <code>Clone</code> on
-        every fork and <code>GameSnapshot</code>.
+        <span class="selected">2a (Selected):</span> Yes &mdash; add
+        <code>#[serde(default, skip_serializing_if = "SpellProfile::is_front")] pub profile: SpellProfile</code>
+        to <code>SpellLki</code>, share one <code>recorded_spell_matches_predicate</code> helper across
+        <code>recorded_cast_matches_predicate</code>, <code>Condition::TriggeringSpellMatches</code>, and
+        <code>subject_matches_damage_source</code>, and resolve the inset/back-face name in
+        <code>effect_execution::spell_lki</code>. Stays on hash contract <strong>v31</strong> with zero front-face
+        serialization change.
       </div>
       <div class="choice">
-        2b: Serialize <code>resolution_owed</code> (with <code>skip_serializing_if = "Not::not"</code>) and
-        bump <code>MATCH_STATE_HASH_VERSION</code> to <strong>v32</strong>, refreshing all hash-v31 receipts
-        and Academy fixtures. (Passed over: high churn across all v31 fixtures for a transient flag already
-        witnessed by the hashed suspension/placement state.)
+        2b: Leave <code>SpellLki</code> without <code>profile</code> and accept front-face fallback for departed
+        Adventures/Omens. (Passed over: directly breaks CR 608.2h/715.3/702.181 on the Adventure/Omen cards just
+        merged in <code>60908f4ccf</code>.)
+      </div>
+    </li>
+    <li>
+      <strong>Replace manual <code>TriggerCondition</code> wrapper matches with exhaustive <code>TriggerCondition::inner(&amp;self)</code>?</strong>
+      <div class="choice">
+        <span class="selected">3a (Selected):</span> Yes &mdash; add exhaustive <code>TriggerCondition::inner()</code>
+        (including <code>Prepared</code>, no wildcard arm) and route <code>once_each_turn</code>,
+        <code>condition_event_kinds</code>, <code>triggering_noun</code>, and <code>bound_x</code> through it,
+        preventing the <code>Prepared</code> + <code>OnceEachTurn</code> panic and any future wrapper drift.
+      </div>
+      <div class="choice">
+        3b: Only add <code>Self::Prepared { condition }</code> to <code>once_each_turn()</code>. (Passed over:
+        leaves five duplicated wrapper lists to drift again on the next wrapper variant.)
       </div>
     </li>
   </ol>
