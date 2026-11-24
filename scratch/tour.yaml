@@ -1,4 +1,4 @@
-at: b5bbe85dca8009d38ded61182717bd28d2b143b6
+at: d3486c59fbdff32ad26e009dc296915ca0ada564
 first:
   - path: docs/engine.md
     why: When a mandatory chain ends in a draw
@@ -12,6 +12,8 @@ first:
     why: The loop watch and its pending resolution count
   - path: managym/src/flow/tick.rs
     why: Count resolutions after stabilization and terminal losses
+  - path: managym/src/state/hash.rs
+    why: Stabilized loop fingerprint masking life, poison and stack ids
   - path: managym/src/flow/action.rs
     why: Clear the watch when a priority action succeeds
   - path: managym/src/flow/triggers.rs
