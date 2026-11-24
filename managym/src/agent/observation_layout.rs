@@ -469,6 +469,7 @@ columns! { stack {
     39: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     40: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     41: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
+    42: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
 } }
 
 columns! { action {
@@ -1191,7 +1192,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 42);
+                assert_eq!(stack::WIDTH, 43);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

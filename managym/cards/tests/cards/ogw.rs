@@ -4,6 +4,7 @@ use crate::support::{
     inspect::{card_of, offered_cards, zone_of},
     play::{activate, offers_ability, select_card, settle},
 };
+use managym::agent::observation::Observation;
 use managym::state::{
     effect::Modification, game_object::PlayerId, player::ManaPayment, zone::ZoneType,
 };
@@ -40,6 +41,14 @@ fn ayli_gains_the_last_known_toughness_of_the_sacrificed_creature() {
         activate(&mut s, ayli, 0);
         assert!(!offered_cards(&s).contains(&ayli_card), "another creature");
         select_card(&mut s, card);
+        // Both viewers see the toughness the pending gain will read.
+        for viewer in [0, 1] {
+            let view = Observation::for_player(s.game(), PlayerId(viewer));
+            let ability = &view.stack_objects[0];
+            assert_eq!(ability.paid_amount, Some(2 + buff));
+            let description = ability.description.as_deref().unwrap();
+            assert!(description.contains(&format!("paid its cost: {}", 2 + buff)));
+        }
         if countered {
             s.game_mut().state.stack_objects.pop();
         }

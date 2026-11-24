@@ -450,6 +450,7 @@ impl CompareOp {
 enum ContextRead {
     SourcePower,
     TriggeringPermanent,
+    PaidCost,
 }
 
 impl Condition {
@@ -1834,6 +1835,7 @@ impl ObjectSelector {
     fn reads(&self, read: ContextRead) -> bool {
         match self {
             Self::Triggering => read == ContextRead::TriggeringPermanent,
+            Self::Paid(_) => read == ContextRead::PaidCost,
             Self::Each {
                 exact_mana_value,
                 max_mana_value,
@@ -1965,10 +1967,26 @@ impl Effect {
             }
             _ => false,
         };
+        if let Some(amount) = self.amount() {
+            return amount.reads(read);
+        }
         match self {
             Self::MayExileTriggeringWithSource => read == ContextRead::TriggeringPermanent,
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
             Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
+            Self::If { condition, .. } if condition.reads(read) => true,
+            Self::SelectCards { max, .. } if max.reads(read) => true,
+            Self::TriggerModes {
+                up_to: Some(limit), ..
+            } if limit.reads(read) => true,
+            _ => self.any_child_effect(|effect| effect.reads(read)),
+        }
+    }
+
+    /// The quantity this instruction acts by ("deals N damage", "gain N
+    /// life"), when it has one.
+    fn amount(&self) -> Option<&EffectValue> {
+        match self {
             Self::DealDamage { amount, .. }
             | Self::DealDamageToPlayer { amount, .. }
             | Self::LoseLife { amount, .. }
@@ -1982,14 +2000,28 @@ impl Effect {
             | Self::CreateToken { count: amount, .. }
             | Self::AddOneColorManaValue { amount }
             | Self::ExileUntilNonlandCastFree { below: amount }
-            | Self::LookAndSelect { look: amount, .. } => amount.reads(read),
-            Self::If { condition, .. } if condition.reads(read) => true,
-            Self::SelectCards { max, .. } if max.reads(read) => true,
-            Self::TriggerModes {
-                up_to: Some(limit), ..
-            } if limit.reads(read) => true,
-            _ => self.any_child_effect(|effect| effect.reads(read)),
+            | Self::LookAndSelect { look: amount, .. } => Some(amount),
+            _ => None,
         }
+    }
+
+    /// The first amount in this program read from the objects that paid its
+    /// cost ("the sacrificed creature's toughness"), which a pending ability
+    /// publishes because those objects have left (CR 608.2h).
+    pub fn paid_cost_amount(&self) -> Option<EffectValue> {
+        if let Some(amount) = self.amount().filter(|a| a.reads(ContextRead::PaidCost)) {
+            return Some(amount.clone());
+        }
+        let found = std::cell::RefCell::new(None);
+        self.any_child_effect(|effect| {
+            let amount = effect.paid_cost_amount();
+            let hit = amount.is_some();
+            if hit {
+                *found.borrow_mut() = amount;
+            }
+            hit
+        });
+        found.into_inner()
     }
 
     /// Whether this program reads its enclosing ability's resolution ordinal.

@@ -1165,6 +1165,7 @@ fn encode_into_memory(
         ] = combat_damage_flags(&object.combat_damage_to_players);
         row[stack::MANA_SPENT] = f32::from(object.mana_spent);
         row[stack::SOURCE_POWER] = object.source_power.unwrap_or_default() as f32 / 10.0;
+        row[stack::PAID_AMOUNT] = object.paid_amount.unwrap_or_default() as f32 / 10.0;
         row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
@@ -2740,6 +2741,7 @@ mod tests {
             StackObjectData {
                 combat_damage_to_players: Vec::new(),
                 source_power: None,
+                paid_amount: None,
                 mana_spent: 0,
                 ability_resolutions: 0,
                 description: None,
@@ -2761,6 +2763,7 @@ mod tests {
             StackObjectData {
                 combat_damage_to_players: Vec::new(),
                 source_power: None,
+                paid_amount: None,
                 mana_spent: 0,
                 ability_resolutions: 0,
                 description: None,

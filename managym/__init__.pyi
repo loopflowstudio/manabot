@@ -1194,6 +1194,7 @@ class StackObject:
     combat_damage_to_players: list[int]
     mana_spent: int
     source_power: int | None
+    paid_amount: int | None
     ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.
     characteristics: ObservationCharacteristics | None

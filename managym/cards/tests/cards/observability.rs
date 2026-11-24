@@ -3489,6 +3489,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         combat_damage_to_players => [column(Stack, stack::COMBAT_DAMAGE_TO_ME), column(Stack, stack::COMBAT_DAMAGE_TO_OPPONENT)],
         mana_spent => [column(Stack, stack::MANA_SPENT)],
         source_power => [column(Stack, stack::SOURCE_POWER)],
+        paid_amount => [column(Stack, stack::PAID_AMOUNT)],
         ability_resolutions => [column(Stack, stack::ABILITY_RESOLUTIONS)],
         description => [Definition],
         stack_object_id => [Identity, Rows("relations")],

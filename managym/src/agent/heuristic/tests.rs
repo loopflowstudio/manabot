@@ -364,7 +364,11 @@ fn heuristic_pumps_live_unblocked_attackers_without_a_declaration() {
             offer(Action::PriorityCastSpell, &[1], None),
             offer(Action::PriorityPassPriority, &[], None),
         ];
-        assert_eq!(choose(&o), expected, "attacking {attacking}, tapped {tapped}");
+        assert_eq!(
+            choose(&o),
+            expected,
+            "attacking {attacking}, tapped {tapped}"
+        );
     }
 }
 #[test]

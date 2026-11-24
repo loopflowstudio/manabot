@@ -288,6 +288,20 @@ impl Game {
         }
     }
 
+    /// Evaluate an amount a pending ability reads from what paid its cost.
+    pub(crate) fn paid_cost_value(
+        &self,
+        value: &EffectValue,
+        controller: PlayerId,
+        paid: &crate::state::payment::PaymentReceipt,
+    ) -> i32 {
+        let frame = EffectFrame {
+            spent: paid.clone(),
+            ..EffectFrame::new(controller, Vec::new())
+        };
+        self.effect_value(value, &frame)
+    }
+
     /// Evaluate a mana output or price with only its controller bound.
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         self.effect_value(value, &EffectFrame::new(controller, Vec::new()))

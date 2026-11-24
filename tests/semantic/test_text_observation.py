@@ -726,6 +726,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "combat_damage_to_players": "seats dealt combat damage by the source this turn",
         "mana_spent": "mana spent to cast",
         "source_power": "source power in the ability description",
+        "paid_amount": "paid-cost amount in the ability description",
         "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",

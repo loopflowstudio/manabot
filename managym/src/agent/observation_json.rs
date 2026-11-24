@@ -323,6 +323,9 @@ impl Serialize for StackObjectJson<'_> {
         if let Some(power) = value.source_power {
             map.serialize_entry("source_power", &power)?;
         }
+        if let Some(amount) = value.paid_amount {
+            map.serialize_entry("paid_amount", &amount)?;
+        }
         map.serialize_entry("stack_object_id", &value.stack_object_id)?;
         map.serialize_entry("targets", &StackTargetsJson(&value.targets))?;
         if value.x != 0 {
@@ -835,6 +838,8 @@ pub(super) struct WireStackObjectData {
     pub combat_damage_to_players: Vec<usize>,
     pub source_power: Option<i32>,
     #[serde(default)]
+    pub paid_amount: Option<i32>,
+    #[serde(default)]
     pub mana_spent: u16,
     #[serde(default)]
     pub ability_resolutions: u32,
@@ -1024,6 +1029,7 @@ impl From<WireStackObjectData> for StackObjectData {
         Self {
             combat_damage_to_players: w.combat_damage_to_players,
             source_power: w.source_power,
+            paid_amount: w.paid_amount,
             mana_spent: w.mana_spent,
             description: w.description,
             ability_resolutions: w.ability_resolutions,

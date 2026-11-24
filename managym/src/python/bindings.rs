@@ -2759,6 +2759,10 @@ impl PyStackObject {
         self.data.source_power
     }
     #[getter]
+    fn paid_amount(&self) -> Option<i32> {
+        self.data.paid_amount
+    }
+    #[getter]
     fn ability_resolutions(&self) -> u32 {
         self.data.ability_resolutions
     }

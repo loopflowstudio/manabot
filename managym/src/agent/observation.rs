@@ -468,6 +468,9 @@ pub struct StackObjectData {
     pub combat_damage_to_players: Vec<usize>,
     /// Effective power read by a pending source-power damage instruction.
     pub source_power: Option<i32>,
+    /// The amount a pending activation reads from the objects that paid its
+    /// cost, from their last known information (Ayli's sacrificed toughness).
+    pub paid_amount: Option<i32>,
     pub mana_spent: u16,
     pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
@@ -1746,7 +1749,16 @@ impl Observation {
             StackObject::Spell(_) => None,
         }
         .and_then(|object| game.permanent_power_or_lki(object));
+        let paid_amount = match stack_object {
+            StackObject::ActivatedAbility(a) => a
+                .effects
+                .iter()
+                .find_map(Effect::paid_cost_amount)
+                .map(|amount| game.paid_cost_value(&amount, a.controller, &a.paid)),
+            _ => None,
+        };
         StackObjectData {
+            paid_amount,
             mana_spent: match stack_object {
                 StackObject::Spell(spell) => spell.spent.total(),
                 _ => 0,
@@ -1788,6 +1800,10 @@ impl Observation {
             }
             .map(|description| match source_power {
                 Some(power) => format!("{description} (source power {power})"),
+                None => description,
+            })
+            .map(|description| match paid_amount {
+                Some(amount) => format!("{description} (from what paid its cost: {amount})"),
                 None => description,
             }),
             stack_object_id: stack_object.id().0 as i32,
