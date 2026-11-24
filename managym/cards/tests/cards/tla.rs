@@ -16616,7 +16616,11 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
     let mut replay = crate::support::play::command(&mut s, |a| *a == second);
     for branch in [&mut s, &mut replay] {
         branch.advance_to_active_step(0, StepKind::EndOfCombat);
-        assert_eq!(attacker_life_gains(branch, combat_start), [2, 3]);
+        // Two simultaneous gains, one per lifelink source (CR 119.9); their
+        // relative order is the engine's damage order, not a rules fact.
+        let mut gains = attacker_life_gains(branch, combat_start);
+        gains.sort_unstable();
+        assert_eq!(gains, [2, 3]);
         assert_eq!(branch.life(1), 15);
         assert_eq!(
             counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),

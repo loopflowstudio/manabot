@@ -2489,6 +2489,17 @@ fn exemplar_of_light_counts_one_gain_per_lifelink_source() {
             .expect("block the Sire");
         s.step_action(index);
     }
+    // Trample: lethal damage (1) to each Lion, the other five to the player.
+    for _ in lions {
+        crate::support::play::pass_until(&mut s, ActionSpaceKind::Modal);
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseMode { mode: 1, .. }))
+            .expect("assign one damage to a Lion");
+        s.step_action(index);
+    }
     s.advance_to_active_step(0, StepKind::End);
     s.assert_life(0, 27);
     s.assert_life(1, 15);
