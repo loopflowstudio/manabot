@@ -317,68 +317,46 @@ both viewer JSON round trips, v11 permanent rows, history-free LLM text and
 the Academy Python projection. A separate pending Serra Angel cast showed
 five spent mana to both choosers through the same surfaces.
 
-**Open findings for the next working pass**
+**Findings still open after the power batch**
 
-1. `flow/triggers.rs::collect_occurrences` only expands bare per-object
-   event conditions. Wrap the passing two-attacker Katara fixture in
-   `ActiveIf(Always)` and the boolean matcher will produce two batch
-   occurrences without either attacker binding, where four bound occurrences
-   are required. An intervening-if on a member is also evaluated against the
-   whole event before expansion, with no triggering permanent for two
-   attackers. Recursively match wrappers before expansion, check the
-   intervening-if for each bound member, and keep that context through
-   resolution. Cover both declaration and combat-hit members.
-2. `OnceEachTurn` is checked only for an outer printed wrapper and consumed
-   after the collector has already expanded duplicates. In a constructed
-   position with Katara, the Fearless and Suki, Courageous Rescuer, Lightning
-   Bolt killing the controller's Gray Ogre on their turn exposes two Suki
-   order offers for that single departure. Suki may trigger once under CR
-   101.2. Cap the collected occurrences for the exact ability before
-   placement, including nested wrappers and granted abilities, and keep the
-   ordinary turn reset. [Comprehensive Rules](https://magic.wizards.com/en/rules)
-3. `granted_firebending_triggers` still bypasses the shared occurrence path.
-   Cast Sozin's Comet with Katara, the Fearless and declare Katara as the
-   only attacker. One and two Comet casts each produce one native stack
-   entry labeled delayed, with five and ten mana respectively. Katara
+The power batch closed the wrapped-member, once-per-turn, layer-comparison
+and condition-only projection findings; Academy `types.ts` now carries the
+viewer history and stack `mana_spent` fields. These remain:
+
+1. `granted_firebending_triggers` (`flow/triggers.rs`) still bypasses the
+   shared occurrence path. Cast Sozin's Comet with Katara, the Fearless and
+   declare Katara as the only attacker. One and two Comet casts each produce
+   one native stack entry labeled delayed, with five and ten mana. Katara
    should have two and four ordinary firebending triggers, each for five
-   mana. Keep each grant as an ability occurrence and apply the same
-   doublers, ordering and source binding as printed attack abilities.
-   Counter one entry to distinguish separate grants from a summed output.
+   mana. Keep each grant as an ability occurrence with the same doublers,
+   ordering and source binding as printed attack abilities; counter one
+   entry to distinguish separate grants from a summed output.
    [Avatar release notes](https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes)
-4. A static `Condition::Compare` over a live creature count can re-enter
-   `layer_board()` while the first board is still being built. `Context` falls
-   through to `layer_state_condition`, and the `Each` selector needs layered
-   characteristics. Evaluate board queries using the in-progress layer
-   context and record the predicate, power and tap dependencies. A count
-   gated by a power threshold and tap state isolates both the recursion and
-   invalidation requirements.
-5. A printed trigger that reads source power only in its intervening-if
-   omits the pending power in text, the stack tensor and the Academy label.
-   `stack_object_data` checks only the printed effects. Include the
-   condition in the same source-power reader. Academy's `types.ts` also
-   omits `life_gained`, `creatures_died`, both departures, `warped_this_turn`,
-   `attacked_this_turn` and stack `mana_spent` from its typed viewer surface.
-   Align the frontend contract with the viewer-safe Python projection.
-6. The heuristic seeds its unblocked-attacker map from
-   `CombatAttackersDeclared`. An unblocked token already attacking before
-   declaration has no entry. Seed the map from the live attacking permanents
-   while keeping the declaration event scoped to actual declarations.
-7. Six Academy fixtures still assume reset starts in priority. Two cases in
+2. The heuristic (`agent/heuristic/mod.rs`, around the
+   `CombatAttackersDeclared` branch) seeds its unblocked-attacker map from
+   the declaration event. An unblocked token already attacking before
+   declaration has no entry. Seed from the live attacking permanents and keep
+   the declaration event scoped to actual declarations.
+3. Six Academy fixtures still assume reset starts in priority: two cases in
    `test_semantic_boundary.py` ask for `pass_priority` at the opening Keep
-   offer. `test_combat_preview.py` and all three Blast cases inject a board
-   and refresh while the action space is `Modal`. Keep both opening hands
-   through native offers before reaching the fixture position, and rerun
-   the offer, stale-command, recovery and privacy assertions. Both boundary
-   assertions passed when rerun with opening keeps injected in memory. The
-   four other failures occur before the interactions under test.
+   offer; `test_combat_preview.py` and all three Blast cases inject a board
+   while the action space is `Modal`. Keep both opening hands through native
+   offers before reaching the fixture position, then rerun the offer,
+   stale-command, recovery and privacy assertions.
+4. Card fixtures for the attack and power batches live in
+   `managym/cards/tests/cards/fdn.rs` even when the card's first-printing
+   module is another set (Bite Down `dmu.rs`, Surrak `dtk.rs`, Halana and
+   Alena `vow.rs`, Ruby `woe.rs`, among others). The repository rule puts a
+   one-card test in its set's test module. Move single-card fixtures there and
+   update the ledger `fixture` paths; keep cross-card interaction tests where
+   their subject card lives.
+5. Six early ledger rows lack fixture pointers (Cat Collector, Venom
+   Connoisseur, Predator Ooze, Steel Hellkite, Fumigate, Exsanguinate). Their
+   fixtures are named in the slices above.
 
-The working phase should iterate. The eight attack fixtures establish the
-authored outcomes they exercise, with shared trigger defects and 56 primary
-rows still open. The power batch remains next. Recorded Watch playback of a
-partial declaration, the full debug and browser gate, frozen pilot
-compatibility on the merged preparation path, and Engine Budget comparisons
-remain open. This review used constructed positions and focused boundary
-controls.
+Still open beyond findings: recorded Watch playback of a partial
+declaration, the full debug and browser gate, frozen pilot compatibility on
+the merged preparation path, and Engine Budget comparisons.
 
 ## Remaining mechanic batches
 
@@ -406,7 +384,7 @@ Seven primary rows and the cost-primary Ruby row now link to their first-printin
 - The final native selection passed all 19 checks, including the layer comparison after tapping and untapping, last-known mana value, source-name filtering, catalog conformance and the Clone replay hash. Academy's `svelte-check` reported zero errors and warnings.
 - The rebuilt CPython 3.13 wheel passed ten focused Python checks. Both viewers saw pending power in the v11 stack, Academy and semantic text. The named layout, effect execution, Torch/MLX parity in both shape modes, and the bundled v9 and v11 pilot replays passed. The optional u1952 replay skipped because its checkpoint was unavailable.
 
-The next card batch is life events, totals and payment thresholds. The granted firebending, heuristic and six Academy fixture findings in the preceding review remain open.
+**Next slice:** the life events, totals and payment thresholds batch below (eight cards, two cost candidates), together with findings 1 and 2, which touch the same trigger and combat readers. Findings 3–5 are independent cleanup for the working review.
 
 ### Later slices
 
@@ -448,10 +426,7 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
   projections, Python, v11 and text as new queries land. Save prefixes and
   frozen evidence, and keep hidden identities out of both projections.
   The 81-row reconciliation, integrated replay and privacy checks, and
-  Engine Budget remain open. Six early ledger rows record native passes
-  without fixture pointers: Cat Collector, Venom Connoisseur, Predator
-  Ooze, Steel Hellkite, Fumigate and Exsanguinate. Their fixtures are
-  recorded above. Add links during ledger reconciliation. Once the cohort
+  Engine Budget remain open. Once the cohort
   stabilizes, refresh the current semantic-kernel, authored-match and
   Academy parity receipts in `conformance/README.md`.
 
