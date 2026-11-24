@@ -1121,11 +1121,12 @@ pub(super) fn write_rows(
     frames: &[ContinuationFrame],
     viewer: usize,
     objects: &std::collections::HashMap<i32, i32>,
+    width: usize,
     out: &mut impl RowWriter,
 ) -> Result<usize, ObservationEncodeError> {
     let mut slot = 0;
     relation_rows(frames, viewer, objects, |row| {
-        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer))?;
+        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer)[..width])?;
         slot += 1;
         Ok(())
     })

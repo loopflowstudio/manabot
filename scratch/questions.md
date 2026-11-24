@@ -204,3 +204,8 @@ Three reversible choices recorded in `scratch/concept-review.html` and `scratch/
 Two reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md` as a small pre-gate repair pass:
 - Rename `CardTypes::is_spell()` to `CardTypes::is_instant_or_sorcery()` (3 Rust callers; `CardTypeData.is_spell` keeps its serialized key), enforce `face.types.is_instant_or_sorcery() || face.has_subtype("Lesson")` in `permits_spell` and `granted_flashback_cost` (plus `flashback().is_some()` / `graveyard_counter_cast().is_some()` on `PrintedFlashback` / `PrintedGraveyard`), and add Iroh graveyard-permanent regression tests in `tla.rs` — fixes the live rules regression introduced by `fd57d06120` where Iroh granted flashback to every creature, artifact, enchantment, and planeswalker in your graveyard.
 - Set `ZoneEntry.library_top_departure` when `push_spell_to_stack` or `play_land` moves the current library top card, matching `draw_cards` and `exile_top_cards_to_play` so casting from library top (Vizier / Planetarium) shifts `known_library` via `remove_top()` instead of wiping remembered positions via `forget_order()`.
+
+## 2026-11-24 gate
+
+- The two sync conflicts converged on main's shared `RowWriter`. Only v11 reads the new continuation profile and off-battlefield counter rows. V9 and v10 keep the 49-column continuation layout they were released with.
+- The casting receipts introduced on this branch bind the integrated casting catalog. Opening-hand receipts and the earlier kernel corpus evidence stay at their original paths.

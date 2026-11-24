@@ -170,7 +170,7 @@ fn encoded_to_dict<'py>(
     put(
         "relations",
         &encoded.relations,
-        &[continuation::RELATION_ROWS, continuation::RELATION_DIM],
+        &[continuation::RELATION_ROWS, config.relation_dim()],
     )?;
     put("agent_player", &encoded.agent_player, &[1, enc::PLAYER_DIM])?;
     put(

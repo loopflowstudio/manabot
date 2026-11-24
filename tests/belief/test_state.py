@@ -240,10 +240,10 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         "3da731e0fb463aa1f4bb368bbcf254d7e5a5ebf0d9062ce65e95b573876ea08d",
     )
     current_v3_receipts = (
-        "ceb78083213777ce4b94ee592ed134808d3bd101aca2067242fa16b15d554219",
-        "a4550695ec9e0223f4f68f113871660e4a9f0e42104781374d8e49de44fb4255",
-        "480b8343ac6326574bc12babec20b9e500316557a1df9567b0fbb834a4b0df5b",
-        "148e13f138e49aedd74e07fc88f17a264029fe9090af9f9374dc76db148f8240",
+        "86a3d0d3f7d9d97d75520bb9af4b2182335e2e664cf8c7cf674ac9ce91bd14d7",
+        "286657557bb5f3439dfcae815faf6b66416c478300d28f47652ef1b411e65a9b",
+        "7a12c507e88bf662f53c7f3577e8bc65a343f6c48ab4a70431b6044fa0635524",
+        "36fc47026bd618081f9f8580b099812ed7ae3e28f862302c1e2e33571bd6d2a5",
     )
     for (
         (belief, prior_catalog_receipt, historical_receipt),

@@ -19,7 +19,7 @@ ROOT = Path(__file__).parents[1]
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json"
 )
-OPENING_RECEIPT_PATH = (
+CASTING_RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-casting.json"
 )
@@ -442,7 +442,7 @@ def generate_authored_match_receipt() -> dict[str, Any]:
 
 
 def write_or_check_authored_match_receipt(
-    path: Path = OPENING_RECEIPT_PATH,
+    path: Path = CASTING_RECEIPT_PATH,
     *,
     check: bool,
 ) -> None:

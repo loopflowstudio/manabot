@@ -229,7 +229,14 @@ impl ObservationEncoderConfig {
     }
 
     pub fn relations_len(&self) -> usize {
-        super::continuation::RELATION_ROWS * super::continuation::RELATION_DIM
+        super::continuation::RELATION_ROWS * self.relation_dim()
+    }
+
+    pub fn relation_dim(&self) -> usize {
+        match self.layout {
+            InputLayout::Legacy => super::legacy_input::RELATION_DIM,
+            InputLayout::OneToken => super::continuation::RELATION_DIM,
+        }
     }
 
     /// Two seats of decklist rows.
@@ -1112,6 +1119,7 @@ pub fn encode_rows(
         &obs.continuation,
         obs.agent.player_index as usize,
         &objects,
+        config.relation_dim(),
         out,
     )?;
     encode_actions(obs, config, out, &objects)?;
@@ -1650,14 +1658,16 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     // Counters on a visible card off the battlefield ("with a stash counter").
-    for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
-        for (kind, count) in &card.counters {
-            push(
-                card.id,
-                FactKind::Counter,
-                name_value(&format!("CounterKind::{kind}")),
-                i64::from(*count),
-            );
+    if layout == InputLayout::OneToken {
+        for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+            for (kind, count) in &card.counters {
+                push(
+                    card.id,
+                    FactKind::Counter,
+                    name_value(&format!("CounterKind::{kind}")),
+                    i64::from(*count),
+                );
+            }
         }
     }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);

@@ -1,5 +1,6 @@
 """Play printed spell profiles through the viewer-facing Command surface."""
 
+import numpy as np
 import pytest
 
 from manabot.env.observation import ObservationSpace, column, encode_observation
@@ -13,6 +14,21 @@ def choose(env: managym.Env, wording: str) -> None:
     decision = capture_text_decision(env)
     [action] = [action for action in decision.actions if wording in action.description]
     submit_response(env, decision, action.reference)
+
+
+def assert_packed_columns(
+    observation: managym.Observation, table: str, *columns: str
+) -> None:
+    space = ObservationSpace()
+    dense = encode_observation(space, observation)[table]
+    batch = managym.encode_observation_batch([observation], space.layout)
+    _, offsets, data = batch.tables()[table]
+    fields = batch.layout.csr_fields[table]
+    packed = np.frombuffer(data, np.dtype([(name, dtype) for name, dtype, _ in fields]))
+    count = int(np.frombuffer(offsets, np.int32)[-1])
+    assert count == np.count_nonzero(dense[:, column(table, "valid")])
+    for name in columns:
+        np.testing.assert_array_equal(packed[name], dense[:count, column(table, name)])
 
 
 def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
@@ -52,6 +68,9 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     submit_response(env, hand, inset.reference)
     targets = capture_text_decision(env)
     assert "casting its Adventure" in targets.text
+    assert_packed_columns(
+        env.observation_for_player(actor), "relations", "spell_profile"
+    )
     [ogre] = [action for action in targets.actions if target in action.description]
     submit_response(env, targets, ogre.reference)
     choose(env, "Pay the offered cost")
@@ -87,6 +106,9 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     ]
     assert creature in recast.description and adventure not in recast.description
     assert "permanent spell only" in exile.text
+    assert_packed_columns(
+        env.observation_for_player(actor), "actions", "play_route", "spell_profile"
+    )
     submit_response(env, exile, recast.reference)
     [spell] = env.observation_for_player(actor).stack_objects
     assert spell.characteristics is not None and spell.characteristics.name == creature
@@ -142,6 +164,15 @@ def test_printed_profiles_have_distinct_commands_and_policy_rows(
         )
         for action in actions
     } == {(f"Cast {front}", 0), (f"Cast {other}", code)}
+    assert_packed_columns(
+        observation,
+        "actions",
+        "has_route_cost",
+        "route_mana_value",
+        "quota_type",
+        "spell_profile",
+        "play_route",
+    )
     for name, mana_value, creature in (
         (front, costs[0], True),
         (other, costs[1], back_creature),
@@ -160,9 +191,17 @@ def test_printed_profiles_have_distinct_commands_and_policy_rows(
         if not branch.observation_for_player(actor).stack_objects:
             choose(branch, "Pay the offered cost")
         for viewer in (0, 1):
-            [spell] = branch.observation_for_player(viewer).stack_objects
+            observation = branch.observation_for_player(viewer)
+            [spell] = observation.stack_objects
             characteristics = spell.characteristics
             assert characteristics is not None
             assert characteristics.name == name
             assert characteristics.mana_cost.mana_value == mana_value
             assert characteristics.card_types.is_creature == creature
+            assert_packed_columns(
+                observation,
+                "stack",
+                "effective_mana_value",
+                "from_prepared",
+                "flashback",
+            )

@@ -670,7 +670,7 @@ Capacities are configuration; widths are the layout.
 | `actions`, `action_focus`, `name_candidates` | 512 × 30 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
-Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
+Policy inputs v9 and v10 keep 22 action columns and 49 relation columns. In v11, column 22
 (`pays_directly`, zero-based) marks taps that directly pay a cost through
 convoke, improvise or waterbend.
 When such a tap could pay more than one thing, the next choice's `mode`

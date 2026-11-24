@@ -3886,6 +3886,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation_encoder::{
         encode, ObservationEncodeError, ObservationEncoderConfig,
     };
+    use crate::agent::{legacy_input, observation_layout::relation};
     use crate::flow::decision::{
         Decision, EffectFrame, FrameCompletion, ResolutionTarget, SuspendedResolution,
         TargetIteration,
@@ -4004,13 +4005,14 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 .iter()
                 .filter(|row| row[11] == 1.0)
                 .count();
-            let relations = input
+            let relations: Vec<_> = input
                 .relations
-                .as_chunks::<49>()
+                .as_chunks::<{ relation::WIDTH }>()
                 .0
                 .iter()
-                .filter(|row| row[31] == 1.0)
-                .count();
+                .take_while(|row| row[relation::VALID] == 1.0)
+                .flat_map(|row| row[..legacy_input::RELATION_DIM].iter().copied())
+                .collect();
             assert!(matches!(
                 encode(
                     &obs,
@@ -4022,8 +4024,10 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 Err(ObservationEncodeError::Capacity { field: "facts", .. })
             ));
             let capture = game.capture_decision(player, 0).unwrap();
-            evidence.push(serde_json::json!({"case":case,"choice":choice,"capture":capture,
-                "facts": &input.facts[..used * 12], "relations": &input.relations[..relations * 49]}));
+            evidence.push(
+                serde_json::json!({"case":case,"choice":choice,"capture":capture,
+                "facts": &input.facts[..used * 12], "relations": relations}),
+            );
             assert_eq!(
                 game.clone().capture_decision(player, 0).unwrap().digest,
                 capture.digest

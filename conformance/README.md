@@ -3,7 +3,7 @@
 Current-world (w17) corpora with executable consumers:
 
 - `semantic-kernel-w17-v6/` — seeded cases (`manifest.json`) whose regenerated
-  traces must match `evidence-opening-v1.json`'s per-case `trace_sha256`, plus property and
+  traces must match `evidence-casting-v1.json`'s per-case `trace_sha256`, plus property and
   Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
   A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v6/`;
   inspect it with `cargo run --manifest-path managym/Cargo.toml --bin
@@ -18,10 +18,10 @@ Current-world (w17) corpora with executable consumers:
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
 
-The opening-hand rules use `evidence-opening-v1.json`. The shared casting
-catalog has authored-match authority and parity receipts ending in
-`-casting.json`. The first opening-hand receipts are retained as
-`-opening.json`. The authored trace
+The shared casting catalog binds `evidence-casting-v1.json` and the
+authored-match authority and parity receipts ending in `-casting.json`.
+`evidence-opening-v1.json` and the first `-opening.json` receipts retain the
+opening-hand rules evidence. The authored trace
 takes two explicit keep Commands, then follows the seeded priority line.
 Generate its authority with `scripts/generate_authored_match_receipt.py`
 and its parity with `uv run --extra dev python -m conformance.authored_match_parity write`.

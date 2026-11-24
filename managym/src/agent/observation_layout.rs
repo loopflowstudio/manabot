@@ -1056,7 +1056,10 @@ pub fn observation_layout(
     let mut relations = ArrayLayout::features(
         &["relation"],
         &[Some(super::continuation::RELATION_ROWS)],
-        relation::COLUMNS,
+        match layout_kind {
+            InputLayout::Legacy => &relation::COLUMNS[..super::legacy_input::RELATION_DIM],
+            InputLayout::OneToken => relation::COLUMNS,
+        },
     );
     relations.row_kinds = BTreeMap::from([
         (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
@@ -1194,7 +1197,11 @@ mod tests {
                     config.event_dim(),
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", relation::WIDTH, 50),
+                (
+                    "relations",
+                    config.relation_dim(),
+                    if one_token { 50 } else { 49 },
+                ),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1224,7 +1231,7 @@ mod tests {
             }
             assert_eq!(
                 config.relations_len(),
-                super::super::continuation::RELATION_ROWS * relation::WIDTH
+                super::super::continuation::RELATION_ROWS * config.relation_dim()
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
