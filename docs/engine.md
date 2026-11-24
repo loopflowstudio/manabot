@@ -350,7 +350,7 @@ zero indices with choices from your learner.
 
 With one external seat, reset and positional step advance built-ins until the
 external chooser or a terminal state. A scalar terminal must be explicitly reset;
-vector steps auto-reset finished slots. Terminal rewards belong to the external
+vector steps auto-reset finished slots by default. Terminal rewards belong to the external
 seat, including when a built-in finishes the game. Reset never silently starts
 a second game if a built-in wins before an external choice.
 
@@ -373,7 +373,7 @@ arguments or an unknown name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch a player policy to random play.
 `"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through CapturedVector and Torch. Retained failure evidence keeps its original
+through RecordedVectorEnv and Torch. Retained failure evidence keeps its original
 policy name; replaying a passive-policy receipt requires its original source.
 
 ### Built-in heuristic
@@ -444,18 +444,22 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 |---|---|
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
-| Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
-| Revision-bound Commands, decision captures, live snapshots (`GameSnapshot` / `RestoreOptions`), forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
+| Live snapshots and batched branch loading (`GameSnapshot`, `RestoreOptions`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Save and restore game positions](engine-python.md#batched-snapshots-and-deferred-reset)) |
+| Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
-| Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
-| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
+| Caller-owned NumPy buffers, per-slot setups, deferred reset and partial stepping | Native `VectorEnv` buffer methods |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
 | Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
 
 Scalar native `Env.step` returns the terminal state and leaves resetting to the
-caller. Native vector steps reset finished slots before returning: reward and
-`terminated` / `truncated` describe the completed game, while its returned
-observation describes the replacement game. The Torch wrapper keeps this
-behavior. Its observation tensors are reused; clone anything retained across
+caller. Native `VectorEnv` and `RecordedVectorEnv` auto-reset finished slots by
+default (`auto_reset=True`): reward and `terminated` / `truncated` describe the
+completed game, while the returned observation describes the replacement game.
+Pass `auto_reset=False` to defer terminal resets instead—finished slots report
+their terminal outcome once and remain parked until replaced by
+`load_slots_into_buffers` or reset. The Torch wrapper keeps eager vector
+autoreset. Its observation tensors are reused; clone anything retained across
 steps. The Gymnasium wrapper `manabot.env.env.Env` never resets on its own:
 a terminal `step` returns the terminal observation and true done flags, and the
 caller calls `reset`. Its former `auto_reset` argument is removed; passing it
@@ -467,21 +471,21 @@ explicit seed, including the current one, so equal seeds reproduce deals.
 `reset()` without a seed continues native seed succession. Its
 `current_agent_indices()` names each slot's chooser.
 
-`CapturedVector` delegates only native reads (seeds, generations, choosers,
+`RecordedVectorEnv` delegates only native reads (seeds, generations, choosers,
 frames, setups, diagnostics). Readable `reset_all` / `step` and other native
 mutators raise `AttributeError`; use its `reset_*_into_buffers` and
 `step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
 new prefix whenever the native game generation changes, so a same-seed reset
 or a replacement at the saturated maximum seed never extends the old game.
 
-Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+Native buffered stepping and `RecordedVectorEnv.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;
 the Python buffer bindings clear their rewards and done flags to zero/false.
 Apply the same mask when collecting transitions. The Torch wrapper's `step`
 advances every slot and does not accept an active mask.
 
 Strict batch errors can occur after other slots have advanced. Do not retry
-the same batch assuming nothing changed. `CapturedVector` retains private
+the same batch assuming nothing changed. `RecordedVectorEnv` retains private
 pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
 individual game failures for replacement. Buffer-integrity failures remain
 fatal, and capacity recovery requires its separate opt-in. See
@@ -548,7 +552,7 @@ origin and stale checks still apply independently of these snapshot fields.
 Both methods synchronously read authoritative hand zones, with one native call
 for the whole batch, without stepping, resetting, consuming randomness or
 building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
-game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+game or retained snapshot. `RecordedVectorEnv` and Torch `VectorEnv` expose the same
 method and CPU records. Ordinary reset/step calls do not collect snapshots.
 
 Read before stepping to capture the current hands; copy reused observation
@@ -601,17 +605,18 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
 ```
 
 `write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
-writes all slots in one native call, with one explicit native seat (`0` or `1`)
-per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
-slot order, naming the game state each row describes:
+takes one entry per slot. Pass seat `0` or `1` to read it, or `None` to
+leave its game and buffer row untouched. This permits reads beside terminal,
+poisoned or unset slots. Each requested slot returns an `ObservationRead` in
+ascending slot order.
 
 | Field | Meaning |
 |---|---|
-| `slot: int` | The row in every array, equal to the list index |
+| `slot: int` | The row in every array (equal to the list index when no slot is `None`) |
 | `player: int` | Requested native seat, unchanged by control effects |
 | `game_id: int`, `seed: int`, `revision: int` | The same values a `HandSnapshot` of that slot reports at this read boundary |
 
-Pair a read with the hand snapshot at the same list index when game ID and
+Pair a read with a hand snapshot at `read.slot` when game ID and
 revision agree, selecting matching or opposite seats as needed. Save a
 collection/run identity too: `game_id` distinguishes resets within the process,
 even to the same seed, but is not a portable replay ID.
@@ -629,17 +634,16 @@ NumPy array at the selected version's shapes, dtypes and capacities. No reward
 or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
 
-`CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
+`RecordedVectorEnv` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
 method and CPU identity records. The Torch wrapper supplies its own layout.
 Pass `layout=consumer_space.layout` for a consumer with different capacities.
 Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
 
-The read does not step, reset or consume randomness. After a successful step,
-done slots describe their replacement games, not the terminal states. Reads
-include every slot, including those left unchanged by an inactive step mask;
-apply that mask when selecting results. Ordinary reset/step calls do not collect
-fixed-seat observations. The read does not replace their chooser observations,
-alter legal choices or create Command or decision-capture authority.
+A fixed-seat read preserves the chooser's observations, legal choices and RNG.
+After eager reset, a finished slot describes its replacement game. The seat
+list selects rows independently of the preceding step's active mask. Ordinary
+steps and resets only encode the chooser's view. Fixed-seat reads confer no
+Command or decision-capture authority.
 
 A wrong-length seat list, an invalid seat, reading before reset, or malformed
 buffers raises an error. Encoding uses supplied capacities and the selected

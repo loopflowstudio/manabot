@@ -3,6 +3,8 @@
 use crate::state::player::{ManaFloats, ManaPayment};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+mod slots;
+pub use slots::{SlotLoad, SlotLoadResult};
 
 use crate::{
     agent::{
@@ -91,6 +93,44 @@ impl RootRoster {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum SlotState {
+    Unset,
+    /// Only an untouched fresh opening can return its seed or change its setup.
+    FreshOpening,
+    Playing,
+    Terminal,
+    Poisoned,
+}
+
+impl SlotState {
+    fn finish_step(
+        &mut self,
+        out: &mut StepResult,
+        auto_reset: bool,
+        reset: impl FnOnce() -> Result<(Observation, InfoDict), AgentError>,
+    ) -> Result<(), AgentError> {
+        if out.terminated || out.truncated {
+            *self = Self::Terminal;
+            if auto_reset {
+                (out.obs, _) = reset()?;
+                *self = Self::FreshOpening;
+            }
+        }
+        Ok(())
+    }
+
+    fn readable(self) -> Result<(), AgentError> {
+        match self {
+            Self::Unset => Err(AgentError(
+                "vector env must be reset before reading observations".into(),
+            )),
+            Self::Poisoned => Err(AgentError("cannot read a poisoned slot".into())),
+            _ => Ok(()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
@@ -102,7 +142,8 @@ pub struct VectorEnv {
     skip_trivial: bool,
     decision_memory_enabled: bool,
     decision_memory_include_own: bool,
-    fresh_roots: Vec<bool>,
+    slots: Vec<SlotState>,
+    auto_reset: bool,
 }
 
 impl VectorEnv {
@@ -161,8 +202,25 @@ impl VectorEnv {
             skip_trivial,
             decision_memory_enabled: false,
             decision_memory_include_own: false,
-            fresh_roots: vec![false; num_envs],
+            slots: vec![SlotState::Unset; num_envs],
+            auto_reset: true,
         }
+    }
+
+    pub fn with_auto_reset(mut self, enabled: bool) -> Self {
+        self.auto_reset = enabled;
+        self
+    }
+
+    #[cfg(feature = "python")]
+    pub(crate) fn parked_slots(&self) -> impl Iterator<Item = usize> + '_ {
+        self.slots.iter().enumerate().filter_map(|(slot, state)| {
+            matches!(state, SlotState::Terminal | SlotState::Poisoned).then_some(slot)
+        })
+    }
+
+    pub fn next_fresh_seeds(&self) -> &[u64] {
+        &self.next_seeds
     }
 
     pub fn decision_memory_enabled(&self) -> bool {
@@ -264,7 +322,22 @@ impl VectorEnv {
     }
 
     pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
-        self.envs.iter().map(Env::exposure_json).collect()
+        self.selected_exposure(None)
+    }
+
+    pub(crate) fn selected_exposure(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<String>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| active.is_none_or(|mask| mask[*slot]))
+            .map(|(_, env)| env.exposure_json())
+            .collect()
     }
 
     /// Configure only before allocation of roots; native authored setups are the authority.
@@ -367,16 +440,26 @@ impl VectorEnv {
             .collect()
     }
 
-    /// Current ordered indices into the fixed Elemental roster; empty otherwise.
-    /// Replaceable training decks report actual setups via `current_player_configs`.
+    /// Current ordered indices when all games use decks from the fixed Elemental
+    /// roster. A detached branch carries its own resolved seats and seed.
     pub fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
         if !self.uniform_roster.elemental {
             return Vec::new();
         }
+        let index = |player: &PlayerConfig| {
+            self.uniform_roster
+                .players
+                .iter()
+                .position(|p| p.deck == player.deck)
+        };
         self.envs
             .iter()
-            .map(|env| self.uniform_roster.pair(env.seed()))
-            .collect()
+            .map(|env| match env.player_configs() {
+                [a, b] => Some((index(a)?, index(b)?)),
+                _ => Some(self.uniform_roster.pair(env.seed())),
+            })
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default()
     }
 
     pub fn len(&self) -> usize {
@@ -484,7 +567,7 @@ impl VectorEnv {
     /// can leave a written prefix, so callers must discard all rows on failure.
     pub fn write_observations_for_players(
         &self,
-        players: &[usize],
+        players: &[Option<usize>],
         mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
     ) -> Result<Vec<ObservationRead>, AgentError> {
         if players.len() != self.len() {
@@ -494,18 +577,16 @@ impl VectorEnv {
                 players.len()
             )));
         }
-        if players.iter().any(|&player| player > 1) {
+        if players.iter().flatten().any(|&player| player > 1) {
             return Err(AgentError("observation player must be 0 or 1".into()));
         }
-        self.validate_ready_for_step().map_err(|_| {
-            AgentError("vector env must be reset before reading observations".into())
-        })?;
-        let reads = self
-            .envs
+        let reads = players
             .iter()
-            .zip(players)
             .enumerate()
-            .map(|(slot, (env, &player))| {
+            .filter_map(|(slot, player)| player.map(|player| (slot, player)))
+            .map(|(slot, player)| {
+                self.slots[slot].readable()?;
+                let env = &self.envs[slot];
                 Ok(ObservationRead {
                     slot,
                     player,
@@ -515,8 +596,11 @@ impl VectorEnv {
                 })
             })
             .collect::<Result<Vec<_>, AgentError>>()?;
-        for (env, read) in self.envs.iter().zip(&reads) {
-            write(read.slot, &env.observation_for_player(read.player)?)?;
+        for read in &reads {
+            write(
+                read.slot,
+                &self.envs[read.slot].observation_for_player(read.player)?,
+            )?;
         }
         Ok(reads)
     }
@@ -570,7 +654,13 @@ impl VectorEnv {
     pub fn current_agent_indices(&self) -> Vec<i64> {
         self.envs
             .iter()
-            .map(|env| env.current_agent_index().map_or(-1, |index| index as i64))
+            .zip(&self.slots)
+            .map(|(env, state)| match state {
+                SlotState::FreshOpening | SlotState::Playing => {
+                    env.current_agent_index().map_or(-1, |i| i as i64)
+                }
+                _ => -1,
+            })
             .collect()
     }
 
@@ -584,61 +674,29 @@ impl VectorEnv {
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
         let player_configs = player_configs.into();
         Self::validate_player_configs(player_configs.len())?;
-        self.fresh_roots.fill(true);
-        self.player_configs = vec![player_configs; self.envs.len()];
-        let player_configs = &self.player_configs;
-        let seed_stride = self.seed_stride;
-        let roster = &self.uniform_roster;
 
-        let mut results = Vec::with_capacity(self.envs.len());
-        for (index, (env, next_seed)) in self
-            .envs
-            .iter_mut()
-            .zip(self.next_seeds.iter_mut())
-            .enumerate()
-        {
-            let (obs, info) = Self::reset_env_on_env(
-                roster,
-                env,
-                next_seed,
-                seed_stride,
-                &player_configs[index],
-            )?;
-            results.push((obs, info));
-        }
-        Ok(results)
+        self.player_configs = vec![player_configs; self.envs.len()];
+        let stride = self.seed_stride;
+        self.for_each_env(|_, env, next_seed, configs, roster, state| {
+            Self::reset_slot(roster, env, next_seed, stride, configs, state)
+        })
     }
 
     pub fn step(&mut self, actions: &[i64]) -> Result<Vec<StepResult>, AgentError> {
         self.validate_actions_len(actions.len())?;
         self.validate_ready_for_step()?;
 
-        let player_configs = &self.player_configs;
-        let seed_stride = self.seed_stride;
-        let roster = &self.uniform_roster;
-
-        let mut results = Vec::with_capacity(self.envs.len());
-        for (index, ((env, next_seed), action)) in self
-            .envs
-            .iter_mut()
-            .zip(self.next_seeds.iter_mut())
-            .zip(actions.iter())
-            .enumerate()
-        {
-            self.fresh_roots[index] = false;
-            let out = Self::step_with_autoreset_on_env(
-                roster,
-                env,
-                next_seed,
-                *action,
-                &player_configs[index],
-                seed_stride,
-            )?;
-            self.fresh_roots[index] = out.terminated || out.truncated;
-            results.push(out);
-        }
-
-        Ok(results)
+        self.validate_active_slots(None)?;
+        let stride = self.seed_stride;
+        let auto_reset = self.auto_reset;
+        self.for_each_env(|slot, env, next_seed, configs, roster, state| {
+            *state = SlotState::Playing;
+            let mut out = Self::step_one_on_env(env, actions[slot])?;
+            state.finish_step(&mut out, auto_reset, || {
+                Self::reset_env_on_env(roster, env, next_seed, stride, configs)
+            })?;
+            Ok(out)
+        })
     }
 
     pub fn reset_all_into<F>(
@@ -687,9 +745,9 @@ impl VectorEnv {
 
         let seed_stride = self.seed_stride;
 
-        self.for_each_env(|env_index, env, next_seed, configs, roster, fresh| {
-            let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, seed_stride, configs)?;
-            *fresh = true;
+        self.for_each_env(|env_index, env, next_seed, configs, roster, state| {
+            let (obs, info) =
+                Self::reset_slot(roster, env, next_seed, seed_stride, configs, state)?;
             write(env_index, &obs, 0.0, false, false)?;
             Ok(info)
         })
@@ -720,19 +778,20 @@ impl VectorEnv {
         for (index, setup) in configs.into_iter().enumerate() {
             if let Some(setup) = setup {
                 let setup: GameSetup = setup.into();
-                if !self.fresh_roots[index] {
+                if self.slots[index] != SlotState::FreshOpening {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
-                let mut env = self.envs[index].replacement_root()?;
+                let previous = &self.envs[index];
+                let mut env = previous.replacement_root(previous.reset_seed());
                 let (obs, info) = env.reset(setup.clone())?;
                 validate(index, &obs)?;
-                prepared.push((index, setup, env, obs, info));
+                prepared.push((index, setup, env, obs, info, previous.current_recording()?));
             }
         }
         let mut infos = vec![InfoDict::new(); self.len()];
-        for (index, setup, env, obs, info) in prepared {
+        for (index, setup, env, obs, info, recording) in prepared {
             write(index, &obs, 0.0, false, false)?;
-            self.envs[index] = env;
+            self.envs[index].replace_slot(env, recording);
             self.player_configs[index] = setup;
             infos[index] = info;
         }
@@ -756,21 +815,17 @@ impl VectorEnv {
         if let Some(mask) = active {
             self.validate_actions_len(mask.len())?;
         }
-        self.for_each_env(|env_index, env, next_seed, configs, roster, fresh| {
+        self.validate_active_slots(active)?;
+        let auto_reset = self.auto_reset;
+        self.for_each_env(|env_index, env, next_seed, configs, roster, state| {
             if active.is_some_and(|mask| !mask[env_index]) {
                 return Ok(InfoDict::new());
             }
-            *fresh = false;
-            let action = actions[env_index];
-            let result = Self::step_with_autoreset_on_env(
-                roster,
-                env,
-                next_seed,
-                action,
-                configs,
-                seed_stride,
-            )?;
-            *fresh = result.terminated || result.truncated;
+            *state = SlotState::Playing;
+            let mut result = Self::step_one_on_env(env, actions[env_index])?;
+            state.finish_step(&mut result, auto_reset, || {
+                Self::reset_env_on_env(roster, env, next_seed, seed_stride, configs)
+            })?;
             write(
                 env_index,
                 &result.obs,
@@ -799,12 +854,14 @@ impl VectorEnv {
         self.validate_actions_len(actions.len())?;
         self.validate_actions_len(active.len())?;
         self.validate_ready_for_step()?;
+        self.validate_active_slots(Some(active))?;
+        let auto_reset = self.auto_reset;
         let stride = self.seed_stride;
-        self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
+        self.for_each_env(|index, env, next_seed, configs, roster, state| {
             if !active[index] {
                 return Ok(InfoDict::new());
             }
-            *fresh = false;
+            *state = SlotState::Playing;
             let frame = serde_json::to_string(&env.semantic_decision_frame()?)
                 .map_err(|error| AgentError(error.to_string()))?;
             // A Rust unwind is contained only around gameplay of a disposable
@@ -827,6 +884,7 @@ impl VectorEnv {
                         ),
                         Ok(Ok(_)) => unreachable!(),
                     };
+                    *state = SlotState::Poisoned;
                     return Ok(InfoDict::from([
                         ("game_error".into(), InfoValue::String(message)),
                         ("game_error_class".into(), InfoValue::String(class.into())),
@@ -840,18 +898,16 @@ impl VectorEnv {
                     ]));
                 }
             };
-            *fresh = false;
-            if out.terminated || out.truncated {
-                *fresh = true;
-                let (obs, _) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
-                out.obs = obs;
-            }
+            state.finish_step(&mut out, auto_reset, || {
+                Self::reset_env_on_env(roster, env, next_seed, stride, configs)
+            })?;
             if let Err(error) = write(index, &out.obs, out.reward, out.terminated, out.truncated) {
                 if recover_capacity && !out.terminated && !out.truncated {
                     if let ObservationWriteError::Encoding(
                         error @ ObservationEncodeError::Capacity { .. },
                     ) = &error
                     {
+                        *state = SlotState::Poisoned;
                         return Ok(InfoDict::from([
                             ("game_error".into(), InfoValue::String(error.to_string())),
                             (
@@ -883,20 +939,13 @@ impl VectorEnv {
     {
         self.validate_actions_len(failed.len())?;
         self.validate_ready_for_step()?;
-        let policy = self.player_policies;
         let stride = self.seed_stride;
-        let skip_trivial = self.skip_trivial;
-        let include_own = self.decision_memory_include_own;
-        let memory_enabled = self.decision_memory_enabled;
-        self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
+        self.for_each_env(|index, env, next_seed, configs, roster, state| {
             if !failed[index] {
                 return Ok(InfoDict::new());
             }
-            *env = Env::new(*next_seed, skip_trivial, false, false)
-                .with_player_policies(policy)
-                .with_decision_memory(memory_enabled)
-                .with_decision_memory_include_own(include_own);
-            *fresh = true;
+            env.replace_slot(env.replacement_root(*next_seed), Default::default());
+            *state = SlotState::FreshOpening;
             let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
             write(index, &obs, 0.0, false, false)?;
             Ok(info)
@@ -911,7 +960,7 @@ impl VectorEnv {
             &mut u64,
             &GameSetup,
             &RootRoster,
-            &mut bool,
+            &mut SlotState,
         ) -> Result<R, AgentError>,
     {
         // Setups are immutable between resets. Borrow each stream's setup while
@@ -922,16 +971,16 @@ impl VectorEnv {
         self.envs
             .iter_mut()
             .zip(self.next_seeds.iter_mut())
-            .zip(self.fresh_roots.iter_mut())
+            .zip(self.slots.iter_mut())
             .enumerate()
-            .map(|(env_index, ((env, next_seed), fresh))| {
+            .map(|(env_index, ((env, next_seed), state))| {
                 work(
                     env_index,
                     env,
                     next_seed,
                     &configs[env_index],
                     &self.uniform_roster,
-                    fresh,
+                    state,
                 )
             })
             .collect()
@@ -965,35 +1014,20 @@ impl VectorEnv {
         Ok(())
     }
 
-    fn step_with_autoreset_on_env(
-        roster: &RootRoster,
-        env: &mut Env,
-        next_seed: &mut u64,
-        action: i64,
-        player_configs: &GameSetup,
-        seed_stride: u64,
-    ) -> Result<StepResult, AgentError> {
-        let mut out = Self::step_one_on_env(env, action)?;
-
-        if out.terminated || out.truncated {
-            let terminal_reward = out.reward;
-            let terminal_terminated = out.terminated;
-            let terminal_truncated = out.truncated;
-            let terminal_info = out.info;
-
-            let (reset_obs, _) =
-                Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
-
-            out = StepResult {
-                obs: reset_obs,
-                reward: terminal_reward,
-                terminated: terminal_terminated,
-                truncated: terminal_truncated,
-                info: terminal_info,
-            };
+    fn validate_active_slots(&self, active: Option<&[bool]>) -> Result<(), AgentError> {
+        for (slot, state) in self.slots.iter().enumerate() {
+            if active.is_none_or(|mask| mask[slot])
+                && matches!(
+                    state,
+                    SlotState::Terminal | SlotState::Poisoned | SlotState::Unset
+                )
+            {
+                return Err(AgentError(format!(
+                    "cannot step {state:?} slot {slot} before reset or replacement"
+                )));
+            }
         }
-
-        Ok(out)
+        Ok(())
     }
 
     fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
@@ -1023,6 +1057,22 @@ impl VectorEnv {
             truncated,
             info,
         })
+    }
+
+    fn reset_slot(
+        roster: &RootRoster,
+        env: &mut Env,
+        next_seed: &mut u64,
+        stride: u64,
+        configs: &GameSetup,
+        state: &mut SlotState,
+    ) -> Result<(Observation, InfoDict), AgentError> {
+        if *state == SlotState::Poisoned {
+            env.replace_slot(env.replacement_root(*next_seed), Default::default());
+        }
+        let opening = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
+        *state = SlotState::FreshOpening;
+        Ok(opening)
     }
 
     fn reset_env_on_env(
@@ -1071,6 +1121,80 @@ mod tests {
     };
 
     #[test]
+    fn deferred_steps_construct_and_encode_only_requested_games() {
+        use crate::{agent::vector_env::SlotLoad, flow::setup::CONSTRUCTIONS};
+        let load = |vector: &mut VectorEnv, request: SlotLoad| {
+            vector
+                .load_slots_into(
+                    &[request],
+                    |_, _| Ok(()),
+                    |_, _, terminal| {
+                        assert!(!terminal);
+                        Ok(())
+                    },
+                )
+                .unwrap()
+                .pop()
+                .unwrap()
+                .0
+        };
+        for isolated in [false, true] {
+            let mut vector =
+                VectorEnv::new(1, u64::MAX, true, [PlayerPolicy::Agent; 2]).with_auto_reset(false);
+            let before = CONSTRUCTIONS.get();
+            let players = ["a", "b"]
+                .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 12)])));
+            vector.reset_all(players.to_vec()).unwrap();
+            let root = vector
+                .snapshot_slots(&[true])
+                .unwrap()
+                .pop()
+                .flatten()
+                .unwrap();
+            let branch = || SlotLoad::Snapshot(0, root.clone(), Default::default());
+            load(&mut vector, branch());
+            assert_eq!(vector.next_fresh_seeds(), [u64::MAX]);
+            let writes = std::cell::Cell::new(0);
+            let observe = |obs: &crate::agent::observation::Observation, done| {
+                writes.set(writes.get() + 1);
+                assert_eq!(obs.action_space.actions.is_empty(), done);
+            };
+            for steps in 1..=64 {
+                if isolated {
+                    vector
+                        .step_isolated_into(&[0], &[true], false, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                } else {
+                    vector
+                        .step_into(&[0], None, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                }
+                assert_eq!(writes.get(), steps);
+                if vector.current_agent_indices() == [-1] {
+                    break;
+                }
+            }
+            assert_eq!(vector.current_agent_indices(), [-1]);
+            load(&mut vector, branch());
+            vector
+                .step_isolated_into(&[999], &[true], false, |_, _, _, _, _| {
+                    panic!("a poisoned slot must not encode a replacement opening")
+                })
+                .unwrap();
+            load(&mut vector, branch());
+            assert_eq!(CONSTRUCTIONS.get() - before, 1);
+            assert_eq!(load(&mut vector, SlotLoad::Fresh(0)).seed, u64::MAX);
+            assert_eq!(CONSTRUCTIONS.get() - before, 2);
+        }
+    }
+
+    #[test]
     fn decision_observations_keep_chooser_and_active_mask() {
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         assert!(vector.decision_observations(&[true, false]).is_err());
@@ -1107,7 +1231,7 @@ mod tests {
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         let mut writes = 0;
         assert!(vector
-            .write_observations_for_players(&[0, 1], |_, _| {
+            .write_observations_for_players(&[Some(0), Some(1)], |_, _| {
                 writes += 1;
                 Ok(())
             })
@@ -1121,7 +1245,7 @@ mod tests {
         for _ in 0..2 {
             vector.envs[0].step(0).unwrap(); // Both seats keep.
         }
-        for players in [vec![], vec![0], vec![0, 2]] {
+        for players in [vec![], vec![Some(0)], vec![Some(0), Some(2)]] {
             assert!(vector
                 .write_observations_for_players(&players, |_, _| {
                     writes += 1;
@@ -1138,7 +1262,7 @@ mod tests {
         let frames = vector.semantic_decision_frames_json(None).unwrap();
         for players in [[0, 1], [1, 0]] {
             let reads = vector
-                .write_observations_for_players(&players, |slot, obs| {
+                .write_observations_for_players(&players.map(Some), |slot, obs| {
                     assert_eq!(
                         obs.to_json(),
                         vector.envs[slot]
@@ -1586,7 +1710,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        assert!(!vector.fresh_roots[0]);
+        assert_ne!(vector.slots[0], super::SlotState::FreshOpening);
         let seeds = vector.current_game_seeds();
         let next = vector.next_seeds.clone();
         assert!(vector
