@@ -1945,13 +1945,30 @@ def load_recorded_slots(
                 vector._snapshot("reset"), "load_slots", setup_known=False
             )
         vector._executing()
-    if len(batches) == 1:
-        vector, requests = batches[0]
-        loaded = [vector.native.load_slots_into_buffers(requests)]
-    else:
-        loaded = managym.VectorEnv._load_shard_buffers(
-            [(vector.native, requests) for vector, requests in batches]
-        )
+    try:
+        if len(batches) == 1:
+            vector, requests = batches[0]
+            loaded = [vector.native.load_slots_into_buffers(requests)]
+        else:
+            loaded = managym.VectorEnv._load_shard_buffers(
+                [(vector.native, requests) for vector, requests in batches]
+            )
+    except (managym.AgentError, ValueError, TypeError, RuntimeError) as error:
+        # Admission rejected the batch. The durable cursor still owns the
+        # pre-call roots and can acknowledge that no mutation is pending.
+        for vector, _ in batches:
+            if vector._game_journal is not None:
+                evidence = vector._call_evidence
+                boundary = vector._boundary
+                assert boundary is not None and evidence is not None
+                boundary.setup_known = all(game.players for game in evidence.games)
+                try:
+                    vector._publish(evidence, "ready")
+                except OSError as journal_error:
+                    error.add_note(
+                        f"Could not settle the rejected slot load: {journal_error}"
+                    )
+        raise
     for (vector, requests), results in zip(batches, loaded, strict=True):
         vector._returned()
         roots = {

@@ -64,6 +64,27 @@ each fixture by snapshot, verified scalar and vector results, and reported
 2, 4, 6, 2 and 33 output actions across its five cases. These were functional
 checks with a single sample per case.
 
+## Product QA
+
+The installed engine wheel completed and replayed a parked game before
+refill. Sparse live loads preserved the neighboring slot, and an untouched
+opening refunded its seed. Isolated failure and cross-shard rejection
+exposed a journal boundary left in `executing`. The corrected path retains
+both pre-call prefixes in `ready` and admits the corrected request at the
+original seed. The focused Python suite passed 124 cases with one skip.
+
+The Torch wrapper retained the completed step while returning the next
+opening. Batched evaluation filled both seat quotas. A two-worker Etude
+snapshot run resumed from update 3 to 5, with 20 verified terminal replays
+matching 20 statistics rows. A copy of the predecessor's save continued
+from update 5 to 6 and preserved all 80 saved recipes and the update-5
+policy. The local recipe also resumed after a saved time-limit stop.
+The snapshot guide now honors its backend option. A compact MLX run
+restored its collector at update 1, finished update 2 with one horizon
+cut, and wrote the new checkpoint and five matching terminal records
+and statistics rows. The optional MLX package-boundary test passed.
+See [the QA transcript](qa.html).
+
 ## Next at Gate
 
 All implementation slices are complete. Reuse the focused results above.

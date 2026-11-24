@@ -54,3 +54,14 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
   receipts keep their original keys. Matched fixtures use a two-agent vector and
   load their scalar snapshots before each timed step. Both seats keep the seeded
   opening hand before the fixture installs its board.
+
+- **Returning-run QA:** Reused a copy of the predecessor's existing
+  update-five save written at `b82e31e123` to exercise the upgrade.
+- **Rejected loads with detailed diagnostics:** Republish the pre-call
+  journal prefixes as ready after native admission rejects a load. Keep the
+  original exception so callers can correct and retry the request.
+- **Snapshot recipe backend:** Honor the inherited `backend` config in
+  the guide's recipe. A run launched with `"backend":"mlx"` previously
+  wrote Torch's `learner.pt` and had no collector continuation file.
+  Used a smaller Gray Ogre matchup with two streams and one branch per
+  group to verify MLX resume within a bounded QA run.

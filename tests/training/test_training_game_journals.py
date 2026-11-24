@@ -589,6 +589,15 @@ def test_explicit_refill_replaces_prefix_and_bounds_retained_files(
         cursor = next(_cursors(scope.journal_directory))
         evidence = read_record(cursor)
         assert evidence.games[0].seed == 24 and evidence.games[0].actions
+        with pytest.raises(managym.AgentError, match="invalid or duplicate slot"):
+            vector.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(0), managym.SlotLoad.fresh(1)]
+            )
+        rejected = read_record(cursor)
+        assert rejected.boundary is not None and rejected.boundary.phase == "ready"
+        assert rejected.boundary.setup_known
+        assert not rejected.needs_reproduction
+        assert rejected.games == evidence.games
         vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         evidence = read_record(cursor)
         assert evidence.games[0].seed == 25

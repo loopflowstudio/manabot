@@ -218,6 +218,7 @@ from typing import Literal
 from etude.train.tracking import track
 from pydantic import Field
 
+from manabot.backends import resolve
 from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
@@ -247,8 +248,9 @@ def train(config: SnapshotRecipeConfig) -> None:
     inputs = settings(config).model_copy(
         update={"snapshot": snapshot, "workers": config.workers}
     )
+    backend = resolve(config.backend)
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(inputs, run, updates=config.updates)
+        self_play(inputs, run, updates=config.updates, backend=backend)
 ```
 
 ```bash
