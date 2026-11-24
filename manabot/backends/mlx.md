@@ -114,7 +114,7 @@ out/state/save-00000001/
 
 - `continuation.json` (framework-free host state, schema 2): global-slot stream
   state (0-action roots for `complete-games`, committed action prefixes for
-  `exact-quota`, parked fresh roots for snapshot vectors), `learned_game_rows`,
+  `exact-quota`, opened fresh roots for snapshot collectors), `learned_game_rows`,
   the opponent RNG when `behavior="random"`, the minibatch RNG, and Python/NumPy
   RNGs;
 - `learner.safetensors` (`schema="canonical-v1"`): canonical float32 raw and

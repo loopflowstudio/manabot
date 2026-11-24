@@ -176,8 +176,8 @@ inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
 on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
 `backend="mlx"` for tracked scalar damped self-play.
 They read and write the same portable policies, preserve live streams and RNGs
-across stops between updates in an
-[MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
+across stops between updates in the
+[portable training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
 and verify baseline runs through the selected backend in explicit CPU float32.
 
 ### Saved regimes

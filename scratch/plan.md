@@ -21,15 +21,15 @@ their existing contracts.
 1. `fa2c52e493` — canonical weights, EMA, and Adam hooks, with per-leaf bias correction on MLX.
 2. `bb0c7267b6`, `5c91b7ff7d` — one Etude callback path for both backends, with native game and RNG recovery and a temporary Etude Git pin.
 3. `30db47c5c1` — tracked continuation acceptance, a smaller Metal fixture, CI wiring for the acceptance file, and training guide updates.
-4. Replaced the temporary Etude Git source with PyPI release 0.4.6. The package and its extras require `>=0.4.6,<0.5`. The play runtime and release smoke pin `==0.4.6`.
+4. `c98aa96bab` — switched from the temporary Etude Git source to PyPI release `etude-sdk` 0.4.6 (`>=0.4.6,<0.5` for package/extras; `==0.4.6` for play runtime and release smoke); merged `main` (`82c5d1d1b7`, native snapshot self-play) in `d9e81afec3`.
 
 The save contains `state.json` (Etude inventory and counts),
 `continuation.json` (collector and host RNGs), `learner.safetensors` (canonical
 raw/EMA weights, Adam state and integrity metadata), and
 `sampling.safetensors` (domain-specific RNG state). The shared reader checks
 the saved model, readings, observation layout, lookup buffers, file digests,
-weights and optimizer state before installing learner tensors. The Etude
-revision also supplies versioned storage listing for training-time reports.
+weights and optimizer state before installing learner tensors. Etude SDK 0.4.6
+also supplies versioned storage listing for training-time reports.
 
 The parent Task note recorded this direction, “Compose canonical
 raw.safetensors / ema.safetensors / optimizer.safetensors cleanly under
@@ -69,5 +69,9 @@ See `scratch/questions.md` for the format and optimizer choices.
   reports and evaluation extras and passed `uv pip check`. All seven
   continuation cases passed against the PyPI release in 53.77 s, and all
   39 release metadata fixtures passed.
+- After merging `main` (`82c5d1d1b7`) in `d9e81afec3`, all four snapshot
+  self-play cases (`tests/training/test_snapshot_rollouts.py -k self_play`,
+  5.49 s) and all 42 package-boundary tests (`tests/test_package_boundaries.py`,
+  10.94 s) passed.
 
-All four implementation slices are complete.
+All four implementation slices are complete; no slices remain.

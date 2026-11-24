@@ -35,7 +35,7 @@
   Switching backend or device therefore goes through
   `etude continue --run RUN --until updates=N --config '{"backend":"mlx","device":"mps"}'`
   (launched runs) or direct Python `self_play(..., backend=...)` against the same
-  `ETUDE_OUT`. At the pinned Etude revision, the CLI queues a continued job in
+  `ETUDE_OUT`. In Etude 0.4.6, the CLI queues a continued job in
   the parent's pool with its rental settings. The docs now name that constraint.
 - **Canonical `precision` spelling in `learner.safetensors`:**
   `SelfPlay.precision` uses `"float32" | "tf32" | "bf16"` while
