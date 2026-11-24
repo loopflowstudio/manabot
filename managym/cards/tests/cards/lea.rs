@@ -373,7 +373,6 @@ fn departed_clone_creates_joo_dee_before_the_sacrifice_choice() {
 
 #[test]
 fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
-    use managym::{state::player::PlayerConfig, Env};
     let horde = "Homunculus Horde";
     let mut s = five_color_setup(&["Clone", horde, "Gray Ogre", "Scout's Warning"]);
     let original = s.force_permanent_on_battlefield(1, horde);
@@ -394,18 +393,7 @@ fn departed_clone_horde_trigger_survives_a_new_form_and_snapshot() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     assert_eq!(s.game().state.stack_objects.len(), 1);
 
-    // Save the constructed decision boundary through the native Env API.
-    let mut env = Env::new(1, false, false, false);
-    env.reset(
-        ["a", "b"]
-            .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
-            .to_vec(),
-    )
-    .unwrap();
-    *env.benchmark_game_mut() = s.game().clone();
-    let snapshot = env.snapshot().unwrap();
-    let mut restored = snapshot.restore(Default::default()).unwrap();
-    *s.game_mut() = restored.benchmark_game_mut().clone();
+    s.restore(&s.snapshot());
     resolve_top(&mut s);
     assert_eq!(current_object(&s, clone).name, "Gray Ogre");
     let copies = s.battlefield_permanents_named(0, horde);

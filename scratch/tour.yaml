@@ -1,4 +1,4 @@
-at: cc1061b7117c0f4a75339bff3079e92c84f17e9a
+at: 3f5eb5940955fea42577b9b93e0c9d8106a19d50
 first:
   - path: scratch/plan.md
     why: See the interaction outcomes and remaining cohort.
@@ -11,7 +11,9 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Construct simultaneous copies before applying token replacements.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Follow both restored trigger orders and kicked Rite.
+    why: Check each sacrifice source and exact graveyard targets.
+  - path: managym/cards/tests/cards.rs
+    why: Restore constructed decisions across card fixtures.
   - path: managym/cards/tests/cards/dsk.rs
     why: Follow paired deals, payment forks and both copies.
   - path: managym/src/flow/selection_sampling.rs

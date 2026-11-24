@@ -181,12 +181,7 @@ fn two_generations_copy_only_the_manifested_face() {
     let card = pin_top(&mut s, &["Aang, Swift Savior"])[0];
     let original = s.game_mut().manifest(card, PlayerId(0));
     s.game_mut().scenario_refresh_priority().unwrap();
-    *s.game_mut() = s
-        .snapshot()
-        .restore(Default::default())
-        .unwrap()
-        .benchmark_game_mut()
-        .clone();
+    s.restore(&s.snapshot());
     for generation in 1..=2 {
         cast(&mut s, "Clone Legion");
         assert!(s.choose_target(Target::Player(PlayerId(0))));
@@ -502,11 +497,7 @@ fn turn_up_shows_the_creature_while_its_controller_chooses_mana() {
     assert!(shown.characteristics.name.is_empty());
     let snapshot = s.snapshot();
     for (spend, keep) in [("{W}", "U"), ("{U}", "W")] {
-        *s.game_mut() = snapshot
-            .restore(Default::default())
-            .unwrap()
-            .benchmark_game_mut()
-            .clone();
+        s.restore(&snapshot);
         spend_named(&mut s, |description| description.contains(spend));
         if s.game().state[object].name.is_empty() {
             spend_named(&mut s, |description| description.contains("{C}"));

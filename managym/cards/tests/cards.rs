@@ -8,6 +8,31 @@
 #[path = "../../tests/support/mod.rs"]
 mod support;
 
+use managym::agent::env::GameSnapshot;
+use support::game::{deck, Scenario};
+
+// Constructed card positions use the benchmark fixture access enabled by this crate.
+impl Scenario {
+    /// Capture this constructed decision for exact native forks.
+    pub fn snapshot(&self) -> GameSnapshot {
+        use managym::{state::player::PlayerConfig, Env};
+        let mut env = Env::new(1, false, false, false);
+        env.reset(
+            ["a", "b"]
+                .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+                .to_vec(),
+        )
+        .unwrap();
+        *env.benchmark_game_mut() = self.game().clone();
+        env.snapshot().unwrap()
+    }
+
+    fn restore(&mut self, snapshot: &GameSnapshot) {
+        let mut env = snapshot.restore(Default::default()).unwrap();
+        *self.game_mut() = env.benchmark_game_mut().clone();
+    }
+}
+
 #[path = "cards/aer.rs"]
 mod aer;
 #[path = "cards/afr.rs"]

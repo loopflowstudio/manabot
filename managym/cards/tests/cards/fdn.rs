@@ -724,7 +724,8 @@ fn replicate(
 #[test]
 fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
     use crate::support::{
-        inspect::{library_card, offered_targets, zone_of},
+        game::move_from_library,
+        inspect::{offered_targets, zone_of},
         play::{cast_card, command, resolve_top},
     };
     use managym::{
@@ -745,20 +746,13 @@ fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
     s.game_mut().mana_payment[0] = ManaPayment::Auto;
     s.force_permanent_on_battlefield(0, "Doubling Season");
     let original = s.force_permanent_on_battlefield(0, driver);
-    let mut eligible = BTreeSet::new();
-    for (owner, name) in [(0, "Llanowar Elves"); 4].into_iter().chain([
-        (0, "Gray Ogre"),
-        (1, "Llanowar Elves"),
-        (0, "Forest"),
-    ]) {
-        let card = library_card(&s, owner, name);
-        let card = move_card(&mut s, card, ZoneType::Graveyard);
-        if owner == 0 && name == "Llanowar Elves" {
-            eligible.insert(card);
-        }
+    let eligible: BTreeSet<_> = (0..4)
+        .map(|_| move_from_library(&mut s, 0, "Llanowar Elves", ZoneType::Graveyard))
+        .collect();
+    for (owner, name) in [(0, "Gray Ogre"), (1, "Llanowar Elves"), (0, "Forest")] {
+        move_from_library(&mut s, owner, name, ZoneType::Graveyard);
     }
-    let spell = library_card(&s, 0, "Electroduplicate");
-    let spell = move_card(&mut s, spell, ZoneType::Graveyard);
+    let spell = move_from_library(&mut s, 0, "Electroduplicate", ZoneType::Graveyard);
     cast_card(&mut s, spell);
     assert!(s.choose_target(Target::Permanent(original)));
     settle(&mut s);
@@ -786,11 +780,7 @@ fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
     let snapshot = s.snapshot();
     let mut first_order = Vec::new();
     for reverse in [false, true] {
-        *s.game_mut() = snapshot
-            .restore(Default::default())
-            .unwrap()
-            .benchmark_game_mut()
-            .clone();
+        s.restore(&snapshot);
         let mut tokens = tokens.clone();
         let mut eligible = eligible.clone();
         while s.action_space().kind == ActionSpaceKind::OrderTriggers {
@@ -823,14 +813,14 @@ fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
             assert!(tokens.remove(&source));
             resolve_top(&mut s);
             assert!(permanent_of(&s, source).is_none());
-            let offered = offered_targets(&s)
-                .into_iter()
-                .map(|target| match target {
-                    Target::GraveyardCard(card) => card,
-                    _ => panic!("unexpected death trigger target {target:?}"),
-                })
-                .collect::<BTreeSet<_>>();
-            assert_eq!(offered, eligible);
+            assert_eq!(
+                offered_targets(&s).into_iter().collect::<BTreeSet<_>>(),
+                eligible
+                    .iter()
+                    .copied()
+                    .map(Target::GraveyardCard)
+                    .collect()
+            );
             let chosen = eligible.pop_first().unwrap();
             command(
                 &mut s,
