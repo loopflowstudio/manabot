@@ -113,8 +113,14 @@ def restore(
         elif host_file.exists():
             raise ValueError("incompatible MLX snapshot schema with host continuation")
         if saved != header:
+            differing = sorted(
+                key
+                for key in saved.keys() | header.keys()
+                if saved.get(key) != header.get(key)
+            )
             raise ValueError(
-                "incompatible MLX snapshot backend, schema, input binding or counts"
+                "incompatible MLX snapshot: saved header differs in "
+                + ", ".join(differing)
             )
         if payload is not None:
             host = HostContinuation.model_validate_json(payload)

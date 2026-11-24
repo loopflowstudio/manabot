@@ -183,7 +183,9 @@ and replace `local` in the checkpoint path with that name.
 - `--backend {torch,mlx}` (default `torch`) chooses which backend admits the
   checkpoint and runs the scalar CPU game children. Selecting `mlx` resolves
   explicit `precision="float32"` on CPU without importing PyTorch and does not
-  change `EvaluationRequest`, `EvaluationKey` or registration digests. MLX
+  change `EvaluationRequest`, `EvaluationKey` or registration digests. Each
+  backend samples actions from its own random stream, so one request plays
+  different games on Torch and MLX; compare their scores, not their traces. MLX
   reads portable policy containers. Use Torch to read a legacy PyTorch file.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.

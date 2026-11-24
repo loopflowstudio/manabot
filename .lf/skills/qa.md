@@ -321,6 +321,17 @@ publish, land or choose the next Graph step from here.
   refuses it on CPU inside `track`. A resume with a changed precision must
   refuse with `run_identity_conflict`. Read `execution/precision` from the
   run's `metrics/*.permanent.json` labels.
+  Exact MLX recovery: on `device: "cpu"`, Ctrl-C a `--until updates=6` run on a
+  pty, `--resume`, and compare `out/policies/00000006-*.safetensors` tensor
+  bytes with an uninterrupted run in another `ETUDE_HOME`: they are identical.
+  Etude keeps the save before the final update, so `out/state/` of a finished
+  run may name an earlier update than its policies. Edit a seed in a copy's
+  `continuation.json`; resume must refuse naming `continuation_sha256` and leave
+  `out/` byte-identical. To block Torch for a CLI and its children, put a
+  directory holding `torch/__init__.py` (`raise ImportError`) on `PYTHONPATH`.
+  `manabot.eval.local --backend mlx` writes the same `request.json` as Torch
+  but plays different games (each framework samples with its own RNG);
+  `--status`/`--continue` take the `panel` directory.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
