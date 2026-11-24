@@ -126,6 +126,8 @@ observation. For attention it sorts observations by live object count and packs
 the shorter and longer halves separately when that saves dense slots. Otherwise
 it uses the object columns present anywhere in the batch. It restores the
 bucket's object coordinates before the critic and action focus lookups.
+Bucketed learner batches also encode only live fact rows, scattering each into
+its own observation's objects.
 Inference can cache the full catalog while the weights are fixed.
 
 The clipped surrogate computes its likelihood ratio in float32 on MLX and
