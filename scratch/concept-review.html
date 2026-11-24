@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Whole-Branch Sign-Off Before Gate</title>
+  <title>MTG-419 Concept Review — Whole-Branch Sign-Off After D7</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -178,15 +178,15 @@
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Pre-Gate Whole-Branch Concept Review (6d60273fd6 vs. main 88ce96bd6b)</p>
-  <h1>Do the shared casting-profile, play-permission, payment-continuation, and stack-trigger concepts line up?</h1>
+  <p class="kicker">Managym · MTG-419 · Pre-Gate Whole-Branch Concept Review (ef8728b23c vs. main 88ce96bd6b)</p>
+  <h1>Do the shared casting-profile, play-permission, payment-continuation, and stacked-trigger concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and per-creature combat-damage trigger area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>experience.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, prompt.ts, Board.svelte, Rail.svelte, Inspect.svelte}</code>, <code>academy/ui/src/lib/projection.ts</code>).<br>
-    <strong>Why this area:</strong> The pre-gate alignment pass (<code>db3f8e6738..6d60273fd6</code>) closed all three open repairs from the prior review plus D6 (stacked trigger X and event context). Reviewing the whole branch fresh before gate confirms <strong>all MTG-419 concepts now align</strong> — zero remaining mismatches inside this Task’s model, so <code>scratch/plan.md</code> needs no changes before gate. Two pre-existing, orthogonal UI/continuation items spotted while walking the full stack are recorded plainly below as outside MTG-419 scope.
+    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and event-bound trigger X area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, trigger.rs, resolution.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>state/src/stack_object.rs</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>experience.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, prompt.ts, Board.svelte, Rail.svelte, Inspect.svelte}</code>, <code>academy/ui/src/lib/projection.ts</code>).<br>
+    <strong>Why this area:</strong> After the pre-gate alignment pass (<code>db3f8e6738..1673a6e053</code>), behavior review caught D7 (a trigger choosing X while resolving rendered <code>"that many (0)"</code> on the stack). Commits <code>2c213d9525..ef8728b23c</code> fixed D7 via <code>bound_x</code> and raised a concept question in <code>scratch/plan.md</code> about whether <code>PendingTrigger.x</code> / <code>TriggeredAbilityOnStack.x</code> should become <code>Option&lt;u8&gt;</code>. Reviewing the whole branch fresh against base <code>88ce96bd6b</code> confirms <strong>every MTG-419 concept aligns</strong>, and testing <code>x: Option&lt;u8&gt;</code> against concrete counterexamples shows keeping <code>x: u8</code> + <code>bound_x</code> is the stronger, state-hash-preserving design. <strong>Outcome: nothing to change in <code>scratch/plan.md</code>; proceed to gate.</strong>
   </div>
 
-  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>6d60273fd6</code>)</h2>
+  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>ef8728b23c</code>)</h2>
   <table>
     <thead>
       <tr>
@@ -199,13 +199,13 @@
     <tbody>
       <tr>
         <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play names one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions.</td>
-        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>Game::cast_choices</code>, <code>Game::priority_play</code>, <code>permits_spell</code>, <code>permitted_play_routes</code>, <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code> (<code>observation_layout.rs:488</code>).</td>
+        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>Game::cast_choices</code>, <code>Game::priority_play</code>, <code>permits_spell</code>, <code>permitted_play_routes</code>, <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code> (<code>observation_layout.rs:487-488</code>).</td>
         <td><span class="badge yes">Yes</span></td>
         <td>Single authority across priority casts, land plays, resolution casts, and payment preview; per-face disambiguation keeps lone-route <code>route: None</code> on the wire; <code>action::PLAY_ROUTE</code> metadata lists all <code>1..9</code> codes including <code>9 printed graveyard</code>; <code>test_pinned_pilot</code> unchanged.</td>
       </tr>
       <tr>
         <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into or is accepted by it.</td>
-        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:456</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2909</code>), <code>action_description</code> (<code>action.rs:58</code>).</td>
+        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:437</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2909</code>), <code>action_description</code> (<code>action.rs:58</code>).</td>
         <td><span class="badge yes">Yes</span></td>
         <td><code>resolved_play_route</code> checks <code>suspended_decision.is_some()</code> before <code>route.is_some()</code>; <code>CastDuringResolution</code> requires <code>route: None</code> on non-front <code>Action::CastSpell</code> and rejects forged <code>Some(PlayRoute::Grant(0))</code> (<code>identity_tests::a_resolution_cast_never_inherits_a_priority_route</code>).</td>
       </tr>
@@ -229,73 +229,80 @@
       </tr>
       <tr>
         <td><strong>Multi-step counter-removal cost vs. chosen spell mode</strong><br>Casting Quilled Greatwurm from the graveyard by removing 6 counters one at a time reports remaining counters owed (6 &rarr; 1), never a phantom chosen mode.</td>
-        <td><code>PlayRoute::PrintedGraveyard</code>, <code>CostComponent::RemoveCounters { remaining, choosing_from }</code>, <code>effect_execution::project_pending_payment</code> (<code>effect_execution.rs:1051</code>), <code>continuation.rs:730, 885</code>, <code>DecisionContextView.pending</code>.</td>
+        <td><code>PlayRoute::PrintedGraveyard</code>, <code>CostComponent::RemoveCounters { remaining, choosing_from }</code>, <code>effect_execution::project_pending_payment</code> (<code>effect_execution.rs:1050</code>), <code>continuation.rs:730, 885</code>, <code>DecisionContextView.pending</code>.</td>
         <td><span class="badge yes">Yes</span></td>
         <td><code>frame.mode</code> stays strictly for spell modes (<code>chosen_mode == None</code>); both policy tokens and text passes share <code>project_pending_payment</code>, reusing <code>"counters remaining"</code> with zero new vocabulary or columns and emitting <code>"6 counters left to remove."</code> &rarr; <code>"1 counter left to remove."</code>.</td>
       </tr>
       <tr>
-        <td><strong>Per-creature combat-damage triggers &amp; stacked trigger identity</strong><br>Each creature dealing combat damage during your turn triggers once with its own step total; every consumer distinguishes stacked triggers by their creature and “that many” amount.</td>
-        <td><code>DealsCombatDamage.to: Option&lt;Actor&gt;</code>, trigger-only <code>GameEvent::CombatDamageTotals</code>, <code>FiredTrigger.occurrence</code>, <code>StackObjectData.x</code> (<code>observation.rs:1874</code>), <code>trigger_description(.., x)</code>, <code>Game::trigger_event_label</code> (<code>flow/action.rs:450</code>), kind-3 continuation frame <code>context</code> + <code>x</code>.</td>
+        <td><strong>Event-bound trigger X vs. resolution-chosen X (CR 107.3) &amp; stacked trigger identity</strong><br>Triggers whose event binds an amount (entering permanent’s spell X, counters put, per-creature combat damage) show that number and event object on placement offers and the stack; triggers that choose X while resolving (Wildborn Preserver) keep X symbolic until chosen.</td>
+        <td><code>DealsCombatDamage.to: Option&lt;Actor&gt;</code>, trigger-only <code>GameEvent::CombatDamageTotals</code>, <code>FiredTrigger.occurrence</code>, <code>PendingTrigger.x</code> / <code>TriggeredAbilityOnStack.x</code>, <code>StackObjectData.x</code> (<code>observation.rs:1874</code>), <code>trigger_description</code> + <code>bound_x</code> (<code>ability_description.rs:25-102</code>), <code>Game::trigger_event_label</code> (<code>flow/action.rs:450</code>), kind-3 continuation frame <code>context</code> + <code>x</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td><code>StackObjectData.x</code> and kind-3 frames project each trigger’s X and event creature to policy tensors; <code>trigger_description</code> + shared <code>trigger_event_label</code> render <code>"Put that many (7) +1/+1 counters ... — event: Quilled Greatwurm (object ...)"</code> on both placement offers and stack entries (and <code>"X (N)"</code> for an entering permanent’s own trigger).</td>
+        <td><code>bound_x</code> mirrors <code>flow/triggers.rs:1151</code>: <code>EntersTheBattlefield { This }</code> renders <code>"X (N)"</code> (CR 107.3m), <code>PutsCounters</code> / <code>NthCounter</code> / <code>Chapter</code> and per-creature <code>DealsCombatDamage { per: Object, to: None }</code> render <code>"that many (N)"</code>, and all other conditions return <code>None</code> so <code>OptionalManaPaymentX</code> keeps <code>"the announced value of X"</code> with no <code>"(0)"</code>. Checked against all four X-using triggers in the catalog (Wan Shi Tong, Earth Kingdom General, Quilled Greatwurm, Wildborn Preserver).</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Pre-gate alignment verified (before &rarr; after)</h2>
+  <h2>2. D7 fix &amp; counterexample check on <code>x: Option&lt;u8&gt;</code></h2>
   <div class="callout">
-    <strong>Outcome:</strong> Nothing left to change in <code>scratch/plan.md</code>. All three conceptual mismatches from the prior review (<code>4bd8f23023</code>) plus D6 (<code>a4e8269362</code>) are cleanly resolved at HEAD <code>6d60273fd6</code> without adding columns, vocabulary churn, or wire breaks.
+    <strong>Outcome:</strong> Nothing to change in <code>scratch/plan.md</code>. D7 is cleanly closed at HEAD <code>ef8728b23c</code>, and the alternative sketched in <code>scratch/plan.md</code> (<code>PendingTrigger.x: Option&lt;u8&gt;</code> / <code>TriggeredAbilityOnStack.x: Option&lt;u8&gt;</code>) fails three counterexamples without removing <code>bound_x</code>.
   </div>
 
   <div class="grid">
     <div class="card">
-      <p><span class="badge existing">Before · bb2fb68c0d</span></p>
-      <h3>Four seams misaligned</h3>
-      <pre>1. continuation.rs:725
-   CostComponent::RemoveCounters { remaining, .. } =&gt;
-       frame.mode = Some(usize::from(*remaining)); // ❌ chosen_mode: 6
-   DecisionContextView.pending = []                // ❌ count absent
+      <p><span class="badge existing">Before D7 · 04f31e8f90</span></p>
+      <h3>Unconditional substitution broke CR 107.3</h3>
+      <pre>ability_description.rs:47-57
+  let amount = if enters_itself(condition) { "X" } else { "that many" };
+  with_trigger_x(effects_description(effects), amount, x)
 
-2. observation_layout.rs:488
-   action::PLAY_ROUTE: "1..8"                      // ❌ omitted 9
-
-3. play.rs:453 &amp; decision.rs:2905
-   resolved_play_route checked route.is_some() first;
-   CastDuringResolution accepted route: Some(..).  // ❌ forged route
-
-4. observation.rs:1862 (D6)
-   StackObject::TriggeredAbility(_) =&gt; 0           // ❌ X=0, no event
-   "...the announced value of X +1/+1 counters..." // ❌ wrong wording</pre>
+// Wildborn Preserver + Gray Ogre entering (X not yet chosen):
+// ❌ "Choose X. You may pay {X}. If you do, When you do:
+//     Put that many (0) +1/+1 counters on this"</pre>
     </div>
 
     <div class="card aligned-box">
-      <p><span class="badge yes">Verified · HEAD 6d60273fd6</span></p>
-      <h3>Single-owner alignment across consumers</h3>
-      <pre>1. effect_execution::project_pending_payment (continuation.rs:730,885)
-   frame.mode = None                               // ✓ spell modes only
-   policy:  "counters remaining": 6 -&gt; 1           // ✓ existing token
-   pending: ["6 counters left to remove."]         // ✓ 6 -&gt; 5 -&gt; 1
+      <p><span class="badge yes">Existing · HEAD ef8728b23c</span></p>
+      <h3><code>bound_x</code> gates substitution on event-bound conditions</h3>
+      <pre>ability_description.rs:47-51, 71-102
+  let text = match bound_x(condition) {
+      Some(amount) =&gt; with_trigger_x(text, amount, x),
+      None =&gt; text,
+  };
+  // EntersTheBattlefield { This }              =&gt; Some("X")
+  // PutsCounters | NthCounter | Chapter        =&gt; Some("that many")
+  // ActiveIf* + DealsCombatDamage(Object,None) =&gt; Some("that many")
+  // everything else (incl. Wildborn Preserver) =&gt; None
 
-2. observation_layout.rs:488
-   action::PLAY_ROUTE: "...9 printed graveyard", "1..9" // ✓ matches code
-
-3. play.rs:456 &amp; decision.rs:2909
-   suspended_decision checked first; route: None required // ✓ rejects forged
-
-4. observation.rs:1836,1874 &amp; ability_description.rs:25
-   StackObjectData.x = ability.x                   // ✓ tensor + Academy
-   "Put that many (7) +1/+1 counters... — event: Quilled Greatwurm"</pre>
+// Wildborn Preserver stacked trigger (both viewers):
+// ✓ "Choose X. You may pay {X}. If you do, When you do:
+//    Put the announced value of X +1/+1 counters on this"
+// Quilled Greatwurm stacked triggers (7 and 2):
+// ✓ "Put that many (7) +1/+1 counters ... — event: Quilled Greatwurm"</pre>
     </div>
+  </div>
+
+  <div class="trace">
+    <div class="trace-label">Counterexamples that refute replacing <code>x: u8</code> with <code>x: Option&lt;u8&gt;</code></div>
+    <ol>
+      <li><strong>State-hash churn on every ETB trigger:</strong> In <code>flow/triggers.rs:1156</code>, every permanent entering the battlefield (including non-X creatures like Earth Kingdom General) hits the <code>*object == source_object</code> arm with <code>permanent.cast_x == 0</code>. Storing <code>Some(0)</code> would either serialize <code>"x": 0</code> on every ETB trigger in the game (breaking retained v16 state hashes and canonical replays) or require <code>skip_serializing_if</code> to collapse <code>Some(0)</code> back into <code>None</code>.</li>
+      <li><strong>Reflexive triggers read <code>EffectFrame.x: u8</code>:</strong> <code>Effect::WhenYouDo</code> (<code>resolution.rs:1708</code>) copies <code>frame.x: u8</code>, which is <code>0</code> both when a resolving spell/ability had no X and when <code>ChoosePaymentX</code> chose <code>X = 0</code>. <code>Option&lt;u8&gt;</code> on <code>PendingTrigger</code> alone does not distinguish those without widening <code>EffectFrame</code> as well.</li>
+      <li><strong>Wording still requires inspecting <code>condition</code>:</strong> Even with <code>x: Option&lt;u8&gt;</code>, <code>ability_description.rs</code> still classifies <code>condition</code> to choose <code>"X"</code> (entering permanent, CR 107.3m) vs. <code>"that many"</code> (counters put, combat damage). Keeping <code>x: u8</code> + <code>bound_x</code> keeps one small 31-line classifier and preserves every retained state hash.</li>
+    </ol>
   </div>
 
   <h2>3. End-to-end walkthrough — Normal path, failure, and recovery</h2>
   <div class="trace">
-    <div class="trace-label">Quilled Greatwurm graveyard cast, forged resolution route, and stacked combat-damage triggers</div>
+    <div class="trace-label">Quilled Greatwurm graveyard cast, forged resolution route, and bound vs. unchosen trigger X</div>
     <ol>
-      <li><strong>Overlapping graveyard routes (normal):</strong> P0 controls Gray Ogre (1 <code>+1/+1</code>) and Muldrotha (4 <code>+1/+1</code>, 1 <code>stun</code>), with Quilled Greatwurm in graveyard holding an exact grant plus Muldrotha’s permission plus its own printed ability. Priority emits three distinct <code>CastSpell</code> offers with <code>play_route</code> codes <code>6</code>, <code>7</code>, and <code>9</code>; choosing route <code>9</code> enters <code>CostComponent::RemoveCounters { remaining: 6, choosing_from: None }</code> with <code>chosen_mode: None</code> and <code>pending: ["6 counters left to remove."]</code>.</li>
-      <li><strong>Multi-kind removal &amp; recovery:</strong> Removing 1 counter from Gray Ogre drops <code>pending</code> to <code>"5 counters left to remove."</code>; choosing Muldrotha opens <code>Action::ChooseMode</code> for <code>+1/+1</code> vs. <code>stun</code> with Muldrotha focused; removing a non-existent kind or choosing a counterless creature is rejected before state mutation. After the 6th removal, <code>RemoveCounters</code> pops cleanly into <code>CostComponent::Mana</code> with zero stale summary. Dropping to 5 total counters closes only route <code>9</code>, leaving routes <code>6</code> and <code>7</code> intact.</li>
-      <li><strong>Forged resolution route (failure &amp; guard):</strong> During <code>Decision::CastDuringResolution</code> on an exiled Adventure that also holds a priority grant, legal offers emit <code>route: None</code> and <code>play_route: None</code>; submitting a forged <code>Action::CastSpell { route: Some(Grant(0)), profile: Adventure }</code> yields <code>resolved_play_route == None</code> and returns <code>Err</code> without consuming the suspended decision.</li>
-      <li><strong>Stacked combat-damage triggers (both viewers):</strong> Quilled Greatwurm (7) and Gray Ogre (2) deal unblocked combat damage during P0’s turn. <code>OrderTriggers</code> and both viewers’ stack observations distinguish the two triggers by <code>StackObjectData.x</code> (7 vs. 2), <code>"Put that many (7/2) +1/+1 counters ... — event: ..."</code>, and distinct kind-3 continuation frame <code>context</code> + <code>x</code> joins.</li>
+      <li><strong>Overlapping graveyard routes (normal):</strong> P0 controls Gray Ogre (1 <code>+1/+1</code>) and Muldrotha (4 <code>+1/+1</code>, 1 <code>stun</code>), with Quilled Greatwurm in graveyard holding an exact grant, Muldrotha’s permission, and its printed ability. Priority emits three distinct <code>CastSpell</code> offers with <code>play_route</code> codes <code>6</code>, <code>7</code>, and <code>9</code>; choosing route <code>9</code> enters <code>CostComponent::RemoveCounters { remaining: 6, choosing_from: None }</code> with <code>chosen_mode: None</code> and <code>pending: ["6 counters left to remove."]</code>.</li>
+      <li><strong>Multi-kind removal &amp; recovery:</strong> Removing 1 counter from Gray Ogre drops <code>pending</code> to <code>"5 counters left to remove."</code>; choosing Muldrotha opens <code>Action::ChooseMode</code> for <code>+1/+1</code> vs. <code>stun</code>; invalid targets/kinds reject before mutation; after the 6th removal <code>RemoveCounters</code> pops cleanly into <code>CostComponent::Mana</code>. Fewer than 6 counters closes only route <code>9</code>.</li>
+      <li><strong>Forged resolution route (failure &amp; guard):</strong> During <code>Decision::CastDuringResolution</code> on an exiled Adventure that also holds a priority grant, legal offers emit <code>route: None</code> and <code>play_route: None</code>; submitting a forged <code>Action::CastSpell { route: Some(Grant(0)), profile: Adventure }</code> yields <code>resolved_play_route == None</code> and returns <code>Err</code> without unsuspending.</li>
+      <li><strong>Bound vs. unchosen trigger X (both viewers):</strong>
+        <ul>
+          <li><em>Event-bound X:</em> Quilled Greatwurm (7) and Gray Ogre (2) deal combat damage on P0’s turn. Both <code>OrderTriggers</code> and both viewers’ stack entries carry <code>StackObjectData.x</code> (7 vs. 2), distinct kind-3 continuation frame <code>context</code> + <code>x</code> joins, and <code>"Put that many (7/2) +1/+1 counters ... — event: ..."</code>.</li>
+          <li><em>Resolution-chosen X:</em> Wildborn Preserver triggers when Gray Ogre enters. On the stack for both viewers, <code>bound_x</code> returns <code>None</code>, so the text reads <code>"Choose X. You may pay {X}. If you do, When you do: Put the announced value of X +1/+1 counters on this"</code> with no <code>"(0)"</code>; only after paying <code>{3}</code> does the reflexive trigger carry <code>x = 3</code>.</li>
+        </ul>
+      </li>
     </ol>
   </div>
 
@@ -303,19 +310,19 @@
   <div class="outside">
     <p><span class="badge outside-badge">Outside MTG-419 · Academy prompt surface</span> <strong>Academy <code>Rail.svelte</code> &amp; <code>prompt.ts</code> do not yet render <code>decision_context.pending</code> or distinguish <code>stage === 'additional_cost'</code>:</strong></p>
     <ul>
-      <li><code>DecisionContextView.pending</code> now carries plain-language progress (<code>"6 counters left to remove."</code>, plus pre-existing <code>SelectCards</code>/<code>DistributeCounters</code> summaries), and the rail exposes every exact legal offer (<code>"Remove a counter from Gray Ogre"</code>, <code>"Remove a stun counter from Muldrotha"</code>) and the full engine instruction under <em>Rules detail</em>. However, <code>academy/ui/src/lib/board/Rail.svelte</code> never displays <code>context.pending</code>, and <code>prompt.ts:61-67</code> maps <code>LOOK_AND_SELECT</code> to <code>"Choose from the revealed cards (Source)"</code> and non-<code>payment</code> <code>MODAL</code> to <code>"Choose a mode for Source"</code> for every <code>additional_cost</code> step (Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, and now RemoveCounters).</li>
-      <li>Similarly, <code>academy/ui/src/lib/projection.ts:4-10</code> (<code>exposesOtherPrivateContext</code>) does not yet check <code>(context.pending?.length ?? 0) &gt; 0</code>, lagging Rust’s <code>experience.rs:771</code>.</li>
-      <li><strong>What it would take:</strong> A small Game/Academy UI task (~30 lines across <code>Rail.svelte</code>, <code>prompt.ts</code>, <code>projection.ts</code>, plus vitest) to render <code>context.pending</code> in the prompt block, branch <code>promptLine</code> on <code>stage === 'additional_cost'</code>, and add <code>context.pending</code> to <code>exposesOtherPrivateContext</code>.</li>
+      <li><code>DecisionContextView.pending</code> carries plain-language progress (<code>"6 counters left to remove."</code>, plus pre-existing <code>SelectCards</code>/<code>DistributeCounters</code> summaries), and the rail exposes every exact legal offer and the full engine instruction under <em>Rules detail</em>. However, <code>Rail.svelte</code> does not render <code>context.pending</code>, <code>prompt.ts:61-67</code> uses generic prompt lines across every <code>additional_cost</code> step (Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, RemoveCounters), and <code>academy/ui/src/lib/projection.ts:4-10</code> (<code>exposesOtherPrivateContext</code>) does not yet include <code>context.pending</code>.</li>
+      <li><strong>What it would take:</strong> A small Game/Academy UI task (~30 lines across <code>Rail.svelte</code>, <code>prompt.ts</code>, <code>projection.ts</code>, plus vitest).</li>
     </ul>
-    <p><span class="badge outside-badge">Outside MTG-419 · Payment continuation cleanup</span> <strong>Pre-existing multi-tap <code>CostComponent::Tap</code> in <code>continuation.rs:714-723</code>:</strong> Still writes remaining tap count into <code>frame.mode</code> (same pattern removed from <code>RemoveCounters</code>). Migrating it into <code>project_pending_payment</code> belongs in a dedicated cleanup task so MTG-419 does not churn unrelated retained activation fixtures (already noted in <code>scratch/plan.md</code>).</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Payment continuation cleanup</span> <strong>Pre-existing multi-tap <code>CostComponent::Tap</code> in <code>continuation.rs:714-723</code>:</strong> Still writes remaining tap count into <code>frame.mode</code> (same pattern removed from <code>RemoveCounters</code>). Migrating it into <code>project_pending_payment</code> belongs in a dedicated cleanup task so MTG-419 does not churn unrelated retained activation fixtures.</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Future inline triggers with X</span> <strong><code>trigger_description</code>’s <code>inline</code> arm (<code>ability_description.rs:31-37</code>):</strong> Unconditionally runs <code>with_trigger_x(..., "that many", x)</code> for all <code>inline_effects</code> (reflexive triggers, delayed triggers, chosen modal trigger modes, granted triggers). Safe for the entire current catalog (only reflexive <code>WhenYouDo</code> triggers carry <code>EffectValue::X</code>, and only after <code>ChoosePaymentX</code> binds X); revisit if a future delayed trigger or modal trigger embeds <code>OptionalManaPaymentX</code>.</p>
   </div>
 
   <h2>5. Questions for review</h2>
   <p class="muted">No plan change was needed; MTG-419 is ready for gate. Reply with e.g. <code>1b</code> or <code>2b</code> if you want a different disposition.</p>
   <ol class="q-list">
-    <li><strong>Proceed to gate with the current casting/permission model unchanged?</strong>
-      <br><span class="chosen">1a (chosen):</span> Proceed straight to gate — all MTG-419 concepts align across rules, v11 tensors, LLM text, and Academy projection; leave <code>scratch/plan.md</code> unchanged.
-      <br>1b: Hold gate to revisit another casting/permission boundary first (name which).
+    <li><strong>Proceed to gate with the current casting/permission/trigger-X model unchanged?</strong>
+      <br><span class="chosen">1a (chosen):</span> Proceed straight to gate — all MTG-419 concepts align across rules, v11 tensors, LLM text, and Academy projection; keep <code>x: u8</code> + <code>bound_x</code> (preserving retained state hashes) and leave <code>scratch/plan.md</code> unchanged.
+      <br>1b: Hold gate to revisit another casting/permission or trigger-X boundary first (name which).
     </li>
     <li><strong>Disposition of the pre-existing Academy <code>additional_cost</code> prompt / <code>decision_context.pending</code> display gap (plus <code>projection.ts</code> parity):</strong>
       <br><span class="chosen">2a (chosen):</span> Keep outside MTG-419 and file as a small Game/Academy UI follow-up task at gate (it predates MTG-419 across Crew/Saddle/Station/Sacrifice/Forage/ExileFromHand and touches <code>prompt.ts</code> / <code>Rail.svelte</code> / <code>projection.ts</code>).
