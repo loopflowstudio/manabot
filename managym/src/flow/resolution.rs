@@ -14,7 +14,8 @@ use crate::{
         game::Game,
         payment::{CostComponent, PaymentProgress},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
+            ZoneEntry,
         },
         trigger::{DelayedEffects, DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -933,7 +934,11 @@ impl Game {
                     let entry = if *to == ZoneType::Battlefield {
                         ZoneEntry {
                             tapped: *tapped,
-                            transformed: *transformed,
+                            face: if *transformed {
+                                EntryFace::Transformed
+                            } else {
+                                EntryFace::Front
+                            },
                             counters: counters.clone(),
                             controller,
                             ..ZoneEntry::default()

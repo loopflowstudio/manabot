@@ -163,7 +163,7 @@ Instructions retired (`/usr/bin/time -l`, stable to 0.1% under any load) against
 - `e99ca6604d`: `ProgramProjection` (`agent/continuation.rs`) owns the tokens-and-text rule for `ContinuationFrame::program` and `DelayedEffects`.
 - PR #593 is published and ready. Merge `3ca5b59f93` brought main `610370233c` (one casting authority for Adventures/Omens/prepared/modal faces, 207 Foundations cards with combat damage choices); conflict resolutions are in `questions.md`. **All local evidence above predates this merge**; CI on `3ca5b59f93` is the first run over the merged tree (in progress at realign).
 
-## Next: entry face and object form (post-merge concept review, before gate)
+## Entry face and object form (post-merge concept review) · done
 
 The post-merge concept review ([concept-review.html](concept-review.html), at `687e8e0ebd`) followed a modal back face and an Adventure through the merged tree. Main's casting authority reuses this branch's form in two places whose names no longer fit. Choices made for review: 1a, 2a, 3a on the page.
 
@@ -171,9 +171,11 @@ The post-merge concept review ([concept-review.html](concept-review.html), at `6
 2. **Rename `BattlefieldForm` → `ObjectForm`** (`state/src/game_object.rs`; Rust-only, not serialized). Its doc and `mint_appearance`'s comment name the stack forms too: an inset Adventure/Omen/prepared spell being cast and a cast modal back keep the card's printing in `backing`.
 3. Checks: debug nextest lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests`, cards crate; `cargo fmt --all`; rebuild the cp313 extension; Python `tests/semantic/test_manifest_text.py`, `tests/model/test_pinned_pilot.py`. Then gate.
 
+Built: `EntryFace` with a flattened serializer (`transformed` bool plus `modal_back` when true); the commit asserts a modal back shows instead of falling back to transform. Witness `agent::effect_execution::tests::a_pending_modal_back_entry_never_reads_as_entering_transformed`. `cr_712_modal_faces::spell_land_back_face_is_played_back_face_up_once` asserted main's `is_transformed()` for a played modal back; it now asserts the opposite (CR 712.11). Engine suites green apart from the known `historical_captures…`; the cards crate fails nine tests identically at base (merge breaks, `questions.md`); Python checks pass.
+
 ## Then: `gate`
 
-- Read CI on the PR head; a failure caused by the merge is fixed in place. Engine Budget passed at `0784a13607` (see the performance review above); rerun it after the entry-face change.
+- Read CI on the PR head; a failure caused by the merge is fixed in place, starting with the nine cards-crate tests in `questions.md`. Engine Budget passed at `0784a13607` (see the performance review above); rerun it after the entry-face change.
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
 - Rerun vector/recording consumers and canonical replay over the merged tree.
 - The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's; recheck them against the new base.

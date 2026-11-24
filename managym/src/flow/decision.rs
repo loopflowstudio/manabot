@@ -22,7 +22,8 @@ use crate::{
         payment::{CostComponent, Operation, Payment, PaymentProgress},
         play::CastAuthority,
         proposed_event::{
-            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
+            BatchProgress, EntryFace, EventBatch, EventBinding, EventResult, ReplacementCandidate,
+            ZoneEntry,
         },
         sba::SbaProgress,
         turn::OnceEachTurnKey,
@@ -1484,7 +1485,11 @@ impl Game {
                                     ZoneType::Battlefield,
                                     ZoneEntry {
                                         attached_to: attach_to,
-                                        transformed: profile == SpellProfile::BackFace,
+                                        face: if profile == SpellProfile::BackFace {
+                                            EntryFace::ModalBack
+                                        } else {
+                                            EntryFace::Front
+                                        },
                                         ..ZoneEntry::from_spell(frame.controller, spell)
                                     },
                                 )

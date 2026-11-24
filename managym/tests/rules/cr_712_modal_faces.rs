@@ -87,7 +87,8 @@ fn spell_land_back_face_is_played_back_face_up_once() {
     );
     settle(&mut played);
     let land = current_object(&played, errand);
-    assert!(land.is_transformed());
+    // A modal back face is up, not transformed (CR 712.11, 712.14).
+    assert!(!land.is_transformed());
     assert_eq!(land.name, "Tidal Haven");
     assert!(land.types.is_land());
     assert!(permanent_of(&played, errand).is_some());

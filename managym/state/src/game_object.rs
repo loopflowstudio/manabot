@@ -624,18 +624,20 @@ impl TransformingFaces {
     }
 }
 
-/// What an object is beyond its shown printed face, when that differs from
-/// an ordinary card or token resting on its own printing: the physical
-/// printing behind a face-down, melded or entry-copy form, a transforming
-/// object's raw faces, and the copy effect behind its copiable values.
+/// What an object is beyond its shown printed face, in any zone, when that
+/// differs from an ordinary card or token resting on its own printing: the
+/// physical printing behind a face-down, melded or entry-copy permanent, an
+/// inset Adventure, Omen or prepared spell being cast or a modal back face
+/// cast or played (CR 715.3, 712.11), a transforming object's raw faces, and
+/// the copy effect behind its copiable values.
 ///
 /// Boxed on [`Object::form`] so ordinary objects allocate nothing. Melded zone
 /// membership belongs to `ZoneManager`, not here.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct BattlefieldForm {
+pub struct ObjectForm {
     /// The object's own printing while it shows another face (a manifest's
-    /// 2/2, a meld result, an entry copy), restored by its next zone move
-    /// (CR 400.7, 707.5, 708.9, 712.4c).
+    /// 2/2, a meld result, an entry copy, an inset spell, a modal back face),
+    /// restored by its next zone move (CR 400.7, 707.5, 708.9, 712.4c).
     backing: Option<Face>,
     /// A transforming object's raw faces. A double-faced card that has not
     /// transformed reads them from the catalog instead.
@@ -664,7 +666,7 @@ pub struct Object {
     /// Physical backing, raw faces, orientation and copy effect, when they
     /// differ from an ordinary object on its own printing. Fixtures may take
     /// and restore it; rules code changes it only through `Object` methods.
-    pub form: Option<Box<BattlefieldForm>>,
+    pub form: Option<Box<ObjectForm>>,
 }
 
 impl Object {
@@ -705,7 +707,7 @@ impl Object {
         exceptions: &[crate::effect::CopyException],
     ) -> Self {
         let mut token = Self::from_definition(id, owner, definition_id, definition, true);
-        token.form = Some(Box::new(BattlefieldForm {
+        token.form = Some(Box::new(ObjectForm {
             faces,
             copy,
             ..Default::default()
@@ -725,7 +727,7 @@ impl Object {
         self.definition_id = source.definition_id;
         self.registry_key = PublicId(source.definition_id.0);
         self.definition = source.copiable_definition();
-        self.form = Some(Box::new(BattlefieldForm {
+        self.form = Some(Box::new(ObjectForm {
             backing: Some(backing),
             copy: source.copy().cloned(),
             ..Default::default()
@@ -805,8 +807,10 @@ impl Object {
     ///
     /// `entry_copy` assigns the prospective values already installed by an
     /// enters-as-copy replacement to the new entry (CR 614.1c, 614.12).
-    /// Otherwise the old appearance's backing or front face returns. A token or
-    /// spell copy starts with its own copiable base, not a physical printing.
+    /// Otherwise the old appearance's backing (the printing behind a face-down,
+    /// melded, entry-copy, inset-spell or modal-back form) or front face
+    /// returns. A token or spell copy starts with its own copiable base, not a
+    /// physical printing.
     pub fn mint_appearance(&mut self, from: Option<ZoneType>, to: ZoneType, entry_copy: bool) {
         debug_assert!(!entry_copy || (to == ZoneType::Battlefield && self.copy().is_some()));
         if !entry_copy && (self.is_card() || from == Some(ZoneType::Battlefield)) {

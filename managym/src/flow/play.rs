@@ -697,7 +697,11 @@ impl Game {
             ZoneType::Battlefield,
             crate::flow::proposed_event::ZoneEntry {
                 controller,
-                transformed: profile == SpellProfile::BackFace,
+                face: if profile == SpellProfile::BackFace {
+                    crate::flow::proposed_event::EntryFace::ModalBack
+                } else {
+                    crate::flow::proposed_event::EntryFace::Front
+                },
                 library_top_departure: self.is_library_top(object),
                 ..Default::default()
             },

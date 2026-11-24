@@ -7,7 +7,9 @@ use crate::{
         decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
-        proposed_event::{EventBinding, EventResult, PendingEvent, ProposedEvent, ZoneEntry},
+        proposed_event::{
+            EntryFace, EventBinding, EventResult, PendingEvent, ProposedEvent, ZoneEntry,
+        },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -829,17 +831,21 @@ impl Game {
             &*MANIFESTED
         } else if let Some((_, result)) = entry.meld {
             default_content_pack().definition(result)?.printed.as_ref()
-        } else if entry.transformed {
-            let pack = default_content_pack();
-            let (base, front) = object.retained_base();
-            if front.modal_back {
-                &pack.back_face_row(base)?.1.printed
-            } else {
-                let back = pack.transforming_faces(object)?.back.0;
-                &pack.definition(back)?.printed
-            }
         } else {
-            object
+            match entry.face {
+                EntryFace::Front => object,
+                EntryFace::ModalBack => {
+                    &default_content_pack()
+                        .back_face_row(object.retained_base().0)?
+                        .1
+                        .printed
+                }
+                EntryFace::Transformed => {
+                    let pack = default_content_pack();
+                    let back = pack.transforming_faces(object)?.back.0;
+                    &pack.definition(back)?.printed
+                }
+            }
         };
         (!face.types.is_instant_or_sorcery()).then_some(face)
     }
@@ -987,8 +993,14 @@ impl Game {
             if entry.manifested {
                 self.state[object_id].turn_face_down(MANIFESTED.clone());
             }
-            if entry.transformed && !self.show_modal_back(object_id) {
-                self.turn_over(object_id, FormTransition::Transform);
+            match entry.face {
+                EntryFace::Front => {}
+                EntryFace::ModalBack => {
+                    assert!(self.show_modal_back(object_id), "offered back face")
+                }
+                EntryFace::Transformed => {
+                    self.turn_over(object_id, FormTransition::Transform);
+                }
             }
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent = Permanent::new(

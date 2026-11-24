@@ -56,8 +56,9 @@ pub(crate) struct ZoneEntry {
     /// Battlefield: manifest as a nameless 2/2 creature (CR 701).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub manifested: bool,
-    /// Battlefield: enters with its back face up (CR 712.14).
-    pub transformed: bool,
+    /// Battlefield: which face is up as it enters.
+    #[serde(flatten)]
+    pub face: EntryFace,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meld: Option<(CardId, CardDefId)>,
     /// CR 614.1c, 614.12: this entry owns the prospective copy already on
@@ -79,6 +80,36 @@ pub(crate) struct ZoneEntry {
     /// The owner selected this departure from a privately inspected prefix.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub inspected_library_departure: bool,
+}
+
+/// The face a card shows as it enters the battlefield.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum EntryFace {
+    #[default]
+    Front,
+    /// A transforming double-faced card enters transformed (CR 712.14).
+    Transformed,
+    /// A modal double-faced card played or cast as its back face enters
+    /// with that face up (CR 712.11). It never transforms.
+    ModalBack,
+}
+
+/// Recorded bytes keep the historical `transformed` key; `modal_back`
+/// appears only for a modal back entry.
+impl serde::Serialize for EntryFace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct Keys {
+            transformed: bool,
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            modal_back: bool,
+        }
+        Keys {
+            transformed: *self == EntryFace::Transformed,
+            modal_back: *self == EntryFace::ModalBack,
+        }
+        .serialize(serializer)
+    }
 }
 
 fn entry_x<S: serde::Serializer>(

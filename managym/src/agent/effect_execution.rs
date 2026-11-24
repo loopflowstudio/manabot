@@ -23,7 +23,8 @@ use crate::{
         game::{ActivationSource, CastChoices, Game},
         payment::{CostComponent, Operation, Payment},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
+            ZoneEntry,
         },
     },
     state::{
@@ -89,6 +90,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "end the turn",
     "entering card",
     "entering definition",
+    "enters back face up",
     "enters face down",
     "enters tapped",
     "enters transformed",
@@ -744,8 +746,10 @@ impl<'a> Projection<'a> {
         if entry.is_face_down() {
             self.field("enters face down", &true);
         }
-        if entry.transformed {
-            self.field("enters transformed", &true);
+        match entry.face {
+            EntryFace::Front => {}
+            EntryFace::Transformed => self.field("enters transformed", &true),
+            EntryFace::ModalBack => self.field("enters back face up", &true),
         }
         if let Some(object) = entry.attached_to {
             self.object("enters attached to", object);
@@ -1600,4 +1604,59 @@ pub(crate) fn project_decision(
         | Decision::NameCard { .. } => return,
     }
     out.finish(frame);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::state::player::PlayerConfig;
+
+    fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
+        let mut out = Projection::new(game, PlayerId(0), true);
+        out.entry(&ZoneEntry {
+            face,
+            ..Default::default()
+        });
+        out.text.expect("text projection").notes
+    }
+
+    /// A modal back face entering is not a transformation (CR 712.11,
+    /// 712.14): its retained entry says which face is up and records only
+    /// the modal key beside the historical `transformed` one.
+    #[test]
+    fn a_pending_modal_back_entry_never_reads_as_entering_transformed() {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        let game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            712_11,
+            false,
+        );
+        let modal = entry_notes(&game, EntryFace::ModalBack);
+        assert!(modal.iter().any(|note| note == "enters back face up: true"));
+        assert!(!modal
+            .iter()
+            .any(|note| note.starts_with("enters transformed")));
+        assert_eq!(
+            entry_notes(&game, EntryFace::Transformed),
+            ["effect execution: true", "enters transformed: true"]
+        );
+        assert!(entry_notes(&game, EntryFace::Front).is_empty());
+
+        let wire = |face| {
+            serde_json::to_value(ZoneEntry {
+                face,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        assert_eq!(wire(EntryFace::ModalBack)["transformed"], false);
+        assert_eq!(wire(EntryFace::ModalBack)["modal_back"], true);
+        assert_eq!(wire(EntryFace::Transformed)["transformed"], true);
+        assert!(wire(EntryFace::Front).get("modal_back").is_none());
+    }
 }
