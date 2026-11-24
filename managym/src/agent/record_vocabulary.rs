@@ -266,6 +266,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "kind",
         "attacking",
         "kicked",
+        "flash_surcharge",
         "flashback",
         "exile_instead_of_graveyard",
         "x",
@@ -397,6 +398,7 @@ mod tests {
                     exile_instead_of_graveyard: true,
                     route: None,
                     kicked: true,
+                    flash_surcharge: true,
                     flashback: true,
                     x: 1,
                     free: true,
@@ -406,16 +408,18 @@ mod tests {
             )
             .unwrap(),
         );
-        tokens.extend(
-            rules_tokens(
-                &CastChoices {
-                    profile: SpellProfile::Omen,
-                    ..Default::default()
-                },
-                pack,
-            )
-            .unwrap(),
-        );
+        for profile in [SpellProfile::Omen, SpellProfile::BackFace] {
+            tokens.extend(
+                rules_tokens(
+                    &CastChoices {
+                        profile,
+                        ..Default::default()
+                    },
+                    pack,
+                )
+                .unwrap(),
+            );
+        }
         for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
             tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
         }
