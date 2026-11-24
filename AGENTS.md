@@ -164,6 +164,9 @@ checkpoints or experiment evidence.
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Standalone local checkpoint admission and scalar games can run with
+  `manabot.training` unavailable. Load the backend learner on first training
+  use so opening a policy in these children needs only inference.
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.

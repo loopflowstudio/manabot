@@ -183,7 +183,8 @@ and replace `local` in the checkpoint path with that name.
 - `--backend {torch,mlx}` (default `torch`) chooses which backend admits the
   checkpoint and runs the scalar CPU game children. Selecting `mlx` resolves
   explicit `precision="float32"` on CPU without importing PyTorch and does not
-  change `EvaluationRequest`, `EvaluationKey` or registration digests.
+  change `EvaluationRequest`, `EvaluationKey` or registration digests. MLX
+  reads portable policy containers. Use Torch to read a legacy PyTorch file.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.
 
@@ -458,11 +459,12 @@ uv run python -m manabot.eval.local --status .runs/local-check/panel
 uv run python -m manabot.eval.local --continue .runs/local-check/panel --seconds 300
 ```
 
-Continuation plays only the missing deals, rerunning any partial deal whole;
-only the deadline may change locally. Typed callers use
+Continuation plays missing deals, rerunning any partial deal whole. Each
+local attempt selects its deadline and execution backend. Pass `--backend mlx`
+on the continuation command to run its games on MLX. Typed callers use
 `evaluation_status(directory)` and `continue_evaluation(directory,
-deadline=...)`. A changed request needs a fresh evaluation. Retained served
-attempts name the original revision to run them from. Relocated
+deadline=..., backend_name="mlx")`. A changed request needs a fresh evaluation.
+Retained served attempts name the original revision to run them from. Relocated
 checkpoints may be passed explicitly and are rechecked by digest and size.
 
 The first `evaluation.json` freezes identity and request; later attempts write

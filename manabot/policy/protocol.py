@@ -22,6 +22,7 @@ from manabot.policy.prepare import Prepared
 if TYPE_CHECKING:
     from manabot.infra.config import ModelConfig
 
+BackendName = Literal["torch", "mlx"]
 Precision = Literal["float32", "bfloat16"]
 
 

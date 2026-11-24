@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Protocol, runtime_checkable
 import numpy as np
 
 from manabot.env.observation import ObservationSpace
-from manabot.policy.protocol import Backend, BackendPolicy, PolicyLoader
+from manabot.policy.protocol import Backend, BackendName, BackendPolicy, PolicyLoader
 from manabot.training.updates.backend import Learner, LearnerFile, Policy, UpdateBackend
 
 if TYPE_CHECKING:
@@ -121,6 +121,9 @@ class ExecutionScope(Protocol):
 
 class VerificationBackend(Backend, Protocol):
     @property
+    def name(self) -> BackendName: ...
+
+    @property
     def runtime(self) -> ExecutionScope: ...
 
 
@@ -158,8 +161,8 @@ class SelfPlayLearning(LearnerFile, Protocol):
 class SelfPlayBackend(UpdateBackend, Protocol):
     """Numerics for one fresh self-play iteration and its portable policies."""
 
-    name: str
-
+    @property
+    def name(self) -> str: ...
     @property
     def runtime(self) -> SelfPlayRuntime: ...
     @property
