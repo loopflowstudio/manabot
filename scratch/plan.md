@@ -137,6 +137,8 @@ Behavior review at `786a6bf3` passed all seven copy, token and text checks. A se
 
 At `5f44d41d`, `Observation::unseen_counts` includes an uninspectable manifested printing in its owner's unseen counts. The extended DSK regression passed. The opponent sees identical unseen counts and encoded v11 decklist rows across the two roots. In both live and restored positions, the controller can inspect the exact printing and sees one fewer unseen copy of it.
 
+Behavior review at `ab5dd9b6` reran `cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards dsk::` (four passed) and `uv run --extra dev pytest tests/semantic/test_manifest_text.py -q` (one passed). The paired-root observation criterion is satisfied. The native checks include both private Commands from one restored decision, stale rejection and two generations of anonymous copies. The working phase remains open because possible-world sampling still fixes the hidden battlefield printing to its private root. Recorded replay, Academy and gate suites remain pending.
+
 ### Next slice · Sample the printing under a public permanent
 
 Use the existing Ogre/Forest roots before adding turn-up. The paired observation regression passed again at `77014472`. Search can receive equal decklist tensors and still benefit from the private root if determinization leaves the actual manifested printing fixed. In `flow/selection_sampling.rs`, the unseen pool currently enumerates hands, libraries and foretold cards. A manifested permanent has a public location and target identity but its backing printing can be unknown.
