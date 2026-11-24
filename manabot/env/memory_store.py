@@ -357,6 +357,7 @@ def select_rows(
 
     if type(rows) is ObservationSelection:
         return rows.select(indexes)
+    # Deprecated dense row slicing; removed in 0.3.0.
     selected = {key: value[indexes] for key, value in rows.items()}
     if isinstance(rows, PrefixObservation):
         prefixes = (

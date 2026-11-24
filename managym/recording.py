@@ -1373,6 +1373,7 @@ class RecordedVectorEnv(_Capture):
         *,
         layout: managym.ObservationLayout | None = None,
     ) -> None:
+        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
         self.native.set_buffers(buffers, action_overflow, layout=layout)
         self._register_outcomes(buffers, action_overflow, buffers["actions"].shape[1])
         self.identities["input_buffers"] = {
@@ -2053,6 +2054,38 @@ class CapturedSearch(_Capture):
         # Native pool counters and observations are read-only PyO3 APIs.
         return getattr(self.native, name)
 
+    def set_observation_layout(
+        self,
+        layout: managym.ObservationLayout,
+        action_overflow: str = "error",
+    ) -> None:
+        self.native.set_observation_layout(layout, action_overflow)
+        dtypes = layout.dtypes
+        slots = self.native.num_slots
+        self.search.buffers = {
+            key: BufferSpec(shape=[slots, *shape], dtype=dtypes[key])
+            for key, shape in layout.shapes.items()
+        }
+        self.search.buffers.update(
+            {
+                "rewards": BufferSpec(shape=[slots], dtype="float64"),
+                "terminated": BufferSpec(shape=[slots], dtype="uint8"),
+                "truncated": BufferSpec(shape=[slots], dtype="uint8"),
+            }
+        )
+        self.search.capacity = slots
+
+    def encode_active_batch(self) -> tuple[list[int], managym.ObservationBatch]:
+        with self._guard(self._snapshot):
+            return self.native.encode_active_batch()
+
+    def step_active_batch(
+        self, actions: list[int]
+    ) -> tuple[list[int], managym.ObservationBatch]:
+        self.search.operations.append(list(actions))
+        with self._guard(self._snapshot):
+            return self.native.step_active_batch(actions)
+
     def set_buffers(
         self,
         buffers: dict[str, Any],
@@ -2060,6 +2093,7 @@ class CapturedSearch(_Capture):
         *,
         layout: managym.ObservationLayout | None = None,
     ) -> None:
+        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
         self.native.set_buffers(buffers, capacity, layout=layout)
         self.search.buffers = {
             key: BufferSpec(shape=list(value.shape), dtype=str(value.dtype))

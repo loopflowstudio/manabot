@@ -161,15 +161,19 @@ def legal_mask(mask: np.ndarray) -> np.ndarray:
 
 
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
-    """Validate the full observation for consumers using padded shapes."""
+    """Validate a dense observation dict for consumers using padded shapes.
+
+    Dense dict admission path; removed in 0.3.0 when `ObservationBatch` is the sole policy input.
+    """
     admit(obs, spec, legal, bucketed=False)
 
 
 def admit(
     obs: ObservationBuffers, spec: Spec, legal: np.ndarray, *, bucketed: bool
 ) -> BucketedObservation | None:
-    """Validate in original coordinates and return the measured views for preparation.
+    """Validate a dense observation dict in original coordinates and return measured views.
 
+    Dense dict admission path; removed in 0.3.0 when `ObservationBatch` is the sole policy input.
     Raw buffers are writable, so only extents measured here may bound the checks.
     """
     measured = (

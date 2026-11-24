@@ -403,13 +403,36 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
         vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
 
     env = managym.Env(seed=7)
-    env.reset(
+    obs, _ = env.reset(
         [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     )
     with pytest.warns(
         DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"
     ):
+        managym.encode_observation_into(obs, space.layout, space.allocate())
+    with pytest.warns(
+        DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"
+    ):
         managym.encode_observations_into([env], space.layout, space.allocate(1), 1)
+    # Standalone Observation items encode directly into an ObservationBatch.
+    batch = managym.encode_observation_batch([obs, env], space.layout)
+    assert batch.batch_size == 2
+    assert batch.action_counts[0] == batch.action_counts[1]
+
+    pool = env.rollout_pool(1, 1, 7, 100)
+    with pytest.warns(
+        DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"
+    ):
+        pool.set_buffers(
+            allocate_vector_buffers(space, pool.num_slots),
+            pool.num_slots,
+            layout=space.layout,
+        )
+
+    with pytest.warns(DeprecationWarning, match=r"axis_extents.*0\.3\.0"):
+        space.layout.axis_extents(space.allocate(1))
+    with pytest.warns(DeprecationWarning, match=r"object_references.*0\.3\.0"):
+        _ = space.layout.object_references
 
 
 def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (

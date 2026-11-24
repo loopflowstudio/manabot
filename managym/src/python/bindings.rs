@@ -5014,10 +5014,11 @@ impl PyEnv {
         )?;
         let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         let layout = super::layout_bindings::ObservationLayout::from_config(config)?;
-        encode_observation_into(py, obs, &layout, out, action_overflow)
+        encode_observation_into_impl(py, obs, &layout, out, action_overflow)
     }
 }
 
+/// Deprecated dense scalar encoder; removed in 0.3.0.
 /// Write any observation (live, restored or a viewer projection) into
 /// caller-owned buffers at the supplied layout;
 /// companion shapes are checked before any write.
@@ -5025,6 +5026,21 @@ impl PyEnv {
 #[pyfunction]
 #[pyo3(signature = (obs, layout, out, action_overflow="error"))]
 fn encode_observation_into(
+    py: Python<'_>,
+    obs: PyObservation,
+    layout: &super::layout_bindings::ObservationLayout,
+    out: Bound<'_, PyDict>,
+    action_overflow: &str,
+) -> PyResult<()> {
+    warn_deprecated(
+        py,
+        "encode_observation_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.3.0",
+    )?;
+    encode_observation_into_impl(py, obs, layout, out, action_overflow)
+}
+
+#[cfg(feature = "python")]
+fn encode_observation_into_impl(
     py: Python<'_>,
     obs: PyObservation,
     layout: &super::layout_bindings::ObservationLayout,

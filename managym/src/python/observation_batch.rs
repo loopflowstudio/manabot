@@ -1,7 +1,7 @@
 //! Freeze the encoder's live prefixes before they cross the Python boundary.
 // PyO3 wrappers generate identity conversions for PyResult.
 #![allow(clippy::useless_conversion)]
-use super::bindings::{map_agent_err, map_encode_err, PyEnv};
+use super::bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation};
 use super::layout_bindings::ObservationLayout;
 use crate::agent::{
     observation::Observation,
@@ -9,7 +9,7 @@ use crate::agent::{
     observation_rows::PackedRows,
 };
 use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
+    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
 };
@@ -229,12 +229,12 @@ pub(super) fn freeze(
     }
 }
 
-/// Encode acting-view frontiers, preserving input order and repeated games.
+/// Encode acting-view envs or standalone observations, preserving input order.
 #[pyfunction]
 #[pyo3(signature = (envs, layout, action_overflow="error"))]
 fn encode_observation_batch(
     py: Python<'_>,
-    envs: Vec<PyRef<'_, PyEnv>>,
+    envs: Vec<Bound<'_, PyAny>>,
     layout: Py<ObservationLayout>,
     action_overflow: &str,
 ) -> PyResult<ObservationBatch> {
@@ -243,15 +243,23 @@ fn encode_observation_batch(
         py,
         layout,
         config,
-        envs.iter().map(|branch| {
-            let env = branch
-                .inner
-                .lock()
-                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-            let actor = env
-                .current_agent_index()
-                .ok_or_else(|| PyValueError::new_err("env has no acting player"))?;
-            env.observation_for_player(actor).map_err(map_agent_err)
+        envs.iter().map(|item| {
+            if let Ok(branch) = item.extract::<PyRef<'_, PyEnv>>() {
+                let env = branch
+                    .inner
+                    .lock()
+                    .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+                let actor = env
+                    .current_agent_index()
+                    .ok_or_else(|| PyValueError::new_err("env has no acting player"))?;
+                env.observation_for_player(actor).map_err(map_agent_err)
+            } else if let Ok(obs) = item.extract::<PyObservation>() {
+                Ok(Observation::from(obs))
+            } else {
+                Err(PyTypeError::new_err(
+                    "encode_observation_batch expects Env or Observation items",
+                ))
+            }
         }),
     )
 }

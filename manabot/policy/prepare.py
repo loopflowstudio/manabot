@@ -643,6 +643,8 @@ def prepare(
     """
     action_capacity = None
     bucket_needs = object_remap = None
+    # Dense `ObservationBuffers` / `BucketedObservation` inputs are deprecated and
+    # removed in 0.3.0 once `ObservationSpans` is the sole policy input.
     native = obs if isinstance(obs, ObservationSpans) else None
     if isinstance(obs, ObservationSpans):
         if obs.buckets is not None:

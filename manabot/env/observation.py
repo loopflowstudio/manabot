@@ -232,7 +232,10 @@ class ObservationSpace(gym.spaces.Space):
         )
 
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
-        """Zeroed buffers for this space, with `leading_dims` before each shape."""
+        """Zeroed dense buffers for this space, with `leading_dims` before each shape.
+
+        Dense transport helper; removed in 0.3.0 with dense `set_buffers` / `encode_observation_into`.
+        """
         return self.layout.allocate(*leading_dims)
 
     @property
@@ -290,7 +293,10 @@ class ObservationSpace(gym.spaces.Space):
 def allocate_vector_buffers(
     obs_space: ObservationSpace, n: int
 ) -> dict[str, np.ndarray]:
-    """Allocate observation and step-result arrays for n native vector streams."""
+    """Allocate dense observation and step-result arrays for n native vector streams.
+
+    Dense transport helper; removed in 0.3.0 (use `step_buffers` with `set_observation_layout`).
+    """
     return {
         **obs_space.allocate(n),
         **step_buffers(n),
@@ -309,7 +315,9 @@ def step_buffers(n: int) -> dict[str, np.ndarray]:
 def encode_observation(
     space: ObservationSpace, obs: managym.Observation
 ) -> dict[str, np.ndarray]:
-    """Fresh buffers for `obs` in `space`, written by the native encoder.
+    """Fresh dense buffers for `obs` in `space`, written by the native encoder.
+
+    Dense dict transport helper; removed in 0.3.0 (use `managym.encode_observation_batch`).
 
     Any observation encodes: live, restored with ``Observation.from_json`` or
     a viewer projection. Raises ``managym.ObservationCapacity`` when it does

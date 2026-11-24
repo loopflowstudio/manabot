@@ -324,6 +324,7 @@ impl ObservationEncoderConfig {
     }
 }
 
+/// Deprecated dense encoded observation container; removed in 0.3.0.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
     pub relations: Vec<f32>,
@@ -576,6 +577,7 @@ pub fn allocate(config: &ObservationEncoderConfig) -> EncodedObservation {
     }
 }
 
+/// Deprecated dense observation encoder; removed in 0.3.0.
 pub fn encode_into(
     obs: &Observation,
     config: &ObservationEncoderConfig,
@@ -584,6 +586,7 @@ pub fn encode_into(
     encode_into_memory(obs, config, out, None)
 }
 
+/// Deprecated incremental dense observation encoder; removed in 0.3.0.
 pub fn encode_into_incremental(
     obs: &Observation,
     config: &ObservationEncoderConfig,

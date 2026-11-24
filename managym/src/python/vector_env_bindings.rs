@@ -45,6 +45,7 @@ type PyResetResult = (PyObservation, PyObject);
 #[cfg(feature = "python")]
 type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 
+/// Deprecated dense transport buffer handles; removed in 0.3.0.
 #[cfg(feature = "python")]
 struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
@@ -806,6 +807,7 @@ fn registered_layout<'a>(
 }
 
 /// Recover the input configuration of pre-layout receipts and deprecated calls.
+/// Removed in 0.3.0.
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -1124,6 +1126,7 @@ pub struct PyRolloutPool {
     inner: RolloutPool,
     config: ObservationEncoderConfig,
     buffers: Option<ObservationBuffers>,
+    packed_layout: Option<Py<ObservationLayout>>,
 }
 
 #[cfg(feature = "python")]
@@ -1133,6 +1136,7 @@ impl PyRolloutPool {
             inner,
             config: ObservationEncoderConfig::default(),
             buffers: None,
+            packed_layout: None,
         }
     }
 
@@ -1198,6 +1202,88 @@ impl PyRolloutPool {
         self.inner.root_actions()
     }
 
+    /// Register the v11 observation layout for typed CSR batch rollouts.
+    #[pyo3(signature = (layout, action_overflow="error"))]
+    fn set_observation_layout(
+        &mut self,
+        py: Python<'_>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<()> {
+        let config = observation_batch::config(&layout.borrow(py), action_overflow)?;
+        self.config = config;
+        self.packed_layout = Some(layout);
+        self.buffers = None;
+        Ok(())
+    }
+
+    /// Encode observations for every active slot into one immutable v11 batch.
+    fn encode_active_batch(&mut self, py: Python<'_>) -> PyResult<(Vec<usize>, ObservationBatch)> {
+        let layout = self
+            .packed_layout
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .clone_ref(py);
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let config = self.config;
+        let inner = &mut self.inner;
+        let mut encode_err = None;
+        let active = py
+            .allow_threads(|| {
+                inner.encode_active_into(|_, obs| {
+                    rows.append(obs, &config).map_err(|error| {
+                        encode_err = Some(error);
+                        AgentError(String::new())
+                    })
+                })
+            })
+            .map_err(|err| {
+                if let Some(encode_err) = encode_err {
+                    map_encode_err(encode_err)
+                } else {
+                    map_agent_err(err)
+                }
+            })?;
+        let count = active.len();
+        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+    }
+
+    /// Step every active slot and return the still-active indices with one v11 batch.
+    fn step_active_batch(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+    ) -> PyResult<(Vec<usize>, ObservationBatch)> {
+        let layout = self
+            .packed_layout
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .clone_ref(py);
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let config = self.config;
+        let inner = &mut self.inner;
+        let mut encode_err = None;
+        let active = py
+            .allow_threads(|| {
+                inner.step_active_into(&actions, |_, obs| {
+                    rows.append(obs, &config).map_err(|error| {
+                        encode_err = Some(error);
+                        AgentError(String::new())
+                    })
+                })
+            })
+            .map_err(|err| {
+                if let Some(encode_err) = encode_err {
+                    map_encode_err(encode_err)
+                } else {
+                    map_agent_err(err)
+                }
+            })?;
+        let count = active.len();
+        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+    }
+
+    /// Deprecated dense buffer registration; removed in 0.3.0.
     /// Attach caller-owned numpy buffers with leading dimension `capacity`
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
@@ -1208,6 +1294,12 @@ impl PyRolloutPool {
         capacity: usize,
         layout: Option<&ObservationLayout>,
     ) -> PyResult<()> {
+        if layout.is_some() {
+            super::bindings::warn_deprecated(
+                buffers.py(),
+                "RolloutPool.set_buffers is deprecated; use RolloutPool.set_observation_layout with encode_active_batch/step_active_batch; removal in 0.3.0",
+            )?;
+        }
         let layout = registered_layout(&buffers, layout)?;
         let config = layout.config;
         if capacity < self.inner.num_slots() {
@@ -1219,6 +1311,7 @@ impl PyRolloutPool {
         let buffers = read_observation_buffers(&buffers, Some(capacity), &layout, true)?;
         self.config = config;
         self.buffers = Some(buffers);
+        self.packed_layout = None;
         Ok(())
     }
 

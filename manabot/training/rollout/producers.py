@@ -120,6 +120,7 @@ class BufferedStreams:
         *,
         layout: managym.ObservationLayout,
     ) -> None:
+        """Deprecated dense buffer registration; use `set_observation_layout` for v11. Removed in 0.3.0."""
         self._check()
         for value in buffers.values():
             self._rows(len(value))

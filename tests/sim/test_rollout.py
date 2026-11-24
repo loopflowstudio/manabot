@@ -100,6 +100,36 @@ class TestRolloutPool:
         assert env._engine.action_count() == before
         assert not env._engine.is_game_over()
 
+    def test_rollout_pool_batch_matches_dense_scores(self):
+        env, _ = make_env(seed=11)
+        space = ObservationSpace()
+        dense_pool = env._engine.rollout_pool(2, 2, 42, 2000)
+        batch_pool = env._engine.rollout_pool(2, 2, 42, 2000)
+        buffers = allocate_buffers(space, dense_pool.num_slots)
+        dense_pool.set_buffers(buffers, dense_pool.num_slots, layout=space.layout)
+        batch_pool.set_observation_layout(space.layout)
+
+        rng_dense = np.random.default_rng(0)
+        rng_batch = np.random.default_rng(0)
+        dense_active = dense_pool.encode_active()
+        batch_active, batch = batch_pool.encode_active_batch()
+        while dense_active:
+            assert batch_active == dense_active
+            assert batch.batch_size == len(batch_active)
+            dense_actions = np.zeros(dense_pool.num_slots, dtype=np.int64)
+            batch_actions = np.zeros(batch_pool.num_slots, dtype=np.int64)
+            for idx, (slot, count) in enumerate(
+                zip(batch_active, batch.action_counts, strict=True)
+            ):
+                valid = np.flatnonzero(buffers["actions_valid"][slot] > 0)
+                assert len(valid) == count
+                dense_actions[slot] = rng_dense.choice(valid)
+                batch_actions[slot] = rng_batch.choice(np.arange(count))
+            dense_active = dense_pool.step_active(dense_actions.tolist())
+            batch_active, batch = batch_pool.step_active_batch(batch_actions.tolist())
+        assert batch_active == []
+        assert batch_pool.scores() == dense_pool.scores()
+
 
 class TestBatchedSampler:
     def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:

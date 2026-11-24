@@ -91,14 +91,18 @@ class ObservationLayout:
     @property
     def axis_buffers(self) -> dict[str, list[tuple[str, int]]]: ...
     @property
-    def object_references(self) -> dict[str, list[tuple[int | None, int]]]: ...
+    def object_references(self) -> dict[str, list[tuple[int | None, int]]]:
+        """Deprecated; removed with dense observation admission in 0.3.0."""
+        ...
     @property
     def dtypes(self) -> dict[str, str]: ...
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
     def axis_extents(
         self, obs: Mapping[str, np.ndarray], *, omit_decision_memory: bool = False
     ) -> dict[str, np.ndarray] | None:
-        """Per-item occupied and referenced row extents, or None on a layout mismatch.
+        """Deprecated; use `ObservationBatch` offsets for v11 observations. Removed in 0.3.0.
+
+        Per-item occupied and referenced row extents, or None on a layout mismatch.
 
         Keep the buffers stable until return. With omit_decision_memory, memory
         arrays may be absent. Present arrays must have their declared shapes.
@@ -494,13 +498,22 @@ class RolloutPool:
     def hero_index(self) -> int: ...
     def acting_players(self) -> list[int]: ...
     def root_actions(self) -> list[int]: ...
+    def set_observation_layout(
+        self, layout: ObservationLayout, action_overflow: str = "error"
+    ) -> None: ...
+    def encode_active_batch(self) -> tuple[list[int], ObservationBatch]: ...
+    def step_active_batch(
+        self, actions: Sequence[int]
+    ) -> tuple[list[int], ObservationBatch]: ...
     def set_buffers(
         self,
         buffers: dict[str, np.ndarray],
         capacity: int,
         *,
         layout: ObservationLayout | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
+        ...
     def encode_active(self) -> list[int]: ...
     def step_active(self, actions: Sequence[int]) -> list[int]: ...
     def finish_random(self) -> int: ...
@@ -1378,7 +1391,9 @@ def encode_observation_into(
     out: Dict[str, np.ndarray],
     action_overflow: str = "error",
 ) -> None:
-    """Write any observation (live, restored or a viewer projection) into out.
+    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
+
+    Write any observation (live, restored or a viewer projection) into out.
 
     The supplied layout determines every buffer key, shape and dtype. The whole buffer
     contract is checked before encoding: a missing array, wrong shape or
@@ -1391,7 +1406,9 @@ def encode_observation_into(
     ...
 
 def encode_observation_batch(
-    envs: Sequence[Env], layout: ObservationLayout, action_overflow: str = "error"
+    envs: Sequence[Env | Observation],
+    layout: ObservationLayout,
+    action_overflow: str = "error",
 ) -> ObservationBatch: ...
 def encode_observations_into(
     envs: Sequence[Env],

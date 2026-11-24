@@ -185,7 +185,12 @@ and vocabulary admission on that path. Read packed fields from
 `layout.csr_fields` and fact units from `layout.csr_fact_divisors`. Use full
 int32 words for lookups and saved logical columns for numeric readings.
 Read-only NumPy dictionaries get full
-admission because their origin and writable aliases are unknown.
+admission because their origin and writable aliases are unknown. The entire
+dense observation transport and dense dict admission graph (`VectorEnv.set_buffers`,
+`RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
+`EncodedObservation`, dense `ObservationRows`, and dense dict admission/bucketing)
+is scheduled for removal in 0.3.0 alongside v9/v10.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic

@@ -118,7 +118,9 @@ OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
 
 class ObservationRows:
-    """One update's recorded non-action observation rows, each copied once.
+    """Deprecated dense per-update observation store; removed in 0.3.0 (replaced by `RecordedSpans`).
+
+    One update's recorded non-action observation rows, each copied once.
 
     Recording copies a step's sampled rows from the native buffers straight into
     `[capacity, *shape]` arrays; a pending decision keeps only its row number, and

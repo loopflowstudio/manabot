@@ -663,8 +663,12 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
-For a v11 acting-view batch, call
-`encode_observation_batch(envs, layout, action_overflow="error")`.
+For a v11 batch, call
+`encode_observation_batch(items, layout, action_overflow="error")` with `Env`
+or `Observation` items.
+`RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
+`encode_active_batch()` and `step_active_batch(actions)` to return
+`(active_slots, ObservationBatch)`.
 `VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
 returns the batch from the step together with per-stream rewards, terminated
 flags and truncated flags. Each stream emits its observation and step events
@@ -715,11 +719,12 @@ For element arrays, the single field describes each element. An action-focus
 row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
 with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
 
-For dense batched buffers, `VectorEnv.set_buffers` and
-`encode_observations_into` emit a `DeprecationWarning` targeting removal in
-`0.3.0` (retained alongside the deprecated v9/v10 fork; v11 callers should use
-`VectorEnv.set_observation_layout` and `encode_observation_batch`).
-`layout.axis_extents(buffers)` returns one int64
+For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
+`encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
+emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
+the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
+`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape
 mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists

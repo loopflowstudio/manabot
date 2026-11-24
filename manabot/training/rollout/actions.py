@@ -73,6 +73,7 @@ class PackedActions:
             native = ObservationSelection(observation.space, observation.coordinates)
             valid = validator.packing_mask(mask, log_probabilities)
         else:
+            # Deprecated dense action-field packing; removed in 0.3.0.
             valid = validator.packing_mask(
                 observation["actions_valid"], log_probabilities
             )
