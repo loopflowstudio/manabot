@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Trigger Wrappers, Object-Property Queries &amp; Layer Conditions</title>
+<title>MTG-418 Concept Review · Trigger Payloads, Paid-Cost Selectors, Cost/Activation Queries &amp; Granted Firebending</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    max-width: 68rem;
+    max-width: 70rem;
     margin: 2.5rem auto;
     padding: 0 1.25rem 4rem;
     font: 16px/1.55 system-ui, -apple-system, sans-serif;
@@ -70,7 +70,7 @@
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
   th, td { padding: .6rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   th { font-weight: 700; background: var(--card); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 1rem; margin: 1rem 0; }
   .panel {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -88,7 +88,7 @@
   }
   .callout.info { border-inline-start-color: var(--prop-fg); }
   ol.questions { padding-left: 1.35rem; }
-  ol.questions li { margin: .85rem 0; }
+  ol.questions li { margin: .9rem 0; }
   .choice { margin-top: .25rem; }
   .selected { font-weight: 700; color: var(--prop-fg); }
   .small { font-size: .88rem; color: var(--muted); }
@@ -96,124 +96,163 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Post-Unification Concept Review · HEAD 7949f55bb2</div>
-  <h1>Do MTG-418’s rules queries, trigger wrappers, and layer readers line up?</h1>
+  <div class="eyebrow">Managym · MTG-418 · Post-Power-Batch Concept Review · HEAD 6155070092</div>
+  <h1>Do MTG-418’s event payloads, cost queries, trigger subjects, and combat readers line up?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s full event-history, contextual-query, trigger-matching,
-    layer-condition, and stack/observation projection surface
-    (<code>ability.rs</code>, <code>turn.rs</code>, <code>triggers.rs</code>, <code>statics.rs</code>,
-    <code>resolution.rs</code>, <code>layers.rs</code>, <code>observation*.rs</code>, <code>experience.rs</code>,
-    and <code>academy/ui/src/lib/types.ts</code>) — widened from the next 8-card power slice
-    (<em>Courageous Goblin, Ruby, Nessian Hornbeetle, Surrak, Ashroot Animist, Halana and Alena, Bulk Up, Bite Down</em>)
-    to the whole MTG-418 cohort (25 delivered + 56 pending primary FDN rows, cost candidates, and cross-set witnesses).
+    <strong>Area reviewed:</strong> <code>managym</code>’s unified event-history, contextual-query,
+    trigger-matching/payload, cost-reduction, activation-gating, game-termination, and observation/heuristic
+    surface (<code>ability.rs</code>, <code>card.rs</code>, <code>player.rs</code>, <code>triggers.rs</code>,
+    <code>layers.rs</code>, <code>play.rs</code>, <code>mana.rs</code>, <code>resolution.rs</code>,
+    <code>tick.rs</code>, <code>game.rs</code>, <code>continuation.rs</code>, <code>effect_execution.rs</code>,
+    <code>decision_context.rs</code>, <code>observation_encoder.rs</code>, and <code>heuristic/mod.rs</code>) —
+    widened from the landed Power batch and the next Life/Threshold slice
+    (<em>Vanguard Seraph, Bloodthirsty Conqueror, Stromkirk Bloodthief, Hidetsugu’s Second Rite,
+    Sanguine Indulgence†, Ayli Eternal Pilgrim†, Exemplar of Light, Bloodtithe Collector</em> plus Findings 1–2)
+    to the remaining 49 primary FDN rows, cost candidates, and cross-set witnesses.
   </p>
   <p class="small">
-    The prior review’s four unifications (<code>PlayerTurnHistory</code> + v11 <code>player_turn_state</code> suffix,
-    per-attacker <code>FiredTrigger</code> + <code>AttackSize::AtLeast</code> + <code>attacks_this_turn</code>,
-    <code>Condition::Compare</code> + shared <code>effect_value</code>, and <code>reads_source_power</code> + <code>stack::MANA_SPENT</code>)
-    are now landed. This review inspects the whole surface as it stands at <code>7949f55bb2</code> before the next batch lands.
+    The Power batch (<code>859878f8e2</code>, compressed in <code>eabb797d6d</code>) closed the prior review’s four
+    seams: wrapper peeling in <code>match_trigger_wrappers</code> + per-member <code>collect_occurrences</code> +
+    CR 101.2 <code>OnceEachTurn</code> cap, composable <code>EffectValue::Property</code> + source-aware
+    <code>Game::select</code>, layer-safe <code>Condition::Compare</code>, and Academy <code>types.ts</code> parity.
+    Stepping back across the whole area at <code>6155070092</code> exposes six deeper mismatches before the Life batch lands.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 7949f55bb2</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 6155070092</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code> at <code>7949f55bb2</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code> at <code>6155070092</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Per-player turn history &amp; v11 turn state</strong><br><span class="small">Closed per-seat counters for life gains/amount, deaths, departures, casting spend, raid, warp</span></td>
+        <td><strong>Per-player turn history &amp; v11 turn state</strong><br><span class="small">Closed per-seat counters for life gains/amount, life lost, deaths, departures, spend, raid, warp</span></td>
         <td>
           <code>TurnState.history: [PlayerTurnHistory; 2]</code> owns all 13 fields; v11 <code>player_turn_state</code>
-          appends cols 8–14 (<code>ValueLayout::COUNT</code> → <code>Reading.LOG</code>, <code>FLAG</code> → <code>AS_IS</code>);
-          legacy v9/v10 keeps its 8-column prefix; scalar <code>FactKind</code>s 16/18/19 are deleted.
+          carries cols 8–14; <code>academy/ui/src/lib/types.ts</code> matches <code>experience.rs</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Single state owner and fixed-width tensor channel; no sparse fact-overflow risk.</td>
+        <td>Single state owner across rules, hash v26, v11 tensors, LLM text, and Academy.</td>
       </tr>
       <tr>
-        <td><strong>Instruction results, exact LKI &amp; damage history</strong><br><span class="small">Committed destruction, life loss, excess damage, exact pairs, combat-player hits</span></td>
+        <td><strong>Trigger wrappers, per-member matching &amp; <code>OnceEachTurn</code></strong><br><span class="small">Wrappers peel cleanly while preserving per-attacker / per-hit bindings and CR 101.2 limits</span></td>
         <td>
-          <code>EventBinding</code> + <code>EffectFrame</code> + <code>ResolutionTarget.spell</code>;
-          sorted <code>DamageHistory</code>; <code>ObjectLki</code> with copiable values and departure types;
-          v11 relation kind 11 + permanent/stack combat-hit flags.
+          <code>match_trigger_wrappers</code> + <code>collect_occurrences</code> peel all wrappers in one loop,
+          check <code>intervening_if</code> per member, cap <code>OnceEachTurn</code> at 1 under doublers,
+          and track printed vs. granted clocks in <code>UsedTriggerGrants</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Clean single owners; later slices extend <code>ObjectLki</code> additively (e.g. <code>was_attacking</code> for Garna).</td>
+        <td>Verified across wrapped attacks, combat hits, and simultaneous static grants.</td>
       </tr>
       <tr>
-        <td><strong>Attack commit &amp; exact-object attack count</strong><br><span class="small">Raid and first-attack history commit at declaration completion only</span></td>
+        <td><strong>Object-property queries &amp; layer-safe <code>Condition::Compare</code></strong><br><span class="small">Composable power/toughness/MV reads with CR 608.2h LKI and layer evaluation</span></td>
         <td>
-          <code>flow/tick.rs</code> records <code>history[active].attacked</code> and <code>attacks_this_turn</code>
-          only for newly declared attackers; entered-attacking creatures stay excluded; <code>AttackSize::AtLeast(n)</code>.
+          <code>EffectValue::Property { of, property, aggregate }</code>; <code>Game::select</code> passes
+          <code>source_permanent_id</code>; <code>layers.rs::ReadSet</code> &amp; <code>Context</code> walk
+          <code>Condition::Compare</code> against <code>self.objects</code> directly.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Exact match to CR 508.1 and Aurelia/Linden/Chart a Course counterexamples.</td>
+        <td>One vocabulary across resolution, intervening-if, and static abilities.</td>
       </tr>
       <tr>
-        <td><strong>Trigger wrappers, per-member events, <code>intervening_if</code> &amp; doublers</strong><br><span class="small">Wrappers qualify inner events without erasing per-attacker / per-hit identity or breaking CR 101.2</span></td>
+        <td><strong>Event-bound numeric trigger amounts (“that much”)</strong><br><span class="small">Combat damage dealt, life lost, or counters put carried on a pending/stacked trigger to both viewers</span></td>
         <td>
-          <strong>Two interpreters in <code>flow/triggers.rs</code>:</strong>
-          <code>collect_occurrences</code> (L1121) expands only unwrapped top-level <code>Attacks</code> and <code>DealsCombatDamage</code>.
-          Any wrapper (<code>ActiveIf</code>, <code>OnceEachTurn</code>, <code>WhileSourceAttacking</code>, <code>WasCast</code>, <code>FromZone</code>)
-          falls through to boolean <code>trigger_condition_fires</code> → emits one <code>TriggerMember::Event</code>.<br>
-          <code>firing_battlefield_triggers</code> (L945–965) checks <code>OnceEachTurn</code> only as outermost <code>Printed</code> syntax,
-          evaluates <code>intervening_if</code> <em>before</em> member expansion with <code>triggering_permanent(event)</code> (<code>None</code> for 2+ attackers),
-          and lets doublers multiply <code>OnceEachTurn</code> triggers.
+          <strong>Split across two event-shaped slots:</strong>
+          <code>PendingTrigger.x: u8</code> (clamped at 255, conflates spell X with <code>CountersPut.count</code>)
+          and <code>PendingTrigger.triggering_damage: i32</code> + <code>EffectValue::TriggeringDamage</code> +
+          <code>FactKind::TriggeringDamage</code> + <code>decision_context.rs:324</code> (hardcoded to
+          “combat damage to a player”). No <code>TriggerCondition::LosesLife</code> or amount slot for life loss.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Two half-implementations for one concept.</strong>
-          Blocks wrapped attack/combat triggers (Courageous Goblin &amp; Ruby in the very next slice; any multi-attacker <code>ActiveIf</code> or <code>OnceEachTurn</code> combat-damage trigger loses member binding &amp; count); breaks CR 101.2 when a trigger doubler meets <code>OnceEachTurn</code>; breaks member-reading <code>intervening_if</code> on multi-attacker combat.
+          <strong>Biggest mismatch — one idea fragmented by event kind.</strong>
+          Adding a third ad-hoc <code>triggering_life_lost</code> field for <em>Bloodthirsty Conqueror</em>
+          would duplicate the field across 5 structs, bloat <code>GameState</code>, and repeat again for
+          noncombat/excess damage triggers (<em>Niv-Mizzet</em>, <em>Quilled Greatwurm</em>).
         </td>
       </tr>
       <tr>
-        <td><strong>Object-property &amp; aggregate quantities</strong><br><span class="small">Read or aggregate power, toughness, or mana value of selected object(s) with CR 608.2h LKI</span></td>
+        <td><strong>Permanent subject on counter-placement triggers</strong><br><span class="small">“Whenever you put one or more +1/+1 counters on this creature / a creature / another creature”</span></td>
         <td>
-          <code>EffectValue</code> has 6 separate property/aggregate variants (<code>SourcePower</code>, <code>TriggeringPower</code>,
-          <code>TargetToughness</code>, <code>TriggeringManaValue</code>, <code>SpellManaValue</code>, <code>GreatestPowerYouControl</code>)
-          and no general <code>(ObjectSelector, Property, Aggregate)</code> reader.<br>
-          <code>Game::select</code> (<code>resolution.rs:2306</code>) calls <code>permanent_matches_predicate</code> with <code>source = None</code>,
-          ignoring <code>CardPredicate::namesake</code>.
+          9 permanent-watching triggers use <code>TriggerSubject</code> (<code>This</code>, <code>EnchantedCreature</code>,
+          <code>Matching { controlled_by, predicate, another }</code>).
+          <code>TriggerCondition::PutsCounters { who, kind, on: CardPredicate }</code> (<code>ability.rs:162</code>)
+          is the sole outlier taking a raw <code>CardPredicate</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>One idea under 6 card-shaped names, still missing the next slice’s queries:</strong>
-          cannot express target power (<em>Bulk Up</em>), total controlled creature power (<em>Surrak</em>, <em>Ghalta</em>),
-          or destroyed target mana value (<em>Feed the Swarm</em>); <code>namesake</code> silently returns 0 in <code>ObjectSelector::Each</code> (<em>Hare Apparent</em>).
+          <strong>One concept with a missing abstraction.</strong>
+          Cannot express <em>Exemplar of Light</em> (“on this creature”) or “on another creature you control”
+          without breaking subject uniformity.
         </td>
       </tr>
       <tr>
-        <td><strong>Unified <code>Condition</code> across layers &amp; resolution</strong><br><span class="small"><code>Condition::Compare</code> works in statics, <code>ActiveIf</code>, <code>intervening_if</code>, and <code>Effect::If</code></span></td>
+        <td><strong>Characteristics of objects paid as costs</strong><br><span class="small">CR 608.2h LKI power/toughness/MV of a sacrificed, tapped, exiled, or discarded cost object</span></td>
         <td>
-          <code>statics.rs:799</code> implements <code>Condition::Compare</code> via <code>effect_value</code> → <code>select</code> → <code>layer_view</code>.
-          <code>layers.rs::ReadSet::condition</code> (L160) and <code>Context::condition</code> (L852) ignore <code>Condition::Compare</code>:
-          <code>ReadSet</code> reports <code>fields = 0, tapped = false</code>; <code>Context</code> delegates to <code>layer_state_condition</code>,
-          which calls back into <code>layer_board()</code> <em>during</em> <code>Context::evaluate</code>.
+          <code>PaymentReceipt</code> already records every <code>Contribution { object, how, toward }</code>
+          and forwards it to <code>EffectFrame.spent</code>. Yet <code>EffectValue::PowerTappedToPay</code>
+          hardcodes <code>How::Tapped + Power</code>; <code>ObjectSelector</code> has no cost-paid selector;
+          <code>effect_execution.rs::project_receipt</code> omits LKI P/T of departed paid objects.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Latent re-entrancy panic &amp; stale-cache bug:</strong>
-          any static ability using <code>Condition::Compare</code> over battlefield permanents either panics with a re-entrant <code>RefCell</code> borrow inside <code>layer_board()</code> or silently misses layer dependency / tap invalidation.
+          <strong>Bespoke variant + public-learnability gap.</strong>
+          Cannot express <em>Ayli, Eternal Pilgrim</em> (“gain life equal to the sacrificed creature’s toughness”)
+          or later sacrifice/discard-cost queries; two pending Ayli abilities that sacrificed differently buffed
+          copies of Gray Ogre look identical on the stack without LKI toughness projection.
         </td>
       </tr>
       <tr>
-        <td><strong>Pending stack &amp; Academy parity</strong><br><span class="small">All consumers expose the same source-power and turn-history contract</span></td>
+        <td><strong>Spell cost reductions &amp; activation conditions</strong><br><span class="small">Uniform <code>Condition</code> + <code>EffectValue</code> gating casts, reductions, and activations</span></td>
         <td>
-          <code>observation.rs:1730</code> checks <code>reads_source_power</code> on <code>effects</code> only (omits <code>intervening_if</code>).<br>
-          <code>academy/ui/src/lib/types.ts</code> declares <code>PlayerTurnHistory</code> only through <code>mana_spent_casting</code>
-          and omits <code>life_gained</code>, <code>creatures_died</code>, <code>permanents_left</code>, <code>nonland_permanents_left</code>,
-          <code>warped_this_turn</code>, <code>attacked_this_turn</code>, and <code>StackEntryView.mana_spent</code> that <code>experience.rs</code> already emits.
+          <code>StaticAbility</code> has 5 card-shaped self-reduction variants (<code>CostsLessPerPermanent</code>,
+          <code>CostsLessPerGraveyardCard</code>, <code>CostsLessByGreatestPower</code>, …) and still cannot express
+          <em>Sanguine Indulgence</em>, <em>Ghalta</em>, <em>Arcane Epiphany</em>, or <em>Gate Colossus</em>.<br>
+          <code>ActivatedAbilityDefinition</code> has 3 ad-hoc flags (<code>own_turn_only</code>, <code>sorcery_timing</code>,
+          <code>before_attackers</code>) and no <code>condition: Option&lt;Condition&gt;</code>; <code>mana.rs</code>
+          duplicates <code>own_turn_only</code> instead of calling <code>check_activation_terms</code>;
+          <code>Player</code> hardcodes <code>life: 20</code> with no <code>starting_life</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Schema drift between producer and browser consumer</strong> plus a silent omission if a trigger’s <code>intervening_if</code> reads source power.
+          <strong>Card-shaped proliferation + split authority.</strong>
+          Blocks <em>Sanguine Indulgence</em>, <em>Ayli</em>’s “10 more than starting life total”,
+          and the entire later Cost Reductions and Activation Thresholds batches.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Granted firebending as a triggered ability</strong><br><span class="small">CR 702.189: each grant is an independent attack trigger obeying doublers, ordering, and countering</span></td>
+        <td>
+          <code>layers.rs:1325</code> sums <code>Modification::Firebending(n)</code> into scalar <code>view.firebending</code>;
+          <code>triggers.rs:1294</code> (<code>granted_firebending_triggers</code>) bypasses <code>firing_battlefield_triggers</code>
+          and emits one inline trigger labeled delayed with the summed mana.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Parallel side-channel breaks CR 603.2d &amp; CR 702.189 (Finding 1).</strong>
+          Two <em>Sozin’s Comet</em> casts on <em>Katara, the Fearless</em> produce 1 trigger for 10 mana
+          instead of 4 independent 5-mana attack triggers.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Unblocked attackers (heuristic) &amp; CR 104.4b mandatory loops</strong><br><span class="small">Live attacking status for combat heuristics; deterministic draw on unbreakable zero-choice trigger loops</span></td>
+        <td>
+          <code>agent/heuristic/mod.rs:271,308</code> seeds unblocked attackers from <code>CombatAttackersDeclared</code>
+          and checks <code>p.tapped</code>, ignoring <code>p.attacking</code>.<br>
+          <code>GameOutcome</code> has only <code>Losses</code> and <code>Victory</code>; <code>tick.rs:95</code>
+          hangs forever on a zero-choice trigger loop under <code>CantLoseAndOpponentsCantWin</code>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Derived state from wrong event (Finding 2) + infinite loop hang.</strong>
+          Entered-attacking tokens and vigilant attackers are missed by the heuristic;
+          <em>Bloodthirsty Conqueror</em> + life-loss-on-gain with <code>CantLoseAndOpponentsCantWin</code> hangs <code>tick()</code>.
         </td>
       </tr>
     </tbody>
@@ -224,125 +263,133 @@
   <h2>2. Biggest Mismatches · Before vs. After</h2>
   <div class="callout">
     <p>
-      <strong>Why fix these three architecture seams right now (before the Power slice and remaining 56 FDN rows):</strong>
-      Every single one is already hit by the next 8-card slice (<em>Courageous Goblin, Ruby, Nessian Hornbeetle, Surrak, Ashroot Animist, Halana and Alena, Bulk Up, Bite Down</em>) or the batches right after it (<em>Ghalta, Feed the Swarm, Hare Apparent</em>).
-      Patching around them would add four more ad-hoc <code>EffectValue</code> variants, leak the wrapper bug onto every wrapped attack/combat trigger, and leave <code>Condition::Compare</code> a trap inside static abilities.
+      <strong>Why fix these six seams right now (before the Life batch and remaining 49 primary rows):</strong>
+      Every one of them is directly exercised by the next slice (<em>Bloodthirsty Conqueror, Exemplar of Light,
+      Ayli Eternal Pilgrim, Sanguine Indulgence</em> + Findings 1–2) AND immediately unlocks three later batches
+      (<em>Damage recipients &amp; amounts</em>, <em>Cost reductions from the board</em>, and <em>Activation costs &amp; thresholds</em>)
+      without adding another wave of card-shaped variants.
     </p>
   </div>
 
-  <h3>A. One Recursive Trigger Occurrence Matcher (<code>flow/triggers.rs</code>)</h3>
+  <h3>A. One Event-Bound Numeric Trigger Payload (<code>trigger.rs</code>, <code>stack_object.rs</code>, <code>triggers.rs</code>, <code>continuation.rs</code>, <code>observation_encoder.rs</code>)</h3>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · 7949f55bb2</div>
-      <h3>Two disconnected matchers + pre-member <code>intervening_if</code></h3>
-<pre>// firing_battlefield_triggers (L945–966)
-1. OnceEachTurn checked only if outermost on Printed ability
-   (ignored on Granted or nested wrappers).
-2. intervening_if evaluated ONCE with triggering_permanent(event)
-   → None whenever attackers.len() &gt; 1!
-3. collect_occurrences (L1144):
-   - Top-level Attacks { per: Object } → per-attacker Attacker(id)
-   - Top-level DealsCombatDamage { per: Object } → per-hit CombatHit
-   - ANY wrapper (ActiveIf, OnceEachTurn, WhileSourceAttacking, ...)
-     → falls through to boolean trigger_condition_fires!
-     → collapses N members to 1 TriggerMember::Event
-     → drops attacker/hit context &amp; triggering_damage
-     → still multiplies OnceEachTurn by (1 + extra_triggers) (CR 101.2 bug!)</pre>
+      <div class="badge existing">Existing · 6155070092</div>
+      <h3>Event-shaped fields duplicated per trigger kind</h3>
+<pre>// PendingTrigger / TriggeredAbilityOnStack / EffectFrame / ContinuationFrame:
+pub x: u8,                  // overloaded for spell X AND CountersPut.count (clamped at 255)
+pub triggering_damage: i32, // combat-damage-only
+
+// EffectValue:
+TriggeringDamage,           // reads frame.triggering_damage only
+// Missing: Bloodthirsty Conqueror's "that much life", Niv-Mizzet's noncombat damage
+
+// decision_context.rs:324:
+"{name} triggered on {} combat damage to a player." // hardcoded prose</pre>
     </div>
     <div class="panel proposed-box">
       <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>One recursive <code>collect_occurrences</code> over wrappers &amp; leaves</h3>
-<pre>// Recursive matcher: peel wrappers, expand leaves, check intervening_if per member
-collect_occurrences(condition, intervening_if, once_each_turn, event, source, ability, fired):
-  WasCast { inner }              =&gt; if source_was_cast { recurse(inner) }
-  FromZone { zone, inner }       =&gt; if event_origin == zone { recurse(inner) }
-  WhileSourceAttacking { inner } =&gt; if source_attacking { recurse(inner) }
-  ActiveIf { active_if, inner }  =&gt; if check_intervening_if(active_if, source) { recurse(inner) }
-  OnceEachTurn { inner }         =&gt; if !already_used_this_turn { recurse(inner, once_each_turn = true) }
-  Attacks { per: Object, .. }    =&gt; for attacker in matching: emit(Attacker(attacker))
-  DealsCombatDamage { per: Obj } =&gt; for hit in matching: emit(CombatHit(hit))
-  other leaf                     =&gt; if leaf_fires(other) { emit(Event) }
+      <h3>One event-bound <code>triggering_amount: i32</code> + <code>TriggerCondition::LosesLife</code></h3>
+<pre>// One i32 payload across PendingTrigger, TriggeredAbilityOnStack,
+// EffectFrame, ContinuationFrame, and v11 FactKind (slot 16):
+pub triggering_amount: i32, // set at event match: hit.amount (CombatDamage),
+                            // old - new (LifeChanged loss), etc.
 
-emit(member):
-  if intervening_if fails for member_target(member, event) { return; }
-  let count = if once_each_turn { 1 } else { 1 + additional_trigger_times(source) };
-  push `count` occurrences; if once_each_turn { stop further matches for this ability }</pre>
+// TriggerCondition::LosesLife { who: Actor } matches GameEvent::LifeChanged
+// only when new &lt; old (actual committed loss, including damage; 0 if prevented).
+
+// EffectValue::TriggeringAmount (with TriggeringDamage kept/aliased for compatibility)
+// reads frame.triggering_amount.
+// decision_context.rs &amp; text format the amount from the ability's trigger kind
+// ("combat damage to a player" vs "life lost"), preserving viewer parity.</pre>
     </div>
   </div>
 
-  <h3>B. Composable <code>EffectValue::Property</code> + Source-Aware <code>Game::select</code></h3>
+  <h3>B. Paid-Cost Selector + Composable Cost Reductions &amp; Activation Conditions (<code>ability.rs</code>, <code>card.rs</code>, <code>play.rs</code>, <code>resolution.rs</code>, <code>player.rs</code>)</h3>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · 7949f55bb2</div>
-      <h3>Card-shaped property variants + missing Bulk Up / Surrak / Ghalta / Feed the Swarm</h3>
-<pre>enum EffectValue {
-  SourcePower,
-  TriggeringPower,
-  TargetToughness,
-  TriggeringManaValue,
-  SpellManaValue(Box&lt;ObjectSelector&gt;),
-  GreatestPowerYouControl { predicate },
-  // Missing:
-  // - TargetPower (Bulk Up)
-  // - TotalPower (Surrak, Ghalta)
-  // - TargetManaValue after Destroy (Feed the Swarm)
-}
+      <div class="badge existing">Existing · 6155070092</div>
+      <h3>Card-shaped reductions, bespoke tapped-power reader &amp; hardcoded 20 life</h3>
+<pre>// EffectValue:
+PowerTappedToPay,           // hardcodes How::Tapped + Power; cannot read Ayli's sacrificed toughness
 
-// resolution.rs:2306
-ObjectSelector::Each =&gt;
-  .filter(|id| self.permanent_matches_predicate(*id, predicate))
-  // passes source = None → CardPredicate::namesake returns 0!</pre>
+// StaticAbility (5 separate self-reduction variants):
+CostsLessPerPermanent(CardPredicate),
+CostsLessPerPermanentOnBattlefield(CardPredicate),
+CostsLessPerGraveyardCard(CardPredicate),
+CostsLessByGreatestPower(CardPredicate),
+CostsLessIfTargets(TargetCostReduction),
+// Still cannot express Sanguine Indulgence, Ghalta, Arcane Epiphany, Gate Colossus!
+
+// ActivatedAbilityDefinition:
+own_turn_only: bool, sorcery_timing: bool, before_attackers: bool,
+// No condition: Option&lt;Condition&gt;; mana.rs duplicates own_turn_only!
+// Player has life: i32 = 20, no starting_life: i32.</pre>
     </div>
     <div class="panel proposed-box">
       <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>One <code>EffectValue::Property</code> primitive + source passed to <code>select</code></h3>
-<pre>pub enum ObjectProperty { Power, Toughness, ManaValue }
-pub enum Aggregate { Sum, Max }
+      <h3>Three small primitives that close four batches at once</h3>
+<pre>// 1. ObjectSelector::Paid(How) — read via EffectValue::Property (live-or-LKI):
+//    Ayli ability 1: Paid(How::Sacrificed).property(Toughness, Sum)
+//    (Legacy PowerTappedToPay untouched for pinned TLA pilots.)
+//    project_receipt emits LKI toughness/power when a pending stack ability reads Paid(how).
 
-EffectValue::Property {
-  of: Box&lt;ObjectSelector&gt;,
-  property: ObjectProperty,
-  aggregate: Aggregate,
-}
-// • Bulk Up:  Property { of: Target(Creature), Power, Sum } (signed; CR 701.10b!)
-// • Surrak:   Compare(Property { of: Each(YouControl, creature), Power, Sum }, Ge, 8)
-// • Ghalta:   total power via the exact same Property expression
-// • Feed the Swarm: Property { of: Target(..), ManaValue, Sum } (reads LKI after Destroy!)
-// • Legacy variants stay untouched so pinned TLA pilot tokens remain byte-identical.
-// • reads_source_power() recognizes both SourcePower and Property(This, Power, _).
-// • Game::select passes self.source_permanent_id(frame) to permanent_matches_with_source.</pre>
+// 2. StaticAbility::CostsLess { amount: EffectValue, condition: Option&lt;Condition&gt; }
+//    • Sanguine Indulgence: amount = Fixed(3), condition = LifeGainedThisTurn(You) &gt;= 3
+//    • Ghalta:              amount = Property(Each(YouControl, creature), Power, Sum), None
+//    • Arcane Epiphany:     amount = Fixed(1), condition = ControlsAtLeast(1, Wizard)
+//    • Gate Colossus:       amount = Each(YouControl, Gate).count(), None
+//    Evaluated in effective_spell_cost before targeting (CR 601.2f). Legacy variants kept.
+
+// 3. Player.starting_life: i32 (default 20, omitted from hash bytes when 20)
+//    + EffectValue::LifeAboveStarting(PlayerSelector) (= life - starting_life)
+//    + ActivatedAbilityDefinition.condition: Option&lt;Condition&gt;
+//    Checked in ONE authority (check_activation_terms, used by play.rs, action.rs, mana.rs).
+//    • Ayli ability 2: condition = Some(Compare(LifeAboveStarting(You), Ge, 10)).</pre>
     </div>
   </div>
 
-  <h3>C. Layer-Safe <code>Condition::Compare</code> (<code>flow/layers.rs</code> &amp; <code>flow/statics.rs</code>)</h3>
+  <h3>C. Subject-Uniform Counter Triggers, Layer-Granted Firebending &amp; Forced Loops</h3>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · 7949f55bb2</div>
-      <h3><code>Condition::Compare</code> invisible to layers</h3>
-<pre>// layers.rs::ReadSet::condition (L160)
-Condition::Compare { .. } =&gt; falls into `_`!
-  fields = 0, tapped = false  // misses POWER/CARD_TYPES/tapped deps!
+      <div class="badge existing">Existing · 6155070092</div>
+      <h3>Raw predicate on <code>PutsCounters</code> + firebending side-channel + loop hang</h3>
+<pre>// ability.rs:162
+PutsCounters { who: Actor, kind: CounterKind, on: CardPredicate }
+// Cannot say TriggerSubject::This (Exemplar of Light)!
 
-// layers.rs::Context::condition (L852)
-Condition::Compare { .. } =&gt; game.layer_state_condition(...)
-  → effect_value → select → layer_view → layer_board()
-  → RE-ENTRANT RefCell::borrow_mut PANIC during Context::evaluate!</pre>
+// layers.rs:1325 + triggers.rs:1294
+Modification::Firebending(n) =&gt; view.firebending += n;
+// granted_firebending_triggers() bypasses firing_battlefield_triggers:
+//   2x Sozin's Comet + Katara =&gt; 1 "delayed" 10-mana trigger (WRONG: should be 4 x 5!)
+
+// heuristic/mod.rs:271,308
+// Seeds unblocked attackers from CombatAttackersDeclared + p.tapped (misses tokens/vigilance)
+
+// tick.rs:95 + game.rs:50
+// No GameOutcome::Draw for CR 104.4b mandatory loops =&gt; tick() hangs forever.</pre>
     </div>
     <div class="panel proposed-box">
       <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3><code>ReadSet::value</code> + layer-internal <code>Context::value</code></h3>
-<pre>// layers.rs::ReadSet::condition
-Condition::Compare { left, right, .. } =&gt; {
-  self.value(left);  // marks POWER / CARD_TYPES / SUBTYPES / tapped / mana
-  self.value(right);
-}
+      <h3>Unified trigger pipeline, subject helper, live attacker read &amp; CR 104.4b Draw</h3>
+<pre>// 1. TriggerCondition::PutsCountersOn { who: Actor, kind: CounterKind, subject: TriggerSubject }
+//    Shares one counters_put_matches() helper with legacy PutsCounters (TLA pilots untouched).
+//    Exemplar of Light: OnceEachTurn(PutsCountersOn { You, +1/+1, TriggerSubject::This }).
 
-// layers.rs::Context::condition
-Condition::Compare { left, op, right } =&gt;
-  op.test(self.value(left, source), self.value(right, source))
-// Evaluates board-reading Objects / Property directly against self.objects,
-// and delegates pure state values (LifeTotal, TurnHistory, Graveyard) safely.
-// statics.rs::layer_state_condition asserts !condition.reads_battlefield().</pre>
+// 2. layers.rs::Modification::Firebending(n):
+//    view.firebending = view.firebending.saturating_add(*n); // keeps v11 column
+//    view.triggered_abilities.push(EffectiveTrigger {
+//        clock: None, ability: Ability::firebending(*n), program: true,
+//    });
+//    DELETE triggers.rs::granted_firebending_triggers!
+//    =&gt; Doublers, APNAP ordering, countering, YourAttackingCreatureTriggers, Bending::Fire all work.
+
+// 3. heuristic/mod.rs: check p.attacking &amp;&amp; self.blocks.get(id).is_none_or(is_empty);
+//    delete the CombatAttackersDeclared branch from observe().
+
+// 4. GameOutcome::Draw (CR 104.4b) + zero-choice mandatory-loop detection in tick():
+//    Draw ONLY when every priority offer in the cycle is PassPriority-only, non-life state
+//    is unchanged, and no unprotected player is moving toward loss (life/poison/library).</pre>
     </div>
   </div>
 </section>
@@ -352,101 +399,105 @@ Condition::Compare { left, op, right } =&gt;
   <table>
     <thead>
       <tr>
-        <th style="width:21%">Interaction / Card</th>
-        <th style="width:29%">Normal Path, Failure &amp; Counterexample</th>
-        <th style="width:24%">Existing (<code>7949f55bb2</code>)</th>
+        <th style="width:20%">Interaction / Card</th>
+        <th style="width:31%">Normal Path, Failure &amp; Counterexample</th>
+        <th style="width:23%">Existing (<code>6155070092</code>)</th>
         <th style="width:26%">Proposed Model</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Courageous Goblin &amp; Ruby, Daring Tracker</strong><br><span class="small">Attack-time power check + wrapped <code>Attacks</code></span></td>
+        <td><strong>Bloodthirsty Conqueror</strong><br><span class="small">Life-loss amount, prevention, finite drain vs. CR 104.4b loop</span></td>
         <td>
-          <strong>1. Pre-declare buff:</strong> Grow another creature to 4 before declaring attackers → triggers.<br>
-          <strong>2. Post-trigger shrink/removal:</strong> Remove the 4-power creature while trigger is on the stack → still resolves (not intervening-if).<br>
-          <strong>3. Wrapped multi-attacker + doubler:</strong> <code>ActiveIf</code> wrapping <code>Attacks { per: Object }</code> with 2 attackers + doubler.
+          <strong>1. Damage + direct loss:</strong> Opponent takes 3 combat damage and loses 2 to spell → two triggers carrying <code>3</code> and <code>2</code> (both visible on stack to both viewers, surviving Conqueror leaving).<br>
+          <strong>2. Prevented loss (Teferi’s Protection):</strong> <code>old == new</code> → 0 triggers.<br>
+          <strong>3. Finite drain kill (counterexample):</strong> Conqueror + drain-on-gain vs. opponent at 50 life (unprotected) → must drain to 0 and WIN (never false-draw!).<br>
+          <strong>4. Forced infinite loop (CR 104.4b):</strong> Same board with opponent holding <code>CantLoseAndOpponentsCantWin</code> and no instant interaction → must end in <code>GameOutcome::Draw</code> instead of hanging; if opponent holds instant removal, priority is offered normally.
         </td>
         <td>
-          <code>ActiveIf</code> falls through to boolean matcher: drops <code>TriggerMember::Attacker</code> and collapses 2 attackers to 1 occurrence.
+          No <code>LosesLife</code> trigger, no shared <code>triggering_amount</code>, no <code>GameOutcome::Draw</code>, and <code>tick()</code> hangs forever on #4.
         </td>
         <td>
-          Recursive <code>collect_occurrences</code> checks <code>ActiveIf</code> once, expands per matching attacker, preserves <code>Attacker(id)</code> context, and multiplies by <code>1 + extra</code> (4 triggers for 2 attackers + doubler).
-        </td>
-      </tr>
-      <tr>
-        <td><strong><code>OnceEachTurn</code> + trigger doubler</strong><br><span class="small">CR 101.2 vs CR 603.2d</span></td>
-        <td>
-          A permanent with <code>OnceEachTurn</code> (including a wrapped <code>OnceEachTurn { ActiveIf { Attacks } }</code> or <code>DealsCombatDamage</code>) triggers while a trigger doubler is on the battlefield.
-        </td>
-        <td>
-          Doubler emits 2 occurrences (violates “triggers only once each turn”), and wrapped combat damage drops <code>CombatHit</code>.
-        </td>
-        <td>
-          <code>once_each_turn = true</code> threads through recursion, keeps exact <code>CombatHit</code> / <code>Attacker</code> context, emits exactly 1 occurrence, and stops further matches for that ability.
+          <code>TriggerCondition::LosesLife { Opponent }</code> sets <code>triggering_amount = old - new</code>; v11 slot 16 + text/Academy show each amount; finite drain wins at 0 life; protected zero-choice loop ends cleanly as <code>GameOutcome::Draw</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Bulk Up (positive, zero, and negative power + flashback)</strong><br><span class="small">CR 701.10b signed doubling</span></td>
+        <td><strong>Exemplar of Light</strong><br><span class="small">Lifegain + once-each-turn <code>This</code> counter grouping</span></td>
         <td>
-          <strong>1. Mid-stack buff:</strong> Pump 2/2 to 4/4 before Bulk Up resolves → gets +4/+0 (becomes 8/4).<br>
-          <strong>2. Negative power counterexample:</strong> Target is -2/2 → doubling gives -2/-0 (becomes -4/2, not +0/+0).<br>
-          <strong>3. Flashback:</strong> Cast from graveyard for <code>{3}{R}</code>, shares same effect, exiles on leave-stack.
+          <strong>1. Lifegain chain:</strong> Gain life → +1/+1 counter trigger → puts 1 counter on Exemplar → draw trigger fires once.<br>
+          <strong>2. Multi-counter single event (counterexample):</strong> Put two +1/+1 counters in one instruction → ONE <code>CountersPut</code> event → ONE draw (not two).<br>
+          <strong>3. Opponent puts counter / another creature gets counter:</strong> Neither fires Exemplar.<br>
+          <strong>4. Entry with +1/+1 counter (CR 122.6) &amp; doubler:</strong> Fires once; under a trigger doubler, <code>OnceEachTurn</code> still caps at 1 draw (CR 101.2).
         </td>
         <td>
-          No <code>EffectValue</code> can read target creature’s power.
+          <code>PutsCounters</code> accepts only <code>CardPredicate</code>, so Exemplar would erroneously fire when <em>any</em> creature gets a counter.
         </td>
         <td>
-          <code>Property { of: Target(Creature), Power, Sum }</code> returns signed power at resolution (4 → +4/+0; -2 → -2/+0); <code>StaticAbility::Flashback</code> handles graveyard cast and exile replacement.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Surrak, the Hunt Caller &amp; Nessian Hornbeetle</strong><br><span class="small">Combat intervening-if total &amp; other-creature power</span></td>
-        <td>
-          <strong>1. Surrak:</strong> Total controlled creature power crosses 8 (including a negative-power creature: e.g. 5 + 4 + (-1) = 8 qualifies; 5 + 3 + (-1) = 7 does not). Check both trigger time and resolution time.<br>
-          <strong>2. Hornbeetle:</strong> Buff Hornbeetle itself to 4/4 alone → does NOT trigger (<code>Except::This</code>); buff another creature to 4+ → triggers; kill that creature before resolution → intervening-if fails.
-        </td>
-        <td>
-          No total-power <code>EffectValue</code> for Surrak; Hornbeetle works via <code>Compare(each_other_you_control.count(), Ge, 1)</code> but static reuse of <code>Compare</code> would crash layers.
-        </td>
-        <td>
-          Surrak uses <code>Compare(Property(Each(YouControl, creature), Power, Sum), Ge, 8)</code>; Hornbeetle uses <code>Compare(each_other_you_control(min_power: 4).count(), Ge, 1)</code>; both are safe in intervening-if AND layers.
+          <code>OnceEachTurn(PutsCountersOn { You, PlusOnePlusOne, TriggerSubject::This })</code> fires only for controller’s placement on exact <code>This</code>, respects event grouping, CR 122.6, and CR 101.2.
         </td>
       </tr>
       <tr>
-        <td><strong>Ashroot Animist &amp; Halana and Alena, Partners</strong><br><span class="small">Source-power LKI + consumer parity</span></td>
+        <td><strong>Ayli, Eternal Pilgrim†</strong><br><span class="small">Sacrificed LKI toughness + starting-life threshold</span></td>
         <td>
-          Trigger targets another creature; before resolution, fork to (a) pump source, (b) remove and blink source. Check native views, v11 <code>stack::SOURCE_POWER</code>, LLM text, Academy label, and stale target Command rejection.
+          <strong>1. Buffed sacrifice + viewer parity (counterexample):</strong> Buff Gray Ogre (2/2 → 4/4) and sacrifice it to Ayli; in a sibling game sacrifice an unbuffed Ogre. Both graveyards show 2/2 Ogre, yet stack projections must show LKI toughness 4 vs. 2 to both viewers and gain 4 vs. 2 life; countering gains 0 while Ogre stays sacrificed; Ayli cannot sacrifice herself.<br>
+          <strong>2. Starting-life threshold:</strong> At 20 starting life, 29 denies ability 2 and 30 permits it; at custom 25 starting life, 34 denies and 35 permits. Dropping to 29 <em>after</em> activating still exiles the nonland target (CR 602.1).
         </td>
         <td>
-          Works via <code>SourcePower</code> for effects, but <code>observation.rs</code> skips <code>intervening_if</code> and <code>types.ts</code> lags <code>experience.rs</code>.
+          No sacrificed-toughness selector, no LKI toughness on pending receipt, no <code>ActivatedAbilityDefinition.condition</code>, no <code>Player.starting_life</code>.
         </td>
         <td>
-          <code>SourcePower</code> and <code>Property(This, Power, _)</code> share <code>permanent_power_or_lki</code> and <code>reads_source_power</code> (including <code>intervening_if</code>); <code>types.ts</code> matches <code>experience.rs</code>.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Feed the Swarm &amp; Hare Apparent</strong><br><span class="small">Post-destruction target LKI &amp; namesake count</span></td>
-        <td>
-          <strong>1. Feed the Swarm:</strong> Destroy target creature/enchantment (normal death, exile replacement, or indestructible survivor), then lose life equal to its mana value.<br>
-          <strong>2. Hare Apparent:</strong> Count other creatures you control sharing its current layered name.
-        </td>
-        <td>
-          <code>SpellManaValue</code> only reads stack spells; <code>Game::select</code> passes <code>source = None</code> so <code>namesake</code> returns 0.
-        </td>
-        <td>
-          <code>Property(Target(..), ManaValue, Sum)</code> falls back to LKI / printing provenance after departure; <code>Game::select</code> passes <code>self.source_permanent_id(frame)</code> to <code>permanent_matches_with_source</code>.
+          <code>Paid(How::Sacrificed).property(Toughness, Sum)</code> reads <code>ObjectLki</code> and projects LKI toughness on stack; <code>condition: Some(LifeAboveStarting(You) &gt;= 10)</code> enforced once in <code>check_activation_terms</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Static ability with <code>Condition::Compare</code></strong><br><span class="small">Layer re-entrancy &amp; invalidation check</span></td>
+        <td><strong>Sanguine Indulgence†</strong><br><span class="small">Turn lifegain cost reduction before targeting</span></td>
         <td>
-          Grant or author a static ability gated by <code>Condition::Compare</code> reading controlled creature power or tapped count; mutate power or tap state and query <code>game.characteristics(id)</code>.
+          <strong>1. Threshold crossing:</strong> Gain 2 life → costs <code>{3}{B}</code>; gain 1 more (total 3 across two events) → costs <code>{B}</code>.<br>
+          <strong>2. Before graveyard targeting:</strong> With only 1 Swamp untapped and 2 graveyard creatures, cast is unoffered at 2 life gained and offered (with 0/1/2 target choices) at 3 life gained; losing life after gaining 3 keeps reduction (reads <code>life_gained</code>, not net life).
         </td>
         <td>
-          Re-entrant <code>layer_board()</code> panic inside <code>Context::evaluate</code>, or stale cache on tap/power change.
+          None of the 5 <code>CostsLess*</code> variants can test a <code>Condition</code>.
         </td>
         <td>
-          <code>ReadSet::condition</code> tracks <code>POWER</code> / <code>CARD_TYPES</code> / <code>tapped</code> / <code>mana</code>; <code>Context::condition</code> evaluates against <code>self.objects</code> with zero re-entrancy.
+          <code>StaticAbility::CostsLess { amount: Fixed(3), condition: Some(LifeGainedThisTurn(You) &gt;= 3) }</code> runs in <code>effective_spell_cost</code> before targeting (and unlocks Ghalta, Arcane Epiphany, Gate Colossus).
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Vanguard Seraph, Stromkirk Bloodthief, Bloodtithe Collector, Hidetsugu’s Second Rite</strong><br><span class="small">First-gain surveil, opponent-loss intervening-if, exact-10 life</span></td>
+        <td>
+          <strong>1. Seraph:</strong> First gain offers private surveil (waiting viewer sees no top card); second gain or late entry does not trigger; next turn resets.<br>
+          <strong>2. Bloodthief &amp; Collector:</strong> Trigger only when opponent actually lost life (damage or loss, not prevented); Bloodthief rechecks on resolution.<br>
+          <strong>3. Second Rite (counterexample):</strong> Cast targeting opponent at 10 life; fork (a) resolve at 10 → deals 10 damage; (b) opponent gains or loses 1 before resolution (11 or 9) → deals 0 damage.
+        </td>
+        <td>
+          Already expressible via <code>GainsLife { nth: Some(1) }</code>, <code>OpponentLostLifeThisTurnAtLeast { 1 }</code>, and <code>Compare(LifeTotal(Target(Player)), Eq, 10)</code> — verify single target clause on <code>Effect::If</code>.
+        </td>
+        <td>
+          No new rules types needed; directed card fixtures verify private surveil, intervening-if, and resolution-time exact-10 check.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Sozin’s Comet + Katara, the Fearless (Finding 1)</strong><br><span class="small">Granted firebending doublers, ordering, countering</span></td>
+        <td>
+          Cast 1 or 2 <em>Sozin’s Comet</em> on <em>Katara</em> and declare Katara attacking. Counter one trigger in a fork.
+        </td>
+        <td>
+          1 delayed trigger for 5 or 10 mana; countering one cancels all 10 mana.
+        </td>
+        <td>
+          2 or 4 ordinary firebending triggers (5 <code>{R}</code> each), independently orderable and counterable, while keeping <code>granted_firebending</code> in v11.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Heuristic unblocked attackers (Finding 2)</strong><br><span class="small">Entered-attacking token &amp; vigilant attacker</span></td>
+        <td>
+          Declare Blockers priority with an unblocked token that entered attacking (or a vigilant attacker) plus a pump activation.
+        </td>
+        <td>
+          Token has no <code>CombatAttackersDeclared</code> entry; vigilant attacker has <code>!p.tapped</code>; pump skipped.
+        </td>
+        <td>
+          Checks <code>p.attacking &amp;&amp; self.blocks.get(id).is_none_or(is_empty)</code>; both are recognized cleanly.
         </td>
       </tr>
     </tbody>
@@ -456,48 +507,53 @@ Condition::Compare { left, op, right } =&gt;
 <section>
   <h2>4. Scope Boundary &amp; Rollout Slice <span class="badge proposed">Proposed</span></h2>
   <div class="callout info">
-    <p><strong>Inside MTG-418 (next implementation slice — Power at attack, combat and resolution):</strong></p>
+    <p><strong>Inside MTG-418 (next implementation slice — Life events, totals, payment thresholds &amp; Findings 1–2):</strong></p>
     <ol>
-      <li><strong>Shared rules &amp; layer fixes (4 small, cohesive changes):</strong>
-        (a) Unified recursive <code>collect_occurrences</code> in <code>flow/triggers.rs</code> (wrappers, per-member <code>intervening_if</code>, granted/nested <code>OnceEachTurn</code> + CR 101.2 cap);
-        (b) Composable <code>EffectValue::Property { of, property, aggregate }</code> with CR 608.2h live-or-LKI reads + passing <code>source_permanent_id</code> in <code>Game::select</code>;
-        (c) <code>Condition::Compare</code> support in <code>layers.rs::ReadSet</code> and <code>layers.rs::Context</code> (with board-read guard in <code>layer_state_condition</code>);
-        (d) <code>intervening_if</code> in <code>observation.rs</code> <code>reads_source_power</code> + syncing <code>academy/ui/src/lib/types.ts</code> with <code>experience.rs</code>.
+      <li><strong>Six cohesive shared unifications (land first, then author cards):</strong>
+        (a) Unify <code>triggering_damage</code> → <code>triggering_amount: i32</code> (v11 slot 16, continuation, text, Academy) + add <code>TriggerCondition::LosesLife { who }</code> &amp; <code>EffectValue::TriggeringAmount</code>;
+        (b) Add <code>TriggerCondition::PutsCountersOn { who, kind, subject: TriggerSubject }</code> sharing one matcher with legacy <code>PutsCounters</code>;
+        (c) Add <code>ObjectSelector::Paid(How)</code> resolved via live-or-LKI in <code>EffectValue::Property</code> + LKI property projection in <code>effect_execution.rs</code> for departed paid objects;
+        (d) Add <code>StaticAbility::CostsLess { amount, condition }</code>, <code>ActivatedAbilityDefinition.condition: Option&lt;Condition&gt;</code> (enforced in one <code>check_activation_terms</code> across <code>play.rs</code>, <code>action.rs</code>, <code>mana.rs</code>), and <code>Player.starting_life: i32</code> + <code>EffectValue::LifeAboveStarting</code>;
+        (e) Move <code>Modification::Firebending(n)</code> onto <code>view.triggered_abilities</code> and delete <code>granted_firebending_triggers</code> (Finding 1);
+        (f) Fix <code>agent/heuristic/mod.rs</code> to read live <code>p.attacking</code> (Finding 2) and add <code>GameOutcome::Draw</code> + zero-choice CR 104.4b mandatory-loop detection in <code>tick.rs</code>.
       </li>
-      <li><strong>Author and verify all 8 cards in the Power batch together:</strong>
-        Courageous Goblin, Ruby Daring Tracker, Nessian Hornbeetle, Surrak the Hunt Caller, Ashroot Animist, Halana and Alena Partners, Bulk Up, and Bite Down (reusing <code>TargetCreaturesDealPowerDamageToLastTarget</code> for Bite Down’s creature-or-planeswalker punch, plus <code>StaticAbility::Flashback</code> for Bulk Up).
-      </li>
-      <li><strong>Rebuild CPython 3.13 extension &amp; verify post-merge host preparation:</strong>
-        Validate the merged Torch/MLX preparation path (<code>074bc49a64</code>), named observation layout, semantic text, Academy types (<code>svelte-check</code>), and bundled v9/v11 pinned pilots.
+      <li><strong>Author and verify all 8 cards in the Life batch together</strong> (6 primary: <em>Vanguard Seraph, Bloodthirsty Conqueror, Stromkirk Bloodthief, Hidetsugu’s Second Rite, Exemplar of Light, Bloodtithe Collector</em>; 2 cost candidates: <em>Sanguine Indulgence, Ayli Eternal Pilgrim</em>), placing each single-card fixture in its first-printing set test module per Finding 4 and recording verified rows in <code>fdn.jsonl</code>.</li>
+      <li><strong>Rebuild CPython 3.13 extension &amp; verify consumers:</strong>
+        Validate <code>triggering_amount</code> (both combat damage and life loss) and Ayli’s sacrificed LKI toughness across native obs, v11 tensors, semantic text, Academy context, and bundled v9/v11 pinned pilots.
       </li>
     </ol>
-    <p><strong>Outside this slice / MTG-418:</strong> Deleting legacy <code>EffectValue</code> variants already baked into pinned TLA pilots (preserve byte-identical pilot tokens); generalizing multi-clause target cross-references for hypothetical player-targeting punch spells not in the cohort; casting permissions (Task 02) and battlefield forms/transform/meld (Task 05).</p>
+    <p><strong>Outside this slice / MTG-418:</strong> Deleting legacy TLA variants (<code>PowerTappedToPay</code>, legacy <code>CostsLess*</code>, legacy <code>PutsCounters</code>) whose serialized tokens are baked into pinned pilots; general multi-player shortcut loops requiring player choices (CR 729.2 — only zero-choice mandatory loops CR 104.4b hang <code>tick()</code>); casting permissions (Task 02) and battlefield forms/transform/meld (Task 05). Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent cleanup for working review.</p>
   </div>
 </section>
 
 <section>
   <h2>5. Choices Made for Review</h2>
-  <p>In headless graph mode, the bold option is selected and written into <code>scratch/plan.md</code>; reply with a number+letter (e.g. <code>2a</code>) to override any choice.</p>
+  <p>In headless graph mode, the bold option is selected and written into <code>scratch/plan.md</code>; reply with a number+letter (e.g. <code>1a</code>) to override any choice.</p>
   <ol class="questions">
     <li>
-      <strong>How should Bulk Up (target power), Surrak/Ghalta (total power), and Feed the Swarm (destroyed target mana value) be expressed in <code>EffectValue</code>?</strong>
-      <div class="choice"><b>1a</b> Add separate flat variants (<code>TargetPower</code>, <code>TotalPowerYouControl</code>, <code>TargetManaValue</code>) as each card arrives.</div>
-      <div class="choice"><span class="selected">1b (selected)</span> Add one composable <code>EffectValue::Property { of: Box&lt;ObjectSelector&gt;, property: ObjectProperty, aggregate: Aggregate }</code> (<code>Power | Toughness | ManaValue</code>, <code>Sum | Max</code>) with CR 608.2h live-or-LKI fallback for single-object selectors and signed sums, while leaving existing TLA legacy variants intact for pinned pilots.</div>
+      <strong>How should <em>Bloodthirsty Conqueror</em>’s “gain that much life” store and expose the triggering life-loss amount?</strong>
+      <div class="choice"><b>1a</b> Add a separate <code>triggering_life_lost: i32</code> field and <code>FactKind::TriggeringLifeLost</code> alongside <code>triggering_damage</code>.</div>
+      <div class="choice"><span class="selected">1b (selected)</span> Unify around one event-bound <code>triggering_amount: i32</code> across <code>PendingTrigger</code>, <code>TriggeredAbilityOnStack</code>, <code>EffectFrame</code>, <code>ContinuationFrame</code>, and v11 fact slot 16 (added on this branch, absent from pinned pilots), with <code>EffectValue::TriggeringAmount</code> (retaining <code>TriggeringDamage</code> compatibility) and trigger-aware phrasing in <code>decision_context.rs</code> / semantic text.</div>
     </li>
     <li>
-      <strong>How should wrapped batch triggers (<code>ActiveIf</code> / <code>OnceEachTurn</code> over <code>Attacks</code> / <code>DealsCombatDamage</code>) and CR 603.2d trigger doublers interact?</strong>
-      <div class="choice"><b>2a</b> Special-case <code>ActiveIf</code> inside <code>collect_occurrences</code> and leave <code>OnceEachTurn</code> / <code>intervening_if</code> outside it.</div>
-      <div class="choice"><span class="selected">2b (selected)</span> Unify <code>collect_occurrences</code> as one recursive matcher over all <code>TriggerCondition</code> wrappers, evaluate <code>intervening_if</code> per matched member, enforce <code>OnceEachTurn</code> for both printed and granted triggers, and cap <code>OnceEachTurn</code> emissions at 1 even with a trigger doubler (CR 101.2).</div>
+      <strong>How should <em>Exemplar of Light</em>’s “put one or more +1/+1 counters on this creature” be represented without breaking pinned TLA pilots?</strong>
+      <div class="choice"><b>2a</b> Add an ad-hoc <code>on_this: bool</code> flag to <code>TriggerCondition::PutsCounters</code>.</div>
+      <div class="choice"><span class="selected">2b (selected)</span> Add <code>TriggerCondition::PutsCountersOn { who: Actor, kind: CounterKind, subject: TriggerSubject }</code> sharing one matcher with legacy <code>PutsCounters</code>, matching all nine other permanent-watching triggers while keeping <em>Earth Kingdom General</em>’s TLA pilot tokens byte-identical.</div>
     </li>
     <li>
-      <strong>How should <code>Bite Down</code> (“target creature you control deals damage equal to its power to target creature or planeswalker you don’t control”) be authored?</strong>
-      <div class="choice"><b>3a</b> Add a new multi-clause target-index selector (<code>ObjectSelector::ClauseTarget(usize)</code>) so <code>Effect::DealDamage</code> can reference clause 0 from clause 1.</div>
-      <div class="choice"><span class="selected">3b (selected)</span> Reuse existing <code>Effect::TargetCreaturesDealPowerDamageToLastTarget</code> (already shared by <em>Allies at Last</em> and <em>Felling Blow</em>, and already handles planeswalker victims via <code>Target::Permanent</code>) with <code>TargetSpec::PermanentOpponentControls</code> for creature or planeswalker; defer clause-indexed selectors unless a cohort card actually requires cross-clause non-damage or player-target punch.</div>
+      <strong>How should <em>Ayli, Eternal Pilgrim</em> read the sacrificed creature’s toughness and how should <em>Sanguine Indulgence</em> express its conditional cost reduction?</strong>
+      <div class="choice"><b>3a</b> Add bespoke <code>EffectValue::ToughnessSacrificedToPay</code> and <code>StaticAbility::CostsLessIfLifeGained</code> variants.</div>
+      <div class="choice"><span class="selected">3b (selected)</span> Add composable <code>ObjectSelector::Paid(How)</code> (read via <code>EffectValue::Property</code> with LKI fallback and LKI stack-receipt projection) and composable <code>StaticAbility::CostsLess { amount: EffectValue, condition: Option&lt;Condition&gt; }</code>, unlocking Ayli, Sanguine Indulgence, and the later Cost Reductions &amp; Activation Cost batches with two general primitives.</div>
     </li>
     <li>
-      <strong>Should <code>layers.rs</code> support <code>Condition::Compare</code> now or forbid it in static abilities?</strong>
-      <div class="choice"><b>4a</b> Keep <code>Condition::Compare</code> forbidden in static abilities via a debug assert and require separate static-only <code>Condition</code> variants later.</div>
-      <div class="choice"><span class="selected">4b (selected)</span> Wire <code>Condition::Compare</code> into <code>layers.rs::ReadSet::condition</code> and <code>Context::condition</code> now so <code>Condition</code> truly remains one vocabulary across statics, <code>ActiveIf</code>, <code>intervening_if</code>, and <code>Effect::If</code> with zero re-entrancy or stale-cache traps.</div>
+      <strong>How should <em>Ayli, Eternal Pilgrim</em>’s “at least 10 life more than your starting life total” check starting life?</strong>
+      <div class="choice"><b>4a</b> Hardcode <code>LifeTotal(You) &gt;= 30</code> assuming every game starts at 20 life.</div>
+      <div class="choice"><span class="selected">4b (selected)</span> Store <code>Player.starting_life: i32</code> (default 20, omitted from hash when 20), add <code>EffectValue::LifeAboveStarting(PlayerSelector)</code>, and add <code>ActivatedAbilityDefinition.condition: Option&lt;Condition&gt;</code> enforced in one <code>check_activation_terms</code> authority across <code>play.rs</code>, <code>action.rs</code>, and <code>mana.rs</code>.</div>
+    </li>
+    <li>
+      <strong>How should <em>Bloodthirsty Conqueror</em>’s CR 104.4b mandatory-loop obligation be handled?</strong>
+      <div class="choice"><b>5a</b> Defer forced-loop termination entirely to a separate <code>game_procedure</code> task and skip the <code>CantLoseAndOpponentsCantWin</code> counterexample.</div>
+      <div class="choice"><span class="selected">5b (selected)</span> Add <code>GameOutcome::Draw</code> and detect unbreakable zero-choice trigger cycles in <code>tick.rs</code> (requiring PassPriority-only offers, unchanged non-life state, and no unprotected player progressing toward loss), so finite high-life drains still win while protected infinite loops terminate cleanly as a draw instead of hanging.</div>
     </li>
   </ol>
 </section>
