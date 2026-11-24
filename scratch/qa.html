@@ -1,0 +1,57 @@
+<!doctype html><meta charset=utf-8><title>QA — MLX architectures, PPO and belief parity</title>
+<style>body{font:15px/1.5 -apple-system,sans-serif;max-width:980px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f3ee;padding:.8em;overflow:auto;font-size:12.5px}h2{font-size:17px;margin-top:2em}span{font-size:12px;padding:2px 8px;border-radius:9px;background:#dcefdc;font-weight:normal}span.blocked{background:#f6e3b4}li{margin:.3em 0}</style>
+<h1>QA — MLX architectures, PPO and belief parity (490ce6)</h1>
+<p>Run 2026-11-23, Apple M4 Max, branch head <code>ca36c632af</code> plus the fix below. The laptop was shared with other work throughout (load average 65–105), so times are upper bounds. Runs are under <code>.runs/qa2/</code>.</p>
+<h2>Fixed</h2>
+<ul><li><code>tests/test_package_boundaries.py</code> failed on the committed branch: <code>manabot/recipes/belief_policy.py</code> now resolves a backend in <code>train</code> but was not listed among the backend entry points. Added the entry; 42 passed.</li></ul>
+<section><h2>1. First tracked MLX run, then resume <span class='works'>works</span></h2><p><b>Did.</b> The two commands in <code>manabot/backends/mlx.md</code> verbatim, in a fresh <code>ETUDE_HOME</code>.</p><pre>$ uv run --extra mlx etude train manabot/recipes/local.py --config &#x27;{&quot;backend&quot;:&quot;mlx&quot;,&quot;device&quot;:&quot;mps&quot;}&#x27; --until updates=1     (58 s)
+out/policies: 00000000-{raw,ema}  00000001-{raw,ema}      out/state: current.json save-00000001
+$ uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates=2                                       (59 s)
+out/policies: … 00000002-{raw,ema}      current.json {&quot;save&quot;:&quot;save-00000002&quot;}      outcome: finished</pre></section><section><h2>2. Returning user: a run saved before this change <span class='works'>works</span></h2><p><b>Did.</b> Wrote an MLX local run (update 1) and Torch belief jobs with the merge-base source (82c5d1d1b7), then used them from this branch.</p><pre>$ etude train manabot/recipes/local.py --resume --until updates=2      (save written by 82c5d1d1b7)
+policies 00000002-{raw,ema} written; current.json {&quot;save&quot;:&quot;save-00000002&quot;}
+legacy belief.pt (starts PK\x03\x04):
+  torch  loads, 64 rows, mean log_prob -1.0772370714702215   (identical to the branch&#x27;s Torch-written belief.safetensors)
+  mlx    ValueError: legacy .pt belief samplers require the Torch backend
+  python -m manabot.reports.belief on it: Report … (sha256 92cb016c…)</pre></section><section><h2>3. Linked belief jobs on MLX with Torch blocked <span class='works'>works</span></h2><p><b>Did.</b> Both <code>experiments/belief.py</code> commands from the guide, with a <code>torch</code> package that raises on import first on <code>PYTHONPATH</code>.</p><pre>belief-mlx/policy@0   (8.5 s)   out/policies/00000001-raw.safetensors, schema-2 save
+belief-mlx/sampler@0  (22 s)    out/belief.safetensors, out/histories.json      both outcomes: finished</pre></section><section><h2>4. Samplers cross backends <span class='works'>works</span></h2><p><b>Did.</b> Loaded each job's sampler on Torch and MLX against the rows of its own histories.json.</p><pre>MLX-written   belief.safetensors  torch ok, mlx max |Δ log_prob| 1.9e-07 over 64 rows
+Torch-written belief.safetensors  torch ok, mlx max |Δ log_prob| 1.9e-07 over 64 rows
+wrong policy identity → ValueError: sampler checkpoint policy_identity mismatch
+wrong --checkpoint-sha256 on the report CLI → ValueError: sampler checkpoint byte identity mismatch (a traceback, not a usage error)</pre></section><section><h2>5. Non-default models through tracked self-play <span class='works'>works</span></h2><p><b>Did.</b> A single-job recipe over the Gray Ogre match, one update each, on <code>mps</code> and on <code>cpu</code>; then every update-1 policy read by Torch and MLX on 160 live decisions.</p><pre>arm                                   mps       cpu       Torch vs MLX (legal logits / values)
+WDL + attention readout + events      finished  finished  5.2e-08 / 3.0e-08
+no attention + historical mean + hashed finished finished  3.0e-08 / 9.3e-09
+WDL + value token + live tokens       finished  finished  5.2e-08 / 6.0e-08
+scalar + events + live tokens, PPO    finished  finished  4.5e-08 / 1.9e-08
+belief PPO policy, old-save local EMA, Torch-written local and PPO policies: all below 2.2e-07
+argmax differed on 3 of 1440 decisions, each an exact tie at this tolerance</pre></section><section><h2>6. Decision memory: warm start, live tokens, resume <span class='works'>works</span></h2><p><b>Did.</b> Control policy without memory, then memory branches started from it.</p><pre>ctrl (no memory, mps)                                   finished
+gru, mps, live tokens, pretrained=ctrl                  finished
+transformer, cpu, live tokens, pretrained=ctrl          finished
+gru, cpu, live tokens: --until updates=1, then --resume --until updates=2 → 00000002-raw.safetensors</pre></section><section><h2>7. Wrong input <span class='works'>works</span></h2><p><b>Did.</b> Things a person would try.</p><pre>Torch, cpu, live_tokens          etude: live tokens require CUDA on the torch backend      (no run created)
+pretrained from another config   etude: pretrained policy has another observation config   (run marked failed)
+memory + recent_events           decision memory requires attention and policy_film, with recent_events disabled
+memory without row limits        decision-memory collection requires explicit collection_rows, bootstrap_rows and learner_rows
+128 records on a TLA game        observation capacity exceeded: decision_records 136 &gt; 128
+old .pt on MLX load_policy       NotAContainer … convert the PyTorch .pt with `uv run python -m manabot.backends.convert`
+converting the retained pilot    missing writer catalog … written at revision b62ac312… ; run it from there
+second fresh_iteration, same out FileExistsError</pre></section><section><h2>8. Guide snippet: baseline iteration with live tokens <span class='works'>works</span></h2><p><b>Did.</b> The Python block in the guide, unchanged apart from the output path.</p><pre>.runs/qa2/mlx-baseline/policies/00000001-ema.safetensors 853        (3 min 16 s under load)</pre></section><section><h2>9. Everything on at once, then evaluation without Torch <span class='works'>works (one game out of time)</span></h2><p><b>Did.</b> Baseline match with a WDL critic, value token, GRU memory and live tokens: one MLX update, then <code>manabot.eval.local --backend mlx</code> with Torch blocked.</p><pre>combined/policies/00000001-ema.safetensors 836 learner transitions
+eval: 4/4 games played; 3 terminal, 1 stopped at its 110 s game budget after 339 decisions → 0/1 complete deals
+candidate latency p50 0.24–0.50 s per decision, the same as the default model under this load (0.055 s at a load near 30)
+Torch reads the same file: logits 6.0e-08, values 6.0e-08</pre></section><section><h2>10. Shipped recipes still run <span class='works'>works</span></h2><p><b>Did.</b> Elemental on MLX (2 updates, 4 streams), Torch local, Torch belief jobs.</p><pre>elemental finished · local (torch) finished · belief-torch policy and sampler finished</pre></section><section><h2>11. Parity command <span class='works'>works</span></h2><p><b>Did.</b> Current-world capture (w64, 2 layers) through <code>python -m manabot.backends.parity … --backend mlx --precision float32 --minibatches 4</code>.</p><pre>mlx clipped Adam weights max |Δ| 1.2e-07 (tol 1e-06) ok · forward logits 2.33e-09 · values 1.49e-07 · learner loss 4.89e-07
+gradient min cosine 1.000000 over 111 tensors            parity: pass (mlx)
+bfloat16, same capture: full-gradient cosine 0.988321 (tol 0.99) FAIL — the w64 behaviour the guide already documents</pre></section><section><h2>12. Backend suite from the plan <span class='blocked'>blocked by machine load</span></h2><p><b>Did.</b> The plan's pytest command, verbose, 17 min 54 s.</p><pre>355 passed, 7 failed
+5 × tests/belief (test_belief_agent, test_learning, test_player ×2, test_state): fail identically at the merge base 82c5d1d1b7
+2 × test_mlx_local_evaluation_and_verification[64|256]: &quot;paired arena evaluation incomplete or from other deals&quot;;
+    panel/failures: &quot;game wall-clock budget exhausted&quot;. Fails the same way at the merge base under the same load.
+    [64] passed at 21:40 the same evening (load ≈ 30). In-process MLX latency, branch vs base: 6.3 vs 6.4 ms per decision.</pre></section>
+<h2>Works now</h2>
+<ul><li>Tracked MLX training and resume, including a save written before this change.</li>
+<li>PPO and both belief jobs on MLX with Torch unimportable; samplers load in both directions with matching log probabilities; legacy <code>.pt</code> samplers still read on Torch and are refused on MLX by name.</li>
+<li>WDL, every tried value readout, attention off, hashed records, recent events, both memory encoders, live tokens on Metal and CPU; Torch reads every MLX-written policy to about 1e-7.</li>
+<li>Refusals are specific and happen before any weights change.</li></ul>
+<h2>Not reached</h2>
+<ul><li>A passing run of <code>test_mlx_local_evaluation_and_verification</code>: the machine never went quiet. It needs one rerun on an idle Mac.</li>
+<li>Academy seating a new-architecture policy, and Ctrl-C mid-update recovery for the new models (resume between updates was checked). Neither path changed here.</li>
+<li>The retained <code>mlx_pilot</code> capture as gate evidence: refused for a missing writer catalog, so a current capture stood in.</li></ul>
+<h2>Still wrong, worst first</h2>
+<ol><li>Five <code>tests/belief</code> tests fail on main as well as here (belief range, player, state receipt digest, keystone demo). CI does not run those files. Not caused by this change; worth a bug Task.</li>
+<li>The evaluation workflow test's 90-second panels leave no room on a busy laptop: per-decision latency rose from 0.055 s to 0.3–0.5 s and games ran out of time.</li>
+<li><code>python -m manabot.reports.belief</code> answers a wrong digest or a missing <code>--training-dataset</code> with a Python traceback.</li></ol>

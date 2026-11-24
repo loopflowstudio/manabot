@@ -50,39 +50,27 @@ prefix identity and native epoch even when branches share record nodes.
 - The remaining architecture refusals are removed. Input-version refusal and
   checkpoint error context still work.
 
-## Next — Apple Silicon gate
+## Apple Silicon gate (run 2026-11-23 on a shared M4 Max, load average 65–105)
 
-Run the full backend suite and the captured parity check required by
-[`docs/development.md`](../docs/development.md#validation-by-change-area).
-The local CPython 3.13 extension was rebuilt from this checkout after the
-previous binary lacked `managym.SlotLoad`. The earlier broad MLX file run
-during sync did not finish with a passing result. Use verbose output to
-retain the first failing test or the last test started if the process exits.
-
-```sh
-uv run --extra mlx --extra dev --extra artifacts pytest -v \
-  tests/model/test_mlx_backend.py tests/belief \
-  tests/training/test_update_backends.py tests/training/test_update_backend_protocols.py \
-  tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py \
-  tests/model/test_prepare_rows.py \
-  tests/training/test_memory_chunk_cache.py tests/training/test_memory_prefix_storage.py \
-  tests/training/test_memory_collection_fold.py tests/training/test_memory_learner_fold.py \
-  tests/training/test_mlx_workflow.py tests/training/test_recipe_etude.py \
-  tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py \
-  tests/test_package_boundaries.py
-```
-
-The artifact manifest lists the retained MLX pilot parity subset. Fetch it
-and check its world admission before using it as gate evidence. If admission
-fails, use a bounded current-world capture through
-`manabot/backends/torch/capture.py` and record the old capture's refusal.
-
-```sh
-doppler run --project manabot --config prd -- uv run --extra artifacts \
-  python -m manabot.data fetch experiments/data/mlx_pilot/capture
-uv run --extra mlx python -m manabot.backends.parity \
-  experiments/data/mlx_pilot/capture/initial.pt --capture experiments/data/mlx_pilot/capture
-```
+- Backend suite: 355 passed, 7 failed. Five `tests/belief` failures
+  (`test_belief_agent`, `test_learning`, `test_player` ×2, `test_state`) fail
+  identically at the merge base `82c5d1d1b7`. The two
+  `test_mlx_local_evaluation_and_verification` cases ran out of game
+  wall-clock budget under the load and failed the same way at the merge
+  base; `[64]` passed earlier the same evening at a load near 30. Rerun both
+  on a quiet Mac before landing.
+- `tests/test_package_boundaries.py` needed `manabot/recipes/belief_policy.py`
+  among the backend entry points; fixed.
+- The retained `mlx_pilot` capture is refused (`missing writer catalog`,
+  written at `b62ac3127`). A current-world capture (w64, 2 attention layers,
+  4 minibatches) passes the float32 MLX parity command; bfloat16 at that
+  width reaches a full-gradient cosine of 0.988 against 0.99, as
+  `manabot/backends/mlx.md` already reports for w64.
+- Driven by hand, all on MLX: tracked local train and resume, a resume of a
+  save written by the merge base, linked belief jobs without Torch, sampler
+  loads in both directions, four non-default models on Metal and CPU,
+  memory warm starts and resume, and local evaluation of a WDL, value-token,
+  GRU-memory policy. `scratch/qa.html` has the transcripts.
 
 Scope ends at numerical parity. Torch resume, Etude managed evaluation,
 further speed optimization and claims about playing strength are excluded.
