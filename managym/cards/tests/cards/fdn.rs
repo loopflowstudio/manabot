@@ -1874,6 +1874,86 @@ fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
     );
 }
 
+/// The stash permission belongs to whichever Tinybones its player controls
+/// now, not to the one that exiled the card: a later Tinybones plays what an
+/// earlier one stashed. An exact grant on the same card adds its own route,
+/// and each (face, route) is offered once.
+#[test]
+fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, zone_of},
+        play::{activate, choose, resolve_top},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::{PlayGrant, PlayRoute},
+        state::permanent::CounterKind,
+    };
+    let mut s = five_color_setup(&["Tinybones, Bauble Burglar"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let tinybones = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let forest = move_from_library(&mut s, 1, "Forest", ZoneType::Hand);
+    move_from_library(&mut s, 1, "Island", ZoneType::Hand);
+    activate(&mut s, tinybones, 0);
+    resolve_top(&mut s);
+    let object = now(&s, forest);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object: chosen, .. } if *chosen == object),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, forest), Some(ZoneType::Exile));
+    let routes = |s: &mut crate::support::game::Scenario| -> Vec<Option<PlayRoute>> {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(s, forest);
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::PlayLand {
+                    object: o, route, ..
+                } if *o == object => Some(*route),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let source = s.game().state.permanents[tinybones]
+        .as_ref()
+        .unwrap()
+        .object;
+    move_card(&mut s, source, ZoneType::Graveyard);
+    assert!(routes(&mut s).is_empty());
+    s.game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    assert_eq!(routes(&mut s), [None], "the later Tinybones's lone route");
+
+    let exiled = now(&s, forest);
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(exiled, PlayerId(0)));
+    let offered = routes(&mut s);
+    assert_eq!(offered.len(), 2, "{offered:?}");
+    assert!(matches!(offered[0], Some(PlayRoute::Grant(_))));
+    assert_eq!(
+        offered[1],
+        Some(PlayRoute::ExileCounter(CounterKind::Stash))
+    );
+    let exile_offers = s
+        .action_space()
+        .actions
+        .iter()
+        .filter(|a| matches!(a, Action::PlayLand { object, .. } if *object == exiled))
+        .count();
+    assert_eq!(exile_offers, 2, "one card, listed once per route");
+}
+
 /// Loot gives its controller, and only them, a second land play each turn.
 /// Its activation looks at six cards and offers only creature cards with
 /// mana value at most the lands its controller has as it resolves; the

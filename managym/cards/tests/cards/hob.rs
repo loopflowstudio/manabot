@@ -992,6 +992,14 @@ fn flameshape_cards_are_hidden_and_locked_without_a_wizard() {
     let object = s.game().state.permanents[wizard].as_ref().unwrap().object;
     assert_eq!(s.game().characteristics(wizard).power, 3);
 
+    // Gandalf leaves while another Wizard remains: still shown and playable.
+    let mut other = s.clone();
+    other.force_permanent_on_battlefield(0, "High Fae Trickster");
+    move_card(&mut other, object, ZoneType::Graveyard);
+    assert_eq!(shown_to(&other, 0, mountain), Some((true, false)));
+    assert_eq!(shown_to(&other, 1, mountain), None);
+    assert!(playable(&mut other).1);
+
     // The last Wizard leaves: hidden and locked; the next restores both.
     move_card(&mut s, object, ZoneType::Graveyard);
     assert_eq!(shown_to(&s, 0, mountain), None);
