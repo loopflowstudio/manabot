@@ -156,11 +156,13 @@ def test_large_support_inference_does_not_enumerate(
     assert torch.isfinite(model.log_prob([row], counts)).all()
 
 
-def test_mlx_search_draws_match_the_physical_measure_with_known_cards() -> None:
-    pytest.importorskip("mlx.core")
+@pytest.mark.parametrize("backend", ["torch", "mlx"])
+def test_search_draws_match_the_physical_measure_with_known_cards(backend: str) -> None:
+    if backend == "mlx":
+        pytest.importorskip("mlx.core")
 
     row = _input()
-    codec = resolve("mlx").belief
+    codec = resolve(backend).belief
     prior = codec.PhysicalDistribution()
     schema = SamplerSchema(row.vocabulary_identity, ("A", "B", "C"), 1, 3)
     baseline = codec.AutoregressiveBeliefSampler(schema, hidden_size=4)

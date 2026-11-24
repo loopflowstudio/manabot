@@ -123,6 +123,16 @@ class MemoryLevel[A]:
     record_nodes: A | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ServingRecord:
+    """A record's one-based parent state and its slice of the reference table."""
+
+    key: str
+    parent: int
+    reference_start: int
+    reference_count: int
+
+
 @dataclass(frozen=True)
 class MemoryFold[A]:
     """One causal node tree; index zero is the zero initial state.
@@ -137,11 +147,7 @@ class MemoryFold[A]:
     levels: tuple[MemoryLevel[A], ...]
     tails: A
     node_count: int
-    keys: tuple[str, ...] = field(default=(), metadata={"host_only": True})
-    reference_slices: tuple[tuple[int, int], ...] = field(
-        default=(), metadata={"host_only": True}
-    )
-    record_slices: tuple[tuple[int, int], ...] = field(
+    serving_records: tuple[ServingRecord, ...] = field(
         default=(), metadata={"host_only": True}
     )
     root_nodes: A | None = None
@@ -865,49 +871,40 @@ def _prepare_fold(
             node = node.previous
         for node in reversed(pending):
             selected_nodes[node.key] = node
-    cached = [node for node in selected_nodes.values() if node.key in roots]
-    root_offsets: dict[str, int] = {}
-    reference_base = 0
-    for node in cached:
-        root_offsets[node.key] = reference_base
-        reference_base += roots[node.key]
-    root_reference_count = reference_base
-    nodes: list[Tail | RecordNode] = []
-    reference_slices: list[tuple[int, int]] = []
-    record_slices: list[tuple[int, int]] = []
-    indexes: dict[str, int] = {}
+    nodes = list(selected_nodes.values())  # Parents precede their children.
+    indexes = {node.key: index for index, node in enumerate(nodes, start=1)}
+    cached = [node for node in nodes if node.key in roots]
+    root_reference_count = sum(roots[node.key] for node in cached)
+    # All cached reference slices precede newly embedded references.
+    root_start = 0
+    reference_base = root_reference_count
+    serving_records: list[ServingRecord] = []
     depths: list[int] = []
     references: list[np.ndarray] = [np.empty(0, np.int64)]
     record_starts: list[int] = []
     arrays: dict[str, list[np.ndarray]] = {f.name: [] for f in fields(MemoryFeatures)}
     record_base = 0
     parents: list[int] = []
-    _prepare_chunk_features(
-        [node for node in selected_nodes.values() if node.key not in roots], tables
-    )
-    for node in selected_nodes.values():
+    _prepare_chunk_features([node for node in nodes if node.key not in roots], tables)
+    for node in nodes:
         parent = (
             indexes[node.previous.key] if node.previous and node.key not in roots else 0
         )
+        parents.append(parent)
         if node.key in roots:
             count = roots[node.key]
-            start = root_offsets[node.key]
-            joined = np.concatenate(
-                (references[parent], np.arange(start, start + count))
-            )
+            references.append(np.arange(root_start, root_start + count, dtype=np.int64))
+            serving_records.append(ServingRecord(node.key, parent, root_start, count))
+            root_start += count
             record_starts.append(-1)
-            reference_slices.append((start, count))
-            record_slices.append((-1, 0))
-            nodes.append(node)
-            indexes[node.key] = len(nodes)
-            references.append(joined)
-            parents.append(parent)
             depths.append(-1)
             continue
         fragment = _chunk_features(node, tables)
         count = len(fragment.reference_numbers)
-        reference_slices.append((reference_base, count))
-        record_slices.append((record_base, len(fragment.numbers)))
+        if collection:
+            serving_records.append(
+                ServingRecord(node.key, parent, reference_base, count)
+            )
         joined = np.concatenate(
             (references[parent], np.arange(reference_base, reference_base + count))
         )
@@ -926,10 +923,7 @@ def _prepare_fold(
         record_starts.append(record_base)
         reference_base += count
         record_base += len(fragment.numbers)
-        nodes.append(node)
-        indexes[node.key] = len(nodes)
         references.append(joined)
-        parents.append(parent)
         depths.append(depths[parent - 1] + 1 if parent else 0)
     # Sequence lengths retain original policy row order; the fold owns routes.
     empty = _empty_memory(tables)
@@ -1006,9 +1000,7 @@ def _prepare_fold(
             tuple(levels),
             np.array([indexes[tail.key] if tail else 0 for tail in tails], np.int64),
             len(nodes),
-            keys=tuple(node.key for node in nodes),
-            reference_slices=tuple(reference_slices),
-            record_slices=tuple(record_slices),
+            serving_records=tuple(serving_records),
             root_nodes=np.array([indexes[node.key] for node in cached], np.int64),
         ),
     )

@@ -18,7 +18,11 @@ import torch
 from torch import nn
 
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
-from manabot.sim.search.sampling_receipt import HandBatch, HandSample, PreparedHands
+from manabot.sim.search.sampling_receipt import (
+    HandBatch,
+    PreparedHands,
+    draw_hand_batch,
+)
 
 
 def _log_choose(n: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
@@ -126,16 +130,6 @@ class AutoregressiveBeliefSampler(nn.Module):
     is a treatment, not a guarantee of calibration on foreign opponents.
     """
 
-    def sample_hands(
-        self,
-        prepared: PreparedHands,
-        *,
-        count: int,
-        seed: int,
-        check: Callable[[], None],
-    ) -> HandBatch:
-        return _sample_hands(prepared, count=count, seed=seed, check=check, model=self)
-
     def __init__(
         self, schema: SamplerSchema, hidden_size: int = 64, history_dropout: float = 0.0
     ) -> None:
@@ -155,12 +149,12 @@ class AutoregressiveBeliefSampler(nn.Module):
         nn.init.zeros_(self.correction.weight)
         nn.init.zeros_(self.correction.bias)
 
-    def _run(
+    def decode(
         self,
         inputs: Sequence[SamplerInput],
         targets: torch.Tensor | None,
         generator: torch.Generator | None,
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         device = self.context.weight.device
         for row in inputs:
             row.validate(self.schema)
@@ -206,13 +200,14 @@ class AutoregressiveBeliefSampler(nn.Module):
             counts.append(count)
             remaining = remaining - count
             previous = count[:, None].float() / self.schema.max_count
-        return torch.stack(counts, dim=1) + minima if unknown is None else log_prob
+        hand = torch.stack(counts, dim=1) + minima if targets is None else targets
+        return hand, log_prob
 
     def log_prob(
         self, inputs: Sequence[SamplerInput], hand_counts: torch.Tensor
     ) -> torch.Tensor:
         """Teacher-forced joint log probabilities [B], labels [B, C]."""
-        return self._run(inputs, hand_counts, None)
+        return self.decode(inputs, hand_counts, None)[1]
 
     @torch.no_grad()
     def sample(
@@ -222,50 +217,9 @@ class AutoregressiveBeliefSampler(nn.Module):
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
         """Return legal full hand counts [B, C]; call eval() to disable dropout."""
-        return self._run(inputs, None, generator)
+        return self.decode(inputs, None, generator)[0]
 
-
-def _sample_hands(
-    prepared: PreparedHands,
-    *,
-    count: int,
-    seed: int,
-    check: Callable[[], None],
-    model: AutoregressiveBeliefSampler | None = None,
-) -> HandBatch:
-    generator = torch.Generator().manual_seed(seed)
-    samples: list[HandSample] = []
-    with torch.inference_mode():
-        for _ in range(count):
-            check()
-            rows = [prepared.inputs]
-            hand = (
-                sample_physical_deal(rows, generator=generator)
-                if model is None
-                else model.sample(rows, generator=generator)
-            )
-            probability = (
-                physical_deal_log_prob(rows, hand)
-                if model is None
-                else model.log_prob(rows, hand)
-            )
-            samples.append(
-                HandSample(
-                    tuple(
-                        (name, int(n))
-                        for name, n in zip(
-                            prepared.card_names, hand[0].tolist(), strict=True
-                        )
-                        if n
-                    ),
-                    float(probability[0]),
-                )
-            )
-            check()
-    return HandBatch(prepared, seed, tuple(samples))
-
-
-class PhysicalDistribution:
+    @torch.inference_mode()
     def sample_hands(
         self,
         prepared: PreparedHands,
@@ -274,7 +228,33 @@ class PhysicalDistribution:
         seed: int,
         check: Callable[[], None],
     ) -> HandBatch:
-        return _sample_hands(prepared, count=count, seed=seed, check=check)
+        generator = torch.Generator().manual_seed(seed)
+
+        def draw() -> tuple[list[int], float]:
+            counts, logs = self.decode([prepared.inputs], None, generator)
+            return counts[0].tolist(), float(logs[0])
+
+        return draw_hand_batch(prepared, count, seed, check, draw)
+
+
+class PhysicalDistribution:
+    @torch.inference_mode()
+    def sample_hands(
+        self,
+        prepared: PreparedHands,
+        *,
+        count: int,
+        seed: int,
+        check: Callable[[], None],
+    ) -> HandBatch:
+        inputs = [prepared.inputs]
+        generator = torch.Generator().manual_seed(seed)
+
+        def draw() -> tuple[list[int], float]:
+            counts = sample_physical_deal(inputs, generator=generator)
+            return counts[0].tolist(), float(physical_deal_log_prob(inputs, counts)[0])
+
+        return draw_hand_batch(prepared, count, seed, check, draw)
 
 
 _RECURRENT_NAMES = {

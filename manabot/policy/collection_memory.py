@@ -1,6 +1,6 @@
 """Lifetime-bound, weak cache of stable decision records for a frozen GRU policy."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol, Self
 from weakref import WeakKeyDictionary, ref
@@ -53,103 +53,77 @@ class CollectionMemory[A: CacheArray]:
         retained = retained_memory(obs)
         if retained is None:
             return {}
-        roots: dict[str, int] = {}
-        rejected = {
-            tail.key for prefix in retained.prefixes if (tail := record_tail(prefix))
-        }
-        for prefix in retained.prefixes:
-            node = record_tail(prefix)
-            while node is not None:
-                cached = self.nodes.get(node)
-                if (
-                    node.key not in rejected
-                    and cached is not None
-                    and cached.lifetime == (prefix.identity, prefix.native_epoch)
-                ):
-                    roots[node.key] = len(cached.references)
-                    break
-                rejected.add(node.key)
-                roots.pop(node.key, None)
-                node = node.previous
-        # Rejecting one root can expose another prefix's deeper candidate.
-        # Recheck only the selected suffixes until every reachable root has the
-        # serving lifetime of every prefix that uses it. Normal batches stop at
-        # the same boundary; mixed fork/reset lifetimes may remove more roots.
-        changed = True
-        while changed and roots:
-            changed = False
-            for prefix in retained.prefixes:
-                node = record_tail(prefix)
+        tails = [
+            (tail, (prefix.identity, prefix.native_epoch))
+            for prefix in retained.prefixes
+            if (tail := record_tail(prefix)) is not None
+        ]
+        rejected = {tail.key for tail, _ in tails}
+        # A root is shared by every prefix that reaches it. If a later prefix
+        # rejects an earlier selection, look past that root on the next pass.
+        while True:
+            roots: dict[str, int] = {}
+            for tail, lifetime in tails:
+                node: RecordNode | None = tail
                 while node is not None:
-                    if node.key in roots:
-                        if self.nodes[node].lifetime != (
-                            prefix.identity,
-                            prefix.native_epoch,
-                        ):
-                            del roots[node.key]
-                            changed = True
-                        else:
-                            break
+                    cached = self.nodes.get(node)
+                    if (
+                        node.key not in rejected
+                        and cached is not None
+                        and cached.lifetime == lifetime
+                    ):
+                        roots[node.key] = len(cached.references)
+                        break
+                    rejected.add(node.key)
                     node = node.previous
-        return roots
+            if roots.keys().isdisjoint(rejected):
+                return roots
 
-    def bind(self, batch: "Prepared[A]", obs: "ObservationBuffers") -> "Prepared[A]":
+    def bind(
+        self, batch: "Prepared[A]", obs: "ObservationBuffers", roots: Mapping[str, int]
+    ) -> "Prepared[A]":
+        """Attach the frozen states selected when this batch was prepared."""
         retained = retained_memory(obs)
         if retained is None or batch.memory is None or batch.memory.fold is None:
             return batch
         fold = batch.memory.fold
-        root_keys = {
-            key
-            for index, key in enumerate(fold.keys)
-            if fold.record_slices[index][0] < 0
-        }
         nodes: dict[str, RecordNode] = {}
         lifetimes: dict[str, tuple[PrefixIdentity, int | None]] = {}
+        open_keys: set[str] = set()
         for prefix in retained.prefixes:
             node = record_tail(prefix)
+            if node is not None:
+                open_keys.add(node.key)
             while node is not None and node.key not in nodes:
                 nodes[node.key] = node
                 lifetimes[node.key] = (prefix.identity, prefix.native_epoch)
-                if node.key in root_keys:
+                if node.key in roots:
                     break
                 node = node.previous
-        cached = [self.nodes[nodes[key]] for key in fold.keys if key in root_keys]
-        open_keys = {
-            tail.key for prefix in retained.prefixes if (tail := record_tail(prefix))
-        }
-        stable = {
-            node.previous.key for node in nodes.values() if node.previous is not None
-        } - open_keys
+        records = fold.serving_records
+        cached = [self.nodes[nodes[r.key]] for r in records if r.key in roots]
         pending = [
-            (i, ref(nodes[key]), lifetimes[key])
-            for i, key in enumerate(fold.keys)
-            if key in stable and key not in root_keys
-        ]
-
-        reference_slices = fold.reference_slices
-        indexes = {key: i for i, key in enumerate(fold.keys)}
-        parents = [
-            indexes[node.previous.key] if node.previous and key not in root_keys else -1
-            for key in fold.keys
-            for node in (nodes[key],)
+            (index, ref(nodes[r.key]), lifetimes[r.key])
+            for index, r in enumerate(records, start=1)
+            if r.key not in open_keys and r.key not in roots
         ]
 
         def retain(states: A, references: A) -> None:
             # Adjacent records usually introduce no snapshots. Share their
             # cumulative join instead of copying the entire reference prefix.
-            joined: list[A] = []
-            for index, (start, count) in enumerate(reference_slices):
-                parent = parents[index]
-                previous = joined[parent] if parent >= 0 else references[:0]
-                current = references[start : start + count]
-                joined.append(
-                    self.concatenate([previous, current]) if count else previous
-                )
+            joined = [references[:0]]  # State zero has no predecessor references.
+            for record in records:
+                previous = joined[record.parent]
+                if record.reference_count:
+                    start = record.reference_start
+                    current = references[start : start + record.reference_count]
+                    previous = self.concatenate([previous, current])
+                joined.append(previous)
             retained_arrays: list[A] = []
             for index, weak, lifetime in pending:
                 node = weak()
                 if node is not None:
-                    state = self.state_at(states, index + 1)
+                    state = self.state_at(states, index)
                     self.nodes[node] = CachedNode(lifetime, joined[index], state)
                     if self.materialize is not None:
                         retained_arrays.extend((joined[index], state))

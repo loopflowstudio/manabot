@@ -33,14 +33,12 @@ from manabot.backends.mlx.arrays import flat_numpy, precision_dtype, to_mlx
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.belief.encoding import BeliefCheckpointBinding, BeliefEncodingSchema
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
 from manabot.model.architecture import architecture_receipt
 from manabot.model.world import validate_policy_input
 from manabot.policy.checkpoint import (
     GRUS,
     ParameterArrays,
     PolicyCheckpoint,
-    UnsupportedPolicy,
     read_container,
     read_metadata,
     restore_value_semantic,
@@ -52,13 +50,6 @@ if TYPE_CHECKING:
     from manabot.backends.mlx.learner import Learner
     from manabot.backends.mlx.runtime import Runtime
     import managym
-
-
-def require_supported(observation: ObservationConfig) -> None:
-    if observation.policy_input_version not in (9, 10, 11):
-        raise UnsupportedPolicy(
-            f"unsupported policy_input_version={observation.policy_input_version}"
-        )
 
 
 _SEQUENCES = r"(^|\.)(projection|policy_head|value_head|mlp|detail_map|reference_map|member_map|record_output)"
@@ -152,7 +143,6 @@ def assemble(
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly. An omitted precision follows the model's
     width (`manabot.backends.mlx.arrays.default_precision`)."""
-    require_supported(checkpoint.space.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(),

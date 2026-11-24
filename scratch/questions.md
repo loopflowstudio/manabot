@@ -68,3 +68,11 @@
 - The preparation file, four unequal-length memory parity cases and both CPU
   and MPS memory warm starts passed together on Apple Silicon (36 tests in
   66.78 seconds).
+
+## Compress pass
+
+- Kept a single host record of each serving node's parent and reference slice.
+  Collection passes the selected roots to both preparation and cache binding.
+  Learning needs only the packed fold and skips the serving records.
+- Both backends record sampled hand counts and their joint log probability
+  together. Torch search uses the conditionals from the draw itself.

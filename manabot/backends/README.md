@@ -469,10 +469,8 @@ beside it, with the original file's name under `converted_from`. Every torch
 tensor becomes one parameter or buffer, or conversion fails naming the key.
 It converts any configuration and refuses a `.safetensors` input.
 
-A backend refuses what it does not implement when it loads, not when the file
-is written: the [MLX backend](mlx.md#what-the-backend-covers) supports every
-`ModelConfig` architecture Torch builds and refuses only policy input versions
-outside 9–11 (raising `UnsupportedPolicy` / `UnsupportedPolicyInput`).
+Both backends build every `ModelConfig` architecture. The shared checkpoint
+reader rejects unsupported input versions through `ObservationConfig.from_checkpoint`.
 
 ## Parity check
 

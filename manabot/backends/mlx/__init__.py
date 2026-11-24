@@ -1,5 +1,4 @@
-"""The MLX backend: the policy and its damped learner step on Apple Silicon; see
-../mlx.md.
+"""The MLX backend: policy inference, learning and belief sampling on Apple Silicon.
 
 Requires the optional `mlx` extra. It is the only manabot package that imports
 MLX, and no other manabot module imports it. The updates take this module as

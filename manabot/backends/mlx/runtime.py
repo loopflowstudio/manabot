@@ -10,7 +10,6 @@ import mlx.core as mx
 from mlx.utils import tree_flatten
 
 from manabot.backends.mlx.arrays import all_finite, mlx_device, training_precision
-from manabot.backends.mlx.checkpoint import require_supported
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.env.observation import ObservationSpace
@@ -121,7 +120,6 @@ class Runtime:
                 f"self-play precision {precision} differs from MLX policy precision {self.precision}"
             )
         effective = requested or self.precision
-        require_supported(space.config)
         if pretrained is None:
             layout = Layout(fresh_readings(space))
             catalog = fresh_policy_tables(space, config)

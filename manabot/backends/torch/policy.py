@@ -1281,20 +1281,18 @@ class PolicyInference:
         self.check(self.agent)
         if any(not isinstance(value, np.ndarray) for value in obs.values()):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(
-            obs,
-            inference=True,
-            memory_roots=self.memory.roots(obs)
+        roots = (
+            self.memory.roots(obs)
             if self.agent.config.decision_memory == "gru"
-            else None,
+            else None
         )
+        batch = self.agent.prepare(obs, inference=True, memory_roots=roots)
         if self.cache_catalog:
             batch = replace(batch, programs=None)
         moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
-        return replace(
-            self.memory.bind(moved, obs),
-            guard=self._forward_check,
-        )
+        if roots is not None:
+            moved = self.memory.bind(moved, obs, roots)
+        return replace(moved, guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------

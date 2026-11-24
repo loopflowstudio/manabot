@@ -1,7 +1,7 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
 `MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
-module, for the policies admitted by `require_supported`.
+module.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
@@ -1143,15 +1143,9 @@ class MLXActorCritic(nn.Module):
             restored[index] = encoded_objects
             return restored.reshape(shape)
         if columns is not None:
-            # Restore the original coordinates; unused columns are zero.
-            positions = np.zeros(count, dtype=np.int64)
-            positions[columns] = np.arange(len(columns))
-            used = np.zeros(count, dtype=np.float32)
-            used[columns] = 1
-            encoded_objects = (
-                mx.take(encoded_objects, mx.array(positions), axis=1)
-                * self._floating(used)[None, :, None]
-            )
+            restored = mx.zeros((shape[0], count, shape[-1]), encoded_objects.dtype)
+            restored[:, mx.array(columns)] = encoded_objects
+            return restored
         return encoded_objects
 
     def _value_from_objects(self, encoded: mx.array, validity: mx.array) -> mx.array:
@@ -1418,12 +1412,11 @@ class PolicyInference:
         self._check()
         if self.agent.config.decision_memory != "gru":
             return self.agent.prepare(obs, inference=True)
-        batch = self.agent.prepare(
-            obs, inference=True, memory_roots=self.memory.roots(obs)
-        )
+        roots = self.memory.roots(obs)
+        batch = self.agent.prepare(obs, inference=True, memory_roots=roots)
         # Routes stay NumPy. Only the optional serving states, references and
         # result sink on the fold use the backend array type.
-        bound = self.memory.bind(cast(Prepared[mx.array], batch), obs)
+        bound = self.memory.bind(cast(Prepared[mx.array], batch), obs, roots)
         return replace(cast(Prepared[np.ndarray], bound), guard=self.check_forward)
 
     def check_forward(self, agent: object) -> None:

@@ -222,10 +222,8 @@ belief samplers (`PK\x03\x04`) naming the Torch backend; Torch keeps a legacy
 
 ### Architecture mirror and execution
 
-`require_supported` checks only that `policy_input_version` is 9–11; no
-`ModelConfig` architecture is refused. The modules under `manabot/backends/mlx/` mirror the
-PyTorch model one to one, so a parameter path in MLX names the same component as
-in the torch state dict:
+Both backends use the input versions admitted by `ObservationConfig`. Each MLX
+parameter path names the corresponding component in the Torch state dict.
 
 - object embeddings, perspective vector and optional belief rows;
 - the catalog GRU or `card_definitions` embedding, and catalog or hashed fact
@@ -266,15 +264,14 @@ Every canonical parameter maps to MLX arrays, or loading fails naming the key.
 
 ## Learner
 
-The backend carries no loss of its own. `manabot.backends.mlx.rl` implements the
+Both updates use the shared training objectives. `manabot.backends.mlx.rl` implements the
 full `RL` surface (`UpdateBackend`), including scalar and categorical WDL critic
 terms (`categorical_lambda_returns`, `categorical_value_loss`,
 `outcome_probabilities`, `expected_outcome`) and PPO standardization
 (`standardized_advantages`). `manabot.backends.mlx.learner.Learner`
 differentiates whatever loss closure an update hands it, clips the global
 gradient norm and applies Adam (eps 1e-5, bias correction). Both maintained
-updates run on MLX unchanged, using the shared one-ahead host prefetch in
-`AdmittedRows`:
+updates run on MLX. PPO prefetches one host batch ahead in `AdmittedRows`.
 
 ```python
 import numpy as np

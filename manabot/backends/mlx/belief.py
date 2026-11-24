@@ -18,7 +18,11 @@ import numpy as np
 from manabot.backends.mlx.arrays import flat_numpy
 from manabot.backends.mlx.gru import PackedGRU
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
-from manabot.sim.search.sampling_receipt import HandBatch, HandSample, PreparedHands
+from manabot.sim.search.sampling_receipt import (
+    HandBatch,
+    PreparedHands,
+    draw_hand_batch,
+)
 
 
 @dataclass(frozen=True)
@@ -176,39 +180,13 @@ class AutoregressiveBeliefSampler(nn.Module):
         seed: int,
         check: Callable[[], None],
     ) -> HandBatch:
-        return draw_hands(prepared, count, seed, check, self.draw)
+        rng = np.random.default_rng(seed)
 
+        def draw() -> tuple[list[int], float]:
+            counts, logs = self.draw([prepared.inputs], rng)
+            return counts[0].tolist(), float(logs[0])
 
-def draw_hands(
-    prepared: PreparedHands,
-    count: int,
-    seed: int,
-    check: Callable[[], None],
-    draw: Callable[
-        [Sequence[SamplerInput], np.random.Generator], tuple[np.ndarray, np.ndarray]
-    ],
-) -> HandBatch:
-    rng = np.random.default_rng(seed)
-    samples = []
-    for _ in range(count):
-        check()
-        hand, logs = draw([prepared.inputs], rng)
-        cards = tuple(
-            (name, int(n))
-            for name, n in zip(prepared.card_names, hand[0], strict=True)
-            if n
-        )
-        samples.append(HandSample(cards, float(logs[0])))
-        check()
-    return HandBatch(prepared, seed, tuple(samples))
-
-
-def draw_physical(
-    inputs: Sequence[SamplerInput], rng: np.random.Generator
-) -> tuple[np.ndarray, np.ndarray]:
-    deals = PhysicalDeals.from_inputs(inputs)
-    counts = deals.sample(rng)
-    return counts, deals.log_prob(counts)
+        return draw_hand_batch(prepared, count, seed, check, draw)
 
 
 class PhysicalDistribution:
@@ -220,7 +198,14 @@ class PhysicalDistribution:
         seed: int,
         check: Callable[[], None],
     ) -> HandBatch:
-        return draw_hands(prepared, count, seed, check, draw_physical)
+        rng = np.random.default_rng(seed)
+        deals = PhysicalDeals.from_inputs([prepared.inputs])
+
+        def draw() -> tuple[list[int], float]:
+            counts = deals.sample(rng)
+            return counts[0].tolist(), float(deals.log_prob(counts)[0])
+
+        return draw_hand_batch(prepared, count, seed, check, draw)
 
 
 def decode_legacy_sampler(data: bytes) -> dict[str, Any]:
