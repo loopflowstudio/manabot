@@ -109,13 +109,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         resume=True,
     ) as run:
         learner, ema = loop.create(settings, seed=run.seed)
-        objects: dict[str, object] = {
-            "learner": learner.agent,
-            "optimizer": learner.optimizer,
-        }
-        if ema is not None:
-            objects["ema"] = ema
-        counts = run.resume(**objects, extra=Counts())
+        counts, _ = loop.resume_training(
+            settings, run, loop.default_backend(), learner, ema
+        )
         assert counts.updates == 2 and counts.optimizer_updates > 0
         assert counts.training_seconds > 0 and learner.optimizer.state
         saved = load_checkpoint(final.with_name("00000002-raw.safetensors"))[
@@ -174,16 +170,32 @@ def test_resume_refuses_changed_model_settings(
     with recording(
         experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
-        self_play(settings, run, updates=1)
+        if legacy_state:
+            learner, ema = loop.create(settings, seed=run.seed)
+            counts = Counts()
+            loop.publish(settings, run, learner, ema, counts)
+            objects = {"learner": learner.agent, "optimizer": learner.optimizer}
+            if ema is not None:
+                objects["ema"] = ema
+            counts.readings = loop.resume_readings(
+                counts, learner.agent.readings, learner.agent.observation_space
+            )
+            run.resume(**objects, extra=counts)
+            for update in run.steps("updates", to=1):
+                counts.updates = update
+                run.log({}, **loop.clocks(counts))
+                run.save()
+        else:
+            self_play(settings, run, updates=1)
     (state,) = (out / "state").glob("save-*/state.json")
     saved = json.loads(state.read_text())
-    assert saved["extra"]["model"] == settings.model.checkpoint_payload()
     initial = out / "policies/00000000-raw.safetensors"
     assert "model" not in load_metadata(initial)["bc"]["counts"]
     if legacy_state:
         del saved["extra"]["model"]
         state.write_text(json.dumps(saved))
     else:
+        assert saved["extra"]["model"] == settings.model.checkpoint_payload()
         initial.unlink()  # A run with recorded settings is self-contained.
     changed = settings.model_copy(
         update={"model": settings.model.model_copy(update={field: True})}
@@ -525,12 +537,7 @@ def test_combat_probe_cadence_and_training_state(
         ) as run:
             learner, ema = loop.create(config, seed=SEED)
             assert ema is not None
-            run.resume(
-                learner=learner.agent,
-                optimizer=learner.optimizer,
-                ema=ema,
-                extra=Counts(),
-            )
+            loop.resume_training(config, run, loop.default_backend(), learner, ema)
             states.append(
                 (
                     learner.agent.state_dict(),

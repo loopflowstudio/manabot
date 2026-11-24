@@ -240,8 +240,11 @@ Etude `af71c109` via a temporary uv source; Slice 4 swaps to the PyPI pin once
 5. Legacy Torch object-registration fixture (`learner.pt`/`optimizer.pt`/`ema.pt`)
    resumes on Torch (next save writes canonical layout) and refuses with the
    actionable message on MLX.
-6. Torch CPU safe-stop matches uninterrupted Torch CPU bit-for-bit across
-   `continuation.json`, `learner.safetensors`, and `sampling.safetensors`.
+6. Torch CPU safe-stop matches uninterrupted Torch CPU byte-for-byte for
+   `continuation.json` and `sampling.safetensors`. Compare every learner tensor,
+   parameter clock and manifest field exactly except `counts_sha256`: verify
+   that digest against each arm's own counts, which include measured training
+   seconds. Compare the remaining counts exactly.
 
 Plus updated existing tests:
 - `tests/training/test_mlx_continuation.py`
@@ -263,16 +266,8 @@ files (`state.json`, `continuation.json`, `learner.safetensors`,
 ## Slices
 
 1. **Built (`fa2c52e493`) — portable learner, EMA and Adam hooks** (`policy_arrays`, `policy_buffers`, `load_policy_arrays`, `adam_state`, `load_adam`, `AdamState`/`admit_adam` in `training/state/optimizer.py`; MLX custom `Adam` with per-leaf `lag`). `tests/training/test_portable_adam.py` passed on CPU: Torch→Torch exact, Torch↔MLX next update within float32 tolerance. Torch `load_adam` returns 0 (native per-parameter steps); MLX returns the number of lagged parameters.
-2. **Next — unified continuation & loop wiring.** Add `export_continuation` and
-   `restore_continuation` in `manabot/training/state/continuation.py`, sampling
-   hooks + `restore_legacy` in both backends, update `Continuation` in
-   `training/state/backend.py`, wire `run.resume(export=, restore=, extra=)`
-   in `manabot/training/loops/self_play.py`, remove `training.safetensors` and
-   `etude.train.state.read_state` from `backends/mlx/state.py`. Update
-   `test_mlx_continuation.py`, `test_self_play_loop.py`,
-   `test_snapshot_rollouts.py`, and `test_numerical_health.py` to pass against
-   the 4-file canonical layout.
-3. **Cross-backend, cross-device, Torch safe-stop, and legacy tests + docs.**
+2. **Built — unified continuation and loop wiring.** Both backends write the four-file layout, validate before tensor installation, recover native streams and restore or reseed sampling. The bounded tracked fixture continued Torch → MLX and MLX → Torch at update 2. The SDK's versioned storage listing is also required for reading those runs in the training-time report.
+3. **Next — cross-backend, cross-device, Torch safe-stop, and legacy acceptance tests + docs.**
    Add `tests/training/test_cross_backend_continuation.py` (acceptance 1–6) and
    verify docs against the implementation. Verify `tests/test_package_boundaries.py`.
 4. **Etude 0.4.6 pin** once released; drop the temporary uv source.

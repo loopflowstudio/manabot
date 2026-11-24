@@ -209,8 +209,9 @@ work (an executor, trainer, manager, runner or collector) is the shape to
 avoid; write the loop as a function whose body shows each step
 (`manabot/training/loops/self_play.py`:
 `row = step(settings, learner, ema, collector, counts, rng, out=run.out)`).
-That step updates the registered learner, EMA and counters in place because
-Etude saves those same objects through `run.resume`.
+That step updates the learner, EMA and counters in place. Etude restores the
+registered counts before calling the self-play restore callback. Register the
+live exporter with `run.save(export=...)` once the collector has opened.
 
 Where classes are valuable here, with the examples to copy:
 

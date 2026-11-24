@@ -333,17 +333,8 @@ def self_play(
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
-        counts = run.resume(extra=Counts())
-        saved_model = counts.model
-        if saved_model is None and counts.updates > 0:
-            initial = run.out / "policies/00000000-raw.safetensors"
-            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
-        model = resume_model(saved_model, settings.model)
-        readings = resume_readings(counts, learner.agent.readings, learner.agent.observation_space)
-        staged = state.restore(run, learner, ema, counts)
-        counts.model = model
-        counts.readings = readings
-        host = staged.host if staged is not None else None
+        counts, restored = resume_training(settings, run, backend, learner, ema)
+        host = restored.host
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         with self_play_games(
             settings, run, counts, backend=backend,
@@ -363,16 +354,18 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
-            if staged is not None:
-                if host is not None:
-                    restore_host_rng(host, rng)
-                    staged.restore_sampling(collector.numerics)
+            if host is not None:
+                restore_host_rng(host, rng)
+            if restored.sampling is not None:
+                state.restore_sampling(collector.numerics, restored.sampling)
 
-                def export(folder: Path) -> None:
-                    host_sha256 = write_host(folder, capture_host(collector, rng))
-                    staged.export(folder, host_sha256, collector.numerics)
+            def export(folder: Path) -> None:
+                export_continuation(
+                    folder, backend_name=backend.name, state=state, learner=learner,
+                    ema=ema, counts=counts, settings=settings, collector=collector, rng=rng,
+                )
 
-                run.save(export=export)
+            run.save(export=export)
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
                 if kind is not None:
@@ -400,9 +393,9 @@ Etude owns the committed state directory and decides when to stop.
 | --- | --- |
 | `track(clocks=, config=)` | The run. Leaving the block finishes the attempt: as stopped when the block raised `Stopped`, as failed on any other exception. |
 | `run.seed` | This run's seed. |
-| `run.resume(**objects, extra=)` | Registers what the run keeps, anything with `state_dict()` and `load_state_dict()`, and loads the last save into it. `extra` is a Pydantic model for the loop's own numbers, here `Counts`; it comes back with the saved values loaded, or as given on a fresh run, and Etude saves that object as it stands, so the loop changes its fields in place. |
+| `run.resume(export=, restore=, extra=)` | Registers the callbacks and `Counts`. Etude fills the supplied counts before calling restore with the selected save folder. A fresh run keeps the initial counts. |
 | `run.steps("updates", to=)` | Counts from the resumed update to the target: the launch's (`--until`) or else `to`. When a stop is asked for or the deadline is near, the current pass finishes and the next raises `Stopped`, so the lines after the loop run only when the target was reached. |
-| `run.save()` | Called every pass. Etude writes the registered objects when a save is due and always on the last pass before a stop; each save is a new folder that `current.json` names only once it is complete, so the next attempt loads weights, Adam and EMA from one save. |
+| `run.save()` | Called every pass. Etude calls the registered exporter when a save is due and always on the last pass before a stop; each save is a new folder that `current.json` names only once it is complete, so the next attempt loads weights, Adam and EMA from one save. |
 | `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `learner_transitions` and `training_seconds` (`clocks(counts)`). |
 | `run.checkpoint(path)` | Publishes an immutable policy with where every clock stood. Evaluations, reports and other runs read these. |
 | `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
@@ -418,7 +411,7 @@ The pieces that are manabot's:
 | `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision and `checkpoint_every`. A Pydantic model holding data only; everything the loop does with it is a function. A recipe builds one in its body (`elemental_self_play()`). |
 | `create(settings, seed=)` | A `Learner` (model and Adam) with fresh weights from `seed`, and the EMA as a copy, or `None` when the learning record keeps none. `run.resume` then loads a saved run over them. |
 | `Counts` | Cumulative work across every attempt: completed updates, `training_seconds`, games, decisions, learner transitions and optimizer calls. A Pydantic model, saved in each save's `state.json`. |
-| `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
+| `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. On portable resume it reconstructs committed stream roots and action prefixes. Fresh streams use the run seed and starting update. |
 | `step(settings, learner, ema, collector, counts, rng, out=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the metric row. The learner, Adam, EMA and `counts` are updated in place. |
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
 | `publish(settings, run, learner, ema, counts)` | Writes raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
@@ -1211,8 +1204,8 @@ buffers fails when the saved state loads.
 
 ### What resume does not promise
 
-- **Exact resume mid-collection.** Games in progress at an interruption are
-  abandoned, not rebuilt from their action prefix. The executor's current-game
+- **Exact resume mid-collection.** Resume reconstructs games from their committed action prefixes at the last
+  saved update. Work during the interrupted update repeats. The executor's current-game
   recovery (`RecoveryPolicy`) and exact CPU process recovery
   (`recovery_max_microsteps`, `--resume-from`) are not available; the frozen
   regimes that declare them (`elemental-long-183-v1`, `elemental-two-seat-181-v1`,
