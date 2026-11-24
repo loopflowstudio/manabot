@@ -887,6 +887,57 @@ fn clone_of_either_cecil_face_is_single_faced() {
     assert_eq!(permanent(&s, back).transforms, 0);
 }
 
+/// A transformed token copy of Cecil shows the Paladin while its copy effect
+/// names the front face. Under closed decklists, with the copied Cecil back
+/// in its owner's hand, an opponent whose own deck has no Cecil still gets
+/// both definitions in its capture.
+#[test]
+fn a_transformed_cecil_token_copy_captures_its_copied_definition() {
+    use crate::support::game::deck;
+    use managym::{
+        cards::content_pack::default_content_pack,
+        state::{game_object::Target, player::DecklistDisclosure},
+    };
+    let mut s = Scenario::new(
+        deck(&[
+            ("Island", 32),
+            ("Cecil, Dark Knight", 4),
+            ("Ember Island Production", 4),
+        ]),
+        deck(&[("Plains", 40)]),
+        161,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().scenario_clear_hand(PlayerId(0));
+    s.game_mut().state.disclosure = DecklistDisclosure::Closed;
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    // Mode 0 makes a nonlegendary Hero copy, which survives the legend rule.
+    s.set_player_mana_pool(0, "3UU");
+    cast(&mut s, "Ember Island Production");
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert!(s.choose_target(Target::Permanent(cecil)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let token = s
+        .battlefield_permanents_named(0, "Cecil, Dark Knight")
+        .into_iter()
+        .find(|id| *id != cecil)
+        .expect("token copy");
+    let original = permanent(&s, cecil).object;
+    move_card(&mut s, original, ZoneType::Hand);
+    s.game_mut().transform_permanent(token);
+    assert_eq!(shown(&s, token).name, "Cecil, Redeemed Paladin");
+    s.pass_priority();
+    let viewer = s.action_space().player.unwrap();
+    assert_eq!(viewer, PlayerId(1));
+    let capture = s.game().capture_decision(viewer, 0).unwrap();
+    let content = default_content_pack();
+    for name in ["Cecil, Dark Knight", "Cecil, Redeemed Paladin"] {
+        let id = content.definition_id(name).unwrap();
+        assert!(capture.definitions.contains_key(&id.0), "{name}");
+    }
+}
+
 #[test]
 fn copied_cecil_tokens_transform_with_their_exceptions_once() {
     use managym::{cards::content_pack::default_content_pack, state::game_object::Target};
