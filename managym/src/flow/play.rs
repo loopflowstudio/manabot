@@ -1695,7 +1695,6 @@ impl Game {
         let source_object = self
             .permanent_object(permanent_id)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
-        let attached = permanent.attached_to;
         let source_transforms = permanent.transforms;
         let source_definition_id = self.state[source_object].definition_id;
         let inherited_from = self.inherited_definition_id(permanent_id);
@@ -1737,7 +1736,6 @@ impl Game {
             source_object,
             ability_index,
             targets,
-            attached,
             x,
             granted_by: ability.granted_by,
             paid: PaymentReceipt::default(),
@@ -1775,7 +1773,6 @@ impl Game {
             source_object,
             ability_index,
             targets,
-            attached: None,
             x: 0,
             granted_by: None,
             paid: PaymentReceipt::default(),

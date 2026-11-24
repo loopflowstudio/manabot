@@ -5,12 +5,15 @@ use managym_state::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        moment_of_craving(),
+        moment_of_triumph(),
         zetalpa_primal_dawn(),
         swab_goblin(),
         gleaming_barrier(),
@@ -145,6 +148,52 @@ fn zetalpa_primal_dawn() -> CardDefinition {
                 Keyword::Trample,
                 Keyword::DoubleStrike,
             ]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn moment_of_craving() -> CardDefinition {
+    let text_box = "Target creature gets -2/-2 until end of turn. You gain 2 life.";
+    CardDefinition {
+        key: "rix.moment_of_craving",
+        scryfall_id: "c0e3ea55-162d-4466-ba4e-b938a0845fb5",
+        printed: PrintedCharacteristics {
+            name: "Moment of Craving".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(-2, -2),
+                ),
+                Effect::gain_life(2),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn moment_of_triumph() -> CardDefinition {
+    let text_box = "Target creature gets +2/+2 until end of turn. You gain 2 life.";
+    CardDefinition {
+        key: "rix.moment_of_triumph",
+        scryfall_id: "08be8c18-eca3-4960-b174-e4a78579ed63",
+        printed: PrintedCharacteristics {
+            name: "Moment of Triumph".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(2, 2),
+                ),
+                Effect::gain_life(2),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

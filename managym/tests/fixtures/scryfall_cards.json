@@ -8454,5 +8454,326 @@
     ],
     "oracle_text": "Landfall — Whenever a land you control enters, equipped creature gets +2/+2 until end of turn.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
     "colors": []
+  },
+  "Valorous Stance": {
+    "name": "Valorous Stance",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Target creature gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)\n• Destroy target creature with toughness 4 or greater.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Boros Charm": {
+    "name": "Boros Charm",
+    "mana_cost": "{R}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Boros Charm deals 4 damage to target player or planeswalker.\n• Permanents you control gain indestructible until end of turn.\n• Target creature gains double strike until end of turn.",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Preposterous Proportions": {
+    "name": "Preposterous Proportions",
+    "mana_cost": "{5}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Fleeting Distraction": {
+    "name": "Fleeting Distraction",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets -1/-0 until end of turn.\nDraw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Crash Through": {
+    "name": "Crash Through",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nDraw a card.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Joust Through": {
+    "name": "Joust Through",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Joust Through deals 3 damage to target attacking or blocking creature. You gain 1 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Uncharted Voyage": {
+    "name": "Uncharted Voyage",
+    "mana_cost": "{3}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Target creature's owner puts it on their choice of the top or bottom of their library.\nSurveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sure Strike": {
+    "name": "Sure Strike",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +3/+0 and gains first strike until end of turn. (It deals combat damage before creatures without first strike.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Boltwave": {
+    "name": "Boltwave",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Boltwave deals 3 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Seismic Rupture": {
+    "name": "Seismic Rupture",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Seismic Rupture deals 2 damage to each creature without flying.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Offer Immortality": {
+    "name": "Offer Immortality",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gains deathtouch and indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Kindled Fury": {
+    "name": "Kindled Fury",
+    "mana_cost": "{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +1/+0 and gains first strike until end of turn. (It deals combat damage before creatures without first strike.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Moment of Triumph": {
+    "name": "Moment of Triumph",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +2/+2 until end of turn. You gain 2 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Quick Study": {
+    "name": "Quick Study",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw two cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Zombify": {
+    "name": "Zombify",
+    "mana_cost": "{3}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return target creature card from your graveyard to the battlefield.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Deathmark": {
+    "name": "Deathmark",
+    "mana_cost": "{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target green or white creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Opt": {
+    "name": "Opt",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\nDraw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Faebloom Trick": {
+    "name": "Faebloom Trick",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create two 1/1 blue Faerie creature tokens with flying. When you do, tap target creature an opponent controls.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Hero's Downfall": {
+    "name": "Hero's Downfall",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target creature or planeswalker.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Deadly Riposte": {
+    "name": "Deadly Riposte",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Deadly Riposte deals 3 damage to target tapped creature and you gain 2 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Bake into a Pie": {
+    "name": "Bake into a Pie",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "Destroy target creature. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Devout Decree": {
+    "name": "Devout Decree",
+    "mana_cost": "{1}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "Exile target creature or planeswalker that's black or red. Scry 1. (Look at the top card of your library. You may put that card on the bottom.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Unsummon": {
+    "name": "Unsummon",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return target creature to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Refute": {
+    "name": "Refute",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target spell. Draw a card, then discard a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Adamant Will": {
+    "name": "Adamant Will",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +2/+2 and gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Moment of Craving": {
+    "name": "Moment of Craving",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets -2/-2 until end of turn. You gain 2 life.",
+    "colors": [
+      "B"
+    ]
   }
 }

@@ -69,3 +69,13 @@ fn printed_creature_zetalpa_primal_dawn() {
         ],
     );
 }
+
+#[test]
+fn foundations_5e_moment_of_craving() {
+    crate::assert_targeted_pump("Moment of Craving", "Hill Giant", 1, (1, 1), &[], 2, 0);
+}
+
+#[test]
+fn foundations_5e_moment_of_triumph() {
+    crate::assert_targeted_pump("Moment of Triumph", "Gray Ogre", 0, (4, 4), &[], 2, 0);
+}

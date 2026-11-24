@@ -1,9 +1,9 @@
 //! The Brothers' War.
 use managym_state::{
     ability::{
-        Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd, Effect,
-        EffectValue, ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+        ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes, Keyword,
@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        deadly_riposte(),
         bushwhack(),
         cityscape_leveler(),
         giant_cindermaw(),
@@ -175,11 +176,11 @@ fn bushwhack() -> CardDefinition {
             types: CardTypes::new([CardType::Sorcery]),
             spell_effects: vec![Effect::Modal {
                 modes: vec![
-                    vec![Effect::SearchDistinctNames {
-                        predicate: CardPredicate::basic_land(),
-                        count: 1,
-                        end: DistinctSearchEnd::Hand,
-                    }],
+                    vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        1.into(),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    )],
                     vec![
                         Effect::TargetClause {
                             requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
@@ -194,6 +195,34 @@ fn bushwhack() -> CardDefinition {
                     ],
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn deadly_riposte() -> CardDefinition {
+    let text_box = "Deadly Riposte deals 3 damage to target tapped creature and you gain 2 life.";
+    CardDefinition {
+        key: "bro.deadly_riposte",
+        scryfall_id: "38eca0ae-d400-4afb-9a45-7100f4cd7149",
+        printed: PrintedCharacteristics {
+            name: "Deadly Riposte".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(
+                    3,
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            tapped: true,
+                            ..CardPredicate::creature()
+                        },
+                    }),
+                ),
+                Effect::gain_life(2),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

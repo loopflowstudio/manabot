@@ -169,3 +169,34 @@ fn foundations_grant_empyrean_eagle() {
     move_card(&mut s, card, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(ally).pt(), base);
 }
+
+#[test]
+fn foundations_5e_devout_decree() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, offered_targets, zone_of};
+    use crate::support::play::{cast, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::{PlayerId, Target};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&[
+        "Devout Decree",
+        "Typhoid Rats",
+        "Gray Ogre",
+        "Savannah Lions",
+    ]);
+    let rats = s.force_permanent_on_battlefield(1, "Typhoid Rats");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let lions = s.force_permanent_on_battlefield(1, "Savannah Lions");
+    let card = card_of(&s, rats);
+    cast(&mut s, "Devout Decree");
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(rats)));
+    assert!(offers.contains(&Target::Permanent(ogre)));
+    assert!(!offers.contains(&Target::Permanent(lions)));
+    assert!(s.choose_target(Target::Permanent(rats)));
+    crate::finish_spending(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    settle(&mut s);
+}

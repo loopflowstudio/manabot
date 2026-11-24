@@ -330,12 +330,6 @@ impl Game {
             Vec::new()
         };
         let requirements = crate::state::ability::effect_target_requirements(&effects);
-        // The object an Aura or Equipment was attached to as the ability was
-        // activated (last known information once the source has left).
-        let attached = ability
-            .attached
-            .and_then(|object| self.lookup_current_permanent(object).ok())
-            .map(Target::Permanent);
         let Some(targets) = self.resolution_targets(
             &ability.targets,
             &ability.target_req_indices,
@@ -359,7 +353,6 @@ impl Game {
             x: ability.x,
             spent: ability.paid,
             targets,
-            context_target: attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
             ..EffectFrame::new(
                 ability.controller,
@@ -1392,18 +1385,33 @@ impl Game {
                     end: *end,
                 })
             }
-            Effect::OwnerPutsIntoLibrary { .. } => {
+            Effect::OwnerPutsIntoLibrary { target, top } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
                 let object_id = self.state.permanents[id].as_ref()?.object;
-                Some(Decision::Modal {
-                    player: self.state[object_id].owner,
-                    modes: [true, false]
+                let modes = if *top {
+                    [
+                        crate::state::ability::LibraryEnd::Top,
+                        crate::state::ability::LibraryEnd::Bottom,
+                    ]
+                    .map(|end| {
+                        vec![Effect::put_in_library(
+                            ObjectSelector::Target(target.clone()),
+                            end,
+                        )]
+                    })
+                    .to_vec()
+                } else {
+                    [true, false]
                         .map(|second_from_top| {
                             vec![Effect::PlaceTargetInLibrary { second_from_top }]
                         })
-                        .to_vec(),
+                        .to_vec()
+                };
+                Some(Decision::Modal {
+                    player: self.state[object_id].owner,
+                    modes,
                 })
             }
             Effect::PlaceTargetInLibrary { second_from_top } => {
@@ -2463,7 +2471,9 @@ impl Game {
             // the player, theirs included (CR 702.16b, 702.16j).
             Target::Player(player) if self.has_protection_from_everything(player) => false,
             Target::Player(player) => match spec {
-                TargetSpec::Player | TargetSpec::AnyTarget => true,
+                TargetSpec::Player | TargetSpec::AnyTarget | TargetSpec::PlayerOrPlaneswalker => {
+                    true
+                }
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
@@ -2576,6 +2586,7 @@ impl Game {
                 let types = &self.characteristics(id).types;
                 types.is_creature() || types.is_planeswalker() || types.is_battle()
             }
+            TargetSpec::PlayerOrPlaneswalker => self.characteristics(id).types.is_planeswalker(),
             TargetSpec::Creature => self.characteristics(id).is_creature(),
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature()

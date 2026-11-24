@@ -111,7 +111,6 @@ fn stack(
                 ability_index: 0,
                 targets,
                 target_req_indices: Vec::new(),
-                attached: None,
                 x: 0,
                 granted_by: None,
                 paid: Default::default(),

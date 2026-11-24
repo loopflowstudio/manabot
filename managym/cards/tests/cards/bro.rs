@@ -161,15 +161,25 @@ fn foundations_5d_bushwhack() {
     let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let enemy = s.force_permanent_on_battlefield(1, "Hill Giant");
     cast(&mut s, "Bushwhack");
+    assert!(crate::support::inspect::mode_labels(&s)[1].contains("fights"));
     let mut search = s.clone();
     choose_mode(&mut search, 0);
     pass_until(&mut search, ActionSpaceKind::LookAndSelect);
     assert_eq!(search.action_space().player, Some(PlayerId(0)));
     let forest = library_card(&search, 0, "Forest");
     assert!(!offered_cards(&search).contains(&library_card(&search, 0, "Gray Ogre")));
+    let definition = search.game().state[forest].definition_id;
     select_card(&mut search, forest);
     settle(&mut search);
     assert_eq!(zone_of(&search, forest), Some(ZoneType::Hand));
+    assert!(search.game().state.events.iter().any(|event| matches!(
+        event,
+        managym::flow::event::GameEvent::CardRevealed { definition: shown, .. } if *shown == definition
+    )));
+    assert_eq!(
+        search.game().state.players[0].known_hand.get(&definition),
+        Some(&1)
+    );
     choose_mode(&mut s, 1);
     assert!(!offered_targets(&s).contains(&Target::Permanent(enemy)));
     assert!(s.choose_target(Target::Permanent(ally)));
@@ -179,4 +189,28 @@ fn foundations_5d_bushwhack() {
     settle(&mut s);
     assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
     assert_eq!(permanent(&s, enemy).damage, 2);
+}
+
+#[test]
+fn foundations_5e_deadly_riposte() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, offered_targets, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Deadly Riposte", "Gray Ogre"]);
+    let untapped = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let tapped = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().state.permanents[tapped]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let card = card_of(&s, tapped);
+    cast(&mut s, "Deadly Riposte");
+    assert_eq!(offered_targets(&s), [Target::Permanent(tapped)]);
+    assert!(s.choose_target(Target::Permanent(tapped)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+    assert!(s.game().state.permanents[untapped].is_some());
+    assert_eq!(s.life(0), 22);
 }

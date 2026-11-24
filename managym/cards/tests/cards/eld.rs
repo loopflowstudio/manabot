@@ -255,3 +255,21 @@ fn printed_creature_raging_redcap() {
     use managym::state::card::Keyword;
     crate::printed_creature_combat("Raging Redcap", 1, 2, &[Keyword::DoubleStrike]);
 }
+
+#[test]
+fn foundations_5e_bake_into_a_pie() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Bake into a Pie", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Bake into a Pie");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+    assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
+    assert!(s.battlefield_permanents_named(1, "Food").is_empty());
+}

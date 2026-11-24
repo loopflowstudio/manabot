@@ -694,26 +694,29 @@ impl Game {
                 match &event {
                     ProposedEvent::ZoneMove {
                         object_id,
-                        from: Some(ZoneType::Graveyard | ZoneType::Library),
+                        from: Some(from @ (ZoneType::Graveyard | ZoneType::Library)),
                         to: ZoneType::Hand,
                         ..
                     } => Some((
                         self.state.entry_object(*object_id).owner,
                         self.state.entry_object(*object_id).definition_id,
+                        *from == ZoneType::Library,
                     )),
                     _ => None,
                 }
             } else {
                 None
             };
-            let known_before = reveal.map(|(owner, definition)| {
+            let known_before = reveal.map(|(owner, definition, _)| {
                 self.state.players[owner.0]
                     .known_hand
                     .get(&definition)
                     .copied()
                     .unwrap_or(0)
             });
-            if let Some((owner, definition)) = reveal {
+            // A card from a hidden zone is revealed; a public graveyard card
+            // is already known and only enters the owner's known hand.
+            if let Some((owner, definition, true)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
             let committed =
@@ -740,7 +743,7 @@ impl Game {
                         self.put_on_bottom_of_library(object_id);
                     }
                 }
-                if let Some((owner, definition)) = reveal {
+                if let Some((owner, definition, _)) = reveal {
                     self.set_known_hand_count(
                         owner,
                         definition,

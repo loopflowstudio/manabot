@@ -150,6 +150,16 @@ impl Game {
                     ))
                 ))
             }
+            Action::ChooseMode { mode, .. }
+                if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
+            {
+                let Some(PendingChoice::SpellMode { object, .. }) = &self.pending_choice else {
+                    unreachable!()
+                };
+                Some(crate::agent::ability_description::effects_description(
+                    self.state[*object].spell_modes()?.get(*mode)?,
+                ))
+            }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
                 let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
                 let modes = self.unchosen_trigger_modes(trigger)?;
@@ -233,7 +243,9 @@ impl Game {
                         [Effect::RemoveCounters {
                             chosen: Some(kind), ..
                         }] => Some(format!("Remove a {} counter", counter_description(*kind))),
-                        _ => None,
+                        effects => Some(crate::agent::ability_description::effects_description(
+                            effects,
+                        )),
                     },
                     _ => None,
                 }

@@ -95,6 +95,12 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Variant, "TriggerSubject::Another", None),
     (Variant, "TriggerSubject::AnotherYouControl", None),
     (Variant, "TriggerSubject::AnyYouControl", None),
+    // Auras and Equipment share one attachment subject.
+    (
+        Variant,
+        "TriggerSubject::EnchantedCreature",
+        Some("TriggerSubject::Attached"),
+    ),
     (Field, "abilities", None),
     (Field, "controller_only", None),
     (Field, "opponent_picks", Some("picks")),

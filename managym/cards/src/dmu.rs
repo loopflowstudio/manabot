@@ -1,8 +1,8 @@
 //! Dominaria United.
 use managym_state::{
     ability::{
-        Ability, Actor, DistinctSearchEnd, Effect, ObjectSelector, PaymentCost, Scope, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, Effect, ObjectSelector, PaymentCost, Scope, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -165,15 +165,15 @@ fn micromancer() -> CardDefinition {
                 TriggerSubject::This,
                 vec![Effect::Modal {
                     modes: vec![
-                        vec![Effect::SearchDistinctNames {
-                            predicate: CardPredicate {
+                        vec![Effect::search_library(
+                            CardPredicate {
                                 min_mana_value: Some(1),
                                 max_mana_value: Some(1),
                                 ..CardPredicate::instant_or_sorcery()
                             },
-                            count: 1,
-                            end: DistinctSearchEnd::Hand,
-                        }],
+                            1.into(),
+                            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        )],
                         vec![],
                     ],
                 }],

@@ -486,10 +486,9 @@ pub enum TriggerSubject {
     ThisOr(Box<TriggerSubject>),
     /// The permanent this ability is on.
     This,
-    /// "enchanted creature": the object the source Aura is attached to.
-    EnchantedCreature,
-    /// The creature this Equipment is attached to.
-    EquippedCreature,
+    /// "enchanted creature" or "equipped creature": the object the source
+    /// Aura or Equipment is attached to.
+    Attached,
     /// "a/another [predicate] [controlled_by controls]": an object whose
     /// controller is `controlled_by`, relative to the ability's controller.
     /// `another` excludes the source itself (CR 109.4).
@@ -1160,10 +1159,13 @@ pub enum Effect {
     },
     /// Shuffle your graveyard into your library.
     ShuffleGraveyardIntoLibrary,
-    /// The target's owner chooses second from the top of their library or
-    /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
+    /// The target's owner chooses where in their library it goes: second
+    /// from the top or the bottom (modes of [`Effect::PlaceTargetInLibrary`]),
+    /// or with `top`, the top or the bottom.
     OwnerPutsIntoLibrary {
         target: TargetSpec,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        top: bool,
     },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
@@ -1541,6 +1543,8 @@ pub enum TargetSpec {
     Creature,
     /// Creature, player, planeswalker or battle (CR 115.4).
     AnyTarget,
+    /// "target player or planeswalker".
+    PlayerOrPlaneswalker,
     Spell,
     /// "target spell or ability with a single target".
     SpellOrAbilityWithSingleTarget,
@@ -1811,7 +1815,7 @@ impl Effect {
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
-            | Effect::OwnerPutsIntoLibrary { target }
+            | Effect::OwnerPutsIntoLibrary { target, .. }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {

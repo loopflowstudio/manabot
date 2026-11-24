@@ -12,6 +12,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        unsummon(),
         giant_growth(),
         disenchant(),
         fire_elemental(),
@@ -518,6 +519,25 @@ fn giant_growth() -> CardDefinition {
                 Modification::pump(3, 3),
             )],
             text_box: "Target creature gets +3/+3 until end of turn.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn unsummon() -> CardDefinition {
+    let text_box = "Return target creature to its owner's hand.";
+    CardDefinition {
+        key: "lea.unsummon",
+        scryfall_id: "8512f2c1-6361-4b79-843f-80b6bceeeb99",
+        printed: PrintedCharacteristics {
+            name: "Unsummon".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                TargetSpec::Creature,
+            ))],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

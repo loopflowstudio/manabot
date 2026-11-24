@@ -308,7 +308,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     // state. Definition ids depend on the name-ordered catalog.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v19:36d548172024d53757946d5c175d5557b18d4d907a4b2571b3175d6239cf24e0"
+        "v19:9ab8df435f772eaa7bdfadb7c92530df1875dbb6ccc50e53833e3a63f015e1b7"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();
@@ -363,4 +363,19 @@ fn foundations_spell_giant_growth() {
     assert_eq!(s.game().characteristics(subject).pt(), (6, 6));
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().characteristics(subject).pt(), (3, 3));
+}
+
+#[test]
+fn foundations_5e_unsummon() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, hand, now};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Unsummon", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Unsummon");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(hand(&s, 1).contains(&now(&s, card)));
 }

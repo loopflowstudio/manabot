@@ -11,7 +11,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![flashfreeze(), dark_depths()]
+    vec![deathmark(), flashfreeze(), dark_depths()]
 }
 
 fn dark_depths() -> CardDefinition {
@@ -71,6 +71,30 @@ fn flashfreeze() -> CardDefinition {
                 exile: false,
             }],
             text_box: "Counter target red or green spell.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn deathmark() -> CardDefinition {
+    let text_box = "Destroy target green or white creature.";
+    CardDefinition {
+        key: "csp.deathmark",
+        scryfall_id: "e72e8728-d0a0-4ee5-87c3-092ca94225e0",
+        printed: PrintedCharacteristics {
+            name: "Deathmark".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Green, Color::White],
+                        ..CardPredicate::creature()
+                    },
+                },
+            ))],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

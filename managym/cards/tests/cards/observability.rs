@@ -954,6 +954,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::ShuffleLibrary,
         Effect::ShuffleGraveyardIntoLibrary,
         Effect::OwnerPutsIntoLibrary {
+            top: false,
             target: TargetSpec::Permanent {
                 predicate: CardPredicate {
                     card_types_any: vec![CardType::Creature, CardType::Enchantment],
@@ -2170,10 +2171,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             .iter()
             .map(|action| format!("KeywordAction::{action:?}")),
     );
-    for subject in [
-        TriggerSubject::EnchantedCreature,
-        TriggerSubject::EquippedCreature,
-    ] {
+    for subject in [TriggerSubject::Attached] {
         expected.push(format!("TriggerSubject::{subject:?}"));
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject,

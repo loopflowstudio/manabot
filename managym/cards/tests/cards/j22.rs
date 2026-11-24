@@ -101,6 +101,7 @@ fn foundations_spell_deadly_plot() {
     let zombie_card = card_of(&s, zombie);
     let grave = move_card(&mut s, zombie_card, ZoneType::Graveyard);
     cast(&mut s, "Deadly Plot");
+    assert!(crate::support::inspect::mode_labels(&s)[1].contains("Zombie creature card"));
     choose_mode(&mut s, 0);
     assert!(s.choose_target(Target::Permanent(subject)));
     settle(&mut s);

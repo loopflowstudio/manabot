@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fleeting_distraction(),
         battle_rattle_shaman(),
         evolving_wilds(),
         prophetic_prism(),
@@ -134,6 +135,29 @@ fn battle_rattle_shaman() -> CardDefinition {
                     }],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fleeting_distraction() -> CardDefinition {
+    let text_box = "Target creature gets -1/-0 until end of turn.\nDraw a card.";
+    CardDefinition {
+        key: "roe.fleeting_distraction",
+        scryfall_id: "ed843c4d-28b5-4a4c-8bae-8f03f329bf2b",
+        printed: PrintedCharacteristics {
+            name: "Fleeting Distraction".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(-1, 0),
+                ),
+                Effect::DrawCards { count: 1.into() },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

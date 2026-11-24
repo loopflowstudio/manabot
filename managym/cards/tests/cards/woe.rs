@@ -219,3 +219,15 @@ fn mocking_sprite_reduces_only_instant_and_sorcery_spells() {
     settle(&mut s);
     s.assert_life(1, 17);
 }
+
+#[test]
+fn foundations_5e_quick_study() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::hand;
+    use crate::support::play::{cast, settle};
+    let mut s = five_color_setup(&["Quick Study"]);
+    let before = hand(&s, 0).len();
+    cast(&mut s, "Quick Study");
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 2);
+}

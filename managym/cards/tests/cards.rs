@@ -152,6 +152,8 @@ mod observability;
 mod ody;
 #[path = "cards/ogw.rs"]
 mod ogw;
+#[path = "cards/one.rs"]
+mod one;
 #[path = "cards/ons.rs"]
 mod ons;
 #[path = "cards/ori.rs"]
@@ -440,11 +442,81 @@ fn assert_draw_then_discard(
     }
 }
 
+/// Casts `spell` at `creature` (controlled by `controller`) and checks the
+/// until-end-of-turn result: power and toughness `pt`, the `granted`
+/// keywords, `life` gained and `drawn` cards. The creature is its printed self
+/// again on the next turn.
+fn assert_targeted_pump(
+    spell: &str,
+    creature: &str,
+    controller: usize,
+    pt: (i32, i32),
+    granted: &[managym::state::card::Keyword],
+    life: i32,
+    drawn: usize,
+) {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{hand, keywords};
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+
+    let mut s = five_color_setup(&[spell, creature]);
+    let subject = s.force_permanent_on_battlefield(controller, creature);
+    let printed = s.game().characteristics(subject).pt();
+    let (life_before, hand_before) = (s.life(0), hand(&s, 0).len());
+    cast(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), pt, "{spell}");
+    assert!(
+        granted.iter().all(|k| keywords(&s, subject).has(*k)),
+        "{spell}"
+    );
+    assert_eq!(s.life(0), life_before + life, "{spell}");
+    assert_eq!(hand(&s, 0).len(), hand_before + drawn, "{spell}");
+    if s.game().state.permanents[subject].is_some() {
+        s.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(s.game().characteristics(subject).pt(), printed, "{spell}");
+        assert!(
+            granted.iter().all(|k| !keywords(&s, subject).has(*k)),
+            "{spell}"
+        );
+    }
+}
+
+/// Completes a pending native spending decision with its first offers.
+fn finish_spending(s: &mut support::game::Scenario) {
+    use managym::flow::decision::Decision;
+    while matches!(
+        s.game()
+            .state
+            .suspended_decision
+            .as_ref()
+            .map(|pending| &pending.decision),
+        Some(Decision::ManaSpend { .. })
+    ) {
+        s.step_action(0);
+    }
+}
+
+/// Makes the permanent a planeswalker: the catalog defines none, so target
+/// legality is checked on a constructed one.
+fn make_planeswalker(
+    s: &mut support::game::Scenario,
+    id: managym::state::game_object::PermanentId,
+) {
+    use managym::state::card::{CardType, CardTypes};
+    let object = s.game().state.permanents[id].as_ref().unwrap().object;
+    s.game_mut().state[object].types = CardTypes::new([CardType::Planeswalker]);
+}
+
 fn assert_optional_revealed_search(name: &str, eligible: &[&str], excluded: &[&str]) {
     use crate::support::game::{five_color_setup, put_onto_battlefield};
     use crate::support::inspect::{library, offered_cards, zone_of};
     use crate::support::play::{choose_mode, fork_selecting, pass_until, settle};
     use managym::agent::action::ActionSpaceKind;
+    use managym::flow::event::GameEvent;
     use managym::state::game_object::PlayerId;
     use managym::state::zone::ZoneType;
 
@@ -471,14 +543,35 @@ fn assert_optional_revealed_search(name: &str, eligible: &[&str], excluded: &[&s
             .find(|id| s.game().state[**id].name == *name)
             .unwrap();
         let definition = s.game().state[chosen].definition_id;
+        let event_cursor = s.game().state.events.len();
         let mut fork = fork_selecting(&s, chosen);
         settle(&mut fork);
         assert_eq!(zone_of(&fork, chosen), Some(ZoneType::Hand));
+        assert!(fork.game().state.events.iter().skip(event_cursor).any(|event| matches!(
+            event,
+            GameEvent::CardRevealed { owner: PlayerId(0), definition: shown } if *shown == definition
+        )));
         assert_eq!(
             fork.game().state.players[0].known_hand.get(&definition),
             Some(&1)
         );
     }
+
+    // Finding nothing still shuffles, without asking for a choice.
+    let mut deck = vec![name];
+    deck.extend_from_slice(excluded);
+    let mut s = five_color_setup(&deck);
+    put_onto_battlefield(&mut s, 0, name);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let mut order = library(&s, 0);
+    choose_mode(&mut s, 0);
+    assert_ne!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    settle(&mut s);
+    let mut shuffled = library(&s, 0);
+    assert_ne!(shuffled, order);
+    order.sort();
+    shuffled.sort();
+    assert_eq!(shuffled, order);
 }
 
 fn assert_required_library_search(name: &str, destination: managym::state::zone::ZoneType) {

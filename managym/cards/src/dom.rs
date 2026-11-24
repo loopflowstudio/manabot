@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        adamant_will(),
         ghitu_lavarunner(),
         lyra_dawnbringer(),
         tatyova_benthic_druid(),
@@ -134,6 +135,32 @@ fn ghitu_lavarunner() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
                 ],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn adamant_will() -> CardDefinition {
+    let text_box = "Target creature gets +2/+2 and gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)";
+    CardDefinition {
+        key: "dom.adamant_will",
+        scryfall_id: "3dfb8817-ca3c-44ba-92f2-e9d6294cd25d",
+        printed: PrintedCharacteristics {
+            name: "Adamant Will".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(2, 2),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

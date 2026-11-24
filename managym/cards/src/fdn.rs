@@ -2,7 +2,8 @@
 use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
-        PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
@@ -17,6 +18,12 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        boltwave(),
+        faebloom_trick(),
+        joust_through(),
+        preposterous_proportions(),
+        refute(),
+        uncharted_voyage(),
         strix_lookout(),
         icewind_elemental(),
         rune_sealed_wall(),
@@ -1041,6 +1048,152 @@ fn strix_lookout() -> CardDefinition {
                 effects: vec![Effect::DrawCards { count: 1.into() }, Effect::discard()],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn boltwave() -> CardDefinition {
+    let text_box = "Boltwave deals 3 damage to each opponent.";
+    CardDefinition {
+        key: "fdn.boltwave",
+        scryfall_id: "8d1ec351-5e70-4eb2-b590-6bff94ef8178",
+        printed: PrintedCharacteristics {
+            name: "Boltwave".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::DealDamageToPlayer {
+                player: PlayerSelector::EachOpponent,
+                amount: 3.into(),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn faebloom_trick() -> CardDefinition {
+    let text_box = "Create two 1/1 blue Faerie creature tokens with flying. When you do, tap target creature an opponent controls.";
+    CardDefinition {
+        key: "fdn.faebloom_trick",
+        scryfall_id: "0c3bee8f-f5be-4404-a696-c902637799c3",
+        printed: PrintedCharacteristics {
+            name: "Faebloom Trick".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::create_tokens("token.faerie_1_1_u_flying", 2),
+                Effect::WhenYouDo {
+                    effects: vec![Effect::tap(ObjectSelector::Target(
+                        TargetSpec::CreatureOpponentControls,
+                    ))],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn joust_through() -> CardDefinition {
+    let text_box =
+        "Joust Through deals 3 damage to target attacking or blocking creature. You gain 1 life.";
+    CardDefinition {
+        key: "fdn.joust_through",
+        scryfall_id: "846adb38-f9bb-4fed-b8ed-36ec7885f989",
+        printed: PrintedCharacteristics {
+            name: "Joust Through".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(
+                    3,
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            in_combat: true,
+                            ..CardPredicate::creature()
+                        },
+                    }),
+                ),
+                Effect::gain_life(1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn preposterous_proportions() -> CardDefinition {
+    let text_box = "Creatures you control get +10/+10 and gain vigilance until end of turn.";
+    CardDefinition {
+        key: "fdn.preposterous_proportions",
+        scryfall_id: "acb65189-60e4-42e0-9fb1-da6b716b91d7",
+        printed: PrintedCharacteristics {
+            name: "Preposterous Proportions".into(),
+            mana_cost: Some(ManaCost::parse("{5}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::pump(10, 10),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Vigilance])),
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn refute() -> CardDefinition {
+    let text_box = "Counter target spell. Draw a card, then discard a card.";
+    CardDefinition {
+        key: "fdn.refute",
+        scryfall_id: "38806934-dd9c-4ad4-a59c-a16dce03a14a",
+        printed: PrintedCharacteristics {
+            name: "Refute".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::CounterSpell {
+                    what: ObjectSelector::Target(TargetSpec::Spell),
+                    exile: false,
+                },
+                Effect::DrawCards { count: 1.into() },
+                Effect::discard(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn uncharted_voyage() -> CardDefinition {
+    let text_box = "Target creature's owner puts it on their choice of the top or bottom of their library.\nSurveil 1. (Look at the top card of your library. You may put it into your graveyard.)";
+    CardDefinition {
+        key: "fdn.uncharted_voyage",
+        scryfall_id: "e0846820-e595-4743-8a28-29c57d728677",
+        printed: PrintedCharacteristics {
+            name: "Uncharted Voyage".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::OwnerPutsIntoLibrary {
+                    target: TargetSpec::Creature,
+                    top: true,
+                },
+                Effect::Surveil { count: 1 },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

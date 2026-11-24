@@ -657,6 +657,7 @@ fn foundations_5d_battle_rattle_shaman() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     pass_until(&mut s, ActionSpaceKind::Modal);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(crate::support::inspect::mode_labels(&s)[0].contains("+2/+0"));
     for (mode, power) in [(0, 4), (1, 2)] {
         let mut branch = s.clone();
         choose_mode(&mut branch, mode);
@@ -665,4 +666,9 @@ fn foundations_5d_battle_rattle_shaman() {
         branch.advance_to_active_step(1, StepKind::Main);
         assert_eq!(branch.game().characteristics(ogre).power, 2);
     }
+}
+
+#[test]
+fn foundations_5e_fleeting_distraction() {
+    crate::assert_targeted_pump("Fleeting Distraction", "Gray Ogre", 1, (1, 2), &[], 0, 1);
 }

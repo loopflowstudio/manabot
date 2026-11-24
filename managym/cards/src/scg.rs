@@ -1,7 +1,7 @@
 //! Scourge.
 
 use managym_state::{
-    ability::{Ability, DistinctSearchEnd, Effect, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -27,14 +27,14 @@ fn fierce_empath() -> CardDefinition {
                 TriggerSubject::This,
                 vec![Effect::Modal {
                     modes: vec![
-                        vec![Effect::SearchDistinctNames {
-                            predicate: CardPredicate {
+                        vec![Effect::search_library(
+                            CardPredicate {
                                 min_mana_value: Some(6),
                                 ..CardPredicate::creature()
                             },
-                            count: 1,
-                            end: DistinctSearchEnd::Hand,
-                        }],
+                            1.into(),
+                            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        )],
                         vec![],
                     ],
                 }],

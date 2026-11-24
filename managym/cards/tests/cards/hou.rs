@@ -43,3 +43,20 @@ fn foundations_permanent_firebrand_archer() {
     s.assert_life(1, 18);
     s.assert_life(0, 20);
 }
+
+#[test]
+fn foundations_5e_crash_through() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{hand, keywords};
+    use crate::support::play::{cast, settle};
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Crash Through", "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let before = hand(&s, 0).len();
+    cast(&mut s, "Crash Through");
+    settle(&mut s);
+    assert!(keywords(&s, ours).has(Keyword::Trample));
+    assert!(!keywords(&s, theirs).has(Keyword::Trample));
+    assert_eq!(hand(&s, 0).len(), before + 1);
+}

@@ -161,3 +161,31 @@ fn impact_tremors_triggers_for_each_goblin() {
         }
     }
 }
+
+#[test]
+fn foundations_5e_seismic_rupture() {
+    use crate::support::game::{five_color_setup, until_end_of_turn};
+    use crate::support::inspect::{card_of, permanent, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::card::{Keyword, Keywords};
+    use managym::state::effect::Modification;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Seismic Rupture", "Gray Ogre", "Hill Giant", "Wind Drake"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    // A creature that gained flying is a creature with flying.
+    let lifted = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        lifted,
+        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+    );
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Seismic Rupture");
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Graveyard));
+    assert_eq!(permanent(&s, giant).damage, 2);
+    assert_eq!(permanent(&s, drake).damage, 0);
+    assert_eq!(permanent(&s, lifted).damage, 0);
+}

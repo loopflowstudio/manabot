@@ -54,6 +54,10 @@ fn foundations_5d_solemn_simulacrum() {
     let golem = put_onto_battlefield(&mut s, 0, "Solemn Simulacrum");
     pass_until(&mut s, ActionSpaceKind::Modal);
     let order = library(&s, 0);
+    assert_eq!(
+        crate::support::inspect::mode_labels(&s),
+        ["Search your library", "Decline"]
+    );
     let mut decline = s.clone();
     choose_mode(&mut decline, 1);
     settle(&mut decline);
@@ -71,6 +75,10 @@ fn foundations_5d_solemn_simulacrum() {
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::Modal);
     let top = library_top(&s, 0);
+    assert_eq!(
+        crate::support::inspect::mode_labels(&s),
+        ["Draw 1 cards", "Decline"]
+    );
     let mut keep = s.clone();
     choose_mode(&mut keep, 1);
     settle(&mut keep);

@@ -44,6 +44,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         soldier_1_1_w(),
         elf_warrior_1_1_g(),
         insect_1_1_bg_flying(),
+        faerie_1_1_u_flying(),
         zombie_2_2_b(),
         dog_1_1_w(),
         beast_3_3_g(),
@@ -516,6 +517,22 @@ fn insect_1_1_bg_flying() -> TokenDefinition {
                 1,
                 1,
                 [Color::Black, Color::Green],
+            )
+        },
+    )
+}
+
+fn faerie_1_1_u_flying() -> TokenDefinition {
+    token(
+        "token.faerie_1_1_u_flying",
+        "bcd82cb0-ff4b-4f4d-b3d0-3ac53883b099",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(
+                face("Faerie", [CardType::Creature], &["Faerie"], "Flying"),
+                1,
+                1,
+                [Color::Blue],
             )
         },
     )

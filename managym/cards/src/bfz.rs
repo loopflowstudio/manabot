@@ -2,15 +2,21 @@
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
-        PrintedCharacteristics, SacrificeCost,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        ManaAbility, PrintedCharacteristics, SacrificeCost,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![felidar_cub(), hedron_archive(), vampiric_rites()]
+    vec![
+        sure_strike(),
+        felidar_cub(),
+        hedron_archive(),
+        vampiric_rites(),
+    ]
 }
 
 fn felidar_cub() -> CardDefinition {
@@ -96,6 +102,32 @@ fn vampiric_rites() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sure_strike() -> CardDefinition {
+    let text_box = "Target creature gets +3/+0 and gains first strike until end of turn. (It deals combat damage before creatures without first strike.)";
+    CardDefinition {
+        key: "bfz.sure_strike",
+        scryfall_id: "074dd176-4608-42ca-8fc3-c7040cd7b32e",
+        printed: PrintedCharacteristics {
+            name: "Sure Strike".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(3, 0),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

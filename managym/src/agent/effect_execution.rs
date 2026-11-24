@@ -44,7 +44,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "after selection",
     "applied replacements",
     "attach to",
-    "attached at activation",
     "batch",
     "bind moved",
     "bind result",
@@ -467,9 +466,6 @@ impl<'a> Projection<'a> {
                 self.effects("captured activation", &ability.effects);
                 for target in &ability.targets {
                     self.target("target", *target);
-                }
-                if let Some(object) = ability.attached {
-                    self.object("attached at activation", object);
                 }
                 if let Some(grant) = ability.granted_by {
                     self.object("grantor", grant.grantor);

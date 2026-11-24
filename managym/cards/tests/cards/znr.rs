@@ -83,6 +83,7 @@ fn foundations_5d_crawling_barrens() {
     activate(&mut s, id, 0);
     pass_until(&mut s, ActionSpaceKind::Modal);
     assert_eq!(counters(&s, id), 2);
+    assert!(crate::support::inspect::mode_labels(&s)[0].contains("becomes a creature"));
     let mut decline = s.clone();
     choose_mode(&mut decline, 1);
     settle(&mut decline);

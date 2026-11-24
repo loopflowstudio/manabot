@@ -1227,7 +1227,7 @@ fn avatar_destiny() -> CardDefinition {
             ],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::EnchantedCreature,
+                    subject: TriggerSubject::Attached,
                 },
                 intervening_if: None,
                 effects: vec![
@@ -6261,6 +6261,7 @@ fn lost_days() -> CardDefinition {
             subtypes: vec!["Lesson".into()],
             spell_effects: vec![
                 Effect::OwnerPutsIntoLibrary {
+                    top: false,
                     target: TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Creature, CardType::Enchantment],

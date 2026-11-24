@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        seismic_rupture(),
         clone_legion(),
         dragonlords_servant(),
         impact_tremors(),
@@ -108,6 +109,32 @@ fn impact_tremors() -> CardDefinition {
                 vec![Effect::DealDamageToPlayer { player: PlayerSelector::EachOpponent, amount: 1.into() }],
             )],
             text_box: "Whenever a creature you control enters, this enchantment deals 1 damage to each opponent.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn seismic_rupture() -> CardDefinition {
+    let text_box = "Seismic Rupture deals 2 damage to each creature without flying.";
+    CardDefinition {
+        key: "dtk.seismic_rupture",
+        scryfall_id: "9b952e4e-c1ed-4455-90d5-46b56478e6b0",
+        printed: PrintedCharacteristics {
+            name: "Seismic Rupture".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::deal_damage(
+                2,
+                ObjectSelector::each(
+                    Scope::Battlefield,
+                    CardPredicate {
+                        not_flying: true,
+                        ..CardPredicate::creature()
+                    },
+                ),
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

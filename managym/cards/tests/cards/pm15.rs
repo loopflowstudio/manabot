@@ -29,6 +29,7 @@ fn foundations_5d_reclamation_sage() {
         assert!(!branch.game().state.stack_objects.is_empty());
         pass_until(&mut branch, ActionSpaceKind::Modal);
         assert_eq!(branch.action_space().player, Some(PlayerId(0)));
+        assert!(crate::support::inspect::mode_labels(&branch)[0].starts_with("Destroy target"));
         for (mode, dest) in [(0, ZoneType::Graveyard), (1, ZoneType::Battlefield)] {
             let mut fork = branch.clone();
             choose_mode(&mut fork, mode);

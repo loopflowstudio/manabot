@@ -38,3 +38,7 @@ Use the 15 explicitly named Batch 5c permanents as the review cohort. Fork Soul-
 Batch 5d uses the 38 cards named in the plan. Reclamation Sage's Magic 2015 promo released July 17, 2014, one day before the core set printing, so its first-printing module is pm15.
 
 Use two friendly Gray Ogres and one opposing Gray Ogre for the six unconditional attachment grants. The second friendly creature distinguishes a wearer-only grant from a controller-wide grant.
+
+Batch 5e follows Scryfall's earliest non-digital printing for each set file (Opt in INV, Offer Immortality in a new ONE module). Planeswalker target legality uses a permanent retyped in the test, since no planeswalker card is defined.
+
+Mode labels now come from `effects_description` when no idiomatic label exists. Some generated text is rough ("Draw 1 cards", Bushwhack's empty first clause, Crawling Barrens' "This object"); improving the shared description templates is left for a text pass.

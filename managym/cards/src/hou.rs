@@ -3,12 +3,13 @@ use managym_state::{
     ability::{
         Ability, Actor, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerCondition,
     },
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![firebrand_archer(), abrade()]
+    vec![crash_through(), firebrand_archer(), abrade()]
 }
 
 fn abrade() -> CardDefinition {
@@ -65,6 +66,29 @@ fn firebrand_archer() -> CardDefinition {
                     amount: 1.into(),
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crash_through() -> CardDefinition {
+    let text_box = "Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nDraw a card.";
+    CardDefinition {
+        key: "hou.crash_through",
+        scryfall_id: "4bdaba76-b98d-4699-9a5f-e59285b09552",
+        printed: PrintedCharacteristics {
+            name: "Crash Through".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                ),
+                Effect::DrawCards { count: 1.into() },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

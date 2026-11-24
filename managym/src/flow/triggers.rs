@@ -808,7 +808,10 @@ impl Game {
                     .map(Target::GraveyardCard)
                     .collect()
             }
-            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
+            TargetSpec::Player
+            | TargetSpec::Opponent
+            | TargetSpec::AnyTarget
+            | TargetSpec::PlayerOrPlaneswalker => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
@@ -850,6 +853,7 @@ impl Game {
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget
+                | TargetSpec::PlayerOrPlaneswalker
                 | TargetSpec::CreatureYouControl
                 | TargetSpec::CreatureOpponentControls
                 | TargetSpec::LandYouControl
@@ -2206,7 +2210,7 @@ impl Game {
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => self
+            TriggerSubject::Attached => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
@@ -2238,7 +2242,7 @@ impl Game {
                     )
             }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => {
+            TriggerSubject::Attached => {
                 self.state
                     .permanent_of(source_object)
                     .and_then(|source| self.attached_permanent(source))

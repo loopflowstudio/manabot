@@ -213,7 +213,7 @@ fn goldvein_pick() -> CardDefinition {
             )],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
-                    subject: TriggerSubject::EquippedCreature,
+                    subject: TriggerSubject::Attached,
                     to: Actor::AnyPlayer,
                     per: Per::Object,
                 },

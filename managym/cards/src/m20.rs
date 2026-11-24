@@ -9,12 +9,13 @@ use managym_state::{
         PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::{EffectDuration, Modification},
-    mana::ManaCost,
+    mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        devout_decree(),
         empyrean_eagle(),
         rapacious_dragon(),
         agent_of_treachery(),
@@ -164,6 +165,31 @@ fn empyrean_eagle() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Flying]),
             text_box: "Flying\nOther creatures you control with flying get +1/+1.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn devout_decree() -> CardDefinition {
+    let text_box = "Exile target creature or planeswalker that's black or red. Scry 1. (Look at the top card of your library. You may put that card on the bottom.)";
+    CardDefinition {
+        key: "m20.devout_decree",
+        scryfall_id: "2dcde8fe-d4a4-4c6e-926e-c4a1b45045e4",
+        printed: PrintedCharacteristics {
+            name: "Devout Decree".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Black, Color::Red],
+                        ..CardPredicate::creature_or_planeswalker()
+                    },
+                })),
+                Effect::Scry { count: 1 },
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

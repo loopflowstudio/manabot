@@ -145,10 +145,10 @@ impl ReadSet {
         if !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying || p.deathtouch {
+        if p.flying || p.not_flying || p.deathtouch {
             self.fields |= KEYWORDS;
         }
-        if p.min_power.is_some() || p.max_power.is_some() {
+        if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
             self.fields |= POWER;
         }
         self.tapped |= p.tapped;
@@ -1228,6 +1228,7 @@ pub(super) fn matches_view(
         && (!p.namesake || source_name == Some(view.name.as_str()))
         && (!p.deathtouch || view.keywords.has(Keyword::Deathtouch))
         && (!p.flying || view.keywords.has(Keyword::Flying))
+        && (!p.not_flying || !view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))
         && (!p.with_counter || permanent.counter_count(CounterKind::PlusOnePlusOne) > 0)
@@ -1264,6 +1265,8 @@ pub(super) fn matches_view(
         && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
         && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
         && p.min_power.is_none_or(|min| view.power >= min)
+        && p.min_toughness
+            .is_none_or(|min| view.toughness >= i32::from(min))
         && p.max_power.is_none_or(|max| view.power <= max)
         && p.min_mana_value.is_none_or(|min| mana_value >= min)
         && p.max_mana_value.is_none_or(|max| mana_value <= max)

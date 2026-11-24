@@ -5519,6 +5519,30 @@ fn watery_grasp_holds_a_creature_tapped_then_shuffles_it_away() {
     assert_eq!(zone_of(&s, grasp_card), Some(ZoneType::Graveyard));
 }
 
+/// CR 608.2h: "enchanted creature" is read as the ability resolves. Watery
+/// Grasp moved to another creature after activation shuffles that creature,
+/// not the one it enchanted when activated.
+#[test]
+fn watery_grasp_shuffles_the_creature_it_enchants_at_resolution() {
+    let mut s = five_color_unfunded_setup(&["Watery Grasp", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let grasp = enchant(&mut s, "Watery Grasp", "U", first);
+    let (first_card, second_card) = (card_of(&s, first), card_of(&s, second));
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, grasp, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let second_object = now(&s, second_card);
+    s.game_mut().state.permanents[grasp]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(second_object);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, second_card), Some(ZoneType::Library));
+    assert_eq!(zone_of(&s, first_card), Some(ZoneType::Battlefield));
+}
+
 #[test]
 fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
     let mut s = five_color_unfunded_setup(&["Swampsnare Trap", "Wind Drake", "Craw Wurm"]);

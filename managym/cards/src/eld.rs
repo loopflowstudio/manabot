@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        bake_into_a_pie(),
         raging_redcap(),
         epic_downfall(),
         fabled_passage(),
@@ -251,6 +252,26 @@ fn raging_redcap() -> CardDefinition {
             power: Some(1),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::DoubleStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bake_into_a_pie() -> CardDefinition {
+    let text_box = "Destroy target creature. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")";
+    CardDefinition {
+        key: "eld.bake_into_a_pie",
+        scryfall_id: "42a4d090-1bb7-4334-ab22-e2527391e79b",
+        printed: PrintedCharacteristics {
+            name: "Bake into a Pie".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::Target(TargetSpec::Creature)),
+                Effect::create_tokens("token.food", 1),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

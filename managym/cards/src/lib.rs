@@ -84,6 +84,7 @@ mod msh;
 mod nec;
 mod ody;
 mod ogw;
+mod one;
 mod ons;
 mod ori;
 mod p02;
@@ -223,6 +224,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     nec::cards,
     ody::cards,
     ogw::cards,
+    one::cards,
     ons::cards,
     ori::cards,
     p02::cards,
