@@ -319,6 +319,14 @@ impl Game {
             .collect()
     }
 
+    /// The permanent's label, or "That creature" once it is gone.
+    fn render_label(&self, id: ObjectRenderId) -> String {
+        self.permanent_by_render_id(id).map_or_else(
+            || "That creature".to_string(),
+            |permanent| self.label(permanent),
+        )
+    }
+
     fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
         self.state
             .permanents
@@ -341,10 +349,7 @@ impl Game {
         plan: &CombatPlan,
     ) -> Option<DeclarationRefusal> {
         let refuse = |id: ObjectRenderId, reason: &str| {
-            let label = self.permanent_by_render_id(id).map_or_else(
-                || "That creature".to_string(),
-                |permanent| self.label(permanent),
-            );
+            let label = self.render_label(id);
             Some(DeclarationRefusal {
                 creature: id,
                 reason: format!("{label} {reason}"),
@@ -379,12 +384,7 @@ impl Game {
                         let reason =
                             match declared.iter().find(|other| other.blocker == block.blocker) {
                                 Some(other) => {
-                                    let attacker =
-                                        self.permanent_by_render_id(other.attacker).map_or_else(
-                                            || "an attacker".to_string(),
-                                            |attacker| self.label(attacker),
-                                        );
-                                    format!("already blocks {attacker}.")
+                                    format!("already blocks {}.", self.render_label(other.attacker))
                                 }
                                 None => "can't block now.".to_string(),
                             };
@@ -506,12 +506,7 @@ impl Game {
         plan: &CombatPlan,
         preview: &CombatPreview,
     ) -> Option<DeclarationRefusal> {
-        let named = |id: ObjectRenderId| {
-            self.permanent_by_render_id(id).map_or_else(
-                || "That creature".to_string(),
-                |permanent| self.label(permanent),
-            )
-        };
+        let named = |id: ObjectRenderId| self.render_label(id);
         match kind {
             DeclarationKind::Attackers => {
                 // Creatures declared before this decision (a skipped
@@ -557,12 +552,12 @@ impl Game {
                 // Blocks declared before this decision (a skipped creature
                 // that must block) are not part of the plan.
                 let mut planned = plan.blocks.clone();
-                planned.extend(self.declared_blocks().into_iter().filter(|block| {
-                    !plan
-                        .blocks
-                        .iter()
-                        .any(|other| other.blocker == block.blocker)
-                }));
+                // `unaskable` admits a declared blocker only in its declared block.
+                planned.extend(
+                    self.declared_blocks()
+                        .into_iter()
+                        .filter(|block| !plan.blocks.contains(block)),
+                );
                 let missing = planned
                     .iter()
                     .find(|block| !preview.declared_blocks.contains(block));

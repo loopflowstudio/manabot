@@ -23,7 +23,7 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Resolves attachments, library choices and target legality.
   - path: managym/src/flow/proposed_event.rs
-    why: Commits replacements and reveals library cards entering hand.
+    why: Offers printed replacements and resolved shields, each with its own identity.
   - path: managym/src/flow/combat_preview.rs
     why: Keeps declarations the engine made without asking.
   - path: academy/ui/src/lib/board/combat.ts

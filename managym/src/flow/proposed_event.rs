@@ -15,8 +15,8 @@ use crate::{
     state::card::StaticAbility,
     state::{
         card::{CardDefId, ReplacementEffect},
-        effect::Modification,
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId},
+        effect::{ContinuousEffect, Modification},
+        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, PublicId},
         permanent::{CounterKind, Counters},
         zone::ZoneType,
     },
@@ -273,6 +273,10 @@ pub(crate) struct ReplacementId {
     pub(crate) source: ObjectId,
     pub(crate) definition_index: usize,
     pub(crate) static_ability: bool,
+    /// The timestamp of the resolved continuous effect that offers it
+    /// (`Fleeting Flight`'s shield); absent for a printed replacement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) effect: Option<PublicId>,
 }
 
 /// One replacement the affected player may apply. A printed replacement's
@@ -291,6 +295,47 @@ pub struct ReplacementCandidate {
 }
 
 impl ReplacementCandidate {
+    /// A replacement printed at `definition_index` of the source's
+    /// `replacement_effects`.
+    fn printed(source: ObjectId, definition_index: usize, effect: ReplacementEffect) -> Self {
+        Self {
+            identity: ReplacementId {
+                source,
+                definition_index,
+                static_ability: false,
+                effect: None,
+            },
+            effect,
+            source_definition: None,
+        }
+    }
+
+    /// A replacement derived from the source's static ability at
+    /// `definition_index`.
+    fn printed_static(
+        source: ObjectId,
+        definition_index: usize,
+        effect: ReplacementEffect,
+    ) -> Self {
+        let mut candidate = Self::printed(source, definition_index, effect);
+        candidate.identity.static_ability = true;
+        candidate
+    }
+
+    /// The prevention `record` places on `object`, named for its source.
+    fn shield(object: ObjectId, record: &ContinuousEffect) -> Self {
+        Self {
+            identity: ReplacementId {
+                source: object,
+                definition_index: 0,
+                static_ability: false,
+                effect: Some(record.timestamp),
+            },
+            effect: ReplacementEffect::PreventCombatDamage,
+            source_definition: record.source,
+        }
+    }
+
     pub(crate) fn source(&self) -> ObjectId {
         self.identity.source
     }
@@ -1087,15 +1132,11 @@ impl Game {
                         .enumerate()
                     {
                         if matches!(effect, ReplacementEffect::MultiplyTokens { .. }) {
-                            out.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source: self.permanent_object(id).expect("battlefield"),
-                                    definition_index,
-                                    static_ability: false,
-                                },
-                                effect: effect.clone(),
-                                source_definition: None,
-                            });
+                            out.push(ReplacementCandidate::printed(
+                                self.permanent_object(id).expect("battlefield"),
+                                definition_index,
+                                effect.clone(),
+                            ));
                         }
                     }
                 }
@@ -1165,15 +1206,11 @@ impl Game {
                             _ => false,
                         };
                         if applies {
-                            out.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source,
-                                    definition_index,
-                                    static_ability: false,
-                                },
-                                effect: effect.clone(),
-                                source_definition: None,
-                            });
+                            out.push(ReplacementCandidate::printed(
+                                source,
+                                definition_index,
+                                effect.clone(),
+                            ));
                         }
                     }
                 }
@@ -1183,19 +1220,13 @@ impl Game {
                 // abilities leaves it in place (CR 615.1).
                 if let (true, ProposedDamageTarget::Object(object)) = (*combat, *target) {
                     if let Ok(id) = self.lookup_current_permanent(object) {
-                        for effect in self.effects_on(id) {
-                            if effect.modification == Modification::PreventCombatDamage {
-                                out.push(ReplacementCandidate {
-                                    identity: ReplacementId {
-                                        source: object,
-                                        definition_index: effect.timestamp.0 as usize,
-                                        static_ability: true,
-                                    },
-                                    effect: ReplacementEffect::PreventCombatDamage,
-                                    source_definition: effect.source,
-                                });
-                            }
-                        }
+                        out.extend(
+                            self.effects_on(id)
+                                .filter(|effect| {
+                                    effect.modification == Modification::PreventCombatDamage
+                                })
+                                .map(|effect| ReplacementCandidate::shield(object, effect)),
+                        );
                     }
                 }
                 out
@@ -1240,15 +1271,11 @@ impl Game {
                             }
                             _ => return None,
                         };
-                        Some(ReplacementCandidate {
-                            identity: ReplacementId {
-                                source,
-                                definition_index,
-                                static_ability: false,
-                            },
+                        Some(ReplacementCandidate::printed(
+                            source,
+                            definition_index,
                             effect,
-                            source_definition: None,
-                        })
+                        ))
                     })
                     .collect();
                 // Keep own replacements before battlefield grants. Borrow the
@@ -1273,15 +1300,11 @@ impl Game {
                             _ => continue,
                         };
                         if self.entry_matches_predicate(*object_id, predicate) {
-                            entries.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source,
-                                    definition_index,
-                                    static_ability: true,
-                                },
-                                effect: ReplacementEffect::EntersTapped,
-                                source_definition: None,
-                            });
+                            entries.push(ReplacementCandidate::printed_static(
+                                source,
+                                definition_index,
+                                ReplacementEffect::EntersTapped,
+                            ));
                         }
                     }
                 }
@@ -1360,15 +1383,11 @@ impl Game {
                             _ => false,
                         };
                     if matches_object && matches_kind && matches_cause {
-                        candidates.push(ReplacementCandidate {
-                            identity: ReplacementId {
-                                source: self.permanent_object(id).expect("battlefield"),
-                                definition_index,
-                                static_ability: false,
-                            },
-                            effect: effect.clone(),
-                            source_definition: None,
-                        });
+                        candidates.push(ReplacementCandidate::printed(
+                            self.permanent_object(id).expect("battlefield"),
+                            definition_index,
+                            effect.clone(),
+                        ));
                     }
                 }
             }
