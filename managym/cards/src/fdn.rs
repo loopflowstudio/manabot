@@ -714,15 +714,13 @@ fn linden_the_steadfast_queen() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Vigilance]),
             abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::you_control(CardPredicate {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate {
                         colors_any: vec![Color::White],
                         ..CardPredicate::creature()
                     }),
-                    per: Per::Object,
-                    attackers: AttackSize::Any,
-                    nth: None,
-                },
+                    Per::Object,
+                ),
                 intervening_if: None,
                 effects: vec![Effect::gain_life(1)],
             }],

@@ -1129,7 +1129,7 @@ pub struct PyPlayer {
     pub keeps_red_mana: bool,
     /// What this player has done this turn.
     #[pyo3(get, set)]
-    pub turn_history: PyPlayerTurnHistory,
+    pub turn_history: PlayerTurnHistory,
     /// Spells this player cast this turn.
     #[pyo3(get, set)]
     pub spells_cast: u32,
@@ -1242,89 +1242,12 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
     }
 }
 
-/// What a player has done this turn.
-#[cfg(feature = "python")]
-#[pyclass(name = "PlayerTurnHistory")]
-#[derive(Clone, Default)]
-pub struct PyPlayerTurnHistory {
-    #[pyo3(get, set)]
-    pub attacked: bool,
-    #[pyo3(get, set)]
-    pub permanents_sacrificed: u32,
-    #[pyo3(get, set)]
-    pub land_entered: bool,
-    #[pyo3(get, set)]
-    pub cards_drawn: u32,
-    /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
-    #[pyo3(get, set)]
-    pub bent: u8,
-    /// Life lost this turn (CR 119.3).
-    #[pyo3(get, set)]
-    pub life_lost: u32,
-    #[pyo3(get, set)]
-    pub life_gains: u32,
-    #[pyo3(get, set)]
-    pub mana_spent_casting: u32,
-    #[pyo3(get, set)]
-    pub life_gained: u32,
-    #[pyo3(get, set)]
-    pub creatures_died: u32,
-    #[pyo3(get, set)]
-    pub permanents_left: u32,
-    #[pyo3(get, set)]
-    pub nonland_permanents_left: u32,
-    #[pyo3(get, set)]
-    pub warped_this_turn: bool,
-}
-
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyPlayerTurnHistory {
+impl PlayerTurnHistory {
     #[new]
     fn py_new() -> Self {
         Self::default()
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
-    fn from(value: PlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-            life_gains: value.life_gains,
-            mana_spent_casting: value.mana_spent_casting,
-            life_gained: value.life_gained,
-            creatures_died: value.creatures_died,
-            permanents_left: value.permanents_left,
-            nonland_permanents_left: value.nonland_permanents_left,
-            warped_this_turn: value.warped_this_turn,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
-    fn from(value: PyPlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-            life_gains: value.life_gains,
-            mana_spent_casting: value.mana_spent_casting,
-            life_gained: value.life_gained,
-            creatures_died: value.creatures_died,
-            permanents_left: value.permanents_left,
-            nonland_permanents_left: value.nonland_permanents_left,
-            warped_this_turn: value.warped_this_turn,
-        }
     }
 }
 
@@ -1476,7 +1399,7 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -1520,7 +1443,7 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -5547,7 +5470,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PyPooledManaClass>()?;
-    m.add_class::<PyPlayerTurnHistory>()?;
+    m.add_class::<PlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;

@@ -1817,14 +1817,17 @@ impl Default for Effect {
 
 impl Effect {
     pub fn reads_source_power(&self) -> bool {
-        let reads = |effects: &[Effect]| effects.iter().any(Self::reads_source_power);
-        if self
-            .selectors()
-            .into_iter()
-            .any(ObjectSelector::reads_source_power)
-            || self
+        let target_reads_power = match self {
+            Self::TargetClause { requirement, .. } => requirement.reads_source_power(),
+            _ => self
                 .target_spec()
-                .is_some_and(TargetSpec::reads_source_power)
+                .is_some_and(TargetSpec::reads_source_power),
+        };
+        if target_reads_power
+            || self
+                .selectors()
+                .into_iter()
+                .any(ObjectSelector::reads_source_power)
         {
             return true;
         }
@@ -1839,10 +1842,6 @@ impl Effect {
             _ => false,
         };
         match self {
-            Self::TargetClause {
-                requirement,
-                effects,
-            } => requirement.reads_source_power() || reads(effects),
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
             Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
             Self::DealDamage { amount, .. }
@@ -1859,62 +1858,46 @@ impl Effect {
             | Self::AddOneColorManaValue { amount }
             | Self::ExileUntilNonlandCastFree { below: amount }
             | Self::LookAndSelect { look: amount, .. } => amount.reads_source_power(),
-            Self::If {
-                condition,
-                then,
-                otherwise,
-            } => condition.reads_source_power() || reads(then) || reads(otherwise),
-            Self::OnNthResolutionThisTurn { effect, .. } => effect.reads_source_power(),
-            Self::ForEachTarget { effects }
-            | Self::ForPlayer { effects, .. }
-            | Self::MayOnceEachTurn { effects } => reads(effects),
-            Self::OptionalPayment {
-                if_paid,
-                if_declined,
-                ..
-            } => reads(if_paid) || reads(if_declined),
-            Self::OptionalManaPaymentX { if_paid } => reads(if_paid),
-            Self::SelectCards {
-                max,
-                effects,
-                if_declined,
-                ..
-            } => max.reads_source_power() || reads(effects) || reads(if_declined),
-            Self::Modal { modes } => modes.iter().any(|mode| reads(mode)),
-            Self::TriggerModes { modes, up_to, .. } => {
-                up_to.as_ref().is_some_and(EffectValue::reads_source_power)
-                    || modes.iter().any(|mode| reads(mode))
-            }
-            _ => false,
+            Self::If { condition, .. } if condition.reads_source_power() => true,
+            Self::SelectCards { max, .. } if max.reads_source_power() => true,
+            Self::TriggerModes {
+                up_to: Some(limit), ..
+            } if limit.reads_source_power() => true,
+            _ => self.any_child_effect(Self::reads_source_power),
         }
     }
 
     /// Whether this program reads its enclosing ability's resolution ordinal.
-    /// Delayed and reflexive triggers will be inspected when they resolve.
     pub fn reads_resolution_count(&self) -> bool {
-        let reads = |effects: &[Effect]| effects.iter().any(Self::reads_resolution_count);
+        matches!(self, Self::OnNthResolutionThisTurn { .. })
+            || self.any_child_effect(Self::reads_resolution_count)
+    }
+
+    /// Instructions within this resolution. Delayed and reflexive triggers
+    /// inspect their programs when those abilities resolve.
+    fn any_child_effect(&self, test: fn(&Effect) -> bool) -> bool {
         match self {
-            Self::OnNthResolutionThisTurn { .. } => true,
+            Self::OnNthResolutionThisTurn { effect, .. } => test(effect),
             Self::If {
                 then, otherwise, ..
-            } => reads(then) || reads(otherwise),
-            Self::OptionalPayment {
-                if_paid,
-                if_declined,
+            }
+            | Self::OptionalPayment {
+                if_paid: then,
+                if_declined: otherwise,
                 ..
-            } => reads(if_paid) || reads(if_declined),
-            Self::SelectCards {
-                effects,
-                if_declined,
+            }
+            | Self::SelectCards {
+                effects: then,
+                if_declined: otherwise,
                 ..
-            } => reads(effects) || reads(if_declined),
-            Self::OptionalManaPaymentX { if_paid } => reads(if_paid),
-            Self::ForEachTarget { effects }
+            } => then.iter().chain(otherwise).any(test),
+            Self::OptionalManaPaymentX { if_paid: effects }
+            | Self::ForEachTarget { effects }
             | Self::TargetClause { effects, .. }
             | Self::ForPlayer { effects, .. }
-            | Self::MayOnceEachTurn { effects } => reads(effects),
+            | Self::MayOnceEachTurn { effects } => effects.iter().any(test),
             Self::Modal { modes } | Self::TriggerModes { modes, .. } => {
-                modes.iter().any(|mode| reads(mode))
+                modes.iter().flatten().any(test)
             }
             _ => false,
         }

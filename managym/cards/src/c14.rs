@@ -1,12 +1,15 @@
 //! Commander 2014.
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope},
-    card::ActivatedAbilityDefinition,
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics,
+    },
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
+
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![jazal_goldmane()]
 }
@@ -33,7 +36,7 @@ fn jazal_goldmane() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}{W}{W}"),
                 effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(attacking.clone()),
+                    ObjectSelector::each_you_control(attacking),
                     Modification::ModifyPt {
                         power: count.clone(),
                         toughness: count,

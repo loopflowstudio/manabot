@@ -75,6 +75,7 @@ pub struct PlayerControl {
 /// ("if you attacked this turn", "your second card each turn"). The owner of
 /// every such fact: the turn reset, the state hash and the policy's player
 /// row all read this struct.
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]
 #[derive(
     Clone,
     Copy,

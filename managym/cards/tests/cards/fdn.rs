@@ -1763,7 +1763,10 @@ fn attack_batch_each_doubled_occurrence_keeps_its_attacker() {
         "four attack triggers".into(),
     );
     for id in ogres {
-        assert_eq!(s.game().state.stack_objects.iter().filter(|entry| matches!(entry, StackObject::TriggeredAbility(a) if a.context == Some(Target::Permanent(id)))).count(),2);
+        let triggers = s.game().state.stack_objects.iter().filter(|entry| {
+            matches!(entry, StackObject::TriggeredAbility(a) if a.context == Some(Target::Permanent(id)))
+        });
+        assert_eq!(triggers.count(), 2);
     }
     settle(&mut s);
     for id in ogres {

@@ -1508,6 +1508,9 @@ impl Observation {
         permanent: &Permanent,
         characteristics: &Characteristics,
     ) {
+        let object = permanent.object;
+        let face = game.state[object].definition_id;
+        let printed_abilities = (object, face, 0)..=(object, face, usize::MAX);
         let pdat = PermanentData {
             colors: (characteristics.colors != game.state[permanent.object].colors()).then(|| {
                 characteristics
@@ -1533,16 +1536,12 @@ impl Observation {
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
-                + game.permanent_object(perm_id).map_or(0, |object| {
-                    game.state
-                        .turn
-                        .ability_triggers_this_turn
-                        .range(
-                            (object, game.state[object].definition_id, 0)
-                                ..=(object, game.state[object].definition_id, usize::MAX),
-                        )
-                        .count()
-                })) as i32,
+                + game
+                    .state
+                    .turn
+                    .ability_triggers_this_turn
+                    .range(printed_abilities.clone())
+                    .count()) as i32,
             granted_firebending: i32::from(characteristics.firebending),
             temp_subtypes: characteristics
                 .added_subtypes
@@ -1551,12 +1550,11 @@ impl Observation {
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             is_animated: characteristics.is_animated,
-            has_exile_link: game.permanent_object(perm_id).is_some_and(|object_ref| {
-                game.state
-                    .exile_links
-                    .iter()
-                    .any(|link| link.source == object_ref)
-            }),
+            has_exile_link: game
+                .state
+                .exile_links
+                .iter()
+                .any(|link| link.source == object),
             counters: permanent
                 .counters
                 .iter()
@@ -1611,16 +1609,13 @@ impl Observation {
                 targets.sort_unstable();
                 targets
             },
-            ability_resolutions: {
-                let object = permanent.object;
-                let face = game.state.source_base(object).0;
-                game.state
-                    .turn
-                    .ability_resolutions_this_turn
-                    .range((object, face, 0)..=(object, face, usize::MAX))
-                    .map(|((_, _, index), count)| (*index, *count))
-                    .collect()
-            },
+            ability_resolutions: game
+                .state
+                .turn
+                .ability_resolutions_this_turn
+                .range(printed_abilities)
+                .map(|((_, _, index), count)| (*index, *count))
+                .collect(),
             used_abilities: characteristics
                 .activated_abilities
                 .iter()

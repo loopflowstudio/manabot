@@ -109,7 +109,6 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     let object = game.move_object(object, ZoneType::Battlefield);
     assert!(object.generation() > 0);
     let source = TriggerSourceSnapshot {
-        controller: PlayerId(0),
         lki: game.snapshot_current_permanent(object).unwrap(),
     };
     let expected = format!(
@@ -1003,7 +1002,6 @@ fn retained_departure_predicate_uses_base_after_copy_reentry() {
     let template = game.state[grantor].clone();
     game.state[object].become_copy_of(&template, &[]);
     let source = TriggerSourceSnapshot {
-        controller: PlayerId(0),
         lki: game.snapshot_current_permanent(object).unwrap(),
     };
     let graveyard = game.move_object(object, ZoneType::Graveyard);

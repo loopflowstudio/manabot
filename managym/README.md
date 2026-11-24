@@ -968,10 +968,11 @@ menace, which the engine removes once every blocker is declared).
 would finish it. During attacker selection both viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
 declaration finishes and lasts through the turn, even if those creatures leave.
-A creature that enters attacking deals combat damage normally but does not
-count toward raid or trigger abilities such as Linden’s. Each declared creature records its own attack for the turn. Aurelia triggers on
-its first declaration even if it previously entered attacking. A creature that
-leaves and returns starts a new attack history. Extra combats preserve raid
-and each creature’s history until the turn ends.
+Linden triggers for each white attacker her controller declares. With two white attackers
+and an ability that doubles her triggers, each attacker accounts for two
+occurrences. A creature that enters attacking can deal combat damage. Its
+first declaration in a later combat still counts as its first attack for
+Aurelia. Leaving and returning starts a new attack history for that creature.
+Extra combats preserve raid and each creature’s history until the turn ends.
 The same address rules as payment previews apply, and the
 call is read-only in the same way.
