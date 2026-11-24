@@ -461,7 +461,7 @@ def verify_live_run(
         )
 
 
-def report(out: Path, widths: Iterable[int]) -> str:
+def render_report(out: Path, widths: Iterable[int]) -> str:
     lines = [
         "# Mini baseline backend throughput",
         "",
@@ -582,7 +582,7 @@ def main() -> None:
         return
     widths = [args.width] if args.width else WIDTHS
     if args.command == "report":
-        print(report(args.out, widths))
+        print(render_report(args.out, widths))
     else:
         host = machine()
         for width in widths:
