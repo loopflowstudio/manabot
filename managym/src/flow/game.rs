@@ -328,6 +328,10 @@ pub struct CastChoices {
     /// Casting via flashback replaces any departure from the stack with exile.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flashback: bool,
+    /// Cast from a prepared copy: a prepared spell (Codie). Read from the
+    /// preparation grant while the copy is still in exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
     /// The caster chose or needed the printed permission to cast with flash.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flash_surcharge: bool,

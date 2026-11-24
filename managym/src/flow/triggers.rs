@@ -24,7 +24,7 @@ use crate::{
         game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         permanent::CounterKind,
-        stack_object::{StackObject, TriggeredAbilityOnStack},
+        stack_object::{SpellOnStack, StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
 };
@@ -97,6 +97,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::WasCast { condition }
         | TriggerCondition::OnceEachTurn { condition }
         | TriggerCondition::FromZone { condition, .. }
+        | TriggerCondition::Prepared { condition }
         | TriggerCondition::InGraveyard { condition }
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
@@ -1789,6 +1790,17 @@ impl Game {
                         event,
                     )
             }
+            (TriggerCondition::Prepared { condition }, GameEvent::SpellCast { object_id, .. }) => {
+                self.stack_spell(*object_id)
+                    .is_some_and(|spell| spell.from_prepared)
+                    && self.trigger_condition_fires(
+                        condition,
+                        source_object,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             (TriggerCondition::OnceEachTurn { condition }, _) => self.trigger_condition_fires(
                 condition,
                 source_object,
@@ -2063,19 +2075,22 @@ impl Game {
     fn event_origin(&self, event: &GameEvent) -> Option<ZoneType> {
         match event {
             GameEvent::SpellCast { object_id, .. } => {
-                self.state
-                    .stack_objects
-                    .iter()
-                    .find_map(|object| match object {
-                        StackObject::Spell(spell) if spell.object == *object_id => {
-                            Some(spell.cast_from)
-                        }
-                        _ => None,
-                    })
+                self.stack_spell(*object_id).map(|spell| spell.cast_from)
             }
             GameEvent::CardMoved { from, .. } => *from,
             _ => None,
         }
+    }
+
+    /// The spell `object` is on the stack.
+    fn stack_spell(&self, object: ObjectId) -> Option<&SpellOnStack> {
+        self.state
+            .stack_objects
+            .iter()
+            .find_map(|stacked| match stacked {
+                StackObject::Spell(spell) if spell.object == object => Some(spell),
+                _ => None,
+            })
     }
 
     /// How many times one event triggers a matching ability: once, except

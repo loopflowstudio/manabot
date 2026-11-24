@@ -102,6 +102,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             condition_description(condition),
             format!("{zone:?}").to_lowercase()
         ),
+        TriggerCondition::Prepared { condition } => {
+            format!("{} (a prepared spell)", condition_description(condition))
+        }
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
         }

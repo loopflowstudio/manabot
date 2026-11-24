@@ -8052,5 +8052,17 @@
     "colors": [
       "B"
     ]
+  },
+  "Codie, Ravenous Codex": {
+    "name": "Codie, Ravenous Codex",
+    "mana_cost": "{3}",
+    "type_line": "Legendary Artifact Creature — Book Construct",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "Whenever you cast a prepared spell, copy it. You may choose new targets for the copy.\n{W}{U}{B}{R}{G}, {T}: Each creature you control becomes prepared. (Only creatures with prepare spells can become prepared.)",
+    "colors": []
   }
 }

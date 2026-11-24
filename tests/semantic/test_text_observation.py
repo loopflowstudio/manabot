@@ -707,7 +707,11 @@ def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
         raise AssertionError("the owner's next main phase was not reached")
     cast = next(a for a in decision.actions if a.description.startswith("Cast "))
     alias = cast.description.removeprefix("Cast ").split(" ", 1)[0]
-    assert cast.description == f"Cast {alias} (Sozin's Comet)"
+    # A lone route still names its permission and price.
+    assert cast.description == (
+        f"Cast {alias} (Sozin's Comet). Native description: "
+        "Cast Sozin's Comet using foretell for {2}{R}"
+    )
     line = _card_line(decision.text, alias)
     assert "; zone exile; " in line and "; foretold, face down" in line
 
@@ -715,7 +719,10 @@ def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
 def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
     env = priority_root((), ("Hakoda, Selfless Commander",) + ("Plains",) * 4)
     decision = capture_text_decision(env)
-    assert decision.actions[0].description == "Cast C1 (Hakoda, Selfless Commander)"
+    assert decision.actions[0].description == (
+        "Cast C1 (Hakoda, Selfless Commander). "
+        "Native description: Cast Hakoda, Selfless Commander from library"
+    )
     assert "; zone library; " in _card_line(decision.text, "C1")
     submit_response(env, decision, decision.actions[0].reference)
     stack = capture_text_decision(env).text.split(

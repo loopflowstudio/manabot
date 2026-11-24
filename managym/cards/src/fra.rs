@@ -58,6 +58,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fatehold_chronologist(),
         hallway_heckler(),
         konstrari_improviser(),
+        codie_ravenous_codex(),
         pompous_battlemage(),
         semester_foreseer(),
         theorix_metamage(),
@@ -280,6 +281,44 @@ fn konstrari_improviser() -> CardDefinition {
             power: Some(2),
             toughness: Some(2),
             ..enters_prepared(soul_tether())
+        },
+        ..Default::default()
+    }
+}
+
+fn codie_ravenous_codex() -> CardDefinition {
+    let text_box = "Whenever you cast a prepared spell, copy it. You may choose new targets for the copy.\n{W}{U}{B}{R}{G}, {T}: Each creature you control becomes prepared. (Only creatures with prepare spells can become prepared.)";
+    CardDefinition {
+        key: "fra.codie_ravenous_codex",
+        scryfall_id: "c3192390-1518-49fc-8716-f2c7a0384f39",
+        printed: PrintedCharacteristics {
+            name: "Codie, Ravenous Codex".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Book".into(), "Construct".into()],
+            power: Some(1),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Prepared {
+                    condition: Box::new(TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate::default(),
+                    )),
+                },
+                intervening_if: None,
+                effects: vec![Effect::CopyTriggeringObject],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{W}{U}{B}{R}{G}"),
+                tap_source: true,
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::each_you_control(CardPredicate::creature()),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
         },
         ..Default::default()
     }

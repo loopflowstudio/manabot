@@ -79,13 +79,17 @@ impl Game {
                                 format!("{}{}", "{X}".repeat(cost.x as usize), cost_label(&cost))
                             }
                         });
-                        format!(
-                            "using {}{}",
+                        let using = if grant.foretold {
+                            "foretell".to_string()
+                        } else {
                             grant
                                 .origin
                                 .and_then(|id| default_content_pack().definition(id))
                                 .map(|def| def.name.clone())
-                                .unwrap_or_else(|| format!("permission {}", key + 1)),
+                                .unwrap_or_else(|| format!("permission {}", key + 1))
+                        };
+                        format!(
+                            "using {using}{}",
                             price.map(|cost| format!(" for {cost}")).unwrap_or_default()
                         )
                     }

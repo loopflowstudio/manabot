@@ -87,6 +87,10 @@ pub enum TriggerCondition {
         zone: ZoneType,
         condition: Box<TriggerCondition>,
     },
+    /// The inner cast trigger only for a prepared spell: one cast from a
+    /// prepared copy ("whenever you cast a prepared spell"). Copies of that
+    /// spell are not prepared spells.
+    Prepared { condition: Box<TriggerCondition> },
     /// "Whenever [subject] becomes tapped."
     BecomesTapped { subject: TriggerSubject },
     /// "Whenever [subject] is tapped for mana."

@@ -173,6 +173,7 @@ impl Game {
                 spell.object = self.create_spell_copy(spell.object, id, controller);
                 // A stack copy was never cast using the original’s permission.
                 spell.flashback = false;
+                spell.from_prepared = false;
                 spell.exile_instead_of_graveyard = false;
                 spell.id = id;
                 spell.controller = controller;

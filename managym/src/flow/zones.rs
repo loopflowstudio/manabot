@@ -583,6 +583,7 @@ impl Game {
                 controller,
                 cast_from,
                 flashback: cast.flashback,
+                from_prepared: cast.from_prepared,
                 profile: cast.profile,
                 exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,

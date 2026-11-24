@@ -11,6 +11,9 @@ pub struct SpellOnStack {
     pub exile_instead_of_graveyard: bool,
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
+    /// Cast from a prepared copy (a "prepared spell"). Copies of it are not.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
     #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
     pub profile: SpellProfile,
     pub id: PublicId,

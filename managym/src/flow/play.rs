@@ -136,18 +136,19 @@ impl Game {
             CastAuthority::Resolution(_) => return None,
             CastAuthority::Priority(route) => route,
         };
-        let flashback = match route {
-            PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback => true,
-            PlayRoute::Grant(key) => self
-                .grant_by_key(object, key)
-                .is_some_and(|grant| grant.flashback),
-            _ => false,
+        let grant = match route {
+            PlayRoute::Grant(key) => self.grant_by_key(object, key),
+            _ => None,
         };
         let mut cast = CastChoices {
             profile,
             free: route == PlayRoute::FreeFromHand,
             route: (route != PlayRoute::Hand).then_some(route),
-            flashback,
+            flashback: matches!(
+                route,
+                PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback
+            ) || grant.is_some_and(|grant| grant.flashback),
+            from_prepared: grant.is_some_and(|grant| grant.prepared),
             ..Default::default()
         };
         // A surcharge is mandatory only when this is the permission that

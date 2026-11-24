@@ -1093,6 +1093,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
+        TriggerCondition::Prepared { .. } => "TriggerCondition::Prepared",
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
@@ -1178,6 +1179,12 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),
+        },
+        TriggerCondition::Prepared {
+            condition: Box::new(TriggerCondition::casts(
+                Actor::You,
+                CardPredicate::default(),
+            )),
         },
         TriggerCondition::InGraveyard {
             condition: Box::new(TriggerCondition::Draws {
