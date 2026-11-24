@@ -286,8 +286,8 @@ impl Game {
         });
     }
 
-    /// Exile `card` and add the play grant `grant` builds for the exiled
-    /// object.
+    /// Exile `object` and add the play grant `grant` builds for its exiled
+    /// arrival.
     fn exile_with_play_grant(
         &mut self,
         object: ObjectId,
@@ -297,7 +297,7 @@ impl Game {
         self.grant_if_exiled(exiled, grant);
     }
 
-    /// Add the grant `grant` builds for `card`'s exiled object. A token, or a
+    /// Add the grant `grant` builds for the exiled `object_id`. A token, or a
     /// card a replacement kept out of exile, receives no grant.
     fn grant_if_exiled(
         &mut self,

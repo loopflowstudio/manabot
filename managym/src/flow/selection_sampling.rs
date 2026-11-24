@@ -235,25 +235,23 @@ impl Game {
         rng: &mut ChaCha8Rng,
     ) -> Option<Vec<ObjectId>> {
         let count = self.hidden_manifests(owner, viewer).count();
+        // Without manifests the deal consumes no rng draw here, so manifest-free
+        // worlds keep their seeded deals.
         if count == 0 {
             return Some(Vec::new());
         }
-        let foretold = self.foretold_cards(owner).count();
-        let set_aside: Vec<_> = pool
-            .iter()
-            .copied()
-            .filter(|object| self.state[*object].retained_base().1.foretell().is_some())
-            .take(foretold)
-            .collect();
-        if set_aside.len() != foretold {
-            return None;
-        }
+        let mut foretold = self.foretold_cards(owner).count();
         let rest: Vec<_> = pool
             .iter()
             .copied()
-            .filter(|object| !set_aside.contains(object))
+            .filter(|object| {
+                let set_aside =
+                    foretold > 0 && self.state[*object].retained_base().1.foretell().is_some();
+                foretold -= usize::from(set_aside);
+                !set_aside
+            })
             .collect();
-        if rest.len() < count {
+        if foretold > 0 || rest.len() < count {
             return None;
         }
         let drawn: Vec<_> = rest.choose_multiple(rng, count).copied().collect();
@@ -275,9 +273,6 @@ impl Game {
     ) {
         let slots: Vec<_> = self.hidden_manifests(owner, viewer).collect();
         assert_eq!(chosen.len(), slots.len(), "one printing per hidden slot");
-        if slots.is_empty() {
-            return;
-        }
 
         // Complete the permutation: displaced printings go into the vacated
         // hidden slots. Every reference in the pending deal follows its printing.
