@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
+import math
 from pathlib import Path
 import random
 from typing import TYPE_CHECKING, BinaryIO
@@ -221,6 +222,7 @@ def capture_incident(
     # prefix of each gradient. Action masks instead locate the offending rows.
     failed = error.tensors.get("failed")
     valid = error.tensors.get("valid")
+    indexes = error.tensors.get("minibatch_indexes")
     positions = None
     row_shape: tuple[int, ...] = ()
     if failed is not None:
@@ -229,17 +231,29 @@ def capture_incident(
         row_shape = failed.shape
         if row_shape:
             positions = np.flatnonzero(np.asarray(failed))[:max_rows]
+    # An optimizer refusal has no failed-row mask. Its minibatch indexes
+    # still identify the rows of the logits, actions and observation.
+    if positions is None and indexes is not None:
+        row_shape = indexes.shape
     for name, value in error.tensors.items():
-        if positions is not None and value.shape[: len(row_shape)] == row_shape:
-            sample = value.reshape(-1, *value.shape[len(row_shape) :])[
-                mx.array(positions)
-            ]
+        if (
+            row_shape
+            and value.shape[: len(row_shape)] == row_shape
+            and not name.startswith(("parameter/", "gradient/"))
+        ):
+            row_values = value.reshape(
+                math.prod(row_shape), *value.shape[len(row_shape) :]
+            )
+            sample = (
+                row_values[:max_rows]
+                if positions is None
+                else row_values[mx.array(positions)]
+            )
         else:
             sample = value.reshape(-1)[:2048]
         retain(name, value, sample)
 
     if batch is not None:
-        indexes = error.tensors.get("minibatch_indexes")
         rows = np.arange(min(batch.actions.size, max_rows))
         if indexes is not None:
             mapped = np.asarray(indexes).reshape(-1)

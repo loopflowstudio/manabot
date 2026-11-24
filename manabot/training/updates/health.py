@@ -1,24 +1,27 @@
 """Local numerical health, independent of tracker availability and RNG.
 
-Batch measurements cover every collected row (`batch_health`). An
-`OptimizerHealth` is the player's `StepRecorder` (`manabot.backends.torch.learner`): passed
-to `gradient_step`, it counts steps and samples gradient and parameter detail,
-including the critic readout's share, at iteration 1 and every 25th iteration.
-Safety checks run on every step, observed or not; absent samples remain absent.
+Batch measurements cover every collected row. A learner reports each optimizer
+step through `StepRecorder`. The player's `OptimizerHealth` samples gradient
+norms and parameter displacement on the first step of iteration 1 and every
+25th iteration. Finiteness checks run on every step.
 """
 
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import AbstractContextManager, contextmanager
-from typing import Any, TypedDict
+from contextlib import AbstractContextManager, contextmanager, nullcontext
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
 from manabot.infra.profiler import Profiler
-from manabot.training.rollout.actions import PackedActions
-from manabot.training.updates.backend import UpdateBackend
+
+if TYPE_CHECKING:
+    from manabot.training.rollout.actions import PackedActions
+    from manabot.training.updates.backend import UpdateBackend
 
 HEALTH_INTERVAL = 25
+# Only these policy parameters are exclusive to the critic in every aggregation.
+CRITIC_READOUT_PREFIXES = ("value_head.", "value_readout.")
 
 
 class StepSample(TypedDict, total=False):
@@ -41,6 +44,50 @@ class StepSample(TypedDict, total=False):
     parameter_relative_delta: float
 
 
+class StepRecorder(Protocol):
+    """Observe optimizer steps without changing the loss, step or RNG.
+
+    `track(section)` times "Backward and gradient clipping" and "Optimizer
+    step". Each ends at a finite check that already waits for the device.
+    `rejecting()` wraps the whole step, so it sees every `NumericalError`.
+    On a sampled step the learner reports clipped gradient measurements before
+    Adam, then parameter displacement after its finite check. Every completed
+    step calls `record_step`, including those without a sample.
+    """
+
+    def track(self, section: str) -> AbstractContextManager[object]: ...
+
+    def rejecting(self) -> AbstractContextManager[object]: ...
+
+    def sampling(self) -> bool: ...
+
+    def record_sample(self, sample: StepSample) -> None: ...
+
+    def record_step(self) -> None: ...
+
+
+class UnrecordedStep:
+    """A step without an observer performs no timing or sampling."""
+
+    def track(self, section: str) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def rejecting(self) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def sampling(self) -> bool:
+        return False
+
+    def record_sample(self, sample: StepSample) -> None:
+        pass
+
+    def record_step(self) -> None:
+        pass
+
+
+UNRECORDED_STEP: StepRecorder = UnrecordedStep()
+
+
 class NumericalHealth(StepSample, total=False):
     legal_logit_gap_max: float
     legal_probability_min: float
@@ -59,7 +106,7 @@ class NumericalHealth(StepSample, total=False):
 
 
 def batch_health(
-    action_data: PackedActions,
+    action_data: "PackedActions",
     advantages: NDArray[np.floating],
     selected: NDArray[np.bool_],
     *,
@@ -98,8 +145,7 @@ class OptimizerHealth:
     `check` rejects a detached or nonfinite objective; it waits for the loss on
     the device, so a caller timing its forward pass ends that timer there.
     `backend` supplies the objective check and numerical refusal type. Its
-    learner measures gradients and parameter changes; a backend whose step
-    takes no samples leaves that detail absent.
+    learner measures gradients and parameter changes.
     With a profiler, `gradient_step` times backward and the optimizer step
     separately; each ends at a finite check that already waits for the device,
     so timing adds no synchronization.
@@ -111,7 +157,7 @@ class OptimizerHealth:
         iteration: int,
         profiler: Profiler | None = None,
         *,
-        backend: UpdateBackend,
+        backend: "UpdateBackend",
     ) -> None:
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective

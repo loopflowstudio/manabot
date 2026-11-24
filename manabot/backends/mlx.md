@@ -249,9 +249,12 @@ MLX retains zero-copy pre-step parameter references, computes per-leaf squared
 sums on device in float32 alongside the finite check, and reduces them in host
 float64 to record pre/post-clip gradient norms, critic readout (`value_head.`,
 `value_readout.`) and optional `value_token` norms, missing/zero/nonzero/frozen
-tensor counts, and parameter L2 / relative displacement. Unsampled steps leave
-those fields absent and add no sampling work; disabling sampling leaves draws
-and weights unchanged.
+tensor counts, and absolute and relative L2 parameter displacement. MLX returns
+zero gradients for unused trainable leaves, which count as zero tensors. A
+missing tensor means the gradient tree has no entry for a trainable parameter.
+The recorder keeps the gradient sample if Adam produces a nonfinite parameter.
+Unsampled steps skip the measurement reductions and weight snapshots.
+Disabling sampling preserves the collected actions and learned weights.
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell

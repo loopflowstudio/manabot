@@ -431,6 +431,7 @@ _GENERIC_ALLOWED = (
     "manabot.infra.profiler",
     "manabot.policy.returns",
     "manabot.training.updates.objective",
+    "manabot.training.updates.health",
 )
 
 
@@ -450,7 +451,6 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
         "manabot/backends/torch/learner.py: manabot.policy.checkpoint",
         "manabot/backends/torch/learner.py: manabot.training.learning",
-        "manabot/backends/torch/learner.py: manabot.training.updates.health",
         "manabot/backends/torch/arrays.py: manabot.policy.prepare",
     ]
 

@@ -1031,7 +1031,7 @@ float64. The PPO-style learner uses the same contract (no `1e-12` KL clamp).
 | `actor_rows`, `critic_rows` | Unique selected rows before epoch reuse. Actor-only filtering can leave zero actor rows. |
 | `forced_rows`, `zero_advantage_rows`, `empty_actor_batch` | Forced decisions have zero policy gradient but critic/shared updates can still move parameters. |
 | `gradient_norm_before`, `gradient_norm_after` | Global L2 norm around clipping on the sampled step. |
-| `gradient_missing_tensors`, `gradient_zero_tensors`, `gradient_nonzero_tensors`, `frozen_parameter_tensors` | Missing, all-zero and nonzero `.grad`, and frozen tensors. All-missing gradients or a detached objective reject the step. |
+| `gradient_missing_tensors`, `gradient_zero_tensors`, `gradient_nonzero_tensors`, `frozen_parameter_tensors` | Trainable tensors with a missing, all-zero or nonzero gradient, and frozen tensors. MLX supplies explicit zeros for unused trainable leaves. Torch rejects all-missing gradients and detached objectives. |
 | `parameter_delta_l2`, `parameter_relative_delta` | Actual parameter movement on the sampled step. Adam momentum can move parameters with zero gradient. |
 | `optimizer_steps`, `skipped_steps` | Completed optimizer calls and skipped minibatches per update. |
 | `rejected_steps`, `rejected_updates` | Terminal failures, separate from completed diagnostics. |

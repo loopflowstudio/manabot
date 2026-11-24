@@ -14,40 +14,37 @@ nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
 precision (bfloat16 for wide models, float32 otherwise, or an explicit choice);
 bfloat16 forwards keep float32 master weights, loss, clipping and Adam.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
-counts steps and rejections; the sampled gradient and parameter detail it
-reads from torch modules stays absent here.
+counts completed and rejected steps. On sampled steps it receives clipped
+gradient measurements before Adam and parameter displacement after Adam.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 from mlx.utils import tree_flatten, tree_map
+import numpy as np
+from numpy.typing import NDArray
 
 from manabot.backends.mlx.arrays import all_finite, flat_numpy
 from manabot.backends.mlx.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
+from manabot.training.updates.health import (
+    CRITIC_READOUT_PREFIXES,
+    UNRECORDED_STEP,
+    StepRecorder,
+    StepSample,
+)
 
 if TYPE_CHECKING:
     from manabot.backends.mlx.policy import MLXActorCritic
     from manabot.policy.checkpoint import ParameterArrays
     from manabot.policy.protocol import Precision
-
-
-class StepRecorder(Protocol):
-    """What `Learner.step` reports: its timed sections, every refusal and each
-    completed step. Recording never changes the loss or the step."""
-
-    def track(self, section: str) -> AbstractContextManager[object]: ...
-
-    def rejecting(self) -> AbstractContextManager[object]: ...
-
-    def record_step(self) -> None: ...
 
 
 def check_objective(loss: mx.array) -> None:
@@ -193,29 +190,60 @@ class Learner:
         else:
             gradients = self._gradients(loss)
             self._pending = None
-        track = recorder.track if recorder is not None else _untracked
-        with recorder.rejecting() if recorder is not None else nullcontext():
+        recorder = recorder if recorder is not None else UNRECORDED_STEP
+        with recorder.rejecting():
             check_objective(loss)
-            with track("Backward and gradient clipping"):
+            with recorder.track("Backward and gradient clipping"):
                 clipped, norm = optim.clip_grad_norm(gradients, max_grad_norm)
-                if not bool(mx.isfinite(norm)):
+                finite = mx.isfinite(norm)
+                # Adam replaces immutable arrays, so these references preserve
+                # the pre-step weights without copying a second model.
+                before = (
+                    dict(tree_flatten(self.agent.parameters()))
+                    if recorder.sampling()
+                    else None
+                )
+                sample = (
+                    gradient_health(gradients, clipped, self.agent, before, finite)
+                    if before is not None
+                    else None
+                )
+                if not bool(finite):
                     raise NumericalError(
                         "nonfinite_gradients",
                         {f"gradient/{name}": g for name, g in tree_flatten(gradients)},
                     )
-            with track("Optimizer step"):
+                if sample is not None:
+                    recorder.record_sample(sample)
+            with recorder.track("Optimizer step"):
                 self.optimizer.update(self.agent, clipped)
                 self.agent.clear_cache()
-                parameters = tree_flatten(self.agent.parameters())
+                updated = self.agent.parameters()
+                parameters = tree_flatten(updated)
                 finite = all_finite(p for _, p in parameters)
-                mx.eval(finite, self.agent.parameters(), self.optimizer.state)
+                movement = ()
+                if before is not None:
+                    movement = (
+                        squared_sums(p - before[name] for name, p in parameters),
+                        squared_sums(before.values()),
+                    )
+                mx.eval(finite, updated, self.optimizer.state, movement)
                 if not bool(finite):
                     raise NumericalError(
                         "nonfinite_parameters_after_step",
                         {f"parameter/{name}": p for name, p in parameters},
                     )
-                if recorder is not None:
-                    recorder.record_step()
+                if movement:
+                    delta, scale = (l2_norm(np.asarray(v)) for v in movement)
+                    recorder.record_sample(
+                        {
+                            "parameter_delta_l2": delta,
+                            "parameter_relative_delta": delta / scale
+                            if scale
+                            else delta,
+                        }
+                    )
+                recorder.record_step()
         return norm
 
     def gradients(self, loss: mx.array) -> ParameterArrays:
@@ -227,5 +255,46 @@ class Learner:
         return flat_numpy(self.agent.parameters())
 
 
-def _untracked(section: str) -> AbstractContextManager[object]:
-    return nullcontext()
+def squared_sums(values: Iterable[mx.array]) -> mx.array:
+    """One float32 sum of squares per leaf on the device."""
+    return mx.stack([value.astype(mx.float32).square().sum() for value in values])
+
+
+def l2_norm(squares: NDArray[np.float32]) -> float:
+    return float(np.sqrt(squares.sum(dtype=np.float64)))
+
+
+def gradient_health(
+    gradients: dict[str, object],
+    clipped: dict[str, object],
+    agent: nn.Module,
+    parameters: dict[str, mx.array],
+    finite: mx.array,
+) -> StepSample:
+    """Sample at the clipping check. Only per-leaf scalars reach the host."""
+    grads = dict(tree_flatten(gradients))
+    clipped_grads = dict(tree_flatten(clipped))
+    trainable = dict(tree_flatten(agent.trainable_parameters()))
+    pre = squared_sums(grads.values())
+    post = squared_sums(clipped_grads.values())
+    # A tiny nonzero gradient can have a float32 square of zero.
+    nonzero = mx.stack([mx.any(g != 0) for g in clipped_grads.values()])
+    mx.eval(finite, pre, post, nonzero)
+    squares = np.asarray(pre)
+    critic = [
+        i for i, name in enumerate(grads) if name.startswith(CRITIC_READOUT_PREFIXES)
+    ]
+    active = int(np.count_nonzero(np.asarray(nonzero)))
+    sample: StepSample = {
+        "gradient_norm_before": l2_norm(squares),
+        "gradient_norm_after": l2_norm(np.asarray(post)),
+        "gradient_norm_critic_readout": l2_norm(squares[critic]),
+        "gradient_missing_tensors": len(trainable.keys() - grads.keys()),
+        "gradient_zero_tensors": len(clipped_grads) - active,
+        "gradient_nonzero_tensors": active,
+        "frozen_parameter_tensors": len(parameters) - len(trainable),
+    }
+    if "value_token" in parameters:
+        token = [i for i, name in enumerate(grads) if name == "value_token"]
+        sample["gradient_norm_value_token"] = l2_norm(squares[token])
+    return sample
