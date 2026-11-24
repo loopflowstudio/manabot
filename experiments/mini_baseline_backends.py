@@ -438,6 +438,29 @@ def rates(steps: list[dict[str, Any]], wall: float, arm: Arm) -> Rates:
     )
 
 
+def verify_live_run(
+    directory: Path, live: dict[str, Any], width: int, layout: str, arm: Arm
+) -> None:
+    """Join the timing to the worker and Etude's recorded warm-start settings."""
+    worker_record = record(directory / "worker.json")
+    if live["run"] != worker_record["run"]:
+        raise ValueError(f"timing belongs to another run in {directory}")
+    declaration = record(directory / "track" / EXPERIMENT / live["run"] / "run.json")
+    settings = json.loads(declaration["config"])
+    if (
+        declaration["id"] != f"{EXPERIMENT}/{live['run']}"
+        or declaration["seed"] != SEED
+        or settings["threads"] != THREADS
+        or settings["model"]["hidden_dim"] != width
+        or settings["bucketed_shapes"] is not (layout == "bucketed")
+        or settings["precision"] != arm.precision
+        or settings["device"] != arm.device
+    ):
+        raise ValueError(
+            f"Etude run settings differ from the parity target in {directory}"
+        )
+
+
 def report(out: Path, widths: Iterable[int]) -> str:
     lines = [
         "# Mini baseline backend throughput",
@@ -521,6 +544,7 @@ def report(out: Path, widths: Iterable[int]) -> str:
             live = record(live_path)
             if live["checkpoint_sha256"] != digest:
                 raise ValueError(f"timing on different checkpoint {directory}")
+            verify_live_run(directory, live, width, layout, arm)
             r = rates(live["steps"], invocation["wall_seconds"], arm)
             lines.append(
                 prefix

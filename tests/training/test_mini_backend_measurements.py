@@ -1,11 +1,19 @@
 """Acceptance and pooling for the mini's retained baseline measurements."""
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from experiments.mini_baseline_backends import ARMS, rates, verdict, write
+from experiments.mini_baseline_backends import (
+    ARMS,
+    EXPERIMENT,
+    rates,
+    verdict,
+    verify_live_run,
+    write,
+)
 
 
 def test_only_finite_half_precision_tolerance_misses_can_be_timed(
@@ -78,3 +86,33 @@ def test_warmup_counts_only_toward_whole_invocation_wall_rate() -> None:
     assert result.active_range == (0.75, 2)
     with pytest.raises(ValueError, match="four finite updates"):
         rates(rows[:-1], 200, ARMS[0])
+
+
+def test_report_refuses_live_evidence_from_another_layout_or_run(
+    tmp_path: Path,
+) -> None:
+    run = "mini-run"
+    directory = tmp_path / "track" / EXPERIMENT / run
+    directory.mkdir(parents=True)
+    write(tmp_path / "worker.json", {"run": run})
+    write(
+        directory / "run.json",
+        {
+            "id": f"{EXPERIMENT}/{run}",
+            "seed": 25201,
+            "config": json.dumps(
+                {
+                    "device": "cpu",
+                    "precision": "float32",
+                    "threads": 4,
+                    "model": {"hidden_dim": 64},
+                    "bucketed_shapes": False,
+                }
+            ),
+        },
+    )
+    verify_live_run(tmp_path, {"run": run}, 64, "padded", ARMS[0])
+    with pytest.raises(ValueError, match="run settings"):
+        verify_live_run(tmp_path, {"run": run}, 64, "bucketed", ARMS[0])
+    with pytest.raises(ValueError, match="another run"):
+        verify_live_run(tmp_path, {"run": "another"}, 64, "padded", ARMS[0])
