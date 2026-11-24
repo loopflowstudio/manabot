@@ -1263,8 +1263,13 @@ class _Renderer:
                     f"{f'; keywords {keywords}' if keywords else ''}; unlisted type and keyword flags false; "
                     f"legendary {_yes(card.is_legendary)}. Rules: {card.text_box or '(empty)'}"
                 )
+            source = (
+                f" [{self.definition(item.source_card_registry_key)}]"
+                if item.source_card_registry_key >= 0
+                else ""
+            )
             lines.append(
-                f"{self.name(item.stack_object_id)}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_card_registry_key)}]; {'; '.join(details)}.{spell}"
+                f"{self.name(item.stack_object_id)}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)}{source}; {'; '.join(details)}.{spell}"
             )
         if not state.stack_objects:
             lines.append("Empty.")

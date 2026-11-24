@@ -554,7 +554,10 @@ impl Game {
                     .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(self.pending_trigger_definition(trigger).0);
+                source.definition = self
+                    .pending_trigger_definition(trigger)
+                    .catalog_id()
+                    .map(|id| id.0);
                 let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing

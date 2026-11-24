@@ -802,9 +802,13 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(
-                                    self.game.state.entry_object(*object_id).definition_id.0,
-                                ),
+                                definition: self
+                                    .game
+                                    .state
+                                    .entry_object(*object_id)
+                                    .definition_id
+                                    .catalog_id()
+                                    .map(|id| id.0),
                                 ..Default::default()
                             },
                         );
@@ -1141,7 +1145,7 @@ pub(crate) fn project_frame(
     }
     let source_definition = effect
         .source()
-        .map(|object| game.state.source_base(object).0);
+        .and_then(|object| game.observed_source_definition(object));
     if receipt_matters(&effect.spent, source_definition, effect.source()) {
         out.receipt(&effect.spent, effect.source());
     }

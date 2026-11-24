@@ -5139,3 +5139,83 @@ fn foretold_and_manifest_slots_fill_without_prefix_bias() {
     let share = ogre_manifests as f64 / samples as f64;
     assert!((share - 0.5).abs() < 0.08, "Ogre manifest share {share}");
 }
+
+/// A departed face-down manifest's token copy pauses on two token-creation
+/// replacements. The suspended creation frame holds the manifest's anonymous last
+/// known information and the nameless copy; every pause captures and encodes
+/// for both players, and the token enters as the public 2/2 (CR 708.2, 707.2).
+#[test]
+fn a_departed_manifests_token_copy_captures_through_replacement_pauses() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    use crate::state::card::ReplacementEffect;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    for multiplier in [2, 3] {
+        let id = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let object = game.state.permanents[id].as_ref().unwrap().object;
+        game.state[object].replacement_effects =
+            vec![ReplacementEffect::MultiplyTokens { multiplier }];
+    }
+    let card = *game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .iter()
+        .find(|object| game.state[**object].name == "Gray Ogre")
+        .unwrap();
+    let manifest = game.manifest(card, player);
+    let mut frame = EffectFrame::new(
+        player,
+        vec![
+            Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::This,
+                exceptions: Vec::new(),
+            },
+            Effect::gain_life(3),
+        ],
+    );
+    frame.bind_source(Some(manifest), Some(manifest));
+    frame.completion = FrameCompletion::Continue;
+    game.move_object(manifest, ZoneType::Graveyard);
+    assert_eq!(
+        game.object_lki(manifest).unwrap().definition_id,
+        crate::state::card::CardDefId::ANONYMOUS
+    );
+    game.run_frame(frame);
+    let check = |game: &Game| {
+        use crate::agent::observation::Observation;
+        use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        game.capture_decision(player, 8).expect("captures");
+        for viewer in [player, PlayerId(1)] {
+            encode(
+                &Observation::for_player(game, viewer),
+                &ObservationEncoderConfig::default(),
+            )
+            .expect("encodes");
+        }
+    };
+    let mut pauses = 0;
+    while game.state.suspended_decision.is_some() {
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        check(&game);
+        checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+        pauses += 1;
+    }
+    assert_eq!(pauses, 1, "the creation order pauses");
+    assert_eq!(game.state.players[0].life, 23);
+    let tokens: Vec<_> = game
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.kind() == ObjectKind::Token)
+        .map(|(id, _)| game.state.permanent_of(game.state.now(id)).unwrap())
+        .collect();
+    assert_eq!(tokens.len(), 6);
+    for token in tokens {
+        let characteristics = game.characteristics(token);
+        assert!(characteristics.name.is_empty());
+        assert_eq!((characteristics.power, characteristics.toughness), (2, 2));
+    }
+}

@@ -636,3 +636,95 @@ fn a_face_down_permanent_bounced_to_hand_names_no_card() {
     });
     assert_eq!(rows[0], rows[1]);
 }
+
+/// Undying Malice and Fake Your Own Death grant a face-down manifest two
+/// dies triggers. When it dies, its controller orders triggers whose source
+/// shows no definition (CR 708.2); capture, encoding and the stacked
+/// abilities publish none, and the countered ability is named only as a
+/// face-down permanent's.
+#[test]
+fn granted_triggers_of_a_dead_manifest_stack_and_counter_without_its_printing() {
+    use crate::support::{
+        inspect::offered_targets,
+        play::{activate, cast, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            ability::{Effect, ObjectSelector, TargetSpec},
+            card::ActivatedAbilityDefinition,
+            game_object::Target,
+        },
+    };
+    let views = [("Gray Ogre", "Forest"), ("Forest", "Gray Ogre")].map(|(hidden, other)| {
+        let mut s = five_color_setup(&["Gray Ogre", "Undying Malice", "Fake Your Own Death"]);
+        let cards = pin_top(&mut s, &[hidden, "Plains", other]);
+        let object = s.game_mut().manifest(cards[0], PlayerId(0));
+        let permanent = s.game().lookup_current_permanent(object).unwrap();
+        for grant in ["Undying Malice", "Fake Your Own Death"] {
+            cast(&mut s, grant);
+            assert!(s.choose_target(Target::Permanent(permanent)));
+            settle(&mut s);
+        }
+        s.game_mut().move_object(object, ZoneType::Graveyard);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        s.pass_priority();
+        assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+        s.game()
+            .capture_decision(PlayerId(0), 8)
+            .expect("ordering captures");
+        encode(
+            &Observation::for_player(s.game(), PlayerId(0)),
+            &ObservationEncoderConfig::default(),
+        )
+        .expect("ordering encodes");
+        s.step_action(0);
+        while s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            s.step_action(0);
+        }
+        assert_eq!(s.game().state.stack_objects.len(), 2);
+
+        // Answer the top ability with a counter ability: no catalog card
+        // counters an ability other than through ward.
+        let seat = s.action_space().player.unwrap();
+        let counter = s.force_permanent_on_battlefield(seat.0, "Gray Ogre");
+        let counter_object = s.game().state.permanents[counter].as_ref().unwrap().object;
+        s.game_mut().state[counter_object]
+            .activated_abilities
+            .push(ActivatedAbilityDefinition {
+                effects: vec![Effect::CounterAbility {
+                    what: ObjectSelector::Target(TargetSpec::Ability),
+                }],
+                ..Default::default()
+            });
+        activate(&mut s, counter, 0);
+        let targets = offered_targets(&s);
+        assert_eq!(targets.len(), 2);
+        assert!(s.choose_target(targets[0]));
+        while s.game().state.stack_objects.len() > 2 {
+            s.pass_priority();
+        }
+        while s.game().state.stack_objects.len() == 2 {
+            s.pass_priority();
+        }
+        let viewer = s.action_space().player.unwrap();
+        let opponent = Observation::for_player(s.game(), PlayerId(1));
+        encode(&opponent, &ObservationEncoderConfig::default()).expect("opponent encodes");
+        let context = s.game().decision_context(viewer).unwrap();
+        assert!(
+            context
+                .recent_facts
+                .iter()
+                .any(|fact| fact == "An ability of a face-down permanent was countered."),
+            "{:?}",
+            context.recent_facts
+        );
+        s.game()
+            .capture_decision(viewer, 8)
+            .expect("stack captures");
+        assert_eq!(opponent.stack_objects.len(), 1);
+        assert_eq!(opponent.stack_objects[0].source_card_registry_key, -1);
+        opponent.stack_objects
+    });
+    assert_eq!(views[0], views[1]);
+}

@@ -43,25 +43,28 @@ impl Game {
             .ok_or(ObjectLookupError::WrongZone)
     }
 
+    /// The definition `viewer` may learn for a battlefield permanent: what
+    /// `observed_source_definition` publishes, plus the printing behind a
+    /// face-down permanent for a viewer who may look at it (CR 708.5) or
+    /// while turning it face up shows it.
     pub(crate) fn observed_permanent_definition(
         &self,
         viewer: PlayerId,
         permanent: &crate::state::permanent::Permanent,
     ) -> Option<CardDefId> {
         let object = &self.state[permanent.object];
-        if object.is_face_down() {
-            // Announcing the special action shows the creature and its cost
-            // before the controller chooses which mana to spend.
-            use super::decision::{FrameCompletion, ResolutionRef};
-            let showing = self.state.suspended_decision.as_ref().is_some_and(|pending| {
-                pending.continuation().into_iter().any(|part| matches!(part, ResolutionRef::Frame(frame)
-                    if matches!(frame.completion, FrameCompletion::TurnFaceUp(id) if id == permanent.object)))
-            });
-            (showing || self.shares_information(viewer, permanent.controller))
-                .then(|| object.retained_base().0)
-        } else {
-            object.definition_id.catalog_id()
+        if !object.is_face_down() {
+            return self.observed_source_definition(permanent.object);
         }
+        // Announcing the special action shows the creature and its cost
+        // before the controller chooses which mana to spend.
+        use super::decision::{FrameCompletion, ResolutionRef};
+        let showing = self.state.suspended_decision.as_ref().is_some_and(|pending| {
+            pending.continuation().into_iter().any(|part| matches!(part, ResolutionRef::Frame(frame)
+                if matches!(frame.completion, FrameCompletion::TurnFaceUp(id) if id == permanent.object)))
+        });
+        (showing || self.shares_information(viewer, permanent.controller))
+            .then(|| object.retained_base().0)
     }
 
     /// Whether `object` stands for a manifested or face-down permanent, live
@@ -109,13 +112,25 @@ impl Game {
         }
     }
 
-    /// The name a viewer may read for an object in event prose: an object
-    /// showing no definition (face down, live or as it last existed) is named
-    /// only as a face-down permanent.
-    pub(crate) fn observed_object_name(&self, object: ObjectId) -> &str {
-        match self.observed_source_definition(object) {
-            Some(_) => &self.state.source_base(object).1.name,
-            None => "a face-down permanent",
+    /// The name a viewer may read for an object in event prose: its last
+    /// effective battlefield name once departed, else the name of the
+    /// definition it shows. An object showing no definition (face down, live
+    /// or as it last existed) is named only as a face-down permanent.
+    pub(crate) fn observed_object_name(&self, object: ObjectId) -> String {
+        const FACE_DOWN: &str = "a face-down permanent";
+        let Some(definition) = self.observed_source_definition(object) else {
+            return FACE_DOWN.to_owned();
+        };
+        if let Ok(permanent) = self.lookup_current_permanent(object) {
+            return self.characteristics(permanent).name.clone();
+        }
+        match self.object_lki(object) {
+            Some(lki) if self.state.live(object).is_none() && !lki.battlefield.name.is_empty() => {
+                lki.battlefield.name.clone()
+            }
+            _ => default_content_pack()
+                .definition(definition)
+                .map_or_else(|| FACE_DOWN.to_owned(), |row| row.printed.name.clone()),
         }
     }
 

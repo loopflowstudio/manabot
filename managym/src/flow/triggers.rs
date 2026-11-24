@@ -216,7 +216,10 @@ impl Game {
     /// A waiting trigger keeps the definition of the appearance that fired it.
     pub(crate) fn pending_trigger_definition(&self, trigger: &PendingTrigger) -> CardDefId {
         trigger.source_lki.as_ref().map_or_else(
-            || self.state.source_base(trigger.source_object()).0,
+            || {
+                self.observed_source_definition(trigger.source_object())
+                    .unwrap_or(CardDefId::ANONYMOUS)
+            },
             |lki| lki.definition_id,
         )
     }

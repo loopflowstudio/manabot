@@ -252,6 +252,9 @@ pub(crate) struct TokenWriter<'p> {
     /// Depth of nested structs; the top-level row (serialized as
     /// `CardDefinition`) is depth 1.
     depth: usize,
+    /// Writing the number inside a `CardDefId`, whose `ANONYMOUS` value (a
+    /// face-down object's absent definition) is written as `Null`.
+    in_definition_id: bool,
 }
 
 impl<'p> TokenWriter<'p> {
@@ -262,6 +265,7 @@ impl<'p> TokenWriter<'p> {
             references: Vec::new(),
             field: None,
             depth: 0,
+            in_definition_id: false,
         }
     }
 
@@ -392,6 +396,10 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         self.integer(value.into())
     }
     fn serialize_u32(self, value: u32) -> Result<(), ContentError> {
+        if self.in_definition_id && value == CardDefId::ANONYMOUS.0 {
+            self.push(TokenKind::Null, 0);
+            return Ok(());
+        }
         self.integer(value.into())
     }
     fn serialize_u64(self, value: u64) -> Result<(), ContentError> {
@@ -456,7 +464,10 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         value: &T,
     ) -> Result<(), ContentError> {
         self.open(name);
-        value.serialize(&mut *self)?;
+        let outer = std::mem::replace(&mut self.in_definition_id, name == "CardDefId");
+        let written = value.serialize(&mut *self);
+        self.in_definition_id = outer;
+        written?;
         self.close(name, None);
         Ok(())
     }

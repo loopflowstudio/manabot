@@ -2878,7 +2878,9 @@ impl Game {
     pub(crate) fn mana_origin(&self, object: ObjectId) -> ManaOrigin {
         ManaOrigin {
             object,
-            definition: self.state.source_base(object).0,
+            definition: self
+                .observed_source_definition(object)
+                .unwrap_or(crate::state::card::CardDefId::ANONYMOUS),
         }
     }
 
