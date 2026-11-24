@@ -173,7 +173,7 @@ class SelfPlay(BaseModel):
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
     workers: int = Field(default=1, ge=1)
-    threads: int = Field(default=1, ge=1, le=4)
+    threads: int = Field(default=1, ge=1)
     bucketed_shapes: bool = False
     live_tokens: bool = False
     # Rows per forward in collection, bootstrap and learning. They bound how
