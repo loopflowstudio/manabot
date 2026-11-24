@@ -4,7 +4,7 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, replace
 import json
 from pathlib import Path
@@ -41,10 +41,10 @@ from manabot.backends.mlx.checkpoint import (
 )
 from manabot.backends.mlx.learner import Learner as MLXLearner
 from manabot.backends.mlx.policy import (
+    MLXActorCritic,
     ObjectAttention,
     PackedGRU,
     attend,
-    packed_steps,
 )
 from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
 from manabot.backends.parity import (
@@ -67,6 +67,12 @@ from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
+    FACT_CONTINUATION_PROGRAM,
+    FACT_DETAIL_INDEX,
+    FACT_KIND_INDEX,
+    FACT_OBJECT_INDEX,
+    FACT_VALID_INDEX,
+    FACT_VALUE_INDEX,
     STACK_SOURCE_INDEX,
     ObservationSpace,
     column,
@@ -79,13 +85,14 @@ from manabot.infra.config import (
     ObservationConfig,
 )
 from manabot.policy.checkpoint import (
+    ParameterArrays,
     UnsupportedPolicy,
     canonical_parameters,
     read_safetensors,
     read_saved_container,
     write_safetensors,
 )
-from manabot.policy.prepare import Tables, pack, reference_distribution
+from manabot.policy.prepare import Prepared, Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.recipes import baseline, elemental
 from manabot.training.loops.self_play import (
@@ -106,7 +113,9 @@ def _mlx_names(torch_named: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
     return mlx_parameters(canonical_parameters(torch_named))
 
 
-def test_packed_gru_matches_torch_final_and_every_step() -> None:
+def test_packed_gru_matches_torch_states_and_gradients() -> None:
+    """States, final states and every gradient of the hand-written recurrence
+    VJP match PyTorch's GRU on sequences of mixed lengths."""
     torch.manual_seed(3)
     width = 8
     reference = torch.nn.GRU(width, width, batch_first=True)
@@ -119,17 +128,34 @@ def test_packed_gru_matches_torch_final_and_every_step() -> None:
         setattr(gru, key.rsplit(".", 1)[1], mx.array(value))
 
     lengths = [3, 5, 1, 5, 2]
-    tokens = (
-        np.random.default_rng(0).normal(size=(sum(lengths), width)).astype(np.float32)
-    )
+    rng = np.random.default_rng(0)
+    tokens = rng.normal(size=(sum(lengths), width)).astype(np.float32)
+    every_weight = rng.normal(size=(sum(lengths), width)).astype(np.float32)
+    last_weight = rng.normal(size=(len(lengths), width)).astype(np.float32)
     schedule = pack(lengths)
-    outputs, finals = gru.run(mx.array(tokens), packed_steps(schedule.gather, schedule))
-    every = np.array(outputs)[schedule.unpack]
-    last = np.array(finals)[schedule.restore]
+    rows = mx.array(schedule.gather)
 
+    def run(table: mx.array) -> tuple[mx.array, mx.array]:
+        outputs, finals = gru.run(table, rows, schedule.sizes)
+        return outputs[mx.array(schedule.unpack)], finals[mx.array(schedule.restore)]
+
+    def loss(parameters: dict[str, mx.array], table: mx.array) -> mx.array:
+        gru.update(parameters)
+        every, last = run(table)
+        return (every * mx.array(every_weight)).sum() + (
+            last * mx.array(last_weight)
+        ).sum()
+
+    every, last = (np.array(part) for part in run(mx.array(tokens)))
+    gradients, table_gradient = mx.grad(loss, argnums=(0, 1))(
+        dict(gru.parameters()), mx.array(tokens)
+    )
+
+    table = torch.from_numpy(tokens).requires_grad_()
     offsets = np.concatenate(([0], np.cumsum(lengths)))
-    for index, length in enumerate(lengths):
-        sequence = torch.from_numpy(tokens[offsets[index] : offsets[index + 1]])[None]
+    total = torch.zeros(())
+    for index in range(len(lengths)):
+        sequence = table[offsets[index] : offsets[index + 1]][None]
         expected, hidden = reference(sequence)
         np.testing.assert_allclose(
             every[offsets[index] : offsets[index + 1]],
@@ -139,6 +165,27 @@ def test_packed_gru_matches_torch_final_and_every_step() -> None:
         np.testing.assert_allclose(
             last[index], hidden[0, 0].detach().numpy(), atol=1e-6
         )
+        total = (
+            total
+            + (
+                expected[0]
+                * torch.from_numpy(every_weight[offsets[index] : offsets[index + 1]])
+            ).sum()
+            + (hidden[0, 0] * torch.from_numpy(last_weight[index])).sum()
+        )
+    total.backward()
+
+    expected_gradients = _mlx_names(
+        {
+            f"{prefix}.{name}": parameter.grad.numpy()
+            for name, parameter in reference.named_parameters()
+        }
+    )
+    for key, value in expected_gradients.items():
+        np.testing.assert_allclose(
+            np.array(gradients[key.rsplit(".", 1)[1]]), value, atol=1e-5
+        )
+    np.testing.assert_allclose(np.array(table_gradient), table.grad.numpy(), atol=1e-5)
 
 
 def test_split_attention_projections_match_packed_multihead_attention() -> None:
@@ -400,6 +447,45 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
             float(np.abs(value - expected_after[name]).max())
             <= STEP_PARAMETER_TOLERANCE
         ), name
+
+
+@pytest.mark.parametrize("bucketed", [False, True])
+def test_mlx_learner_encodes_only_referenced_catalog_programs(
+    baseline_model: ModelConfig, monkeypatch: pytest.MonkeyPatch, bucketed: bool
+) -> None:
+    space = ObservationSpace()
+    policy = resolve("mlx").runtime.create_policy(
+        space, baseline_model, bucketed_shapes=bucketed
+    )
+    env = managym.Env(seed=7)
+    env.reset(lesson_match().to_rust())
+    obs = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
+    inputs = {key: row[None] for key, row in obs.items()}
+    batch = policy.prepare(inputs)
+    inference = policy.prepare(inputs, inference=True)
+    assert batch.programs is not None and inference.programs is not None
+    assert 0 < len(batch.programs.rows) < len(inference.programs.rows)
+
+    # Count actual GRU sequences so ignoring the prepared subset fails even
+    # when the unused full-catalog outputs produce the same logits.
+    sequences: list[int] = []
+    run = PackedGRU.run
+
+    def counted(
+        gru: PackedGRU, table: mx.array, rows: mx.array, sizes: Sequence[int]
+    ) -> tuple[mx.array, mx.array]:
+        if gru is policy.semantic_cards.encoder:
+            sequences.append(sizes[0])
+        return run(gru, table, rows, sizes)
+
+    monkeypatch.setattr(PackedGRU, "run", counted)
+    actual = policy.evaluate(batch)
+    expected = policy.evaluate(replace(batch, programs=inference.programs))
+    assert sequences == [len(batch.programs.rows), len(inference.programs.rows)]
+    for selected, full in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(selected, full, rtol=1e-5, atol=1e-6)
 
 
 def test_bfloat16_host_arrays_widen_to_float32() -> None:
@@ -750,58 +836,32 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
             scope.cache_programs()
 
 
-def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
-    """Remapped opponent joins and ownership survive changes in object capacity."""
+type LearnerTerms = tuple[np.ndarray, np.ndarray, float, ParameterArrays]
 
-    _, _, agent = _converted(tmp_path)
-    space = agent.observation_space
-    obs = {
-        k: np.zeros((2, *shape), dtype=np.float32) for k, shape in space.shapes.items()
-    }
-    obs["agent_player_valid"][:] = 1
-    obs["opponent_player_valid"][:] = 1
-    obs["agent_cards_valid"][:, 1] = 1
-    obs["opponent_permanents_valid"][:, 0] = 1
-    obs["actions_valid"][:, :2] = 1
-    obs["action_focus"].fill(-1)
-    obs["action_focus"][:, 0, 0] = 0
-    obs["action_focus"][:, 1, 0] = (
-        2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
+
+def _learner_terms(
+    policy: MLXActorCritic, prepared: Prepared[np.ndarray], returns: np.ndarray
+) -> LearnerTerms:
+    """Two-action logits, values, loss and unclipped gradients of one minibatch
+    whose behaviour policy is uniform over two legal actions."""
+    rows = len(returns)
+    logits, values = policy.evaluate(prepared)
+    legal = prepared.legal
+    targets = Targets(
+        np.zeros(rows, np.int64),
+        returns,
+        np.ones(rows, np.float32),
+        np.ones(rows, bool),
+        np.where(legal, np.log(0.5), -np.inf).astype(np.float32),
+        np.where(legal, 0.5, 0).astype(np.float32),
     )
-    checkpoint = policy_weights(agent)
-    expected_logits, expected_values = agent.evaluate(agent.prepare(obs))
+    learner = MLXLearner(policy, minibatch_rows=rows)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
-    results = []
-    for bucketed in (False, True):
-        policy = assemble(checkpoint, bucketed_shapes=bucketed)
-        learner = MLXLearner(policy, minibatch_rows=2)
-        prepared = policy.prepare(obs)
-        assert (prepared.bucket_needs is not None) == bucketed
-        assert (prepared.agent_cards.shape[1] < obs["agent_cards"].shape[1]) == bucketed
-        assert prepared.is_agent.shape == prepared.validity.shape
-        logits, values = policy.evaluate(prepared)
-        np.testing.assert_allclose(logits, expected_logits, atol=LOGIT_TOLERANCE)
-        np.testing.assert_allclose(values, expected_values, atol=LOGIT_TOLERANCE)
-        # Learner rows can reuse the measured extents from admission.
-        needs = policy.check_observation(obs)
-        np.testing.assert_equal(
-            asdict(prepared), asdict(policy.prepare_admitted(obs, needs=needs))
-        )
-        legal = prepared.legal
-        logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
-        reference = np.where(legal, 0.5, 0).astype(np.float32)
-        targets = Targets(
-            np.zeros(2, np.int64),
-            np.array([1, -1], np.float32),
-            np.ones(2, np.float32),
-            np.ones(2, bool),
-            logs,
-            reference,
-        )
-        loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
-        gradients = learner.gradients(loss)
-        results.append((logits[:, :2], values, float(loss), gradients))
-    expected, actual = results
+    loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
+    return logits[:, :2], values, float(loss), learner.gradients(loss)
+
+
+def _assert_terms_close(expected: LearnerTerms, actual: LearnerTerms) -> None:
     for a, b in zip(actual[:3], expected[:3], strict=True):
         np.testing.assert_allclose(a, b, atol=2e-6)
     assert actual[3].keys() == expected[3].keys()
@@ -809,6 +869,166 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         np.testing.assert_allclose(
             actual[3][key], expected[3][key], atol=2e-6, err_msg=key
         )
+
+
+def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Grouped attention restores interleaved rows and their focused opponent permanent.
+
+    Compact fact routes reach the same objects as padded ones: rows hold unequal
+    fact counts, one has none, and a later row carries a two-token program.
+    """
+
+    _, _, agent = _converted(tmp_path)
+    space = agent.observation_space
+    obs = {
+        k: np.zeros((4, *shape), dtype=np.float32) for k, shape in space.shapes.items()
+    }
+    obs["agent_player_valid"][:] = 1
+    obs["opponent_player_valid"][:] = 1
+    # Live lengths 6, 3, 5, 4 put nonadjacent rows in both groups.
+    obs["agent_cards_valid"][0, [0, 2, 4]] = 1
+    obs["agent_cards_valid"][2, [1, 3]] = 1
+    obs["agent_cards_valid"][3, 2] = 1
+    obs["opponent_permanents_valid"][:, 0] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"].fill(-1)
+    obs["action_focus"][:, 0, 0] = 0
+    obs["action_focus"][:, 1, 0] = (
+        2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
+    )
+    # (observation, slot, object, program position, number): row 1 has no
+    # facts, and row 2's second program is linked to no object.
+    fact_rows = [
+        (0, 0, 1, 0, -71),
+        (2, 0, 2, 0, 3),
+        (2, 1, 2, 1, 70000),
+        (2, 2, 0, 0, 9),
+        (3, 0, 4, 0, -2147483648),
+        (3, 1, 4, 1, 5),
+        (3, 2, 1, 0, 12),
+    ]
+    for b, slot, target, position, number in fact_rows:
+        row = obs["facts"][b, slot]
+        row[FACT_VALID_INDEX] = 1
+        row[FACT_OBJECT_INDEX] = target
+        row[FACT_KIND_INDEX] = FACT_CONTINUATION_PROGRAM
+        row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = [4, position]
+        word = number & 0xFFFFFFFF
+        row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = [word >> 16, word & 65535]
+    checkpoint = policy_weights(agent)
+    widths: list[int] = []
+    table_widths: list[int] = []
+    attend_objects = ObjectAttention.__call__
+
+    def record_width(
+        layer: ObjectAttention, objects: mx.array, *args: mx.array
+    ) -> mx.array:
+        widths.append(objects.shape[1])
+        return attend_objects(layer, objects, *args)
+
+    monkeypatch.setattr(ObjectAttention, "__call__", record_width)
+    returns = np.array([1, -1, -0.5, 0.75], np.float32)
+    expected_logits, expected_values = agent.evaluate(agent.prepare(obs))
+    results = []
+    for bucketed in (False, True):
+        policy = assemble(checkpoint, bucketed_shapes=bucketed)
+        prepared = policy.prepare(obs)
+        assert (prepared.bucket_needs is not None) == bucketed
+        assert (prepared.agent_cards.shape[1] < obs["agent_cards"].shape[1]) == bucketed
+        assert prepared.is_agent.shape == prepared.validity.shape
+        # Learner rows can reuse the measured extents from admission.
+        needs = policy.check_observation(obs)
+        np.testing.assert_equal(
+            asdict(prepared), asdict(policy.prepare_admitted(obs, needs=needs))
+        )
+        assert prepared.facts.compact == bucketed
+        if bucketed:
+            assert prepared.facts.kinds.shape == (1, len(fact_rows))
+            programs = prepared.facts.programs
+            assert programs is not None
+            np.testing.assert_array_equal(programs.rows, np.arange(len(fact_rows)))
+            assert programs.schedule.lengths == (1, 2, 1, 2, 1)
+        table_widths.append(prepared.validity.shape[1])
+        widths.clear()
+        results.append(_learner_terms(policy, prepared, returns))
+        assert set(widths) == ({4, 6} if bucketed else {prepared.validity.shape[1]})
+        np.testing.assert_allclose(
+            results[-1][0], expected_logits[:, :2], atol=LOGIT_TOLERANCE
+        )
+        np.testing.assert_allclose(
+            results[-1][1], expected_values, atol=LOGIT_TOLERANCE
+        )
+    logits, values = results[1][:2]
+    # Inference and single-length batches keep the cheaper single attention call.
+    widths.clear()
+    infer_logits, infer_values = policy.evaluate(policy.prepare(obs, inference=True))
+    assert set(widths) == {8}
+    np.testing.assert_allclose(infer_logits[:, :2], logits[:, :2], atol=2e-6)
+    np.testing.assert_allclose(infer_values, values, atol=2e-6)
+    for identical_rows in ([0], [0, 0]):
+        widths.clear()
+        same = {key: value[identical_rows] for key, value in obs.items()}
+        same_logits, same_values = policy.evaluate(policy.prepare(same))
+        assert set(widths) == {6}
+        np.testing.assert_allclose(
+            same_logits[:, :2], logits[identical_rows, :2], atol=2e-6
+        )
+        np.testing.assert_allclose(same_values, values[identical_rows], atol=2e-6)
+
+    # Odd batches place the middle observation in the shorter half.
+    widths.clear()
+    odd_rows = [0, 1, 2]
+    odd = {key: value[odd_rows] for key, value in obs.items()}
+    odd_logits, odd_values = policy.evaluate(policy.prepare(odd))
+    assert set(widths) == {5, 6}
+    np.testing.assert_allclose(odd_logits[:, :2], logits[odd_rows, :2], atol=2e-6)
+    np.testing.assert_allclose(odd_values, values[odd_rows], atol=2e-6)
+
+    padded_width, bucket_width = table_widths
+    assert 6 < bucket_width < padded_width
+    _assert_terms_close(*results)
+
+
+@pytest.mark.parametrize(("rows", "groups"), [(64, 2), (192, 3), (256, 4)])
+def test_large_bucketed_batches_pack_more_attention_groups(
+    tmp_path: Path, rows: int, groups: int
+) -> None:
+    """Large batches pack more, shorter attention groups with unchanged outputs."""
+
+    _, _, agent = _converted(tmp_path)
+    space = agent.observation_space
+    obs = {
+        k: np.zeros((rows, *shape), dtype=np.float32)
+        for k, shape in space.shapes.items()
+    }
+    obs["agent_player_valid"][:] = 1
+    obs["opponent_player_valid"][:] = 1
+    obs["opponent_permanents_valid"][:, 0] = 1
+    cards = space.shapes["agent_cards"][0]
+    rng = np.random.default_rng(7)
+    for b, live in enumerate(rng.integers(0, cards + 1, rows)):
+        obs["agent_cards_valid"][b, rng.permutation(cards)[:live]] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"].fill(-1)
+    obs["action_focus"][:, 0, 0] = 0
+    obs["action_focus"][:, 1, 0] = 2 + 2 * cards + space.shapes["agent_permanents"][0]
+    returns = rng.uniform(-1, 1, rows).astype(np.float32)
+    checkpoint = policy_weights(agent)
+    results = []
+    for bucketed in (False, True):
+        policy = assemble(checkpoint, bucketed_shapes=bucketed)
+        prepared = policy.prepare(obs)
+        packed = prepared.packed_attention
+        if bucketed:
+            assert packed is not None and len(packed.groups) == groups
+            widths = [group.shape[1] for group in packed.groups]
+            assert widths == sorted(widths) and len(set(widths)) == groups
+        else:
+            assert packed is None
+        results.append(_learner_terms(policy, prepared, returns))
+    _assert_terms_close(*results)
 
 
 def test_mlx_bucketed_rejections_match_padded_and_torch(tmp_path: Path) -> None:
