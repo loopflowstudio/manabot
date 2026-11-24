@@ -51,13 +51,6 @@
   placed the registered policy at `run.input("start")` under the shared
   experiment label. The commands are in `manabot/backends/mlx.md`.
 
-## Realign after Slice 3
-
-- Share the serving cache's record traversal across backends. In
-  `manabot/backends/torch/_decision_memory.py`, the root selection rules use
-  host record keys, viewer identities and native epochs. A second traversal
-  could diverge on the restored branches introduced by `82c5d1d1b7`.
-
 ## Slice 4
 
 - A 65-record prefix on MLX CPU prepared 65 records cold and one warm.

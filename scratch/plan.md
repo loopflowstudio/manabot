@@ -14,18 +14,30 @@ write portable samplers by design. Torch retains legacy zip `.pt` reads. See
 `scratch/questions.md` for that choice and the linked run evidence.
 
 Parent PR #585 supplied exact MLX recovery, sampled health and local
-evaluation. Host observation preparation (`b9b09bc6d9`) and native snapshot
-rollouts (`82c5d1d1b7`) are now in the checkout. Extend the shared admission,
-`prepared_chunks` and retained-prefix paths. Native restores fork the
-decision-log lineage, so serving cache eligibility needs the viewer prefix
-identity and native epoch even when branches share the same record nodes.
+evaluation. Use the shared admission and host preparation paths
+(`b9b09bc6d9`). Native restores fork the decision-log lineage
+(`82c5d1d1b7`), so the shared serving cache binds roots to both the viewer
+prefix identity and native epoch even when branches share record nodes.
 
 ## Slices
 
-1. **Done (`90211689b7`)** — Gray Ogre PPO runs on MLX through the shared update with `world=None`, hashed records, and historical mean. A Torch-blocked recipe registered a policy after one MPS Adam step and both backends reloaded it with identical outputs.
-2. **Done (`ec62204d49`)** — Seven architecture cases matched Torch on forwards, gradients and clipped Adam weights. A collected WDL rollout trained through the shared categorical returns and the single `UpdateBackend` / `RL` surface.
-3. **Done (`a95bdce183`)** — Ten focused tests passed, including belief-row forward, gradient and Adam parity, portable sampler reads across backends and legacy Torch zip reads. The linked Torch-blocked Etude jobs registered the PPO policy and its bound sampler.
-4. **Done (`230c18b879`)** — Recent events and both decision-memory encoders run on MLX. GRU collection shares the lifetime-bound record cache with Torch. Live-token attention packs all object layers and bounds SDPA by the longest live sequence. MLX can branch from a published control with its saved column readings. Self-play admits live tokens on MLX CPU/MPS and Torch CUDA.
+1. **Done (`90211689b7`)** — Shared PPO update, Gray Ogre parity, and a Torch-blocked MPS policy registration.
+2. **Done (`ec62204d49`)** — Remaining critic readouts, attention off, and shared categorical returns with seven architecture parity cases.
+3. **Done (`a95bdce183`)** — Belief-row parity, portable samplers, legacy Torch reads, and linked Torch-blocked policy and sampler jobs.
+4. **Done (`230c18b879`, evidence in `dc864d6c9f`)** — History encoders, shared GRU serving cache, packed live-token attention, backend device admission and memory warm starts.
+
+## Next — Prepare packed attention coordinates once
+
+`manabot/policy/prepare.py` currently prepares the flat live index and sequence
+offsets. `LiveTokens.from_offsets` in `manabot/backends/mlx/live_tokens.py`
+still derives packed batch and slot coordinates and the additive key mask
+inside each forward. Move that derivation into host preparation so repeated
+forwards of one `Prepared` reuse it. Keep the MLX compact schedule on the host
+through Torch transfer and preserve Torch's existing index and offsets.
+Remove the reconstruction from the MLX forward. Check the schedule in
+`tests/model/test_prepare_rows.py` and run the existing unequal-length
+live-token parity and memory warm-start cases in
+`tests/model/test_mlx_backend.py`.
 
 ## Acceptance
 
@@ -50,19 +62,22 @@ identity and native epoch even when branches share the same record nodes.
 - The remaining architecture refusals are removed. Input-version refusal and
   checkpoint error context still work.
 
-## Next — Apple Silicon gate
+## Apple Silicon gate
 
 The local CPython 3.13 extension was rebuilt from this checkout after test
 collection found the previous binary lacked `managym.SlotLoad`. The five new
 architecture cases passed the existing forward, gradient and clipped Adam
 tolerances. A bounded PPO update branched from a Torch control with legacy
 readings, trained nonzero gates and reloaded them on MLX CPU and MPS.
-The full gate and the captured parity check in `docs/development.md` remain.
+Run the full gate and the captured parity check required by
+`docs/development.md#validation-by-change-area`.
 
 ```sh
-uv run --extra mlx --extra dev pytest -q \
+uv run --extra mlx --extra dev --extra artifacts pytest -q \
   tests/model/test_mlx_backend.py tests/belief \
   tests/training/test_update_backends.py tests/training/test_update_backend_protocols.py \
+  tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py \
+  tests/model/test_prepare_rows.py \
   tests/training/test_memory_chunk_cache.py tests/training/test_memory_prefix_storage.py \
   tests/training/test_memory_collection_fold.py tests/training/test_memory_learner_fold.py \
   tests/training/test_mlx_workflow.py tests/training/test_recipe_etude.py \
@@ -76,6 +91,18 @@ The earlier broad MLX file run during sync did not finish with a passing
 result. Its crash context was not captured in full. Gate should run the
 whole file against the rebuilt engine and retain the first failing node
 if the problem recurs.
+
+The artifact manifest lists the retained MLX pilot parity subset. Fetch it
+and check its world admission before using it as gate evidence. If admission
+fails, use a bounded current-world capture through
+`manabot/backends/torch/capture.py` and record the old capture's refusal.
+
+```sh
+doppler run --project manabot --config prd -- uv run --extra artifacts \
+  python -m manabot.data fetch experiments/data/mlx_pilot/capture
+uv run --extra mlx python -m manabot.backends.parity \
+  experiments/data/mlx_pilot/capture/initial.pt --capture experiments/data/mlx_pilot/capture
+```
 
 Scope ends at numerical parity. Torch resume, Etude managed evaluation,
 further speed optimization and claims about playing strength are excluded.
