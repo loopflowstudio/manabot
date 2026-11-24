@@ -303,6 +303,22 @@ impl Game {
             .collect()
     }
 
+    /// Blocks already declared in this combat, before the current decision
+    /// (a creature that must block and was offered no choice).
+    fn declared_blocks(&self) -> Vec<PlannedBlock> {
+        self.state
+            .combat
+            .iter()
+            .flat_map(|combat| &combat.attacker_to_blockers)
+            .flat_map(|(attacker, blockers)| {
+                blockers.iter().map(|blocker| PlannedBlock {
+                    blocker: self.render_id(*blocker),
+                    attacker: self.render_id(*attacker),
+                })
+            })
+            .collect()
+    }
+
     fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
         self.state
             .permanents
@@ -357,9 +373,22 @@ impl Game {
                 if let Some(id) = plan.attackers.first() {
                     return refuse(*id, "is not attacking now: this is a block.");
                 }
+                let declared = self.declared_blocks();
                 for (index, block) in plan.blocks.iter().enumerate() {
-                    if !asked(block.blocker) {
-                        return refuse(block.blocker, "can't block now.");
+                    if !asked(block.blocker) && !declared.contains(block) {
+                        let reason =
+                            match declared.iter().find(|other| other.blocker == block.blocker) {
+                                Some(other) => {
+                                    let attacker =
+                                        self.permanent_by_render_id(other.attacker).map_or_else(
+                                            || "an attacker".to_string(),
+                                            |attacker| self.label(attacker),
+                                        );
+                                    format!("already blocks {attacker}.")
+                                }
+                                None => "can't block now.".to_string(),
+                            };
+                        return refuse(block.blocker, &reason);
                     }
                     if plan.blocks[..index]
                         .iter()
@@ -525,8 +554,16 @@ impl Game {
                 })
             }
             DeclarationKind::Blockers => {
-                let missing = plan
-                    .blocks
+                // Blocks declared before this decision (a skipped creature
+                // that must block) are not part of the plan.
+                let mut planned = plan.blocks.clone();
+                planned.extend(self.declared_blocks().into_iter().filter(|block| {
+                    !plan
+                        .blocks
+                        .iter()
+                        .any(|other| other.blocker == block.blocker)
+                }));
+                let missing = planned
                     .iter()
                     .find(|block| !preview.declared_blocks.contains(block));
                 if let Some(block) = missing {
@@ -543,7 +580,7 @@ impl Game {
                 preview
                     .declared_blocks
                     .iter()
-                    .find(|block| !plan.blocks.contains(block))
+                    .find(|block| !planned.contains(block))
                     .map(|block| {
                         let label = named(block.blocker);
                         DeclarationRefusal {

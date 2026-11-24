@@ -1830,8 +1830,9 @@ fn revealed_since(
 /// cards from the top of your library until you reveal a creature card. Put
 /// that card into your hand and the rest on the bottom of your library in a
 /// random order." The cards stay in the library while revealed: a match on
-/// top keeps every known position, one passed card keeps those below it, and
-/// two or more passed cards are put back in an unknown order.
+/// top keeps every known position, one passed card keeps those below it and
+/// is publicly known on the bottom, and two or more passed cards are put back
+/// in an unknown order.
 #[test]
 fn foundations_5f_spinner_of_souls() {
     use crate::support::{
@@ -1890,9 +1891,16 @@ fn foundations_5f_spinner_of_souls() {
     assert_eq!(s.game().state[hand(&s, 0)[0]].name, "Gray Ogre");
     assert_eq!(library(&s, 0)[0], pinned[0], "the Forest is on the bottom");
     assert_eq!(revealed_since(&s, cursor)[0], forest);
+    let bottom = library(&s, 0).len() - 1;
+    let known = &s.game().state.players[0].known_library;
     assert_eq!(
-        s.game().state.players[0].known_library.own,
-        BTreeMap::from([(0, island), (1, plains)])
+        known.own,
+        BTreeMap::from([(0, island), (1, plains), (bottom, forest)])
+    );
+    assert_eq!(
+        known.public,
+        BTreeMap::from([(bottom, forest)]),
+        "the revealed Forest is publicly known on the bottom"
     );
 
     // Two lands passed: both go to the bottom in a random order.

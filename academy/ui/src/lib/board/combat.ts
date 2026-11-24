@@ -107,6 +107,18 @@ export function drawDraft(frame: ExperienceFrame, draft: Draft): ExperienceFrame
   };
 }
 
+/**
+ * What the engine already declared in this frame without asking: a creature
+ * that must attack, or a blocker with one legal block (`skip_trivial`).
+ */
+export function committedOf(frame: ExperienceFrame): Draft {
+  const permanents = [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield];
+  return {
+    attackers: permanents.filter(permanent => permanent.attacking).map(permanent => permanent.id),
+    blocks: permanents.flatMap(permanent => (permanent.blocking === undefined ? [] : [[permanent.id, permanent.blocking] as [number, number]])),
+  };
+}
+
 // ———————————————————————————————————————— Words
 
 /** "Tiger-Seal", "Ally ×2": names in first-seen order, repeats counted. */
@@ -127,8 +139,15 @@ export interface DraftWords {
   plan: string;
 }
 
-export function draftWords(kind: CombatPreview['kind'], draft: Draft, declarable: DeclarableCreature[], names: Map<number, string>): DraftWords {
+/** Words for the declaration as it will stand: `committed` (see `committedOf`) plus the draft. */
+export function draftWords(
+  kind: CombatPreview['kind'], drafted: Draft, declarable: DeclarableCreature[], names: Map<number, string>, committed: Draft,
+): DraftWords {
   const name = (id: number): string => names.get(id) ?? 'a creature';
+  const draft: Draft = {
+    attackers: [...committed.attackers.filter(id => !drafted.attackers.includes(id)), ...drafted.attackers],
+    blocks: [...committed.blocks.filter(([blocker]) => !drafted.blocks.some(([b]) => b === blocker)), ...drafted.blocks],
+  };
   if (kind === 'attackers') {
     const count = draft.attackers.length;
     if (count === 0) return { text: 'No attack', plan: 'No attack · click creatures to add them' };

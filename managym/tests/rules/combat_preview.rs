@@ -317,3 +317,111 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
         }
     }
 }
+
+/// Taunting Challenge makes Giant Spider block Wind Drake (CR 509.1c). When
+/// the engine has already declared that block without asking, the preview
+/// accepts plans that include or omit it, refuses moving it, and still asks
+/// for the Llanowar Elves' answer.
+#[test]
+fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
+    use crate::support::play::{cast, settle};
+    use managym::state::target::Target;
+    let mut reached_predeclared = false;
+    for order in [
+        ["Giant Spider", "Llanowar Elves"],
+        ["Llanowar Elves", "Giant Spider"],
+    ] {
+        let mut s = five_color_setup(&[
+            "Taunting Challenge",
+            "Wind Drake",
+            "Gray Ogre",
+            "Giant Spider",
+            "Llanowar Elves",
+        ]);
+        let drake = s.force_permanent_on_battlefield(0, "Wind Drake");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        for id in [drake, ogre] {
+            clear_summoning_sickness(&mut s, id);
+        }
+        let blockers: Vec<_> = order
+            .iter()
+            .map(|name| s.force_permanent_on_battlefield(1, name))
+            .collect();
+        let spider = blockers[order.iter().position(|n| *n == "Giant Spider").unwrap()];
+        let elves = blockers[order.iter().position(|n| *n == "Llanowar Elves").unwrap()];
+        cast(&mut s, "Taunting Challenge");
+        assert!(s.choose_target(Target::Permanent(drake)));
+        settle(&mut s);
+        s.game_mut().skip_trivial = true;
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            let index = s
+                .action_space()
+                .actions
+                .iter()
+                .position(|action| {
+                    matches!(
+                        action,
+                        managym::agent::action::Action::DeclareAttacker { attack: true, .. }
+                    )
+                })
+                .unwrap();
+            s.step_action(index);
+        }
+        s.advance_until(
+            |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+            "failed to reach blockers".into(),
+        );
+        let game = s.game();
+        let predeclared =
+            !game.state.combat.as_ref().unwrap().attacker_to_blockers[&drake].is_empty();
+        reached_predeclared |= predeclared;
+        let context = format!("order {order:?}, spider pre-declared {predeclared}");
+        let forced = PlannedBlock {
+            blocker: render(game, spider),
+            attacker: render(game, drake),
+        };
+        let elves_on_ogre = PlannedBlock {
+            blocker: render(game, elves),
+            attacker: render(game, ogre),
+        };
+
+        for blocks in [vec![forced, elves_on_ogre], vec![elves_on_ogre]] {
+            let plan = CombatPlan {
+                attackers: Vec::new(),
+                blocks: blocks.clone(),
+            };
+            let result = preview(game, 1, &plan);
+            if predeclared || blocks.contains(&forced) {
+                assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
+                let mut declared = result.declared_blocks.clone();
+                declared.sort_by_key(|block| block.blocker.entity);
+                let mut wanted = vec![forced, elves_on_ogre];
+                wanted.sort_by_key(|block| block.blocker.entity);
+                assert_eq!(declared, wanted, "{context}");
+            } else {
+                assert_eq!(
+                    result.refused.expect("omitting the forced block").reason,
+                    "Giant Spider must block Wind Drake.",
+                    "{context}"
+                );
+            }
+        }
+
+        if predeclared {
+            let moved = CombatPlan {
+                attackers: Vec::new(),
+                blocks: vec![PlannedBlock {
+                    blocker: render(game, spider),
+                    attacker: render(game, ogre),
+                }],
+            };
+            assert_eq!(
+                preview(game, 1, &moved).refused.unwrap().reason,
+                "Giant Spider already blocks Wind Drake.",
+                "{context}"
+            );
+        }
+    }
+    assert!(reached_predeclared, "one order declares the Spider first");
+}

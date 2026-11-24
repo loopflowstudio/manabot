@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
 import {
-  drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setPileCount, stepOffer, toggleAttacker, toggleBlock,
+  committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setPileCount, stepOffer, toggleAttacker, toggleBlock,
   type CombatPreview, type DeclarableCreature, type DeclarationStep,
 } from './combat';
 
@@ -28,17 +28,37 @@ describe('draftWords', () => {
   const attackers = [creature(1, 'Tiger-Seal'), creature(2, 'Otter-Penguin'), creature(3, 'Ally'), creature(4, 'Ally')];
 
   it('reads the whole attack, naming who stays home', () => {
-    expect(draftWords('attackers', { attackers: [2, 3, 4], blocks: [] }, attackers, names))
+    expect(draftWords('attackers', { attackers: [2, 3, 4], blocks: [] }, attackers, names, EMPTY_DRAFT))
       .toEqual({ text: 'Attack with 3', plan: 'Attack with 3 · not with Tiger-Seal' });
-    expect(draftWords('attackers', { attackers: [2], blocks: [] }, attackers, names).plan)
+    expect(draftWords('attackers', { attackers: [2], blocks: [] }, attackers, names, EMPTY_DRAFT).plan)
       .toBe('Attack with Otter-Penguin · not with Tiger-Seal and Ally ×2');
-    expect(draftWords('attackers', { attackers: [1, 2, 3, 4], blocks: [] }, attackers, names).plan).toBe('Attack with all 4');
-    expect(draftWords('attackers', EMPTY_DRAFT, attackers, names).text).toBe('No attack');
+    expect(draftWords('attackers', { attackers: [1, 2, 3, 4], blocks: [] }, attackers, names, EMPTY_DRAFT).plan).toBe('Attack with all 4');
+    expect(draftWords('attackers', EMPTY_DRAFT, attackers, names, EMPTY_DRAFT).text).toBe('No attack');
   });
 
   it('reads blocks by the attacker they stop', () => {
-    const words = draftWords('blockers', { attackers: [], blocks: [[3, 1], [4, 1], [2, 5]] }, [], names);
+    const words = draftWords('blockers', { attackers: [], blocks: [[3, 1], [4, 1], [2, 5]] }, [], names, EMPTY_DRAFT);
     expect(words).toEqual({ text: 'Block with 3', plan: 'Ally ×2 on Tiger-Seal · Otter-Penguin on Ally' });
+  });
+
+  it('counts what the engine already declared without asking', () => {
+    const juggernaut = new Map([...names, [9, 'Juggernaut']]);
+    const committed = { attackers: [9], blocks: [] };
+    expect(draftWords('attackers', EMPTY_DRAFT, attackers, juggernaut, committed).text).toBe('Attack with Juggernaut');
+    expect(draftWords('attackers', { attackers: [1], blocks: [] }, attackers, juggernaut, committed).text).toBe('Attack with 2');
+    const forced = { attackers: [], blocks: [[3, 1]] as [number, number][] };
+    expect(draftWords('blockers', EMPTY_DRAFT, [], names, forced)).toEqual({ text: 'Block with 1', plan: 'Ally on Tiger-Seal' });
+    expect(draftWords('blockers', { attackers: [], blocks: [[2, 5]] }, [], names, forced).text).toBe('Block with 2');
+  });
+
+  it('reads committed attackers and blockers from the live frame', () => {
+    const frame = structuredClone(block);
+    const [mine, theirs] = [frame.projection.agent.battlefield[0], frame.projection.opponent.battlefield[0]];
+    mine.attacking = true;
+    theirs.blocking = mine.id;
+    const committed = committedOf(frame);
+    expect(committed.attackers).toContain(mine.id);
+    expect(committed.blocks).toContainEqual([theirs.id, mine.id]);
   });
 });
 

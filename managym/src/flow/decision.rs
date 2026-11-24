@@ -3573,7 +3573,7 @@ impl Game {
     /// `predicate`; it goes to their hand and the cards revealed before it to
     /// the bottom in a random order. The cards never leave the library while
     /// revealed, so the match leaves a public position and a single passed
-    /// card keeps every fact below it.
+    /// card keeps every fact below it and is publicly known on the bottom.
     pub(crate) fn reveal_until_to_hand(&mut self, player: PlayerId, predicate: &CardPredicate) {
         let from_top: Vec<ObjectId> = self.library_from_top(player).collect();
         let hit = from_top
@@ -3598,7 +3598,15 @@ impl Game {
         }
         match passed.as_slice() {
             [] => {}
-            [top] => self.place_entrant_on_bottom(*top),
+            [top] => {
+                let definition = self.state[*top].definition_id;
+                let knowledge = self.state.known_library_mut(player);
+                for view in [&mut knowledge.public, &mut knowledge.own] {
+                    view.insert(0, definition);
+                    LibraryKnowledge::bound(view);
+                }
+                self.place_entrant_on_bottom(*top);
+            }
             _ => {
                 let mut rest = passed;
                 rest.shuffle(self.state.rng_mut());
