@@ -297,6 +297,17 @@ describe('the spell being cast', () => {
     expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
+  it('draws a spell announced from outside the hand with its card', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const source = frame.projection.decision_context!.source!;
+    const agent = frame.projection.agent;
+    const card = agent.hand.find(candidate => candidate.id === source.display_id)!;
+    agent.hand = agent.hand.filter(candidate => candidate !== card);
+    agent.graveyard = [...agent.graveyard, { ...card, zone: 'graveyard' }];
+    const view = boardView(frame, PLAYERS);
+    expect(view.stack[0]).toMatchObject({ announcing: 'spell', card: { id: source.display_id } });
+  });
+
   it('names an ability being activated by its source and leaves the source on the battlefield', () => {
     const frame = structuredClone(navigation.PAY_OR_NOT.frame);
     const land = frame.projection.agent.battlefield[0];

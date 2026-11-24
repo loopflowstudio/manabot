@@ -253,8 +253,9 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
   const announced = announcement(frame);
   if (announced) {
     const { source, kind } = announced;
-    // A spell's card is drawn here rather than in the hand; an ability's source stays on the battlefield.
-    const card = kind === 'spell' ? frame.projection.agent.hand.find(candidate => candidate.id === source.display_id) ?? null : null;
+    // A spell's card is drawn here rather than in its zone (hand, graveyard, exile); an ability's source stays on the battlefield.
+    const players = [frame.projection.agent, frame.projection.opponent];
+    const card = kind === 'spell' ? inspectableCards(players).find(candidate => candidate.id === source.display_id) ?? null : null;
     items.push({
       entry: { id: -source.display_id - 1, kind, controller: frame.projection.decision_context!.actor, label: source.label,
         ...(kind === 'activated_ability' ? { source_permanent: source.display_id } : {}) },
