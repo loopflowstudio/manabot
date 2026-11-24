@@ -854,7 +854,22 @@ pub struct SpellCostReduction {
     pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
     pub condition: Condition,
-    pub generic: u8,
+    /// Generic mana less, read as the spell's cost is determined: a fixed
+    /// amount, or one relative to the reducing permanent ("{X} less, where X
+    /// is equipped creature's power"). A fixed amount serializes as its
+    /// number, as before amounts could vary.
+    #[serde(serialize_with = "fixed_as_number")]
+    pub generic: EffectValue,
+}
+
+fn fixed_as_number<S: serde::Serializer>(
+    value: &EffectValue,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        EffectValue::Fixed(amount) => serializer.serialize_i32(*amount),
+        value => serde::Serialize::serialize(value, serializer),
+    }
 }
 
 /// A P/T amount read from the current layer context for an affected object.

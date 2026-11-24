@@ -10,7 +10,7 @@ use crate::{
         turn::RecordedCast,
     },
     state::{
-        ability::{Condition, PaymentCost},
+        ability::{Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             StaticAbility, StaticScope,
@@ -777,6 +777,27 @@ impl Game {
     pub(crate) fn attached_creature(&self, source: PermanentId) -> Option<PermanentId> {
         self.attached_permanent(source)
             .filter(|&creature| self.layer_view(creature).is_creature())
+    }
+
+    /// The power of the creature `source` is attached to, at least 0; 0 when
+    /// it is attached to no creature (`EffectValue::AttachedCreaturePower`).
+    pub(crate) fn attached_creature_power(&self, source: PermanentId) -> i32 {
+        self.attached_creature(source)
+            .map_or(0, |creature| self.layer_view(creature).power.max(0))
+    }
+
+    /// `value` as a static ability of `source` reads it: values relative to
+    /// that permanent, else as its controller's quantity.
+    pub(crate) fn static_value(
+        &self,
+        value: &EffectValue,
+        source: PermanentId,
+        controller: PlayerId,
+    ) -> i32 {
+        match value {
+            EffectValue::AttachedCreaturePower => self.attached_creature_power(source),
+            value => self.controller_value(value, controller),
+        }
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {

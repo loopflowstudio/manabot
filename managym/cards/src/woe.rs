@@ -1,6 +1,6 @@
 //! Wilds of Eldraine.
 use managym_state::{
-    ability::{Condition, Effect, ObjectSelector, TargetSpec},
+    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SpellCostReduction, StaticAbility,
@@ -92,7 +92,7 @@ fn mocking_sprite() -> CardDefinition {
                     ..Default::default()
                 },
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             text_box: text_box.into(),
             ..Default::default()

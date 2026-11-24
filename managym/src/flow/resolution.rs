@@ -109,6 +109,9 @@ impl Game {
                         .map(|lki| lki.power)
                 })
                 .unwrap_or(0),
+            EffectValue::AttachedCreaturePower => self
+                .source_permanent_id(frame)
+                .map_or(0, |source| self.attached_creature_power(source)),
             EffectValue::AttackingMatching { predicate } => self
                 .battlefield_permanents(frame.controller)
                 .into_iter()
@@ -136,6 +139,7 @@ impl Game {
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
+            | EffectValue::AttachedCreaturePower
             | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
             | EffectValue::TriggeringManaValue
@@ -2273,6 +2277,11 @@ impl Game {
                 .iter()
                 .map(|binding| binding.object)
                 .filter(|object| self.state.live(*object).is_some())
+                .collect(),
+            ObjectSelector::Matching { of, predicate } => self
+                .select(of, frame)
+                .into_iter()
+                .filter(|object| self.object_matches_predicate(*object, predicate))
                 .collect(),
             ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
                 (match what {

@@ -4653,7 +4653,7 @@ fn gran_gran() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -6701,7 +6701,7 @@ fn momo_friendly_flier() -> CardDefinition {
                     ..Default::default()
                 },
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -10613,7 +10613,7 @@ fn uncle_iroh() -> CardDefinition {
                     ..Default::default()
                 },
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,

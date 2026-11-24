@@ -680,6 +680,11 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::Moved => "it".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
+        ObjectSelector::Matching { of, predicate } => format!(
+            "all {} among {}",
+            predicate_description(predicate, "card"),
+            selector_description(of)
+        ),
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
         ObjectSelector::TargetPlayersZone { spec, zone } => format!(
             "{}'s {}",
@@ -840,6 +845,7 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
+        EffectValue::AttachedCreaturePower => "equipped creature's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),

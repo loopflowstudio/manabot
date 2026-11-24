@@ -579,6 +579,9 @@ pub enum EffectValue {
     /// The source permanent's current power ("where X is this creature's
     /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
+    /// The power of the creature the source is attached to ("where X is
+    /// equipped creature's power"), at least 0; 0 when it is attached to none.
+    AttachedCreaturePower,
     /// Attacking creatures `controller` controls matching `predicate`, as
     /// the effect resolves ("search for up to that many").
     AttackingMatching {
@@ -713,6 +716,12 @@ pub enum ObjectSelector {
     CardsThisWay,
     /// Exact objects chosen by the enclosing SelectCards operation.
     Selected,
+    /// The objects `of` names that match [predicate], without a choice
+    /// ("put all instant and sorcery cards from among them into your hand").
+    Matching {
+        of: Box<ObjectSelector>,
+        predicate: CardPredicate,
+    },
     /// Cards the resolving player owns in a zone. Hidden selection retains
     /// the zone provenance across sampled worlds.
     Zone(ZoneType),
@@ -819,6 +828,7 @@ impl ObjectSelector {
         match self {
             Self::Target(spec) | Self::Targets(spec) => Some(spec),
             Self::TargetPlayersZone { spec, .. } => Some(spec),
+            Self::Matching { of, .. } => of.target_spec(),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..

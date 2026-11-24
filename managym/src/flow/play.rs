@@ -542,7 +542,7 @@ impl Game {
         }
         // Tinybones: "mana of any type can be spent to cast those spells".
         let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)));
-        for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+        for (source, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             for ability in &view.static_abilities {
                 if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
                     any_mana |= cast.matches_spell(self, object, predicate);
@@ -572,7 +572,8 @@ impl Game {
                 if cast.matches_spell(self, object, &reduction.predicate)
                     && self.check_static_condition(&reduction.condition, player)
                 {
-                    cost = cost.reduced_generic(reduction.generic);
+                    let generic = self.static_value(&reduction.generic, source, player);
+                    cost = cost.reduced_generic(u8::try_from(generic.max(0)).unwrap_or(u8::MAX));
                 }
             }
         }

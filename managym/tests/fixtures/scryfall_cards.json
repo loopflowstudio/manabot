@@ -8101,5 +8101,18 @@
     "colors": [
       "B"
     ]
+  },
+  "Glamdring, Foe-hammer": {
+    "name": "Glamdring, Foe-hammer",
+    "mana_cost": "{2}",
+    "type_line": "Legendary Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip",
+      "Mill"
+    ],
+    "oracle_text": "Instant and sorcery spells you cast cost {X} less to cast, where X is equipped creature's power.\nEquip {2}",
+    "colors": []
   }
 }

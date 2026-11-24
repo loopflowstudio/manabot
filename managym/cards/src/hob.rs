@@ -32,6 +32,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         beorn_reluctant_host(),
         smaug_the_great_calamity(),
         bilbo_thief_in_the_night(),
+        glamdring_foe_hammer(),
     ]
 }
 
@@ -621,6 +622,64 @@ fn thranduil_sindarin_liege() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::create_tokens("token.elf", 1)],
+            }],
+            inset: Some(InsetSpell::Adventure(inset.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn glamdring_foe_hammer() -> CardDefinition {
+    let text = "Instant and sorcery spells you cast cost {X} less to cast, where X is equipped creature's power.\nEquip {2}";
+    let adventure_text = "Mill six cards, then put all instant and sorcery cards from among them into your hand. (Then exile this card. You may cast the artifact later from exile.)";
+    let spells = || CardPredicate {
+        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+        ..Default::default()
+    };
+    let inset = PrintedCharacteristics {
+        name: "Gleam of Death".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Adventure".into()],
+        spell_effects: vec![
+            Effect::MillCards {
+                count: EffectValue::Fixed(6),
+                target: None,
+            },
+            Effect::return_to_hand(ObjectSelector::Matching {
+                of: Box::new(ObjectSelector::CardsThisWay),
+                predicate: spells(),
+            }),
+        ],
+        text_box: adventure_text.into(),
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "hob.glamdring_foe_hammer",
+        scryfall_id: "a5cfbfde-783e-46ca-b3cf-11f16209d6cb",
+        printed: PrintedCharacteristics {
+            name: "Glamdring, Foe-hammer".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            supertypes: vec!["Legendary".into()],
+            text_box: text.into(),
+            statics: vec![StaticAbility::SpellsCostLess(
+                managym_state::card::SpellCostReduction {
+                    first_on_own_turn: false,
+                    predicate: spells(),
+                    condition: Condition::Always,
+                    generic: EffectValue::AttachedCreaturePower,
+                },
+            )],
+            activated_abilities: vec![managym_state::card::ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
             }],
             inset: Some(InsetSpell::Adventure(inset.into())),
             ..Default::default()

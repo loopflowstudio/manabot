@@ -781,3 +781,94 @@ fn allure_sacrifices_before_drawing_and_my_precious_charges_both_equip_costs() {
         .iter()
         .any(|p| p.cant_be_blocked_this_turn));
 }
+
+/// Glamdring takes {X} off instant and sorcery spells, X the equipped
+/// creature's power: Spew Flame costs {2}{R} with a 2/2 equipped and its
+/// printed {4}{R} once that creature is gone. Gleam of Death mills six and
+/// returns every instant and sorcery among them without a choice, then
+/// goes on an Adventure.
+#[test]
+fn glamdring_discounts_by_equipped_power_and_gleam_returns_every_milled_spell() {
+    use crate::support::{
+        game::{move_card, move_from_library, pin_top},
+        inspect::{hand, now, zone_of},
+        play::{activate, cast_profile, castable},
+    };
+    use managym::state::{player::ManaPayment, zone::ZoneType};
+    let mut s = five_color_setup(&[
+        "Glamdring, Foe-hammer",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+        "Think Twice",
+        "Counterspell",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let glamdring = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Glamdring, Foe-hammer", true)
+        .unwrap();
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Hand);
+    let spew_flame_castable = |s: &mut crate::support::game::Scenario| {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(s, smaug);
+        s.action_space().actions.iter().any(|a| {
+            matches!(a, managym::agent::action::Action::CastSpell { object: o, profile: SpellProfile::Adventure, .. } if *o == object)
+        })
+    };
+    s.set_player_mana_pool(0, "2R");
+    assert!(!spew_flame_castable(&mut s), "unequipped: {{4}}{{R}}");
+
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, glamdring, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "2R");
+    assert!(spew_flame_castable(&mut s), "a 2/2 equipped: {{2}}{{R}}");
+    let mut unequipped = s.clone();
+    let creature = unequipped.game().state.permanents[ogre]
+        .as_ref()
+        .unwrap()
+        .object;
+    move_card(&mut unequipped, creature, ZoneType::Graveyard);
+    assert!(!spew_flame_castable(&mut unequipped), "nothing equipped");
+    cast_profile(&mut s, smaug, SpellProfile::Adventure);
+    assert!(s.choose_target(Target::Permanent(enemy)));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+
+    // Gleam of Death: two of the six milled cards are instants or sorceries.
+    let mut gleam = five_color_setup(&["Glamdring, Foe-hammer", "Think Twice", "Counterspell"]);
+    gleam.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let card = move_from_library(&mut gleam, 0, "Glamdring, Foe-hammer", ZoneType::Hand);
+    let milled = pin_top(
+        &mut gleam,
+        &[
+            "Island",
+            "Think Twice",
+            "Forest",
+            "Counterspell",
+            "Swamp",
+            "Plains",
+        ],
+    );
+    gleam.set_player_mana_pool(0, "3U");
+    assert!(castable(&mut gleam, card));
+    cast_profile(&mut gleam, card, SpellProfile::Adventure);
+    settle(&mut gleam);
+    let mut returned: Vec<_> = hand(&gleam, 0)
+        .into_iter()
+        .map(|id| gleam.game().state[id].name.clone())
+        .collect();
+    returned.sort();
+    assert_eq!(returned, ["Counterspell", "Think Twice"]);
+    for land in [milled[0], milled[2], milled[4], milled[5]] {
+        assert_eq!(zone_of(&gleam, land), Some(ZoneType::Graveyard));
+    }
+    assert_eq!(
+        zone_of(&gleam, card),
+        Some(ZoneType::Exile),
+        "on an Adventure"
+    );
+}

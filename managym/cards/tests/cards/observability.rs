@@ -492,6 +492,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Matching { .. } => "ObjectSelector::Matching",
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::TargetPlayersZone { .. } => "ObjectSelector::TargetPlayersZone",
         ObjectSelector::You => "ObjectSelector::You",
@@ -500,7 +501,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 16] {
+fn selector_witnesses() -> [ObjectSelector; 17] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -513,6 +514,10 @@ fn selector_witnesses() -> [ObjectSelector; 16] {
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
+        ObjectSelector::Matching {
+            of: Box::new(ObjectSelector::CardsThisWay),
+            predicate: CardPredicate::creature(),
+        },
         ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::TargetPlayersZone {
             spec: Box::new(TargetSpec::Opponent),
@@ -1796,7 +1801,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             first_on_own_turn: false,
             predicate: CardPredicate::default(),
             condition: Condition::Always,
-            generic: 1,
+            generic: EffectValue::Fixed(1),
         }),
         StaticAbility::CostsLessPerPermanent(creature()),
         StaticAbility::CostsLessPerPermanentOnBattlefield(creature()),
