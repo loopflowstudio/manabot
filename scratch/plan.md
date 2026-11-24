@@ -384,7 +384,7 @@ The working phase for the life batch is satisfied except Finding 6 below. These 
    fixtures are named in the slices above.
 6. **Closed in the death slice.** **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
 
-7. **A stacked "up to" modal trigger that chose no modes reads as all of
+7. **Closed in `4502508574`.** **A stacked "up to" modal trigger that chose no modes reads as all of
    them.** `trigger_description` (`agent/ability_description.rs`) only
    prefixes "chosen mode N" when `chosen_modes` is nonempty and otherwise
    describes the printed `TriggerModes`. Before the death slice an empty
@@ -476,7 +476,7 @@ Compression (`e4579800a7`) gave stacked triggers one effects reader, `Game::stac
 
 Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
-Still open from this slice: re-record conformance evidence (catalog grew again, hash v27, now v28) at the final head; Findings 3–5. Finding 7 was fixed in `4502508574`.
+Still open from this slice: re-record conformance evidence (catalog grew again; hash now v29) at the final head; Findings 3–5. Finding 7 was fixed in `4502508574`.
 
 **Compression at the draw/cast slice.** Stack lookups now go through `spell_on_stack` and `stack_index_of(Target)`; X-inclusive mana value is `Object::mana_value_with_x`; one `trigger_context` binds the event object for the intervening-if and the stacked ability; pending trigger text and definitions share `pending_trigger_description`/`pending_trigger_definition`. Finding 7 is fixed there: a modal trigger with zero chosen modes reads "no modes chosen". Debug workspace: 1588 passed; the 15 stale `frozen_*`/inventory cases fail as recorded above, and `compatibility_names_and_content_allocations_are_metamorphic` fails (state hash diverges at step 47 after renaming objects). It fails identically at `1ca881442e`. Cause (read at `f11b0b882c`): the test rewrites every `Object.name` (`conformance.rs::rename_compatibility_cards`), and the death batch's v27 `ObjectLki` serializes the layered `name` (`state/src/game_object.rs:307`) into the hashed state, so the first departure diverges. `SpellLki` carries no name. Remaining: keep the departed name out of hashed identity (it follows from `source_base` and copy provenance, or hash the definition key instead), or rename it in the test alongside `Object.name`; decide which before re-recording evidence. Focused Python: 116 passed, 1 skipped.
 
@@ -523,9 +523,8 @@ The working phase for this batch is satisfied except Finding 8 (text only). At t
 - Constraint, not this batch's defect: `on_step_start` emits `StepStarted { Draw }` on the first player's turn 1, even though CR 103.8a skips that step. So a "beginning of each player's draw step" trigger (Dictate, and the existing `fut.rs` card) would fire on that turn. In ordinary games no such permanent can be on the battlefield before that step; only constructed positions reach it. The concept review kept turn 1's step schedule for frozen replays. Any fix belongs with that schedule.
 - `scratch/questions.md` calls Rhino's multi-target case untested; Fancy Footwork covers it.
 
-8. **A cast trigger reading its spell calls the spell "that permanent".** `selector_description` (`agent/ability_description.rs:728`) describes `ObjectSelector::Triggering` as "that permanent" whatever the event. Ramos's stack and card text reads "Put the number of colors of that permanent +1/+1 counters on this", although the triggering object is a spell. Reproduction: describe `c17.ramos_dragon_engine`'s trigger. Fix: describe `Triggering` by the event's noun. For `Casts` (and other spell events) say "that spell"; keep "that permanent" for permanent events. Either thread the noun from `condition_description` into the effect text or say "that object" everywhere. Assert Ramos's text in `c17.rs`.
+8. **Closed in the departed-name and damage slice:** cast triggers named their spell "that permanent".
 
-Finding 8 was fixed in the departed-name and damage slice below.
 
 ### Implemented slice · Departed-name LKI repair and damage recipients, amounts and results (Hash v29)
 
@@ -544,6 +543,11 @@ Shared changes:
 Checks, all debug: cards target (917), `managym` lib (360), rules (188), `match_state_hash_tests`, `search_state_contract`, `canonical_replay_tests`, content pack, engine, scenario, authored match, and `compatibility_names_and_content_allocations_are_metamorphic` (passes again). The 14 `frozen_*` cases and the inventory test still fail only as stale evidence (catalog grew; re-record at the final head as described above). After rebuilding and atomically installing the cp313 extension, the focused Python selection passed (116 passed, 1 skipped).
 
 Witnesses: Niv-Mizzet draws 3 for a Bolt to the opponent, 0 when the Bolt's controller is changed to the opponent (stolen spell), 0 to its controller or a creature, 1 for a sacrificed Fanatical Firebrand (departed source), and 0 for its own combat damage. Goblin Negotiation makes 3 Goblins at X = 5 on a 2/2, 0 at X = 2, and 0 when a later damage instruction to a player follows (the stale-excess control). No catalog card prevents damage to a creature, so "prevented excess" is covered by that later-instruction control rather than by real prevention.
+
+Shape review at `cf15cce2e7` (remaining work, not defects observed in a fixture):
+
+- `name_triggering_object` rewrites every "that permanent" in the generated effect text, not only the words `ObjectSelector::Triggering` produced. A spell-event trigger whose program also names a target or chosen permanent "that permanent" would read "that spell". Thread the noun into `selector_description` for `Triggering` and delete the string rewrite, when the next slice touches ability text.
+- `DealsNoncombatDamage` puts combat/noncombat in the variant name beside `DealsCombatDamage { subject, to, per }`, against the "parameters are fields, not names" rule for `TriggerCondition`. The two also differ in actor shape (`Actor` source versus `TriggerSubject`) and event (`DamageDealt` versus `CombatDamageToPlayers`). Quilled Greatwurm's blocker (combat damage to any recipient) needs the same event to widen. Decide there whether one `DealsDamage { subject, to, combat: Option<bool>, per }` replaces both, keeping `DealsCombatDamage` for pinned pilots.
 
 Next: the live-board counts, name predicates and turn departures slice below.
 
