@@ -1,4 +1,4 @@
-at: 3b1e8a2888c664c8934a33df40756ea9fa24e19b
+at: a2e481d191d87844a91e6ea24a34652ec8d899e1
 first:
   - path: scratch/plan.md
     why: Tracks verified card batches and remaining rules work.
@@ -12,6 +12,8 @@ first:
     why: Defines flying exclusions and minimum toughness.
   - path: managym/state/src/card.rs
     why: Defines continuous abilities and equip costs.
+  - path: managym/state/src/effect.rs
+    why: Defines the combat-damage shield record.
   - path: managym/cards/src/fdn.rs
     why: Assembles the rules for first-printing Foundations cards.
   - path: managym/src/flow/triggers.rs
@@ -22,6 +24,10 @@ first:
     why: Resolves attachments, library choices and target legality.
   - path: managym/src/flow/proposed_event.rs
     why: Commits replacements and reveals library cards entering hand.
+  - path: managym/src/flow/combat_preview.rs
+    why: Keeps declarations the engine made without asking.
+  - path: academy/ui/src/lib/board/combat.ts
+    why: Names committed attackers and blockers on the button.
   - path: managym/src/state/knowledge.rs
     why: Keeps known library positions when a card goes to the bottom.
   - path: managym/src/flow/combat_actions.rs
