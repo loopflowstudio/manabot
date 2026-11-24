@@ -22,9 +22,9 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.semantic.text_observation import capture_text_decision, submit_response
+import managym
 from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import decision_surface_view
-import managym
 
 SPACE = ObservationSpace(ObservationConfig())
 CONTROLLER, OPPONENT = 0, 1
@@ -108,7 +108,9 @@ def two_roots(env: managym.Env) -> tuple[managym.Env, managym.Env]:
 def test_two_manifest_roots_are_byte_equal_to_the_opponent() -> None:
     first, second = two_roots(opponent_decision_after_manifest("open"))
     assert first.state_digest() != second.state_digest()
-    assert manifest_printing(first, OPPONENT) == manifest_printing(second, OPPONENT) == -1
+    assert (
+        manifest_printing(first, OPPONENT) == manifest_printing(second, OPPONENT) == -1
+    )
 
     left, right = opponent_views(first), opponent_views(second)
     for consumer in left:
@@ -120,7 +122,9 @@ def test_two_manifest_roots_are_byte_equal_to_the_opponent() -> None:
             root.snapshot().to_replay_json()
         ).restore()
         assert replay.state_digest() == root.state_digest()
-        assert replay.semantic_decision_frame_json() == root.semantic_decision_frame_json()
+        assert (
+            replay.semantic_decision_frame_json() == root.semantic_decision_frame_json()
+        )
         assert manifest_printing(replay, CONTROLLER) == manifest_printing(
             root, CONTROLLER
         )

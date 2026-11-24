@@ -1,15 +1,22 @@
-"""Recover a real manifest offer, then replay its private choice and public reveal."""
+"""Recover a real manifest offer, then replay its private choice and public reveal.
 
+A manifest's public references keep incarnation 0 after it turns face up, so
+Academy's offer subjects, presentation events, reconnect frames and recording
+labels must still join them to the face-up permanent on the board.
+"""
+
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
 from starlette.testclient import WebSocketTestSession
 
-import managym
 from manabot.semantic.text_observation import capture_text_decision
+import managym
 from managym.academy import server, trace as trace_store
-from managym.experience import ExperienceFrame, InteractionOffer
+from managym.academy.recording import Recording
+from managym.experience import ExperienceFrame, InteractionOffer, ObjectRenderId
 from tests.academy.socket_messages import settled_message
 
 
@@ -33,6 +40,16 @@ def submit(
     result = settled_message(socket)
     assert result["status"] == "accepted"
     return ExperienceFrame.model_validate(result["update"]["frame"])
+
+
+def cited_objects(event: object) -> list[dict[str, int]]:
+    """Every `{entity, incarnation}` reference inside a presentation event."""
+    if isinstance(event, dict):
+        own = [event] if set(event) == {"entity", "incarnation"} else []
+        return own + [ref for child in event.values() for ref in cited_objects(child)]
+    if isinstance(event, list):
+        return [ref for child in event for ref in cited_objects(child)]
+    return []
 
 
 def test_manifest_turn_up_reconnect_text_and_native_replay(
@@ -109,6 +126,72 @@ def test_manifest_turn_up_reconnect_text_and_native_replay(
                 p.characteristics.name == "Llanowar Elves"
                 for p in game.obs.agent_permanents
             )
+
+            # The face-up manifest is still cited at incarnation 0, and every
+            # consumer joins that reference to the named board permanent.
+            for _ in range(4):
+                if any(o.label == "Attack with Llanowar Elves" for o in frame.offers):
+                    break
+                pass_priority = next(
+                    o for o in frame.offers if o.label == "Pass priority"
+                )
+                frame = submit(socket, frame, pass_priority)
+            attack = next(
+                o for o in frame.offers if o.label == "Attack with Llanowar Elves"
+            )
+            (subject,) = attack.subjects
+            board = {
+                card["id"]: card["name"]
+                for card in frame.projection.model_dump(mode="json")["agent"][
+                    "battlefield"
+                ]
+            }
+            elves = subject.object.display_id
+            assert board[elves] == subject.object.label == "Llanowar Elves"
+            assert subject.object.subject.id == ObjectRenderId(
+                entity=elves, incarnation=0
+            )
+            assert attack.focus == [elves]
+            frame = submit(socket, frame, attack)
+            for _ in range(6):
+                kinds = {e["kind"]["kind"] for e in game.presentation_events}
+                if "damage" in kinds:
+                    break
+                frame = submit(socket, frame, frame.offers[0])
+            combat = [
+                e
+                for e in game.presentation_events
+                if e["kind"]["kind"] in ("attack_group", "damage")
+            ]
+            assert {e["kind"]["kind"] for e in combat} == {"attack_group", "damage"}
+            for event in combat:
+                assert {"entity": elves, "incarnation": 0} in cited_objects(event)
+
+        with client.websocket_connect("/ws/play") as socket:
+            socket.send_json(
+                {
+                    "type": "resume",
+                    "session_id": initial["session_id"],
+                    "resume_token": initial["resume_token"],
+                }
+            )
+            recovered = ExperienceFrame.model_validate(
+                settled_message(socket)["recovery"]["frame"]
+            )
+            assert recovered == frame
+            payload = game.attempt_store.load(game.match_id)
+            assert payload is not None
+            latest = Recording(game.match_id, payload).read("latest")
+            labelled = [
+                labels["objects"].get(f"{elves}:0")
+                for event, labels in zip(
+                    latest["history"], latest["history_labels"], strict=True
+                )
+                if event["kind"]["kind"] in ("attack_group", "damage")
+            ]
+            assert labelled == ["Llanowar Elves", "Llanowar Elves"]
+            assert "expired object" not in json.dumps(latest)
+
             archive = game.env.snapshot().to_replay_json()
             replay = managym.GameSnapshot.from_replay_json(archive).restore()
             assert replay.state_digest() == game.env.state_digest()
