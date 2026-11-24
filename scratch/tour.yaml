@@ -1,17 +1,17 @@
-at: a9577ac25638f35f953fc5441addfb53875dbee9
+at: 1677261e506c6f85692004c902d2a3928ad4ed6c
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Find each outcome and Slagstorm’s missing damage instruction.
-  - path: managym/cards/src/hou.rs
-    why: Read how Abrade’s mode binds its target.
-  - path: managym/cards/tests/cards.rs
-    why: See how counterspells and removal check target eligibility.
-  - path: managym/cards/tests/cards/hou.rs
-    why: Follow both modes through casting and resolution.
-  - path: managym/cards/tests/cards/zen.rs
-    why: See simultaneous deaths through Bounty Hunters’ triggers.
+    why: Find each card’s definition and directed outcome.
+  - path: managym/cards/src/ons.rs
+    why: Follow Arcanis’s return through battlefield identity.
+  - path: managym/cards/src/thb.rs
+    why: Compare targeted entry with untargeted graveyard exile.
+  - path: managym/state/src/subtype.rs
+    why: Locate the three new creature types.
+  - path: managym/cards/tests/cards/ons.rs
+    why: Compare Arcanis’s return across a removal response.
+  - path: managym/cards/tests/cards/thb.rs
+    why: Trace both sacrifices from the same graveyards.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Compare lethal toughness loss with cleanup recovery.
-  - path: managym/cards/tests/cards/j22.rs
-    why: Check Deadly Plot’s tapped Zombie return.
+    why: Check three draw triggers and graveyard target eligibility.
 hide: []
