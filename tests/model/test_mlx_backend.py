@@ -41,6 +41,7 @@ from manabot.backends.mlx.checkpoint import (
 )
 from manabot.backends.mlx.learner import Learner as MLXLearner
 from manabot.backends.mlx.policy import (
+    MLXActorCritic,
     ObjectAttention,
     PackedGRU,
     attend,
@@ -83,13 +84,14 @@ from manabot.infra.config import (
     ObservationConfig,
 )
 from manabot.policy.checkpoint import (
+    ParameterArrays,
     UnsupportedPolicy,
     canonical_parameters,
     read_safetensors,
     read_saved_container,
     write_safetensors,
 )
-from manabot.policy.prepare import Tables, pack, reference_distribution
+from manabot.policy.prepare import Prepared, Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.recipes import baseline, elemental
 from manabot.training.loops.self_play import (
@@ -790,6 +792,41 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
             scope.cache_programs()
 
 
+type LearnerTerms = tuple[np.ndarray, np.ndarray, float, ParameterArrays]
+
+
+def _learner_terms(
+    policy: MLXActorCritic, prepared: Prepared[np.ndarray], returns: np.ndarray
+) -> LearnerTerms:
+    """Two-action logits, values, loss and unclipped gradients of one minibatch
+    whose behaviour policy is uniform over two legal actions."""
+    rows = len(returns)
+    logits, values = policy.evaluate(prepared)
+    legal = prepared.legal
+    targets = Targets(
+        np.zeros(rows, np.int64),
+        returns,
+        np.ones(rows, np.float32),
+        np.ones(rows, bool),
+        np.where(legal, np.log(0.5), -np.inf).astype(np.float32),
+        np.where(legal, 0.5, 0).astype(np.float32),
+    )
+    learner = MLXLearner(policy, minibatch_rows=rows)
+    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
+    return logits[:, :2], values, float(loss), learner.gradients(loss)
+
+
+def _assert_terms_close(expected: LearnerTerms, actual: LearnerTerms) -> None:
+    for a, b in zip(actual[:3], expected[:3], strict=True):
+        np.testing.assert_allclose(a, b, atol=2e-6)
+    assert actual[3].keys() == expected[3].keys()
+    for key in expected[3]:
+        np.testing.assert_allclose(
+            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
+        )
+
+
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -848,11 +885,10 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
         return attend_objects(layer, objects, *args)
 
     monkeypatch.setattr(ObjectAttention, "__call__", record_width)
-    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    returns = np.array([1, -1, -0.5, 0.75], np.float32)
     results = []
     for bucketed in (False, True):
         policy = assemble(checkpoint, bucketed_shapes=bucketed)
-        learner = MLXLearner(policy, minibatch_rows=4)
         prepared = policy.prepare(obs)
         assert prepared.is_agent.shape == prepared.validity.shape
         assert prepared.facts.compact == bucketed
@@ -864,22 +900,9 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
             assert programs.schedule.lengths == (1, 2, 1, 2, 1)
         table_widths.append(prepared.validity.shape[1])
         widths.clear()
-        logits, values = policy.evaluate(prepared)
+        results.append(_learner_terms(policy, prepared, returns))
         assert set(widths) == ({4, 6} if bucketed else {prepared.validity.shape[1]})
-        legal = prepared.legal
-        logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
-        reference = np.where(legal, 0.5, 0).astype(np.float32)
-        targets = Targets(
-            np.zeros(4, np.int64),
-            np.array([1, -1, -0.5, 0.75], np.float32),
-            np.ones(4, np.float32),
-            np.ones(4, bool),
-            logs,
-            reference,
-        )
-        loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
-        gradients = learner.gradients(loss)
-        results.append((logits[:, :2], values, float(loss), gradients))
+    logits, values = results[1][:2]
     # Inference and single-length batches keep the cheaper single attention call.
     widths.clear()
     infer_logits, infer_values = policy.evaluate(policy.prepare(obs, inference=True))
@@ -907,14 +930,7 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
 
     padded_width, bucket_width = table_widths
     assert 6 < bucket_width < padded_width
-    expected, actual = results
-    for a, b in zip(actual[:3], expected[:3], strict=True):
-        np.testing.assert_allclose(a, b, atol=2e-6)
-    assert actual[3].keys() == expected[3].keys()
-    for key in expected[3]:
-        np.testing.assert_allclose(
-            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
-        )
+    _assert_terms_close(*results)
 
 
 @pytest.mark.parametrize(("rows", "groups"), [(64, 2), (192, 3), (256, 4)])
@@ -942,11 +958,9 @@ def test_large_bucketed_batches_pack_more_attention_groups(
     obs["action_focus"][:, 1, 0] = 2 + 2 * cards + space.shapes["agent_permanents"][0]
     returns = rng.uniform(-1, 1, rows).astype(np.float32)
     checkpoint = policy_weights(agent)
-    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
     results = []
     for bucketed in (False, True):
         policy = assemble(checkpoint, bucketed_shapes=bucketed)
-        learner = MLXLearner(policy, minibatch_rows=rows)
         prepared = policy.prepare(obs)
         packed = prepared.packed_attention
         if bucketed:
@@ -955,26 +969,8 @@ def test_large_bucketed_batches_pack_more_attention_groups(
             assert widths == sorted(widths) and len(set(widths)) == groups
         else:
             assert packed is None
-        logits, values = policy.evaluate(prepared)
-        legal = prepared.legal
-        targets = Targets(
-            np.zeros(rows, np.int64),
-            returns,
-            np.ones(rows, np.float32),
-            np.ones(rows, bool),
-            np.where(legal, np.log(0.5), -np.inf).astype(np.float32),
-            np.where(legal, 0.5, 0).astype(np.float32),
-        )
-        loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
-        results.append((logits[:, :2], values, float(loss), learner.gradients(loss)))
-    expected, actual = results
-    for a, b in zip(actual[:3], expected[:3], strict=True):
-        np.testing.assert_allclose(a, b, atol=2e-6)
-    assert actual[3].keys() == expected[3].keys()
-    for key in expected[3]:
-        np.testing.assert_allclose(
-            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
-        )
+        results.append(_learner_terms(policy, prepared, returns))
+    _assert_terms_close(*results)
 
 
 def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:

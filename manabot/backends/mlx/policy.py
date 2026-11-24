@@ -379,7 +379,6 @@ class Continuation(nn.Module):
 class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
-    catalog_rows: mx.array  # token id of each packed catalog GRU row
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -475,14 +474,12 @@ class MLXActorCritic(nn.Module):
             }
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
-        programs = tables.full_programs
         named = np.nonzero(tables.name_definitions != 0)[0]
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
             "_static",
             _Static(
-                mx.array(programs.tokens),
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
                 tables,
@@ -708,7 +705,7 @@ class MLXActorCritic(nn.Module):
             self._static.tables,
             inference=inference,
             select_programs=not inference,
-            compact_attention=self.bucketed_shapes,
+            compact_learner=self.bucketed_shapes,
             bucketed=self.bucketed_shapes,
             binding=admission.binding(
                 self.config,
@@ -741,8 +738,7 @@ class MLXActorCritic(nn.Module):
     def programs(self, programs: CatalogPrograms[np.ndarray] | None = None) -> mx.array:
         """Encode selected definitions at their one-based catalog rows. Others stay zero."""
         with self.forward_precision():
-            static: _Static = self._static
-            full = static.tables.full_programs
+            full = self._static.tables.full_programs
             if programs is None:
                 programs = full
             weights = self.semantic_cards.token_embedding.weight
@@ -751,11 +747,8 @@ class MLXActorCritic(nn.Module):
             )
             if not len(programs.rows):
                 return table
-            rows = (
-                static.catalog_rows if programs is full else mx.array(programs.tokens)
-            )
             _, finished = self.semantic_cards.encoder.run(
-                weights, rows, programs.schedule.sizes
+                weights, mx.array(programs.tokens), programs.schedule.sizes
             )
             encoded = _take(finished, mx.array(programs.schedule.restore))
             return table.at[mx.array(programs.rows)].add(encoded)

@@ -662,15 +662,16 @@ def prepare(
     action_capacity: int | None = None,
     bucket_needs: np.ndarray | None = None,
     select_programs: bool = False,
-    compact_attention: bool = False,
+    compact_learner: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. `compact_attention` also selects live attention columns for
-    dense learner batches. For bucketed learners it packs short and long rows
-    separately when smaller, and routes only live fact rows.
+    are packed. `compact_learner` gives learner batches the same column
+    selection, or packs rows by live length when that is smaller, and routes
+    only live fact rows. Torch never sets it: it keeps padded shapes for
+    gradient reduction order.
     `action_capacity` retains full logit coordinates after trimming.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
@@ -697,12 +698,13 @@ def prepare(
         validity = np.concatenate(
             (validity, belief.validity, np.ones((len(validity), 1), np.float32)), 1
         )
+    compact = compact_learner and not inference
     columns = None
     packed_attention = None
-    if (inference or compact_attention) and not live_tokens:
+    if (inference or compact) and not live_tokens:
         valid = validity != 0
         used = np.flatnonzero(valid.any(0))
-        if compact_attention and bucketed and not inference:
+        if compact:
             packed_attention = pack_attention(valid, len(used))
         if packed_attention is None and 0 < len(used) < validity.shape[1]:
             columns = used
@@ -846,12 +848,7 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(
-            facts,
-            tables,
-            objects,
-            compact=compact_attention and bucketed and not inference,
-        ),
+        facts=_facts(facts, tables, objects, compact=compact),
         effects=_effects(obs, tables, objects),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
