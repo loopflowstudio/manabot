@@ -8,10 +8,11 @@ reads receipts offline. Without --width, both commands visit all three widths.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
+from itertools import pairwise
 import json
 import math
 import os
@@ -22,9 +23,10 @@ import socket
 import subprocess
 import sys
 import time
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 from uuid import uuid4
 
+from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 
 WIDTHS = (64, 256, 384)
@@ -58,17 +60,21 @@ ARMS = (
 )
 
 
-def cells(width: int) -> Iterable[tuple[str, Arm]]:
+@dataclass(frozen=True)
+class Cell:
+    width: int
+    order: int
+    layout: str
+    arm: Arm
+
+
+def cells(width: int) -> Iterator[Cell]:
+    """Rotate the five arms for each width and layout, keeping the recorded order."""
     for index, layout in enumerate(("padded", "bucketed")):
         offset = (2 * WIDTHS.index(width) + index) % len(ARMS)
-        for arm in ARMS[offset:] + ARMS[:offset]:
-            yield layout, arm
-
-
-def write(path: Path, data: object) -> None:
-    partial = path.with_suffix(".partial")
-    partial.write_text(json.dumps(data, indent=2, allow_nan=False) + "\n")
-    partial.replace(path)
+        arms = ARMS[offset:] + ARMS[:offset]
+        for order, arm in enumerate(arms, start=index * len(arms) + 1):
+            yield Cell(width, order, layout, arm)
 
 
 def record(path: Path) -> dict[str, Any]:
@@ -138,7 +144,7 @@ def worker(directory: Path, width: int, layout: str, arm: Arm, capture: Path) ->
         else:
             self_play(config, run, updates=4, backend=resolve(arm.backend))
     # Darwin reports ru_maxrss in bytes. Sample before any offline metric reads.
-    write(
+    atomic_json(
         directory / "worker.json",
         {
             "run": run.name,
@@ -161,7 +167,6 @@ def attempt(directory: Path, phase: str, args: list[str]) -> dict[str, Any]:
     )
     log = directory / f"{phase}.log"
     before = host_reading()
-    interrupted = False
     with log.open("w") as stream:
         start = time.perf_counter()
         try:
@@ -171,7 +176,6 @@ def attempt(directory: Path, phase: str, args: list[str]) -> dict[str, Any]:
                 stdout=stream,
                 stderr=subprocess.STDOUT,
                 timeout=1800,
-                check=False,
             )
             status = (
                 "completed" if result.returncode == 0 else f"exit {result.returncode}"
@@ -180,7 +184,6 @@ def attempt(directory: Path, phase: str, args: list[str]) -> dict[str, Any]:
             status = "timeout"
         except KeyboardInterrupt:
             status = "interrupted"
-            interrupted = True
         wall = time.perf_counter() - start
     receipt = dict(
         status=status, wall_seconds=wall, before=before, after=host_reading()
@@ -188,8 +191,8 @@ def attempt(directory: Path, phase: str, args: list[str]) -> dict[str, Any]:
     if status != "completed":
         lines = log.read_text(errors="replace").splitlines()
         receipt["detail"] = lines[-1] if lines else status
-    write(directory / f"{phase}-attempt.json", receipt)
-    if interrupted:
+    atomic_json(directory / f"{phase}-attempt.json", receipt)
+    if status == "interrupted":
         raise KeyboardInterrupt
     return receipt
 
@@ -223,7 +226,9 @@ def verdict(directory: Path, layout: str, arm: Arm, digest: str) -> tuple[str, s
         and [row["index"] for row in proof["minibatches"]]
         == proof["minibatch_indices"]
         == list(range(8))
-        and len(set(proof["collection_indices"])) == 8
+        and len(proof["collection_indices"])
+        == len(set(proof["collection_indices"]))
+        == 8
         and finite(proof)
         and attempt_record["status"] == ("exit 1" if failures else "completed")
     ):
@@ -261,64 +266,57 @@ def step_rows(directory: Path, digest: str) -> dict[str, Any]:
     for block in data.columns:
         for index in range(block.rows):
             row = block.row(index)
-            if "time/collection" in row.values:
-                rows.append(
-                    {
-                        "update": row.clocks["updates"],
-                        **{
-                            k: v
-                            for k, v in row.values.items()
-                            if k.startswith(
-                                ("time/", "coordinates/", "memory/", "execution/")
-                            )
-                            or k
-                            in {
-                                "rows",
-                                "retained",
-                                "optimizer_exposures",
-                                "numerical/optimizer_steps",
-                            }
-                        },
-                    }
-                )
+            if "time/collection" not in row.values:
+                continue
+            metrics = {
+                key: value
+                for key, value in row.values.items()
+                if key.startswith(("time/", "coordinates/", "memory/", "execution/"))
+                or key
+                in {
+                    "rows",
+                    "retained",
+                    "optimizer_exposures",
+                    "numerical/optimizer_steps",
+                }
+            }
+            rows.append({"update": row.clocks["updates"], **metrics})
     return worker_record | {"checkpoint_sha256": digest, "steps": rows}
+
+
+def worker_command(
+    directory: Path, width: int, layout: str, arm: Arm, capture: Path
+) -> list[str]:
+    return [
+        str(Path(__file__).resolve()),
+        "_worker",
+        str(directory),
+        str(width),
+        layout,
+        arm.name,
+        str(capture),
+    ]
 
 
 def run_width(out: Path, width: int, host: dict[str, object]) -> None:
     root = out / f"w{width}l2"
     root.mkdir(parents=True, exist_ok=False)
     target = {"width": width, "seed": SEED, "threads": THREADS, **host}
-    write(root / "machine.json", target)
+    atomic_json(root / "machine.json", target)
     capture = root / "capture"
-    script = str(Path(__file__).resolve())
-
-    def command(directory: Path, layout: str, arm: Arm) -> list[str]:
-        return [
-            script,
-            "_worker",
-            str(directory),
-            str(width),
-            layout,
-            arm.name,
-            str(capture),
-        ]
-
     print(root.name, "capture", flush=True)
-    if (
-        attempt(root, "capture", command(root, "padded", ARMS[0]))["status"]
-        != "completed"
-    ):
+    command = worker_command(root, width, "padded", ARMS[0], capture)
+    if attempt(root, "capture", command)["status"] != "completed":
         raise RuntimeError(f"capture failed, see {root}/capture.log")
-    checkpoint = capture / "initial.pt"
-    digest = file_sha256(checkpoint)
     # Bind both names and bytes of every capture file, in relative path order.
     files = {
         p.relative_to(capture).as_posix(): file_sha256(p)
-        for p in sorted(capture.rglob("*"))
+        for p in capture.rglob("*")
         if p.is_file()
     }
-    write(root / "capture-files.json", files)
-    write(
+    digest = files["initial.pt"]
+    atomic_json(root / "capture-files.json", files)
+    atomic_json(
         root / "source.json",
         {
             "capture_sha256": file_sha256(root / "capture-files.json"),
@@ -326,57 +324,70 @@ def run_width(out: Path, width: int, host: dict[str, object]) -> None:
             "run": record(root / "worker.json")["run"],
         },
     )
-    for order, (layout, arm) in enumerate(cells(width), 1):
-        directory = root / layout / arm.name
-        directory.mkdir(parents=True)
-        args = [
-            "-m",
-            "manabot.backends.parity",
-            str(checkpoint),
-            "--capture",
-            str(capture),
-            "--device",
-            arm.device,
-            "--precision",
-            arm.dtype,
-            "--backend",
-            arm.backend,
-            "--threads",
-            str(THREADS),
-            "--json",
-            str(directory / "parity.json"),
-        ]
-        if layout == "bucketed":
-            args.append("--bucketed")
-        print(root.name, order, layout, arm.name, "parity", flush=True)
-        attempt(directory, "parity", args)
-        gate, detail = verdict(directory, layout, arm, digest)
-        write(
-            directory / "cell.json",
-            target
-            | asdict(arm)
-            | {
-                "order": order,
-                "layout": layout,
-                "checkpoint_sha256": digest,
-                "gate": gate,
-                "reason": detail,
-            },
-        )
-        print(root.name, order, gate, detail, flush=True)
-        if gate == "rejected":
-            continue
-        live = attempt(directory, "live", command(directory, layout, arm))
-        if live["status"] == "completed":
-            write(directory / "live.json", step_rows(directory, digest))
-        print(
-            root.name,
-            order,
-            "live",
-            live["status"],
-            round(live["wall_seconds"], 1),
-            flush=True,
-        )
+    for cell in cells(width):
+        run_cell(root, cell, target, digest)
+
+
+def run_cell(root: Path, cell: Cell, target: dict[str, object], digest: str) -> None:
+    capture = root / "capture"
+    arm = cell.arm
+    directory = root / cell.layout / arm.name
+    directory.mkdir(parents=True)
+    args = [
+        "-m",
+        "manabot.backends.parity",
+        str(capture / "initial.pt"),
+        "--capture",
+        str(capture),
+        "--device",
+        arm.device,
+        "--precision",
+        arm.dtype,
+        "--backend",
+        arm.backend,
+        "--threads",
+        str(THREADS),
+        "--json",
+        str(directory / "parity.json"),
+    ]
+    if cell.layout == "bucketed":
+        args.append("--bucketed")
+    print(root.name, cell.order, cell.layout, arm.name, "parity", flush=True)
+    attempt(directory, "parity", args)
+    receipt = cell_receipt(directory, cell, target, digest)
+    atomic_json(directory / "cell.json", receipt)
+    print(root.name, cell.order, receipt["gate"], receipt["reason"], flush=True)
+    if receipt["gate"] == "rejected":
+        return
+    command = worker_command(directory, cell.width, cell.layout, arm, capture)
+    live = attempt(directory, "live", command)
+    if live["status"] == "completed":
+        atomic_json(directory / "live.json", step_rows(directory, digest))
+    print(
+        root.name,
+        cell.order,
+        "live",
+        live["status"],
+        round(live["wall_seconds"], 1),
+        flush=True,
+    )
+
+
+def cell_receipt(
+    directory: Path, cell: Cell, host: dict[str, object], digest: str
+) -> dict[str, object]:
+    gate, reason = verdict(directory, cell.layout, cell.arm, digest)
+    return (
+        host
+        | asdict(cell.arm)
+        | {
+            "order": cell.order,
+            "layout": cell.layout,
+            "checkpoint_sha256": digest,
+            "gate": gate,
+            "reason": reason,
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -426,19 +437,20 @@ def rates(steps: list[dict[str, Any]], wall: float, arm: Arm) -> Rates:
     active = [s["rows"] / (s["time/collection"] + s["time/learning"]) for s in measured]
     collected = [s["rows"] / s["time/collection"] for s in measured]
     return Rates(
-        rows / collection,
-        rows / policy,
-        total("time/collection/environment_step_and_encoding") / collection,
-        rows / learning,
-        total("optimizer_exposures") / learning,
-        rows / (collection + learning),
-        count / wall,
-        (min(active), max(active)),
-        (min(collected), max(collected)),
-        total("retained") / rows,
-        int(total("numerical/optimizer_steps")),
-        total("time/learning/targets"),
-        total("time/learning/minibatches"),
+        collection=rows / collection,
+        policy=rows / policy,
+        engine_share=total("time/collection/environment_step_and_encoding")
+        / collection,
+        learner=rows / learning,
+        exposures=total("optimizer_exposures") / learning,
+        active=rows / (collection + learning),
+        wall=count / wall,
+        active_range=(min(active), max(active)),
+        collection_range=(min(collected), max(collected)),
+        retained_fraction=total("retained") / rows,
+        optimizer_steps=int(total("numerical/optimizer_steps")),
+        targets_seconds=total("time/learning/targets"),
+        minibatch_seconds=total("time/learning/minibatches"),
     )
 
 
@@ -463,6 +475,61 @@ def verify_live_run(
         raise ValueError(
             f"Etude run settings differ from the parity target in {directory}"
         )
+
+
+class TableRows(NamedTuple):
+    throughput: str
+    workload: str | None = None
+
+
+def render_cell(
+    root: Path, cell: Cell, host: dict[str, object], digest: str
+) -> TableRows:
+    """Join one parity receipt to its live timing and workload, when measured."""
+    arm = cell.arm
+    directory = root / cell.layout / arm.name
+    receipt = cell_receipt(directory, cell, host, digest)
+    if record(directory / "cell.json") != receipt:
+        raise ValueError(f"cell does not match its parity evidence in {directory}")
+    gate, reason = receipt["gate"], receipt["reason"]
+    live_path = directory / "live.json"
+    prefix = f"| {arm.name} | {gate}" + (f" (parity FAIL) {reason}" if reason else "")
+    if gate == "rejected":
+        if live_path.exists() or (directory / "live-attempt.json").exists():
+            raise ValueError(f"timing on rejected cell {directory}")
+        return TableRows(prefix + " | — | — | — | — | — | — | — | — |")
+    invocation = record(directory / "live-attempt.json")
+    if invocation["status"] != "completed":
+        if live_path.exists():
+            raise ValueError(f"timing on failed attempt {directory}")
+        return TableRows(
+            prefix
+            + f" | — | — | — | — | — | — | — | {invocation['status']} {invocation.get('detail', '')} |"
+        )
+    live = record(live_path)
+    if live["checkpoint_sha256"] != digest:
+        raise ValueError(f"timing on different checkpoint {directory}")
+    verify_live_run(directory, live, cell.width, cell.layout, arm)
+    r = rates(live["steps"], invocation["wall_seconds"], arm)
+    throughput = (
+        prefix + f" | {r.collection:.1f} | {r.policy:.1f} | {r.engine_share:.1%} "
+        f"| {r.learner:.1f} | {r.exposures:.1f} | {r.active:.1f} "
+        f"({r.active_range[0]:.1f}–{r.active_range[1]:.1f}) | {r.wall:.1f} | {live['run']} |"
+    )
+    steps = live["steps"]
+    games = ", ".join(
+        str(int(after["coordinates/games"] - before["coordinates/games"]))
+        for before, after in pairwise(steps)
+    )
+    decisions = ", ".join(str(int(s["rows"])) for s in steps[1:])
+    workload = (
+        f"| {cell.layout} | {arm.name} | {games} | {decisions} "
+        f"| {r.collection_range[0]:.1f}–{r.collection_range[1]:.1f} "
+        f"| {r.retained_fraction:.1%} | {r.optimizer_steps} "
+        f"| {r.targets_seconds:.2f} | {r.minibatch_seconds:.2f} "
+        f"| {live['peak_rss_bytes'] / (1024**2):.0f} |"
+    )
+    return TableRows(throughput, workload)
 
 
 def render_report(out: Path, widths: Iterable[int]) -> str:
@@ -510,8 +577,10 @@ def render_report(out: Path, widths: Iterable[int]) -> str:
             "| Targets (s) | Minibatches (s) | Peak RSS (MiB) |",
             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
-        for order, (layout, arm) in enumerate(cells(width), 1):
-            if (order - 1) % len(ARMS) == 0:
+        layout = None
+        for cell in cells(width):
+            if cell.layout != layout:
+                layout = cell.layout
                 lines.extend(
                     [
                         "",
@@ -521,66 +590,10 @@ def render_report(out: Path, widths: Iterable[int]) -> str:
                         "|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
                     ]
                 )
-            directory = root / layout / arm.name
-            cell = record(directory / "cell.json")
-            gate, reason = verdict(directory, layout, arm, digest)
-            expected = (
-                host
-                | asdict(arm)
-                | dict(
-                    order=order,
-                    layout=layout,
-                    checkpoint_sha256=digest,
-                    gate=gate,
-                    reason=reason,
-                )
-            )
-            if cell != expected:
-                raise ValueError(
-                    f"cell does not match its parity evidence in {directory}"
-                )
-            live_path = directory / "live.json"
-            prefix = f"| {arm.name} | {gate}" + (
-                f" (parity FAIL) {reason}" if reason else ""
-            )
-            if gate == "rejected":
-                if live_path.exists() or (directory / "live-attempt.json").exists():
-                    raise ValueError(f"timing on rejected cell {directory}")
-                lines.append(prefix + " | — | — | — | — | — | — | — | — |")
-                continue
-            invocation = record(directory / "live-attempt.json")
-            if invocation["status"] != "completed":
-                if live_path.exists():
-                    raise ValueError(f"timing on failed attempt {directory}")
-                lines.append(
-                    prefix
-                    + f" | — | — | — | — | — | — | — | {invocation['status']} {invocation.get('detail', '')} |"
-                )
-                continue
-            live = record(live_path)
-            if live["checkpoint_sha256"] != digest:
-                raise ValueError(f"timing on different checkpoint {directory}")
-            verify_live_run(directory, live, width, layout, arm)
-            r = rates(live["steps"], invocation["wall_seconds"], arm)
-            lines.append(
-                prefix
-                + f" | {r.collection:.1f} | {r.policy:.1f} | {r.engine_share:.1%} "
-                f"| {r.learner:.1f} | {r.exposures:.1f} | {r.active:.1f} "
-                f"({r.active_range[0]:.1f}–{r.active_range[1]:.1f}) | {r.wall:.1f} | {live['run']} |"
-            )
-            steps = live["steps"]
-            games = ", ".join(
-                str(int(after["coordinates/games"] - before["coordinates/games"]))
-                for before, after in zip(steps, steps[1:])
-            )
-            decisions = ", ".join(str(int(s["rows"])) for s in steps[1:])
-            workloads.append(
-                f"| {layout} | {arm.name} | {games} | {decisions} "
-                f"| {r.collection_range[0]:.1f}–{r.collection_range[1]:.1f} "
-                f"| {r.retained_fraction:.1%} | {r.optimizer_steps} "
-                f"| {r.targets_seconds:.2f} | {r.minibatch_seconds:.2f} "
-                f"| {live['peak_rss_bytes'] / (1024**2):.0f} |"
-            )
+            row = render_cell(root, cell, host, digest)
+            lines.append(row.throughput)
+            if row.workload is not None:
+                workloads.append(row.workload)
         lines.extend(workloads)
     if len(revisions) != 1:
         raise ValueError("matrix widths use different revisions")

@@ -13,7 +13,7 @@ at w64l2, 39.5 at w256l2 and 25.3 at w384l2. Torch MPS float32 narrows the
 gap from 0.48× of CPU at w64l2 to 0.81× at w256l2 and w384l2. At w384l2 Torch MPS bf16
 passes strict parity in both layouts and reaches 22.8 padded (0.90×).
 
-**MLX collects fastest from w256l2 up but learns slowest everywhere.** Its
+**With padded shapes, MLX float32 collects fastest at w256l2 and w384l2.** Its
 collection rate is 202.4 decisions/s at w256l2 and 147.6 at w384l2, against
 Torch CPU's 183.0 and 143.3. Its learning rate falls to 10.3 and 6.7
 decisions/s, against Torch's 50–53 and 30–37, so MLX ends at 9.8 and 6.4
@@ -21,16 +21,16 @@ active, roughly a quarter of Torch CPU. MLX bf16 learns faster than MLX
 float32 at w256l2 and w384l2, but every MLX bf16 cell failed the 1% relative
 learner-loss gate (1.65%–10.03%) and is only approximate.
 
-**Bucketed shapes make Torch learning 3–12× slower on Apple hardware and do
-not change MLX.** At w64l2, Torch CPU took 18.1 s of measured minibatch time
-padded and 177.8 s bucketed for a similar workload. MLX's padded and bucketed
+**On this M1, padded Torch learns 3–12× faster than bucketed Torch.** At
+w64l2, Torch CPU spent 18.1 s in minibatches with padding and 177.8 s with
+bucketing for the same 349 Adam steps. MLX's padded and bucketed
 learning rates agree within about 10% at every width. Under bucketing, MLX float32
 is the fastest strict arm (23.7, 9.8 and 6.4 active). The baseline enables
 bucketing only on CUDA, which this result supports keeping.
 
-**Collection is policy-bound.** The Rust engine's step-and-encode share of
-collection time is 1.0%–2.8% in every cell; the remainder is observation
-preparation and policy inference.
+**Observation preparation, policy inference and action selection account for
+84.2%–95.3% of collection time across the 30 cells.** The Rust engine spends
+1.0%–2.8% of collection time stepping games and encoding observations.
 
 | Width | Best strict active (padded) | Best strict collection | Best strict learning |
 |---|---|---|---|
@@ -91,15 +91,15 @@ The run used about 2.9 hours of the owned mini (live timing 2.8 h, parity
 Receipts, Etude tracking rows and the three captures are in
 `experiments/data/mini_baseline_backends/` (fetch with
 `uv run --extra artifacts python -m manabot.data fetch experiments/data/mini_baseline_backends`).
-Each cell's `training/` checkpoints were not retained. The section below is
-the verbatim output of
+The archive omits the per-cell `training/` checkpoints. To reproduce the
+tables below, run
 
 ```sh
 uv run python experiments/mini_baseline_backends.py report --out experiments/data/mini_baseline_backends
 ```
 
-which validates every parity receipt, Etude run declaration and capture
-digest before rendering.
+The command checks each cell against its parity receipt and Etude run
+declaration. It also verifies the digest of each capture's file list.
 
 Rates pool updates 2–4. Wall rate includes startup, warmup and shutdown. Policy rate counts collection preparation and inference. Rates use learner decisions per second except exp/s, which counts optimizer exposures.
 

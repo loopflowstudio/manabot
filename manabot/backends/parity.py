@@ -3,44 +3,24 @@ real inputs.
 
     uv run --extra mlx python -m manabot.backends.parity CHECKPOINT.pt --capture DIR
 
-`DIR` is a capture as the MLX pilot wrote it
-(experiments/reports/mlx_pilot.md; its capture code is at revision 83b77e6c64): learner
+`DIR` is a capture from `manabot.backends.torch.capture` containing learner
 minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
 (`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU.
-Each backend whose framework is installed (`BACKENDS`) loads the same weights
-through the shared container's canonical names and is compared in its own
-parameter layout (`manabot.policy.protocol.Backend`). Both sides run the one
-loss the damped update trains (`minibatch_objective`), each over its own
-backend's `rl` functions and learner (`minibatch_loss`). For each minibatch,
-at the checkpoint's weights:
+Both sides run the production damped objective with their own learner. The
+report compares legal logits, critic values, loss, gradients and the weights
+after one clipped Adam step. Each minibatch starts at the checkpoint weights.
 
-- forward logits on legal actions and values: max absolute difference <= 1e-4;
-- damped policy loss: relative difference <= 0.1%;
-- every parameter's gradient: cosine similarity >= 0.999. A tensor whose
-  gradient norm is below 1e-6 of the global gradient norm in both frameworks
-  counts as zero: the policy-score bias and every attention key bias have
-  analytically zero gradients (softmax is invariant to a shift shared by all
-  its inputs), so both frameworks return rounding noise whose cosine is
-  meaningless.
+`TOLERANCES` sets the gates for each precision. Float32 checks individual
+gradient cosines above the rounding-noise floor. Bfloat16 checks the full
+gradient cosine and records the per-tensor cosines and Adam difference as
+diagnostics. Use `--precision bfloat16` with MLX or Torch MPS/CUDA.
 
-Collection calls compare inference logits and values with the same 1e-4 bar.
-The first minibatch also takes one clipped Adam step in both frameworks:
-every parameter must agree within 1e-6 absolute, including near-zero-gradient
-tensors. This is 0.4% of the default learning rate (2.5e-4), tight enough to
-reject a missing or doubled update. The command prints one line per check and
-backend, writes
-`--json` (one report per backend) when given, and exits 1 naming each failing
-backend's worst components if any check fails; it exits 2 when the checkpoint
-or capture is missing, the checkpoint is refused or no backend is installed.
-
-Use `--precision bfloat16` on MLX or Torch MPS/CUDA for half precision. Half uses its measured logit/value, loss and full-gradient cosine
-bars in `TOLERANCES`; the minimum per-tensor cosine and one-step difference
-remain diagnostics. Float32 retains all the stricter checks above. Passing half's
-numerical gates does not establish equivalent optimization or playing strength.
+`--json` writes one report per backend. The CLI exits 0 on agreement, 1 on
+a failed check and 2 for an invalid input or unavailable execution target.
 """
 
 import argparse
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
 import importlib.util
@@ -191,7 +171,7 @@ def minibatch_loss(
 
     if isinstance(policy, torch_backend.policy.ActorCritic):
         policy.train()
-        device_batch = torch_backend.arrays.on_device(batch, device)
+        device_batch = on_device(batch, device)
     else:
         device_batch = batch
 
@@ -531,32 +511,8 @@ def check(
             )
         )
         weights = read_policy(str(checkpoint))
-
-        def load_candidate() -> tuple[ParityPolicy, ParityLearner]:
-            policy, learner = port.load(
-                weights,
-                device=device,
-                precision=precision,
-                bucketed_shapes=bucketed_shapes,
-            )
-            report.actual_device = policy.device_type
-            report.bucketed_shapes = policy.bucketed_shapes
-            if not report.placement_matches:
-                raise ParityMismatch(
-                    f"loaded {policy.device_type}, bucketed={policy.bucketed_shapes}; requested {device}, bucketed={bucketed_shapes}"
-                )
-            return policy, learner
-
         try:
-            compare(
-                port,
-                weights,
-                load_candidate,
-                capture,
-                minibatch_count,
-                collection_count,
-                report,
-            )
+            compare(port, weights, capture, minibatch_count, collection_count, report)
         except (
             ParityMismatch,
             torch_backend.rl.NumericalError,
@@ -569,19 +525,33 @@ def check(
 def compare(
     port: ParityBackend,
     weights: PolicyCheckpoint,
-    load_candidate: Callable[[], tuple[ParityPolicy, ParityLearner]],
     capture: Path,
     minibatch_count: int | None,
     collection_count: int,
     report: Report,
 ) -> None:
-    def load_reference() -> torch_backend.learner.Learner:
-        return torch_backend.learner.Learner(
+    def load_pair() -> tuple[
+        torch_backend.learner.Learner, ParityPolicy, ParityLearner
+    ]:
+        reference = torch_backend.learner.Learner(
             restore_policy(weights), "cpu", minibatch_rows=1
         )
+        policy, learner = port.load(
+            weights,
+            device=report.requested_device,
+            precision=report.precision,
+            bucketed_shapes=report.requested_bucketed_shapes,
+        )
+        report.actual_device = policy.device_type
+        report.bucketed_shapes = policy.bucketed_shapes
+        if not report.placement_matches:
+            raise ParityMismatch(
+                f"loaded {policy.device_type}, bucketed={policy.bucketed_shapes}; "
+                f"requested {report.requested_device}, bucketed={report.requested_bucketed_shapes}"
+            )
+        return reference, policy, learner
 
-    reference_learner = load_reference()
-    policy, learner = load_candidate()
+    reference_learner, policy, learner = load_pair()
     for index, (obs, targets, settings, meta) in enumerate(
         minibatches(capture, minibatch_count)
     ):
@@ -590,7 +560,7 @@ def compare(
         valid = reference_batch.legal
         with torch.no_grad():
             logits, values = reference_policy.forward_distribution(
-                torch_backend.arrays.on_device(reference_batch, "cpu")
+                on_device(reference_batch, "cpu")
             )
         loss = minibatch_loss(
             torch_backend,
@@ -671,8 +641,9 @@ def compare(
                 settings,
                 report,
             )
-            policy, learner = load_candidate()
-            reference_learner = load_reference()
+            # Release the stepped optimizers before restoring both checkpoint models.
+            del reference_learner, reference_policy, learner, policy
+            reference_learner, policy, learner = load_pair()
         print(
             f"{report.backend} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
@@ -804,8 +775,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bucketed", action="store_true")
     parser.add_argument("--threads", type=int)
     args = parser.parse_args(argv)
-    names = [args.backend] if args.backend else installed_backends()
-    if any(name not in installed_backends() for name in names):
+    installed = installed_backends()
+    names = [args.backend] if args.backend else installed
+    if args.backend and args.backend not in installed:
         parser.error("the selected backend's framework is not installed")
     if not names:
         parser.error("no framework backend is installed (" + ", ".join(BACKENDS) + ")")

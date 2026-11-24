@@ -36,7 +36,6 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        # The framework container implements input v9 only.
         observation=ObservationConfig(policy_input_version=9),
         model=ModelConfig(
             hidden_dim=8,

@@ -12,8 +12,8 @@ from experiments.mini_baseline_backends import (
     rates,
     verdict,
     verify_live_run,
-    write,
 )
+from manabot.infra.files import atomic_json
 
 
 def test_only_finite_half_precision_tolerance_misses_can_be_timed(
@@ -45,8 +45,8 @@ def test_only_finite_half_precision_tolerance_misses_can_be_timed(
             for index in range(8)
         ],
     }
-    write(tmp_path / "parity-attempt.json", {"status": "exit 1"})
-    write(tmp_path / "parity.json", {"torch": evidence})
+    atomic_json(tmp_path / "parity-attempt.json", {"status": "exit 1"})
+    atomic_json(tmp_path / "parity.json", {"torch": evidence})
     gate, detail = verdict(tmp_path, "padded", arm, "same")
     assert gate == "approximate" and "2.00%" in detail
     assert verdict(tmp_path, "bucketed", arm, "same")[0] == "rejected"
@@ -56,10 +56,11 @@ def test_only_finite_half_precision_tolerance_misses_can_be_timed(
         json.dumps({"torch": evidence | {"gradient_cosine": float("nan")}})
     )
     assert verdict(tmp_path, "padded", arm, "same")[0] == "rejected"
-    write(proof_file, {"torch": evidence | {"minibatches": []}})
-    assert verdict(tmp_path, "padded", arm, "same")[0] == "rejected"
+    for incomplete in ({"minibatches": []}, {"collection_indices": [*range(8), 7]}):
+        atomic_json(proof_file, {"torch": evidence | incomplete})
+        assert verdict(tmp_path, "padded", arm, "same")[0] == "rejected"
     evidence.update(precision="float32", observed_forward_dtype="float32")
-    write(tmp_path / "parity.json", {"torch": evidence})
+    atomic_json(tmp_path / "parity.json", {"torch": evidence})
     assert verdict(tmp_path, "padded", ARMS[1], "same")[0] == "rejected"
 
 
@@ -107,8 +108,8 @@ def test_report_refuses_live_evidence_from_another_layout_or_run(
     run = "mini-run"
     directory = tmp_path / "track" / EXPERIMENT / run
     directory.mkdir(parents=True)
-    write(tmp_path / "worker.json", {"run": run})
-    write(
+    atomic_json(tmp_path / "worker.json", {"run": run})
+    atomic_json(
         directory / "run.json",
         {
             "id": f"{EXPERIMENT}/{run}",
