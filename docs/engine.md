@@ -210,7 +210,14 @@ that reads its resolution count keeps it for that turn under the source
 incarnation, printed face and ability index. A trigger still on the stack
 keeps that identity after the source leaves. A countered trigger adds zero.
 It also records the winning seat for a card-instructed victory, private
-opening progress and simultaneous loss causes.
+opening progress and simultaneous loss causes. Version 30 adds a
+`PermanentUntapped` event to the hashed event ledger for each permanent that
+becomes untapped, and records a draw by mandatory loop (CR 104.4b): when the
+resolutions of one priority round with only automatic passes run 64 times
+without unwinding the stack, shrinking a library, adding poison or lowering
+the life of a player who can lose, the game ends as
+`GameOutcome::Draw { mandatory_loop: true }` and Env reports
+`draw_reason: "mandatory_loop"`.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.
@@ -967,7 +974,13 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
   anything). Its source is any object, a spell included, matched as it is
   or last was with its controller ("a source you control" is
   `TriggerSubject::you_control(CardPredicate::default())`), and the damage
-  dealt is "that many". The ability
+  dealt is "that many". `BecomesTapped` and `BecomesUntapped` fire on a
+  transition only: every untap, the untap step's included, goes through
+  `Game::untap_permanent`, and a stun counter removed instead is no untapping.
+  A state trigger (CR 603.8) is `State(Condition)` ("when there are four or
+  more page counters on this artifact"): it is asked of its source whenever a
+  player would receive priority, never of an event, and doesn't trigger again
+  while its occurrence waits or is on the stack. The ability
   description ("Whenever an opponent draws their second card each turn, ...")
   and the learning tokens come from one template per event, so a card that
   needs a new actor or count needs no new variant.
