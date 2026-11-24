@@ -403,8 +403,8 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 32 of 81 primary rows with definitions and native
-fixture evidence. The 49 pending primary rows are in the later batches below.
+The FDN ledger has 38 of 81 primary rows with definitions and native
+fixture evidence. The 43 pending primary rows are in the later batches below.
 Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
 witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
 witnesses. Daggers identify pending cost candidates whose full ledger
@@ -423,39 +423,25 @@ Seven primary rows and the cost-primary Ruby row now link to their first-printin
 - The final native selection passed all 19 checks, including the layer comparison after tapping and untapping, last-known mana value, source-name filtering, catalog conformance and the Clone replay hash. Academy's `svelte-check` reported zero errors and warnings.
 - The rebuilt CPython 3.13 wheel passed ten focused Python checks. Both viewers saw pending power in the v11 stack, Academy and semantic text. The named layout, effect execution, Torch/MLX parity in both shape modes, and the bundled v9 and v11 pilot replays passed. The optional u1952 replay skipped because its checkpoint was unavailable.
 
-### Next slice · Life events, totals, payment thresholds, and Findings 1–2
+### Implemented slice · Life events, totals, payment thresholds, and Findings 1–2
 
-Implement six shared unifications first so the Life batch (six primary FDN rows plus two cost-primary candidates) and Findings 1–2 land on one clean model that also serves the later Damage, Cost Reductions, and Activation Thresholds batches without card-shaped variants:
+Six primary rows (Vanguard Seraph, Bloodthirsty Conqueror, Exemplar of Light, Stromkirk Bloodthief, Bloodtithe Collector, Hidetsugu's Second Rite) and the cost-primary Sanguine Indulgence and Ayli rows link to their first-printing modules and directed tests. The FDN ledger has 38 of 81 primary rows.
 
-1. **One event-bound numeric trigger payload (`triggering_amount: i32`) and `TriggerCondition::LosesLife { who: Actor }`.**
-   - Unify `triggering_damage: i32` into one event-bound `triggering_amount: i32` across `PendingTrigger`, `TriggeredAbilityOnStack`, `EffectFrame`, `ContinuationFrame`, and v11 fact slot 16 (slot 16 was introduced on this branch and is absent from pinned pilots; keep `EffectValue::TriggeringDamage` compatible alongside `EffectValue::TriggeringAmount` and update `decision_context.rs`, `observation_layout.rs`, and `test_text_observation.py` so combat damage and life loss phrase their bound amount from the ability's trigger kind).
-   - `TriggerCondition::LosesLife { who }` matches `GameEvent::LifeChanged` only when `new < old` (actual committed loss, including damage; prevented loss where `old == new` emits nothing) and binds `triggering_amount = old - new`. Verify `TurnStateReads` / `input_v10_state` stay consistent.
-2. **Subject-uniform counter triggers (`TriggerCondition::PutsCountersOn { who: Actor, kind: CounterKind, subject: TriggerSubject }`).**
-   - Match all nine other permanent-watching triggers by taking `TriggerSubject` (`This`, `EnchantedCreature`, `Matching`). Share one `counters_put_matches` helper in `flow/triggers.rs` with legacy `TriggerCondition::PutsCounters { who, kind, on }` so *Earth Kingdom General*'s pinned TLA pilot tokens remain byte-identical. Verify CR 122.6 entry counters, multi-counter single-event grouping, and `OnceEachTurn` CR 101.2 capping under doublers.
-3. **Paid-cost object selector (`ObjectSelector::Paid(How)`) and LKI receipt projection.**
-   - Resolve `ObjectSelector::Paid(how)` in `EffectValue::Property` via `object_property_or_lki` over `frame.spent.contributions()` (leaving legacy `EffectValue::PowerTappedToPay` intact for pinned TLA pilots).
-   - When a pending stack ability reads a property of `ObjectSelector::Paid(how)` (e.g., *Ayli*'s sacrificed creature's toughness), project that departed contribution's last-known property value onto its stack continuation / text / Academy context so two equal-board games that sacrificed differently buffed copies remain publicly distinguishable to both viewers.
-4. **Composable spell cost reductions, activation conditions, and `Player.starting_life`.**
-   - Add `StaticAbility::CostsLess { amount: EffectValue, condition: Option<Condition> }`, evaluated in `play.rs::effective_spell_cost` before targeting (CR 601.2f), leaving legacy TLA `CostsLess*` variants intact for pinned pilots. This immediately serves *Sanguine Indulgence* and later *Ghalta*, *Arcane Epiphany*, and *Gate Colossus*.
-   - Store `starting_life: i32` on `Player` (default 20, skipped from hash bytes when 20) and add `EffectValue::LifeAboveStarting(PlayerSelector)` (`life.saturating_sub(starting_life)`).
-   - Add `condition: Option<Condition>` (`#[serde(skip_serializing_if = "Option::is_none")]`) on `ActivatedAbilityDefinition`, enforced in one authority (`check_activation_terms`) used by `play.rs`, `action.rs`, and `mana.rs` (removing duplicated `own_turn_only` checks in `mana.rs`).
-5. **Layer-granted firebending (Finding 1).**
-   - In `layers.rs::Modification::Firebending(n)`, continue accumulating `view.firebending` (preserving the existing v11 `permanent::GRANTED_FIREBENDING` column and `experience.rs` field) AND push an ordinary `EffectiveTrigger { clock: None, ability: Ability::firebending(*n), program: true }` onto `view.triggered_abilities` (`Attacks { subject: This, per: Object }` → `Effect::AddMana { mana: {R: n}, amount: Fixed(1), until_end_of_combat: true }`, which already records `Bending::Fire`). Delete `granted_firebending_triggers` from `flow/triggers.rs`.
-6. **Live unblocked attackers in heuristic (Finding 2) and CR 104.4b mandatory-loop termination.**
-   - In `agent/heuristic/mod.rs`, read live `p.attacking && self.blocks.get(id).is_none_or(BTreeSet::is_empty)` directly and remove the `CombatAttackersDeclared` branch from `observe()`.
-   - Add `GameOutcome::Draw` (with `winner_index() == None`) and detect unbreakable zero-choice trigger cycles in `flow/tick.rs`: end in a draw only when every priority offer in the cycle is `PassPriority`-only, non-life board/zone/counter state is unchanged across the cycle, and no unprotected player is progressing toward a state-based loss (life, poison, or empty library). Finite high-life drains must still win; stoppable loops with instant interaction must still offer priority.
+Shared changes:
 
-**Cards and directed checks in this slice** (place each single-card test in its card's first-printing set test module per Finding 4 and record verified `source` and `fixture` paths in `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl`):
+- One event amount. `triggering_damage` became `triggering_amount` everywhere (pending trigger, stack, frame, continuation, v11 fact slot 16 now named `triggering_amount`, text, Academy pending line). The name was branch-only, so `EffectValue::TriggeringDamage` was renamed rather than kept. `TriggerCondition::LosesLife { who }` matches a committed decrease and binds `old - new`; combat hits still bind their own amount.
+- `TriggerCondition::PutsCountersOn { who, kind, subject }` sits beside the legacy `PutsCounters`.
+- `ObjectSelector::Paid(How)`: property reads use each paying object's LKI. A pending activation publishes the first amount it reads from what paid (`StackObjectData.paid_amount`, appended v11 stack column 42 `paid_amount` in tenths, description suffix "from what paid its cost: N", Python getter).
+- `StaticAbility::CostsLess { amount, condition }`; `Player.starting_life` (omitted from the record at 20) with `EffectValue::LifeAboveStarting`; `ActivatedAbilityDefinition.condition` enforced in `check_activation_terms`, which mana-ability offers and the autotapper probe now call instead of their own `own_turn_only`/life checks.
+- Finding 1: `Modification::Firebending(n)` pushes an ordinary `Ability::firebending(n)` trigger; `granted_firebending_triggers` is deleted. One and two Sozin's Comets under Katara give two and four 5-mana triggers; removing one leaves 15.
+- Finding 2: the heuristic reads live `attacking` and keeps only recorded blocks; the `CombatAttackersDeclared` branch is gone. A vigilant or entered-attacking unblocked creature is pumped for lethal.
 
-- **Vanguard Seraph** (`fdn`): first lifegain triggers private surveil 1 (waiting viewer sees no top card); second gain same turn and late entry do not trigger; next turn resets.
-- **Bloodthirsty Conqueror** (`fdn`): triggers on direct life loss and combat/noncombat damage loss; zero triggers when prevented (*Teferi's Protection*); two stacked triggers with distinct amounts expose both amounts to both viewers across source departure; finite drain kill wins at 0 life; forced infinite loop with `StaticAbility::CantLoseAndOpponentsCantWin` and no instant answers ends in `GameOutcome::Draw`; holding instant removal offers priority instead of drawing.
-- **Stromkirk Bloodthief** (`mid`): end-step intervening-if fires only on controller's end step after actual opponent life loss (not prevented) and targets a Vampire you control.
-- **Hidetsugu's Second Rite** (`sok`): resolution-time exact-10 check on target player (`Compare(LifeTotal(Target(Player)), Eq, 10)`) — deals 10 at 10 life, deals 0 if life changes to 9 or 11 before resolution, with one target clause.
-- **Sanguine Indulgence†** (`m21`): `CostsLess { Fixed(3), LifeGainedThisTurn(You) >= 3 }` reduces cost before graveyard targeting (0/1/2 creature cards), counts across multiple gain events, and ignores subsequent life loss.
-- **Ayli, Eternal Pilgrim†** (`ogw`): ability 1 sacrifices another creature (excluding Ayli) and gains its LKI toughness (buffed vs. unbuffed Ogre visible to both viewers on stack; countered ability leaves Ogre sacrificed and gains 0); ability 2 gates on `LifeAboveStarting(You) >= 10` (checked at both default 20 and custom 25 starting life, and still resolves if life drops after activation per CR 602.1).
-- **Exemplar of Light** (`fdn`): lifegain places +1/+1 counter; `OnceEachTurn(PutsCountersOn { You, PlusOnePlusOne, TriggerSubject::This })` draws once per turn even when placing multiple counters in one event or under a trigger doubler; ignores opponent's placements and counters placed on other creatures; sees CR 122.6 entry counters.
-- **Bloodtithe Collector** (`mid`): ETB intervening-if makes each opponent discard when an opponent lost life earlier this turn and does nothing otherwise.
-- **Findings 1 & 2 controls**: one and two *Sozin's Comet* casts on *Katara, the Fearless* yield two and four independent 5-mana attack triggers (countering one leaves the rest intact); heuristic pumps an unblocked entered-attacking token and an unblocked vigilant attacker.
+Checks: the debug cards target (887) and engine lib (359), rules/content-pack/engine/hash targets, `search_state_contract` and `canonical_replay_tests` passed. The Clone state hash moved with the eight new catalog ids. After the rebuild, the focused Python selection passed (120 passed, 1 skipped optional checkpoint).
+
+Not built in this slice:
+
+- **CR 104.4b mandatory-loop draw** (`GameOutcome::Draw` and cycle detection in `flow/tick.rs`). Conqueror's ledger row records it as pending. It needs a loop partner such as Vito, Thorn of the Dusk Rose, which isn't defined yet. It also touches every outcome reader: `winner_index`, Env rewards and Academy. It should be its own slice with that partner card.
+- Vanguard Seraph's waiting-viewer privacy during the surveil choice, and Exemplar under a trigger doubler or with CR 122.6 entry counters. The shared machinery has existing controls, but these cards have no directed check.
 
 Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent cleanup for the working review.
 
