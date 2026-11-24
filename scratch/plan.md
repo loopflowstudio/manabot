@@ -1,4 +1,5 @@
 # MTG-419 · Shared casting profiles and play permissions
+Implementation and review proceed by casting mechanic. In one implementation pass, cover every remaining ledger row using that mechanic or an established path, run the directed checks, and review the batch together. Record any concrete dependency that splits a batch.
 
 ## Verified permission behavior
 
@@ -76,7 +77,7 @@ The native cast-order witness lives in `managym/cards/tests/cards/rix.rs`, the c
 
 The focused native check (`cargo test --manifest-path managym/Cargo.toml -p managym --lib seed_suture`) passed both the transfer and counter cases. After rebuilding and atomically installing the CPython 3.13 release extension, `uv run pytest -q tests/env/test_game_snapshot.py -k transferred_seed_suture` passed the cold replay.
 
-**Next slice.** Verify Academy and LLM projections at the two-source priority decision and after transfer. Keep the remaining prepare lifecycle cases in the interaction table below.
+**Next implementation cohort.** Complete the prepared-copy lifecycle and its Academy and LLM projections together with all SOS and FRA rows the shared path supports. Use the set selectors below to account for every remaining row. Run directed checks for the whole cohort before review. Apply the same grouping to Adventure, Omen and Foundations permissions. Split a cohort only where a specific missing rule or distinct implementation path requires it, and list the affected rows and dependency together.
 
 
 ## Scope

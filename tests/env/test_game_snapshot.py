@@ -38,6 +38,13 @@ def cold_restore(env: managym.Env) -> managym.Env:
     return managym.GameSnapshot.from_replay_json(replay).restore()
 
 
+def assert_replayed_command(
+    env: managym.Env, restored: managym.Env, command: str
+) -> None:
+    transition = env.execute_semantic_command_json(command)
+    assert restored.execute_semantic_command_json(command) == transition
+
+
 def decision_frame(env: managym.Env) -> DecisionFrame:
     return DecisionFrame.from_json(env.semantic_decision_frame_json())
 
@@ -738,8 +745,7 @@ def test_pending_adventure_target_command_survives_cold_restore() -> None:
         for p in env.observation_for_player(frame.actor).agent_permanents
         if p.tapped
     }
-    transition = env.execute_semantic_command_json(command)
-    assert restored.execute_semantic_command_json(command) == transition
+    assert_replayed_command(env, restored, command)
     for branch in (env, restored):
         observation = branch.observation_for_player(frame.actor)
         paid = [
@@ -812,9 +818,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
     [one] = [offer for offer in frame.offers if "X = 1" in offer["label"]]
     command = Command("announce-one", frame.revision, one["id"]).to_json()
     restored = cold_restore(env)
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     before = json.loads(env.search_witness_json())["rng_continuation"]
     space = ObservationSpace()
     for branch in (env, restored):
@@ -839,9 +843,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
         command = Command(
             f"pass-{frame.revision}", frame.revision, passed["id"]
         ).to_json()
-        assert restored.execute_semantic_command_json(
-            command
-        ) == env.execute_semantic_command_json(command)
+        assert_replayed_command(env, restored, command)
         if not env.observation_for_player(0).stack_objects:
             break
     assert not env.observation_for_player(0).stack_objects
@@ -924,9 +926,7 @@ def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
         )
     assert restored.search_witness_json() == fork.search_witness_json()
     command = Command("target", frame.revision, target).to_json()
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     assert decision_frame(fork) == frame
     remaining = decision_frame(env)
     assert decision_frame(restored) == remaining
@@ -935,9 +935,7 @@ def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
     command = Command(
         "cast-ogre", remaining.revision, remaining.offers[0]["id"]
     ).to_json()
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     assert completed() == before + 1
     assert [
         s.characteristics.name for s in env.observation_for_player(0).stack_objects
@@ -1009,20 +1007,14 @@ def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
     before = env.observation_for_player(1)
     untapped = {p.id for p in before.agent_permanents if not p.tapped}
     command = Command("cast-suture", frame.revision, suture["id"]).to_json()
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     target = decision_frame(env)
     command = Command("target", target.revision, target.offers[0]["id"]).to_json()
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     payment = decision_frame(env)
     pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
     command = Command("pay", payment.revision, pay["id"]).to_json()
-    assert restored.execute_semantic_command_json(
-        command
-    ) == env.execute_semantic_command_json(command)
+    assert_replayed_command(env, restored, command)
     for branch in (env, restored):
         obs = branch.observation_for_player(1)
         [paid] = [p for p in obs.agent_permanents if p.tapped and p.id in untapped]
