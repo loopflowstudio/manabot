@@ -129,31 +129,22 @@ Ordered by profile share. Each must keep complete choices, `first-legal`
 overflow semantics, typed `ObservationCapacity` errors, native skipping,
 replay digests, pinned pilots and the debug cache invariants.
 
-### 1. Completed — skip zero padding in host numeric readings
+### 1. Done (`fe46e6b375`) — skip zero padding in host numeric readings
 
-Card, permanent and stack readings skip all-zero rows. Relation readings
-and pending-frame cleanup use only valid rows. Both restore features to
-their original slots. Object validity alone would discard nonzero numeric
-features accepted in masked external rows, observable by historical value
-pooling. Dense dictionaries therefore still need one scan of object values.
-The native CSR path in slice 2 can supply its row spans directly.
-
-Measured the base and this slice in the same process on the eight
-256-stream snapshots at steps 40–320 from `scratch/stages.py` (seed 24).
-Each snapshot passed admission. Every `Prepared` array matched the base
-in dtype, shape and values (`np.array_equal`) and every other field
-matched, for both learner and CPU inference preparation. Median process CPU
-ms/batch (best of five per snapshot):
+Object readings skip all-zero rows (not invalid rows: masked external rows
+may carry numeric features that `historical_mean` pools); relations read
+only valid rows. Paired against base on the eight `scratch/stages.py`
+snapshots: every `Prepared` array `np.array_equal`; median CPU ms/batch,
+shared machine:
 
 | Preparation | Base `4127aa973f` | Slice 1 |
 | --- | ---: | ---: |
 | Learning | 72.47 | 34.59 |
 | Inference | 68.76 | 22.02 |
 
-These are paired host preparation times on the shared M4 Max. Whole-update
-throughput and peak RSS still need the idle-machine measurements above.
-The v9 and v11 pinned games, layer-input checks and sparse-coordinate
-regression passed. The optional u1952 checkpoint was not configured.
+v9/v11 pinned games, layer-input checks and sparse-coordinate regression
+passed; the optional u1952 checkpoint was not configured. Whole-update
+throughput and RSS remain deferred (above).
 
 ### 2. Native emits exact live counts; Python stops rescanning
 
