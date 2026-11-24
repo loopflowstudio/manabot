@@ -1,17 +1,11 @@
-at: 79880a3b39680fe2d9dde9bb5d112fa628ce34b6
+at: 865b67175cdd2aab9ab55abf55a6bda967bbb882
 first:
+  - path: managym/src/flow/combat.rs
+    why: Distinguish creatures already attacking when declaration begins
+  - path: managym/src/flow/tick.rs
+    why: Commit raid and emit the declared attackers together
   - path: managym/cards/src/fdn.rs
-    why: One second-draw condition, three distinct rewards
+    why: Linden counts attackers and Chart reads turn history
   - path: managym/cards/tests/cards/fdn.rs
-    why: Compare live, departed and countered Horde triggers
-  - path: managym/state/src/game_object.rs
-    why: Copiable values owned by each departed appearance
-  - path: managym/src/flow/identity.rs
-    why: Capture altered faces and copies before departure
-  - path: managym/src/flow/resolution.rs
-    why: Resolve token creation against the exact source
-  - path: tests/semantic/test_text_observation.py
-    why: Both choosers read the same public draw count
-  - path: scratch/plan.md
-    why: Second-draw outcomes and remaining coverage
+    why: Follow the partial declaration through both card outcomes
 hide: []
