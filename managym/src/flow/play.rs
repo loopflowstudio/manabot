@@ -227,28 +227,22 @@ impl Game {
             || self.layer_board().play_permissions[1 - player.0].opponents_hand_only
     }
 
-    /// Collect the permissions before timing or payment eliminates individual routes.
+    /// The routes `object`'s zone opens to `player`, before any face is
+    /// selected. Which face a route permits, and the cast-only-from-hand
+    /// prohibition, belong to `permits_spell` alone; timing and payment
+    /// eliminate routes later.
     pub(super) fn play_routes(
         &self,
         player: PlayerId,
         object: ObjectId,
     ) -> Cow<'static, [PlayRoute]> {
-        let land = self.state[object].types.is_land();
-        // A modal card may have a spell on either face; `permits_spell`
-        // matches each route against the selected face.
-        let has_spell = !land || self.state[object].modal_back;
         match self.state.zones.zone_of(object) {
             Some(ZoneType::Hand) if self.state[object].owner == player => {
-                if has_spell && self.layer_board().play_permissions[player.0].free_from_hand {
+                if self.layer_board().play_permissions[player.0].free_from_hand {
                     Cow::Borrowed(&[PlayRoute::Hand, PlayRoute::FreeFromHand])
                 } else {
                     Cow::Borrowed(&[PlayRoute::Hand])
                 }
-            }
-            // A card with a land back face keeps its land plays; `permits_spell`
-            // refuses its spells.
-            _ if !land && !self.state[object].modal_back && self.casts_only_from_hand(player) => {
-                Cow::Borrowed(&[])
             }
             Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
                 let mut routes: Vec<_> = self
@@ -338,7 +332,7 @@ impl Game {
                 routes.into()
             }
             Some(ZoneType::Library)
-                if has_spell && self.state.zones.top(ZoneType::Library, player) == Some(object) =>
+                if self.state.zones.top(ZoneType::Library, player) == Some(object) =>
             {
                 Cow::Borrowed(&[PlayRoute::LibraryTop])
             }

@@ -79,7 +79,7 @@ Behavior review of D7 at `b35dfe9ef0` (2026-11-24): fixed, no new defects. `boun
 
 ## Remaining work
 
-Next is **gate**. Gate owns:
+Decomposition is done (see Later phases); next is **gate**. Gate owns:
 
 - Clippy, the full debug workspace, the measured 10% Engine Budget (search/decision digests move: new card, new routes, `play_lands` in state hashes), `conformance/` receipts for the final catalog.
 - Compare against main: `tests/academy/test_play_modes.py::test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture` and four `tests/belief` tests stop at the opening Keep/Mulligan decision (opening procedure from main `d12eb496b3`); `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails (16 Islands make Islandcycling ask for a manual tap; Slice 5 does not touch payment).
@@ -123,7 +123,29 @@ Gate owns the full debug workspace, Clippy and the measured 10% Engine Budget.
 
 ## Later phases
 
-**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Quilled Greatwurm + Muldrotha + Zul overlap, Omniscience and Harbinger from hand (and Harbinger via free resolution cast), Tinybones from counter-marked exile, Gandalf from conditional face-down exile (including Foretell coexistence and Scry shift), Azula + Glamdring, and an Adventure, Modal BackFace (both Spell//Land and Land//Creature), and linked prepare copy through stack and departure. One static-permission owner (`LayerBoard.play_permissions`), one route model (`PlayRoute`), one profile owner (`SpellProfile`), one profile-vs-route gate (`permits_spell`), one `CastChoices` builder, one CR 601.2h `any_mana` owner, one atomic hidden-exile refill (`refill_hidden_exile_slots`), one profile-faithful cast history (`RecordedCast`), and one open-ended pooled-mana fact path (`POOLED_MANA`) must explain all of them, including airbend, flashback, foretell, and modal regressions. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
+**Decomposition (done, 2026-11-24).** Review criterion: each representative below composes from the shared mechanism with no card name in engine code, no per-card dispatch and no second copy of a casting fact.
+
+| Representative | Composes from |
+|---|---|
+| Muldrotha + Zul Ashur + Quilled Greatwurm on one graveyard object | `play_routes` (codes 6/7/9) → `permits_spell` → `cast_choices`; `spent_types` quota |
+| Omniscience, Harbinger of the Tides (hand and free resolution cast) | `FreeFromHand` / `CastAuthority::Resolution`; `flash_surcharge` only at priority |
+| Tinybones (counter-marked exile), Azula + Glamdring | `ExileCounter`, `PlayGrant.any_mana`, `SpendAnyManaToCast` → the one CR 601.2h step in `effective_spell_cost` |
+| Gandalf // Flameshape beside Foretell | `exile_with_play_grant`, `PlayGrant.{face_down, condition, foretold}`, `refill_hidden_exile_slots` |
+| Adventure, Omen, both modal back faces, linked prepare copy | `SpellProfile` → `ContentPack::spell_definition`; `RecordedCast`; `PlayGrant.prepared` |
+
+Map checked at `253d20542e`: engine code under `managym/src` and `managym/state/src` names no cohort card outside tests, fixtures and comments. `PlayRoute` is matched for rules only in `play.rs` (`cast_choices`, `play_routes`, `permits_spell`, `casting_mana_cost`, `effective_spell_cost`) and the Greatwurm counter cost in `payment.rs`; `action.rs`, `observation.rs` and `effect_execution.rs` only describe or project a route already resolved by `resolved_play_route`. `pay_with_any_mana` runs in `effective_spell_cost` (payment) and `grant_cast_cost` (the price a viewer reads on a grant, before a cast exists). The cast-only-from-hand fact has one reader, `casts_only_from_hand`, consulted by the two authorities: `permits_spell` at priority and `resolution_cast_candidates` during resolution. FRA/SOS prepare cards are plain definitions (`enters_prepared`, `prepares_at_upkeep`, `Effect::Prepare { what }` over a selector); nothing dispatches on them.
+
+One duplicate removed: `play_routes` repeated two `permits_spell` rules (no free or library-top route for a land-only card; no non-hand route under cast-only-from-hand). It now reads only the zone; `permits_spell` alone matches a route against the selected face.
+
+Validation (debug) after the removal: cards 917, `managym --lib` 361, `rules_tests` 193 (2 ignored), including `cr_712_modal_faces::spell_land_back_face_uses_muldrotha_under_hand_only_casting`, `cmr::volcanic_torrent_cascade_respects_hand_only_casting` and the Omniscience/land route fixtures in `flow/action.rs`. The extension was not rebuilt: offers are unchanged, so the Python controls from the D7 rebuild stand.
+
+**Delete — do not maintain**
+
+- Face or prohibition checks in `play_routes` (removed in this phase). A new route adds one arm to `play_routes` (where it opens), one to `permits_spell` (which faces) and one code in `play_route_code`.
+- A per-card cost or spending branch beside `casting_mana_cost` / `effective_spell_cost`.
+- A second trigger-X classifier: see the `bound_x` nit under Remaining work. Left as is; no catalog trigger exposes the difference, and carrying the binding on the trigger changes hashed trigger state.
+
+Not generalized (one consumer each, so no shared shape to extract yet): `StaticAbility::GraveyardSpellsHaveFlashback` with Iroh's Lesson {1} price in `granted_flashback_cost` (TLA, predates this branch); `LinkedGrant`'s two forms (Hama, Azula). A second card of either kind should move the price or terms into the variant's data.
 
 **Performance.** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
 - Muldrotha with a graveyard of duplicate artifact creatures, overlapped by a Zul grant (now reading cached `StaticPlayPermissions.graveyard_type_sources` instead of scanning the battlefield per card).

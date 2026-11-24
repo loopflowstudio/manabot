@@ -193,3 +193,8 @@ Three reversible choices recorded in `scratch/concept-review.html` and `scratch/
 - D6: the stack entry names its event object in the native description (`" — event: Gray Ogre (object 7)"`, the same `Game::trigger_event_label` the ChooseTrigger offer already used), so LLM text and the Academy label read it without a new `StackObjectData`/`StackEntryView` field or protocol change. The policy input already joined the context through the kind-3 continuation frame (`frame.context`, `frame.x`); only `StackObjectData.x` was missing for the stack row. If Academy later wants to draw an arrow to the event creature, add a structured reference then.
 - X wording: an entering permanent's own trigger reads "X (N)" (CR 107.3m: its spell's X); every other trigger reads "that many (N)" (counters put, per-creature combat damage). The choice is by `TriggerCondition` (`enters_itself`), applied to the rendered effects text.
 - `tests/verify/test_effect_execution_input.py` failed on the branch before this pass (relations 49 → 50 since `be71091782` appended `relation::SPELL_PROFILE`); it now compares the recorded 49 columns as a prefix.
+
+## 2026-11-24 decomposition phase
+
+- The casting structure already met the criterion (table in `scratch/plan.md`, Later phases). The one cut: `play_routes` no longer repeats `permits_spell`'s land-face and cast-only-from-hand rules. It costs a few refused candidate routes per priority scan under a hand-only lock or Omniscience with lands in hand; not measured, gate's Engine Budget covers it.
+- Left alone, each with one consumer: the trigger-X binding's second classifier (`bound_x`; moving it onto the trigger changes hashed trigger state), Iroh's Lesson {1} flashback price in `granted_flashback_cost`, and `LinkedGrant`'s two forms.
