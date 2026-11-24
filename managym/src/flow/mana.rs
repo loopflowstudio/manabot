@@ -1814,7 +1814,7 @@ impl Game {
                     .filter(|(index, ability)| {
                         !prohibited
                             && (!ability.tap_source || can_tap)
-                            && (!ability.own_turn_only || self.active_player() == player)
+                            && self.check_activation_terms(player, ability).is_ok()
                             && !source.activation_used(*index, ability)
                     })
                     .filter_map(|(index, ability)| {
@@ -3163,7 +3163,6 @@ impl Game {
         // One validated board for every view; a permanent with no activated
         // ability (a basic land's mana ability is not one) costs nothing more.
         let _scan = self.board_scan();
-        let life = self.payable_life(player);
         let views = self.characteristics_many(model.sources.iter().map(|source| source.permanent));
         for (index, (id, view)) in views.enumerate() {
             if view.activated_abilities.is_empty() {
@@ -3189,8 +3188,7 @@ impl Game {
                     || ability.mana_cost.mana_value == 0
                     || ability.mana_choices().is_some()
                     || permanent.activation_used(ability_index, ability)
-                    || (ability.own_turn_only && self.active_player() != player)
-                    || life < ability.life_cost as i32
+                    || self.check_activation_terms(player, ability).is_err()
                     || (ability.tap_source && !self.permanent_can_tap(source.permanent))
                     || (single_use && ability.mana_cost == *cost)
                 {

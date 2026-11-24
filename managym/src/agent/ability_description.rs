@@ -687,6 +687,9 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::Moved => "it".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
+        ObjectSelector::Paid(how) => {
+            format!("the permanent {} to pay", format!("{how:?}").to_lowercase())
+        }
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
         ObjectSelector::TargetPlayersZone { spec, zone } => format!(
             "{}'s {}",
@@ -872,9 +875,15 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
-        EffectValue::TriggeringAmount => "the amount of the triggering event (damage dealt or life lost)".into(),
+        EffectValue::TriggeringAmount => {
+            "the amount of the triggering event (damage dealt or life lost)".into()
+        }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::LifeTotal(who) => format!("life total of {}", player_description(who)),
+        EffectValue::LifeAboveStarting(who) => format!(
+            "how much more life {} has than their starting life total",
+            player_description(who)
+        ),
         EffectValue::LifeGainedThisTurn(who) => {
             format!("life gained this turn by {}", player_description(who))
         }

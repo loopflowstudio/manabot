@@ -1,6 +1,7 @@
 use super::effect::{EffectDuration, Modification};
 use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
+use super::payment::How;
 use super::permanent::CounterKind;
 use super::predicate::CardPredicate;
 use super::zone::ZoneType;
@@ -27,6 +28,23 @@ impl Ability {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::CounterUnlessPays { cost }],
+        }
+    }
+
+    /// The triggered rule represented by firebending N (CR 702.189a):
+    /// "Whenever this creature attacks, add N {R}. This mana lasts until end
+    /// of combat." Each instance triggers separately (CR 702.189b).
+    pub fn firebending(amount: u8) -> Self {
+        let mut mana = Mana::default();
+        mana.mana[super::mana::Color::Red as usize] = amount;
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+            effects: vec![Effect::AddMana {
+                mana,
+                amount: EffectValue::Fixed(1),
+                until_end_of_combat: true,
+            }],
         }
     }
 
@@ -739,6 +757,10 @@ pub enum EffectValue {
     LifeTotal(PlayerSelector),
     LifeGainedThisTurn(PlayerSelector),
     LifeLostThisTurn(PlayerSelector),
+    /// How much more life the players have than their starting life totals
+    /// (CR 103.4): "at least 10 life more than your starting life total";
+    /// negative when below it.
+    LifeAboveStarting(PlayerSelector),
     SpellManaSpent(Box<ObjectSelector>),
     SpellManaValue(Box<ObjectSelector>),
     Fixed(i32),
@@ -907,6 +929,11 @@ pub enum ObjectSelector {
     CardsThisWay,
     /// Exact objects chosen by the enclosing SelectCards operation.
     Selected,
+    /// The objects that paid the resolving spell's or ability's cost by
+    /// being `How` ("the sacrificed creature", CR 602.2b). Property reads
+    /// use each object's last known information once it has left; the
+    /// selection names only those still in their paying appearance.
+    Paid(How),
     /// Cards the resolving player owns in a zone. Hidden selection retains
     /// the zone provenance across sampled worlds.
     Zone(ZoneType),
@@ -1048,6 +1075,7 @@ impl ObjectSelector {
             | Self::Moved
             | Self::CardsThisWay
             | Self::Selected
+            | Self::Paid(_)
             | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
@@ -2502,7 +2530,10 @@ impl EffectValue {
     pub fn is_resolution_only(&self) -> bool {
         match self {
             Self::Half(inner) => inner.is_resolution_only(),
-            Self::LifeTotal(who) | Self::LifeLostThisTurn(who) | Self::LifeGainedThisTurn(who) => {
+            Self::LifeTotal(who)
+            | Self::LifeLostThisTurn(who)
+            | Self::LifeGainedThisTurn(who)
+            | Self::LifeAboveStarting(who) => {
                 !matches!(who, PlayerSelector::You | PlayerSelector::EachOpponent)
             }
             Self::Property { of, .. }

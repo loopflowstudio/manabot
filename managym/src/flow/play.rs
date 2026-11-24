@@ -240,6 +240,15 @@ impl Game {
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
                 }
+                StaticAbility::CostsLess { amount, condition } => {
+                    if condition
+                        .as_ref()
+                        .is_some_and(|condition| !self.check_condition(condition, player, None))
+                    {
+                        continue;
+                    }
+                    self.controller_value(amount, player).max(0) as usize
+                }
                 StaticAbility::CostsLessByGreatestPower(predicate) => {
                     self.controller_value(
                         &EffectValue::GreatestPowerYouControl {
@@ -1310,7 +1319,9 @@ impl Game {
         )
     }
 
-    /// The turn and life terms every activation shares, whatever its source.
+    /// The turn, life and condition terms every activation shares, whatever
+    /// its source, mana abilities included: the one authority for "activate
+    /// only ..." restrictions (CR 602.5).
     pub(crate) fn check_activation_terms(
         &self,
         player: PlayerId,
@@ -1318,6 +1329,13 @@ impl Game {
     ) -> Result<(), AgentError> {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
+        }
+        if ability
+            .condition
+            .as_ref()
+            .is_some_and(|condition| !self.check_condition(condition, player, None))
+        {
+            return Err(AgentError("activation condition is not met".into()));
         }
         if self.payable_life(player) < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));

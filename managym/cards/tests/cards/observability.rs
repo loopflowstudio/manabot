@@ -79,6 +79,7 @@ use managym::{
             TriggeredManaOutput,
         },
         mana::{Mana, ManaCost},
+        payment::How,
         permanent::Permanent,
         player::Player,
         predicate::CardPredicate,
@@ -489,6 +490,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Paid(_) => "ObjectSelector::Paid",
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::TargetPlayersZone { .. } => "ObjectSelector::TargetPlayersZone",
         ObjectSelector::You => "ObjectSelector::You",
@@ -497,7 +499,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 16] {
+fn selector_witnesses() -> [ObjectSelector; 17] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -510,6 +512,7 @@ fn selector_witnesses() -> [ObjectSelector; 16] {
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
+        ObjectSelector::Paid(How::Sacrificed),
         ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::TargetPlayersZone {
             spec: Box::new(TargetSpec::Opponent),
@@ -1493,6 +1496,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_lessons",
         ),
+        StaticAbility::CostsLess { .. } => witnessed(
+            "StaticAbility::CostsLess",
+            Seen::Actions("the cast becomes affordable at the reduced cost"),
+            "Sanguine Indulgence",
+            "m21",
+            "sanguine_indulgence_costs_three_less_after_three_life_gained_this_turn",
+        ),
         StaticAbility::CostsLessByGreatestPower(_) => witnessed(
             "StaticAbility::CostsLessByGreatestPower",
             Seen::Actions("the cast becomes affordable at the reduced cost"),
@@ -1809,6 +1819,14 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CantBeCountered,
         StaticAbility::CostsLessPerGraveyardCard(creature()),
         StaticAbility::CostsLessByGreatestPower(creature()),
+        StaticAbility::CostsLess {
+            amount: EffectValue::Fixed(3),
+            condition: Some(Condition::compare(
+                EffectValue::LifeGainedThisTurn(PlayerSelector::You),
+                managym::state::ability::CompareOp::Ge,
+                3,
+            )),
+        },
         StaticAbility::FlashIf(Condition::YourTurn),
         StaticAbility::Flashback(ManaCost::parse("{2}")),
         StaticAbility::Foretell(ManaCost::parse("{2}")),

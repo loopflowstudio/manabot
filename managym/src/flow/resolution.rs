@@ -123,6 +123,14 @@ impl Game {
                 ObjectSelector::Target(_) => {
                     self.target_property(frame.primary_target(), *property)
                 }
+                ObjectSelector::Paid(how) => aggregate.evaluate(
+                    frame
+                        .spent
+                        .contributions()
+                        .iter()
+                        .filter(|paid| paid.how == *how)
+                        .filter_map(|paid| self.object_property_or_lki(paid.object, *property)),
+                ),
                 _ => aggregate.evaluate(
                     self.selected_permanents(of, frame)
                         .into_iter()
@@ -150,11 +158,16 @@ impl Game {
                 .len() as i32,
             EffectValue::LifeTotal(who)
             | EffectValue::LifeGainedThisTurn(who)
-            | EffectValue::LifeLostThisTurn(who) => self
+            | EffectValue::LifeLostThisTurn(who)
+            | EffectValue::LifeAboveStarting(who) => self
                 .selected_players(who, frame)
                 .into_iter()
                 .map(|player| match value {
                     EffectValue::LifeTotal(_) => self.state.players[player.0].life,
+                    EffectValue::LifeAboveStarting(_) => {
+                        let player = &self.state.players[player.0];
+                        player.life.saturating_sub(player.starting_life)
+                    }
                     EffectValue::LifeGainedThisTurn(_) => {
                         self.state.turn.history[player.0].life_gained as i32
                     }
@@ -2291,6 +2304,14 @@ impl Game {
                 .grantor
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
                 .into_iter()
+                .collect(),
+            ObjectSelector::Paid(how) => frame
+                .spent
+                .contributions()
+                .iter()
+                .filter(|paid| paid.how == *how)
+                .map(|paid| paid.object)
+                .filter(|object| self.state.live(*object).is_some())
                 .collect(),
             ObjectSelector::Remembered => frame
                 .remembered

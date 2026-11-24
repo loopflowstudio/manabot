@@ -91,6 +91,13 @@ impl PlayerConfig {
     }
 }
 
+/// The starting life total of a two-player game (CR 103.4).
+pub const DEFAULT_STARTING_LIFE: i32 = 20;
+
+fn is_default_starting_life(life: &i32) -> bool {
+    *life == DEFAULT_STARTING_LIFE
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Player {
     pub id: PublicId,
@@ -104,6 +111,10 @@ pub struct Player {
     pub known_library: super::knowledge::LibraryKnowledge,
     pub name: String,
     pub life: i32,
+    /// The life total this player began the game with (CR 103.4); omitted
+    /// from the state record at the default 20.
+    #[serde(skip_serializing_if = "is_default_starting_life")]
+    pub starting_life: i32,
     #[serde(skip_serializing_if = "super::permanent::Counters::is_empty")]
     pub counters: super::permanent::Counters,
     pub drew_when_empty: bool,
@@ -123,7 +134,8 @@ impl Player {
             known_hand: BTreeMap::new(),
             known_library: Default::default(),
             name: name.into(),
-            life: 20,
+            life: DEFAULT_STARTING_LIFE,
+            starting_life: DEFAULT_STARTING_LIFE,
             counters: Default::default(),
             drew_when_empty: false,
             mana_pool: ManaPool::default(),

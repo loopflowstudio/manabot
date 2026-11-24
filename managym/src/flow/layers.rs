@@ -1323,7 +1323,12 @@ impl<'a> Context<'a> {
                     }
                     Modification::LoseAllAbilities => lose_all_abilities(view, &mut object.statics),
                     Modification::Firebending(n) => {
-                        view.firebending = view.firebending.saturating_add(*n)
+                        view.firebending = view.firebending.saturating_add(*n);
+                        view.triggered_abilities.push(EffectiveTrigger {
+                            clock: None,
+                            ability: Ability::firebending(*n),
+                            program: true,
+                        });
                     }
                     Modification::GrantActivated(ability) => {
                         view.activated_abilities.push((**ability).clone())

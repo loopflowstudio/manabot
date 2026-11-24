@@ -779,6 +779,11 @@ pub struct ActivatedAbilityDefinition {
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
+    /// "Activate only if [condition]" (CR 602.5b), asked of the activating
+    /// player when the ability is offered and activated, never again on
+    /// resolution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<Condition>,
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
@@ -901,6 +906,14 @@ pub enum StaticAbility {
     /// among [predicate] you control" (The Great Henge); functions while
     /// casting, generic floor 0.
     CostsLessByGreatestPower(CardPredicate),
+    /// "This spell costs {amount} less to cast [if condition]" (CR 601.2f):
+    /// generic mana only, floor 0, read as total cost is determined, before
+    /// targets would change it.
+    CostsLess {
+        amount: EffectValue,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<Condition>,
+    },
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
     FlashIf(Condition),

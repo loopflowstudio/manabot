@@ -16,13 +16,12 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, DelayedFrequency, Effect, EffectValue, EffectiveTrigger, KeywordAction,
-            Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            Ability, Actor, DelayedFrequency, Effect, EffectiveTrigger, KeywordAction, Per,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
         game_object::{AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, Target},
-        mana::{Color, Mana},
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
@@ -1017,7 +1016,6 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
-        self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
         self.cast_triggers(event);
         self.delayed_triggers_for_event(event);
@@ -1299,37 +1297,6 @@ impl Game {
                     .count()
             })
             .sum()
-    }
-
-    /// Granted firebending (CR 702.189): each attacking creature with
-    /// firebending until end of turn triggers "add that much {R} until end
-    /// of combat".
-    fn granted_firebending_triggers(&mut self, event: &GameEvent) {
-        let GameEvent::AttackersDeclared { attackers, .. } = event else {
-            return;
-        };
-        for attacker in attackers.clone() {
-            let amount = self.characteristics(attacker).firebending;
-            let Some(permanent) = self.state.permanents[attacker].as_ref() else {
-                continue;
-            };
-            let (controller, object) = (permanent.controller, permanent.object);
-            if amount == 0 {
-                continue;
-            }
-            let Some(source) = self.permanent_object(attacker) else {
-                continue;
-            };
-            let mut mana = Mana::default();
-            mana.mana[Color::Red as usize] = amount;
-            let effect = Effect::AddMana {
-                mana,
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
-            };
-            self.enqueue_inline_trigger(object, Some(source), controller, vec![effect], None)
-                .attacker = Some(attacker);
-        }
     }
 
     /// Wait for a delayed triggered ability's event (CR 603.7).
@@ -2119,9 +2086,12 @@ impl Game {
                     && who.includes(source_controller, *player)
                     && nth.is_none_or(|n| n == *gain_ordinal)
             }
-            (TriggerCondition::LosesLife { who }, GameEvent::LifeChanged { player, old, new, .. }) => {
-                new < old && who.includes(source_controller, *player)
-            }
+            (
+                TriggerCondition::LosesLife { who },
+                GameEvent::LifeChanged {
+                    player, old, new, ..
+                },
+            ) => new < old && who.includes(source_controller, *player),
             (
                 TriggerCondition::Draws { who, nth },
                 GameEvent::CardDrawn {
