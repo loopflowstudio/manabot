@@ -36,3 +36,5 @@ Use the 23 spells named in Batch 5b as this review cohort. Keep unnamed siblings
 Use the 15 explicitly named Batch 5c permanents as the review cohort. Fork Soul-Guide Lantern before activation to compare its two sacrifice abilities from the same graveyards.
 
 Batch 5d uses the 38 cards named in the plan. Reclamation Sage's Magic 2015 promo released July 17, 2014, one day before the core set printing, so its first-printing module is pm15.
+
+Use two friendly Gray Ogres and one opposing Gray Ogre for the six unconditional attachment grants. The second friendly creature distinguishes a wearer-only grant from a controller-wide grant.

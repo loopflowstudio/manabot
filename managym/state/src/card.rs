@@ -878,6 +878,12 @@ pub enum LayerValue {
     },
 }
 
+impl From<i32> for LayerValue {
+    fn from(value: i32) -> Self {
+        Self::Fixed(value)
+    }
+}
+
 /// One static effect: once its first part applies, later layers retain its
 /// affected objects even if its generating ability disappears (CR 613.6).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1020,6 +1026,22 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+}
+
+impl StaticAbility {
+    /// A battlefield effect applying its modifications together across layers (CR 613.6).
+    pub fn continuous(
+        scope: StaticScope,
+        condition: Option<Condition>,
+        modifications: Vec<crate::effect::Modification<LayerValue>>,
+    ) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope,
+            condition,
+            characteristic_defining: false,
+            modifications,
+        })
+    }
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).

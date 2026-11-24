@@ -1499,14 +1499,6 @@ pub enum DelayedExpiry {
 }
 
 impl Modification<EffectValue> {
-    /// "+power/+toughness".
-    pub fn pump(power: i32, toughness: i32) -> Self {
-        Modification::ModifyPt {
-            power: EffectValue::Fixed(power),
-            toughness: EffectValue::Fixed(toughness),
-        }
-    }
-
     /// Fixed base power and/or toughness (layer 7b).
     pub fn base_pt(power: Option<i32>, toughness: Option<i32>) -> Self {
         Modification::SetBasePt {

@@ -2,7 +2,7 @@
 use managym_state::{
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -18,15 +18,14 @@ fn basilisk_collar() -> CardDefinition {
         key: "wwk.basilisk_collar",
         scryfall_id: "55cdba1b-7a80-435f-9cff-b9365f62e311",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[
                     Keyword::Deathtouch,
                     Keyword::Lifelink,
                 ]))],
-            })],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             name: "Basilisk Collar".into(),
             types: CardTypes::new([CardType::Artifact]),

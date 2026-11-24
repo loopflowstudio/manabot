@@ -345,6 +345,56 @@ fn check_targeted_removal(
     assert_eq!(zone_of(&s, card), Some(destination));
 }
 
+/// Cast the Aura or pay the Equipment's equip cost, then remove the attachment.
+fn check_attachment_grant(
+    name: &str,
+    equip_cost: Option<&str>,
+    wearer_pt: (i32, i32),
+    granted: &[managym::state::card::Keyword],
+) {
+    use managym::state::{card::Keywords, game_object::Target, zone::ZoneType};
+    use support::{
+        game::{five_color_setup, move_card},
+        inspect::{card_of, offered_targets, permanent_named},
+        play::{activate, cast, settle},
+    };
+
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let wearer = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    if let Some(cost) = equip_cost {
+        let equipment = s.force_permanent_on_battlefield(0, name);
+        s.set_player_mana_pool(0, cost);
+        activate(&mut s, equipment, 0);
+    } else {
+        cast(&mut s, name);
+    }
+    let offered = offered_targets(&s);
+    assert!(offered.contains(&Target::Permanent(ally)));
+    assert_eq!(
+        offered.contains(&Target::Permanent(enemy)),
+        equip_cost.is_none()
+    );
+    assert!(s.choose_target(Target::Permanent(wearer)));
+    settle(&mut s);
+
+    let face = s.game().characteristics(wearer);
+    assert_eq!(face.pt(), wearer_pt);
+    assert_eq!(face.keywords, Keywords::of(granted));
+    for other in [ally, enemy] {
+        let face = s.game().characteristics(other);
+        assert_eq!(face.pt(), (2, 2));
+        assert_eq!(face.keywords, Keywords::default());
+    }
+
+    let source = card_of(&s, permanent_named(&s, name));
+    move_card(&mut s, source, ZoneType::Graveyard);
+    let face = s.game().characteristics(wearer);
+    assert_eq!(face.pt(), (2, 2));
+    assert_eq!(face.keywords, Keywords::default());
+}
+
 fn assert_surveil_one(s: &mut support::game::Scenario) {
     use crate::support::inspect::{library_top, offered_cards, zone_of};
     use crate::support::play::{choose, pass_until, select_card, settle};

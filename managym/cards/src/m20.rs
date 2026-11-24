@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        LayerValue, PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -148,18 +148,14 @@ fn empyrean_eagle() -> CardDefinition {
         key: "m20.empyrean_eagle",
         scryfall_id: "ac555709-c7cc-4c64-8a6f-8fe2bc149fcd",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
                     flying: true,
                     ..CardPredicate::creature()
                 }),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             name: "Empyrean Eagle".into(),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Bird".into(), "Spirit".into()],

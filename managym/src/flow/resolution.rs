@@ -552,16 +552,15 @@ impl Game {
         }
     }
 
-    /// The object the resolving ability's Aura or Equipment is attached to:
-    /// the one captured as an activated ability was activated, or else the
-    /// source's current attachment (a triggered ability).
+    /// Read the attachment at resolution (CR 608.2h). If the source left,
+    /// use its last known wearer, which may itself have left.
     fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
         let source = frame.source_ref()?;
-        let attached = match self.lookup_current_permanent(source) {
-            Ok(permanent) => self.state.permanents[permanent].as_ref()?.attached_to,
-            Err(_) => self.object_lki(source)?.attached_to,
-        }?;
-        self.lookup_current_permanent(attached).ok()
+        if let Ok(permanent) = self.lookup_current_permanent(source) {
+            return self.attached_permanent(permanent);
+        }
+        self.lookup_current_permanent(self.object_lki(source)?.attached_to?)
+            .ok()
     }
 
     /// The players a selector names as the effect resolves; a target player

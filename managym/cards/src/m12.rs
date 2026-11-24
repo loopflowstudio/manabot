@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -108,15 +108,14 @@ fn swiftfoot_boots() -> CardDefinition {
         key: "m12.swiftfoot_boots",
         scryfall_id: "8b82753b-284c-44ba-9d48-d28913f02a5f",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[
                     Keyword::Hexproof,
                     Keyword::Haste,
                 ]))],
-            })],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
             name: "Swiftfoot Boots".into(),
             types: CardTypes::new([CardType::Artifact]),

@@ -2,8 +2,7 @@
 use managym_state::{
     ability::{Ability, Effect, TriggerSubject},
     card::{
-        CardDefinition, CardType, CardTypes, LayerValue, PrintedCharacteristics, StaticAbility,
-        StaticContinuous, StaticScope,
+        CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -46,15 +45,11 @@ fn corsair_captain() -> CardDefinition {
                 TriggerSubject::This,
                 vec![Effect::create_tokens("token.treasure", 1)],
             )],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Pirate")),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Pirate")),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

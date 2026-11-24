@@ -1487,7 +1487,7 @@ mod tests {
             effects_description(&[
                 Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                 Effect::Move {
- unrevealed: false,
+                    unrevealed: false,
                     what: ObjectSelector::Moved,
                     to: ZoneType::Battlefield,
                     tapped: false,

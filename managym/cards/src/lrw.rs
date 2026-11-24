@@ -2,8 +2,8 @@
 use managym_state::{
     ability::Effect,
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, LayerValue,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -25,15 +25,11 @@ fn imperious_perfect() -> CardDefinition {
             subtypes: vec!["Elf".into(), "Warrior".into()],
             power: Some(2),
             toughness: Some(2),
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Elf")),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Elf")),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{G}"),
                 tap_source: true,

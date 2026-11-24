@@ -31,7 +31,8 @@ use super::{
 };
 
 /// What a continuous effect changes. `N` is the type of its P/T amounts:
-/// `EffectValue` in a card definition, `i32` once resolved into a record.
+/// `LayerValue` for a static ability, `EffectValue` for a resolving instruction,
+/// and `i32` for the resulting record.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Modification<N = i32> {
     /// Replace creature subtypes, retaining land/artifact/enchantment types.
@@ -149,6 +150,17 @@ pub enum Modification<N = i32> {
 }
 
 impl<N> Modification<N> {
+    /// A fixed power/toughness bonus (layer 7c).
+    pub fn pump(power: i32, toughness: i32) -> Self
+    where
+        N: From<i32>,
+    {
+        Self::ModifyPt {
+            power: power.into(),
+            toughness: toughness.into(),
+        }
+    }
+
     /// The record's form, with every amount resolved.
     pub fn resolve(&self, amount: impl FnMut(&N) -> i32) -> Modification<i32> {
         self.map_amount(amount)

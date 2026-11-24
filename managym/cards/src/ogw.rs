@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope, TargetRequirement, TargetSpec},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
-        StaticAbility, StaticContinuous, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -65,18 +65,14 @@ fn untamed_hunger() -> CardDefinition {
         key: "ogw.untamed_hunger",
         scryfall_id: "595deb86-b6cf-4e4f-a6cf-f5ff128b720d",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
                     Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(2),
-                        toughness: LayerValue::Fixed(1),
-                    },
+                    Modification::pump(2, 1),
                 ],
-            })],
+            )],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             spell_effects: vec![Effect::AttachSourceTo {
                 what: ObjectSelector::Target(TargetSpec::Creature),

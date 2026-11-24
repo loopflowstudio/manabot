@@ -1,21 +1,23 @@
-at: fac7b31d0595cd74c868525dd969d550891c644d
+at: 473671f8fdb13a334dbf8cc2187c5240ce898f01
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Find each result, fixture and unresolved rule.
+    why: Lists each card’s outcome, fixture or missing capability.
   - path: managym/README.md
-    why: Read the identity and search disclosure contracts.
+    why: Explains source identity, attachment resolution and search disclosure.
+  - path: managym/state/src/card.rs
+    why: Defines continuous abilities and equip costs.
+  - path: managym/state/src/effect.rs
+    why: Represents fixed bonuses across static and resolved effects.
   - path: managym/state/src/ability.rs
-    why: Defines unrestricted searches and their movement disclosure.
-  - path: managym/src/flow/resolution.rs
-    why: Resolves attachments and decides when moves reveal cards.
-  - path: managym/src/flow/identity.rs
-    why: Retains the exact wearer when its attachment leaves.
+    why: Defines object selectors and restricted and unrestricted searches.
   - path: managym/cards/src/ala.rs
-    why: Shows how overlapping creature types receive one grant.
+    why: Grants overlapping creature types one Death Baron bonus.
+  - path: managym/src/flow/resolution.rs
+    why: Resolves exact sources, attachments and move disclosure.
+  - path: managym/cards/tests/cards.rs
+    why: Checks wearer eligibility, search disclosure and discard choices.
   - path: managym/cards/tests/cards/zen.rs
-    why: Compares wearers across reattachment and removal during landfall.
+    why: Exercises reattachment and departure during landfall.
   - path: managym/cards/tests/cards/ons.rs
     why: Forks Arcanis across removal and return.
-  - path: managym/cards/tests/cards.rs
-    why: Follows search and discard choices on independent forks.
 hide: []

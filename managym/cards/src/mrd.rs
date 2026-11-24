@@ -3,7 +3,7 @@ use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -68,14 +68,13 @@ fn fireshrieker() -> CardDefinition {
         key: "mrd.fireshrieker",
         scryfall_id: "8da0fcc6-6209-4b8e-997d-ad3cc4ff0856",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[
                     Keyword::DoubleStrike,
                 ]))],
-            })],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             name: "Fireshrieker".into(),
             types: CardTypes::new([CardType::Artifact]),

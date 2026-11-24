@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Ability, Effect, TriggerSubject},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
-        StaticAbility, StaticContinuous, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -26,18 +26,14 @@ fn regal_caracal() -> CardDefinition {
             subtypes: vec!["Cat".into()],
             power: Some(3),
             toughness: Some(3),
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Cat")),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(1),
-                        toughness: LayerValue::Fixed(1),
-                    },
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Cat")),
+                None,
+                vec![
+                    Modification::pump(1, 1),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
                 ],
-            })],
+            )],
             abilities: vec![Ability::when_enters(
                 TriggerSubject::This,
                 vec![Effect::create_tokens("token.cat_1_1_w_lifelink", 2)],

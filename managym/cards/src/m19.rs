@@ -3,7 +3,7 @@ use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -137,12 +137,11 @@ fn aggressive_mammoth() -> CardDefinition {
         key: "m19.aggressive_mammoth",
         scryfall_id: "323f3c76-5e79-43e6-ae78-f555810edbc3",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))],
+            )],
             name: "Aggressive Mammoth".into(),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Elephant".into()],

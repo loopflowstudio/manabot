@@ -2,8 +2,8 @@
 use managym_state::{
     ability::Effect,
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
-        StaticAbility, StaticContinuous, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -33,18 +33,14 @@ fn dragon_fodder() -> CardDefinition {
 fn death_baron() -> CardDefinition {
     // A Skeleton Zombie receives this bonus once. Baron itself qualifies only as a Skeleton.
     let grant = |scope| {
-        StaticAbility::Continuous(StaticContinuous {
+        StaticAbility::continuous(
             scope,
-            condition: None,
-            characteristic_defining: false,
-            modifications: vec![
-                Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                },
+            None,
+            vec![
+                Modification::pump(1, 1),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
             ],
-        })
+        )
     };
     let text_box = "Skeletons you control and other Zombies you control get +1/+1 and have deathtouch. (Any amount of damage they deal to a creature is enough to destroy it.)";
     CardDefinition {

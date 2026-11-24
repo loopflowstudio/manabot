@@ -93,28 +93,11 @@ fn mazes_end_counts_distinct_gate_names_after_the_search() {
 
 #[test]
 fn foundations_grant_unflinching_courage() {
-    use crate::support::game::{five_color_setup, move_card};
-    use crate::support::inspect::{card_of, keywords, offered_targets, permanent_named};
-    use crate::support::play::{cast, settle};
     use managym::state::card::Keyword;
-    use managym::state::game_object::Target;
-    use managym::state::zone::ZoneType;
-    let mut s = five_color_setup(&["Unflinching Courage", "Gray Ogre"]);
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    cast(&mut s, "Unflinching Courage");
-    assert!(offered_targets(&s).contains(&Target::Permanent(enemy)));
-    assert!(s.choose_target(Target::Permanent(ogre)));
-    settle(&mut s);
-    let source = permanent_named(&s, "Unflinching Courage");
-    assert!(keywords(&s, ogre).has(Keyword::Trample));
-    assert!(!keywords(&s, enemy).has(Keyword::Trample));
-    assert!(keywords(&s, ogre).has(Keyword::Lifelink));
-    assert!(!keywords(&s, enemy).has(Keyword::Lifelink));
-    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
-    let card = card_of(&s, source);
-    move_card(&mut s, card, ZoneType::Graveyard);
-    assert!(!keywords(&s, ogre).has(Keyword::Trample));
-    assert!(!keywords(&s, ogre).has(Keyword::Lifelink));
-    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    crate::check_attachment_grant(
+        "Unflinching Courage",
+        None,
+        (4, 4),
+        &[Keyword::Trample, Keyword::Lifelink],
+    );
 }

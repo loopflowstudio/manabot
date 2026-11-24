@@ -3,8 +3,7 @@ use managym_state::{
     ability::{Condition, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticContinuous,
-        StaticScope,
+        PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -65,18 +64,14 @@ fn unflinching_courage() -> CardDefinition {
         key: "dgm.unflinching_courage",
         scryfall_id: "35952c24-d728-4ec6-b0d1-b8183a18554a",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
                     Modification::AddKeywords(Keywords::of(&[Keyword::Trample, Keyword::Lifelink])),
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(2),
-                        toughness: LayerValue::Fixed(2),
-                    },
+                    Modification::pump(2, 2),
                 ],
-            })],
+            )],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             spell_effects: vec![Effect::AttachSourceTo {
                 what: ObjectSelector::Target(TargetSpec::Creature),

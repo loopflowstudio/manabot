@@ -6,9 +6,8 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
-        DamageTransform, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
-        Restriction, SacrificeCost, StaticAbility, StaticContinuous, StaticRestriction,
-        StaticScope, TargetCostReduction,
+        DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect, Restriction,
+        SacrificeCost, StaticAbility, StaticRestriction, StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -342,15 +341,11 @@ fn arahbo_the_first_fang() -> CardDefinition {
             power: Some(2),
             toughness: Some(2),
             supertypes: vec!["Legendary".into()],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(cat),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(cat),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             abilities: vec![Ability::when_enters(
                 TriggerSubject::ThisOr(Box::new(other_nontoken_cat)),
                 vec![Effect::create_tokens("token.cat_1_1_w", 1)],
@@ -417,15 +412,11 @@ fn anthem_of_champions() -> CardDefinition {
             name: "Anthem of Champions".into(),
             mana_cost: Some(ManaCost::parse("{G}{W}")),
             types: CardTypes::new([CardType::Enchantment]),
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::YouControl(CardPredicate::creature()),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: "Creatures you control get +1/+1.".into(),
             ..Default::default()
         },
@@ -793,14 +784,13 @@ fn twinblade_blessing() -> CardDefinition {
         key: "fdn.twinblade_blessing",
         scryfall_id: "ecf01cbe-9fcb-4f35-bc6b-2280620b06ff",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[
                     Keyword::DoubleStrike,
                 ]))],
-            })],
+            )],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             spell_effects: vec![Effect::AttachSourceTo {
                 what: ObjectSelector::Target(TargetSpec::Creature),
@@ -828,18 +818,14 @@ fn quick_draw_katana() -> CardDefinition {
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: Some(Condition::YourTurn),
-                characteristic_defining: false,
-                modifications: vec![
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(2),
-                        toughness: LayerValue::Fixed(0),
-                    },
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                Some(Condition::YourTurn),
+                vec![
+                    Modification::pump(2, 0),
                     Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
                 ],
-            })],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -867,18 +853,14 @@ fn billowing_shriekmass() -> CardDefinition {
                     target: None,
                 }],
             )],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::GraveyardAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::GraveyardAtLeast {
                     count: 7,
                     predicate: CardPredicate::default(),
                 }),
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(2),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+                vec![Modification::pump(2, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -899,25 +881,23 @@ fn inspiring_paladin() -> CardDefinition {
             power: Some(3),
             toughness: Some(3),
             statics: vec![
-                StaticAbility::Continuous(StaticContinuous {
-                    scope: StaticScope::This,
-                    condition: Some(Condition::YourTurn),
-                    characteristic_defining: false,
-                    modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::YourTurn),
+                    vec![Modification::AddKeywords(Keywords::of(&[
                         Keyword::FirstStrike,
                     ]))],
-                }),
-                StaticAbility::Continuous(StaticContinuous {
-                    scope: StaticScope::YouControl(CardPredicate {
+                ),
+                StaticAbility::continuous(
+                    StaticScope::YouControl(CardPredicate {
                         with_counter: true,
                         ..CardPredicate::creature()
                     }),
-                    condition: Some(Condition::YourTurn),
-                    characteristic_defining: false,
-                    modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                    Some(Condition::YourTurn),
+                    vec![Modification::AddKeywords(Keywords::of(&[
                         Keyword::FirstStrike,
                     ]))],
-                }),
+                ),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -946,18 +926,17 @@ fn skyknight_squire() -> CardDefinition {
                     1,
                 )],
             )],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::SourceCountersAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::SourceCountersAtLeast {
                     kind: CounterKind::PlusOnePlusOne,
                     count: 3,
                 }),
-                characteristic_defining: false,
-                modifications: vec![
+                vec![
                     Modification::AddSubtypes(vec!["Knight".into()]),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
                 ],
-            })],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

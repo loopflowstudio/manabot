@@ -6,8 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, LayerValue, PrintedCharacteristics, SacrificeCost, StaticAbility,
-        StaticContinuous, StaticScope,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -207,15 +206,11 @@ fn goldvein_pick() -> CardDefinition {
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::EquippedCreature,

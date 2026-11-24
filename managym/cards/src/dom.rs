@@ -4,8 +4,8 @@ use managym_state::{
         Ability, Condition, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject,
     },
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
-        StaticAbility, StaticContinuous, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -88,18 +88,14 @@ fn lyra_dawnbringer() -> CardDefinition {
         key: "dom.lyra_dawnbringer",
         scryfall_id: "93be6799-7b9d-44d4-84dc-2961692b5a85",
         printed: PrintedCharacteristics {
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Angel")),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(1),
-                        toughness: LayerValue::Fixed(1),
-                    },
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Angel")),
+                None,
+                vec![
+                    Modification::pump(1, 1),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
                 ],
-            })],
+            )],
             name: "Lyra Dawnbringer".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -127,21 +123,17 @@ fn ghitu_lavarunner() -> CardDefinition {
             subtypes: vec!["Human".into(), "Wizard".into()],
             power: Some(1),
             toughness: Some(2),
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::GraveyardAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::GraveyardAtLeast {
                     count: 2,
                     predicate: CardPredicate::instant_or_sorcery(),
                 }),
-                characteristic_defining: false,
-                modifications: vec![
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(1),
-                        toughness: LayerValue::Fixed(0),
-                    },
+                vec![
+                    Modification::pump(1, 0),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
                 ],
-            })],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

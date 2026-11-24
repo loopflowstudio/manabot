@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Colors, Mana, ManaCost},
@@ -67,11 +67,10 @@ fn imprisoned_in_the_moon() -> CardDefinition {
             subtypes: vec!["Aura".into()],
             // One effect across layers 4, 5 and 6; the loss precedes the grant
             // it keeps.
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
                     Modification::SetTypes {
                         types: vec![CardType::Land],
                         subtypes: vec![],
@@ -84,7 +83,7 @@ fn imprisoned_in_the_moon() -> CardDefinition {
                         ..Default::default()
                     })),
                 ],
-            })],
+            )],
             spell_effects: vec![Effect::AttachSourceTo {
                 what: ObjectSelector::Target(enchantable.clone()),
             }],
