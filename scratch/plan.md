@@ -1,6 +1,6 @@
 # MTG-420 · Battlefield forms, copies and persistent ability sources
 
-> “stop doing 1 card at a time”
+> “Stop doing 1 card per `coverage-working` loop: group remaining in-scope ledger rows into cohesive batches by shared mechanism/test setup so you finish in a few substantial passes.”
 
 Implement the remaining cards in batches that share rules behavior. Run the outer review cycle once per batch. Record which rows passed. When a row can't join its batch, record the specific dependency.
 
@@ -16,128 +16,59 @@ The Task brief's design constraint: “Explore one-card transform, two-card meld
 - `CopyException` restricted to copiable characteristics, `320a8875`.
 - Named Koma's Coil copies through Rite, Self-Reflection (hand and flashback), Relm's Sketching and Extravagant Replication. Ordering Commands replay from the constructed snapshot. `fdn.rs` `named_coil` at `d52156c9`.
 - Compress `9e297f0c`: waiting triggers read the captured face (`pending_trigger_definition`/`pending_trigger_face`), and target legality shares `fits_trigger_clause`. The focused nextest run passed 42 cases. The 13 Python copy-text, Academy trigger-order and pinned-game checks passed. The merge `039b275b` brought only Loopflow workflow files.
+- Batch 1 exact departures and linked returns (`e6f6ef27`, `47dec0aa`, `2955a3d8`). Effective `ObjectLki` uses the same matcher as live characteristics. `WithSource` exile links survive departure, and delayed returns bind to exact arrivals. The card list and directed evidence are in [the behavior review](behavior-review.md). The implementation run passed 14 departure cases, 142 focused card and observability cases, and the canonical replay and LKI/exile filters.
 
-## Model to build (concept review)
+## Batch 2 · Graveyard choices, costs and simultaneous movement
 
-Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-review.html`. Batch 1 settled departure LKI matching (`CharacteristicView` over `ObjectLki.battlefield`), split exile-link lifetimes (`UntilSourceLeaves` vs `WithSource` pruned in `release_resolved_forms`), explicit target optionality and counted returns. Model items across Batches 2–4:
+### A. Spell entries · built
 
-1. **Choices and payment of the entering spell (Batch 2A).** See the corrected model and checks below. A copy of a permanent spell keeps kicker and X.
+`SpellEntry` owns kicker, X and optional payment through the proposed move and on the resulting permanent. A cast for zero carries an empty receipt. A permanent spell copy keeps kicker and X with no payment. A blink or battlefield copy has no spell entry. This supersedes the reviewed `CastReceipt` model because casting choices can survive without a cast. `Arc<SpellEntry>` keeps the permanent at its 168-byte ceiling, down from the 184-byte inline attempt. The digest projection retains `was_cast`, `cast_x` and `cast_spent`. The copied spell's cast flag is corrected. See `managym/state/src/permanent.rs` and `managym/src/flow/decision.rs` at `d61564193a`.
 
-2. **Unified clause target legality and zone-filtered selection (Batch 2 foundation).**
-   - Extend `requirement.another` (`triggers.rs:250`) to exclude both a live source (`Target::Permanent`) and a departed source's graveyard/exile arrival (`departure_arrivals(source)` → `Target::GraveyardCard`), preventing **Fiendish Panda** from targeting its own card in the graveyard.
-   - Pass source identity into `resolution_targets` (`resolution.rs:516`) so placement (`fits_trigger_clause`) and resolution (`resolution_targets`) enforce one target-legality contract, including `another` and `within_source_bound` (CR 608.2b).
-   - Add `ObjectSelector::ZoneMatching { zone: ZoneType, owner: Actor, predicate: CardPredicate }` (keeping `ObjectSelector::Zone(ZoneType)`'s serialized shape unchanged) so **Raise the Past** and **Rise of the Dark Realms** reuse `Effect::Move`'s simultaneous `EventBatch` pipeline without one-off mass-reanimation effects.
+The entry answers X counters and Familiar's cast-only condition before commitment. The entering permanent's own trigger captures kicker, X and spent mana. Its intervening-if recheck can still read kicker after the source leaves. Healer (`fdn.rs`) and Nullpriest (`znr.rs`) share `check_kicked_return` in `managym/cards/tests/cards.rs`. It forks kicker and target Commands, rejects stale submissions, exercises Cleric-only mana, removes the source in response and blinks it in a sibling branch. The chooser sees the captured kicker during placement and both viewers see it after removal.
 
-3. **General creation-time value freezing for delayed triggers (Batch 2 or 4 cleanup of Batch 1 shape finding).**
-   - Replace the single-field `matches!` in `CreateDelayedTrigger` (`resolution.rs:1964`) with one recursive `freeze_delayed_effect` helper that resolves creation-time source/frame values (`DeathCountersMinus` / `SourceCountersMinus`, `X`, `TriggerDamage`, `ExcessDamage`, `ManaSpentToCast`, `ColorsSpentToCast`) into `EffectValue::Fixed` across every delayed effect. Generalize `DeathCountersMinus` to `SourceCountersMinus { kind, subtract }` (live or departed LKI) with a `token_renames.rs` entry — or keep Familiar's serialized token name if avoiding pilot churn.
+Eleven directed debug checks passed, including Familiar's cast-only replacement, Toph's spend receipt and a copied permanent spell's X, kicker and absent payment. Compression at `12c51346a1` and `7cd57bfb32` passed 81 focused Rust tests and 14 trigger-order Academy and semantic-text tests with the rebuilt CPython 3.13 extension. Both trigger orders at seed 7 produced identical state digests and both viewers' observation JSON before and after compression. The departure fixture distinguishes Gray Ogre's printing from its Mountain face at departure and its later copy. The merge of `b9b09bc6d9` added observation extents and changed policy preparation without edits in the rules flow or state crates. Those checks predate the merge and did not include the pinned pilot.
 
-4. **One layered continuous-effect path for transformation Auras and accurate characteristic observation (Batch 3 foundation).**
-   - Add `Modification::SetName(String)` (`effect.rs`) so **Witness Protection**, **Eaten by Piranhas** and **Imprisoned in the Moon** all compose via `StaticAbility::Continuous(StaticContinuous)` instead of extending `SetCharacteristics`. Lower legacy `StaticAbility::AttachedSetsCharacteristics` through `Modification::SetName` in `layers.rs` (deleting `Operation::Name` while preserving Honest Work's TLA learning tokens).
-   - Fix two shared consumers exposed by `StaticContinuous` Auras:
-     - `zones.rs:934`: invalidate both players' mana caches whenever a permanent with a static `LoseAllAbilities`, `LoseNonManaAbilities` or `GrantActivated` enters or leaves (not only `attached_characteristics` / `attached_grants` / `SetsLandType`).
-     - `observation.rs:1572–1581` & `record_vocabulary.rs:295`: scan `Modification::SetName` for granted names; decouple observed `name` (`characteristics.name != object.name`) and replaced `creature_types` (`characteristics.creature_types_set`, set by `SetCreatureTypes` and `SetTypes`) from `Operation::Name` so Eaten by Piranhas and Kellan project their replaced creature types.
+### B. Source-relative target legality · next
 
-5. **Explicit battlefield form backing and resumable battlefield moves (Batch 4).**
-   - Replace the overloaded `Object.printed` / `Object.front` / `Permanent.manifested` / `ZoneManager.melded_cards` split with an explicit battlefield form recording physical backing card(s), orientation and face-down state, separate from immutable `CopiableValues`. Gate `transform_permanent` (`zones.rs:978`) on backing form (fixing the CR 712.9 counterexample where a non-DFC Clone copying Cecil currently transforms) and expose one `is_face_down()` authority (replacing the 3 repeated `permanent.manifested && definition_id == ANONYMOUS` checks in `identity.rs:52`, `action.rs:454`, `selection_sampling.rs:212`).
-   - Keep `move_object` / `complete_immediate_batch` strictly for non-choice moves (draws, stack counter, setup) and migrate battlefield-capable resolution moves (starting with `cast_permission::exile_linked` for `Decision::ExileLinked` at `decision.rs:2905`, which currently panics at `proposed_event.rs:971` if Azula exiles Ragnarok) onto `EffectFrame.batch`.
+`fits_trigger_clause`, trigger mode availability and retargeting use separate source filters. `resolution_targets` only checks the target spec and any shared creature type. Put base spec legality, `another` and bounds relative to the source behind one clause predicate. Pass the existing `AbilitySource` into it from placement, modes, retarget and resolution. It already distinguishes the source object from a captured exact reference. Preserve target offer order and reuse the existing spec-legality check. Share the choice-only distinctness and announced-X budget checks between placement and retarget.
 
-*Choices made for review (reversible):* (1a) capture the entering spell at trigger time for the CR 603.4 recheck; (2a) `ObjectSelector::ZoneMatching` reusing `Effect::Move` over bespoke mass-reanimation effects; (3a) `Modification::SetName` + `StaticContinuous` lowering over extending `SetCharacteristics`; (4a) general `freeze_delayed_effect` helper and `SourceCountersMinus` over the single-field `matches!`.
+Use the live source permanent or the exact former permanent's current graveyard arrivals for `another`. `departure_arrivals` serves both graveyard and exile movement, including both meld cards. The target model has `Target::GraveyardCard`, so the filter only compares those arrivals against graveyard-card targets. Resolve source power from the live source or its departure LKI. Keep the activated-ability source exclusion and shared-creature-type checks in `play.rs` intact when changing resolution.
 
-## Batch 2 decomposition (graveyard choices, costs, simultaneous movement)
+- Implement Fiendish Panda and exercise Driver of the Dead on the same graveyard setup. Panda's trigger uses its last power after counters, excludes Bears and its own graveyard appearance, and rejects targets outside the power bound at retarget and resolution. Exercise exact self-exclusion with a clause whose predicate admits the source card, so the ordinary card predicate cannot mask a failure.
+- Exercise Driver's owner, creature and mana-value restrictions and keep the existing Jailer, Wolfbat and TLA within-power cases passing. Remove inline `requirement.another` checks from placement, mode availability and retargeting after the shared predicate takes over.
 
-I mapped this against `e1806481`. The cohort's rules duplicate three facts, and each needs one owner.
+### C. Simultaneous public-zone movement
 
-**A. Choices and payment of the spell that entered.** CR 707.10 copies kicker and X on the stack. A copy of a permanent spell may enter kicked without having been cast. A blink or a battlefield copy has neither the original's choices nor payment. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
+Add `ObjectSelector::ZoneMatching { zone, owner: Actor, predicate: CardPredicate }` beside `Each` in `Game::select`. Feed its matches to `Effect::Move` as one `EventBatch`. Raise the Past selects the caster's creatures with mana value at most two. Rise of the Dark Realms selects all players' creatures and puts them under the caster's control. Preserve `Zone(_)` and `Each` serialization. Cover the new selector in `ability_description.rs`, learning tokens and `observability.rs`.
 
-- Carry one `SpellEntry { kicked, x, payment: Option<PaymentReceipt> }` from the resolving frame through the proposed move into the permanent. A cast for zero has an empty receipt, a spell copy has no payment, and an ordinary zone entry has no spell record. The proposal and permanent hold an optional shared pointer. An inline record measured 184 bytes per permanent; the shared record keeps the row at its 168-byte ceiling.
-- The same entry answers X counters and Familiar's cast condition before commitment. Its own ETB captures kicker, X and spent mana. Resolution rechecks the condition from the trigger's captured choices even if the source left.
-- Preserve the historical serialized permanent fields for existing games. The old `was_cast` field was always serialized, including false. A copied spell counting as cast was a rules error.
+Use the two-graveyard setup for both spells. Check that entering Momo, Friendly Flier sees an entering Spectral Sailor. Use a Sailor owned by the opponent for the Rise fork to check ownership and control. Driver stays a death-trigger witness in B.
 
-**B. Whether a target fits its clause, given its source.** Four sites hold copies today:
-- `fits_trigger_clause` (`triggers.rs:244`) checks `another` against the live source only, plus distinctness, mana budget and source bound.
-- Trigger mode availability (`triggers.rs:501`) checks `another` against the live permanent only.
-- `retarget.rs:101–116` checks distinctness, budget, `another` and source bound.
-- `resolution_targets` (`resolution.rs:516`) checks spec legality only. It never applies `another` or `within_source_bound`.
-- *Owner:* one `target_fits_clause(requirement, target, ClauseSource { object, reference }, controller)`. It combines `target_is_legal` with `another` and `within_source_bound`. `another` excludes the live source permanent and every `departure_arrivals(source)` as `Target::GraveyardCard`/`ExiledCard`, which is how Fiendish Panda can't return itself. All four sites call it. Choice-time-only rules (distinctness, `total_mana_value_x`) stay at the two choice sites (placement and retarget) as one `choice_admits` wrapper, so placement and retarget share one function too. `resolution_targets` takes the `ClauseSource`.
+### Finish and review the cohort
 
-**C. Every matching card in a public zone.** `ObjectSelector::Each` is battlefield-only by contract, and `Zone(ZoneType)` is the resolving player's hidden-selection provenance.
-- *Owner:* `ObjectSelector::ZoneMatching { zone, owner: Actor, predicate: CardPredicate }`, resolved in `Game::select` beside `Each`. Its result feeds the existing `Effect::Move` batch, giving one simultaneous `EventBatch` with ETB triggers and `under` for control.
-- Raise the Past is `Move { what: ZoneMatching { Graveyard, You, creature mv≤2 }, to: Battlefield }`. Rise of the Dark Realms is the same with `AnyPlayer` and `under: You`.
-- `Zone(_)` and `Each` keep their serialized shapes. The new variant reaches `ability_description.rs`, the learning tokens and the `observability.rs` guard in the same change.
+- Heartfire Immolator gets prowess and a self-sacrifice cost. Pump it, sacrifice it, return it before resolution and check damage from the sacrificed appearance's power.
+- Ordeal of Nylea follows the enchanted creature's attack, counter threshold, sacrifice and optional basic-land search through native triggers. Feldon's Cane (`atq.rs`) exiles itself as a cost, then shuffles.
+- Pair Undying Malice or Valkyrie's Call with simultaneous deaths and a blink in response, as carried from Batch 1.
+- Review the whole batch together. Each card composes from shared rules and has a directed debug case in its first-printing set's test file. Check the `SpellEntry` owner, shared clause predicate and single `Effect::Move` path.
 
-**Not built in Batch 2: model item 3 (`freeze_delayed_effect`).** Nine-Lives Familiar is still its only consumer, and no Batch 2 or 3 card creates a delayed trigger that reads a creation-time value. The single `matches!` at `resolution.rs:1970` stays until a second real consumer appears. Generalizing now would mean inventing one.
+Defer general delayed-effect value freezing until a second card needs it. `CreateDelayedTrigger` freezes `DeathCountersMinus` for Nine-Lives Familiar. The post-Batch 1 concept review in `scratch/concept-review.html` records the proposed generalization if another consumer appears.
 
-### Delete — do not maintain (deepest owner first, consumers moved in the same cut)
+**Abyssal Harvester depends on MTG-418.** It needs the native query for exact graveyard arrivals this turn from any zone. `TurnState::graveyard_from_battlefield` records only battlefield departures. MTG-418 has no published PR or release for the query. Once it reaches `main`, run `lf sync` and locate the query with `rg -n 'graveyard_from_battlefield|GraveyardThisTurn|graveyard.*this turn' managym/src/flow managym/state/src`. Offer Harvester a milled creature, a dead creature and a card that left and reentered. Follow the selected exile appearance through the Nightmare copy and the exile of the other Nightmare tokens. Continue the rest of this batch independently.
 
-1. Removed `Permanent.was_cast`, `cast_x` and `cast_spent` as state fields. Their serialized names remain in the digest projection.
-2. Removed the separate stack lookup from `EntersWithCounters.if_cast`. Both this replacement and `TriggerCondition::WasCast` read the presence of payment on the spell entry.
-3. Moved `Condition::Kicked` out of the resolution-only group so the entering source can answer it when the trigger fires.
-4. The inline `another` checks at `triggers.rs:250`, `triggers.rs:501` and `retarget.rs:109`, and the separate `within_source_bound` calls at `triggers.rs:265` and `retarget.rs:114`. All move into `target_fits_clause`.
-5. No old path is deleted for C. Nothing bespoke exists to replace; the new selector is the only implementation.
+## Batch 3 · Effective characteristics and grants
 
-### Implement slices (one shared mechanism per loop pass)
+- Add `Modification::SetName(String)` so Witness Protection, Eaten by Piranhas and Imprisoned in the Moon (`emn.rs`) use `StaticAbility::Continuous`. Lower `StaticAbility::AttachedSetsCharacteristics` through `Modification::SetName` in `layers.rs` and delete `Operation::Name`. Preserve Honest Work's TLA learning tokens.
+- Invalidate both players' mana caches when a permanent with static `LoseAllAbilities`, `LoseNonManaAbilities` or `GrantActivated` enters or leaves. Check the opponent's enchanted mana creature.
+- Scan `Modification::SetName` for granted names in `record_vocabulary.rs`. In `observation.rs`, project changed `name` and replaced `creature_types` independently. `SetCreatureTypes` and `SetTypes` set `creature_types_set`. Check the replaced types for Kellan and Eaten by Piranhas.
+- Use one board across grant, copy, attachment movement and reentry. Check that Celestial Armor's protection stays with its original recipient when the Equipment moves. Check Dropkick Bomber's granted flying and damage trigger, Kellan and Mild-Mannered Librarian's incarnation-bound upgrades, and Soulstone Sanctuary and Crawling Barrens' persistent and temporary animation.
+- Check transformation Auras across a copy and at death. Witness Protection contributes Citizen LKI. Imprisoned in the Moon contributes noncreature Land LKI.
 
-1. **A, spell entries — built.** Sun-Blessed Healer (FDN) and Nullpriest of Oblivion (ZNR) use the same kicked intervening-if and graveyard move. The two set tests fork the kicker and target Commands, reject stale submissions, spend Cleric-only mana, remove the source with Lightning Bolt, and blink it in a sibling branch. The chooser sees the captured kicker during placement and both viewers see it after removal.
-   - Eleven debug checks passed across the card, rules, source-tap and conformance binaries, including Familiar's cast-only replacement, Toph's spend receipt and the spell copy's X, kicker and absent payment. Both FDN ledger rows name their directed checks.
-   - Compression checks at `7cd57bfb32`: 81 focused Rust tests and 14 Python/Academy tests passed with the rebuilt CPython 3.13 extension. For both trigger orders at seed 7, the pre- and post-refactor builds produced identical state digests and both players’ observation JSON at each sampled step. The departure predicate fixture distinguishes Gray Ogre’s printing from its Mountain face at departure and its later copy.
-2. **B, clause legality — next.** Build `target_fits_clause` and `ClauseSource`, then move the four sites onto it. Cards: Fiendish Panda; Driver of the Dead (`avr.rs`, existing), whose remaining restrictions get exercised.
-   - Panda's death trigger never offers its own graveyard card, and its power bound reads LKI after the +1/+1 counters.
-   - A retargeted or resolution-time target outside Panda's bound is illegal.
-   - The existing Jailer, Wolfbat and TLA within-power cases still pass.
-3. **C, zone selection.** Build `ZoneMatching`. Cards: Raise the Past and Rise of the Dark Realms, on one two-graveyard setup.
-   - Check simultaneous entry: two Driver of the Dead triggers see each other. Check ownership versus control under Rise, and ETB triggers.
-4. **Remaining cohort on the same setup, composed from existing parts.**
-   - Heartfire Immolator: prowess, self-sacrifice cost, `SourcePower` LKI. Pump it, sacrifice it, return it before resolution; the damage uses its departed power.
-   - Ordeal of Nylea: `Attacks { EnchantedCreature }`, `Sacrificed { This }`, basic-land search.
-   - Feldon's Cane (`atq.rs`): exiles itself as a cost, then shuffles.
-   - Any of these that needs a new rules variant gets it as its own directed variant, never as card logic.
+Use first printings and record each delivered definition and directed check in the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) where it applies. Match tokens by their full printed characteristics. Scope comes from Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md).
 
-### Review criterion (`coverage-decomposition-review`)
+## Batch 4 · Representation, consumers and budget
 
-Healer, Nullpriest, Panda, Driver, Raise the Past, Rise of the Dark Realms, Immolator, Ordeal and Cane each compose from the shared mechanisms, with no card-specific engine branch and no duplicate state:
-- one `SpellEntry` owner for the choices and payment of an entering spell;
-- one `target_fits_clause` behind placement, mode availability, retarget and resolution;
-- one zone selector feeding `Effect::Move`.
-
-The review should find:
-- No `was_cast`/`cast_x`/`cast_spent` and no stack re-lookup for cast provenance: `rg 'was_cast\b|cast_x|cast_spent|find_spell_on_stack_index' managym/src/flow/{zones,proposed_event,triggers}.rs` is empty apart from unrelated spell lookups.
-- No inline `requirement.another` outside `target_fits_clause`.
-- Every card above defined in its first-printing set file with a directed test in `managym/cards/tests/cards/<set>.rs`, passing in debug.
-
-This concerns growing the card file, not runtime speed.
-
-## Remaining batches
-
-1. **Exact departures and linked returns — built (`e6f6ef27`, compress `47dec0aa`/`2955a3d8`); behavior review passed (`scratch/behavior-review.md`).**
-   - Built: `ObjectLki.battlefield` (`BattlefieldFacts`) plus `attached_to` and `meld_partner`, one `CharacteristicView` matcher (`layers::matches_view` / `matches_departure`) read by departure triggers, delayed `CreatureDies`, `SourceMatches`, `SourceCountersAtLeast` and additional trigger times; `ObjectSelector::Triggering` and `This` follow each departure arrival (both meld cards); `WithSource` links survive departure and are pruned in `release_resolved_forms`; `ObjectSelector::ExiledWithSource`; explicit `exile_until_source_leaves(spec, min)` with the inference deleted; `EntryCounters` (bare kind serialization for one counter) and `EffectValue::DeathCountersMinus`, frozen to a literal when the delayed trigger is created; `EntersWithCounters.if_cast`.
-   - Cards: Banishing Light (`jou`), Stasis Snare (`bfz`), Prayer of Binding (`dmu`), Kykar, Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call (`fdn`), Hoarding Dragon (`m11`), Angelic Destiny (`m12`), Fake Your Own Death (`snc`), Undying Malice (`vow`); `token.flying_spirit`; `Revival` counter; `Demon` subtype. Earth Kingdom Jailer now states its `min: 0` clause.
-   - Proof: 14 `fdn::departure_*` cases (debug), with Commands forked and stale ones rejected at Prayer's target, Kykar's mode, the Dragon's search and the Familiar's return; 142 cases across `observability::`, `lea::`, `fin::`, `dsk::`, `fdn::`, Jailer and Wolfbat; `canonical_replay_tests` and the LKI/exile rules filters. Ledger rows updated.
-   - Gate: Jailer's learning program gained an explicit `TargetClause`. If `tests/model/test_pinned_pilot.py` fails, declare it with `scripts/pinned_pilot.py record --reason` (the extension was not rebuilt here). Full debug nextest, clippy and Engine Budget are still to run.
-   - Not covered: Malice or Call paired with a blink in response (the Call case covers simultaneous deaths). Add it in the Batch 1 review if a fixture is cheap; otherwise carry it to Batch 2's integrated cases.
-2. **Graveyard choices, costs and simultaneous movement.**
-   - *Foundation:* A is built. B (clause legality) and C (zone selection) remain. Item 3 waits for a second consumer.
-   - *Cards & fixtures:* Use one two-graveyard setup for Raise the Past, Rise of the Dark Realms, Driver of the Dead (remaining target restrictions), Fiendish Panda (including self-exclusion in graveyard), Heartfire Immolator, Sun-Blessed Healer (including removal in response to kicked ETB), Nullpriest of Oblivion, Feldon's Cane (`atq.rs`) and Ordeal of Nylea. Abyssal Harvester is blocked (see below).
-3. **Effective characteristics and grants.**
-   - *Foundation:* Land item 4 (`Modification::SetName`, `StaticContinuous` lowering for transformation Auras, mana-cache invalidation for static ability removal/grant in `zones.rs:934`, `record_vocabulary.rs` scan, and decoupled observed `name` / `creature_types_set` in `observation.rs:1572`).
-   - *Cards & fixtures:* Use one board before and after grant, copy, attachment movement and reentry for Celestial Armor, Dropkick Bomber, Kellan (`fdn.rs`), Mild-Mannered Librarian, Soulstone Sanctuary, Crawling Barrens, Witness Protection, Eaten by Piranhas and Imprisoned in the Moon (`emn.rs`). Include death-time LKI checks for Witness Protection (Citizen) and Imprisoned in the Moon (noncreature Land), mana-cache checks on opponent's enchanted mana dork, and observation checks on Kellan and Eaten by Piranhas's replaced creature types.
-4. **Representation unification, consumers and budget.** Land item 5 (battlefield form backing + CR 712.9 transform gate + `is_face_down()` authority + battlefield `move_object` audit, plus item 3 if deferred), close the open replay/sampling checks, verify consumers and measure against the engine budget.
-
-Row identity comes from the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) (Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md)). Update each row with its delivered source and checks. Reuse first printings. Match produced tokens by their full printed characteristics: Kykar needs a white flying Spirit, and the catalog already defines Treasure and Koma's Coil.
-
-| Rows | Behavior to exercise |
-| --- | --- |
-| Banishing Light, Stasis Snare, Prayer of Binding | Remove the source before its entry trigger resolves, then again after the exile resolves. Only the second has an exile to end. Move the exiled card out and back before the source leaves. The new appearance stays put. Prayer gains life with zero targets chosen (`min: 0`); Banishing Light and Stasis Snare require a target (`min: 1`). A sole target that becomes illegal loses the entire resolution. |
-| Kykar; Hoarding Dragon | Choose Kykar's blink or its Spirit. The delayed return binds to the object in exile. With two Dragons that found different artifacts, only the dying Dragon recovers its linked card via `WithSource` surviving departure. Bounce and replay the same Dragon, then check the old link. |
-| Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call | Capture the Familiar's revival count at death (`k - 1` frozen into the delayed trigger) and spend one on its next-end-step return; cast entry gives 8 revival counters while blink gives 0. In a sibling fork, move it out of the graveyard. Vessel and Call read death-time effective creature types through unified LKI so a returned Demon Vessel or Angel creature does not re-trigger on a second death. Counters and type grants attach to the returned incarnation. Kill Call together with an eligible creature; the trigger still returns the owner's card. |
-| Fake Your Own Death, Undying Malice, Celestial Armor | Track which creature received a grant and when it ends. Move the Equipment after its entry trigger resolves. The protection follows its original recipient. When Fake Your Own Death is cast on a stolen creature, its owner gets the tapped card and the trigger's controller gets the Treasure. A dying token still produces Treasure. Malice returns the card tapped with its counter. |
-| Angelic Destiny, Ordeal of Nylea | Follow the enchanted creature through death (including simultaneous Aura + creature departure reading `ObjectLki.attached_to`) and the Aura through its own departure. Only the eligible Aura appearance is recovered. Resolve Ordeal's attack, counter threshold, sacrifice and optional library selection through its actual triggers. |
-| Raise the Past, Rise of the Dark Realms, Driver, Fiendish Panda, Heartfire Immolator | Put qualifying and excluded cards in both graveyards. Check simultaneous entry, ownership, resulting control and ETB triggers. Driver and Panda choose legal graveyard targets when their triggers are placed, including Panda's last power and its exclusions. Pump Immolator, sacrifice it as the cost and return it before resolution. Its damage uses its departed power. |
-| Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane | Read the actual kicker choice in the ETB intervening-if (CR 603.4). An ordinary blink supplies `None` and does not trigger. Each has its own graveyard target restrictions. Check competing restricted spends on the kicked cards. Cane exiles itself as the cost before shuffling. |
-| Characteristics subset | Kellan and Librarian: incarnation-bound upgrades. Sanctuary and Barrens: persistent versus temporary animation. Dropkick Bomber: flying and a damage trigger granted to one exact recipient. Witness Protection, Eaten by Piranhas and Moon: layered form changes across a copy and through death LKI. |
-
-Pair Malice or Valkyrie's Call with simultaneous deaths and a blink in response. Keep simultaneous reanimation and sacrificed-source power in the integrated cases.
-
-**Blocked: Abyssal Harvester.** It needs the history/queries Task's exact graveyard arrivals this turn from any zone. `TurnState::graveyard_from_battlefield` records only battlefield departures. The FDN ledger names no release that provides this. When the query lands, locate its consumer API with `rg -n 'graveyard_from_battlefield|GraveyardThisTurn|graveyard.*this turn' managym/src/flow managym/state/src`. Then offer Harvester a milled creature, a dead creature and a card that left and reentered. Follow the selected exile appearance through the Nightmare copy and the exile of the other Nightmare tokens.
+- Replace the split across `Object.printed`, `Object.front`, `Permanent.manifested` and `ZoneManager.melded_cards` with explicit battlefield form backing. Record physical cards, orientation and face-down state separately from immutable `CopiableValues`. Gate `transform_permanent` on backing form and share one `is_face_down()` across `identity.rs`, `action.rs` and `selection_sampling.rs`.
+- Audit immediate `move_object` callers by their legal source zones. Route battlefield moves that can suspend through `EffectFrame.batch`, including follow-ups that consume their arrivals. Start with `cast_permission::exile_linked` for `Decision::ExileLinked`, where an immediate batch can encounter Ragnarok's ordering choice. Keep immediate completion for moves without a choice.
+- Finish the consumer checks and measure the engine budget below.
 
 ## Open checks on finished work
 
@@ -145,7 +76,8 @@ Pair Malice or Valkyrie's Call with simultaneous deaths and a blink in response.
 - Horde, Driver and Fire Crystal still need viewer projections and replay of their recorded Commands from a recorded root. Their native fork and restore checks already pass.
 - The named Coil setup has no seed-to-position replay file.
 - Manifest sampling: there is no pending private selection in the fixture. Constrained sampling, paired seeded searches and comparative viewer trace exports remain open.
-- Audit immediate battlefield move callers by their legal source zones. Start with `cast_permission::exile_linked` (`Decision::ExileLinked`) and linked entry follow-ups that consume a move's arrivals.
+- Batch 1's constructed fixtures still need viewer projections, text, tokens and Command replay from a recorded root.
+- Run the pinned pilot after rebuilding. Earth Kingdom Jailer's explicit optional `TargetClause` changed its learning program. Check any mismatch before recording an intentional break with `uv run python scripts/pinned_pilot.py record --reason "<why>"`.
 
 ## Representation review
 
