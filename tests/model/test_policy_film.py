@@ -110,7 +110,13 @@ def test_film_preserves_offer_and_object_order_invariance() -> None:
     order = torch.randperm(count, generator=torch.Generator().manual_seed(3))
     with torch.no_grad():
         expected = film(device_input(film, obs))[0].softmax(-1)
-        offers = film(device_input(film, reorder_offers(obs, order)))[0].softmax(-1)
-        objects = film(device_input(film, reorder_objects(obs)))[0].softmax(-1)
+        offers = film(
+            device_input(
+                film, reorder_offers(obs, order, film.observation_space.layout)
+            )
+        )[0].softmax(-1)
+        objects = film(
+            device_input(film, reorder_objects(obs, film.observation_space.layout))
+        )[0].softmax(-1)
     torch.testing.assert_close(offers[:, :count], expected[:, order], atol=1e-6, rtol=0)
     torch.testing.assert_close(objects, expected, atol=1e-6, rtol=0)

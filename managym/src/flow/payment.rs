@@ -64,7 +64,10 @@ impl Operation {
 pub enum CostComponent {
     /// Tap other untapped creatures until their total power reaches `power`
     /// (crew, CR 702.122a). `power` is what is still owed.
-    TapPower { power: i32, toward: Toward },
+    TapPower {
+        power: i32,
+        toward: Toward,
+    },
     /// "Tap N untapped [predicate] you control"; `count` is what is still
     /// owed, and the second value is the part of the cost the taps pay. A
     /// station tap is another creature than the source (CR 702.184a).
@@ -80,10 +83,16 @@ pub enum CostComponent {
     /// Forage (CR 701.61a) or pay `or_mana`: sacrifice a Food, or exile
     /// three cards from the payer's graveyard, `exiled` of them so far. The
     /// first card exiled commits to that branch.
-    Forage { or_mana: ManaCost, exiled: u8 },
+    Forage {
+        or_mana: ManaCost,
+        exiled: u8,
+    },
     /// The mana still owed, and how its payer may pay part of it without
     /// mana. Each such payment is a contribution and reduces `cost`.
-    Mana { cost: ManaCost, help: Help },
+    Mana {
+        cost: ManaCost,
+        help: Help,
+    },
     /// The artifact or creature just tapped could pay more than one thing
     /// of the mana owed (`Game::help_taps`): choose which, such as a color
     /// or {1} by convoke (CR 702.51a), or {1} by convoke or by waterbending.
@@ -98,6 +107,7 @@ pub enum CostComponent {
     /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
     /// functions from hand, "discard this card" (`Discarded`).
     Source(How),
+    ExileGrantor(ObjectId),
 }
 
 impl CostComponent {
@@ -535,10 +545,16 @@ impl Game {
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
+                if ability.exile_grantor {
+                    owed.push(CostComponent::ExileGrantor(
+                        ability.granted_by.expect("attached ability grant").grantor,
+                    ));
+                }
                 for (owes, how) in [
                     (ability.tap_source, How::Tapped),
                     (ability.sacrifice_source, How::Sacrificed),
                     (ability.exile_source, How::Exiled),
+                    (ability.return_source, How::Returned),
                     (ability.discard_source, How::Discarded),
                 ] {
                     if owes {
@@ -881,7 +897,7 @@ impl Game {
             CostComponent::TapPays { .. } => {
                 return Err(AgentError("choose what the tapped permanent pays".into()));
             }
-            CostComponent::Life(_) | CostComponent::Source(_) => {
+            CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -1033,8 +1049,10 @@ impl Game {
                 };
                 let source_object = ability.source_object;
                 for component in &payment.owed {
-                    let CostComponent::Source(how) = *component else {
-                        continue;
+                    let (source_object, how) = match *component {
+                        CostComponent::Source(how) => (source_object, how),
+                        CostComponent::ExileGrantor(object) => (object, How::Exiled),
+                        _ => continue,
                     };
                     payment
                         .receipt
@@ -1043,6 +1061,7 @@ impl Game {
                         How::Tapped | How::Sacrificed => continue,
                         How::Discarded => ZoneType::Graveyard,
                         How::Exiled => ZoneType::Exile,
+                        How::Returned => ZoneType::Hand,
                     };
                     leaves.push(self.zone_move_proposal(source_object, to, Default::default()));
                 }

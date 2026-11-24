@@ -26,6 +26,8 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
             managym.PlayerConfig("b", {"Forest": 10, "Llanowar Elves": 20}),
         ]
     )
+    env.step(0)
+    env.step(0)
     env.scenario_force_battlefield(0, "Gray Ogre")
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()
@@ -82,7 +84,7 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
         for layer in (*agent.link_to_target, *agent.link_from_target):
             layer.weight.normal_()
         obs = _batch(encoded)
-        permuted = reorder_objects(obs)
+        permuted = reorder_objects(obs, space.layout)
         count = obs["agent_permanents"].shape[1]
         assert permuted["agent_permanents"][0, count - 2, column] == host + count
         expected_logits, expected_value = agent(device_input(agent, obs))
@@ -90,4 +92,6 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
         torch.testing.assert_close(logits.softmax(-1), expected_logits.softmax(-1))
         torch.testing.assert_close(value, expected_value)
         for key, original in obs.items():
-            torch.testing.assert_close(reorder_objects(permuted)[key], original)
+            torch.testing.assert_close(
+                reorder_objects(permuted, space.layout)[key], original
+            )

@@ -33,7 +33,7 @@ test('participant access, transfer and real Study survive the simpler table', as
     await expect(pilot.getByTestId('author-belief')).toHaveCount(0);
     await expect(pilot.getByTestId('decision-advice')).toHaveCount(0);
     const before = await pilot.locator('main').getAttribute('data-frame-revision');
-    await pilot.getByTestId('action-option').first().click();
+    await pilot.getByTestId('action-option').filter({hasText:'Keep hand'}).click();
     await expect(watcher.locator('main')).not.toHaveAttribute('data-frame-revision',before!);
     await openTools(watcher);
     const decision = watcher.getByTestId('restore-table-decision').first();
@@ -41,7 +41,7 @@ test('participant access, transfer and real Study survive the simpler table', as
     await decision.click();
     await expect(watcher.getByTestId('return-to-live-table')).toBeVisible();
     await closeMenu(watcher);
-    await watcher.getByTestId('action-option').filter({hasText:'Pass priority'}).first().click();
+    await watcher.getByTestId('action-option').filter({hasText:'Keep hand'}).first().click();
     await openTools(watcher);
     await expect(watcher.getByTestId('return-from-participant-branch')).toBeVisible();
     await watcher.getByTestId('return-from-participant-branch').click();

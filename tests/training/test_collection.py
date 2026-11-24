@@ -8,17 +8,23 @@ from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env import target_practice
+from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.profiler import Profiler
+from manabot.policy.prepare import Prepared
 from manabot.training.rollout.collection import (
     Collector,
     ObservationRows,
     RolloutBatch,
+    close_collector,
     collect,
     open_collector,
 )
 from manabot.verify.games import INTERACTIVE_DECK
+import managym
 from tests.model.prepared_routes import device_input
 
 
@@ -54,6 +60,34 @@ def _make_collector(
 
 def _make_agent():
     return ActorCritic(ObservationSpace(), ModelConfig(attention_on=False))
+
+
+def test_collection_borrows_whole_groups_and_chunk_views(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = _make_agent()
+    group = agent.observation_space.allocate(3)
+    group["actions_valid"][:, 0] = group["agent_player_valid"][:, 0] = 1
+    session = TorchCollectionSession(device="cpu", seed=7)
+    with session.scope(agent) as scope:
+        prepare = scope.inference.prepare
+        widths = []
+
+        def check_borrow(rows: ObservationBuffers) -> Prepared[torch.Tensor]:
+            assert all(
+                np.shares_memory(value, group[key])
+                for key, value in rows.items()
+                if value.size
+            )
+            widths.append(len(rows["actions_valid"]))
+            if widths[-1] == 3:
+                assert rows is group
+            return prepare(rows)
+
+        monkeypatch.setattr(scope.inference, "prepare", check_borrow)
+        scope.sample(group, Profiler())
+        scope.sample(group, Profiler(), execution_rows=2)
+    assert widths == [3, 2, 1]
 
 
 def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
@@ -161,6 +195,10 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collect(collector, agent, 7)
+    assert all(
+        not np.shares_memory(data, collector._buffers[key])
+        for key, data in first.next_obs.items()
+    )
     first_logs = first.observations().log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
@@ -213,3 +251,64 @@ def test_recorded_rows_survive_growth_and_later_appends() -> None:
         store.arrays()["x"],
         [[6, 7, 8], [0, 1, 2], [109, 110, 111], [103, 104, 105], [103, 104, 105]],
     )
+
+
+def test_target_practice_constructs_only_requested_games(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeds: list[int] = []
+    fail_seed: int | None = None
+    construct = target_practice.target_root
+
+    def root(match: Match, space: ObservationSpace, seed: int, seat: int) -> Env:
+        seeds.append(seed)
+        if seed == fail_seed:
+            raise ValueError("target unavailable")
+        return construct(match, space, seed, seat)
+
+    monkeypatch.setattr(target_practice, "target_root", root)
+    space = ObservationSpace()
+    match = Match(
+        MatchConfig(
+            hero_deck={"Mountain": 12, "Igneous Inspiration": 1},
+            villain_deck={"Island": 12},
+        )
+    )
+    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    collector = open_collector(
+        space,
+        match,
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=10,
+        opponent_mode="self",
+        root="lethal-target-v1",
+        games_per_stream=1,
+        numerics=TorchCollectionSession(device="cpu", seed=10),
+    )
+    try:
+        for batch_index in range(2):
+            batch = collect(collector, agent, 1)
+            assert batch.actions.size == 2 and batch.dones.all()
+            assert seeds == list(range(10, 12 + 2 * batch_index))
+            assert collector._env.current_agent_indices() == [-1, -1]
+            assert not collector._buffers["actions_valid"].any()
+        with pytest.raises(RuntimeError, match="parked"):
+            collector._env.step_into_buffers([0, 0], [False, True])
+        with pytest.raises(ValueError, match="configured match"):
+            collector._env.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(0), managym.SlotLoad.fresh(1, match.to_rust())]
+            )
+        assert seeds == [10, 11, 12, 13]
+        fail_seed = 15
+        with pytest.raises(ValueError, match="target unavailable"):
+            collector._env.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(i) for i in (0, 1)]
+            )
+        assert collector._env.current_agent_indices() == [-1, -1]
+        assert not collector._buffers["actions_valid"].any()
+        collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
+        assert seeds[-3:] == [14, 15, 14]
+        assert collector._env.current_agent_indices() == [0, -1]
+    finally:
+        close_collector(collector)

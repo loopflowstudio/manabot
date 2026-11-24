@@ -1,33 +1,37 @@
 # manabot.policy
 
-The policy contract every framework backend shares, and the host work that
-does not depend on a framework. **This package never imports an array
-framework** (PyTorch, MLX, JAX); it uses NumPy only
-(`tests/test_package_boundaries.py` enforces it).
+This package defines the policy contract shared by every backend. It prepares
+host inputs with NumPy and managym. `tests/test_package_boundaries.py` checks
+that it stays independent of PyTorch, MLX and JAX.
 
 ```python
 from manabot.backends import resolve
 
 backend = resolve("torch")
 policy, space = backend.load_policy("policy.safetensors")
-batch = policy.prepare(obs, inference=True)  # check, trim, index: a Prepared batch
+batch = policy.prepare(obs, inference=True)  # admitted and indexed on the host
 logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
-`Prepared` is the one policy input. A policy's `prepare` runs this package's
-host work in order (admission, bucket trimming, indexing) and every backend's
-forward reads the result; no forward reads an observation dictionary.
+Every backend's forward reads a `Prepared` batch. With bucketed shapes,
+Torch and MLX measure occupied and referenced rows before admission. The
+resulting `BucketedObservation` pairs views of the original rows with their extents.
+Host preparation uses those extents to translate object joins and restore
+the full action width.
 
 - `admission.py` owns the checks an observation batch passes before a policy
   reads it: shapes and binary validity, definition and vocabulary references,
   fact programs, shared-effect partitions, continuation, naming and action
-  joins, permanent links, recent events and belief rows. `check(obs, spec,
-  legal)` runs them all, and every backend calls it on the raw rows.
+  joins, permanent links, recent events and belief rows. Both backends call
+  `admit` on the host and prepare the views it validated.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
-  axes to (`bucket_sizes`) and trims the NumPy rows (`trim_observation`),
-  remapping object references to the trimmed table.
+  axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
+  measures each item's occupied rows, object references, continuation joins
+  and effect spans. `bucket_observation` reads the buffer names and row dimensions
+  from `ObservationLayout.axis_buffers` and slices in original coordinates.
+  `object_map` supplies the lookup for joins into the trimmed object table.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token
@@ -73,8 +77,8 @@ forward reads the result; no forward reads an observation dictionary.
   `terminal_distances`). The update diagnostics read them and every backend's
   `transition_gae` wraps them; torch's device-side selection matches them bit
   for bit.
-- `protocol.py` states what a backend provides (`BackendPolicy`,
-  `BackendLearner`, `Backend`) and one captured minibatch's constants and
+- `protocol.py` defines host policy inference, checkpoint readers and loaders,
+  and one captured minibatch's constants and
   coefficients (`Targets`, `Settings`). Values are `[B]`.
 
 Two type aliases name the NumPy mappings that cross this boundary:

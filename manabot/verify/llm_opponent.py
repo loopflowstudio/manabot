@@ -10,9 +10,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from manabot.belief.protocol import SamplerBackend
 from manabot.env.observation import encode_observation
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import SeededPolicyLoader
 from manabot.semantic.text_observation import TextDecision
 from manabot.verify.util import select_agent_action
 import managym
@@ -37,7 +37,7 @@ class CheckpointOpponent:
         players: list[managym.PlayerConfig],
         seed: int,
         *,
-        backend: SamplerBackend,
+        backend: SeededPolicyLoader,
     ) -> None:
         self.backend = backend
         self.agent, self.space = backend.load_policy(str(path))

@@ -29,11 +29,17 @@ from manabot.semantic.text_observation import (
     resolve_action,
     submit_response,
 )
-from manabot.verify.text_observation import collision_branches, priority_root, run_demo
+from manabot.verify.text_observation import (
+    collision_branches,
+    keep_opening_hands,
+    priority_root,
+    run_demo,
+)
 import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
+from managym.experience_projection import serialize_observation
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -99,6 +105,7 @@ def test_reset_and_offline_capture_cannot_execute() -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     env.reset(players)
     decision = capture_text_decision(env)
+    assert "Keep hand" in decision.text and "Mulligan" in decision.text
     env.reset(players)
     assert capture_text_decision(env).capture_digest == decision.capture_digest
     before = env.state_digest()
@@ -107,6 +114,23 @@ def test_reset_and_offline_capture_cannot_execute() -> None:
     with pytest.raises(SemanticContractError, match="no live origin"):
         submit_response(env, render_decision(decision.capture_json), "A0")
     assert env.state_digest() == before
+
+
+def test_opening_capture_renders_bottom_order_and_pregame_entry() -> None:
+    env = managym.Env(seed=23)
+    env.reset([managym.PlayerConfig(seat, {"Leyline Axe": 40}) for seat in ("a", "b")])
+    env.step(1)  # First seat mulligans.
+    env.step(0)  # Second seat keeps.
+    bottom = capture_text_decision(env)
+    assert "1 card left to bottom" in bottom.text
+    assert "active target clause" not in bottom.text
+    assert len(bottom.actions) == 7
+    env.step(0)  # Choose the exact bottom card.
+    env.step(0)  # Keep the redraw.
+    entry = capture_text_decision(env)
+    assert "taking opening actions" in entry.text
+    assert "Begin with Leyline Axe on the battlefield" in entry.text
+    assert "Finish opening-hand actions" in entry.text
 
 
 def test_complete_prompt_budgets_fail_without_truncation_or_execution() -> None:
@@ -600,6 +624,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
+        "entered_this_turn": "entered this turn",
         "plus1_counters": "+1/+1 counters",
         "cant_be_blocked_this_turn": "cannot be blocked this turn",
         "power": "power/toughness",
@@ -688,6 +713,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_agent": "the viewer's own section",
         "is_active": "active player",
         "life": "life",
+        "counters": "public counter kinds and counts",
         "zone_counts": "zone counts",
         "graveyard_lessons": "graveyard Lessons",
         "combat_mana": "combat mana",
@@ -832,6 +858,18 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
         "non-Human creature spell it casts; expires at step end."
     ) in text
     assert "Combat mana:" not in text
+
+
+def test_player_poison_count_reaches_text_and_academy() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    state = payload["observation"]["viewer_state"]
+    state["opponent"]["counters"] = {"poison": 8}
+    assert "counters 8 poison" in render_decision(_redigest(payload)).text
+    observation = managym.Observation.from_json(json.dumps(state))
+    projected = serialize_observation(observation)
+    assert projected["opponent"]["counters"] == {"poison": 8}
+    assert "counters" not in projected["agent"]
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
@@ -1445,7 +1483,8 @@ def test_decision_memory_text_lists_every_record_and_snapshot_once() -> None:
     # prompt must keep every record without repeating their rules snapshots,
     # or ordinary games pass the default budget after about 120 decisions.
     env = managym.Env(seed=0, decision_memory=True)
-    env.reset(Match().to_rust())
+    raw, _ = env.reset(Match().to_rust())
+    keep_opening_hands(env, raw)
     rng = random.Random(0)
     for _ in range(160):
         if not env.action_count():
@@ -1762,19 +1801,20 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     )
     matchup = manifest["matchup"]
     env = managym.Env(seed=197, decision_memory=True)
-    env.reset(
+    raw, _ = env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
             for role in ("hero", "villain")
         ]
     )
+    keep_opening_hands(env, raw)
     rng = random.Random(197)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 440
+    assert len(memory) == 441
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250

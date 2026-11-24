@@ -18,12 +18,12 @@ import random
 import tempfile
 from typing import Literal, cast
 
-from manabot.belief.protocol import SamplerBackend
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.policy.protocol import SeededPolicyLoader
 from manabot.sim.search.flat_mc import AgentMatchupPlayer
 import managym
 from managym.decision import (
@@ -258,7 +258,7 @@ def public_sampler_input(
 def collect_frozen_policy(
     *,
     checkpoint: Path,
-    backend: SamplerBackend,
+    backend: SeededPolicyLoader,
     match_config: MatchConfig,
     games: int,
     seed: int,

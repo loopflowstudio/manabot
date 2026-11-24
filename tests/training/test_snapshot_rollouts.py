@@ -21,7 +21,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
-from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, PrefixObservation
 from manabot.env.observation import (
@@ -57,8 +57,10 @@ from manabot.training.loops.self_play import (
 )
 from manabot.training.rollout.collection import (
     Collector,
+    CollectorSnapshot,
     RolloutBatch,
     TrajectorySpan,
+    capture_collector,
     close_collector,
     collect,
     open_collector,
@@ -70,6 +72,7 @@ from manabot.training.rollout.snapshot_vector import (
     SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
+    replay_prefix,
     replay_snapshot,
 )
 from manabot.training.rollout.snapshots import (
@@ -142,13 +145,13 @@ def replay_root(
         ],
         decklists="closed",
     )
-    memory = space.config.max_decision_records > 0
     own = space.config.decision_memory_include_own
+    memory = space.config.max_decision_records > 0 or own
     scalar = managym.Env(
         seed=42, decision_memory=memory, decision_memory_include_own=own
     )
     scalar.reset(setup)
-    actions = [0] * (30 if terminal else 4)
+    actions = [0, 0] + [0] * (30 if terminal else 4)
     for action in actions:
         scalar.step(action)
     recipe = SnapshotRecipe.from_inputs(
@@ -171,6 +174,7 @@ def replay_collector(
     recipe: SnapshotRecipe,
     *,
     num_envs: int = 1,
+    snapshot: CollectorSnapshot | None = None,
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
 ) -> Iterator[Collector]:
@@ -182,6 +186,7 @@ def replay_collector(
         opponent_mode="self",
         snapshots=True,
         seed=42,
+        snapshot=snapshot,
         game_errors=game_errors,
         record_attempt=record_attempt,
         numerics=CollectionSession(device="cpu", seed=0),
@@ -479,21 +484,28 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
     vector = ShardedVectorEnv(3, 42, 2)
     try:
         vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
-        vector.reset_all_into_buffers(setup)
+        seeds = [701, 49, 33]
+        vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
+        generations = vector.current_game_generations()
+        with pytest.raises(ValueError, match="native seed must fit uint64"):
+            vector.reset_each_into_buffers([setup] * 3, seeds=[800, 900, -1])
+        assert vector.current_game_generations() == generations
         frozen = space.allocate(3)
         players = [1, 0, 1]
         reads = vector.write_observations_for_players(
             players, frozen, layout=space.layout
         )
+        digests = vector.state_digests([True, False, True])
         for slot, read in enumerate(reads):
             assert (read.slot, read.player, read.seed, read.game_id) == (
                 slot,
                 players[slot],
-                42 + slot,
-                vector.current_game_generations()[slot],
+                seeds[slot],
+                generations[slot],
             )
-            scalar = managym.Env(seed=42 + slot)
+            scalar = managym.Env(seed=seeds[slot])
             scalar.reset(setup)
+            assert digests[slot] == (None if slot == 1 else scalar.state_digest())
             encoded = encode_observation(
                 space, scalar.observation_for_player(players[slot])
             )
@@ -501,6 +513,73 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
                 np.testing.assert_array_equal(frozen[key][slot], encoded[key])
     finally:
         vector.close()
+
+
+def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
+    space = ObservationSpace()
+    recipe, scalar = replay_root(space)
+    games = tmp_path / "games.jsonl"
+    statistics = tmp_path / "statistics.jsonl"
+    vector = RecordedVectorEnv(
+        num_envs=1, seed=900, games_path=games, statistics_path=statistics
+    )
+    try:
+        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        replay_prefix(vector, recipe, None)
+        assert vector.state_digests() == [scalar.state_digest()]
+        assert vector.current_agent_indices() == [scalar.current_agent_index()]
+    finally:
+        vector.close()
+    [record] = read_records(games)
+    [game] = record.games
+    assert (game.seed, game.actions) == (recipe.seed, list(recipe.actions))
+    [summary] = read_statistics(statistics)
+    assert summary.seed == recipe.seed
+
+
+def test_collector_resumes_after_snapshot_branch(
+    tmp_path: Path,
+) -> None:
+    space = ObservationSpace(ObservationConfig(decision_memory_include_own=True))
+    agent = small_agent(space)
+    recipe, _ = replay_root(space)
+    branch = SnapshotBranch(7, recipe, horizon=1)
+    with replay_collector(space, recipe) as collector:
+        collect(collector, agent, 1, snapshot_starts=[branch])
+        saved = capture_collector(collector)
+        # The boundary reopens the branched slot at its refunded fresh seed.
+        assert saved.parked_fresh == []
+        [root] = saved.streams
+        assert (root.recipe.seed, root.recipe.actions) == (recipe.seed, ())
+        control = collect(collector, agent, 1)
+        after = capture_collector(collector)
+
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(record_games=1, statistics=True)
+    )
+    with (
+        capture_scope(scope),
+        replay_collector(space, recipe, snapshot=saved) as collector,
+    ):
+        assert capture_collector(collector) == saved
+        assert not list(tmp_path.rglob("*.jsonl"))
+        resumed = collect(collector, agent, 1)
+        np.testing.assert_array_equal(resumed.actions, control.actions)
+        assert capture_collector(collector) == after
+
+    played = [
+        game
+        for record in read_records(tmp_path / "games")
+        for game in record.games
+        if game.actions
+    ]
+    assert len(played) == 1 and played[0].end.status == "complete"
+    statistics = [
+        r
+        for path in (tmp_path / "statistics").glob("*.jsonl")
+        for r in read_statistics(path)
+    ]
+    assert [r.seed for r in statistics if r.terminal] == [played[0].seed]
 
 
 def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() -> None:
@@ -2061,7 +2140,6 @@ def test_deprecated_snapshot_factory_uses_native_deferred_slots(
             else InMemorySnapshotVector(ObservationSpace(), 1, 42)
         )
     try:
-        assert not vector.auto_reset
         assert vector.next_fresh_seeds() == [42]
     finally:
         vector.close()
@@ -2176,7 +2254,6 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
 
     with (
         patch.object(vector, "install_slots", wraps=vector.install_slots) as installs,
-        patch.object(vector, "replace_failed_into_buffers", side_effect=AssertionError),
         patch.object(vector, "step_isolated_into_buffers", side_effect=fail_once),
         patch.object(
             vector,

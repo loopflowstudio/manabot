@@ -71,7 +71,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
         rng = session.snapshot_rng()
         expected = scope.sample(rows, Profiler())
         expected_rng = session.snapshot_rng()
-        session.rng.set_state(rng)
+        session.restore_rng(rng)
         sizes: list[int] = []
         forward = model.forward_distribution
 

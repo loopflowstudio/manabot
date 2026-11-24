@@ -22,6 +22,7 @@ from managym.recording import GameInputs, record_from_row
 
 if TYPE_CHECKING:
     from manabot.training.rollout.producers import BufferedStreams, ObservationRead
+    from managym.recording import RecordedVectorEnv
 
 
 @dataclass(frozen=True)
@@ -141,7 +142,11 @@ class CapturedSnapshot:
 
 @runtime_checkable
 class SnapshotVector(Protocol):
-    """Capture returns one owned handle per slot. Release relinquishes those references."""
+    """Capture returns one owned handle per slot. Release relinquishes those references.
+
+    Vectors used with game-error recovery also supply game_inputs(slot) to
+    materialize the failed branch's committed replay and attempted actions.
+    """
 
     def capture_slots(self, slots: Sequence[int]) -> list[CapturedSnapshot]: ...
 
@@ -181,6 +186,44 @@ def replay_snapshot(recipe: SnapshotRecipe) -> managym.GameSnapshot:
     return env.snapshot()
 
 
+def replay_prefix(
+    live: "RecordedVectorEnv", recipe: SnapshotRecipe, hot_handle: object | None
+) -> None:
+    """Reset a replay stream and apply the committed decisions of a single game."""
+    setup = (
+        hot_handle
+        if isinstance(hot_handle, managym.GameSetup)
+        else Match(recipe.match).to_rust()
+    )
+    replay_prefixes(live, [setup], [recipe])
+
+
+def replay_prefixes(
+    live: "RecordedVectorEnv | BufferedStreams",
+    setups: list[managym.GameSetup],
+    recipes: list[SnapshotRecipe],
+) -> None:
+    """Install roots and advance each stream only through its committed prefix."""
+    for game, recipe in zip(live.games, recipes, strict=True):
+        if (game.decision_memory, game.decision_memory_include_own) != (
+            recipe.decision_memory,
+            recipe.decision_memory_include_own,
+        ):
+            raise ValueError("decision memory settings differ")
+    live.reset_each_into_buffers(setups, seeds=[r.seed for r in recipes])
+    generation = live.current_game_generations()
+    prefixes = [r.actions for r in recipes]
+    for offset in range(max(map(len, prefixes))):
+        active = [offset < len(prefix) for prefix in prefixes]
+        actions = [
+            prefix[offset] if on else 0
+            for prefix, on in zip(prefixes, active, strict=True)
+        ]
+        live.step_into_buffers(actions, active)
+        if live.current_game_generations() != generation:
+            raise ValueError("action prefix crossed a game terminal")
+
+
 def bind_cold_start(
     request: SlotInstall,
     replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]],
@@ -212,10 +255,7 @@ class InMemorySnapshotVector:
     def __new__(
         cls, observation_space: ObservationSpace, num_envs: int, seed: int
     ) -> "BufferedStreams":
-        from manabot.training.rollout.producers import (
-            BufferedStreams,
-            open_native_streams,
-        )
+        from manabot.training.rollout.producers import open_native_streams
 
         warnings.warn(
             "InMemorySnapshotVector is deprecated and will be removed in 0.4.0; "
@@ -224,13 +264,10 @@ class InMemorySnapshotVector:
             stacklevel=2,
         )
         memory = observation_space.config
-        streams = open_native_streams(
+        return open_native_streams(
             num_envs,
             seed,
             workers=1,
-            auto_reset=False,
             decision_memory=memory.max_decision_records > 0,
             decision_memory_include_own=memory.decision_memory_include_own,
         )
-        assert isinstance(streams, BufferedStreams)
-        return streams

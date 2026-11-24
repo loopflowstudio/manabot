@@ -16,8 +16,15 @@ use managym::{
 
 #[test]
 fn fetch_lands_have_distinct_entry_and_life_rules() {
-    for (name, tapped, life) in [("Fabled Passage", true, 20), ("Prismatic Vista", false, 19)] {
+    for (name, forests, tapped, life) in [
+        ("Fabled Passage", 2, true, 20),
+        ("Fabled Passage", 3, false, 20),
+        ("Prismatic Vista", 0, false, 19),
+    ] {
         let mut s = five_color_setup(&[name]);
+        for _ in 0..forests {
+            s.force_permanent_on_battlefield(0, "Forest");
+        }
         play_and_settle(&mut s, name);
         let source = permanent_named(&s, name);
         activate_first(&mut s, source);

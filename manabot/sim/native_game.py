@@ -20,7 +20,7 @@ import time
 import traceback
 from typing import Any
 
-from manabot.backends import resolve
+from manabot.backends import local_cpu_backend
 from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
@@ -29,7 +29,7 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import BackendName, SimulationBackend
 from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import (
     bind_record,
@@ -53,16 +53,16 @@ class _InChildPlayers:
     """Builds in-process players and answers which game hooks they take.
 
     Code players (anchors, heuristic, demo search) come from the Torch-free
-    `players` module. Scalar checkpoint and search players load Torch on their
-    first build. Only search players that track the whole game receive
+    `players` module. Checkpoint and search players load their backend on
+    first use. Only search players that track the whole game receive
     `start_game`, and only local-update players observe each step; until a
     backend is built there are no such players, so neither hook applies to
     supplied agents.
     """
 
-    def __init__(self, backend_factory: Callable[[], Backend] | None) -> None:
+    def __init__(self, backend_factory: Callable[[], SimulationBackend] | None) -> None:
         self._backend_factory = backend_factory
-        self._backend: Backend | None = None
+        self._backend: SimulationBackend | None = None
         self._game_trackers: tuple[type, ...] = ()
         self._step_observers: tuple[type, ...] = ()
 
@@ -102,7 +102,7 @@ class _InChildPlayers:
         return isinstance(player, self._step_observers)
 
     def seed(self, seed: int) -> None:
-        """Seed Torch's global generator before a checkpoint-guided search decision."""
+        """Seed the backend's global generator before a checkpoint-guided search decision."""
         assert self._backend is not None
         self._backend.seed(seed)
 
@@ -114,7 +114,7 @@ def execute_game(
     max_commands: int,
     send: Callable[[tuple[str, Any]], None],
     *,
-    backend_factory: Callable[[], Backend] | None = None,
+    backend_factory: Callable[[], SimulationBackend] | None = None,
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
 ) -> None:
@@ -405,14 +405,12 @@ def game_worker(
     checkpoint_paths: dict[str, str],
     max_commands: int,
     deadline_unix: float,
+    backend_name: BackendName = "torch",
 ) -> None:
     """Standalone scalar child; Etude games call execute_game in their own process."""
 
-    def backend_factory() -> Backend:
-        import torch
-
-        torch.set_num_threads(1)
-        return resolve("torch")
+    def backend_factory() -> SimulationBackend:
+        return local_cpu_backend(backend_name)
 
     def send(event: tuple[str, Any]) -> None:
         connection.send(event)

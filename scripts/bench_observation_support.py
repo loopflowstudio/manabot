@@ -72,18 +72,11 @@ def identity() -> dict[str, object]:
 def _root(large: bool) -> managym.Env:
     env = managym.Env(seed=23)
     deck = {"Swamp": 20, "Deadly Precision": 40, "Gray Ogre": 4}
-    obs, _ = env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])
-    for _ in range(20):
-        if int(obs.turn.phase) == 1:
-            break
-        index = next(
-            i
-            for i, action in enumerate(obs.action_space.actions)
-            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
-        )
-        obs = env.step(index)[0]
-    else:
-        raise AssertionError("main phase not reached")
+    env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    # Both seats keep the seeded deal before the scenario installs its board.
+    env.step(0)
+    obs = env.step(0)[0]
+    assert obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN
     actor = env.current_agent_index()
     assert actor is not None
     env.scenario_clear_hand(actor)
@@ -142,15 +135,10 @@ def decision_cases() -> list[DecisionCase]:
     ]
 
 
-def _step(env: VectorEnv, actions: torch.Tensor) -> None:
-    env._rust_env.step_into_buffers(actions.cpu().tolist())
-    env._sync_tensors_from_buffers()
-    env._apply_reward_policy()
-
-
 def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
     """Return per-family exact-match proofs, timings and separate allocation data."""
     rows: list[dict[str, Any]] = []
+    vector = env._rust_env
     for case in decision_cases():
         root = case.root
         actor = root.current_agent_index()
@@ -168,51 +156,47 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
         encoded = encode_observation(env.observation_space, observation)
         actions = torch.full((env.num_envs,), case.action, dtype=torch.int64)
 
-        def restore() -> None:
-            env._rust_env._benchmark_load_root(root)
-            # Failure prefixes are fixture-local, not a fictitious long game.
-            for game in env._rust_env.games:
-                game.actions.clear()
+        snapshot = root.snapshot()
+        loads = [
+            managym.SlotLoad.snapshot(slot, snapshot) for slot in range(env.num_envs)
+        ]
 
-        def step() -> None:
-            _step(env, actions)
-
-        restore()
-        step()
+        vector.load_slots_into_buffers(loads)
+        env.step(actions)
         for key, value in expected.items():
             for row in env._buffers[key]:
                 np.testing.assert_array_equal(row, value, err_msg=case.name + ":" + key)
-        frames = env._rust_env.semantic_decision_frames_json()
+        frames = vector.semantic_decision_frames_json()
         assert all(
             json.loads(frame) == json.loads(positional.semantic_decision_frame_json())
             for frame in frames
         )
         for _ in range(20):
-            restore()
-            step()
+            vector.load_slots_into_buffers(loads)
+            env.step(actions)
         samples = []
         for _ in range(steps):
-            restore()
+            vector.load_slots_into_buffers(loads)
             start = time.perf_counter_ns()
-            step()
+            env.step(actions)
             samples.append(time.perf_counter_ns() - start)
 
-        restore()
-        env._rust_env._benchmark_allocations_start()
+        vector.load_slots_into_buffers(loads)
+        vector.native._benchmark_allocations_start()
         try:
-            step()
+            env.step(actions)
         finally:
-            allocations, allocated_bytes = env._rust_env._benchmark_allocations_stop()
-        restore()
+            allocations, allocated_bytes = vector.native._benchmark_allocations_stop()
+        vector.load_slots_into_buffers(loads)
         tracemalloc.start()
-        step()
+        env.step(actions)
         python_live, python_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        restore()
+        vector.load_slots_into_buffers(loads)
         with torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU], profile_memory=True
         ) as profile:
-            step()
+            env.step(actions)
         events = profile.events()
         torch_allocations = [
             e.self_cpu_memory_usage for e in events if e.self_cpu_memory_usage > 0

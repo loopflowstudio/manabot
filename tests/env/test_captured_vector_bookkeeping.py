@@ -1,11 +1,11 @@
-"""CapturedVector replay prefixes follow native games, not seeds or raw delegation."""
+"""RecordedVectorEnv replay prefixes follow native games, not seeds or raw delegation."""
 
 import numpy as np
 import pytest
 import torch
 
 from manabot import managym
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
@@ -25,8 +25,8 @@ def _captured(
     player_policies: tuple[str, str] | None = None,
     *,
     opponent_policy: str | None = None,
-) -> tuple[CapturedVector, dict[str, np.ndarray]]:
-    vector = CapturedVector(
+) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
+    vector = RecordedVectorEnv(
         num_envs=1,
         seed=seed,
         player_policies=player_policies,
@@ -69,6 +69,29 @@ def test_native_reads_are_delegated() -> None:
         assert len(vector.current_game_generations()) == 1
         assert vector.semantic_decision_frames_json()[0] is not None
         assert len(vector.skip_trivial_counts()) == 1
+    finally:
+        vector.close()
+
+
+def test_seeded_reset_rejects_bad_seeds_before_replacing_any_stream() -> None:
+    vector = RecordedVectorEnv(num_envs=2, seed=12)
+    space = ObservationSpace()
+    vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
+    setups = [managym.GameSetup(_players()), managym.GameSetup(_players()[::-1])]
+    try:
+        vector.reset_each_into_buffers(setups, seeds=[71, 41])
+        vector.step_into_buffers([0, 0])
+        prefixes = [game.model_copy(deep=True) for game in vector.games]
+        digests = vector.state_digests()
+        for invalid in ([99], [99, -1]):
+            with pytest.raises((ValueError, OverflowError)):
+                vector.reset_each_into_buffers(setups, seeds=invalid)
+            assert vector.state_digests() == digests
+            assert vector.games == prefixes
+
+        vector.reset_each_into_buffers(setups)
+        assert vector.current_game_seeds() == [73, 43]
+        assert [game.seed for game in vector.games] == [73, 43]
     finally:
         vector.close()
 
@@ -150,6 +173,9 @@ def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
                 break
         else:
             pytest.fail("bounded tiny-deck fixture did not terminate")
+        assert vector.current_game_generations()[0] == generation
+        assert vector.games[0].actions
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert vector.current_game_seeds() == [_MAX_SEED]
         assert vector.current_game_generations()[0] != generation
         (game,) = vector.games
@@ -202,6 +228,35 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
         vector.close()
 
 
+def test_torch_terminal_step_keeps_outcome_and_returns_next_opening() -> None:
+    match = Match(MatchConfig(hero_deck={"Mountain": 8}, villain_deck={"Island": 8}))
+    space = ObservationSpace()
+    vector = TorchVectorEnv(
+        1, match, space, Reward(RewardConfig(managym=True)), "cpu", seed=42
+    )
+    scalar = managym.Env(seed=42)
+    scalar.reset(match.to_rust())
+    try:
+        vector.reset()
+        for _ in range(120):
+            _, expected_reward, done, truncated, info = scalar.step(0)
+            obs, rewards, ends, cuts, _ = vector.step(torch.zeros(1, dtype=torch.int64))
+            assert (rewards.item(), ends.item(), cuts.item()) == (
+                expected_reward,
+                done,
+                truncated,
+            )
+            if done:
+                assert vector.get_last_info()["winner_index"][0] == info["winner_index"]
+                assert vector.hand_snapshots([0])[0].seed == 43
+                assert obs["actions_valid"][0].any()
+                break
+        else:
+            pytest.fail("tiny deck did not finish")
+    finally:
+        vector.close()
+
+
 @pytest.mark.parametrize(
     "policies", [("heuristic", "agent"), ("heuristic", "heuristic")]
 )
@@ -231,10 +286,22 @@ def test_captured_per_seat_configuration_and_terminal_rewards(
             assert bool(buffers["terminated"][0]) == done
             assert bool(buffers["truncated"][0]) == truncated
             if done or truncated:
-                assert vector.games[0].actions == []
+                assert vector.games[0].actions and vector.current_agent_indices() == [
+                    -1
+                ]
                 break
             assert vector.current_agent_indices() == [scalar.current_agent_index()]
         else:
             pytest.fail("bounded per-seat fixture did not terminate")
     finally:
         vector.close()
+
+
+def test_captured_vector_deprecated_alias_warns_and_resolves() -> None:
+    import manabot.env.failures as failures
+    import managym.recording as recording
+
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        assert recording.CapturedVector is recording.RecordedVectorEnv
+    with pytest.warns(DeprecationWarning, match="0.4.0"):
+        assert failures.CapturedVector is failures.RecordedVectorEnv

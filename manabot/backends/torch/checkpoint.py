@@ -17,18 +17,17 @@ import importlib
 from pathlib import Path
 import tempfile
 from types import ModuleType
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from etude.train.records import CheckpointRecord
 import numpy as np
 import torch
 
-from manabot.backends.torch.learner import Learner
+from manabot.backends.torch import arrays, rl
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
-    belief_checkpoint_fields,
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import (
@@ -37,11 +36,8 @@ from manabot.infra.artifacts import (
     materialize_artifact,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.interface import saved_readings, world_fields
-from manabot.model.world import (
-    checkpoint_source,
-    validate_policy_input,
-)
+from manabot.model.interface import saved_readings
+from manabot.model.world import validate_policy_input
 from manabot.policy.checkpoint import (
     NotAContainer,
     ParameterArrays,
@@ -52,11 +48,16 @@ from manabot.policy.checkpoint import (
     from_torch_state,
     read_metadata,
     read_saved_container,
+    restore_value_semantic,
+    save_policy_checkpoint,
     torch_name,
-    write_container,
 )
 from manabot.policy.prepare import Tables
+from manabot.policy.protocol import Precision
 import managym
+
+if TYPE_CHECKING:
+    from manabot.backends.torch.learner import Learner
 
 
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
@@ -144,13 +145,7 @@ def restore_policy(
         checkpoint, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
     record = checkpoint.record()
-    value_semantic = record.get("bc", {}).get("value_semantic")
-    if value_semantic is not None:
-        if value_semantic not in ("signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
-            raise ValueError("checkpoint value semantic conflicts with its critic")
-        agent.value_semantic = value_semantic
+    restore_value_semantic(agent, record.get("bc", {}).get("value_semantic"))
     world_binding = record["world_binding"]
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
@@ -263,62 +258,41 @@ def save_checkpoint(
     Pass `player_configs` to record the exact setups in the binding. Passing
     `None` allows the policy to play any admitted deck.
     """
-
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    checkpoint = {
-        **world_fields(obs_space, agent.readings, player_configs),
-        "source": checkpoint_source(),
-        "architecture": agent.architecture_receipt().model_dump(mode="json"),
-        "global_step": 0,
-        "hypers": {
-            "agent_hypers": agent.config.checkpoint_payload(),
-            "observation_hypers": obs_space.config.model_dump(),
-            "train_hypers": {},
-            # The collector applies the policy's decision settings to both seats.
-            # Training provenance is independent of strict world/ABI admission.
-            "training_setup": {
-                "mana_payment": [obs_space.config.mana_payment] * 2,
-                "mana_floats": [obs_space.config.mana_floats] * 2,
-                "skip_trivial": True,
-            },
-        },
-        "bc": extra or {},
-    }
-    validate_policy_input(agent, checkpoint["world_binding"])
-    checkpoint.update(
-        belief_checkpoint_fields(
-            belief_schema,
-            count_buckets=agent.belief_count_buckets,
-            card_vocab_size=agent.config.belief_card_vocab_size,
-        )
-    )
-    # Check before NumPy conversion, which refuses some floating types outright.
+    state = agent.state_dict()
+    parameters = {}
     for name, parameter in agent.named_parameters():
+        # NumPy cannot represent every Torch floating dtype.
         if parameter.dtype != torch.float32:
             raise TypeError(
                 f"parameter {name}: expected float32, got {parameter.dtype}"
             )
-    container = from_torch_state(
-        agent.config,
-        obs_space.config,
-        {
-            name: tensor.detach().cpu().numpy()
-            for name, tensor in agent.state_dict().items()
-        },
-        checkpoint_metadata(checkpoint),
-        parameter_names=dict(agent.named_parameters()),
+        parameters[canonical_name(name)] = state.pop(name).detach().cpu().numpy()
+    save_policy_checkpoint(
+        agent,
+        obs_space,
+        path,
+        parameters=parameters,
+        buffers={name: tensor.detach().cpu().numpy() for name, tensor in state.items()},
         readings=agent.readings,
+        architecture=agent.architecture_receipt(),
+        player_configs=player_configs,
+        extra=extra,
+        belief_schema=belief_schema,
     )
-    write_container(path, container)
 
 
-class _Torch:
-    name = "torch"
+class TorchBackend:
+    name: Literal["torch"] = "torch"
+    arrays = arrays
+    rl = rl
+
+    @staticmethod
+    def configure_cpu_inference() -> None:
+        torch.set_num_threads(1)
 
     @property
-    def verification(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.verification")
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.learner")
 
     @property
     def runtime(self) -> ModuleType:
@@ -329,10 +303,6 @@ class _Torch:
     @property
     def state(self) -> ModuleType:
         return importlib.import_module("manabot.backends.torch.state")
-
-    @property
-    def belief_fit(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.belief_fit")
 
     @property
     def belief(self) -> ModuleType:
@@ -351,18 +321,6 @@ class _Torch:
         ):
             torch.manual_seed(seed)
             yield
-
-    @property
-    def rl(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.rl")
-
-    @property
-    def arrays(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.arrays")
-
-    @property
-    def learner(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.torch.learner")
 
     @property
     def rollout(self) -> ModuleType:
@@ -385,22 +343,38 @@ class _Torch:
 
     read_policy = staticmethod(read_policy)
 
-    @staticmethod
-    def metadata(path: str) -> dict[str, Any]:
-        return load_metadata(path)
+    metadata = staticmethod(load_metadata)
 
     @staticmethod
-    def seed_training(seed: int, *, torch_deterministic: bool = True) -> None:
+    def seed(seed: int, *, deterministic: bool | None = None) -> None:
         torch.manual_seed(seed)
-        torch.backends.cudnn.deterministic = torch_deterministic
+        if deterministic is not None:
+            torch.backends.cudnn.deterministic = deterministic
 
-    @staticmethod
-    def seed(seed: int) -> None:
-        torch.manual_seed(seed)
-
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[ActorCritic, Learner]:
-        agent = assemble(checkpoint)
-        return agent, Learner(agent, "cpu", minibatch_rows=1)
+    def load(
+        self,
+        checkpoint: PolicyCheckpoint,
+        *,
+        device: str | None = None,
+        precision: Precision | None = None,
+        bucketed_shapes: bool = False,
+        minibatch_rows: int = 1,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
+    ) -> tuple[ActorCritic, "Learner"]:
+        device = "cpu" if device is None else device
+        self.runtime.require_device(torch.device(device).type)
+        if precision is None:
+            precision = "float32"
+        agent = assemble(checkpoint, bucketed_shapes=bucketed_shapes)
+        return agent, self.learner.Learner(
+            agent,
+            device,
+            precision="bf16" if precision == "bfloat16" else precision,
+            minibatch_rows=minibatch_rows,
+            execution_rows=execution_rows,
+            bootstrap_rows=bootstrap_rows,
+        )
 
     def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Torch tensors have the canonical shapes under torch's own names."""
@@ -411,4 +385,4 @@ class _Torch:
     gradient_layout = parameter_layout
 
 
-BACKEND = _Torch()
+BACKEND = TorchBackend()

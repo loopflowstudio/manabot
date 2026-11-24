@@ -7,6 +7,7 @@ use crate::{
         observation::Observation,
     },
     infra::profiler::{InfoDict, InfoValue},
+    state::player::GameSetup,
 };
 use std::{collections::HashSet, sync::Arc};
 
@@ -14,18 +15,26 @@ use std::{collections::HashSet, sync::Arc};
 /// next scheduled seed and the vector's ordinary roster sampler.
 #[derive(Clone)]
 pub enum SlotLoad {
-    Fresh(usize),
+    Fresh(usize, Option<GameSetup>),
     Snapshot(usize, Arc<GameSnapshot>, RestoreOptions),
 }
 
 impl SlotLoad {
+    pub fn with_slot(&self, slot: usize) -> Self {
+        match self {
+            Self::Fresh(_, setup) => Self::Fresh(slot, setup.clone()),
+            Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), *options),
+        }
+    }
+
     pub fn slot(&self) -> usize {
         match self {
-            Self::Fresh(slot) | Self::Snapshot(slot, ..) => *slot,
+            Self::Fresh(slot, _) | Self::Snapshot(slot, ..) => *slot,
         }
     }
 }
 
+#[derive(Clone)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 pub struct SlotLoadResult {
     pub slot: usize,
@@ -36,7 +45,8 @@ pub struct SlotLoadResult {
     pub source_digest: Option<String>,
 }
 
-struct SlotReplacement {
+pub(crate) struct SlotReplacement {
+    setup: Option<GameSetup>,
     result: SlotLoadResult,
     env: Env,
     obs: Observation,
@@ -84,9 +94,18 @@ impl VectorEnv {
     pub fn load_slots_into(
         &mut self,
         requests: &[SlotLoad],
-        mut validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
-        mut write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
+        validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
+        write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
     ) -> Result<Vec<(SlotLoadResult, InfoDict)>, ObservationWriteError> {
+        let prepared = self.prepare_slots(requests, validate)?;
+        self.publish_slots(prepared, write)
+    }
+
+    pub(crate) fn prepare_slots(
+        &self,
+        requests: &[SlotLoad],
+        mut validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
+    ) -> Result<Vec<SlotReplacement>, ObservationWriteError> {
         if requests.is_empty() {
             return Ok(Vec::new());
         }
@@ -104,11 +123,22 @@ impl VectorEnv {
             validate(request.slot(), &next.obs)?;
             prepared.push(next);
         }
+        Ok(prepared)
+    }
+
+    pub(crate) fn publish_slots(
+        &mut self,
+        prepared: Vec<SlotReplacement>,
+        mut write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
+    ) -> Result<Vec<(SlotLoadResult, InfoDict)>, ObservationWriteError> {
         let mut results = Vec::with_capacity(prepared.len());
         for next in prepared {
             let slot = next.result.slot;
             write(slot, &next.obs, next.result.terminal)?;
             self.envs[slot].replace_slot(next.env, next.recording);
+            if let Some(setup) = next.setup {
+                self.player_configs[slot] = setup;
+            }
             self.slots[slot] = next.state;
             self.next_seeds[slot] = next.next_seed;
             results.push((next.result, next.info));
@@ -119,20 +149,28 @@ impl VectorEnv {
     fn prepare_slot(&self, request: &SlotLoad) -> Result<SlotReplacement, AgentError> {
         let slot = request.slot();
         let previous = &self.envs[slot];
-        let rewind =
-            matches!(request, SlotLoad::Snapshot(..)) && self.slots[slot] == SlotState::OPENING;
+        let rewind = matches!(request, SlotLoad::Snapshot(..))
+            && self.slots[slot] == SlotState::FreshOpening;
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
-            SlotLoad::Fresh(_) => {
+            SlotLoad::Fresh(_, setup) => {
+                if let Some(setup) = setup {
+                    if !self.uniform_roster.is_empty() {
+                        return Err(AgentError(
+                            "per-slot setup conflicts with configured roster".into(),
+                        ));
+                    }
+                    Self::validate_player_configs(setup.len())?;
+                }
                 let mut env = previous.replacement_root(next_seed);
-                let (obs, info) = Self::reset_env_on_env(
+                let (obs, info) = Self::deal_fresh_game(
                     &self.uniform_roster,
                     &mut env,
                     &mut next_seed,
                     self.seed_stride,
-                    &self.player_configs[slot],
+                    setup.as_ref().unwrap_or(&self.player_configs[slot]),
                 )?;
-                (env, obs, info, SlotState::OPENING, None)
+                (env, obs, info, SlotState::FreshOpening, None)
             }
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
@@ -156,7 +194,7 @@ impl VectorEnv {
                     env,
                     obs,
                     InfoDict::new(),
-                    SlotState::Branch,
+                    SlotState::Playing,
                     Some(source.state_digest().to_owned()),
                 )
             }
@@ -183,6 +221,10 @@ impl VectorEnv {
             previous.current_recording()?
         };
         Ok(SlotReplacement {
+            setup: match request {
+                SlotLoad::Fresh(_, setup) => setup.clone(),
+                SlotLoad::Snapshot(..) => None,
+            },
             result,
             env,
             obs,

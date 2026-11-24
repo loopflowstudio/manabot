@@ -33,6 +33,9 @@ fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
         347,
         true,
     );
+    for _ in 0..2 {
+        game.step(0).unwrap(); // Both seats keep.
+    }
     let player = PlayerId(0);
     game.scenario_clear_hand(player);
     game.scenario_force_card_in_hand(player, "Gray Ogre")

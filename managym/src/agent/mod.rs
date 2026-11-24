@@ -8,6 +8,8 @@ pub mod heuristic;
 pub mod legacy_input;
 pub mod observation;
 pub mod observation_encoder;
+#[cfg(feature = "python")]
+pub(crate) mod observation_extents;
 pub mod observation_json;
 pub mod observation_layout;
 pub mod player_policy;

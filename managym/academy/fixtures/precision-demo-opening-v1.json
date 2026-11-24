@@ -1,0 +1,142 @@
+{
+  "config": {
+    "hero_deck": {
+      "Swamp": 24,
+      "Callous Inspector": 16,
+      "Deadly Dispute": 10,
+      "Deadly Precision": 10
+    },
+    "villain_deck": {
+      "Forest": 60
+    },
+    "villain_type": "passive",
+    "auto_pass": false,
+    "seed": 1
+  },
+  "prefix": [
+    {
+      "label": "Keep hand",
+      "offer_id": 0,
+      "before_digest": "f5a1ee7bc30b8c7a58aaebf12cdafc2211127ffa72f4e3b737a584c506e9b2c3"
+    },
+    {
+      "label": "Play Swamp",
+      "offer_id": 0,
+      "before_digest": "4f8b5e7e61b91b6940e474b6317b99e1b76fc1a036a7d68b1a67d9873a31ea0d"
+    },
+    {
+      "label": "Cast Callous Inspector",
+      "offer_id": 0,
+      "before_digest": "57118900cebc679afec553e339f4be3a1ba2cba9fa6291d3aa6fa92826a7f3cf"
+    },
+    {
+      "label": "Play Swamp",
+      "offer_id": 3,
+      "before_digest": "1d109679b2059e4d4ad769f9c4cf100f2afc5b770e602e988b683962c4e5fb0f"
+    },
+    {
+      "label": "Cast Callous Inspector",
+      "offer_id": 1,
+      "before_digest": "f11e8f549c648de906e3f3a60f5934561ed132055d0755d21ac57f54dea99aad"
+    },
+    {
+      "label": "Pay the cost",
+      "offer_id": 2,
+      "before_digest": "99651a99d5ab68c4fb4368327423608c52cf306b9c20fd7e028af6462d0820ec"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "99eb380541ea3fb96904b2abacce9d0fc3e4db39dd4b8c6617178bb8efea2be2"
+    },
+    {
+      "label": "Do not attack with Callous Inspector",
+      "offer_id": 1,
+      "before_digest": "4df13577c600e419405a5900b760f6becb7885a5dd0f31158cc146162686af06"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "1fc18ab93f87bf72569f42310e41777015bc1114530aa318e555d1cdc938e14d"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "99e5c268966d557027fccd96e72c6256d19c44541b8ea0a4479a8e934d20218e"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "bd24639ac418a578df980b3946de18170ae1390de65bf80da14ce4fa6560d255"
+    },
+    {
+      "label": "Cast Callous Inspector",
+      "offer_id": 3,
+      "before_digest": "aa9bc54662e3f043ba566f3eaf4a7d01008b81aa3a2d2056abfb80bb06b9d43a"
+    },
+    {
+      "label": "Pay the cost",
+      "offer_id": 2,
+      "before_digest": "b273b5662a9c9561fb64996ac57f5914a351650d50e91f2fbcfe1cf07d043f92"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "bf688604c959be4aa1af708d583f9886a7d2f4742cefe36eb54e80a0f4796acc"
+    },
+    {
+      "label": "Do not attack with Callous Inspector",
+      "offer_id": 1,
+      "before_digest": "4e399832daeb4163b59b21797438288713a04ecb9675d4ca38062cc07b94044e"
+    },
+    {
+      "label": "Do not attack with Callous Inspector",
+      "offer_id": 1,
+      "before_digest": "5d3d7ef5a3da1fafd96b3f5b7988e3b9aedb13ee7e0ec62c5ff8c04fd85e5f39"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "a872e0bce737878b7ebf44d1515cc9b0643238089fd0920d7ce94a7e1b11a8ce"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "ca99c2d4de3e18906210206d1e71412198398ada84e14a8b42d9d4316953b86a"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 2,
+      "before_digest": "37315f81ddce7bf67d6799df6055a8169b48ed70a0578c075c956f5c46d936d6"
+    },
+    {
+      "label": "Play Swamp",
+      "offer_id": 4,
+      "before_digest": "29fcccd66a8d7e762bd52f8eb7ce697a7a02559986e827ecee86cb3b2821d4bc"
+    },
+    {
+      "label": "Cast Callous Inspector",
+      "offer_id": 3,
+      "before_digest": "58d3c8c0f6fdbe322158e3482d2113e50dd49e4e81a9a54b75a4e5c6fdc24f59"
+    },
+    {
+      "label": "Pay the cost",
+      "offer_id": 3,
+      "before_digest": "3e9b0546df0a3e530638d19c0e5cf500849e161a38e13e43c035d10437ea8dfd"
+    },
+    {
+      "label": "Cast Deadly Dispute",
+      "offer_id": 0,
+      "before_digest": "6fd6385deb3de41bc556e0530cabfeb3bd26daaa3106185641b4abbbe624d36b"
+    },
+    {
+      "label": "Sacrifice Callous Inspector",
+      "offer_id": 0,
+      "before_digest": "6479fcd2d8e4fb0ae8bc6e90250e18887cee2cb529f9260cdecbc581fc876b88"
+    }
+  ],
+  "decision_digest": "4c41cfda68c27ce17b0a322d563d7d4a9d1d3a18accc523fc9b6cc2af3c2282e",
+  "decision_revision": 34,
+  "decision_kind": "PRIORITY",
+  "manifest_digest": "d3d96b4360aff0e955b35e21c6e59d00572de87ac24ac2ba3f53eb1e02d0e61f"
+}

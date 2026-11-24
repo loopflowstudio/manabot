@@ -7,7 +7,12 @@ import sys
 import pytest
 
 import managym
-from managym.recording import CapturedVector, ScalarCapture, read_failure, read_record
+from managym.recording import (
+    RecordedVectorEnv,
+    ScalarCapture,
+    read_failure,
+    read_record,
+)
 from managym.replay import replay_failure_inputs, require_replay_runtime
 
 
@@ -91,9 +96,9 @@ def test_legacy_source_is_not_reinterpreted(tmp_path: Path) -> None:
 
 
 def test_standalone_vector_records_global_streams(tmp_path: Path) -> None:
-    from managym.recording import CapturedVector
+    from managym.recording import RecordedVectorEnv
 
-    capture = CapturedVector(
+    capture = RecordedVectorEnv(
         num_envs=2, seed=17, stream_offset=8, journal_path=tmp_path / "vector.jsonl"
     )
     capture.enable_statistics()
@@ -146,7 +151,7 @@ def test_decision_memory_option_survives_journal_reset_and_replay(
     path = tmp_path / "memory.jsonl"
     players = [managym.PlayerConfig(n, {"Mountain": 20}) for n in ("a", "b")]
     if vector:
-        capture = CapturedVector(
+        capture = RecordedVectorEnv(
             num_envs=1,
             seed=17,
             decision_memory=enabled,

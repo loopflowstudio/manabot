@@ -1,18 +1,26 @@
 ---
-requires: working cohort and behavior evidence
-produces: decomposition-phase plan in the existing scratch design
+requires: a working card batch and its behavior checks
+produces: a decomposition plan in `scratch/plan.md`, cut into slices
+action_style: exploratory
 ---
-Find the reusable decomposition that makes the working mechanics support further cards.
+Find the reusable shape that lets further cards in this area compose without new engine code.
 
-1. Map selectors, rules types, observation/token projections and ownership using
-   the working examples. Choose distinct real consumers or interactions that
-   expose duplicated rules or special paths; do not invent future mechanics.
-2. Update the phase plan and Delete — do not maintain list with the deepest
-   obsolete owners first. Move real consumers in the same cut and retain directed
-   behavior tests. Keep one implementation of each fact.
-3. Set a concrete review criterion: named representative cards compose from the
-   shared mechanism without card-specific engine logic or duplicate state.
-   This phase concerns growing the card file, not runtime speed. If the existing
-   structure already meets it, document why and preserve the passing evidence.
-4. A semantic counterexample invalidates dependent evidence. Revise the working
-   contract before dependent refactoring; do not hide it behind a cleaner API.
+1. Map the batch's selectors, conditions, triggers, effects, replacements,
+   and observation/token projections with their owners. Pick real consumers
+   or interactions that expose duplicated rules, special paths, or cramped
+   types that fuse orthogonal axes into one specialized variant (for example,
+   baking a source filter, timing rule and transform into a single effect or
+   replacement variant); don't invent future mechanics.
+2. Refactor how effects, triggers, replacements, conditions and selectors
+   compose so each axis lives in one small reusable type. Write a **Delete —
+   do not maintain** list, deepest obsolete owner first, and group the work
+   into slices: one shared mechanism and every caller it moves. Each slice
+   cuts real consumers over together and keeps directed behavior tests on the
+   surviving owner.
+3. State the review criterion: named representative cards compose from small
+   orthogonal primitives with no card-specific engine logic, multi-axis
+   special variants, or duplicate state. Focus on growing the card file, not
+   runtime speed. If the current structure already meets that bar, say why
+   and plan no slices.
+4. A semantic counterexample stops dependent refactoring: fix the rules
+   contract first rather than hiding it behind a cleaner API.

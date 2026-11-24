@@ -8,8 +8,10 @@ and uses PyTorch as its numerical reference
 ([parity check](README.md#parity-check)). The ordinary pilot gates timing on
 those checks. The [MPS retest](../../experiments/reports/mps_retest.md) explicitly
 measures approximate half-precision arms too; it reports failing tolerances
-alongside timing and does not treat execution as numerical equivalence. Training, evaluation and the CLI
-still run the PyTorch model; nothing in the PyTorch path imports MLX.
+alongside timing and does not treat execution as numerical equivalence. Local
+evaluation and baseline verification can also run through MLX in explicit CPU
+float32 without importing PyTorch; PyTorch remains the default for evaluation
+and the numerical parity reference.
 
 ```python
 from manabot.backends import resolve
@@ -52,15 +54,136 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
 
 ## What the backend covers
 
-The backend runs what the w160l8 recipe uses: a catalog world with catalog
-record ids, table attention, a masked-mean scalar critic and policy input v9.
-The container carries every configuration, so `backend.load_policy` is where the
-rest is refused: a checkpoint that enables belief inputs, policy history,
-another critic, FiLM (`policy_film` or `focus_film`), `stream_norm` or input
-v10 raises `UnsupportedPolicy` naming every unsupported field, rather than
-running partially. Checkpoints of the `local` and `baseline` recipes use FiLM
-and are refused. The sized column readings (`one_hot`, `steps`) are host
-preparation and need nothing from the backend.
+MLX supports tracked and fresh scalar damped self-play with catalog record ids, table
+attention and a masked-mean critic. Inputs v9 through v11 use the same saved
+column readings as Torch. The model supports stream normalization, focus and
+policy FiLM, and v11 stack and known-library rows. Collection and learning
+support bucketed shapes and bounded execution chunks. The baseline, local and Elemental recipes accept `backend="mlx"` for training and recovery.
+
+Run one fresh baseline iteration on Apple Silicon with the recipe’s model,
+learning rule and both-seat routing. Give each run a new output directory.
+
+```python
+from pathlib import Path
+
+from manabot.backends import resolve
+from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.training.loops.self_play import fresh_iteration
+
+recipe = settings(BaselineConfig(device="mps")).model_copy(
+    update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True}
+)
+result = fresh_iteration(
+    recipe, backend=resolve("mlx"), seed=19,
+    out=Path(".runs/mlx-baseline"),
+)
+print(result.checkpoint, result.counts.learner_transitions)
+```
+
+The ordinary self-play loop and `fresh_iteration` share policy creation,
+collection, learning, EMA and milestone export. The output directory holds
+`policies/00000001-raw.safetensors` and, when averaging is enabled,
+`policies/00000001-ema.safetensors`. Both readers can load either file.
+The returned policies are the live sources of those exports. Frozen-choice inspection
+reads them on MLX using the NumPy corpus and its offer and object permutations.
+
+### Tracked training and recovery
+
+Run the bounded local recipe through one update, then continue the same run from
+the saved update boundary:
+
+```sh
+uv run --extra mlx etude train manabot/recipes/local.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
+uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates=2
+```
+
+Each attempt writes raw and EMA policy exports under `out/policies/`
+(`00000001-raw.safetensors`, `00000001-ema.safetensors`, and after resume
+`00000002-raw.safetensors`, `00000002-ema.safetensors`) and commits an atomic
+update save under `out/state/current.json` (including after update 0).
+
+A schema-2 MLX save pairs two files alongside Etude's `state.json`:
+
+- `continuation.json` (framework-free host state): global-slot stream state
+  (0-action roots for `complete-games`, committed action prefixes for
+  `exact-quota`, parked fresh roots for snapshot vectors), `learned_game_rows`,
+  the opponent RNG when `behavior="random"`, the minibatch RNG, and Python/NumPy
+  RNGs;
+- `training.safetensors` (backend state): raw and EMA weights, Adam moments and
+  step, the collector's private sampling RNG, the MLX RNG, and a SHA-256 digest
+  binding the save to `continuation.json` (`schema="2"`).
+
+Before mutating weights or opening native streams, resume validates model
+settings, saved column readings, lookup tables, backend, schema, the
+`continuation.json` digest, and array names, dtypes and shapes. It restores
+weights, EMA and Adam state, reopens streams directly into their committed roots
+or replayed action prefixes (verifying every slot's native state digest, chooser
+and decision-memory cursors, including across changed worker counts), and
+installs host and backend RNGs last. Prefix replay rebuilds native game statistics
+and preserves any recorded policy probabilities and values. Policy cutoff counts
+and durable game records resume with live play.
+
+On CPU float32, stopping between updates (via `--until` or `ETUDE_STOP_FILE`)
+and resuming reproduces the next update's native decisions, counts, weights, EMA
+and Adam arrays identically. On Metal, stream keys, slots, action traces, state
+digests and restored arrays match identically, while subsequent GPU arithmetic
+follows Metal's float32 repeatability. Existing schema-1 MLX saves (without
+`continuation.json`) remain readable and start fresh game and sampling streams
+at the saved update. A schema-2 save with a missing or tampered
+`continuation.json`, digest mismatch, nonfinite Adam state, corrupt action
+prefix or incompatible stream geometry fails admission without advancing or
+modifying `state/current.json` or milestones. Portable policy exports can start
+a fresh learner on either backend.
+
+A numerical failure ends the attempt. Under `numerical-incident/`, the JSON
+record names the invariant (`nonfinite_gradients` before Adam,
+`nonfinite_parameters_after_step` after Adam), attempted update and last policy
+exports. `tensors.safetensors` retains bounded evidence from up to 16 rollout
+rows within 32 MiB. `state.safetensors` holds the failure-time model, Adam, EMA
+and RNG state when their tensors fit within 512 MiB.
+
+### Local evaluation and baseline verification
+
+Score an exported policy against an anchor or another policy through MLX on CPU
+without importing PyTorch:
+
+```sh
+uv run --extra mlx python -m manabot.eval.local \
+  --backend mlx \
+  --checkpoint ~/.etude/track/local/out/policies/00000002-ema.safetensors \
+  --opponent heuristic --deal-seed 101 --out .runs/local-mlx-check --seconds 300
+```
+
+```text
+completed: 1/1 complete deals; 4/4 games; evidence: .runs/local-mlx-check/panel
+score: 0.500 (1 deal block; uncertainty unavailable from a single deal); local-check-not-admission
+```
+
+In Python, `manabot.eval.evaluation.evaluate_local(..., backend_name="mlx")`
+runs the same scalar CPU game children through MLX, and
+`manabot.recipes.baseline.evaluate` uses `config.backend`:
+
+```python
+from pathlib import Path
+
+from manabot.recipes.baseline import BaselineConfig, evaluate
+
+report = evaluate(
+    BaselineConfig(backend="mlx", device="mps", updates=2),
+    Path("~/.etude/track/baseline/out").expanduser(),
+    seed=0,
+)
+print(report.learning.verdict, report.learning.gain)
+```
+
+Both resolve MLX with explicit `precision="float32"` on CPU so width ≥ 256
+checkpoints do not switch to `bfloat16` during CPU verification. `backend_name`
+is execution-only and does not enter `EvaluationRequest` or `EvaluationKey`, so
+registration digests and existing evaluation directories stay unchanged.
+
+Fresh construction and checkpoint loading both call `require_supported`.
+It reports unsupported settings together, including belief inputs, decision
+memory, recent events, other critic layouts and disabled attention.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:
@@ -71,12 +194,20 @@ path in MLX names the same component as in the torch state dict:
 - the attention stack;
 - action heads, name candidates and the critic.
 
-Two departures from the PyTorch forward are exact up to float rounding. The
-catalog GRU always encodes every definition, where PyTorch learning encodes
-only the rows a batch references; the others never reach the loss either way.
-And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
-float64 (the GPU has none). Ordinary values can differ by rounding; a
-float32 ratio can also overflow sooner, which the numerical checks refuse.
+The MLX learner encodes the catalog definitions referenced by each prepared
+batch. With bucketed shapes it selects those definitions after trimming the
+observation. For attention it sorts observations by live object count and packs
+equal groups separately when that saves dense slots: two groups below 192 rows,
+three below 256 and four from 256. Otherwise it uses the object columns present
+anywhere in the batch. It restores the
+bucket's object coordinates before the critic and action focus lookups.
+Bucketed learner batches also encode only live fact rows, scattering each into
+its own observation's objects.
+Inference can cache the full catalog while the weights are fixed.
+
+The clipped surrogate computes its likelihood ratio in float32 on MLX and
+float64 on PyTorch. The Apple GPU lacks float64. Ordinary ratios can differ
+by rounding, and the numerical checks reject a float32 ratio that overflows.
 
 ## Layout mapping
 
@@ -116,14 +247,52 @@ diagnostics = update_damped_iteration(
 `batch` is a `RolloutBatch` as torch collection writes it. Check diagnostics
 against the torch backend on the intended batch, weights and precision using
 the parity command below. Returns and advantage selection run on the host in NumPy
-(`manabot.policy.returns`), the surrogate ratio is float32, and the sampled
-gradient detail of `OptimizerHealth` is absent
+(`manabot.policy.returns`), and the surrogate ratio is float32
 ([what differs](README.md#algorithms-are-written-once)).
+
+`Learner.step(..., recorder=observer)` accepts the shared `StepRecorder`
+protocol (`manabot.training.updates.health.StepRecorder`). On sampled steps (the
+first step of iteration 1 and every 25th iteration under `OptimizerHealth`),
+MLX retains zero-copy pre-step parameter references, computes per-leaf squared
+sums on device in float32 alongside the finite check, and reduces them in host
+float64 to record pre/post-clip gradient norms, critic readout (`value_head.`,
+`value_readout.`) and optional `value_token` norms, missing/zero/nonzero/frozen
+tensor counts, and absolute and relative L2 parameter displacement. MLX returns
+zero gradients for unused trainable leaves, which count as zero tensors. A
+missing tensor means the gradient tree has no entry for a trainable parameter.
+The recorder keeps the gradient sample if Adam produces a nonfinite parameter.
+Unsampled steps skip the measurement reductions and weight snapshots.
+Disabling sampling preserves the collected actions and learned weights.
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. The backend does not write checkpoints or collect; training
-continuity stays with the PyTorch learner.
+and its reverse are compiled. Each `PackedGRU` gathers and projects its tokens
+once, and its recurrence is an `mx.custom_function` with a hand-written VJP:
+autograd never traces the per-step slices, whose whole-input zero cotangents
+would make the backward quadratic in the number of steps. Collection samples
+once per group across execution chunks.
+Portable exports contain the policy’s float32 parameters and lookup buffers.
+
+### Profile captured learner minibatches
+
+Replay the learner arrays and initial policy from a Torch capture (`CAPTURE`, a
+`torch.capture` directory) on the Apple GPU.
+The first minibatch warms the path. Each subsequent batch contributes one sample
+to the reported medians.
+
+```sh
+uv run --extra mlx python -m scripts.profile_mlx_learner CAPTURE --bucketed --precision bfloat16 --out profile.json
+```
+
+Omit `--bucketed` for padded shapes. Precision defaults to float32. The output
+records admission and host preparation, full loss and gradients, and clipping
+plus Adam. Two controls replay the same loss at the same weights. The first
+reuses the catalog table. The second also reuses the attention and MLP outputs,
+passing gradients through to the object inputs. Differences between controls
+estimate the cost of the skipped work. Each sample records its maximum control
+loss difference. Repeated bfloat16 forwards can vary at fixed weights, so the
+bfloat16 controls use the existing 1% relative loss tolerance. Only the full
+gradient advances Adam.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).
@@ -134,7 +303,10 @@ A policy built without a precision follows the
 [one width rule](../../docs/training.md#reduced-precision) every GPU backend
 shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
 below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
-precision always wins. This does not enable an MLX training CLI.
+precision always wins. Fresh and tracked self-play use `SelfPlay.precision`,
+including when starting from a portable checkpoint. An explicit precision on
+`resolve("mlx", precision=...)` must agree with the recipe. Resuming a tracked
+MLX run requires the precision in its training save.
 
 ```python
 from manabot.backends import resolve
@@ -162,20 +334,27 @@ silently skips a step. Logits, values, log-softmax and sampled action log probab
 are float32 for both behavior and learner evaluation. Both paths use
 `rl.policy_logs` and `rl.action_logs`, promoting before normalization.
 
-Public forwards select precision automatically. A fixed-weight inference loop
-may hold `with policy.forward_precision():` across calls to reuse cast weights;
-close it before differentiating or stepping. `Learner.loss` clears inference
-catalog caches before differentiation, so catalog parameters still learn.
+Public forwards select precision automatically. Collection holds
+`policy.forward_precision()` across all draws from the frozen policy and
+reuses its encoded catalog. Leaving collection restores the master weights
+and clears the catalog before learning. Custom inference loops can use the
+same context manager while their weights are fixed.
 
-Check a checkpoint and real capture with the selected dtype:
+Check a checkpoint and real capture with the selected dtype (add `--bucketed`,
+`--device` or `--threads` as needed; `--backend torch --device mps --precision bfloat16`
+uses the same half-precision gates, see [parity check](README.md#parity-check)):
 
 ```sh
-uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16 --bucketed
 ```
 
 | Precision | Legal logits, max absolute | Values, max absolute | Loss, relative | Full-gradient cosine |
 |---|---:|---:|---:|---:|
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
+
+`MLXBackend.load` accepts optional `device`, `precision` and `bucketed_shapes`
+(defaulting to `mps`, the backend's configured precision and padded) and places
+the policy on that device with no silent fallback.
 
 The bound was calibrated on the retained real-input w384/w768 checks in
 the [MPS retest](../../experiments/reports/mps_retest.md), source `140eec28d`. It

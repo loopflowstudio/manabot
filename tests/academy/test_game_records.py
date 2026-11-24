@@ -17,7 +17,7 @@ from tests.fixtures.recorded_commands import record_until_object_candidate
 def test_mixed_disclosure_record_replays_and_imports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vector: bool
 ) -> None:
-    from managym.recording import CapturedVector, read_records
+    from managym.recording import RecordedVectorEnv, read_records
     from managym.replay import walk
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
@@ -27,13 +27,14 @@ def test_mixed_disclosure_record_replays_and_imports(
     )
     path = tmp_path / "games.jsonl"
     if vector:
-        capture = CapturedVector(num_envs=1, seed=7, games_path=path)
+        capture = RecordedVectorEnv(num_envs=1, seed=7, games_path=path)
         capture.reset_all(setup)
         for _ in range(1000):
             if capture.step([0])[0][2]:
                 break
         else:
             raise AssertionError("bounded fixture did not complete")
+        capture.reset_all(setup)
         capture.step([0])
         capture.close()
     else:
@@ -117,7 +118,7 @@ def test_retained_exposure_receipt_opens_without_export(
             break
     else:
         raise AssertionError("bounded fixture did not complete")
-    game = json.loads(vector.take_exposure()[0][0])
+    game = json.loads(vector.current_exposure([True])[0])
     receipt = {
         "schema": "training-exposure-v1",
         "phase": "training",

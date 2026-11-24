@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
@@ -60,7 +60,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
 ) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     vector = (
-        CapturedVector(num_envs=2, seed=42)
+        RecordedVectorEnv(num_envs=2, seed=42)
         if captured
         else managym.VectorEnv(2, seed=42)
     )
@@ -177,7 +177,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
 
 def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
     space = ObservationSpace()
-    vector = CapturedVector(num_envs=2, seed=42)
+    vector = RecordedVectorEnv(num_envs=2, seed=42)
     vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
     players = _players()
     vector.reset_all_into_buffers(players)
@@ -191,21 +191,23 @@ def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
             [1, 0], buffers, layout=space.layout
         )
         assert all(a.game_id != b.game_id for a, b in zip(first, reset, strict=True))
-        vector.reassign_roots_into_buffers([list(reversed(players)), None])
+        vector.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(0, list(reversed(players)))]
+        )
         reassigned = vector.write_observations_for_players(
             [1, 0], buffers, layout=space.layout
         )
         assert reassigned[0].game_id != reset[0].game_id
         assert _identity(reassigned[1]) == _identity(reset[1])
         vector.step_isolated_into_buffers([-1, 0], [True, False])
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         replaced = vector.write_observations_for_players(
             [1, 0], buffers, layout=space.layout
         )
         assert replaced[0].game_id != reassigned[0].game_id
-        assert replaced[0].seed == 44
+        assert replaced[0].seed == 46
         assert _identity(replaced[1]) == _identity(reassigned[1])
-        scalars = [managym.Env(seed=44), managym.Env(seed=43)]
+        scalars = [managym.Env(seed=46), managym.Env(seed=43)]
         scalars[0].reset(list(reversed(players)))
         scalars[1].reset(players)
         _assert_rows(space, buffers, scalars, [1, 0])
@@ -213,7 +215,7 @@ def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
         vector.close()
 
 
-def test_fixed_seat_done_reads_replacement_including_maximum_seed() -> None:
+def test_fixed_seat_done_reads_terminal_including_maximum_seed() -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     vector = managym.VectorEnv(1, seed=2**64 - 1)
     vector.reset_all(players)
@@ -227,10 +229,12 @@ def test_fixed_seat_done_reads_replacement_including_maximum_seed() -> None:
     else:
         pytest.fail("bounded tiny-deck fixture did not terminate")
     after = vector.write_observations_for_players([1], buffers, layout=space.layout)[0]
-    assert after.game_id != before.game_id
+    assert after.game_id == before.game_id
     assert after.seed == 2**64 - 1
     scalar = managym.Env(seed=after.seed)
     scalar.reset(players)
+    while not scalar.is_game_over():
+        scalar.step(0)
     _assert_rows(space, buffers, [scalar], [1])
 
 

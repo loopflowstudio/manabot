@@ -5,10 +5,9 @@ from copy import deepcopy
 
 import pytest
 import torch
-from torch import Tensor
 
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.learner import StepRecorder, gradient_step, update_ema
+from manabot.backends.torch.learner import gradient_step, update_ema
 from manabot.backends.torch.rl import (
     NumericalError,
     categorical_value_loss,
@@ -22,7 +21,12 @@ from manabot.backends.torch.rl import (
     standardized_advantages,
     transition_gae,
 )
-from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.health import (
+    NumericalHealth,
+    OptimizerHealth,
+    StepRecorder,
+    StepSample,
+)
 
 
 def test_squared_value_loss_accepts_column_predictions() -> None:
@@ -148,15 +152,11 @@ class _Sections:
     def sampling(self) -> bool:
         return not self.sampled_norms
 
-    def before_clip(self, model: torch.nn.Module) -> None:
-        pass
+    def record_sample(self, sample: StepSample) -> None:
+        if "gradient_norm_before" in sample:
+            self.sampled_norms.append(sample["gradient_norm_before"])
 
-    def record_gradients(self, model: torch.nn.Module, norm_before: Tensor) -> None:
-        self.sampled_norms.append(float(norm_before))
-
-    def record_step(
-        self, parameters: list[torch.nn.Parameter], before: list[Tensor]
-    ) -> None:
+    def record_step(self) -> None:
         self.steps += 1
 
 
@@ -200,3 +200,10 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
     torch.testing.assert_close(averaged.weight, start + 1.0)
     with pytest.raises(ValueError):
         update_ema(averaged, model, rate=1.0)
+
+
+def test_legacy_torch_step_recorder_names_shared_protocol() -> None:
+    with pytest.warns(DeprecationWarning, match="removal in 0.4.0"):
+        from manabot.backends.torch.learner import StepRecorder as LegacyRecorder
+
+    assert LegacyRecorder is StepRecorder

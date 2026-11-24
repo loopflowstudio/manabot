@@ -131,7 +131,6 @@ impl Game {
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
             // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
-            // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
                 if let Some(object) = zones.top(ZoneType::Library, player) {
                     zones.place(&objects, object, player, ZoneType::Hand);
@@ -144,6 +143,7 @@ impl Game {
             payment_cache: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {
+                procedure: crate::flow::game::GameProcedure::OpeningHands(Default::default()),
                 cards: CardVec::new(cards),
                 objects,
                 permanents: PermanentVec::default(),
@@ -191,6 +191,7 @@ impl Game {
             capture_originals: Default::default(),
         };
 
+        game.state.turn.turn_number = 0;
         if capture.is_some() || statistics {
             let initial = snapshots(&game);
             if statistics {

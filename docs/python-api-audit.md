@@ -6,28 +6,29 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 
 | Capability | Scalar native `managym.Env` | Native `managym.VectorEnv` | Python wrappers and disposition |
 |---|---|---|---|
-| Construction and setup | Seed, trivial skipping, optional profiling/behavior tracking; explicit two-player reset | Fixed slot count, seed stride, built-in none/random opponent; uniform or distinct deck sampling; per-slot buffered setups | Gym `Env` takes Match/ObservationSpace/Reward. Torch vector takes those plus device; uses CapturedVector. Different orchestration, same native rules. |
+| Construction and setup | Seed, trivial skipping, optional profiling/behavior tracking; explicit two-player reset | Fixed slot count, seed stride, built-in none/random opponent; uniform or distinct deck sampling; per-slot buffered setups | Gym `Env` takes Match/ObservationSpace/Reward. Torch vector takes those plus device; uses RecordedVectorEnv. Different orchestration, same native rules. |
 | Perspective | Reset/step return chooser view; `observation_for_player` reads a fixed native seat; `hand_snapshot` reads authoritative hand counts | Reset/step return each chooser view; built-in opponents advance to seat 0 | `current_agent_indices` reports choosers, including control effects. `write_observations_for_players` writes one explicit native seat's viewer-safe encoding per slot into caller-owned buffers, matching scalar `observation_for_player`; there is no readable fixed-view batch. Hand snapshots supply authoritative contents without materializing observations. |
 | Legal choices | Complete action list, positional steps, revision-bound Commands and captured-command submission | Positional indices; readable results have complete actions; buffered observations may select explicit `first-legal` prefix | No vector Command execution or capture-origin authorization. Intentional collection API difference; use scalar for external interactive submissions. Neither snapshot reads nor tensor cutoffs change native legality. |
 | Observation encoding | `managym.encode_observation_into` writes any observation into caller-owned buffers | The supplied native layout sets NumPy buffer capacities and input version; readable mode bypasses tensor capacities | One native encoder and layout; Python `ObservationSpace` is config plus native layout, supplying allocations, and `encode_observation(space, obs)` encodes. No new observation fields or schema versions for snapshots. |
 | Step and reward | One surfaced decision, terminal observation, reward from decision chooser | Same with opponent policy none; built-in policy plays opponent decisions and negates an opponent terminal reward for seat 0 | Gym and Torch can apply reward shaping. Torch returns reused tensors and empty step info; `get_last_info` reads native diagnostics separately. |
-| End/reset | No implicit native reset; further step fails after game over | Terminal reward/flags/info, but replacement-game observation; seeds advance by stride | Gym `Env` never auto-resets: terminal steps return true done flags and the caller resets (its `auto_reset` argument is removed). Torch keeps native vector autoreset with true done flags, the only automatic-reset contract. |
-| Partial execution | Caller chooses whether to step | Buffered active masks; inactive observations unchanged, reward/done cleared by Python bindings | CapturedVector records only active attempted steps; Torch step has no mask. Hand snapshots and fixed-seat observation writes always cover all slots; collector applies its mask. |
-| Seeds and identity | `set_seed` affects the next reset; state digest and decision revision are distinct identities | Current seeds, seed restoration, root reassignment and failed-slot replacement | HandSnapshot retains the originating reset seed and an opaque generation distinct across resets, replacements, forks and materialized worlds. Generations are not frozen replay identities. |
-| Errors and capacities | Invalid action rejects; later rules/encoder failure need not be transactional | Strict calls may advance a prefix before failing; isolated gameplay/capacity outcomes are opt-in; malformed buffers remain fatal | CapturedVector retains private replay inputs around buffered calls. Discard failed-call rows and recover/reset; neither an old buffer nor an empty snapshot denotes a successful transition. |
+| End/reset | No implicit native reset; further step fails after game over | No implicit native reset: terminal step reports outcome once and parks slot (chooser `-1`); reload via `load_slots_into_buffers` or reset; seeds advance by stride | Gym `Env` and `RecordedVectorEnv` never reset automatically. Torch `VectorEnv` explicitly reloads done slots via `load_slots_into_buffers` with true done flags and terminal `get_last_info()`, the only automatic-reset contract. |
+| Partial execution | Caller chooses whether to step | Buffered active masks; inactive observations unchanged, reward/done cleared by Python bindings | RecordedVectorEnv records only active attempted steps; Torch step has no mask. Hand snapshots and fixed-seat observation writes always cover all slots; collector applies its mask. |
+| Seeds and identity | `set_seed` affects the next reset; state digest and decision revision are distinct identities | Current seeds, seed restoration, and transactional slot loading (`SlotLoad.fresh` with optional per-slot setup, `SlotLoad.snapshot`) | HandSnapshot retains the originating reset seed and an opaque generation distinct across resets, replacements, forks and materialized worlds. Generations are not frozen replay identities. |
+| Errors and capacities | Invalid action rejects; later rules/encoder failure need not be transactional | Strict calls may advance a prefix before failing; isolated gameplay/capacity outcomes are opt-in; malformed buffers remain fatal | RecordedVectorEnv retains private replay inputs around buffered calls. Discard failed-call rows and recover/reset; neither an old buffer nor an empty snapshot denotes a successful transition. |
 | Capture and diagnostics | Viewer decision captures, Commands, state/selected-search witnesses, optional card/exposure capture and profiler | Semantic decision frames, current setups/seeds/action summaries, exposure and buffered timing counters | Vector frames are not scalar DecisionCapture authorization. Snapshots are separate privileged records; no automatic collection or addition to capture/diagnostic payloads. |
 | Search and possible worlds | Fork/selected fork, determinization, fixed-view spaces/materialization, MC/PUCT, RolloutPool | No arbitrary slot fork or possible-world operations | RolloutPool batches simulations from one scalar root; it is not VectorEnv. Closed-decklist search admission remains native. No parity shim added. |
-| Installation and typing | `import managym` from the engine distribution; `from manabot import managym` is the compatibility alias | Same installed extension and stub, including HandSnapshot | Explicit typed methods on CapturedVector and Torch. Engine-only consumers need no training package; see [installation](engine-python.md). |
+| Installation and typing | `import managym` from the engine distribution; `from manabot import managym` is the compatibility alias | Same installed extension and stub, including HandSnapshot | Explicit typed methods on RecordedVectorEnv and Torch. Engine-only consumers need no training package; see [installation](engine-python.md). |
 
 ## Code evidence
 
 - [`agent/env.rs`](../managym/src/agent/env.rs): `reset`, `step`,
   `observation_for_player`, `capture_decision`, `selected_revision`, `hand_snapshot`, `hand_counts`,
   `fork` and possible-world/search methods own single-game semantics.
-- [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs): `reset_each_into`,
-  `reassign_roots_into`, `step_with_autoreset_on_env`, `step_one_on_env`,
-  `step_isolated_into`, `replace_failed_into` and `hand_snapshots` own the batch.
-  `for_each_env` currently visits slots sequentially, not in a thread pool.
+- [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs) and
+  [`agent/vector_env/slots.rs`](../managym/src/agent/vector_env/slots.rs):
+  `reset_each_into`, `load_slots_into`, `step_slot`,
+  `step_isolated_into` and `hand_snapshots` own the batch.
+  Each native vector visits its slots in order.
 - [`python/bindings.rs`](../managym/src/python/bindings.rs) and
   [`python/vector_env_bindings.rs`](../managym/src/python/vector_env_bindings.rs):
   scalar lock/Command checks; vector active-state clearing, buffer validation,
@@ -37,8 +38,8 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 - [`env.py`](../manabot/env/env.py),
   [`vector_env.py`](../manabot/env/vector_env.py), and
   [`failures.py`](../manabot/env/failures.py): wrapper rewards, reset policies,
-  tensor reuse and private failure evidence. `CapturedVector.__getattr__`
-  delegates an explicit read-only allowlist; its instrumentation is buffered.
+  tensor reuse and private failure evidence. `RecordedVectorEnv.__getattr__`
+  delegates an explicit list of native reads.
 - [`belief/audit.py`](../manabot/belief/audit.py): `authority_hand` establishes
   the existing name-count representation used by a belief-model client. It
   now reads the shared scalar snapshot contract, as do sampler collection and
@@ -53,22 +54,22 @@ that inactive Python reward/done buffers retain old values. The actual bindings
 clear those fields; only observations remain untouched. Five audit findings
 are also fixed:
 
-- **CapturedVector readable calls bypassed capture bookkeeping.** Its
-  `__getattr__` now delegates only native reads; `reset_all`, `step` and other
-  native mutators raise `AttributeError` naming the buffered calls.
-- **Same-seed capture rollover.** Native `current_game_generations()` exposes
-  the reset generation; `CapturedVector._synchronize` starts a new prefix when
-  it changes, covering terminal replacement at `u64::MAX` and same-seed resets.
-  Generations stay process-local bookkeeping, never serialized evidence.
+- **RecordedVectorEnv readable calls.** The wrapper records `reset_all` and
+  `step` directly. Additional native mutations require a recording method.
+- **Same-seed capture rollover.** Each reset or slot load starts a replay prefix
+  for the admitted game, including at `u64::MAX`. Native generations identify
+  games within the process.
 - **Torch explicit-seed reset.** `reset(seed=s)` now restarts at `s` for every
   explicit seed, including the current base; previously a reset to the current
   base advanced succession. `reset()` without a seed still advances.
 
-- **Gym/vector done-flag contract.** Gym auto-reset suppressed done flags
-  while vector preserved them. The Gym `auto_reset` argument and its step-time
-  reset are removed (breaking: passing it raises `TypeError`), along with the
-  `true_terminated` / `true_truncated` info keys nothing read. Vector autoreset
-  with true done flags is the only automatic-reset contract.
+- **Gym/vector done-flag contract.** Gym automatic reset previously suppressed
+  done flags while vector preserved them; both Gym and native vector automatic
+  reset (along with `true_terminated` / `true_truncated` info keys nothing read)
+  have been removed. Native `VectorEnv` and `RecordedVectorEnv` park finished
+  slots until reloaded via `load_slots_into_buffers`, leaving Torch `VectorEnv`
+  (reloading done slots explicitly in Python with true done flags) as the only
+  automatic-reset contract.
 
 - **Built-in opponents.** Removed native `Passive`, its Python policy and the
   passive decision-profile CLI branch. Vector construction (native, capture and

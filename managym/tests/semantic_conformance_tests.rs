@@ -14,7 +14,7 @@ const ROOT: &str = concat!(
     "/../conformance/semantic-kernel-w17-v6"
 );
 
-// Each frozen game regenerates the reference/optimized lockstep once. Its
+// Each recorded game regenerates the reference/optimized lockstep once. Its
 // digest pins every checkpoint and command. The public-handoff test below
 // checks serialized replay separately, avoiding a duplicate full traversal
 // of the largest boards within one 300-second test.
@@ -54,7 +54,7 @@ fn manifest() -> Manifest {
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v6/evidence.json"
+        "../../conformance/semantic-kernel-w17-v6/evidence-opening-v1.json"
     ))
     .expect("pinned evidence")
 }

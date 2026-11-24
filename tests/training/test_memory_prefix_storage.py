@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 import random
 from typing import Literal
+from unittest.mock import patch
 import weakref
 
 import numpy as np
@@ -28,9 +29,11 @@ from manabot.env.memory_store import (
     archive_memory,
     gather_memory,
     restore_memory,
+    select_rows,
 )
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
-from manabot.infra.config import ObservationConfig, RewardConfig
+from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import (
     Collector,
     RecordedObservations,
@@ -93,6 +96,21 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
     assert space.shapes["decision_records"] == (4, 74)
+
+
+def test_slicing_a_compact_export_preserves_edits_and_prefix_order() -> None:
+    _, dense = memory_input()
+    store = MemoryStore((4, 1024, 1024, 16384))
+    full = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
+    empty = Prefix(PrefixIdentity("empty", 0, "root"), None)
+    obs = CompactObservation({}, (full, empty, full), (4, 1024, 1024, 16384))
+    obs["decision_records"][2, 0, 3] = 21
+    selected = select_rows(obs, slice(1, 3))
+    assert isinstance(selected, CompactObservation)
+    assert selected.prefixes == (empty, full)
+    assert selected.memory_capacities == obs.memory_capacities
+    assert selected["decision_records"][1, 0, 3] == 21
+    assert np.shares_memory(selected["decision_records"], obs["decision_records"])
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -570,6 +588,10 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
         first[1].tail.chunk.rows[0][0, 3] + 1,
     ]
     assert calls == [1, 0, 2]
+    with pytest.raises(ValueError, match="live seat"):
+        store.capture_live_rows(
+            buffers, np.array([0]), seeds, [-1, 1, 0], epochs, cursors
+        )
     # A seed change inside the same generation is a regression, not a hit.
     seeds[0] += 1
     with pytest.raises(ValueError, match="regressed"):
@@ -580,3 +602,58 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
     buffers["decision_records"][0, 0, 10] = np.nan
     with pytest.raises(ValueError):
         store.capture_live_rows(buffers, np.array([0]), seeds, seats, epochs, cursors)
+
+
+@pytest.mark.parametrize("closure", ["complete-games", "exact-quota"])
+def test_terminal_bootstrap_retains_empty_memory(closure: BatchClosure) -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=16,
+            max_decision_references=256,
+            max_decision_reference_details=512,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    model = policy(space, "gru", 1)
+    deck = {"Mountain": 7}
+    collector = open_collector(
+        space,
+        Match(MatchConfig(hero_deck=deck, villain_deck=deck)),
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=197,
+        learning_seats="one",
+        batch_closure=closure,
+        opponent_mode="self",
+        numerics=CollectionSession(device="cpu", seed=197),
+    )
+    try:
+        with patch.object(
+            torch,
+            "multinomial",
+            side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                (len(probs), 1), dtype=torch.long
+            ),
+        ):
+            # With seven lands and the first offer, seat zero decides twice per game.
+            batch = collect(collector, model, 1)
+            assert collector._env.current_game_seeds() == [197, 198]
+            assert isinstance(batch.next_obs, PrefixObservation)
+            if closure == "exact-quota":
+                assert batch.next_done.tolist() == [False, True]
+                live, parked = batch.next_obs.prefixes
+                assert live.identity.game == "197" and live.counts[0] > 0
+                assert parked.counts == (0, 0, 0, 0)
+                batch = collect(collector, model, 1)
+                assert collector._env.current_game_seeds() == [197, 200]
+            assert collector._env.current_agent_indices() == [-1, -1]
+            assert batch.next_done.all() and isinstance(
+                batch.next_obs, PrefixObservation
+            )
+            assert all(
+                prefix.counts == (0, 0, 0, 0) for prefix in batch.next_obs.prefixes
+            )
+            assert any(prefix.counts[0] > 0 for prefix in batch.recorded.memory)
+    finally:
+        close_collector(collector)

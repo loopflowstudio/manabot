@@ -5,28 +5,29 @@ Incident payloads use Any: their nested tensors belong to the framework.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol, runtime_checkable
 
 import numpy as np
 
-from manabot.belief.protocol import SamplerBackend
 from manabot.env.observation import ObservationSpace
-from manabot.policy.protocol import BackendPolicy
+from manabot.policy.protocol import Backend, BackendName, BackendPolicy, PolicyLoader
+from manabot.training.updates.backend import Learner, LearnerFile, Policy, UpdateBackend
 
 if TYPE_CHECKING:
-    from manabot.belief.encoding import BeliefEncodingSchema
-    from manabot.belief.sampling_fit import BeliefTrainer
+    from etude.train.tracking import TrainingRun
+
     from manabot.infra.config import ModelConfig
+    from manabot.policy.readings import Readings
     from manabot.training.learning import Precision
+    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor
-    from manabot.verify.choice_corpus import Case
-    from manabot.verify.learning_regression import PolicySnapshot
+    from manabot.training.state.continuation import StagedContinuation
     from managym import PlayerConfig
 
 
@@ -43,10 +44,10 @@ class IncidentCapture:
     shapes: dict[str, object]
     state_tensor_bytes: int
     full_batch_captured: bool
+    suffix: str = ".pt"
 
 
 class TrainingState(Protocol):
-    def preserve_rng(self) -> AbstractContextManager[object]: ...
     def save(self, value: object, stream: BinaryIO) -> None: ...
     def capture_incident(
         self,
@@ -62,9 +63,7 @@ class TrainingState(Protocol):
     ) -> IncidentCapture: ...
 
 
-class TrainingRuntime(Protocol):
-    def configure(self, threads: int, precision: Precision, device: str) -> None: ...
-    def threads(self) -> int: ...
+class PolicyFactory(Protocol):
     def create_policy(
         self,
         space: ObservationSpace,
@@ -75,39 +74,110 @@ class TrainingRuntime(Protocol):
     ) -> BackendPolicy: ...
 
 
-class SessionFactory(Protocol):
-    def __call__(
+class FreshPolicies(Protocol):
+    @property
+    def runtime(self) -> PolicyFactory: ...
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
+
+
+class CollectionSessions(Protocol):
+    def CollectionSession(
         self, *, device: str, seed: int, precision: Precision = "float32"
     ) -> CollectionSession: ...
 
 
-class CollectionFactory(Protocol):
-    @property
-    def CollectionSession(self) -> SessionFactory: ...
-    @property
+class SelectionPredictors(Protocol):
     def SelectionPredictor(
+        self, agent: BackendPolicy, seed: int, /
+    ) -> SelectionPredictor: ...
+
+
+class SelectionBackend(PolicyLoader, Protocol):
+    @property
+    def collection(self) -> SelectionPredictors: ...
+    def metadata(self, path: str) -> dict[str, Any]: ...
+
+
+class SelfPlayPolicy(BackendPolicy, Policy, Protocol):
+    def memory_gates(self) -> dict[str, float]:
+        """Effective decision-memory gates at an update boundary."""
+        ...
+
+    @property
+    def readings(self) -> Readings: ...
+
+
+class SelfPlayLearner(Learner, Protocol):
+    @property
+    def agent(self) -> SelfPlayPolicy: ...
+
+
+class ExecutionScope(Protocol):
+    def scoped(
+        self, threads: int, precision: Precision, device: str
+    ) -> AbstractContextManager[object]: ...
+    def preserve_rng(self, device: str) -> AbstractContextManager[object]: ...
+
+
+class VerificationBackend(Backend, Protocol):
+    @property
+    def name(self) -> BackendName: ...
+
+    @property
+    def runtime(self) -> ExecutionScope: ...
+
+
+class SelfPlayRuntime(ExecutionScope, Protocol):
+    def synchronize(self, device: str) -> None: ...
+    def memory_metrics(self, device: str) -> dict[str, int]: ...
+    def create_policy(
         self,
-    ) -> Callable[[BackendPolicy, int], SelectionPredictor]: ...
+        space: ObservationSpace,
+        config: ModelConfig,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
+        pretrained: BackendPolicy | None = None,
+        precision: Precision | None = None,
+    ) -> SelfPlayPolicy: ...
+    def create_learner(
+        self,
+        agent: BackendPolicy,
+        device: str,
+        *,
+        minibatch_rows: int,
+        precision: Precision,
+        execution_rows: int | None,
+        bootstrap_rows: int | None,
+    ) -> SelfPlayLearner: ...
 
 
-class Verification(Protocol):
-    def inspect_policy(
-        self, path: Path, cases: list[Case], updates: int
-    ) -> PolicySnapshot: ...
+class SelfPlayLearning(LearnerFile, Protocol):
+    def update_ema(
+        self, ema: BackendPolicy, agent: BackendPolicy, rate: float, /
+    ) -> None: ...
 
 
-class TrainingBackend(SamplerBackend, Protocol):
-    """Execution roles beyond ordinary inference and portable updates.
-
-    An unsupported runtime refuses before collection or recovery starts.
-    """
+class SelfPlayBackend(UpdateBackend, Protocol):
+    """Numerics for one fresh self-play iteration and its portable policies."""
 
     @property
-    def verification(self) -> Verification: ...
-
+    def name(self) -> str: ...
     @property
-    def runtime(self) -> TrainingRuntime: ...
-
+    def runtime(self) -> SelfPlayRuntime: ...
+    @property
+    def learner(self) -> SelfPlayLearning: ...
+    @property
+    def collection(self) -> CollectionSessions: ...
+    def metadata(self, path: str | Path) -> dict[str, Any]: ...
+    def seed(self, seed: int, *, deterministic: bool | None = None) -> None: ...
+    def load_policy(
+        self,
+        path: str | Path,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
+    ) -> tuple[BackendPolicy, ObservationSpace]: ...
     def save_policy(
         self,
         agent: BackendPolicy,
@@ -116,14 +186,28 @@ class TrainingBackend(SamplerBackend, Protocol):
         *,
         player_configs: Sequence[PlayerConfig] | None,
         extra: dict[str, Any] | None = None,
-        belief_schema: "BeliefEncodingSchema | None" = None,
     ) -> None: ...
 
-    @property
-    def state(self) -> "TrainingState": ...
 
-    @property
-    def belief_fit(self) -> BeliefTrainer: ...
+@runtime_checkable
+class Continuation(TrainingState, Protocol):
+    """Objects Etude can restore together, plus this framework's incident evidence."""
 
-    @property
-    def collection(self) -> CollectionFactory: ...
+    def restore(
+        self,
+        run: TrainingRun,
+        learner: SelfPlayLearner,
+        ema: BackendPolicy | None,
+        counts: Counts,
+    ) -> StagedContinuation | None:
+        """Restore the live objects and supply a staged export for callback saves."""
+        ...
+
+    def framework(self) -> dict[str, str | None]: ...
+
+
+def require_continuation(backend: SelfPlayBackend) -> Continuation:
+    state = getattr(backend, "state", None)
+    if not isinstance(state, Continuation):
+        raise ValueError(f"{backend.name} does not support resumable self-play")
+    return state

@@ -117,6 +117,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "{} while this is attacking",
             condition_description(condition)
         ),
+        TriggerCondition::NthCounter { kind, nth } => format!("When the number of {} counters on this reaches {}", kind.name(), nth),
         TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
         TriggerCondition::LeavesTheBattlefield { subject } => {
             format!(
@@ -341,15 +342,25 @@ fn condition_text(condition: &Condition) -> String {
             predicate_description(predicate, "matching")
         ),
         Condition::ControlsAtLeast {
+            distinct_names: false,
             count: 1,
             predicate,
         } => format!(
             "you control a {}",
             predicate_description(predicate, "permanent")
         ),
-        Condition::ControlsAtLeast { count, predicate } => format!(
-            "you control {count} or more {}s",
-            predicate_description(predicate, "permanent")
+        Condition::ControlsAtLeast {
+            count,
+            predicate,
+            distinct_names,
+        } => format!(
+            "you control {count} or more {}s{}",
+            predicate_description(predicate, "permanent"),
+            if *distinct_names {
+                " with different names"
+            } else {
+                ""
+            }
         ),
         Condition::BattlefieldAtLeast { count, predicate } => format!(
             "there are {count} or more {}s on the battlefield",
@@ -445,6 +456,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
         flying,
+        deathtouch,
         no_counters,
         in_combat,
         token,
@@ -479,6 +491,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
                 .collect::<Vec<_>>()
                 .join(" or "),
         );
+    }
+    if *deathtouch {
+        terms.push("deathtouch".into());
     }
     if *flying {
         terms.push("flying".into());
@@ -935,6 +950,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             let cost = payment_description(cost);
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
         },
+        GivePlayerCounters {player, kind, count} => format!("Give {} {count} {} counters", player_description(player), kind.name()),
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
@@ -975,6 +991,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
             crate::state::ability::PlayerControlDuration::NextTurn => "turn",
         }),
         TakeExtraTurn => "Take an extra turn after this one".into(),
+        WinGame => "You win the game".into(),
+        LoseGame => "You lose the game".into(),
         EndTheTurn => "End the turn".into(),
         AdditionalCombatPhase { attackers } => match attackers {
             None => "After this phase, there is an additional combat phase".into(),
@@ -1291,6 +1309,19 @@ fn roman(chapter: u8) -> &'static str {
 mod tests {
     use super::*;
     use crate::state::ability::TargetRequirement;
+
+    #[test]
+    fn distinct_name_threshold_describes_the_required_permanents() {
+        let condition = Condition::ControlsAtLeast {
+            count: 10,
+            predicate: CardPredicate::subtype("Gate"),
+            distinct_names: true,
+        };
+        assert_eq!(
+            condition_text(&condition),
+            "you control 10 or more Gate permanents with different names"
+        );
+    }
 
     #[test]
     fn trigger_descriptions_fill_one_template_per_event() {

@@ -1,5 +1,6 @@
 """Deterministic failures through the ordinary collector and update boundary."""
 
+from contextlib import closing
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -50,7 +51,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.ppo import update_iteration
 import managym
-from managym.recording import CapturedVector, read_record
+from managym.recording import RecordedVectorEnv, read_record
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
@@ -92,7 +93,7 @@ class ScriptedFailures:
             )
 
     def current_agent_indices(self) -> list[int]:
-        return [position % 2 for position in self.positions]
+        return [-1 if position == 5 else position % 2 for position in self.positions]
 
     def current_game_seeds(self) -> list[int]:
         return [row + self.generation[row] * 2 for row in (0, 1)]
@@ -125,17 +126,15 @@ class ScriptedFailures:
                 continue
             self.positions[row] += 1
             if self.positions[row] == 5:
-                self.positions[row] = 0
-                self.generation[row] += 1
                 self.buffers["terminated"][row] = 1
                 self.infos[row] = {"winner_index": 1}
         self.encode()
 
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
-        for row, enabled in enumerate(failed):
-            if enabled:
-                self.generation[row] += 1
-                self.positions[row] = 0
+    def load_slots_into_buffers(self, requests: list[managym.SlotLoad]) -> None:
+        for request in requests:
+            row = request.slot
+            self.generation[row] += 1
+            self.positions[row] = 0
         self.encode()
 
     def get_last_info(self) -> list[dict[str, Any]]:
@@ -161,10 +160,7 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
     )
 
 
-@pytest.mark.parametrize("error_class", ["ObservationCapacity", "AgentError", None])
-def test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundary(
-    error_class: str | None,
-) -> None:
+def test_historical_capacity_replay_diverges_at_opening_hand() -> None:
     evidence = read_record(
         Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
     )
@@ -189,7 +185,7 @@ def test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundar
         ),
         outcome="resource_limit",
         actions=actions,
-        error_class=error_class,
+        error_class="ObservationCapacity",
         error="observation capacity exceeded: agent_permanents 41 > 40",
         frame_json=game.frame,
         observation=ObservationConfig(
@@ -200,32 +196,63 @@ def test_resource_limit_replay_rejects_old_schema_and_reproduces_current_boundar
         ),
     )
     result = replay_attempt(row)
-    # The frozen receipt predates the current semantic frame schema. Reject it
-    # before execution; reproducing its allocation failure needs a fresh binding.
-    assert result["status"] == "binding_mismatch"
-    assert result["matches_binding"] is False
+    # The receipt starts at turn one. Its first index is illegal at Keep/Mulligan.
+    assert result["status"] == "failed"
+    assert result["action_index"] == 0
+    assert result["error_class"] == managym.AgentError.__name__
+    assert result["matches_binding"] is None
     assert result["at_retained_failure"] is False
-    assert result["matches_error"] is None
-    assert result["action_index"] == 370
-    current_frame = result["frame"]
-    assert isinstance(current_frame, str)
-    assert isinstance(game.frame, str)
-    retained = json.loads(game.frame)
-    current = json.loads(current_frame)
-    assert retained.pop("schema_version") == 7
-    assert current.pop("schema_version") == 8
-    assert retained.pop("fingerprint") != current.pop("fingerprint")
-    assert retained == current
+    assert result["matches_error"] is False
 
-    # This current-world attempt is separate from the retained evidence. Keep
-    # the original bytes and binding check, and exercise the same capacity limit.
-    result = replay_attempt(row.model_copy(update={"frame_json": current_frame}))
+
+@pytest.mark.parametrize("error_class", ["ObservationCapacity", "AgentError", None])
+def test_resource_limit_replay_checks_binding_and_error_class(
+    error_class: str | None,
+) -> None:
+    match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
+    space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
+    with closing(RecordedVectorEnv(num_envs=1, seed=7)) as vector:
+        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        vector.reset_all_into_buffers(match.to_rust())
+        for _ in range(16):
+            vector.step_isolated_into_buffers([0], recover_capacity=True)
+            [info] = vector.get_last_info()
+            if "game_error" in info:
+                break
+        else:
+            pytest.fail("game did not exceed its permanent buffer")
+        game = vector.game_inputs(0)
+    assert info["game_error_class"] == "ObservationCapacity"
+    row = GameAttempt(
+        stream=game.stream,
+        seed=game.seed,
+        seat=0,
+        matchup=match.config,
+        outcome="resource_limit",
+        actions=game.actions,
+        observation=space.config,
+        error=info["game_error"],
+        error_class=error_class,
+        frame_json=info["game_error_frame"],
+    )
+    stale = json.loads(info["game_error_frame"])
+    stale["schema_version"] -= 1
+    rejected = replay_attempt(
+        row.model_copy(update={"frame_json": json.dumps(stale, separators=(",", ":"))})
+    )
+    assert rejected["status"] == "binding_mismatch"
+    assert rejected["matches_binding"] is False
+    assert rejected["at_retained_failure"] is False
+    assert rejected["matches_error"] is None
+    assert rejected["action_index"] == len(row.actions) - 1
+
+    result = replay_attempt(row)
     assert result["status"] == "failed"
     assert result["matches_binding"] and result["at_retained_failure"]
     assert result["matches_error"] is (
         None if error_class is None else error_class == "ObservationCapacity"
     )
-    assert result["action_index"] == 370
+    assert result["action_index"] == len(row.actions) - 1
     assert "recover_capacity" not in GameErrorPolicy().model_dump()
     assert "observation" not in attempt(False).model_dump()
 
@@ -458,7 +485,7 @@ def _assert_native_failure_replay(collector: Collector) -> None:
     assert native["post_error_state"] is not None
     assert replay["frame"] == row.frame_json
     advanced = {k: v.copy() for k, v in collector._buffers.items()}
-    collector._env.replace_failed_into_buffers([False, True, False])
+    collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(1)])
     assert collector._env.current_game_seeds() == [0, 4, 2]
     for key in before:
         np.testing.assert_array_equal(
@@ -714,8 +741,6 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
             if "game_error" in self.infos[1]:
                 self.infos[1] = {}
                 self.buffers["truncated"][1] = 1
-                # Native terminal/truncation calls already auto-reset the row.
-                self.replace_failed_into_buffers([False, True])
 
     model = agent()
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", GameErrorPolicy())
@@ -725,7 +750,7 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
     batch = collect(collector, model, 1)
     assert collector.game_error_state.completed == collector.stats.games == 2
     assert collector.game_error_state.crashed == collector.stats.truncations == 1
-    assert scripted.generation == [1, 2]
+    assert scripted.generation == [0, 1]
     assert batch.actions.size == 10 and int(batch.dones.sum()) == 4
 
 
@@ -940,7 +965,7 @@ def test_replay_resource_limit_on_a_restored_memory_boundary() -> None:
     source.reset(match.to_rust())
     for _ in range(4):
         source.step(0)
-    vector = CapturedVector(num_envs=1, decision_memory=True, auto_reset=False)
+    vector = RecordedVectorEnv(num_envs=1, decision_memory=True)
     vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
     vector.reset_all_into_buffers(match.to_rust())
     vector.load_slots_into_buffers(

@@ -1,12 +1,16 @@
 """Reusable settings for current self-play recipes. No builder executes training."""
 
-from typing import Literal
+from typing import Literal, Self
+
+from pydantic import Field, model_validator
 
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
     ObservationConfig,
 )
+from manabot.infra.run_settings import RunSettings
+from manabot.policy.protocol import BackendName
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
 from manabot.training.loops.self_play import SelfPlay
@@ -37,6 +41,21 @@ def fitted_horizon(wall_seconds: float, seconds_per_update: float) -> int:
     return max(1, min(REFERENCE_UPDATES, int(wall_seconds // seconds_per_update)))
 
 
+class SelfPlayRecipe(RunSettings):
+    """Validate the execution device before Etude opens the named run."""
+
+    backend: BackendName = Field(
+        default="torch", exclude_if=lambda value: value == "torch"
+    )
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
+
+    @model_validator(mode="after")
+    def backend_runs_on_device(self) -> Self:
+        if self.backend == "mlx" and self.device == "cuda":
+            raise ValueError("backend 'mlx' runs on device 'mps' or 'cpu', not 'cuda'")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Matches
 # ---------------------------------------------------------------------------
@@ -60,7 +79,7 @@ def sampled_self_play(
     deck_source: UniformDecks | None = None,
     match: MatchConfig | None = None,
     elemental_uniform: bool = False,
-    workers: Literal[1, 2, 4] = 4,
+    workers: int = 4,
 ) -> SelfPlay:
     """Damped self-play over a sampled roster with a fixed, fitted rate horizon.
 

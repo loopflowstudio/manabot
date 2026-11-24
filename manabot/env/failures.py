@@ -293,7 +293,7 @@ class _TrainingCapture:
                     decision_kind=kind,
                     game=(
                         self.game_inputs(game.stream - self.games[0].stream)
-                        if isinstance(self, recording.CapturedVector)
+                        if isinstance(self, recording.RecordedVectorEnv)
                         else game
                     ).model_copy(deep=True),
                 )
@@ -351,7 +351,7 @@ class ScalarCapture(_TrainingCapture, recording.ScalarCapture):
     """Engine recording with run scope and policy accounting."""
 
 
-class CapturedVector(_TrainingCapture, recording.CapturedVector):
+class RecordedVectorEnv(_TrainingCapture, recording.RecordedVectorEnv):
     """Engine recording with run scope and policy accounting."""
 
 
@@ -361,6 +361,14 @@ class CapturedSearch(_TrainingCapture, recording.CapturedSearch):
 
 # Published evidence names retain a warning-only alias until 0.4.0.
 def __getattr__(name: str) -> Any:
+    if name == "CapturedVector":
+        warnings.warn(
+            "manabot.env.failures.CapturedVector is deprecated; "
+            "use RecordedVectorEnv; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return RecordedVectorEnv
     if name.startswith("_") or not hasattr(recording, name):
         raise AttributeError(name)
     warnings.warn(

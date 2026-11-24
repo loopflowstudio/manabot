@@ -49,6 +49,17 @@ def release_handles(vector: SnapshotVector, handles: Sequence[object]) -> None:
             )
 
 
+# Native snapshots outlive their producers. Opaque handles must be returned
+# to the custom vector that captured them.
+type CachedHandle = managym.GameSnapshot | tuple[SnapshotVector, object]
+
+
+def release_cached_handle(cached: CachedHandle | None) -> None:
+    if isinstance(cached, tuple):
+        owner, handle = cached
+        release_handles(owner, [handle])
+
+
 class CapturePolicy(Strict):
     model_config = ConfigDict(frozen=True)
 
@@ -317,6 +328,11 @@ class BatchPlan:
                         self.config.snapshot_weight,
                     )
                 )
+        options = self.pending[0].restore_options if self.pending else None
+        if options is not None and options.forced_first_action is not None:
+            raise ValueError(
+                "a grouped snapshot schedule cannot force an opening action"
+            )
         self.scheduler.starts += 1
         if self.entries:
             self.scheduler.allowance += self.rate.numerator
@@ -517,7 +533,7 @@ class SnapshotBank:
             config_digest=canonical_sha256(config.model_dump(mode="json")),
             scheduler=SchedulerState(rng=rng, capture_rng=rng),
         )
-        self._hot: dict[int, managym.GameSnapshot | tuple[SnapshotVector, object]] = {}
+        self._hot: dict[int, CachedHandle] = {}
 
     @property
     def generation(self) -> int:
@@ -576,17 +592,13 @@ class SnapshotBank:
                     if key in replayed and replayed[key][0] == entry.recipe:
                         previous = self._hot.get(key)
                         self._hot[key] = replayed[key][1]
-                        if isinstance(previous, tuple):
-                            owner, handle = previous
-                            release_handles(owner, [handle])
+                        release_cached_handle(previous)
             return results
 
     def close(self) -> None:
         with self._lock:
             for cached in self._hot.values():
-                if isinstance(cached, tuple):
-                    owner, handle = cached
-                    release_handles(owner, [handle])
+                release_cached_handle(cached)
             self._hot.clear()
 
     def commit(self, receipt: BatchReceipt, signals: BatchSignals) -> None:
@@ -719,9 +731,8 @@ class SnapshotBank:
                 transferred.add(id(capture))
             old_hot, self._state, self._hot = self._hot, state, hot
             for key, cached in old_hot.items():
-                if isinstance(cached, tuple) and hot.get(key) is not cached:
-                    owner, handle = cached
-                    release_handles(owner, [handle])
+                if hot.get(key) is not cached:
+                    release_cached_handle(cached)
             if plan.vector is not None:
                 release_handles(
                     plan.vector,
