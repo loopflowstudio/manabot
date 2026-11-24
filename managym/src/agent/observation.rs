@@ -1536,8 +1536,7 @@ impl Observation {
             tapped: permanent.tapped,
             damage: permanent.damage,
             is_summoning_sick: permanent.summoning_sick
-                && characteristics.is_creature()
-                && !characteristics.keywords.has(Keyword::Haste),
+                && characteristics.restricted_by_summoning_sickness(),
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,

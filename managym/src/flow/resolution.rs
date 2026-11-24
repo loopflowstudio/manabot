@@ -2544,8 +2544,7 @@ impl Game {
             // CR 613.7e: an attachment receives a new timestamp.
             equipment.timestamp = timestamp;
             // Its grants leave one creature, whoever controls it, for another.
-            self.invalidate_mana_cache(PlayerId(0));
-            self.invalidate_mana_cache(PlayerId(1));
+            self.invalidate_mana_caches();
         }
     }
 

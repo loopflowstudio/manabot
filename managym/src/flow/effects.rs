@@ -108,8 +108,7 @@ impl Game {
         }
         self.state.effects.extend(records);
         // Characteristics can change which mana abilities exist.
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
+        self.invalidate_mana_caches();
     }
 
     /// The `Affected` of a battlefield permanent's current incarnation.
@@ -415,7 +414,6 @@ impl Game {
                 }
             }
         }
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
+        self.invalidate_mana_caches();
     }
 }

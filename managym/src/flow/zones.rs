@@ -940,8 +940,7 @@ impl Game {
                     .iter()
                     .any(StaticAbility::affects_mana))
         {
-            self.invalidate_mana_cache(PlayerId(0));
-            self.invalidate_mana_cache(PlayerId(1));
+            self.invalidate_mana_caches();
         }
         let second = second.map(|second| {
             let arrival = self.state.mint_appearance(second, owner, to_zone, false);
@@ -994,8 +993,7 @@ impl Game {
             .unwrap()
             .transforms += 1;
         // Its mana abilities and static grants may change for either player.
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
+        self.invalidate_mana_caches();
     }
 
     /// Show a card's back face; false when it has none.

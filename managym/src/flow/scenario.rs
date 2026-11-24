@@ -209,8 +209,7 @@ impl Game {
     /// call this once, after all injections, while the game is at a priority
     /// decision (e.g. immediately after reset, at the first main phase).
     pub fn scenario_refresh_priority(&mut self) -> Result<(), AgentError> {
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
+        self.invalidate_mana_caches();
         let Some(space) = self.current_action_space.as_ref() else {
             return Err(AgentError(
                 "scenario_refresh_priority: no active action space".to_string(),

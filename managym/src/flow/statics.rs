@@ -131,6 +131,12 @@ impl Characteristics {
         self.types.is_creature()
     }
 
+    /// Whether a summoning-sick permanent with these characteristics can't
+    /// attack or pay {T} (CR 302.6): it is a creature without haste.
+    pub fn restricted_by_summoning_sickness(&self) -> bool {
+        self.is_creature() && !self.keywords.has(Keyword::Haste)
+    }
+
     /// Printed or granted land.
     pub fn is_land(&self) -> bool {
         self.types.is_land()
@@ -1041,11 +1047,10 @@ impl Game {
         if permanent.tapped {
             return false;
         }
-        if !permanent.summoning_sick {
-            return true;
-        }
-        let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature() || characteristics.keywords.has(Keyword::Haste)
+        !permanent.summoning_sick
+            || !self
+                .characteristics(permanent_id)
+                .restricted_by_summoning_sickness()
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's

@@ -360,8 +360,7 @@ impl Game {
     }
 
     pub(crate) fn refresh_priority_actions(&mut self, player: PlayerId) {
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
+        self.invalidate_mana_caches();
         self.publish_action_space(self.priority_action_space(player));
     }
 

@@ -25,10 +25,8 @@ pub(crate) fn pending_trigger_description(
     Some(trigger_description(
         game.pending_trigger_face(trigger)?,
         trigger.ability_index,
-        trigger.inline_effects.as_deref(),
-        trigger
-            .modes_chosen
-            .then_some(trigger.chosen_modes.as_slice()),
+        trigger.inline_effects.is_some(),
+        &game.pending_trigger_effects(trigger)?,
     ))
 }
 
@@ -38,21 +36,21 @@ pub(super) fn stacked_trigger_description(
     trigger_description(
         crate::flow::resolution::stacked_trigger_face(trigger),
         trigger.ability_index,
-        trigger.inline_effects.as_deref(),
-        Some(&trigger.chosen_modes),
+        trigger.inline_effects.is_some(),
+        &crate::flow::resolution::stacked_trigger_effects(trigger),
     )
 }
 
-/// Inline delayed payloads take precedence: their ability index is not a card
-/// slot. Once modes are chosen, a modal rule reads as the modes it will run
-/// (CR 700.2b).
+/// `effects` are what the trigger will run, so chosen modes read as
+/// themselves (CR 700.2b). Inline delayed payloads have no printed ability:
+/// their ability index is not a card slot.
 fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
-    inline: Option<&[Effect]>,
-    chosen_modes: Option<&[usize]>,
+    inline: bool,
+    effects: &[Effect],
 ) -> String {
-    if let Some(effects) = inline {
+    if inline {
         return format!(
             "{} — delayed ability: {}",
             object.name,
@@ -62,12 +60,8 @@ fn trigger_description(
     let Ability::Triggered {
         condition,
         intervening_if,
-        effects,
+        ..
     } = &object.abilities[index];
-    let effects = match chosen_modes {
-        Some(modes) => crate::state::ability::chosen_trigger_effects(effects, modes),
-        None => effects.as_slice().into(),
-    };
     let intervening = intervening_if
         .as_ref()
         .map(|condition| format!(", if {}", condition_text(condition)))
@@ -76,7 +70,7 @@ fn trigger_description(
         "{} — {}{intervening}: {}",
         object.name,
         condition_description(condition),
-        effects_description(&effects)
+        effects_description(effects)
     )
 }
 

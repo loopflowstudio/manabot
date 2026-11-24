@@ -2869,6 +2869,12 @@ impl Game {
         self.state.mana_cache_mut()[player.0] = None;
     }
 
+    /// For a change that can reach either player's mana abilities, such as a
+    /// grant moving between permanents whoever controls them.
+    pub(crate) fn invalidate_mana_caches(&mut self) {
+        *self.state.mana_cache_mut() = Default::default();
+    }
+
     /// The same witness used by automatic production determines PayCost offers.
     pub(crate) fn can_pay_automatic_mana(&self, player: PlayerId, cost: &ManaCost) -> bool {
         let model = self.payment_model(player, None);
