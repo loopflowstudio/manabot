@@ -42,6 +42,7 @@ class VectorEnv:
         self._rust_env = self._build_rust_env(seed=seed)
         self._terminal_infos: list[dict[str, Any]] | None = None
 
+        # Dense buffer registration; migrate or remove in 0.3.0 with VectorEnv.set_buffers.
         self._buffers = allocate_vector_buffers(self.observation_space, self.num_envs)
         self._rust_env.set_buffers(
             self._buffers,
@@ -383,10 +384,7 @@ class VectorEnv:
     def to(self, device: str) -> "VectorEnv":
         self.device = torch.device(device)
         self._obs_tensors = {
-            key: src.to(
-                self.device, dtype=torch.float32 if key == "action_focus" else src.dtype
-            )
-            for key, src in self._obs_cpu_views.items()
+            key: src.to(self.device) for key, src in self._obs_cpu_views.items()
         }
         self._reward_tensor = self._reward_tensor.to(self.device)
         self._terminated_tensor = self._terminated_tensor.to(self.device)

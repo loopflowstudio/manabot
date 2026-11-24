@@ -27,6 +27,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from tests.fixtures.dense_collector import dense_collector
 from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, program_input
 
@@ -92,6 +93,7 @@ def _policy(
         opponent_mode="self",
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
+    dense_collector(collector)
     return PolicyFixture(
         agent, collector, collection._retain_obs_rows(collector, np.arange(2))
     )

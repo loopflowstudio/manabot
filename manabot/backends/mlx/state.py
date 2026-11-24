@@ -27,6 +27,7 @@ from manabot.backends.mlx.checkpoint import (
 )
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
@@ -260,14 +261,25 @@ def capture_incident(
                 **packed.fields,
             }.items():
                 retain(f"packed_actions/{name}", value, value)
-        observed = batch.recorded.index[rows]
-        for name, values in batch.recorded.rows.items():
-            # Check size before gathering potentially wide observation rows.
-            required = len(rows) * values[0].nbytes
-            if required > remaining:
+        source = batch.recorded.rows
+        if isinstance(source, ObservationSelection):
+            selected_obs = source.select(batch.recorded.index[rows])
+        for name in source:
+            if isinstance(source, ObservationSelection):
+                size = (
+                    np.prod(source.space.shapes[name])
+                    * np.dtype(source.space.dtypes[name]).itemsize
+                )
+            else:
+                size = source[name][0].nbytes
+            if len(rows) * size > remaining:
                 shapes[f"observation/{name}"] = {"omitted": "evidence byte budget"}
                 continue
-            sample = values[observed]
+            sample = (
+                selected_obs[name]
+                if isinstance(source, ObservationSelection)
+                else source[name][batch.recorded.index[rows]]
+            )
             retain(f"observation/{name}", sample, sample)
 
     state = IncidentTensors(

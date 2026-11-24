@@ -242,7 +242,7 @@ def test_learner_assembles_collected_record_features_without_featurizing_again(
     model = policy(space, "gru", 1)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
         collected = model.encode_decision_memory(scope.prepare(obs))
-    original = memory._prepare_dense_memory
+    original = memory._prepare_memory_rows
 
     def require_cached_records(
         buffers: dict[str, np.ndarray], tables: Tables
@@ -250,7 +250,7 @@ def test_learner_assembles_collected_record_features_without_featurizing_again(
         assert buffers["decision_records"].shape[1] == 0
         return original(buffers, tables)
 
-    monkeypatch.setattr(memory, "_prepare_dense_memory", require_cached_records)
+    monkeypatch.setattr(memory, "_prepare_memory_rows", require_cached_records)
     learned = model.encode_decision_memory(on_device(model.prepare(obs), "cpu"))
     torch.testing.assert_close(learned, collected, atol=2e-6, rtol=2e-5)
     assert learned.requires_grad
@@ -273,6 +273,6 @@ def test_learner_assembles_collected_record_features_without_featurizing_again(
         seen.append(buffers["decision_records"].shape[1])
         return original(buffers, tables)
 
-    monkeypatch.setattr(memory, "_prepare_dense_memory", count_new_records)
+    monkeypatch.setattr(memory, "_prepare_memory_rows", count_new_records)
     model.prepare(PrefixObservation(raw, [appended], capacities))
     assert sum(seen) == 1

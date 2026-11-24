@@ -18,3 +18,6 @@ mod layout_extents;
 
 #[cfg(feature = "python")]
 mod snapshot_bindings;
+
+#[cfg(feature = "python")]
+mod observation_batch;

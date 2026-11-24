@@ -28,7 +28,7 @@ from manabot.policy import returns
 
 @deprecated(
     "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
-    "The backend-bound function will be removed in 0.4.0."
+    "The backend-bound function will be removed in 0.3.0."
 )
 def damped_policy_loss(
     logits: mx.array,

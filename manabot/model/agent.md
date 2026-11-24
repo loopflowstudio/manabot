@@ -167,7 +167,7 @@ The policy is split by what depends on an array framework:
 ## Observation admission
 
 A policy forward reads only a `Prepared` batch. The policy's `prepare`
-validates a batch of NumPy observation buffers once, on the host, and builds
+admits a dense NumPy mapping or native v11 batch on the host and builds
 every index the forward reads; `forward`, `forward_distribution`,
 `get_action_and_value` and `get_value` then do no validation and no lookups
 of their own:
@@ -179,8 +179,12 @@ prepared = agent.prepare(obs)                    # NumPy: checked, trimmed, inde
 logits, value = agent(on_device(prepared, "cpu"))  # logits [B,A], value [B]
 ```
 
-Admission (`manabot.policy.admission.check`) reads the observation, not the
-weights: shapes, binary validity, definition and vocabulary references, action
+A v11 `managym.ObservationBatch` supplies immutable live values and row offsets.
+The policy checks its layout, definition lookups and vocabulary against the
+checkpoint. The encoder guarantees native object bounds and effect partitions.
+
+For a dense mapping, admission checks shapes, binary validity, definition
+and vocabulary references, action
 focus and continuation references, permanent links, fact and record programs,
 shared-effect partitions, naming spans, recent events, belief rows, the
 legal-action mask and, when the value aggregation needs one, a valid object in

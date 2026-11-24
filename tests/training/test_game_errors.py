@@ -37,6 +37,7 @@ from manabot.training.rollout.collection import (
     Collector,
     close_collector,
     collect,
+    live_observations,
     open_collector,
 )
 from manabot.training.state.game_errors import (
@@ -53,6 +54,7 @@ from manabot.training.updates.ppo import update_iteration
 import managym
 from managym.recording import RecordedVectorEnv, read_record
 from tests.eval.arena_fixture import arena_fixture
+from tests.fixtures.dense_collector import dense_collector
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
     _payment_match,
@@ -264,7 +266,7 @@ def _tolerant_collector(
     seats: Literal["one", "both"] = "both",
     closure: BatchClosure = "complete-games",
 ) -> Collector:
-    return open_collector(
+    collector = open_collector(
         model.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -276,6 +278,8 @@ def _tolerant_collector(
         record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
+    dense_collector(collector)
+    return collector
 
 
 @pytest.mark.parametrize("threshold", [0.1, 0.25])
@@ -454,7 +458,7 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
 
 
 def _assert_native_failure_replay(collector: Collector) -> None:
-    before = {k: v.copy() for k, v in collector._buffers.items()}
+    before = dict(live_observations(collector))
     collector._env.step_isolated_into_buffers([0, -1, 0], [True] * 3)
     infos = collector._env.get_last_info()
     assert "game_error" not in infos[0] and "game_error" not in infos[2]
@@ -484,13 +488,12 @@ def _assert_native_failure_replay(collector: Collector) -> None:
     assert native["failed_action_index"] == row.actions[-1]
     assert native["post_error_state"] is not None
     assert replay["frame"] == row.frame_json
-    advanced = {k: v.copy() for k, v in collector._buffers.items()}
+    advanced = dict(live_observations(collector))
     collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(1)])
     assert collector._env.current_game_seeds() == [0, 4, 2]
+    current = live_observations(collector)
     for key in before:
-        np.testing.assert_array_equal(
-            collector._buffers[key][[0, 2]], advanced[key][[0, 2]]
-        )
+        np.testing.assert_array_equal(current[key][[0, 2]], advanced[key][[0, 2]])
 
 
 @pytest.mark.parametrize(

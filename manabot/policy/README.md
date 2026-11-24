@@ -14,7 +14,7 @@ logits, values = policy.evaluate(batch)      # NumPy: logits [B,A], values [B]
 ```
 
 Every backend's forward reads a `Prepared` batch. With bucketed shapes,
-Torch and MLX measure occupied and referenced rows before admission. The
+Torch and MLX read exact counts from a native v11 `ObservationBatch` or measure occupied and referenced rows in dense mappings before admission. The
 resulting `BucketedObservation` pairs views of the original rows with their extents.
 Host preparation uses those extents to translate object joins and restore
 the full action width.
@@ -26,6 +26,11 @@ the full action width.
   `admit` on the host and prepare the views it validated.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
+- `spans.py` reads immutable packed values and offsets for the native
+  batch. Admission binds the batch layout and checks checkpoint vocabularies.
+  Preparation uses the offsets for slot coordinates and restores the model's
+  padding where its arithmetic depends on shape. A copied or read-only
+  dictionary goes through the full dense checks.
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`). The native `ObservationLayout.axis_extents`
   measures each item's occupied rows, object references, continuation joins
@@ -56,10 +61,12 @@ the full action width.
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`
-  applies each numeric reading once, so a backend never scales a column, and
-  admission keys include the readings, so two models that differ in one
-  reading never share a prepared batch. A column whose kind has no reading
-  raises when the layout is built; joins and ids never reach a projection. A
+  skips all-zero card, permanent and stack rows when applying numeric readings.
+  It reads relation features at valid slots and restores the original row
+  coordinates for every backend. The host applies the readings once. Admission
+  keys include them, so two models that differ in one reading never share a
+  prepared batch. A column whose kind has no reading raises when the layout
+  is built; joins and ids never reach a projection. A
   reading may write more than one input (`duration`: four flags), so
   projection widths come from `Layout` (`numeric_width`, `fact_width`)
   ([how the network reads a column](../../docs/observation-and-model.md#how-the-network-reads-a-column)).

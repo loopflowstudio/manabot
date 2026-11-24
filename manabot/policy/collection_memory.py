@@ -9,7 +9,7 @@ from manabot.env.memory_store import PrefixIdentity, RecordNode, record_tail
 from manabot.policy.decision_memory import retained_memory
 
 if TYPE_CHECKING:
-    from manabot.env.observation import ObservationBuffers
+    from manabot.env.observation import PolicyObservation
     from manabot.policy.prepare import Prepared
 
 
@@ -49,7 +49,7 @@ class CollectionMemory[A: CacheArray]:
     def clear(self) -> None:
         self.nodes.clear()
 
-    def roots(self, obs: "ObservationBuffers") -> dict[str, int]:
+    def roots(self, obs: "PolicyObservation") -> dict[str, int]:
         retained = retained_memory(obs)
         if retained is None:
             return {}
@@ -80,7 +80,7 @@ class CollectionMemory[A: CacheArray]:
                 return roots
 
     def bind(
-        self, batch: "Prepared[A]", obs: "ObservationBuffers", roots: Mapping[str, int]
+        self, batch: "Prepared[A]", obs: "PolicyObservation", roots: Mapping[str, int]
     ) -> "Prepared[A]":
         """Attach the frozen states selected when this batch was prepared."""
         retained = retained_memory(obs)
