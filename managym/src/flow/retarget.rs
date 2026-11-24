@@ -40,8 +40,8 @@ impl Game {
         let Some(requirement) = requirements.get(clause) else {
             return Vec::new();
         };
-        // Both distinctness and the shared mana-value budget apply only to
-        // the other targets of this clause, never to the slot being replaced.
+        // The clause rules apply only to the other targets of this clause,
+        // never to the slot being replaced.
         let other_targets = targets
             .iter()
             .enumerate()

@@ -257,8 +257,9 @@ impl Game {
         ))
     }
 
-    /// Distinctness and the announced X budget apply within one clause
-    /// while choosing targets, including when replacing one chosen slot.
+    /// Distinctness, the announced X budget and "that share a creature
+    /// type" apply within one clause while choosing targets, including when
+    /// replacing one chosen slot.
     pub(super) fn can_add_clause_target(
         &self,
         requirement: &TargetRequirement,

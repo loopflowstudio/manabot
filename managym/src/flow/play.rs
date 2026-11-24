@@ -1419,9 +1419,11 @@ impl Game {
             .iter()
             .enumerate()
             .all(|(index, requirement)| {
-                self.activated_ability_targets(player, source, ability_index, index, &[])
-                    .len()
-                    >= requirement.min
+                requirement.min == 0
+                    || self
+                        .activated_ability_targets(player, source, ability_index, index, &[])
+                        .len()
+                        >= requirement.min
             })
     }
 

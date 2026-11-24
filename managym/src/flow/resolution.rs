@@ -73,27 +73,31 @@ pub(crate) fn stacked_trigger_program(
     if let Some(effects) = &trigger.inline_effects {
         return trigger.program.then(|| effects.as_slice().into());
     }
-    let ability = trigger
+    let index = trigger.ability_index;
+    let snapshot_differs = trigger
         .source_face
         .as_ref()
-        .and_then(|face| face.abilities.get(trigger.ability_index));
-    let printed = default_content_pack()
-        .definition(trigger.source_definition_id)
-        .and_then(|row| row.abilities.get(trigger.ability_index));
+        .and_then(|face| face.abilities.get(index))
+        .is_some_and(|ability| {
+            default_content_pack()
+                .definition(trigger.source_definition_id)
+                .and_then(|row| row.abilities.get(index))
+                != Some(ability)
+        });
     let modal = matches!(
-        stacked_trigger_face(trigger).abilities[trigger.ability_index].effects(),
+        stacked_trigger_face(trigger).abilities[index].effects(),
         [Effect::TriggerModes { .. }]
     );
-    (ability.is_some_and(|ability| printed != Some(ability))
-        || (modal && trigger.chosen_modes.len() != 1))
+    (snapshot_differs || (modal && stacked_trigger_mode(trigger).is_none()))
         .then(|| stacked_trigger_effects(trigger))
 }
 
 /// The single chosen mode of a modal trigger, which a viewer joins to the
 /// catalog program; `None` for any other trigger.
 pub(crate) fn stacked_trigger_mode(trigger: &TriggeredAbilityOnStack) -> Option<usize> {
+    // Inline triggers never choose modes (`pending_mode_rule`).
     match trigger.chosen_modes.as_slice() {
-        [mode] if trigger.inline_effects.is_none() => Some(*mode),
+        [mode] => Some(*mode),
         _ => None,
     }
 }
