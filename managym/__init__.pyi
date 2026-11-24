@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from enum import IntEnum
 import os
 from typing import (
@@ -85,8 +85,20 @@ class ObservationLayout:
     @property
     def shapes(self) -> dict[str, tuple[int, ...]]: ...
     @property
+    def axis_buffers(self) -> dict[str, list[tuple[str, int]]]: ...
+    @property
+    def object_references(self) -> dict[str, list[tuple[int | None, int]]]: ...
+    @property
     def dtypes(self) -> dict[str, str]: ...
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
+    def axis_extents(
+        self, obs: Mapping[str, np.ndarray], *, omit_decision_memory: bool = False
+    ) -> dict[str, np.ndarray] | None:
+        """Per-item occupied and referenced row extents, or None on a layout mismatch.
+
+        Keep the buffers stable until return. With omit_decision_memory, memory
+        arrays may be absent. Present arrays must have their declared shapes.
+        """
 
 def observation_layout(
     *,
