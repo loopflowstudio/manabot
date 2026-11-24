@@ -136,3 +136,12 @@ Four reversible choices recorded in `scratch/concept-review.html` and `scratch/p
 - Include `...(player.inspected ?? [])` in `Board.svelte`'s `cards` and `textOf` (matching `view.ts:165`) and resolve `CardState` from `item.placed.anchor.id` on Academy play-tray hover (`previewCard` with `previewName` fallback), so hovering playable exiled/graveyard/library/inspected cards actually displays `permissionTerms` and `counterTerms`.
 - Pass `library_top_departure: true` from `exile_top_cards_to_play` through `exile_with_play_grant` (preserving shifted `known_library` positions under Redcap/Flameshape, matching `draw_cards`), read `casting_zone` in `SpellsFromOutsideHandCostLess`, and walk `objects(&json)` in `record_vocabulary::play_grant_conditions`.
 - Build Quilled Greatwurm (`PlayRoute::PrintedGraveyard` + distributed `CostComponent::RemoveCounters` + creature combat-damage amount) and finish the remaining Tinybones/Gandalf/MDFC interaction evidence inside MTG-419, and formally split the 12 non-casting shared-rules rows into separate follow-up Tasks at their named boundaries (graveyard-zone triggers, batch-collapsed triggers, surveil/mill-result queries & graveyard exile costs, APNAP wheel & delayed mana triggers, and entry-chosen creature type / control exchange / Amass).
+
+## 2026-11-24 implement pass (Slice 4)
+
+Reversible choices taken:
+- `Action::PlayLand.profile` serializes under the key `adventure`, the key `CastSpell` and `SpellOnStack` already use for the profile, so the two play actions carry one wire name. A rename to `profile` everywhere would be one coordinated wire change.
+- The MDFC rules fixtures are invented (`Tidal Errand // Tidal Haven`, `Kelp Hollow // Kelp Warden`). Their lands enter untapped and have no other text, unlike most printed MDFC lands.
+- Muldrotha now offers every permanent type of a land (an artifact land gets both its Artifact and its Land route), following its ruling that any permanent-type permission may be used.
+- `Condition` and `CounterKind` derive `Deserialize` so the vocabulary walk reads conditions from definition JSON. `CastPermissionData.condition` stays rules text.
+- The Scryfall fixture's Heartwood Crafter and Sanar rows had `"colors": null` (double-faced/prepare layout), which broke `conformance_tests` on this branch. They now hold the front face's colors, written by hand: `refresh_card_fixture.py` probably writes null for these layouts and would need the same fix.
