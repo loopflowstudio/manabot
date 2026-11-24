@@ -354,6 +354,11 @@ chooses preparation purpose independently of autograd mode; `no_grad` does not
 change a default learner batch into an inference batch. Torch rollout `rows`
 and `minibatches` always prepare learner rows; `next_observation` always
 prepares inference rows for bootstrapping.
+On MPS, Torch prepares every batch, inference and learner alike, with live
+fact rows only (`prepare(live_facts=True)`): a `[1,R]` route padded with
+unlinked rows to a power of two of at least 64, so MPS compiles few shapes.
+Captured 64-board calls had at most 1.3% of their fact rows live. CPU and
+CUDA keep padded `[B,F]` fact routes.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
