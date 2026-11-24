@@ -8,7 +8,7 @@ use managym_state::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
     },
-    effect::Modification,
+    effect::{CopyException, Modification},
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -286,8 +286,8 @@ fn electroduplicate() -> CardDefinition {
                 count: 1.into(),
                 of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 exceptions: vec![
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
-                    Modification::GrantTriggered(Box::new(Ability::Triggered {
+                    CopyException::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                    CopyException::GrantTriggered(Box::new(Ability::Triggered {
                         condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
                         intervening_if: None,
                         effects: vec![Effect::sacrifice_this()],

@@ -12,7 +12,7 @@ use crate::{
     },
     state::{
         card::{CardDefId, PrintedCharacteristics, Restriction, StaticAbility},
-        effect::Modification,
+        effect::CopyException,
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
@@ -437,7 +437,7 @@ impl Game {
         &mut self,
         values: &crate::state::game_object::CopiableValues,
         controller: PlayerId,
-        exceptions: &[Modification],
+        exceptions: &[CopyException],
     ) -> ObjectId {
         let id = self.state.id_gen.next_id();
         // Token status is the object's kind, not a copiable value; only an

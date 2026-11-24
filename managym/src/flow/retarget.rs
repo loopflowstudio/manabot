@@ -46,7 +46,9 @@ impl Game {
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
                     Some(effects) => effects.as_slice(),
-                    None => triggered.source_face.abilities[triggered.ability_index].effects(),
+                    None => super::resolution::stacked_trigger_face(triggered).abilities
+                        [triggered.ability_index]
+                        .effects(),
                 };
                 effect_target_requirements(effects)
                     .get(*triggered.target_req_indices.get(slot)?)

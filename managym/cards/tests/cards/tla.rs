@@ -44,7 +44,7 @@ use managym::{
     search_state::witness,
     state::{
         card::{Keyword, Keywords, StaticAbility},
-        effect::{CopyEffect, EffectDuration, Modification},
+        effect::{CopyEffect, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
         payment::{Contribution, How, Toward},
@@ -8640,7 +8640,7 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
         objects[copy].copy,
         Some(CopyEffect {
             of: objects[source].definition_id,
-            exceptions: vec![Modification::Nonlegendary],
+            exceptions: vec![CopyException::Nonlegendary],
         })
     );
     assert_eq!(objects[copy].registry_key, objects[source].registry_key);

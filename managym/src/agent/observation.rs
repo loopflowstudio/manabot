@@ -569,7 +569,7 @@ impl CopyData {
                 .iter()
                 .map(|exception| {
                     ContinuousEffectData::of_modification(
-                        exception,
+                        &exception.modification(),
                         "Indefinite".into(),
                         copy.of.catalog_id(),
                         timestamp,
@@ -1706,11 +1706,7 @@ impl Observation {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
                 StackObject::TriggeredAbility(a) => {
-                    Some(super::ability_description::trigger_description(
-                        &a.source_face,
-                        a.ability_index,
-                        a.inline_effects.as_deref(),
-                    ))
+                    Some(super::ability_description::stacked_trigger_description(a))
                 }
                 _ => None,
             },

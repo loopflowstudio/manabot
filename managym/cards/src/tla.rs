@@ -1,6 +1,6 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
-use managym_state::effect::{EffectDuration, Modification};
+use managym_state::effect::{CopyException, EffectDuration, Modification};
 use managym_state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
@@ -3422,9 +3422,12 @@ fn ember_island_production() -> CardDefinition {
             count: 1.into(),
             of: ObjectSelector::Target(target),
             exceptions: vec![
-                Modification::Nonlegendary,
-                Modification::base_pt(Some(size), Some(size)),
-                Modification::AddSubtypes(vec![subtype.into()]),
+                CopyException::Nonlegendary,
+                CopyException::SetBasePt {
+                    power: Some(size.into()),
+                    toughness: Some(size.into()),
+                },
+                CopyException::AddSubtypes(vec![subtype.into()]),
             ],
         }]
     };
@@ -7681,7 +7684,7 @@ fn ran_and_shaw() -> CardDefinition {
                     effects: vec![Effect::CreateTokenCopy {
                         count: 1.into(),
                         of: ObjectSelector::This,
-                        exceptions: vec![Modification::Nonlegendary],
+                        exceptions: vec![CopyException::Nonlegendary],
                     }],
                 },
             ],

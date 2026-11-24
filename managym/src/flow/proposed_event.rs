@@ -122,7 +122,7 @@ pub(crate) enum TokenSource {
     Copy {
         #[serde(flatten)]
         values: crate::state::game_object::CopiableValues,
-        exceptions: Vec<crate::state::effect::Modification>,
+        exceptions: Vec<crate::state::effect::CopyException>,
     },
 }
 
@@ -883,7 +883,7 @@ impl Game {
     ) -> Option<(
         crate::state::ability::Scope,
         &crate::state::predicate::CardPredicate,
-        &[crate::state::effect::Modification],
+        &[crate::state::effect::CopyException],
     )> {
         face.replacement_effects
             .iter()

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
+    cards::content_pack::default_content_pack,
     flow::{
         event::{EventKind, GameEvent},
         game::Game,
@@ -758,8 +759,11 @@ impl Game {
             .unwrap_or(self.state.source_base(trigger.source_object()).0);
         let source_face = self
             .source_face(trigger.source_object(), source_definition_id)
-            .expect("placing trigger has a source face")
-            .clone();
+            .expect("placing trigger has a source face");
+        let source_face = (!default_content_pack()
+            .definition(source_definition_id)
+            .is_some_and(|row| Arc::ptr_eq(source_face, &row.printed)))
+        .then(|| source_face.clone());
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);

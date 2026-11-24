@@ -656,8 +656,8 @@ impl Game {
                 if ability.trigger_damage > 0 {
                     super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
                 }
-                if ability.program {
-                    frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                if let Some(effects) = crate::flow::resolution::stacked_trigger_program(ability) {
+                    frame.program(effects);
                 }
                 frame.inherited_from = ability
                     .source_lki

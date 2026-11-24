@@ -547,7 +547,7 @@ pub enum ReplacementEffect {
         scope: crate::ability::Scope,
         predicate: CardPredicate,
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        exceptions: Vec<crate::effect::Modification>,
+        exceptions: Vec<crate::effect::CopyException>,
     },
 }
 

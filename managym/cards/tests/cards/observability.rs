@@ -53,7 +53,7 @@ use managym::{
         turn::{PlayerTurnHistory, StepKind, TurnState},
     },
     state::{
-        effect::{Affected, EffectDuration, Modification},
+        effect::{Affected, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::Color,
         permanent::CounterKind,
@@ -805,7 +805,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::CreateTokenCopy {
             count: 1.into(),
             of: ObjectSelector::Target(TargetSpec::Creature),
-            exceptions: vec![Modification::Nonlegendary],
+            exceptions: vec![CopyException::Nonlegendary],
         },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
         Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
@@ -2811,7 +2811,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
             if let managym::state::card::ReplacementEffect::EntersAsCopy { exceptions, .. } = effect
             {
                 exceptions.retain(|exception| {
-                    !matches!(exception, Modification::GrantStatic(granted)
+                    !matches!(exception, CopyException::GrantStatic(granted)
                         if std::mem::discriminant(&**granted) == std::mem::discriminant(&ability))
                 });
             }

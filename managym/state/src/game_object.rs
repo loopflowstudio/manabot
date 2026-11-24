@@ -613,7 +613,7 @@ impl Object {
     /// face and copy chain, then `exceptions` (CR 707.9b). Token status is
     /// not copiable, so the object stays a card or token as it was; its
     /// printed row is kept for [`Object::mint_appearance`].
-    pub fn become_copy_of(&mut self, source: &Object, exceptions: &[crate::effect::Modification]) {
+    pub fn become_copy_of(&mut self, source: &Object, exceptions: &[crate::effect::CopyException]) {
         let printed = self
             .printed
             .take()
@@ -628,10 +628,9 @@ impl Object {
     }
 
     /// Record the copy's root and apply new exceptions after inherited ones.
-    pub fn apply_copy_exceptions(&mut self, exceptions: &[crate::effect::Modification]) {
+    pub fn apply_copy_exceptions(&mut self, exceptions: &[crate::effect::CopyException]) {
         for exception in exceptions {
-            let copiable = exception.apply_copiable(self);
-            debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
+            exception.apply(self);
         }
         self.copy
             .get_or_insert_with(|| crate::effect::CopyEffect {
@@ -794,7 +793,7 @@ impl Object {
         if let Some(mut copy) = self.copy.take() {
             copy.of = id;
             for exception in &copy.exceptions {
-                exception.apply_copiable(self);
+                exception.apply(self);
             }
             self.copy = Some(copy);
         }

@@ -25,7 +25,7 @@ use crate::{
             TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
-        effect::{Affected, EffectDuration, Modification},
+        effect::{Affected, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         payment::How,
@@ -37,6 +37,33 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+/// Stack abilities own their face through an immutable catalog row or an
+/// appearance-specific snapshot (CR 113.7a).
+pub(crate) fn stacked_trigger_face(trigger: &TriggeredAbilityOnStack) -> &PrintedCharacteristics {
+    trigger.source_face.as_deref().unwrap_or_else(|| {
+        &default_content_pack()
+            .definition(trigger.source_definition_id)
+            .expect("captured trigger face")
+            .printed
+    })
+}
+
+/// The program a catalog join cannot recover for a viewer or a suspended frame.
+pub(crate) fn stacked_trigger_program(trigger: &TriggeredAbilityOnStack) -> Option<&[Effect]> {
+    if let Some(effects) = &trigger.inline_effects {
+        return trigger.program.then_some(effects);
+    }
+    let ability = trigger
+        .source_face
+        .as_ref()?
+        .abilities
+        .get(trigger.ability_index)?;
+    let printed = default_content_pack()
+        .definition(trigger.source_definition_id)
+        .and_then(|row| row.abilities.get(trigger.ability_index));
+    (printed != Some(ability)).then(|| ability.effects())
+}
 
 impl Game {
     /// A permanent's power and toughness as it is, or from its last known
@@ -323,7 +350,7 @@ impl Game {
             .object_lki(object)
             .and_then(|lki| lki.copiable.as_ref())
         {
-            if values.definition_id == Some(face) {
+            if values.definition_id == face.catalog_id() {
                 return Some(&values.definition.printed);
             }
         }
@@ -386,11 +413,10 @@ impl Game {
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
-        let program = if triggered.program {
-            triggered.inline_effects.clone().unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        let source_face = stacked_trigger_face(&triggered);
+        let program = stacked_trigger_program(&triggered)
+            .unwrap_or_default()
+            .to_vec();
         let source_object = triggered
             .source_lki
             .as_ref()
@@ -409,7 +435,7 @@ impl Game {
                 intervening_if,
                 effects,
                 ..
-            } = triggered.source_face.abilities[triggered.ability_index].clone();
+            } = source_face.abilities[triggered.ability_index].clone();
             // CR 603.4: an intervening "if" that no longer holds removes the
             // ability from the stack doing nothing.
             if intervening_if.as_ref().is_some_and(|condition| {
@@ -2481,7 +2507,7 @@ impl Game {
     }
 
     /// Read the current form or the exact appearance's final values (CR 608.2h).
-    fn copy_source(&self, copied: ObjectId, exceptions: Vec<Modification>) -> TokenSource {
+    fn copy_source(&self, copied: ObjectId, exceptions: Vec<CopyException>) -> TokenSource {
         let content = default_content_pack();
         let values = if let Ok(object) = self.state.object(copied) {
             content.copiable_values(object)

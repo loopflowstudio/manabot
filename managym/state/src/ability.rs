@@ -1,4 +1,4 @@
-use super::effect::{EffectDuration, Modification};
+use super::effect::{CopyException, EffectDuration, Modification};
 use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
 use super::permanent::CounterKind;
@@ -979,7 +979,7 @@ pub enum Effect {
         #[serde(skip_serializing_if = "is_fixed_one")]
         count: EffectValue,
         of: ObjectSelector,
-        exceptions: Vec<Modification<EffectValue>>,
+        exceptions: Vec<CopyException<EffectValue>>,
     },
     OptionalPayment {
         cost: PaymentCost,

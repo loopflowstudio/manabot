@@ -11,12 +11,22 @@ use crate::state::{
         TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardType, Keyword, Keywords},
-    effect::{EffectDuration, Modification},
+    effect::{CopyException, EffectDuration, Modification},
     mana::{Color, Mana, ManaCost, SpendEffect},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
 };
+
+pub(super) fn stacked_trigger_description(
+    trigger: &crate::state::stack_object::TriggeredAbilityOnStack,
+) -> String {
+    trigger_description(
+        crate::flow::resolution::stacked_trigger_face(trigger),
+        trigger.ability_index,
+        trigger.inline_effects.as_deref(),
+    )
+}
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
@@ -1115,7 +1125,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
 fn copy_description(
     of: &ObjectSelector,
     count: &EffectValue,
-    exceptions: &[Modification<EffectValue>],
+    exceptions: &[CopyException<EffectValue>],
 ) -> String {
     let tokens = if *count == EffectValue::Fixed(1) {
         "a token that's a copy".into()
@@ -1132,7 +1142,7 @@ fn copy_description(
         // "It …", lowercased after "except".
         let phrase = continuous_description(
             &ObjectSelector::Triggering,
-            exception,
+            &exception.modification(),
             EffectDuration::Indefinite,
         );
         text.push_str(if index == 0 { ", except " } else { " and " });

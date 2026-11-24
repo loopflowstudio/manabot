@@ -16,7 +16,7 @@ use crate::{
             TargetRequirement, TargetSpec,
         },
         card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
-        effect::{EffectDuration, Modification},
+        effect::{CopyException, EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         player::PlayerConfig,
@@ -118,7 +118,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
-            source_face: game.state[source_object].copiable_definition(),
+            source_face: Some(game.state[source_object].copiable_definition()),
             trigger_damage: 0,
             program: false,
             remembered: Vec::new(),
@@ -697,7 +697,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
-        source_face: game.state[source_object].copiable_definition(),
+        source_face: Some(game.state[source_object].copiable_definition()),
         trigger_damage: 0,
         program: false,
         remembered: Vec::new(),
@@ -3681,7 +3681,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
             Effect::CreateTokenCopy {
                 count: 1.into(),
                 of: ObjectSelector::This,
-                exceptions: vec![Modification::SetBasePt {
+                exceptions: vec![CopyException::SetBasePt {
                     power: Some(EffectValue::Fixed(4)),
                     toughness: Some(EffectValue::Fixed(5)),
                 }],
