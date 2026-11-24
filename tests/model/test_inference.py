@@ -62,7 +62,11 @@ class PolicyFixture:
 
 
 def _policy(
-    *, semantic: bool = True, history: bool = False, input_version: int | None = None
+    *,
+    semantic: bool = True,
+    history: bool = False,
+    input_version: int | None = None,
+    bucketed_shapes: bool = False,
 ) -> PolicyFixture:
     torch.set_num_threads(1)
     torch.manual_seed(819)
@@ -78,7 +82,7 @@ def _policy(
     if not semantic:
         config.agent.world = None
     space = ObservationSpace(config.observation)
-    agent = ActorCritic(space, config.agent).eval()
+    agent = ActorCritic(space, config.agent, bucketed_shapes=bucketed_shapes).eval()
     collector = open_collector(
         space,
         Match(config.match),

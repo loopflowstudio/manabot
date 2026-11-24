@@ -29,9 +29,11 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
-from managym.recording import read_record
+from managym.recording import Intervention, read_record
 from managym.replay import (
     ReplayAgreement,
+    apply_boundary,
+    interventions_by_offset,
     matches_retained_error,
     replay_failure_inputs,
     run_bounded_replay,
@@ -79,12 +81,21 @@ class GameAttempt(BaseModel):
         default=None, exclude_if=lambda value: value is None
     )
     outcome: GameOutcome
-    actions: list[int] = []
+    actions: list[int | str] = []
+    interventions: list[Intervention] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    object_candidate_frames: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     error_class: str | None = None
     error: str | None = None
     frame_json: str | None = None
     native_trace: str | None = None
     observation: ObservationConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    decision_memory: bool | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     discarded_samples: int = 0
@@ -250,7 +261,7 @@ def append_attempt(
 
 
 def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
-    """Bounded positional replay; the final pre-command frame exposes the offer.
+    """Replay retained choices and bind the final attempt to its original offer.
 
     AgentError and PyO3 panic are recorded here only around native gameplay.
     Process interrupts escape. Divergence before the retained failing action is
@@ -259,8 +270,12 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env = managym.Env(
         seed=attempt.seed,
         skip_trivial=True,
-        decision_memory=bool(
-            attempt.observation and attempt.observation.max_decision_records > 0
+        decision_memory=(
+            attempt.decision_memory
+            if attempt.decision_memory is not None
+            else bool(
+                attempt.observation and attempt.observation.max_decision_records > 0
+            )
         ),
         decision_memory_include_own=bool(
             attempt.observation and attempt.observation.decision_memory_include_own
@@ -276,7 +291,12 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     )
     # Replay the same fixed allocation at every step, as the collector does.
     buffers = space.allocate() if space is not None else {}
+    boundaries = interventions_by_offset(attempt)
+    if any(offset > len(attempt.actions) for offset in boundaries):
+        raise ValueError("intervention outside retained action prefix")
+    remaining_frames = set(attempt.object_candidate_frames)
     for index, action in enumerate(attempt.actions):
+        apply_boundary(env, boundaries.get(index, ()), remaining_frames)
         if index == len(attempt.actions) - 1:
             frame = env.semantic_decision_frame_json()
             if attempt.frame_json is not None:
@@ -290,7 +310,12 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                     }
             agreement.at_retained_failure = True
         try:
-            observation, _, terminated, truncated, _ = env.step(action)
+            if isinstance(action, str):
+                env.execute_semantic_command_json(action)
+                observation = env.observation_for_player(env.current_agent_index() or 0)
+                terminated, truncated = env.is_game_over(), False
+            else:
+                observation, _, terminated, truncated, _ = env.step(action)
         except BaseException as error:
             if (
                 not isinstance(error, managym.AgentError)
@@ -338,6 +363,9 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "action_index": index,
                 "frame": frame,
             }
+    apply_boundary(env, boundaries.get(len(attempt.actions), ()), remaining_frames)
+    if remaining_frames:
+        raise ValueError("snapshot object candidate frame missing")
     return {
         **asdict(agreement),
         "status": "advanced",

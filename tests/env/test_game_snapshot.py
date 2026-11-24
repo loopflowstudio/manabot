@@ -12,9 +12,9 @@ import pytest
 
 from manabot.env.observation import ObservationSpace, column, encode_observation
 from manabot.semantic.text_observation import capture_text_decision
-import managym
 from manabot.sim import sim
 from manabot.verify.text_observation import reset_to_first_main
+import managym
 from managym.decision import Command, DecisionFrame
 from managym.recording import (
     ScalarCapture,
@@ -23,7 +23,10 @@ from managym.recording import (
     records_from_source,
 )
 from managym.replay import replay_failure_inputs, walk
-from tests.fixtures.recorded_commands import preferred_action, record_until_object_candidate
+from tests.fixtures.recorded_commands import (
+    preferred_action,
+    record_until_object_candidate,
+)
 
 
 def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
@@ -150,14 +153,15 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
         env.snapshot()
     seat = reset_to_first_main(env, setup())
     obs = env.observation_for_player(seat)
-    meta = env.snapshot().metadata()
+    opening = env.snapshot()
+    meta = opening.metadata()
     assert meta.turn == 1
     assert meta.phase == managym.PhaseEnum.PRECOMBAT_MAIN
     assert meta.life == [20, 20]
     assert meta.board_counts == [0, 0]
     assert not meta.active_card_defs and meta.stack_len == 0
     assert meta.action_count == len(obs.action_space.actions)
-    assert meta.acting_player == obs.agent.player_index
+    assert opening.acting_player == meta.acting_player == obs.agent.player_index
     assert meta.action_kind == managym.ActionSpaceEnum.PRIORITY
     land = next(
         i
@@ -178,6 +182,7 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     meta = terminal.metadata()
     assert meta.terminal and meta.action_count == 0
     assert meta.action_kind is None and meta.acting_player is None
+    assert terminal.acting_player is None
     ended = last.restore(managym.RestoreOptions.exact(forced_first_action=0))
     assert ended.is_game_over() and ended.state_digest() == env.state_digest()
     with pytest.raises(managym.AgentError, match="non-terminal"):
@@ -1084,11 +1089,15 @@ def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
             branch = snapshot.restore()
             assert branch.search_witness_json() == before
             if semantic:
-                _, _, reward, terminated, truncated, info = branch.step_semantic_command(command)
+                _, _, reward, terminated, truncated, info = (
+                    branch.step_semantic_command(command)
+                )
             else:
                 _, reward, terminated, truncated, info = branch.step(3)
             assert (reward, terminated, truncated) == (-1.0, True, False)
-            assert sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
+            assert (
+                sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
+            )
             assert info["winner_index"] == 1
             assert info["winner_name"] == "Opponent"
             assert info["p0_loss_reason"] == "instructed_loss"
@@ -1108,9 +1117,12 @@ def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
         ((0,), True, sim.GameOutcome.TIMEOUT),
     ):
         native = managym.Env(seed=23)
-        reset_to_first_main(native, managym.GameSetup([
-            managym.PlayerConfig(str(seat), deck) for seat in (0, 1)
-        ]))
+        reset_to_first_main(
+            native,
+            managym.GameSetup(
+                [managym.PlayerConfig(str(seat), deck) for seat in (0, 1)]
+            ),
+        )
         if protected:
             native.scenario_force_battlefield(0, "Herald of Eternal Dawn")
         for seat in losses:

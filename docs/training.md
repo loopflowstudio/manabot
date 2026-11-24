@@ -174,8 +174,11 @@ automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
 inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
 on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
-`backend="mlx"` for tracked scalar damped self-play. They read and write the
-same portable policies and can resume an [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery).
+`backend="mlx"` for tracked scalar damped self-play.
+They read and write the same portable policies, preserve live streams and RNGs
+across stops between updates in an
+[MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
+and verify baseline runs through the selected backend in explicit CPU float32.
 
 ### Saved regimes
 
@@ -337,16 +340,17 @@ def self_play(
             saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
         model = resume_model(saved_model, settings.model)
         readings = resume_readings(counts, learner.agent.readings, learner.agent.observation_space)
-        export = state.restore(run, learner, ema, counts)
+        staged = state.restore(run, learner, ema, counts)
         counts.model = model
         counts.readings = readings
-        if export is not None:
-            run.save(export=export)
+        host = staged.host if staged is not None else None
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
-        # Repair an unrecorded milestone without rewriting its immutable bytes.
-        if counts.updates == 0 or is_checkpoint(settings, counts.updates):
-            publish(settings, run, learner, ema, counts, backend=backend)
-        with self_play_games(settings, run, counts, backend=backend) as collector:
+        with self_play_games(
+            settings, run, counts, backend=backend,
+            snapshot=host.collector if host is not None else None,
+        ) as collector:
+            if counts.updates == 0 or is_checkpoint(settings, counts.updates):
+                publish(settings, run, learner, ema, counts, backend=backend)
             if counts.updates == 0:
                 log_corpus_setup(
                     run,
@@ -359,6 +363,16 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
+            if staged is not None:
+                if host is not None:
+                    restore_host_rng(host, rng)
+                    staged.restore_sampling(collector.numerics)
+
+                def export(folder: Path) -> None:
+                    host_sha256 = write_host(folder, capture_host(collector, rng))
+                    staged.export(folder, host_sha256, collector.numerics)
+
+                run.save(export=export)
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
                 if kind is not None:
@@ -379,8 +393,8 @@ training-time report shows the run as `unclassified`; the local recipe supplies
 
 The loop records and returns the EMA checkpoint by default when averaging is
 enabled. Set `checkpoint_weights="raw"` to evaluate the raw learner while
-keeping both exports. Without averaging, the loop always records the raw learner. There is no resume
-branch, stop check or state file in it. Those are the run's:
+keeping both exports. Without averaging, the loop always records the raw learner.
+Etude owns the committed state directory and decides when to stop.
 
 | From Etude | What the loop gets |
 | --- | --- |
@@ -524,12 +538,13 @@ return the settings our recipes use. A variant is a training function that
 changes a copy's fields (`settings.model_copy(update={...})`) in its body and
 adds a config field only for what its runs vary.
 
-`workers` accepts 1 (default), 2 or 4 CPU observation producers: persistent
+`workers` accepts 1 (default) or any positive count up to `streams` CPU
+observation producers: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
 unchanged across partitions. Sampled rosters (a deck source or
 `elemental-uniform`) draw each game's decks from that game's native seed, so
-draws, exposure and batches agree for 1, 2 and 4 producers. `threads` controls
+draws, exposure and batches agree for any worker count. `threads` controls
 Torch threads independently. `sampled_self_play()` defaults to four producers,
 a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in
@@ -1019,7 +1034,7 @@ float64. The PPO-style learner uses the same contract (no `1e-12` KL clamp).
 | `actor_rows`, `critic_rows` | Unique selected rows before epoch reuse. Actor-only filtering can leave zero actor rows. |
 | `forced_rows`, `zero_advantage_rows`, `empty_actor_batch` | Forced decisions have zero policy gradient but critic/shared updates can still move parameters. |
 | `gradient_norm_before`, `gradient_norm_after` | Global L2 norm around clipping on the sampled step. |
-| `gradient_missing_tensors`, `gradient_zero_tensors`, `gradient_nonzero_tensors`, `frozen_parameter_tensors` | Missing, all-zero and nonzero `.grad`, and frozen tensors. All-missing gradients or a detached objective reject the step. |
+| `gradient_missing_tensors`, `gradient_zero_tensors`, `gradient_nonzero_tensors`, `frozen_parameter_tensors` | Trainable tensors with a missing, all-zero or nonzero gradient, and frozen tensors. MLX supplies explicit zeros for unused trainable leaves. Torch rejects all-missing gradients and detached objectives. |
 | `parameter_delta_l2`, `parameter_relative_delta` | Actual parameter movement on the sampled step. Adam momentum can move parameters with zero gradient. |
 | `optimizer_steps`, `skipped_steps` | Completed optimizer calls and skipped minibatches per update. |
 | `rejected_steps`, `rejected_updates` | Terminal failures, separate from completed diagnostics. |
@@ -1125,8 +1140,10 @@ is `experiments/data/etu126/cuda-admission-20261008.json` in the artifact store.
 There is one recovery contract: a run carries on from the last state it saved,
 and Etude does the saving, the carrying and the calling again. The loop
 calls `run.save()` every update. Torch registers its learner, Adam, EMA and counts
-with Etude. MLX registers counts and exports its arrays into the same staged save
-through a callback. Resume uses the backend that wrote the run.
+with Etude. MLX registers counts and atomically writes `training.safetensors`
+and framework-free `continuation.json` (live stream state, committed action
+prefixes and host RNGs) into the same staged save through a callback. Resume
+uses the backend that wrote the run.
 [Tracked MLX training](../manabot/backends/mlx.md#tracked-training-and-recovery)
 
 | The run | What carries it on |
@@ -1152,7 +1169,7 @@ its rows replace the earlier attempt's, so the record reads as one run.
 
 | Kept across a resume | Started again |
 | --- | --- |
-| Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, and every published checkpoint | Native game streams (seeded from the run seed and the update they start at), RNG state, and every update after the last save |
+| Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, every published checkpoint, and — on MLX (`schema="2"`) — committed stream roots/action prefixes, collector sampling RNG and host/framework RNGs | On Torch (and schema-1 MLX saves): native game streams (seeded from the run seed and the update they start at) and RNG state; on every backend: any uncommitted work after the last save |
 
 Work after the last save repeats, and Etude charges its hours and dollars to
 the run. Etude writes a save five minutes after the last one and always on the
@@ -1179,11 +1196,15 @@ policies load on later revisions by name
   `elemental-uniform-174-v1`, `elemental-ur-gw-186-v1`,
   `tla-frontier-c5fba4-w64`) reproduce with that behavior only from the
   revision [saved regimes](#saved-regimes) names.
-- **Proof that a resumed run equals an uninterrupted one.** A resumed run
-  plays different games after the resume point than an uninterrupted run with
-  the same seed would have. Each checkpoint names the revision that wrote it
-  and, under `etude launch`, its Etude run. Etude's run record names the attempts and their resume
-  coordinates. These records preserve provenance, not identical bytes.
+- **Proof that a resumed run equals an uninterrupted one on Torch.** A resumed
+  Torch run starts fresh streams after the resume point, so it plays different
+  games than an uninterrupted run with the same seed. A schema-2 MLX run stopped
+  at a safe update boundary replays the same committed streams and RNGs (exact
+  on CPU float32; on Metal, keys, slots, action traces, digests and restored
+  arrays match identically while subsequent GPU math follows device float32
+  repeatability). Each checkpoint names the revision that wrote it and, under
+  `etude launch`, its Etude run. Etude's run record names the attempts and their
+  resume coordinates.
 - **A check that a fix is compatible.** After a bug fix, `--resume` runs the
   current code as another attempt of the same run; `--source-repair-reason`
   is gone. Each attempt records its commit, existing checkpoints stay as

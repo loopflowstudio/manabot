@@ -5,9 +5,11 @@ explicit unavailable CUDA request fails; CPU results never count as CUDA proof.
 """
 
 from collections.abc import Iterator
+import json
 import os
 from pathlib import Path
 from typing import Literal
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -544,3 +546,180 @@ def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
     torch.testing.assert_close(torch.get_rng_state(), cpu_rng, rtol=0, atol=0)
     if cuda_rng is not None:
         torch.testing.assert_close(torch.cuda.get_rng_state(), cuda_rng, rtol=0, atol=0)
+
+
+def run_mlx_updates(
+    root: Path, *, updates: int, resume: bool = False, streams: int = 2
+) -> None:
+    from manabot.backends import resolve
+    from manabot.training.loops.self_play import CLOCKS, self_play
+    from tests.fixtures.training_records import recording
+    from tests.training.test_mlx_continuation import bounded_self_play
+
+    base = bounded_self_play()
+    settings = base.model_copy(
+        update={
+            "device": "cpu",
+            "precision": "float32",
+            "streams": streams,
+            "transitions": 2,
+            "learning": base.learning.model_copy(update={"filter_scope": "actor"}),
+        }
+    )
+    with (
+        patch.dict(os.environ, ETUDE_OUT=str(root / "out")),
+        recording(
+            experiment="health",
+            run="mlx",
+            seed=19,
+            clocks=CLOCKS,
+            directory=root / "track",
+            resume=resume,
+        ) as run,
+    ):
+        self_play(settings, run, updates=updates, backend=resolve("mlx"))
+
+
+def test_mlx_health_preserves_draws_and_weights(tmp_path: Path) -> None:
+    mx = pytest.importorskip("mlx.core")
+    from etude.train.state import read_state
+
+    run_mlx_updates(tmp_path / "sampled", updates=2)
+    with patch.object(OptimizerHealth, "sampling", return_value=False):
+        run_mlx_updates(tmp_path / "unsampled", updates=2)
+    sampled, unsampled = [
+        read_state(tmp_path / arm / "out/state") for arm in ("sampled", "unsampled")
+    ]
+    assert sampled is not None and unsampled is not None
+    # Committed native actions, host RNGs and the next private sampling key,
+    # along with the raw/EMA weights and Adam state after the next collection.
+    assert (sampled.path / "continuation.json").read_bytes() == (
+        unsampled.path / "continuation.json"
+    ).read_bytes()
+    expected = mx.load(sampled.path / "training.safetensors")
+    actual = mx.load(unsampled.path / "training.safetensors")
+    assert expected.keys() == actual.keys() and int(expected["adam.step"]) > 0
+    for name, value in expected.items():
+        np.testing.assert_array_equal(actual[name], value, err_msg=name)
+
+
+@pytest.mark.parametrize(
+    "invariant,adam_steps",
+    [("nonfinite_gradients", 0), ("nonfinite_parameters_after_step", 1)],
+)
+def test_mlx_optimizer_refusal_preserves_last_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invariant: str, adam_steps: int
+) -> None:
+    mx = pytest.importorskip("mlx.core")
+    from etude.train.tracking import Stopped
+    from mlx.utils import tree_map
+
+    from manabot.backends.mlx.learner import Learner as MLXLearner
+    from manabot.backends.mlx.rl import NumericalError as MLXError
+
+    stop = tmp_path / "stop"
+    stop.touch()
+    monkeypatch.setenv("ETUDE_STOP_FILE", str(stop))
+    with pytest.raises(Stopped):
+        run_mlx_updates(tmp_path, updates=1, streams=17)
+    stop.unlink()
+
+    out = tmp_path / "out"
+    pointer = out / "state/current.json"
+    committed = pointer.read_bytes()
+    policies = out / "policies"
+    exports = {p: p.read_bytes() for p in policies.iterdir()}
+    assert {p.name for p in exports} == {
+        "00000000-raw.safetensors",
+        "00000000-ema.safetensors",
+    }
+    if invariant == "nonfinite_gradients":
+        gradients = MLXLearner._gradients
+
+        def bad_gradients(learner: MLXLearner, loss: mx.array) -> dict[str, object]:
+            return tree_map(lambda g: g * float("nan"), gradients(learner, loss))
+
+        monkeypatch.setattr(MLXLearner, "_gradients", bad_gradients)
+    else:
+        set_rate = MLXLearner.set_learning_rate
+        monkeypatch.setattr(
+            MLXLearner,
+            "set_learning_rate",
+            lambda self, rate: set_rate(self, float("inf")),
+        )
+    with pytest.raises(MLXError, match=invariant) as caught:
+        run_mlx_updates(tmp_path, updates=1, resume=True, streams=17)
+    assert not getattr(caught.value, "__notes__", [])
+    (receipt,) = (out / "numerical-incident").glob("*/incident.json")
+    info = json.loads(receipt.read_text())
+    assert info["invariant"] == invariant
+    assert (info["completed_updates"], info["iteration"]) == (0, 1)
+    health = info["health"]
+    assert health["rejected_steps"] == 1 and health["optimizer_steps"] == 0
+    assert health["sampled_steps"] == adam_steps
+    assert "parameter_delta_l2" not in health
+    if adam_steps:
+        assert 0 < health["gradient_norm_after"] <= health["gradient_norm_before"]
+    assert {Path(p) for p in info["last_valid_exports"]} == exports.keys()
+    assert {p: p.read_bytes() for p in policies.iterdir()} == exports
+    assert pointer.read_bytes() == committed
+
+    rows = info["tensors"]["batch_layout"]["selected_flat_indexes"]
+    evidence = mx.load(receipt.with_name("tensors.safetensors"))
+    assert len(rows) == len(evidence["batch/actions"]) == 16
+    assert info["tensors"]["logits"]["shape"][0] == 17
+    assert evidence["logits"].shape[0] == 16
+    np.testing.assert_array_equal(evidence["minibatch_indexes"], rows)
+    assert (
+        sum(v.nbytes for v in evidence.values())
+        <= info["evidence_limit_bytes"]
+        == 32 * 1024**2
+    )
+    prefix = "parameter/" if adam_steps else "gradient/"
+    assert any(
+        not np.isfinite(np.asarray(value)).all()
+        for name, value in evidence.items()
+        if name.startswith(prefix)
+    )
+    state = mx.load(receipt.with_name("state.safetensors"))
+    assert int(state["adam.step"]) == adam_steps
+    assert sum(v.nbytes for v in state.values()) == info["state_tensor_bytes"]
+    assert info["state_tensor_bytes"] <= info["state_limit_bytes"] == 512 * 1024**2
+
+
+def test_mlx_gradient_sample_counts_leaves_and_separates_value_token() -> None:
+    mx = pytest.importorskip("mlx.core")
+    import mlx.nn as nn
+    from mlx.utils import tree_flatten, tree_map
+
+    from manabot.backends.mlx.learner import gradient_health
+
+    model = nn.Module()
+    model.value_readout = nn.Linear(1, 1, bias=False)
+    for key in ("value_token", "unused", "zero", "tiny", "frozen"):
+        setattr(model, key, mx.zeros(1))
+    model.freeze(keys="frozen")
+    gradients = {
+        "value_readout": {"weight": mx.array([[3.0]])},
+        "value_token": mx.array([4.0]),
+        "zero": mx.zeros(1),
+        "tiny": mx.array([1e-30]),  # Its float32 square underflows to zero.
+    }
+    clipped = tree_map(lambda g: 0.5 * g, gradients)
+    sample = gradient_health(
+        gradients,
+        clipped,
+        model,
+        dict(tree_flatten(model.parameters())),
+        mx.array(True),
+    )
+    assert sample == {
+        "gradient_norm_before": 5.0,
+        "gradient_norm_after": 2.5,
+        "gradient_norm_critic_readout": 3.0,
+        "gradient_norm_value_token": 4.0,
+        "gradient_missing_tensors": 1,
+        "gradient_zero_tensors": 1,
+        "gradient_nonzero_tensors": 3,
+        "frozen_parameter_tensors": 1,
+    }

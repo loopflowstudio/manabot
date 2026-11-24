@@ -1,9 +1,12 @@
 """Run real Etude callback saves, restore and failure capture without Torch."""
 
+from contextlib import nullcontext
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import random
 import subprocess
 import sys
 from typing import TYPE_CHECKING
@@ -13,8 +16,11 @@ import numpy as np
 import pytest
 
 if TYPE_CHECKING:
+    from manabot.policy.protocol import BackendPolicy
     from manabot.training.learning import Precision
-    from manabot.training.loops.self_play import SelfPlay
+    from manabot.training.loops.self_play import Counts, SelfPlay
+    from manabot.training.rollout.collection import Collector
+    from manabot.training.state.backend import SelfPlayBackend, SelfPlayLearner
 
 
 def bounded_self_play() -> "SelfPlay":
@@ -184,9 +190,15 @@ def exercise_continuation(root: Path) -> None:
         resume=True,
     ) as run:
         learner, ema = loop.create(settings, seed=37, backend=backend)
-        state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
+        restored = state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
+        assert restored.host is not None
+        # The original schema-2 writer bound these exact bytes in its header.
+        host_file = saved.path / "continuation.json"
+        payload = host_file.read_bytes()
+        assert restored.host.model_dump_json().encode() == payload
+        assert metadata["continuation_sha256"] == hashlib.sha256(payload).hexdigest()
         live = state.training_arrays(learner, ema)
-        assert live.keys() == arrays.keys()
+        assert live.keys() == arrays.keys() - {"rng.collector", "rng.mlx"}
         for name, value in live.items():
             np.testing.assert_array_equal(value, arrays[name], err_msg=name)
 
@@ -207,6 +219,92 @@ def exercise_continuation(root: Path) -> None:
         mx.save_safetensors(snapshot, invalid, header)
         with pytest.raises(ValueError, match=match):
             attempt(2)
+    current = (out / "state/current.json").read_bytes()
+    for damaged, message in (
+        (None, r"^missing MLX continuation\.json$"),
+        (payload + b" ", "saved header differs in continuation_sha256$"),
+        (payload[:-1], "saved header differs in continuation_sha256$"),
+    ):
+        mx.save_safetensors(snapshot, arrays, metadata)
+        if damaged is None:
+            host_file.unlink()
+        else:
+            host_file.write_bytes(damaged)
+        with pytest.raises(ValueError, match=message):
+            attempt(2)
+    malformed = payload[:-1]
+    host_file.write_bytes(malformed)
+    mx.save_safetensors(
+        snapshot,
+        arrays,
+        metadata | {"continuation_sha256": hashlib.sha256(malformed).hexdigest()},
+    )
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        attempt(2)
+    host_file.write_bytes(payload)
+    corrupt = arrays | {
+        "rng.collector": arrays["rng.collector"] ^ mx.array([0, 1], mx.uint32)
+    }
+    mx.save_safetensors(snapshot, corrupt, metadata)
+    with pytest.raises(ValueError, match="incompatible MLX snapshot"):
+        attempt(2)
+    changed_host = json.loads(payload)
+    changed_host["collector"]["streams"][0]["recipe"]["actions"].pop()
+    changed_bytes = json.dumps(changed_host).encode()
+    host_file.write_bytes(changed_bytes)
+    mx.save_safetensors(
+        snapshot,
+        arrays,
+        metadata | {"continuation_sha256": hashlib.sha256(changed_bytes).hexdigest()},
+    )
+    raw = milestone.with_name("00000001-raw.safetensors")
+    pending = raw.rename(raw.with_suffix(".pending"))
+    with pytest.raises(ValueError, match="collector root mismatch"):
+        attempt(2)
+    assert not raw.exists()
+    pending.rename(raw)
+    host_file.write_bytes(payload)
+    mx.save_safetensors(snapshot, arrays, metadata)
+    with pytest.raises(ValueError, match="stream geometry"):
+        attempt(2, recipe=settings.model_copy(update={"streams": 3}))
+    assert (out / "state/current.json").read_bytes() == current
+    assert milestone.read_bytes() == original
+    assert not milestone.with_name("00000002-raw.safetensors").exists()
+    # A historical writer supplied weights and Adam, with no stream state.
+    historical = {
+        k: v
+        for k, v in metadata.items()
+        if k not in ("rng_sha256", "continuation_sha256")
+    }
+    mx.save_safetensors(
+        snapshot,
+        {k: v for k, v in arrays.items() if not k.startswith("rng.")},
+        historical | {"schema": "1"},
+    )
+    with (
+        patch.object(
+            state, "read_host", side_effect=AssertionError("legacy host read")
+        ),
+        pytest.raises(
+            ValueError, match="incompatible MLX snapshot schema with host continuation"
+        ),
+    ):
+        attempt(2)
+    host_file.unlink()
+    with recording(
+        experiment="test",
+        run="mlx",
+        seed=19,
+        clocks=loop.CLOCKS,
+        directory=root / "track",
+        resume=True,
+    ) as run:
+        learner, ema = loop.create(settings, seed=37, backend=backend)
+        restored = state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
+        assert restored.host is None
+        for name, value in state.training_arrays(learner, ema).items():
+            np.testing.assert_array_equal(value, arrays[name], err_msg=name)
+    host_file.write_bytes(payload)
     snapshot.unlink()
     with pytest.raises(ValueError, match="MLX callback save"):
         attempt(2)
@@ -263,7 +361,213 @@ def exercise_continuation(root: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("stop_after", "scenario"),
+    [(0, "self"), (1, "self"), (1, "random"), (1, "complete"), (1, "metal")],
+)
+def test_safe_stop_matches_uninterrupted(
+    tmp_path: Path, stop_after: int, scenario: str
+) -> None:
+    pytest.importorskip("mlx.core")
+    from etude.train.state import read_state
+    import mlx.core as mx
+
+    runs = [("control", "whole"), ("split", "stop"), ("split", "resume")]
+    if scenario == "metal":
+        runs.append(("repeat", "whole"))
+    for arm, phase in runs:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tests.training.test_mlx_continuation",
+                str(tmp_path / arm),
+                phase,
+                str(stop_after),
+                scenario,
+            ],
+            check=True,
+            timeout=120,
+        )
+    control = read_state(tmp_path / "control/out/state")
+    assert control is not None
+    if scenario == "complete":
+        assert control.record.extra["optimizer_updates"] == 2
+    expected = mx.load(control.path / "training.safetensors")
+    for arm in ["split", "repeat"] if scenario == "metal" else ["split"]:
+        actual = read_state(tmp_path / arm / "out/state")
+        assert actual is not None
+        assert (control.path / "continuation.json").read_bytes() == (
+            actual.path / "continuation.json"
+        ).read_bytes()
+        assert (tmp_path / "control/entry.json").read_bytes() == (
+            tmp_path / arm / "entry.json"
+        ).read_bytes()
+        arrays = mx.load(actual.path / "training.safetensors")
+        assert arrays.keys() == expected.keys()
+        for name, value in arrays.items():
+            if scenario == "metal" and name.startswith(("learner.", "ema.", "adam.")):
+                np.testing.assert_allclose(
+                    value, expected[name], rtol=0, atol=1e-6, err_msg=name
+                )
+            else:
+                np.testing.assert_array_equal(value, expected[name], err_msg=name)
+        counts = control.record.extra.copy()
+        resumed = actual.record.extra.copy()
+        del counts["training_seconds"], resumed["training_seconds"]
+        assert counts == resumed
+
+    if scenario == "random":
+        # Each attempt closes its live games. Compare the rows emitted after
+        # update two, and count actual policy decisions across both attempts.
+        from managym.statistics import read_statistics
+
+        totals = []
+        summaries = []
+        for arm in ("control", "split"):
+            out = tmp_path / arm / "out"
+            summaries.append(
+                sorted(
+                    (row.stream, row.model_dump_json(exclude={"context", "generation"}))
+                    for row in read_statistics(out / "statistics")
+                    if row.context["update"] == 2
+                )
+            )
+            totals.append(
+                sum(
+                    counts["decisions"]
+                    for file in (out / "failures").glob("action-cutoff-*.json")
+                    for counts in json.loads(file.read_bytes())[
+                        "counts_by_kind"
+                    ].values()
+                )
+            )
+        assert summaries[0] and summaries[0] == summaries[1]
+        assert totals[0] > 0 and totals[0] == totals[1]
+
+
+def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) -> None:
+    from etude.train.tracking import Stopped
+
+    from manabot.backends import resolve
+    from manabot.infra.config import MatchConfig
+    from manabot.infra.run_settings import RunSettings
+    from manabot.training.loops import self_play as loop
+    from manabot.training.rollout.collection import capture_collector
+    from manabot.training.state.game_errors import GameErrorPolicy
+    from tests.fixtures.training_records import recording
+
+    root.mkdir(exist_ok=True)
+    stop = root / "stop"
+    os.environ.update(ETUDE_OUT=str(root / "out"), ETUDE_STOP_FILE=str(stop))
+    settings = bounded_self_play().model_copy(
+        update={
+            "device": "mps" if scenario == "metal" else "cpu",
+            "precision": "float32",
+            "workers": 1 if phase == "resume" else 2,
+        }
+    )
+    if scenario == "random":
+        settings = settings.model_copy(
+            update={
+                "behavior": "random",
+                "run_settings": RunSettings(record_games=1, statistics=True),
+                "observation": settings.observation.model_copy(
+                    update={"action_overflow": "first-legal"}
+                ),
+                "deck_source": None,
+                "match": MatchConfig(),
+                "game_errors": GameErrorPolicy(recover_capacity=True),
+            }
+        )
+    elif scenario == "complete":
+        settings = settings.model_copy(
+            update={
+                "batch_closure": "complete-games",
+                "learning_seats": "both",
+                "games_per_stream": 1,
+                # One optimizer step per update, independent of game length.
+                "learning": settings.learning.model_copy(
+                    update={
+                        "filter_scope": "actor_critic",
+                        "filter_kind": "top_count",
+                        "advantage_quantile": 1.0,
+                        "min_advantage": 0.0,
+                    }
+                ),
+                "deck_source": None,
+                "match": MatchConfig(
+                    hero_deck={"Mountain": 8, "Gray Ogre": 4},
+                    villain_deck={"Island": 8, "Wind Drake": 4},
+                ),
+            }
+        )
+    original_step = loop.step
+
+    def observed(
+        settings: "SelfPlay",
+        learner: "SelfPlayLearner",
+        ema: "BackendPolicy | None",
+        collector: "Collector",
+        counts: "Counts",
+        rng: np.random.Generator,
+        *,
+        out: Path,
+        backend: "SelfPlayBackend",
+    ) -> dict[str, object]:
+        # Exercise the host RNGs even when the damped objective needs no shuffle.
+        draws = [random.random(), np.random.random(), rng.permutation(8).tolist()]
+        if counts.updates == stop_after:
+            if scenario == "random":
+                assert any(
+                    any(root.annotations)
+                    for root in capture_collector(collector).streams
+                )
+                assert collector.stats.learned_game_rows
+                assert collector._game_actions == [
+                    list(r.recipe.actions) for r in capture_collector(collector).streams
+                ]
+            (root / "entry.json").write_text(
+                json.dumps(
+                    {
+                        "host_draws": draws,
+                        "streams": capture_collector(collector).model_dump(mode="json"),
+                        "key": np.asarray(collector.numerics.snapshot_rng()).tolist(),
+                        "minibatch": rng.bit_generator.state,
+                    },
+                    sort_keys=True,
+                )
+            )
+        row = original_step(
+            settings, learner, ema, collector, counts, rng, out=out, backend=backend
+        )
+        if phase == "stop" and counts.updates == stop_after:
+            stop.touch()
+        return row
+
+    if phase == "stop" and stop_after == 0:
+        stop.touch()
+    if phase == "resume":
+        stop.unlink()
+    with (
+        patch.object(loop, "step", observed),
+        pytest.raises(Stopped) if phase == "stop" else nullcontext(),
+        recording(
+            experiment="test",
+            run="cpu",
+            seed=19,
+            clocks=loop.CLOCKS,
+            directory=root / "track",
+            resume=phase == "resume",
+        ) as run,
+    ):
+        loop.self_play(settings, run, updates=2, backend=resolve("mlx"))
+
+
 if __name__ == "__main__":
     assert "torch" not in sys.modules
     sys.modules["torch"] = None
-    exercise_continuation(Path(sys.argv[1]))
+    if len(sys.argv) == 2:
+        exercise_continuation(Path(sys.argv[1]))
+    else:
+        safe_stop_attempt(Path(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4])

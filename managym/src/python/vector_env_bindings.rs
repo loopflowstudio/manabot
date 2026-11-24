@@ -19,17 +19,18 @@ use crate::{
         env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
-            encode, encode_into, encode_into_incremental, EncodedObservationMut,
-            ObservationEncoderConfig,
+            encode, encode_into, encode_into_incremental, EncodedObservation,
+            EncodedObservationMut, ObservationEncoderConfig,
         },
         rollout_pool::RolloutPool,
-        vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
+        vector_env::{ObservationRead, ObservationWriteError, SlotLoad, SlotLoadResult, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
-        bindings::{map_agent_err, PyEnv, PyObservation, PyPlayerConfig},
+        bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation, PyPlayerConfig},
         convert::{info_dict_to_pydict, require_ndarray, require_numpy_array},
         layout_bindings::ObservationLayout,
+        snapshot_bindings::{PyGameSnapshot, PyRestoreOptions, PySnapshotMetadata},
     },
     state::player::PlayerConfig,
 };
@@ -99,6 +100,43 @@ pub struct PyVectorEnv {
     memory_encoding: Vec<Mutex<crate::agent::decision_memory::MemoryEncoding>>,
 }
 
+#[pyclass(name = "SlotLoad", frozen)]
+#[derive(Clone)]
+struct PySlotLoad(SlotLoad);
+
+#[pymethods]
+impl PySlotLoad {
+    /// Detached replay authority for a recording wrapper, including the intervention.
+    #[getter]
+    fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
+        match &self.0 {
+            SlotLoad::Fresh(_) => None,
+            SlotLoad::Snapshot(_, source, options) => {
+                Some((PyGameSnapshot(source.clone()), PyRestoreOptions(*options)))
+            }
+        }
+    }
+
+    #[staticmethod]
+    fn fresh(slot: usize) -> Self {
+        Self(SlotLoad::Fresh(slot))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (slot, snapshot, options=None))]
+    fn snapshot(
+        slot: usize,
+        snapshot: &PyGameSnapshot,
+        options: Option<&PyRestoreOptions>,
+    ) -> Self {
+        Self(SlotLoad::Snapshot(
+            slot,
+            snapshot.0.clone(),
+            options.map(|o| o.0).unwrap_or_default(),
+        ))
+    }
+}
+
 /// Cumulative wall time inside buffered calls: every step or reset, split into
 /// stepping (all work in the call except encoding) and observation encoding.
 #[cfg(feature = "python")]
@@ -138,7 +176,7 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false, auto_reset=true))]
     fn new(
         num_envs: usize,
         seed: u64,
@@ -148,9 +186,11 @@ impl PyVectorEnv {
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
         decision_memory: bool,
+        auto_reset: bool,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
         let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
+            .with_auto_reset(auto_reset)
             .with_decision_memory(decision_memory)
             .with_decision_memory_include_own(decision_memory_include_own);
         if let Some(stride) = seed_stride {
@@ -257,21 +297,27 @@ impl PyVectorEnv {
         })
     }
 
+    #[pyo3(signature = (player_configs, *, seeds=None))]
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
         player_configs: Vec<Bound<'_, PyAny>>,
+        seeds: Option<Vec<u64>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
             .map(|row| super::bindings::game_setup(&row))
             .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
-            })
+            inner.reset_each_into_at(
+                configs,
+                seeds,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
+                },
+            )
         })
     }
 
@@ -287,7 +333,6 @@ impl PyVectorEnv {
                     .transpose()
             })
             .collect::<PyResult<Vec<_>>>()?;
-        self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.reassign_roots_into(
                 configs,
@@ -297,12 +342,97 @@ impl PyVectorEnv {
                         .map_err(|error| AgentError(error.to_string()))
                 },
                 |index, obs, reward, terminated, truncated| {
+                    buffers.clear_memory_cursor(index);
                     buffers
                         .write_encoded_row(index, obs, reward, terminated, truncated, &config)
                         .map_err(AgentError::from)
                 },
             )
         })
+    }
+
+    fn next_fresh_seeds(&self) -> Vec<u64> {
+        self.inner.next_fresh_seeds().to_vec()
+    }
+
+    fn snapshot_slots(
+        &mut self,
+        py: Python<'_>,
+        mask: Vec<bool>,
+    ) -> PyResult<Vec<Option<PyGameSnapshot>>> {
+        let inner = &mut self.inner;
+        py.allow_threads(move || inner.snapshot_slots(&mask))
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PyGameSnapshot))
+                    .collect()
+            })
+            .map_err(map_agent_err)
+    }
+
+    fn slot_metadata(
+        &mut self,
+        py: Python<'_>,
+        mask: Vec<bool>,
+    ) -> PyResult<Vec<Option<PySnapshotMetadata>>> {
+        let inner = &mut self.inner;
+        py.allow_threads(move || inner.slot_metadata(&mask))
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PySnapshotMetadata))
+                    .collect()
+            })
+            .map_err(map_agent_err)
+    }
+
+    fn load_slots_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        requests: Vec<PySlotLoad>,
+    ) -> PyResult<Vec<SlotLoadResult>> {
+        let requests: Vec<_> = requests.into_iter().map(|r| r.0).collect();
+        let loaded = self.with_buffers(py, move |inner, buffers, config| {
+            // Admission needs one private row regardless of the number of siblings.
+            let mut admission: Option<EncodedObservation> = None;
+            inner
+                .load_slots_into(
+                    &requests,
+                    |slot, obs| {
+                        // Owners may have resized a registered array between calls.
+                        // Check every selected destination before publishing any of them.
+                        buffers.fields.encoded_row_mut(slot, &config)?;
+                        buffers.rewards.element_ptr(slot)?;
+                        buffers.terminated.element_ptr(slot)?;
+                        buffers.truncated.element_ptr(slot)?;
+                        if let Some(row) = &mut admission {
+                            encode_into(obs, &config, row.buffers_mut())?;
+                        } else {
+                            admission = Some(encode(obs, &config)?);
+                        }
+                        Ok(())
+                    },
+                    |slot, obs, terminal| {
+                        buffers.clear_memory_cursor(slot);
+                        buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
+                        if terminal {
+                            buffers.clear_memory_cursor(slot);
+                        }
+                        Ok(())
+                    },
+                )
+                .map_err(|e| match e {
+                    ObservationWriteError::Encoding(error) => map_encode_err(error),
+                    ObservationWriteError::Buffer(error) => map_agent_err(error),
+                })
+        })?;
+        self.last_info.resize_with(self.num_envs, InfoDict::new);
+        Ok(loaded
+            .into_iter()
+            .map(|(result, info)| {
+                self.last_info[result.slot] = info;
+                result
+            })
+            .collect())
     }
 
     #[pyo3(signature = (actions, active=None))]
@@ -325,7 +455,7 @@ impl PyVectorEnv {
                     }
                 }
             }
-            inner.step_into(
+            let infos = inner.step_into(
                 &actions,
                 active.as_deref(),
                 |env_index, obs, reward, terminated, truncated| {
@@ -333,7 +463,11 @@ impl PyVectorEnv {
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
                         .map_err(AgentError::from)
                 },
-            )
+            )?;
+            for slot in inner.parked_slots() {
+                write_buffers.clear_memory_cursor(slot);
+            }
+            Ok(infos)
         })
     }
 
@@ -419,7 +553,7 @@ impl PyVectorEnv {
     fn write_observations_for_players(
         &self,
         py: Python<'_>,
-        players: Vec<usize>,
+        players: Vec<Option<usize>>,
         buffers: Bound<'_, PyDict>,
         action_overflow: &str,
         layout: &ObservationLayout,
@@ -469,14 +603,18 @@ impl PyVectorEnv {
             for index in 0..inner.len() {
                 buffers.write_step_state(index, 0.0, false, false)?;
             }
-            inner.step_isolated_into(
+            let infos = inner.step_isolated_into(
                 &actions,
                 &active,
                 recover_capacity,
                 |index, obs, reward, done, truncated| {
                     buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
                 },
-            )
+            )?;
+            for slot in inner.parked_slots() {
+                buffers.clear_memory_cursor(slot);
+            }
+            Ok(infos)
         })
     }
 
@@ -531,8 +669,11 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn current_exposure(&self) -> PyResult<Vec<String>> {
-        self.inner.current_exposure().map_err(map_agent_err)
+    #[pyo3(signature = (active=None))]
+    fn current_exposure(&self, active: Option<Vec<bool>>) -> PyResult<Vec<String>> {
+        self.inner
+            .selected_exposure(active.as_deref())
+            .map_err(map_agent_err)
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
@@ -734,6 +875,18 @@ impl PyVectorEnv {
             ) -> Result<Vec<InfoDict>, AgentError>
             + Send,
     ) -> PyResult<()> {
+        self.last_info = self.with_buffers(py, |inner, buffers, config| {
+            run(inner, buffers, config).map_err(map_agent_err)
+        })?;
+        Ok(())
+    }
+
+    fn with_buffers<R: Send>(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(&mut VectorEnv, SendWriteBuffers, ObservationEncoderConfig) -> PyResult<R>
+            + Send,
+    ) -> PyResult<R> {
         let buffers = self
             .buffers
             .take()
@@ -755,15 +908,13 @@ impl PyVectorEnv {
                     config,
                 )
             })
-            .map_err(map_agent_err)
         });
         let encoding = ENCODING_NANOS.get();
         self.timings.encoding_nanos += encoding;
         self.timings.stepping_nanos +=
             (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
-        self.last_info = result?;
-        Ok(())
+        result
     }
 }
 
@@ -919,6 +1070,8 @@ impl PyRolloutPool {
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encode_observations_into, m)?)?;
     m.add_class::<PyVectorEnv>()?;
+    m.add_class::<PySlotLoad>()?;
+    m.add_class::<SlotLoadResult>()?;
     m.add_class::<PyRolloutPool>()
 }
 
@@ -1470,6 +1623,12 @@ struct SendWriteBuffers<'a> {
 
 #[cfg(feature = "python")]
 impl SendWriteBuffers<'_> {
+    fn clear_memory_cursor(&self, slot: usize) {
+        if let Some(cursors) = self.memory_encoding {
+            *cursors[slot].lock().expect("exclusive buffer row") = Default::default();
+        }
+    }
+
     fn encode_observation(
         &self,
         env_index: usize,

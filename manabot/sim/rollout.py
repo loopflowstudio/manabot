@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import (
@@ -115,8 +115,14 @@ class BatchedSampler:
 class RandomBatchController:
     """Uniform-over-valid batched controller (mirrors RandomMatchupPlayer)."""
 
-    def __init__(self, seed: int = 0):
+    def __init__(self, seed: int = 0) -> None:
         self._rng = np.random.default_rng(seed)
+
+    def snapshot_rng(self) -> dict[str, Any]:
+        return self._rng.bit_generator.state
+
+    def restore_rng(self, state: dict[str, Any]) -> None:
+        self._rng.bit_generator.state = state
 
     def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         valid = buffers["actions_valid"][rows] > 0
@@ -167,7 +173,7 @@ def run_vector_games(
     for controller in (hero, villain):
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
-    env = CapturedVector(
+    env = RecordedVectorEnv(
         num_envs=num_streams,
         seed=seed,
         skip_trivial=True,

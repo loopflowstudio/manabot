@@ -288,11 +288,13 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
 
 
 def reorder_offers(
-    obs: dict[str, torch.Tensor], order: torch.Tensor | list[int]
+    obs: dict[str, torch.Tensor],
+    order: torch.Tensor | list[int],
+    layout: managym.ObservationLayout,
 ) -> dict[str, torch.Tensor]:
     host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
     indices = order.cpu().numpy() if isinstance(order, torch.Tensor) else order
-    return tensors_like(choice_inputs.reorder_offers(host, indices), obs)
+    return tensors_like(choice_inputs.reorder_offers(host, indices, layout), obs)
 
 
 def tensors_like(
@@ -303,9 +305,11 @@ def tensors_like(
     }
 
 
-def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def reorder_objects(
+    obs: dict[str, torch.Tensor], layout: managym.ObservationLayout
+) -> dict[str, torch.Tensor]:
     host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
-    return tensors_like(choice_inputs.reorder_objects(host), obs)
+    return tensors_like(choice_inputs.reorder_objects(host, layout), obs)
 
 
 # Version of the case set `curriculum()` builds; bump it when its digest changes.

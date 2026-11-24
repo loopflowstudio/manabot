@@ -71,7 +71,12 @@ def test_native_attack_choice_can_learn_either_preference(
             assert float(logits.softmax(-1)[0, preferred]) > 0.95
             swapped, _ = agent(
                 device_input(
-                    agent, reorder_offers(attack_observation, torch.tensor([1, 0]))
+                    agent,
+                    reorder_offers(
+                        attack_observation,
+                        torch.tensor([1, 0]),
+                        agent.observation_space.layout,
+                    ),
                 )
             )
             torch.testing.assert_close(swapped[:, :2], logits[:, [1, 0]])

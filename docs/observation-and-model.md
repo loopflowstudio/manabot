@@ -222,18 +222,22 @@ of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding, the default for CUDA training, avoids most of that. After an
-observation is admitted, the network trims each variable axis (facts, effect
-headers, details and members, relations, actions, events, cards, permanents,
-known hands and decklists) to a bucket: the next power of two at or
-above what the batch uses, at least 8 and at most the declared capacity. What a
-batch uses includes every row a reference can name, so trimming removes only
-empty rows nothing refers to. Trimming cards and permanents renumbers object
-references; it is skipped under `historical_mean` value aggregation, whose
-average includes padding, and with belief rows. Logits keep their full action
-capacity. Admission measures the buckets on the host
-(`manabot.policy.buckets`), before any device transfer, for inference and
-learning alike, so the device forward reads nothing back to find them.
+Bucketed padding is the default for CUDA training. The host measures the last
+occupied or referenced row on each variable axis, including actions, objects
+and effect spans. It rounds each extent up to a power of two, with a minimum
+of 8 rows and a maximum of the declared capacity. Admission validates these
+prefixes in the original object coordinates. Raw buffers keep those coordinates
+throughout collection and learning. Preparation translates the integer gathers
+into the trimmed object table. Models with belief rows or
+`historical_mean` value aggregation keep the full object table. Logits retain
+the original action slots.
+
+Torch and MLX collection borrow the original group or a contiguous slice
+while preparing it. Both sample once in the original row order and keep the
+measured extents on the host. The learner checks the
+current rollout rows at admission and uses their collection extents as a lower
+bound, since packing keeps only legal actions. Later minibatches take the
+maximum across their admitted rows.
 
 Inside the network, fact ids are looked up at the fact axis's shape instead of
 for selected rows, and learning encodes the complete card catalog instead of
