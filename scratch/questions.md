@@ -1,10 +1,5 @@
 # Choices made without review
 
-## Kickoff (2026-11-23)
-
-- Stacked on dba0f2 (`lf sync dba0f2`) because PR #585 rewrites the MLX
-  learner, checkpoint and update protocol files this Task also changes.
-
 ## Concept review (2026-11-23)
 
 - **Portable `belief.safetensors` on both backends** (replaces kickoff's
@@ -38,3 +33,12 @@
 - The attention-off historical mean differed from Torch by up to 0.051 before
   masking continuation context by object validity. That table row passed the
   existing forward, gradient and Adam tolerances with the mask.
+
+## Realign after Slice 2
+
+- Use the two declared jobs in `experiments/belief.py` for the demo. In
+  Etude SDK 0.4.5, `etude/controller/local.py:train` forwards the `--config`
+  override to `_prepare` for the selected job and places the declared inputs.
+  Both jobs use the same fresh experiment label so the sampler declaration
+  sees the policy's final checkpoint. The linked MLX run is still Slice 3
+  acceptance.
