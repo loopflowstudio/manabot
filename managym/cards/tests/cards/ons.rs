@@ -123,8 +123,14 @@ fn foundations_permanent_arcanis_the_omnipotent() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 3);
     s.set_player_mana_pool(0, "2UU");
     activate(&mut s, source, 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
     let mut removed = s.clone();
     crate::support::game::move_card(&mut removed, card, ZoneType::Graveyard);
+    let mut returned = removed.clone();
+    let new_card = crate::support::game::move_card(&mut returned, card, ZoneType::Battlefield);
+    assert_ne!(new_card, card);
+    settle(&mut returned);
+    assert!(returned.game().lookup_current_permanent(new_card).is_ok());
     settle(&mut removed);
     assert_eq!(zone_of(&removed, card), Some(ZoneType::Graveyard));
     settle(&mut s);

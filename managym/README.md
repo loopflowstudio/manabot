@@ -705,6 +705,11 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
+that activated its ability. A zone change ends that identity. Avatar Destiny
+uses `ObjectSelector::This` to return the Aura from the graveyard after the
+enchanted creature dies.
+
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard

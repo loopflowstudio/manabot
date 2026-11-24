@@ -1,6 +1,6 @@
 //! Onslaught.
 use managym_state::{
-    ability::{Actor, Condition, Effect, ObjectSelector, PlayerSelector, Scope},
+    ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageTransform, Keyword,
         Keywords, PrintedCharacteristics, ReplacementEffect,
@@ -113,12 +113,7 @@ fn arcanis_the_omnipotent() -> CardDefinition {
                 },
                 ActivatedAbilityDefinition {
                     mana_cost: ManaCost::parse("{2}{U}{U}"),
-                    // A response can remove Arcanis before this ability resolves.
-                    effects: vec![Effect::If {
-                        condition: Condition::SourceMatches(CardPredicate::default()),
-                        then: vec![Effect::return_to_hand(ObjectSelector::This)],
-                        otherwise: vec![],
-                    }],
+                    effects: vec![Effect::return_to_hand(ObjectSelector::ExactSource)],
                     ..Default::default()
                 },
             ],

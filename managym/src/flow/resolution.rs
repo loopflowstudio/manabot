@@ -2179,6 +2179,11 @@ impl Game {
                 .collect()
         };
         match what {
+            ObjectSelector::ExactSource => frame
+                .source_ref()
+                .and_then(|source| self.state.live(source))
+                .into_iter()
+                .collect(),
             ObjectSelector::This => self.source_object(frame).into_iter().collect(),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)

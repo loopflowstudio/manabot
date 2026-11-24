@@ -653,6 +653,7 @@ fn player_description(player: &PlayerSelector) -> String {
 
 fn selector_description(selector: &ObjectSelector) -> String {
     match selector {
+        ObjectSelector::ExactSource => "this object".into(),
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
         ObjectSelector::Targets(target) => format!("each chosen {}", target_description(target)),

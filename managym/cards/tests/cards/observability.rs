@@ -478,6 +478,7 @@ fn duration_code(duration: EffectDuration) -> f32 {
 /// The token each `ObjectSelector` contributes; no wildcard.
 fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
+        ObjectSelector::ExactSource => "ObjectSelector::ExactSource",
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
         ObjectSelector::Targets(_) => "ObjectSelector::Targets",
@@ -497,8 +498,9 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 16] {
+fn selector_witnesses() -> [ObjectSelector; 17] {
     [
+        ObjectSelector::ExactSource,
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Targets(TargetSpec::Creature),

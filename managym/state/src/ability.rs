@@ -697,6 +697,8 @@ pub enum ObjectSelector {
     /// card it became in the graveyard or exile it went to (CR 400.7,
     /// 603.10a: "return this card", "exile it"); never a later object.
     This,
+    /// The bound source object only while that incarnation is live.
+    ExactSource,
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
@@ -836,6 +838,7 @@ impl ObjectSelector {
                 ..
             } => Some(&TARGET_PLAYER),
             Self::This
+            | Self::ExactSource
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
