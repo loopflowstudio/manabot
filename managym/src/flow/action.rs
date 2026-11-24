@@ -231,26 +231,16 @@ impl Game {
             }
             Action::ChooseMode { mode, .. }
                 if self.state.suspended_decision.is_none()
-                    && matches!(
-                        self.paying(),
-                        Some((_, _, CostComponent::RemoveCounters { .. }))
-                    ) =>
+                    && let Some((
+                        _,
+                        _,
+                        CostComponent::RemoveCounters {
+                            choosing_from: Some(object),
+                            ..
+                        },
+                    )) = self.paying() =>
             {
-                let (
-                    _,
-                    _,
-                    CostComponent::RemoveCounters {
-                        choosing_from: Some(object),
-                        ..
-                    },
-                ) = self.paying()?
-                else {
-                    return None;
-                };
-                let kind = self
-                    .removable_kinds(*object)
-                    .into_iter()
-                    .find(|kind| *kind as usize == *mode)?;
+                let kind = self.removable_kind(*object, *mode)?;
                 Some(format!(
                     "Remove a {} counter from {}",
                     crate::agent::ability_description::counter_description(kind),

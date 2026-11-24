@@ -689,32 +689,22 @@ impl Game {
             } else {
                 None
             };
+            // Combat damage a permanent dealt: its total joins the step's
+            // totals, and damage to a player is also a hit.
             let dealt = match (&batch.binding, &event) {
                 (
                     EventBinding::Combat,
                     ProposedEvent::Damage {
                         source: Some(source),
+                        target,
                         amount,
                         ..
                     },
-                ) if *amount > 0 => self
-                    .lookup_current_permanent(*source)
-                    .ok()
-                    .map(|source| (source, *amount as u32)),
+                ) if *amount > 0 => self.lookup_current_permanent(*source).ok().map(|source| {
+                    let to_player = matches!(target, ProposedDamageTarget::Player(_));
+                    (source, *amount as u32, to_player)
+                }),
                 _ => None,
-            };
-            let hit = if matches!(batch.binding, EventBinding::Combat) {
-                match &event {
-                    ProposedEvent::Damage {
-                        source: Some(source),
-                        target: ProposedDamageTarget::Player(_),
-                        amount,
-                        ..
-                    } if *amount > 0 => self.lookup_current_permanent(*source).ok(),
-                    _ => None,
-                }
-            } else {
-                None
             };
             let reveal = if matches!(batch.binding, EventBinding::Moved { reveal: true, .. }) {
                 match &event {
@@ -773,8 +763,10 @@ impl Game {
                     );
                 }
                 died.extend(death);
-                hits.extend(hit);
-                if let Some((source, amount)) = dealt {
+                if let Some((source, amount, to_player)) = dealt {
+                    if to_player {
+                        hits.push(source);
+                    }
                     match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
                         Some((_, total)) => *total += amount,
                         None => totals.push((source, amount)),

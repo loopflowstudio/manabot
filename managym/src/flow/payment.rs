@@ -510,16 +510,19 @@ impl Game {
     pub(crate) fn removable_counters(&self, player: PlayerId) -> u32 {
         self.counter_removal_candidates(player)
             .into_iter()
-            .filter_map(|object| self.state.permanent_of(object))
-            .filter_map(|id| self.state.permanents[id].as_ref())
-            .map(|permanent| {
-                permanent
-                    .counters
-                    .iter()
-                    .map(|(_, count)| count.max(0) as u32)
-                    .sum::<u32>()
-            })
+            .flat_map(|object| self.counters_on(object))
+            .map(|(_, count)| count.max(0) as u32)
             .sum()
+    }
+
+    /// The counters on `object`, in `CounterKind` order; none once it has
+    /// left the battlefield.
+    fn counters_on(&self, object: ObjectId) -> impl Iterator<Item = (CounterKind, i32)> + '_ {
+        self.state
+            .permanent_of(object)
+            .and_then(|id| self.state.permanents[id].as_ref())
+            .into_iter()
+            .flat_map(|permanent| permanent.counters.iter())
     }
 
     /// Remove one counter of `kind` from `object` as part of a cost, then
@@ -558,9 +561,7 @@ impl Game {
             return Err(AgentError("no counter kind is being chosen".into()));
         };
         let kind = self
-            .removable_kinds(object)
-            .into_iter()
-            .find(|kind| *kind as usize == mode)
+            .removable_kind(object, mode)
             .ok_or_else(|| AgentError("that creature has no counter of this kind".into()))?;
         self.pending_choice = None;
         self.remove_cost_counter(&mut payment, object, kind, remaining);
@@ -569,11 +570,14 @@ impl Game {
 
     /// The kinds of counter on `object`, in `CounterKind` order.
     pub(crate) fn removable_kinds(&self, object: ObjectId) -> Vec<CounterKind> {
-        self.state
-            .permanent_of(object)
-            .and_then(|id| self.state.permanents[id].as_ref())
-            .map(|permanent| permanent.counters.iter().map(|(kind, _)| kind).collect())
-            .unwrap_or_default()
+        self.counters_on(object).map(|(kind, _)| kind).collect()
+    }
+
+    /// The kind of counter on `object` whose `CounterKind` index is `mode`.
+    pub(crate) fn removable_kind(&self, object: ObjectId, mode: usize) -> Option<CounterKind> {
+        self.counters_on(object)
+            .map(|(kind, _)| kind)
+            .find(|kind| *kind as usize == mode)
     }
 
     /// The parts of `operation`'s total cost its payer chooses how to pay,
