@@ -264,7 +264,6 @@ impl Node {
 enum Operation {
     Modify(Modification<LayerValue>),
     LandType(String),
-    Name(String),
     // Expressions resolve before becoming per-target instructions. Indirection
     // keeps their large predicates out of every small resolved modification.
     Power(Box<PowerCda>),
@@ -287,7 +286,6 @@ const ABILITIES: u8 = 128;
 impl Operation {
     fn writes(&self) -> u8 {
         match self {
-            Self::Name(_) => NAME,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Power(_) | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
@@ -972,7 +970,10 @@ impl<'a> Context<'a> {
             StaticAbility::AttachedSetsCharacteristics(set) => {
                 plan.scope = StaticScope::Attached;
                 plan.parts = vec![
-                    (Layer::Name, Operation::Name(set.named.clone())),
+                    (
+                        Layer::Name,
+                        Operation::Modify(Modification::SetName(set.named.clone())),
+                    ),
                     (
                         Layer::Type,
                         Operation::Modify(Modification::SetCreatureTypes(
@@ -1039,7 +1040,7 @@ impl<'a> Context<'a> {
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
-                Operation::Name(name) | Operation::Modify(Modification::SetName(name)) => {
+                Operation::Modify(Modification::SetName(name)) => {
                     view.name = name.clone();
                     view.name_set = true;
                 }

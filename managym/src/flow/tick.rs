@@ -8,12 +8,7 @@ use crate::{
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{
-        card::{Restriction, StaticAbility},
-        game_object::PlayerId,
-        permanent::CounterKind,
-        zone::ZoneType,
-    },
+    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
 };
 
 impl Game {
@@ -345,9 +340,7 @@ impl Game {
                     }
                     return None;
                 };
-                // CR 508.1d: a creature that attacks each combat if able
-                // offers no choice to stay home.
-                let must_attack = self.has_restriction(attacker, Restriction::AttacksEachCombat);
+                let must_attack = self.must_attack(attacker);
                 let actions = [true, false]
                     .into_iter()
                     .filter(|attack| *attack || !must_attack)

@@ -19,7 +19,6 @@ use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
-use crate::state::card::Restriction;
 use crate::state::game_object::{PermanentId, PlayerId};
 
 /// One proposed block: `blocker` blocks `attacker`.
@@ -293,8 +292,15 @@ impl Game {
         }
     }
 
-    fn must_attack(&self, attacker: PermanentId) -> bool {
-        self.has_restriction(attacker, Restriction::AttacksEachCombat)
+    /// Attackers already declared in this combat, before the current
+    /// decision (a creature that must attack and was offered no choice).
+    fn declared_attackers(&self) -> Vec<ObjectRenderId> {
+        self.state
+            .combat
+            .iter()
+            .flat_map(|combat| &combat.attackers)
+            .map(|attacker| self.render_id(*attacker))
+            .collect()
     }
 
     fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
@@ -341,17 +347,10 @@ impl Game {
                         "is not blocking now: this is an attack.",
                     );
                 }
-                let declared = |id: ObjectRenderId| {
-                    self.permanent_by_render_id(id).is_some_and(|permanent| {
-                        self.state
-                            .combat
-                            .as_ref()
-                            .is_some_and(|combat| combat.attackers.contains(&permanent))
-                    })
-                };
+                let declared = self.declared_attackers();
                 plan.attackers
                     .iter()
-                    .find(|id| !asked(**id) && !declared(**id))
+                    .find(|id| !asked(**id) && !declared.contains(id))
                     .and_then(|id| refuse(*id, "can't attack now."))
             }
             DeclarationKind::Blockers => {
@@ -490,11 +489,8 @@ impl Game {
                 // creature that must attack) are not part of the plan.
                 let mut planned = plan.attackers.clone();
                 planned.extend(
-                    self.state
-                        .combat
-                        .iter()
-                        .flat_map(|combat| &combat.attackers)
-                        .map(|attacker| self.render_id(*attacker))
+                    self.declared_attackers()
+                        .into_iter()
                         .filter(|id| !plan.attackers.contains(id)),
                 );
                 let mut declared = preview.declared_attackers.clone();

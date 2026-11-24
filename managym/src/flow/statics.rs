@@ -709,6 +709,13 @@ impl Game {
             })
         })
     }
+
+    /// "attacks each combat if able" (CR 508.1d): the declaration offers it
+    /// no choice to stay home.
+    pub(crate) fn must_attack(&self, attacker: PermanentId) -> bool {
+        self.has_restriction(attacker, Restriction::AttacksEachCombat)
+    }
+
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {

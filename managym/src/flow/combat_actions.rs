@@ -42,9 +42,7 @@ impl Game {
         attack: bool,
     ) -> Result<(), AgentError> {
         if !attack {
-            if self.permanent_can_attack(permanent_id)
-                && self.has_restriction(permanent_id, Restriction::AttacksEachCombat)
-            {
+            if self.permanent_can_attack(permanent_id) && self.must_attack(permanent_id) {
                 return Err(AgentError(
                     "creature attacks each combat if able".to_string(),
                 ));

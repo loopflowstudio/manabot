@@ -1619,9 +1619,6 @@ impl Game {
             .map(|(done, _)| done)
     }
 
-    /// Recover the complete, still-undecided attacker batch from the current
-    /// sequential legacy prompt. The first permanent was popped while the
-    /// prompt was built; the remainder will be popped from the back.
     /// Whether a creature still to be declared in this combat must attack.
     fn attacker_declaration_is_required(&self) -> bool {
         let current = self
@@ -1641,9 +1638,12 @@ impl Game {
             .flat_map(|combat| combat.attackers_to_declare.iter().copied());
         current
             .chain(pending)
-            .any(|attacker| self.has_restriction(attacker, Restriction::AttacksEachCombat))
+            .any(|attacker| self.must_attack(attacker))
     }
 
+    /// Recover the complete, still-undecided attacker batch from the current
+    /// sequential legacy prompt. The first permanent was popped while the
+    /// prompt was built; the remainder will be popped from the back.
     fn current_attacker_declaration(
         &self,
     ) -> Result<(PlayerId, Vec<PermanentId>), StructuredOfferError> {
