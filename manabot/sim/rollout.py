@@ -41,6 +41,7 @@ from manabot.sim.search.flat_mc import (
     GameRecord,
     SearchStats,
 )
+from managym import SlotLoad
 
 # -----------------------------------------------------------------------------
 # Batched action selection
@@ -179,21 +180,19 @@ def run_vector_games(
 
     hero_seat = np.arange(num_streams, dtype=np.int64) % 2
     quota = {0: (num_games + 1) // 2, 1: num_games // 2}
+    active = np.array([quota[seat] > 0 for seat in hero_seat])
     recorded = {0: 0, 1: 0}
     steps_in_game = np.zeros(num_streams, dtype=np.int64)
     records: list[GameRecord] = []
     total_steps = 0
-    game_index = 0
     max_env_steps = max_env_steps or 10_000_000
 
     start = time.perf_counter()
-    while (
-        recorded[0] < quota[0] or recorded[1] < quota[1]
-    ) and total_steps < max_env_steps:
+    while active.any() and total_steps < max_env_steps:
         acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
         actions = np.zeros(num_streams, dtype=np.int64)
-        hero_rows = np.flatnonzero(acting == hero_seat)
-        villain_rows = np.flatnonzero(acting != hero_seat)
+        hero_rows = np.flatnonzero(active & (acting == hero_seat))
+        villain_rows = np.flatnonzero(active & (acting != hero_seat))
         if len(hero_rows):
             actions[hero_rows] = hero.select(buffers, hero_rows)
         if len(villain_rows):
@@ -205,11 +204,11 @@ def run_vector_games(
             environment_steps=total_steps,
             max_env_steps=max_env_steps,
         )
-        env.step_into_buffers(actions.tolist())
-        total_steps += num_streams
-        steps_in_game += 1
+        env.step_into_buffers(actions.tolist(), active.tolist())
+        total_steps += int(active.sum())
+        steps_in_game[active] += 1
 
-        done = (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
+        done = active & ((buffers["terminated"] > 0) | (buffers["truncated"] > 0))
         if done.any():
             infos = env.get_last_info()
             for s in np.flatnonzero(done):
@@ -219,7 +218,7 @@ def run_vector_games(
                     winner = int(winner) if winner is not None else None
                     records.append(
                         GameRecord(
-                            game_index=game_index,
+                            game_index=len(records),
                             hero_seat=seat,
                             hero_won=winner == seat,
                             winner=winner,
@@ -227,8 +226,12 @@ def run_vector_games(
                         )
                     )
                     recorded[seat] += 1
-                    game_index += 1
-                steps_in_game[s] = 0
+                    if recorded[seat] == quota[seat]:
+                        active[hero_seat == seat] = False
+            refill = np.flatnonzero(done & active)
+            if refill.size and total_steps < max_env_steps:
+                env.load_slots_into_buffers([SlotLoad.fresh(int(s)) for s in refill])
+                steps_in_game[refill] = 0
     wall_seconds = time.perf_counter() - start
 
     stats = {
