@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Face-down status, nameless copies &amp; linked-exile viewer ids · MTG-420</title>
+<title>Concept review · Battlefield forms, viewer identities &amp; persistent sources · MTG-420</title>
 <style>
 :root{color-scheme:light dark;font:16px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas);--codebg:color-mix(in srgb,CanvasText 7%,Canvas)}
 body{max-width:60rem;margin:2.5rem auto;padding:0 1.15rem}
@@ -13,7 +13,7 @@ code{font-size:.88em;background:var(--codebg);padding:.08em .3em;border-radius:.
 pre{background:var(--codebg);padding:.75rem .9rem;border-radius:.35rem;overflow-x:auto;font-size:.85rem;line-height:1.42;margin:.55rem 0}
 pre code{background:none;padding:0}
 .callout{border-inline-start:.28rem solid var(--accent);background:var(--card);padding:.95rem 1.15rem;margin:1.25rem 0;border-radius:0 .35rem .35rem 0}
-.callout.warn{border-inline-start-color:var(--no)}
+.callout.ok{border-inline-start-color:var(--yes)}
 .tag{display:inline-block;font-size:.74rem;font-weight:600;letter-spacing:.02em;padding:.08rem .42rem;border-radius:.25rem;vertical-align:baseline;margin-inline-end:.35rem}
 .existing{background:color-mix(in srgb,CanvasText 12%,Canvas);color:CanvasText}
 .proposed{background:color-mix(in srgb,var(--prop) 20%,Canvas);color:var(--prop)}
@@ -26,80 +26,71 @@ pre code{background:none;padding:0}
 @media (max-width:740px){.grid{grid-template-columns:1fr}}
 </style>
 <main>
-<small class="muted">MTG-420 · post-build full concept review · base <code>5d85077748</code> → <code>f5d3bf9165</code></small>
-<h1>Do battlefield forms, viewer identities and linked sources line up end to end?</h1>
+<small class="muted">MTG-420 · post-build full concept review · base <code>5d85077748</code> → <code>b183a0b8b5</code></small>
+<h1>Do battlefield forms, viewer identities and persistent sources line up end to end?</h1>
 
-<p><strong>Area reviewed.</strong> The full MTG-420 battlefield-form, copiable-snapshot, persistent-source, viewer-identity, hidden-slot sampling and downstream-consumer surface from merge base <code>5d85077748</code> to <code>f5d3bf9165</code>: native state (<code>managym/state/src/{game_object,permanent,stack_object,effect,zone}.rs</code>, <code>managym/src/cards/{content_pack,tokens}.rs</code>, <code>managym/src/state/hash.rs</code>), rules flow and samplers (<code>managym/src/flow/{identity,zones,proposed_event,resolution,triggers,trigger,effects,layers,statics,cast_permission,action,decision,search,selection_sampling,knowledge}.rs</code>, <code>managym/src/possible_worlds.rs</code>), and every consumer (<code>managym/src/agent/{observation,observation_layout,observation_encoder,continuation,shared_effects,policy_history,decision_memory,structured_offer,ability_description}.rs</code>, <code>managym/src/{decision_capture,decision_context}.rs</code>, <code>managym/experience_projection.py</code>, <code>manabot/semantic/text_observation.py</code>, <code>managym/academy/</code>). Slice 3c, the closing pass and <code>aa3b51fc16</code> cleanly unified <code>observed_identity</code>, incarnation-0 joins and decision memory. Reviewing the whole built area against base with fresh eyes finds <strong>two remaining conceptual mismatches</strong> that belong inside MTG-420 before measurement and publication.</p>
+<p><strong>Area reviewed.</strong> The full MTG-420 battlefield-form, copiable-snapshot, persistent-source, viewer-identity, hidden-slot sampling and downstream-consumer surface from merge base <code>5d85077748</code> to <code>b183a0b8b5</code>: native state (<code>managym/state/src/{game_object,permanent,stack_object,effect,zone}.rs</code>, <code>managym/src/cards/{content_pack,tokens}.rs</code>, <code>managym/src/state/hash.rs</code>), rules flow and samplers (<code>managym/src/flow/{identity,zones,proposed_event,resolution,triggers,trigger,effects,layers,statics,cast_permission,action,decision,search,selection_sampling,knowledge}.rs</code>, <code>managym/src/possible_worlds.rs</code>), and every consumer (<code>managym/src/agent/{observation,observation_layout,observation_encoder,observation_json,continuation,shared_effects,policy_history,decision_memory,structured_offer,ability_description}.rs</code>, <code>managym/src/{decision_capture,decision_context,experience}.rs</code>, <code>managym/{experience,experience_projection}.py</code>, <code>protocol/*.schema.json</code>, <code>manabot/semantic/text_observation.py</code>, and <code>academy/ui/src/lib/</code>). Reviewed as a whole against base with fresh eyes after item 5 (<code>b804a1b341</code>, <code>90197a3a4f</code>).</p>
 
-<section class="callout warn">
-<h2>Biggest mismatch · “Face-down status” is dropped at the LKI and observation boundaries, conflating face-down permanents with face-up copies of them</h2>
-<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> In Magic (CR 707.2, 708.2), <strong>face-down status</strong> and <strong>lacking a catalog definition</strong> are two separate concepts. A manifested permanent is face down and hides a physical card behind a nameless 2/2. A <em>Clone</em>, <em>Clone Legion</em>, <em>Electroduplicate</em> or <em>Ember Island Production</em> copying that manifest is <strong>face up</strong> (status is not copiable), cannot be turned face up, and hides no physical card — yet its shown definition is also <code>CardDefId::ANONYMOUS</code> with an empty name. <code>Object.form</code> models <code>face_down: bool</code> explicitly, then drops it when building <code>BattlefieldFacts</code> and <code>PermanentData</code>, causing four downstream surfaces to guess from <code>ANONYMOUS</code> or <code>name.is_empty()</code>:</p>
+<section class="callout ok">
+<h2>Verdict · Nothing left to change in MTG-420</h2>
+<p><span class="tag existing">Existing</span><span class="tag yes">Aligned</span> Both conceptual mismatches found in the prior post-build review are closed cleanly at <code>b183a0b8b5</code> without leaving duplicate authorities or broken edge cases:</p>
 <ul>
-<li><strong>Identity flips on departure (<code>flow/identity.rs:83-94</code>):</strong> Live, <code>observed_identity</code> sets <code>hides_card = permanent.manifested || object.is_face_down()</code> (<code>false</code> for a face-up Clone or token copy of a manifest: <code>(permanent.id, gen)</code>, <code>visible_slot = Some(slot)</code>). Departed, it sets <code>hides_card = lki.battlefield.manifested || lki.definition_id == CardDefId::ANONYMOUS</code> — which flips to <code>true</code> the instant that face-up Clone or token copy leaves the battlefield. Pre-departure damage/trigger events rewrite to incarnation <code>0</code>, and bouncing that face-up Clone to hand suppresses its <code>CardMoved</code> source as if it were secret.</li>
-<li><strong>False “face-down” labels on face-up copies (<code>flow/identity.rs:143-160</code>, <code>agent/ability_description.rs:53-57</code>):</strong> Both fall back to <code>"a face-down permanent"</code> whenever <code>name.is_empty()</code> and <code>observed_source_definition</code> is <code>None</code> — labeling a face-up Clone or token copy of a manifest as <code>"a face-down permanent"</code> in offers, target labels, recent facts and stack trigger descriptions.</li>
-<li><strong>Split terminology &amp; missing status in observations (<code>agent/observation.rs:780-842</code>, <code>observation_layout.rs</code>, <code>text_observation.py:495</code>):</strong> <code>CardData</code> carries <code>face_down: bool</code> (for foretold exile), but <code>PermanentData</code> and v11’s <code>permanent</code> buffer do not. In the same LLM prompt (<code>tests/semantic/test_manifest_text.py</code>), the board reads <code>P1 (nameless permanent)</code> while the stack trigger next to it reads <code>a face-down permanent — delayed ability</code>. Worse, when a manifested <em>Llanowar Elves</em> (or animated <em>Forest</em>) is enchanted by <em>Witness Protection</em>, its controller’s <code>PermanentData</code> has <code>registry_key = Llanowar Elves</code>, <code>name = "Legitimate Businessperson"</code>, 1/1, <code>abilities_lost = true</code> — indistinguishable in v11 tensors, LLM text and Academy from a face-up copy enchanted by <em>Witness Protection</em> even though only the face-down one can turn face up.</li>
+<li><strong>Face-down status vs. nameless copies:</strong> <code>BattlefieldFacts.face_down</code> carries face-down status into LKI; <code>Game::observed_face_down</code> (<code>flow/identity.rs:137-144</code>) is the single live-and-departed reader feeding <code>observed_identity</code>, <code>observed_object_name</code> and both trigger descriptions through <code>Game::unnamed_label</code> (<code>FACE_DOWN_NAME</code> vs. <code>NAMELESS_PERMANENT_NAME</code>). <code>PermanentData.face_down</code> reaches observation JSON (omitted when false), PyO3 bindings, <code>__init__.pyi</code>, <code>experience.py</code>/<code>experience.rs</code>, all five <code>protocol/*.schema.json</code> files, <code>experience_projection.py</code>, v11 permanent column 52 (<code>permanent::FACE_DOWN</code>, prefix-compatible with saved checkpoints without bumping input version), and <code>manabot/semantic/text_observation.py</code>. <code>pinned_objects</code> checks the entry controller (CR 708.5).</li>
+<li><strong>Linked-exile grant source identity:</strong> <code>CastPermissionData.source_permanent_id</code> (<code>observation.rs:1677-1682</code>) now projects through <code>lookup_current_permanent(source)</code> → <code>permanent_event_ref(id)</code> → viewer <code>PublicId</code>, matching <code>StackObjectData.source_permanent_id</code>, <code>PermanentData.id</code>, <code>attached_to</code>, <code>blocking</code> and <code>text_observation.py</code>. An audit of every remaining <code>.0 as i32</code> cast across <code>agent/</code> and <code>decision_*.rs</code> confirms no other <code>PermanentId</code> storage index leaks onto a viewer-ID field.</li>
 </ul>
 
 <div class="grid">
 <div class="panel">
-<h3><span class="tag existing">Existing</span> Before · guessed from <code>ANONYMOUS</code> / empty name</h3>
-<pre><code>// flow/identity.rs (live vs departed disagree)
-live:     permanent.manifested || object.is_face_down()
+<h3><span class="tag existing">Before item 5</span> Guessed from <code>ANONYMOUS</code> &amp; raw <code>PermanentId</code></h3>
+<pre><code>// flow/identity.rs (live vs departed disagreed)
 departed: lki.battlefield.manifested
           || lki.definition_id == CardDefId::ANONYMOUS
 
 // Clone of manifest bounced to hand:
-live capture/effects: (entity=90, incarnation=2)
-post-bounce DamageDealt: (entity=90, incarnation=0)
-post-bounce CardMoved: source suppressed (None)
+live:     (entity=90, incarnation=2)
+departed: (entity=90, incarnation=0), CardMoved = None
+label:    "a face-down permanent"
 
-// Same LLM prompt for a manifested creature:
-Board:   P1 (nameless permanent) [Llanowar Elves]
-Trigger: a face-down permanent — delayed ability: ...</code></pre>
+// observation.rs (storage index leaked)
+source_permanent_id: lookup_current_permanent(source)
+    .map(|id| id.0 as i32) // 0 → "Seat 1", 2 → crash</code></pre>
 </div>
 <div class="panel">
-<h3><span class="tag proposed">Proposed</span> After · explicit <code>face_down</code> carried through LKI &amp; observation</h3>
-<pre><code>// BattlefieldFacts + PermanentData + v11 permanent[52]
-pub face_down: bool  // skipped in JSON when false
+<h3><span class="tag existing">Built at HEAD</span> Explicit status &amp; viewer <code>PublicId</code></h3>
+<pre><code>// flow/identity.rs (one authority live and departed)
+let hides_card = manifested || self.observed_face_down(object);
 
-// flow/identity.rs (same predicate live and departed)
-live:     permanent.manifested || object.is_face_down()
-departed: lki.battlefield.manifested || lki.battlefield.face_down
+// Clone of manifest vs manifest vs Witness-Protected manifest:
+manifest:          "a face-down permanent" / P1 (face-down permanent); face down
+Clone of manifest: "a nameless permanent"  / P2 (nameless permanent) [incarnation kept]
+Witness-Protected: "Legitimate Businessperson" / face_down=true, v11[52]=1.0
 
-// Native labels + text_observation.py agree:
-face-down manifest:  "a face-down permanent" / P1 (face-down permanent); face down
-face-up copy of one: "a nameless permanent"  / P2 (nameless permanent); copy of a nameless permanent
-Witness-Protected:   "Legitimate Businessperson" / P1 (Legitimate Businessperson); face down</code></pre>
+// observation.rs (viewer PublicId)
+source_permanent_id: lookup_current_permanent(source)
+    .and_then(|id| permanent_event_ref(id)).map(|o| o.entity.0 as i32)</code></pre>
 </div>
 </div>
-</section>
-
-<section class="callout warn">
-<h2>Second mismatch · <code>CastPermissionData.source_permanent_id</code> leaks internal <code>PermanentId</code> (vector index) instead of viewer <code>PublicId</code></h2>
-<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> In <code>managym/src/agent/observation.rs:1673-1677</code>, an exiled card’s linked cast grant (“while you control Azula / Hama”) projects its controlling permanent as:</p>
-<pre><code>source_permanent_id: grant.source.and_then(|source| {
-    game.lookup_current_permanent(source).ok().map(|id| id.0 as i32) // ← PermanentVec index (0, 1, 2…)!
-})</code></pre>
-<p>Every other observation field named <code>*_permanent_id</code> — including <code>StackObjectData.source_permanent_id</code> sixty lines below (<code>observation.rs:1733-1737</code>), <code>sparse-optionals.json</code> (<code>99</code>), and <code>manabot/semantic/text_observation.py:964</code> (<code>f"while they control {self.name(permission.source_permanent_id)}"</code>) — uses the viewer <strong><code>PublicId</code></strong> (<code>permanent.id.0</code>, e.g. <code>87</code>). When <em>Azula, Cunning Usurper</em> exiles <em>Ragnarok</em> (a headline MTG-420 witness), <code>PermanentId(0)</code> resolves <code>self.name(0)</code> to <strong><code>"Seat 1"</code></strong> (Player 0’s <code>PublicId(0)</code>!), printing <code>while they control Seat 1</code>; for <code>PermanentId(2)</code>+, <code>render_decision</code> crashes with <code>TextEncodingError("unknown object id 2")</code>.</p>
-<p><span class="tag proposed">Proposed</span> Route <code>CastPermissionData.source_permanent_id</code> through the same identity authority as every other permanent join: <code>game.lookup_current_permanent(source).ok().and_then(|id| game.permanent_event_ref(id)).map(|r| r.entity.0 as i32)</code>. Add a Rust assertion on <em>Azula</em> exiling <em>Ragnarok</em> and a Python <code>render_decision</code> check verifying <code>while they control P… (Azula…)</code>.</p>
 </section>
 
 <h2>Concrete walks · normal path, counterexample and recovery</h2>
 <table>
-<thead><tr><th>Step</th><th>Face-up Clone copying a face-down manifest, dealing damage &amp; bouncing</th><th>Manifested creature enchanted by Witness Protection</th><th>Azula exiling Ragnarok with linked cast grants</th></tr></thead>
+<thead><tr><th>Step</th><th>Face-up Clone copying a face-down manifest, dealing damage &amp; bouncing</th><th>Manifested creature enchanted by Witness Protection</th><th>Azula exiling Ragnarok with linked cast grants</th><th>Transformed / copied DFC (Cecil) across departure &amp; token copies</th></tr></thead>
 <tbody>
 <tr><th>Normal path</th>
-<td>Player 0 manifests a card. Player 1 casts <em>Clone</em> entering as a copy of the face-down permanent (a face-up nameless 2/2). Clone deals 2 damage and is later bounced to hand or dies with a granted trigger.</td>
-<td>Player 0 manifests <em>Llanowar Elves</em>; Player 1 enchants it with <em>Witness Protection</em> (1/1 <em>Legitimate Businessperson</em>, loses all abilities). Player 0 still has the special action to turn it face up for <code>{G}</code>.</td>
-<td>Player 1 controls <em>Azula, Cunning Usurper</em> (<code>PermanentId(2)</code>, <code>PublicId(87)</code>), exiles <em>Ragnarok</em>; Player 0 orders Fang and Vanille; both exiled cards receive linked cast grants bound to Azula’s exact object.</td></tr>
-<tr><th>Counterexample / failure</th>
-<td><strong>Existing breaks three ways:</strong> (1) While live, Clone has <code>incarnation = 2</code> and <code>visible_slot = Some(slot)</code>; once bounced, <code>lki.definition_id == ANONYMOUS</code> flips <code>hides_card</code> to <code>true</code>, rewriting its damage event to <code>incarnation = 0</code> and suppressing <code>CardMoved</code>. (2) Offers, recent facts and granted triggers call face-up Clone <code>"a face-down permanent"</code>.</td>
-<td><strong>Existing hides face-down status:</strong> <code>PermanentData</code> and v11’s <code>permanent</code> buffer have no <code>face_down</code> bit. To Player 0, <code>PermanentData</code> looks identical in status to a face-up <em>Llanowar Elves</em> under <em>Witness Protection</em>; LLM text prints no <code>face down</code> marker and calls ordinary manifests <code>nameless permanent</code> on the board vs <code>a face-down permanent</code> on the stack.</td>
-<td><strong>Existing leaks storage index:</strong> <code>CastPermissionData.source_permanent_id</code> emits <code>2</code> instead of <code>87</code>. <code>text_observation.py:964</code> calls <code>self.name(2)</code> → <code>TextEncodingError</code> (or prints <code>while they control Seat 1</code> when Azula is <code>PermanentId(0)</code>).</td></tr>
-<tr><th>Recovery / fork</th>
-<td><strong>Proposed:</strong> <code>BattlefieldFacts.face_down</code> is <code>false</code> for Clone and <code>true</code> for the manifest. <code>observed_identity</code> reads <code>lki.battlefield.manifested || lki.battlefield.face_down</code>, keeping Clone’s <code>(90, 2)</code> identity and public bounce event consistent across live, LKI, capture and fork. Labels call Clone <code>"a nameless permanent"</code> and the manifest <code>"a face-down permanent"</code>.</td>
-<td><strong>Proposed:</strong> <code>PermanentData.face_down</code> (JSON-omitted when false) and appended v11 column <code>permanent::FACE_DOWN</code> (52; saved checkpoints slice to prefix 52 without bumping input version) carry status directly. LLM text renders <code>P1 (face-down permanent)</code> / <code>; face down</code>; Academy receives <code>face_down: true</code> matching <code>CardData.face_down</code>.</td>
-<td><strong>Proposed:</strong> <code>CastPermissionData.source_permanent_id</code> reads <code>permanent_event_ref</code> → <code>87</code>. Both exiled cards render <code>while they control P… (Azula, Cunning Usurper)</code> and stay valid across forks, reconnects and Azula leaving the battlefield (<code>None</code> once departed).</td></tr>
+<td>Player 0 manifests a card. Player 1 casts <em>Clone</em> entering as a copy of the face-down permanent (a face-up nameless 2/2). Clone deals 2 damage and is bounced to hand or dies with a granted trigger.</td>
+<td>Player 0 manifests <em>Llanowar Elves</em>; Player 1 enchants it with <em>Witness Protection</em> (1/1 <em>Legitimate Businessperson</em>, loses all abilities). Player 0 retains the special action to turn it face up for <code>{G}</code>.</td>
+<td>Player 1 controls <em>Azula, Cunning Usurper</em> (<code>PermanentId(2)</code>, <code>PublicId(87)</code>) and exiles melded <em>Ragnarok</em>. Player 0 orders Fang and Vanille; both exiled cards gain linked cast grants bound to Azula’s exact object.</td>
+<td><em>Electroduplicate</em> copies an <em>Ember Island Production</em> nonlegendary <em>Cecil, Redeemed Paladin</em> token and transforms three times; a face-up <em>Clone</em> copies either face of Cecil; a departed front-face Cecil is copied from LKI.</td></tr>
+<tr><th>Counterexample tested</th>
+<td>A face-up Clone has <code>definition_id == ANONYMOUS</code> and empty name, just like a manifest. Does departure flip its incarnation to <code>0</code>, suppress its bounce <code>CardMoved</code>, or mislabel it as face down?</td>
+<td>With <em>Witness Protection</em>, the manifest has a non-empty name and (for its controller) a catalog <code>registry_key</code>. Can v11, LLM text and protocol consumers still tell it is face down?</td>
+<td>With Azula at a non-zero <code>PermanentId</code>, does <code>source_permanent_id</code> collide with player <code>PublicId(0)</code> or crash <code>text_observation.py</code>? Does the grant cleanly drop <code>source_permanent_id</code> once Azula leaves?</td>
+<td>Does a Clone of Cecil illegally transform? Do copy exceptions stack twice across transforms? Does a departed Clone of Cecil falsely inherit catalog back faces?</td></tr>
+<tr><th>Behavior at HEAD &amp; recovery</th>
+<td><strong>Holds:</strong> <code>BattlefieldFacts.face_down</code> is <code>false</code> for Clone and <code>true</code> for the manifest. <code>observed_identity</code> keeps Clone’s <code>(90, gen)</code> and public bounce event across live, LKI, capture and fork; labels call Clone <code>"a nameless permanent"</code> and the manifest <code>"a face-down permanent"</code>.</td>
+<td><strong>Holds:</strong> <code>PermanentData.face_down</code> (JSON-omitted when false) and v11 <code>permanent::FACE_DOWN</code> (col 52) stay <code>true</code>; LLM text emits <code>; face down</code>; saved checkpoints slice to prefix 52 with no input-version bump.</td>
+<td><strong>Holds:</strong> <code>source_permanent_id</code> emits viewer <code>PublicId(87)</code>, renders <code>while they control P… (Azula, Cunning Usurper)</code>, stays valid across forks/reconnects and becomes <code>None</code> once Azula leaves the battlefield.</td>
+<td><strong>Holds:</strong> <code>ContentPack::transforming_faces</code> reads <code>Object.form</code> first (<code>None</code> for Clone, raw <code>TransformingFaces</code> for tokens); <code>Object::show</code> applies copy exceptions once per face; <code>retain_copiable_values</code> keeps Clone’s <code>faces: None</code> in LKI while ordinary Cecil reconstructs <code>catalog_faces</code>.</td></tr>
 </tbody>
 </table>
 
@@ -112,7 +103,7 @@ Witness-Protected:   "Legitimate Businessperson" / P1 (Legitimate Businessperson
 <td><span class="tag yes">Yes</span> Distinct lifetimes have distinct owners: appearance form on <code>Object</code>, permanent-stint alias provenance on <code>Permanent</code>, physical-card zone membership on <code>ZoneManager</code>.</td></tr>
 
 <tr><td><strong>Transformability, face transitions &amp; copiable snapshots</strong><br>Clone of Cecil cannot transform; token copy of Cecil transforms with exceptions applied once; departed copy sources keep catalog faces only for transforming cards.</td>
-<td><code>ContentPack::transforming_faces</code> + <code>catalog_faces</code> + <code>retain_copiable_values</code> + <code>departed_copiable_values</code>, <code>Game::turn_over</code>, <code>Object::show_transforming_face</code>.</td>
+<td><code>ContentPack::transforming_faces</code>, <code>catalog_faces</code>, <code>retain_copiable_values</code>, <code>departed_copiable_values</code>, <code>Game::turn_over</code>, <code>Object::show_transforming_face</code>.</td>
 <td><span class="tag yes">Yes</span> Single transformability authority and single transition helper; copy exceptions apply once per raw face.</td></tr>
 
 <tr><td><strong>Exact departures, linked returns, spell entries, clause targets &amp; public-zone moves</strong><br>Batches 1–2 (CR 400.7, 601.2c, 603.10a, 608.2b, 610.3).</td>
@@ -123,35 +114,43 @@ Witness-Protected:   "Legitimate Businessperson" / P1 (Legitimate Businessperson
 <td><code>StackObjectData.chosen_mode/x</code>, <code>catalog_join_misses</code>, <code>SetName</code>, <code>CreatureTypes::All</code> + <code>has_all_creature_types</code>, <code>once_per_object</code>/<code>is_use_limited</code>, <code>restricted_by_summoning_sickness</code>, <code>ZoneEntry.attached_to</code>, <code>aura_attachment_illegal</code>.</td>
 <td><span class="tag yes">Yes</span> One owner per rule across rules, observations, tokens and text.</td></tr>
 
-<tr><td><strong>Resumable linked exile, meld-order actor &amp; joint hidden-slot sampling</strong><br>Azula / Hama exiling Ragnarok; uniform joint <code>(foretold, manifest)</code> deals and constrained weights.</td>
-<td><code>EventBinding::ExileLinked</code>, <code>meld_order_choice</code>, <code>grant_exile_linked</code>, <code>selection_hidden_allocations</code>, <code>draw_manifests</code>, <code>fill_manifest_slots</code>, <code>ZoneEntry::is_face_down</code>, <code>EventBatch::public_entries</code> / <code>pending_movers</code>.</td>
-<td><span class="tag yes">Yes</span> Resumable across forks; minor CR 708.5 nit in <code>pinned_objects</code> (checks <code>owner</code> instead of <code>entry.controller.unwrap_or(owner)</code>) folds cleanly into the pass.</td></tr>
+<tr><td><strong>Resumable linked exile, meld-order actor &amp; joint hidden-slot sampling</strong><br>Azula / Hama exiling Ragnarok; uniform joint <code>(foretold, manifest)</code> deals, constrained weights and controller pinning (CR 708.5).</td>
+<td><code>EventBinding::ExileLinked</code>, <code>meld_order_choice</code>, <code>grant_exile_linked</code>, <code>selection_hidden_allocations</code>, <code>draw_manifests</code>, <code>fill_manifest_slots</code>, <code>ZoneEntry::is_face_down</code>, <code>EventBatch::public_entries</code> / <code>pending_movers</code>, <code>pinned_objects</code>.</td>
+<td><span class="tag yes">Yes</span> Resumable across forks; controller-based face-down entry pinning matches CR 708.5.</td></tr>
 
-<tr><td><strong>Viewer identity <code>(entity, incarnation)</code> for manifests, turn-up &amp; decision memory</strong><br>Hidden cards keep <code>(permanent.id, 0)</code> across live, turn-up and departure without exposing physical-card slot or generation.</td>
-<td><code>Game::observed_identity</code>, <code>hidden_card_alias</code>, <code>object_event_ref</code>, <code>observed_object_id</code>, <code>decision_memory::own_projection</code>, Academy incarnation-0 joins.</td>
-<td><span class="tag no">No</span> Unified for manifests by <code>aa3b51fc16</code>, but departed line 92 checks <code>lki.definition_id == ANONYMOUS</code> instead of <code>lki.battlefield.face_down</code>, flipping identity when a face-up Clone/token copy of a manifest leaves the battlefield.</td></tr>
+<tr><td><strong>Viewer identity <code>(entity, incarnation)</code> for manifests, turn-up &amp; decision memory</strong><br>Hidden cards keep <code>(permanent.id, 0)</code> across live, turn-up and departure without exposing physical-card slot or generation; face-up copies of manifests keep their own exact identity.</td>
+<td><code>Game::observed_identity</code>, <code>observed_face_down</code>, <code>hidden_card_alias</code>, <code>object_event_ref</code>, <code>observed_object_id</code>, <code>decision_memory::own_projection</code>, Academy incarnation-0 joins.</td>
+<td><span class="tag yes">Yes</span> Live and departed paths share <code>manifested || self.observed_face_down(object)</code>; no identity flip on departure.</td></tr>
 
-<tr><td><strong>Face-down status vs nameless face in observations, policy tensors, LLM text &amp; native labels</strong><br>Every consumer knows whether a permanent is face down vs a face-up nameless copy, using consistent names.</td>
-<td><code>PermanentData</code> and v11 <code>permanent</code> omit <code>face_down</code>; <code>observed_object_name</code> / <code>trigger_description</code> label face-up nameless copies <code>"a face-down permanent"</code>; <code>text_observation.py</code> labels face-down manifests <code>"nameless permanent"</code>.</td>
-<td><span class="tag no">No</span> Biggest mismatch — carry <code>face_down: bool</code> on <code>BattlefieldFacts</code>, <code>PermanentData</code>, appended v11 <code>permanent::FACE_DOWN</code>, Academy and LLM text; separate <code>FACE_DOWN_NAME</code> from <code>NAMELESS_PERMANENT_NAME</code>.</td></tr>
+<tr><td><strong>Face-down status vs. nameless face in observations, policy tensors, LLM text &amp; native labels</strong><br>Every consumer distinguishes face-down permanents from face-up nameless copies using consistent names.</td>
+<td><code>BattlefieldFacts.face_down</code>, <code>PermanentData.face_down</code>, v11 <code>permanent::FACE_DOWN</code> (col 52), <code>Game::unnamed_label</code> (<code>FACE_DOWN_NAME</code> / <code>NAMELESS_PERMANENT_NAME</code>), <code>experience.{py,rs}</code>, <code>experience_projection.py</code>, <code>protocol/*.schema.json</code>, <code>text_observation.py</code>.</td>
+<td><span class="tag yes">Yes</span> Explicit boolean across every native, tensor, protocol and LLM text surface; native and LLM labels match.</td></tr>
 
 <tr><td><strong>Linked-exile cast permission source identity</strong><br>“While you control [permanent]” cites the controlling permanent’s viewer <code>PublicId</code>.</td>
-<td><code>observation.rs:1673-1677</code> maps <code>lookup_current_permanent</code> directly to <code>PermanentId.0 as i32</code> instead of <code>permanent.id.0</code>.</td>
-<td><span class="tag no">No</span> Second mismatch — storage vector index leaked into a viewer-id field, misnaming or crashing <code>text_observation.py</code> on Azula/Hama.</td></tr>
+<td><code>observation.rs:1677-1682</code> projects <code>ExileCastGrant.source</code> through <code>lookup_current_permanent</code> → <code>permanent_event_ref</code> → viewer <code>PublicId</code>.</td>
+<td><span class="tag yes">Yes</span> Matches every other <code>*_permanent_id</code> field and renders cleanly in <code>text_observation.py</code>.</td></tr>
 
 <tr><td><strong>Creation-time values frozen into delayed triggers</strong><br>Nine-Lives Familiar’s <code>revival - 1</code>.</td>
 <td><code>EffectValue::DeathCountersMinus</code> frozen in <code>resolution.rs</code>.</td>
-<td><span class="tag no">No</span> Known minor mismatch; stays deferred until a second delayed-trigger consumer appears.</td></tr>
+<td><span class="tag no">Deferred</span> Known minor mismatch already tracked in <code>scratch/plan.md</code>; stays deferred until a second delayed-trigger consumer appears.</td></tr>
 </tbody>
 </table>
 
-<h2>Review questions (choices made for review)</h2>
+<h2>Outside this work (separate outcomes)</h2>
+<p>None of these block MTG-420; each is a separate UI, schema or future-card outcome:</p>
+<ul>
+<li><strong>Academy Svelte UI presentation of <code>PermanentState.face_down</code> and nameless <code>copy_of</code>:</strong> <code>experience_projection.py</code> and the protocol schemas already transmit <code>face_down: true</code>, but MTG-420 does not touch <code>academy/ui/</code>. A small UI follow-up would add <code>face_down?: boolean</code> to <code>PermanentState</code> (<code>academy/ui/src/lib/types.ts</code>), include it in <code>pileKey</code> (<code>view.ts</code>), display a face-down badge/card-back in <code>BoardCard.svelte</code> and <code>Inspect.svelte</code>, and fall back when <code>copy_of.name</code> is empty (<code>inspect.ts:61</code>).</li>
+<li><strong>Public-history v1 <code>HistoryReference::Card</code> face-down status:</strong> When a face-down permanent deals damage, <code>policy_history.rs</code> records <code>HistoryReference::Card { definition: None, … }</code> without a <code>face_down</code> flag, so <code>text_observation.py:560</code> renders it as <code>"nameless permanent"</code> in the history suffix (the board, offers and triggers already say <code>face-down permanent</code>). Fixing that requires adding a field to capture/public-history v1 and bumping its schema version.</li>
+<li><strong>General delayed-effect creation-time freezing &amp; <code>Effect::exile_linked</code> vs. <code>Effect::ExileLinked</code> naming:</strong> Deferred by trigger (second delayed-trigger consumer; naming/token pass), as recorded in <code>scratch/plan.md</code> and <code>scratch/questions.md</code>.</li>
+</ul>
+
+<h2>Review questions (shipped choices for confirmation)</h2>
 <ol>
-<li>How should face-down status cross the LKI and observation boundaries so manifests and face-up copies of manifests stay distinct everywhere?
-  <strong>1a · Add <code>face_down: bool</code> (JSON-omitted when false) to <code>BattlefieldFacts</code> and <code>PermanentData</code>, append <code>permanent::FACE_DOWN</code> (col 52) to v11’s layout (prefix-compatible for saved checkpoints, no version bump), check <code>lki.battlefield.manifested || lki.battlefield.face_down</code> in <code>observed_identity</code>, split <code>FACE_DOWN_NAME</code> (<code>"a face-down permanent"</code>) from <code>NAMELESS_PERMANENT_NAME</code> (<code>"a nameless permanent"</code>) in native labels/triggers, and surface <code>face_down</code> in Academy and <code>text_observation.py</code> (selected — fixes the departure identity flip on copies of manifests, aligns native and LLM terminology, makes face-down status observable even under <em>Witness Protection</em>, and preserves saved JSON/checkpoint compatibility).</strong>
-  1b · Fix only <code>BattlefieldFacts.face_down</code> for <code>observed_identity</code> and leave <code>PermanentData</code> without <code>face_down</code> (leaves v11 policies, LLM text and Academy unable to distinguish a face-down permanent under <em>Witness Protection</em> from a face-up one, and keeps the board/stack naming conflict in <code>text_observation.py</code>).</li>
-<li>How should <code>CastPermissionData.source_permanent_id</code> project <code>ExileCastGrant.source</code>?
-  <strong>2a · Project through <code>lookup_current_permanent(source).ok().and_then(|id| permanent_event_ref(id)).map(|r| r.entity.0 as i32)</code> so it emits the viewer <code>PublicId</code> matching <code>StackObjectData.source_permanent_id</code>, <code>PermanentData.id</code>, <code>sparse-optionals.json</code> and <code>text_observation.py</code> (selected — eliminates a storage-index leak and unbreaks LLM rendering for Azula/Hama).</strong>
-  2b · Leave <code>PermanentId.0</code> on the wire and adapt <code>text_observation.py</code> (violates the viewer-ID contract, contradicts <code>StackObjectData.source_permanent_id</code> and <code>sparse-optionals.json</code>, and leaks internal storage indices).</li>
+<li>Face-down status across LKI, observation JSON, v11 column 52, experience protocol and LLM text (shipped at <code>b804a1b341</code> / <code>90197a3a4f</code>):
+  <strong>1a · Keep as built (recommended — separates face-down status from nameless copies everywhere, preserves checkpoint prefix compatibility without bumping input version, and aligns native and LLM terminology).</strong>
+  1b · Also wire <code>PermanentState.face_down</code> into <code>academy/ui/</code> in a separate UI Task.</li>
+<li>Out-of-scope follow-ups (Academy UI face-down rendering, public-history v1 <code>face_down</code> bit, delayed-effect freezing):
+  <strong>2a · Leave outside MTG-420 and advance to decomposition review, engine-optimization and PR publication (recommended).</strong>
+  2b · File a dedicated Academy UI Task for <code>PermanentState.face_down</code> rendering now.</li>
 </ol>
 </main></html>
