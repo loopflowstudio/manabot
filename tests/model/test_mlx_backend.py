@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import torch
 
+from tests.belief.support import fixture_decision
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.training.backend_fixtures import policy_weights, self_play_batch
 
@@ -64,6 +65,8 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.belief.encoding import BeliefCheckpointBinding, encode_belief
+from manabot.belief.state import CompatibleDealBeliefModel
 from manabot.env.match import Match
 from manabot.env.observation import (
     STACK_SOURCE_INDEX,
@@ -295,6 +298,11 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     [
         pytest.param({}, False, id="masked-mean"),
         pytest.param({}, True, id="masked-mean-bucketed"),
+        pytest.param(
+            {"belief_count_buckets": 3, "belief_card_vocab_size": 3},
+            True,
+            id="belief-rows",
+        ),
         pytest.param({"value_kind": "categorical_wdl"}, True, id="categorical-wdl"),
         pytest.param({"value_aggregation": "value_token"}, True, id="value-token"),
         pytest.param(
@@ -322,6 +330,7 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     ],
 )
 def test_policy_architecture_matches_torch_forward_gradients_and_step(
+    tmp_path: Path,
     variant: dict[str, object],
     bucketed: bool,
     baseline_model: ModelConfig,
@@ -338,8 +347,11 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
             if param.abs().max() == 0:
                 param.copy_(torch.randn_like(param) * 0.1)
     checkpoint = policy_weights(agent)
+    behavior = (
+        ActorCritic(space, baseline_model) if config.belief_count_buckets else agent
+    )
     rollout = self_play_batch(
-        agent, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
+        behavior, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
     )
     rows = rollout.observations(np.arange(rollout.actions.size))
     obs = rows.observation
@@ -352,6 +364,32 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     obs["card_turn_state"][0, 0, 0] = 1
 
     policy = assemble(checkpoint, bucketed_shapes=bucketed)
+    if config.belief_count_buckets:
+        decision, schema = fixture_decision()
+        belief = (
+            CompatibleDealBeliefModel()
+            .update(
+                previous=None,
+                world_space=decision.world_space,
+                viewer_history=decision.viewer_history,
+            )
+            .belief
+        )
+        obs.update(
+            encode_belief(belief, schema).observation(batch_size=len(obs["actions"]))
+        )
+        backend = resolve("mlx")
+        path = tmp_path / "policy.safetensors"
+        backend.save_policy(
+            policy,
+            space,
+            path,
+            player_configs=lesson_match().to_rust(),
+            belief_schema=schema,
+        )
+        policy, _ = backend.load_policy(path, bucketed_shapes=bucketed)
+        policy.admit_belief(schema)
+        assert policy.belief_binding == BeliefCheckpointBinding.from_schema(schema)
     round_tripped = canonical_from_mlx(flat_numpy(policy.parameters()))
     assert round_tripped.keys() == checkpoint.parameters.keys()
     for name, expected in checkpoint.parameters.items():

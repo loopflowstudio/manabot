@@ -31,7 +31,7 @@ import numpy as np
 from manabot.backends.mlx import arrays, rl
 from manabot.backends.mlx.arrays import flat_numpy, precision_dtype, to_mlx
 from manabot.backends.mlx.policy import MLXActorCritic
-from manabot.belief.encoding import BeliefEncodingSchema
+from manabot.belief.encoding import BeliefCheckpointBinding, BeliefEncodingSchema
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.architecture import architecture_receipt
@@ -60,8 +60,6 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
     reasons = []
     if observation.policy_input_version not in (9, 10, 11):
         reasons.append(f"policy_input_version={observation.policy_input_version}")
-    if model.belief_count_buckets:
-        reasons.append("belief inputs")
     if model.decision_memory != "none":
         reasons.append("decision memory")
     if model.recent_events:
@@ -226,6 +224,14 @@ class MLXBackend:
         mx.set_default_device(mx.cpu)
 
     @property
+    def belief_fit(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.belief_fit")
+
+    @property
+    def belief(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.belief")
+
+    @property
     def learner(self) -> ModuleType:
         return importlib.import_module("manabot.backends.mlx.learner")
 
@@ -284,6 +290,10 @@ class MLXBackend:
         world_binding = json.loads(checkpoint.metadata["world_binding"])
         validate_policy_input(policy, world_binding)
         policy.world_binding = world_binding
+        if policy.belief_count_buckets:
+            policy.belief_binding = BeliefCheckpointBinding.from_checkpoint(
+                checkpoint.record()
+            )
         training = json.loads(checkpoint.metadata.get("bc", "{}"))
         restore_value_semantic(policy, training.get("value_semantic"))
         return policy, checkpoint.space

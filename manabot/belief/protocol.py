@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+import numpy as np
 
 from manabot.policy.protocol import BackendPolicy
 
@@ -13,13 +16,16 @@ if TYPE_CHECKING:
 
 
 class SamplerCodec(Protocol):
-    def decode_sampler(self, data: bytes) -> Any: ...
+    def decode_legacy_sampler(self, data: bytes) -> dict[str, Any]: ...
+    def sampler_parameters(
+        self, model: LearnedDistribution
+    ) -> Mapping[str, np.ndarray]: ...
     def restore_sampler(
         self,
         schema: SamplerSchema,
         hidden_size: int,
         history_dropout: float,
-        state: Any,
+        parameters: Mapping[str, np.ndarray],
     ) -> LearnedDistribution: ...
 
 

@@ -44,6 +44,7 @@ from manabot.backends.mlx.rl import (
     expected_outcome,
     outcome_probabilities,
 )
+from manabot.belief.encoding import BeliefCheckpointBinding, BeliefEncodingSchema
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
@@ -114,6 +115,11 @@ class PackedGRU(nn.Module):
         self.input_bias = mx.zeros((3 * hidden_size,))
         self.hidden_bias = mx.zeros((3 * hidden_size,))
 
+    def step(self, inputs: mx.array, state: mx.array) -> mx.array:
+        return _compiled_gru_cell(
+            inputs @ self.Wx.T + self.input_bias, state, self.Wh, self.hidden_bias
+        )
+
     def run(
         self, table: mx.array, steps: Sequence[mx.array]
     ) -> tuple[mx.array, mx.array]:
@@ -131,8 +137,7 @@ class PackedGRU(nn.Module):
         finished: list[mx.array] = []
         for step, index in enumerate(steps):
             live = index.shape[0]
-            x = mx.take(table, index, axis=0) @ self.Wx.T + self.input_bias
-            state = _compiled_gru_cell(x, state[:live], self.Wh, self.hidden_bias)
+            state = self.step(mx.take(table, index, axis=0), state[:live])
             outputs.append(state)
             following = steps[step + 1].shape[0] if step + 1 < len(steps) else 0
             if following < live:
@@ -401,6 +406,25 @@ class MLXActorCritic(nn.Module):
             self.stream_norms = {
                 name: nn.LayerNorm(hidden, eps=1e-5) for name in streams
             }
+        self.belief_binding: BeliefCheckpointBinding | None = None
+        if config.belief_count_buckets > 0:
+            if config.belief_card_vocab_size < 1:
+                raise ValueError(
+                    "belief_card_vocab_size must be positive when belief input is enabled"
+                )
+            self.belief_card_embedding = nn.Embedding(
+                config.belief_card_vocab_size, hidden
+            )
+            self.belief_owner_embedding = nn.Embedding(
+                config.belief_owner_role_vocab_size, hidden
+            )
+            self.belief_zone_embedding = nn.Embedding(
+                config.belief_hidden_zone_vocab_size, hidden
+            )
+            self.belief_count_embedding = Projection(
+                config.belief_count_buckets, hidden
+            )
+            self.belief_global_embedding = Projection(2, hidden)
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
         # Draw the critic query last so the actor starts from the same weights
@@ -465,6 +489,9 @@ class MLXActorCritic(nn.Module):
     @property
     def belief_count_buckets(self) -> int:
         return self.config.belief_count_buckets
+
+    def admit_belief(self, belief_schema: BeliefEncodingSchema) -> None:
+        belief_schema.admit_model(self.config)
 
     @staticmethod
     def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
@@ -877,6 +904,17 @@ class MLXActorCritic(nn.Module):
             parts.append(
                 self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
                 + defs(batch.stack_rows)
+            )
+        if (belief := batch.belief) is not None:
+            rows = (
+                self.belief_card_embedding(mx.array(belief.cards))
+                + self.belief_owner_embedding(mx.array(belief.owners))
+                + self.belief_zone_embedding(mx.array(belief.zones))
+                + self.belief_count_embedding(self._floating(belief.probabilities))
+            )
+            parts.append(rows * self._floating(belief.validity)[..., None])
+            parts.append(
+                self.belief_global_embedding(self._floating(belief.globals))[:, None]
             )
         objects = mx.concatenate(parts, axis=1)
         count = objects.shape[1]

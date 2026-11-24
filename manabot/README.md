@@ -860,7 +860,7 @@ with those packages blocked.
 - `training/state/`: game-failure ledgers and numerical incidents.
 - `belief/`: viewer histories, world distributions and belief models;
   `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`
-  fits and persists hand samplers.
+  scores hand samplers and `checkpoint.py` persists them.
 - `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
   baseline) and the settings builders they share.
 - `experiment/`: what an experiment file runs on its machine: setup of the

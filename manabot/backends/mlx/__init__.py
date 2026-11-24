@@ -22,6 +22,8 @@ except ImportError as error:  # pragma: no cover - depends on the platform
 _FILES = frozenset(
     {
         "arrays",
+        "belief",
+        "belief_fit",
         "checkpoint",
         "collection",
         "learner",

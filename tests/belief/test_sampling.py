@@ -6,12 +6,14 @@ import itertools
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.torch.belief import (
     AutoregressiveBeliefSampler,
     physical_deal_log_prob,
     sample_physical_deal,
 )
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
+from manabot.sim.search.sampling_receipt import PreparedHands
 from managym.possible_worlds import PossibleWorldSpace
 
 
@@ -152,3 +154,38 @@ def test_large_support_inference_does_not_enumerate(
     assert counts.shape == (1, 40)
     assert counts.sum().item() == 20
     assert torch.isfinite(model.log_prob([row], counts)).all()
+
+
+def test_mlx_search_draws_match_the_physical_measure_with_known_cards() -> None:
+    pytest.importorskip("mlx.core")
+
+    row = _input()
+    codec = resolve("mlx").belief
+    prior = codec.PhysicalDistribution()
+    schema = SamplerSchema(row.vocabulary_identity, ("A", "B", "C"), 1, 3)
+    baseline = codec.AutoregressiveBeliefSampler(schema, hidden_size=4)
+    baseline.eval()
+    prepared = PreparedHands("fixture", "history", schema.card_names, row, "{}")
+    for distribution in (prior, baseline):
+        batch = distribution.sample_hands(
+            prepared, count=12, seed=19, check=lambda: None
+        )
+        assert batch == distribution.sample_hands(
+            prepared, count=12, seed=19, check=lambda: None
+        )
+        assert len({hand.counts for hand in batch.hands}) > 1
+        counts = torch.tensor(
+            [
+                [dict(hand.counts).get(card, 0) for card in schema.card_names]
+                for hand in batch.hands
+            ]
+        )
+        expected = physical_deal_log_prob([row] * len(counts), counts)
+        assert [hand.log_probability for hand in batch.hands] == pytest.approx(
+            expected.tolist(), abs=1e-6
+        )
+    empty = replace(
+        prepared, card_names=(), inputs=SamplerInput("empty", (), (), 0, ())
+    )
+    (hand,) = prior.sample_hands(empty, count=1, seed=19, check=lambda: None).hands
+    assert hand.counts == () and hand.log_probability == 0

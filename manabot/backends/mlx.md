@@ -197,49 +197,19 @@ registration digests and existing evaluation directories stay unchanged.
 
 ### PPO and belief sampling
 
-Train the Gray Ogre PPO policy on Apple Silicon without importing PyTorch:
+Train one Gray Ogre PPO update, then fit the sampler from the registered final
+policy. Use the same fresh experiment label on both commands so Etude delivers
+the policy checkpoint as the sampler job's `start` input.
 
 ```sh
-uv run --extra mlx etude train manabot/recipes/belief_policy.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
+uv run --extra mlx etude train experiments/belief.py --experiment belief-mlx --job policy --config '{"backend":"mlx","device":"mps"}'
+uv run --extra mlx etude train experiments/belief.py --experiment belief-mlx --job sampler --config '{"backend":"mlx"}'
 ```
 
-This writes a portable policy under
-`~/.etude/track/belief_policy/out/policies/00000001-raw.safetensors`. Collect
-hidden-hand histories with that frozen policy and fit a portable
-`belief.safetensors` sampler on MLX:
-
-```python
-from pathlib import Path
-
-from manabot.backends import resolve
-from manabot.belief.collect import collect_belief
-from manabot.belief.train import SamplerConfig, train_belief
-from manabot.recipes.belief_policy import match
-
-backend = resolve("mlx")
-out = Path(".runs/mlx-belief")
-histories = collect_belief(
-    Path("~/.etude/track/belief_policy/out/policies/00000001-raw.safetensors").expanduser(),
-    out / "histories.json",
-    match=match(),
-    games=3,
-    seed=0,
-    backend=backend,
-)
-sampler = train_belief(
-    histories,
-    out / "belief.safetensors",
-    SamplerConfig(steps=4, batch_size=8, hidden_size=16, evaluation_samples=4),
-    seed=0,
-    backend=backend.belief_fit,
-    codec=backend.belief,
-)
-```
-
-In a two-job Etude experiment (such as `experiments/belief.py`), configure the
-jobs with `belief_policy.PolicyConfig(backend="mlx", device="mps")` and
-`belief_sampler.BeliefConfig(backend="mlx")` (`start=policy`) so Etude delivers
-the policy checkpoint as `run.input("start")` and records `belief.safetensors`.
+The sampler job writes `histories.json` with the policy's SHA-256, fits the
+autoregressive sampler on the training games, and registers
+`belief.safetensors` at step 4. Its output directory is
+`~/.etude/track/belief-mlx/sampler@0/out/`.
 
 Both Torch and MLX write `belief.safetensors` in one portable container holding
 float32 parameters under canonical names alongside the format, schema, dataset,

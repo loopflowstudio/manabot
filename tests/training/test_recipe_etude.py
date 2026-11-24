@@ -106,7 +106,7 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     dataset = read_dataset(tmp_path / "sampler/histories.json")
     assert dataset.policy_identity == hashlib.sha256(original).hexdigest()
     assert policy.read_bytes() == original
-    assert (tmp_path / "sampler/belief.pt").is_file()
+    assert (tmp_path / "sampler/belief.safetensors").is_file()
 
 
 @pytest.mark.parametrize(

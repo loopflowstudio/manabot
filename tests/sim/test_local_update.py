@@ -10,8 +10,9 @@ import torch
 from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.belief.checkpoint import save_belief_sampler
 from manabot.belief.sampling_data import collect_frozen_policy
-from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
+from manabot.belief.sampling_fit import fit_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env.env import Env
@@ -314,10 +315,8 @@ def attach_learned_sampler(
         games=3,
         seed=719,
         max_steps=1000,
-        backend=resolve("torch"),
+        backend=TORCH_BACKEND,
     )
-    from manabot.backends.torch import belief_fit
-
     result = fit_belief_sampler(
         dataset,
         steps=1,
@@ -325,10 +324,10 @@ def attach_learned_sampler(
         hidden_size=8,
         evaluation_samples=2,
         seed=18,
-        backend=belief_fit,
+        backend=TORCH_BACKEND.belief_fit,
     )
-    path = tmp_path / "sampler.pt"
-    digest = save_belief_sampler(path, result, dataset, codec=belief_fit)
+    path = tmp_path / "belief.safetensors"
+    digest = save_belief_sampler(path, result, dataset, codec=TORCH_BACKEND.belief)
     return LocalUpdateTeacher(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
@@ -341,7 +340,7 @@ def attach_learned_sampler(
             policy_identity=dataset.policy_identity,
             world_identity=dataset.world_identity,
         ),
-        backend=resolve("torch"),
+        backend=TORCH_BACKEND,
     )
 
 

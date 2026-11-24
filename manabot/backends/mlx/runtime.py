@@ -40,7 +40,7 @@ def scoped(threads: int, precision: Precision, device: str) -> Iterator[None]:
 
 
 @contextmanager
-def preserve_rng(device: str) -> Iterator[None]:
+def preserve_rng(device: str | None = None) -> Iterator[None]:
     # MLX exposes the current key as two uint32 words and seeds from a uint64.
     high, low = mx.random.state[0].tolist()
     try:

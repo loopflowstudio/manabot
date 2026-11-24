@@ -498,7 +498,8 @@ Ogre match, whose rates follow the horizon the recipe states
 ```bash
 uv run etude launch experiments/belief.py --rent l4   # the policy; again once it finishes, the sampler
 uv run etude train experiments/belief.py              # the same jobs on this computer
-uv run --extra mlx etude train manabot/recipes/belief_policy.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
+uv run --extra mlx etude train experiments/belief.py --experiment belief-mlx --job policy --config '{"backend":"mlx","device":"mps"}'
+uv run --extra mlx etude train experiments/belief.py --experiment belief-mlx --job sampler --config '{"backend":"mlx"}'
 ```
 
 On this computer the first `etude train experiments/belief.py` trains the

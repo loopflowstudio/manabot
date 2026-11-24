@@ -40,7 +40,6 @@ from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
-from manabot.belief.range import BeliefError
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
@@ -453,29 +452,7 @@ class ActorCritic(nn.Module):
 
     def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
         """Admit a host belief vocabulary against this policy's input embeddings."""
-        if self.belief_count_buckets != belief_schema.count_buckets:
-            raise BeliefError("ActorCritic and belief encoding count buckets differ")
-        if self.belief_card_embedding is None:
-            raise BeliefError(
-                "Manabot requires an ActorCritic with belief input enabled"
-            )
-        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
-        if maximum_card_id >= self.belief_card_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
-        if self.belief_owner_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
-        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
-        if maximum_owner_id >= self.belief_owner_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic owner-role vocabulary"
-            )
-        if self.belief_zone_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
-        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
-        if maximum_zone_id >= self.belief_zone_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
-            )
+        belief_schema.admit_model(self.config)
 
     def _binding(self) -> str:
         return self._binding_cache.get(
