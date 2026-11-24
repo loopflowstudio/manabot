@@ -393,13 +393,25 @@ impl CompareOp {
         }
     }
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContextRead {
+    SourcePower,
+    TriggeringPermanent,
+}
+
 impl Condition {
-    fn reads_source_power(&self) -> bool {
+    pub fn reads_source_power(&self) -> bool {
+        self.reads(ContextRead::SourcePower)
+    }
+    pub fn reads_triggering_permanent(&self) -> bool {
+        self.reads(ContextRead::TriggeringPermanent)
+    }
+
+    fn reads(&self, read: ContextRead) -> bool {
         match self {
-            Self::Compare { left, right, .. } => {
-                left.reads_source_power() || right.reads_source_power()
-            }
-            Self::AllOf(items) | Self::AnyOf(items) => items.iter().any(Self::reads_source_power),
+            Self::Compare { left, right, .. } => left.reads(read) || right.reads(read),
+            Self::AllOf(items) | Self::AnyOf(items) => items.iter().any(|item| item.reads(read)),
+            Self::TriggeringHadCounters => read == ContextRead::TriggeringPermanent,
             _ => false,
         }
     }
@@ -653,9 +665,37 @@ impl PlayerSelector {
     }
 }
 
+/// A permanent characteristic, read live or at its last battlefield appearance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ObjectProperty {
+    Power,
+    Toughness,
+    ManaValue,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Aggregate {
+    Sum,
+    Max,
+}
+
+impl Aggregate {
+    pub fn evaluate(self, values: impl Iterator<Item = i32>) -> i32 {
+        match self {
+            Self::Sum => values.sum(),
+            Self::Max => values.max().unwrap_or(0),
+        }
+    }
+}
+
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
+    Property {
+        of: Box<ObjectSelector>,
+        property: ObjectProperty,
+        aggregate: Aggregate,
+    },
     LifeTotal(PlayerSelector),
     LifeGainedThisTurn(PlayerSelector),
     LifeLostThisTurn(PlayerSelector),
@@ -892,6 +932,14 @@ pub enum Except {
 }
 
 impl ObjectSelector {
+    pub fn property(self, property: ObjectProperty, aggregate: Aggregate) -> EffectValue {
+        EffectValue::Property {
+            of: Box::new(self),
+            property,
+            aggregate,
+        }
+    }
+
     /// Count every object named by this selector.
     pub fn count(self) -> EffectValue {
         EffectValue::Objects {
@@ -1715,8 +1763,9 @@ pub struct TargetRequirement {
 }
 
 impl ObjectSelector {
-    fn reads_source_power(&self) -> bool {
+    fn reads(&self, read: ContextRead) -> bool {
         match self {
+            Self::Triggering => read == ContextRead::TriggeringPermanent,
             Self::Each {
                 exact_mana_value,
                 max_mana_value,
@@ -1724,10 +1773,13 @@ impl ObjectSelector {
             } => [exact_mana_value, max_mana_value]
                 .into_iter()
                 .flatten()
-                .any(|value| value.reads_source_power()),
-            _ => self
-                .target_spec()
-                .is_some_and(TargetSpec::reads_source_power),
+                .any(|value| value.reads(read)),
+            _ => {
+                read == ContextRead::SourcePower
+                    && self
+                        .target_spec()
+                        .is_some_and(TargetSpec::reads_source_power)
+            }
         }
     }
 }
@@ -1817,17 +1869,21 @@ impl Default for Effect {
 
 impl Effect {
     pub fn reads_source_power(&self) -> bool {
+        self.reads(ContextRead::SourcePower)
+    }
+    pub fn reads_triggering_permanent(&self) -> bool {
+        self.reads(ContextRead::TriggeringPermanent)
+    }
+
+    fn reads(&self, read: ContextRead) -> bool {
         let target_reads_power = match self {
             Self::TargetClause { requirement, .. } => requirement.reads_source_power(),
             _ => self
                 .target_spec()
                 .is_some_and(TargetSpec::reads_source_power),
         };
-        if target_reads_power
-            || self
-                .selectors()
-                .into_iter()
-                .any(ObjectSelector::reads_source_power)
+        if (read == ContextRead::SourcePower && target_reads_power)
+            || self.selectors().into_iter().any(|s| s.reads(read))
         {
             return true;
         }
@@ -1835,13 +1891,14 @@ impl Effect {
             Modification::SetBasePt { power, toughness } => [power, toughness]
                 .into_iter()
                 .flatten()
-                .any(EffectValue::reads_source_power),
+                .any(|v| v.reads(read)),
             Modification::ModifyPt { power, toughness } => {
-                power.reads_source_power() || toughness.reads_source_power()
+                power.reads(read) || toughness.reads(read)
             }
             _ => false,
         };
         match self {
+            Self::MayExileTriggeringWithSource => read == ContextRead::TriggeringPermanent,
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
             Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
             Self::DealDamage { amount, .. }
@@ -1857,13 +1914,13 @@ impl Effect {
             | Self::CreateToken { count: amount, .. }
             | Self::AddOneColorManaValue { amount }
             | Self::ExileUntilNonlandCastFree { below: amount }
-            | Self::LookAndSelect { look: amount, .. } => amount.reads_source_power(),
-            Self::If { condition, .. } if condition.reads_source_power() => true,
-            Self::SelectCards { max, .. } if max.reads_source_power() => true,
+            | Self::LookAndSelect { look: amount, .. } => amount.reads(read),
+            Self::If { condition, .. } if condition.reads(read) => true,
+            Self::SelectCards { max, .. } if max.reads(read) => true,
             Self::TriggerModes {
                 up_to: Some(limit), ..
-            } if limit.reads_source_power() => true,
-            _ => self.any_child_effect(Self::reads_source_power),
+            } if limit.reads(read) => true,
+            _ => self.any_child_effect(|effect| effect.reads(read)),
         }
     }
 
@@ -1875,7 +1932,7 @@ impl Effect {
 
     /// Instructions within this resolution. Delayed and reflexive triggers
     /// inspect their programs when those abilities resolve.
-    fn any_child_effect(&self, test: fn(&Effect) -> bool) -> bool {
+    fn any_child_effect(&self, test: impl Fn(&Effect) -> bool + Copy) -> bool {
         match self {
             Self::OnNthResolutionThisTurn { effect, .. } => test(effect),
             Self::If {
@@ -1899,28 +1956,6 @@ impl Effect {
             Self::Modal { modes } | Self::TriggerModes { modes, .. } => {
                 modes.iter().flatten().any(test)
             }
-            _ => false,
-        }
-    }
-
-    /// Whether the effect reads the permanent whose event fired its
-    /// trigger, which the trigger then keeps as its context.
-    pub fn reads_triggering_permanent(&self) -> bool {
-        if self
-            .selectors()
-            .into_iter()
-            .any(|selector| *selector == ObjectSelector::Triggering)
-        {
-            return true;
-        }
-        match self {
-            Effect::MayExileTriggeringWithSource => true,
-            Effect::Earthbend { count: value, .. }
-            | Effect::MillCards { count: value, .. }
-            | Effect::DrawCards { count: value }
-            | Effect::GainLife { amount: value }
-            | Effect::DealDamage { amount: value, .. }
-            | Effect::PutCounters { amount: value, .. } => *value == EffectValue::TriggeringPower,
             _ => false,
         }
     }
@@ -2374,14 +2409,21 @@ impl Effect {
 }
 
 impl EffectValue {
-    fn reads_source_power(&self) -> bool {
+    fn reads(&self, read: ContextRead) -> bool {
         match self {
-            Self::SourcePower => true,
-            Self::Half(inner) => inner.reads_source_power(),
-            Self::Objects { of, .. }
+            Self::Property {
+                of,
+                property: ObjectProperty::Power,
+                ..
+            } if **of == ObjectSelector::This => read == ContextRead::SourcePower,
+            Self::SourcePower => read == ContextRead::SourcePower,
+            Self::TriggeringPower => read == ContextRead::TriggeringPermanent,
+            Self::Half(inner) => inner.reads(read),
+            Self::Property { of, .. }
+            | Self::Objects { of, .. }
             | Self::DistinctManaValues { of }
             | Self::SpellManaValue(of)
-            | Self::SpellManaSpent(of) => of.reads_source_power(),
+            | Self::SpellManaSpent(of) => of.reads(read),
             _ => false,
         }
     }
@@ -2390,14 +2432,26 @@ impl EffectValue {
         match self {
             Self::SourcePower => true,
             Self::Half(inner) => inner.reads_source(),
-            Self::Objects { of, .. } | Self::DistinctManaValues { of } => matches!(
-                of.as_ref(),
-                ObjectSelector::This
-                    | ObjectSelector::Each {
-                        except: Some(Except::This),
-                        ..
-                    }
-            ),
+            Self::Property { of, .. }
+            | Self::Objects { of, .. }
+            | Self::DistinctManaValues { of } => match of.as_ref() {
+                ObjectSelector::This | ObjectSelector::Triggering => true,
+                ObjectSelector::Each {
+                    except,
+                    predicate,
+                    exact_mana_value,
+                    max_mana_value,
+                    ..
+                } => {
+                    *except == Some(Except::This)
+                        || predicate.reads_source()
+                        || [exact_mana_value, max_mana_value]
+                            .into_iter()
+                            .flatten()
+                            .any(|v| v.reads_source())
+                }
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -2411,7 +2465,10 @@ impl EffectValue {
             Self::LifeTotal(who) | Self::LifeLostThisTurn(who) | Self::LifeGainedThisTurn(who) => {
                 !matches!(who, PlayerSelector::You | PlayerSelector::EachOpponent)
             }
-            Self::Objects { of, .. } | Self::DistinctManaValues { of } => match of.as_ref() {
+            Self::Property { of, .. }
+            | Self::Objects { of, .. }
+            | Self::DistinctManaValues { of } => match of.as_ref() {
+                ObjectSelector::This | ObjectSelector::Triggering => false,
                 ObjectSelector::Each {
                     of: Scope::YouControl | Scope::OpponentsControl | Scope::Battlefield,
                     except,
@@ -2506,6 +2563,32 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectiveTrigger {
+    /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clock: Option<GrantClock>,
     pub ability: Ability,
     pub program: bool,
+}
+
+/// Identifies one limited ability supplied by a continuous effect. Several
+/// permanents can receive the same static grant at one timestamp.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+pub struct GrantClock {
+    pub grantor: crate::game_object::PermanentId,
+    pub timestamp: crate::game_object::PublicId,
+    pub static_slot: Option<usize>,
+    pub ability_index: usize,
+}
+
+impl TriggerCondition {
+    pub fn once_each_turn(&self) -> bool {
+        match self {
+            Self::OnceEachTurn { .. } => true,
+            Self::WasCast { condition }
+            | Self::FromZone { condition, .. }
+            | Self::ActiveIf { condition, .. }
+            | Self::WhileSourceAttacking { condition } => condition.once_each_turn(),
+            _ => false,
+        }
+    }
 }

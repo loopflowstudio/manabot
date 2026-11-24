@@ -1,9 +1,9 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, AttackSize, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
-        Per, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject, TurnStep,
+        Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, Effect, EffectValue,
+        ObjectProperty, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -18,6 +18,9 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        courageous_goblin(),
+        bulk_up(),
+        ashroot_animist(),
         alesha_who_laughs_at_fate(),
         searslicer_goblin(),
         gorehorn_raider(),
@@ -994,6 +997,117 @@ fn alesha_who_laughs_at_fate() -> CardDefinition {
                     )],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ashroot_animist() -> CardDefinition {
+    let text_box = "Trample\nWhenever this creature attacks, another target creature you control gains trample and gets +X/+X until end of turn, where X is this creature's power.";
+    CardDefinition {
+        key: "fdn.ashroot_animist",
+        scryfall_id: "dece147f-d71a-4c95-9fe5-f5c862ef14ac",
+        printed: PrintedCharacteristics {
+            name: "Ashroot Animist".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Lizard".into(), "Druid".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::another(TargetSpec::CreatureYouControl),
+                    effects: vec![
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                        ),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::ModifyPt {
+                                power: EffectValue::SourcePower,
+                                toughness: EffectValue::SourcePower,
+                            },
+                        ),
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bulk_up() -> CardDefinition {
+    let text_box = "Double target creature's power until end of turn.\nFlashback {4}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+    CardDefinition {
+        key: "fdn.bulk_up",
+        scryfall_id: "977dcc50-da10-4281-b522-9240c1204f5d",
+        printed: PrintedCharacteristics {
+            name: "Bulk Up".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{4}{R}{R}"))],
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::ModifyPt {
+                    power: ObjectSelector::Target(TargetSpec::Creature)
+                        .property(ObjectProperty::Power, Aggregate::Sum),
+                    toughness: 0.into(),
+                },
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn courageous_goblin() -> CardDefinition {
+    let text_box = "Whenever this creature attacks while you control a creature with power 4 or greater, this creature gets +1/+0 and gains menace until end of turn. (It can't be blocked except by two or more creatures.)";
+    CardDefinition {
+        key: "fdn.courageous_goblin",
+        scryfall_id: "8db6819c-666a-409d-85a5-b9ac34d8dd2f",
+        printed: PrintedCharacteristics {
+            name: "Courageous Goblin".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::Compare {
+                        left: Box::new(
+                            ObjectSelector::each_you_control(CardPredicate {
+                                min_power: Some(4),
+                                ..CardPredicate::creature()
+                            })
+                            .count(),
+                        ),
+                        op: CompareOp::Ge,
+                        right: Box::new(1.into()),
+                    },
+                    condition: Box::new(TriggerCondition::attacks(
+                        TriggerSubject::This,
+                        Per::Object,
+                    )),
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 0)),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    ),
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

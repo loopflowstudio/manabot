@@ -5,7 +5,10 @@
 use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
-        ability::{Condition, Effect, EffectiveTrigger},
+        ability::{
+            Condition, Effect, EffectValue, EffectiveTrigger, Except, ObjectProperty,
+            ObjectSelector, Scope,
+        },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, Keyword, Keywords, LayerValue,
             PowerCda, StaticAbility, StaticPtBuff, StaticScope,
@@ -157,8 +160,60 @@ impl ReadSet {
         }
     }
 
+    fn value(&mut self, value: &EffectValue) {
+        match value {
+            EffectValue::Half(inner) => self.value(inner),
+            EffectValue::GraveyardMatching { predicate, .. } if predicate.reads_power() => {
+                self.fields |= CARD_TYPES
+            }
+            EffectValue::SourcePower => self.fields |= POWER,
+            EffectValue::GreatestSharedCreatureType => self.fields |= CARD_TYPES | SUBTYPES,
+            EffectValue::CreaturesWithCounters => self.fields |= CARD_TYPES,
+            EffectValue::GreatestPowerYouControl { predicate } => {
+                self.fields |= CARD_TYPES | POWER;
+                self.predicate(predicate);
+            }
+            EffectValue::BattlefieldMatching { predicate }
+            | EffectValue::AttackingMatching { predicate } => self.predicate(predicate),
+            EffectValue::Property { of, .. }
+            | EffectValue::Objects { of, .. }
+            | EffectValue::DistinctManaValues { of } => {
+                if let EffectValue::Property {
+                    property: ObjectProperty::Power | ObjectProperty::Toughness,
+                    ..
+                } = value
+                {
+                    self.fields |= POWER;
+                }
+                if let EffectValue::Objects {
+                    predicate: Some(p), ..
+                } = value
+                {
+                    self.predicate(p);
+                }
+                if let ObjectSelector::Each {
+                    predicate,
+                    exact_mana_value,
+                    max_mana_value,
+                    ..
+                } = of.as_ref()
+                {
+                    self.predicate(predicate);
+                    for bound in [exact_mana_value, max_mana_value].into_iter().flatten() {
+                        self.value(bound);
+                    }
+                }
+            }
+            _ => self.mana |= value.reads_mana_pools(),
+        }
+    }
+
     fn condition(&mut self, condition: &Condition) {
         match condition {
+            Condition::Compare { left, right, .. } => {
+                self.value(left);
+                self.value(right);
+            }
             Condition::ControlsAtLeast {
                 predicate,
                 distinct_names,
@@ -518,6 +573,7 @@ impl<'a> Context<'a> {
                     .iter()
                     .cloned()
                     .map(|ability| EffectiveTrigger {
+                        clock: None,
                         ability,
                         program: false,
                     })
@@ -757,7 +813,9 @@ impl<'a> Context<'a> {
                                 m.map_amount(|n| LayerValue::Fixed(self.value(n, id))),
                             ),
                             Operation::Power(cda) => Operation::Modify(Modification::SetBasePt {
-                                power: Some(LayerValue::Fixed(self.cda(cda, node.source))),
+                                power: Some(LayerValue::Fixed(
+                                    self.cda(cda, self.controller(node.source)),
+                                )),
                                 toughness: None,
                             }),
                             Operation::Buff(buff) => self.buff(buff, node.source, id),
@@ -792,9 +850,10 @@ impl<'a> Context<'a> {
                 .collect::<BTreeSet<_>>()
                 .len() as i32
         });
-        let per_card = buff.per_graveyard_matching.as_ref().map_or(1, |p| {
-            self.game.count_graveyard_matching(controller, p) as i32
-        });
+        let per_card = buff
+            .per_graveyard_matching
+            .as_ref()
+            .map_or(1, |p| self.graveyard_count(controller, p));
         let times = per_type * per_color * per_card;
         Operation::Modify(Modification::ModifyPt {
             power: LayerValue::Fixed(buff.power * times),
@@ -826,8 +885,7 @@ impl<'a> Context<'a> {
             }
         }
     }
-    fn cda(&self, cda: &PowerCda, source: PermanentId) -> i32 {
-        let controller = self.controller(source);
+    fn cda(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
                 .objects
@@ -844,13 +902,154 @@ impl<'a> Context<'a> {
                 .iter()
                 .filter(|(id, o)| self.controller(**id) == controller && o.view.is_creature())
                 .count() as i32,
-            PowerCda::GraveyardMatching(p) => {
-                self.game.count_graveyard_matching(controller, p) as i32
-            }
+            PowerCda::GraveyardMatching(p) => self.graveyard_count(controller, p),
         }
     }
+    fn graveyard_count(&self, controller: PlayerId, predicate: &CardPredicate) -> i32 {
+        self.game
+            .state
+            .zone_cards(ZoneType::Graveyard, controller)
+            .filter(|card| {
+                let object = self.game.state.object_of(*card);
+                self.game.off_battlefield_matches(object, predicate, || {
+                    let card = &self.game.state[object];
+                    card.power_cda()
+                        .map_or_else(|| card.power.unwrap_or(0), |cda| self.cda(cda, card.owner))
+                })
+            })
+            .count() as i32
+    }
+
+    fn property(&self, id: PermanentId, property: ObjectProperty) -> i32 {
+        match property {
+            ObjectProperty::Power => self.objects[&id].view.power,
+            ObjectProperty::Toughness => self.objects[&id].view.toughness,
+            ObjectProperty::ManaValue => self.game.permanent_mana_value(id),
+        }
+    }
+
+    /// Static comparisons see the characteristics at this point in the layer system.
+    fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
+        let controller = self.controller(source);
+        let controlled = || self.game.iter_battlefield_permanents(controller);
+        match value {
+            EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
+            EffectValue::SourcePower => self.objects[&source].view.power,
+            EffectValue::Property { of, property, .. } if **of == ObjectSelector::This => {
+                self.property(source, *property)
+            }
+            EffectValue::Property { of, .. }
+            | EffectValue::Objects { of, .. }
+            | EffectValue::DistinctManaValues { of } => {
+                let selection = match of.as_ref() {
+                    ObjectSelector::Each {
+                        of,
+                        predicate,
+                        except,
+                        exact_mana_value,
+                        max_mana_value,
+                    } => Some((
+                        of,
+                        predicate,
+                        except,
+                        exact_mana_value
+                            .as_ref()
+                            .map(|n| self.comparison_value(n, source)),
+                        max_mana_value
+                            .as_ref()
+                            .map(|n| self.comparison_value(n, source)),
+                    )),
+                    _ => None,
+                };
+                let selected = self.objects.keys().copied().filter(|&id| {
+                    let Some((scope, predicate, except, exact, max)) = selection else {
+                        return **of == ObjectSelector::This && id == source;
+                    };
+                    !self.game.is_phased_out(id)
+                        && match scope {
+                            Scope::YouControl => self.controller(id) == controller,
+                            Scope::OpponentsControl => self.controller(id) != controller,
+                            Scope::Battlefield => true,
+                            _ => false,
+                        }
+                        && !(id == source && *except == Some(Except::This))
+                        && self.matches(id, predicate, Some(source))
+                        && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
+                        && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
+                });
+                match value {
+                    EffectValue::Property {
+                        property,
+                        aggregate,
+                        ..
+                    } => aggregate.evaluate(selected.map(|id| self.property(id, *property))),
+                    EffectValue::Objects { predicate, .. } => selected
+                        .filter(|&id| {
+                            predicate
+                                .as_ref()
+                                .is_none_or(|p| self.matches(id, p, Some(source)))
+                        })
+                        .count()
+                        as i32,
+                    _ => selected
+                        .map(|id| self.game.permanent_mana_value(id))
+                        .collect::<BTreeSet<_>>()
+                        .len() as i32,
+                }
+            }
+            EffectValue::GreatestPowerYouControl { predicate } => controlled()
+                .filter(|&id| {
+                    self.objects[&id].view.is_creature() && self.matches(id, predicate, None)
+                })
+                .map(|id| self.objects[&id].view.power)
+                .max()
+                .unwrap_or(0)
+                .max(0),
+            EffectValue::GreatestSharedCreatureType => {
+                let mut counts = BTreeMap::new();
+                for id in controlled().filter(|id| self.objects[id].view.is_creature()) {
+                    for subtype in self.objects[&id]
+                        .view
+                        .subtypes
+                        .iter()
+                        .filter(|s| is_creature_type(s))
+                    {
+                        *counts.entry(subtype).or_insert(0) += 1;
+                    }
+                }
+                counts.into_values().max().unwrap_or(0)
+            }
+            EffectValue::CreaturesWithCounters => controlled()
+                .filter(|&id| {
+                    self.objects[&id].view.is_creature()
+                        && self
+                            .game
+                            .live_permanent(id)
+                            .counter_count(CounterKind::PlusOnePlusOne)
+                            > 0
+                })
+                .count() as i32,
+            EffectValue::AttackingMatching { predicate }
+            | EffectValue::BattlefieldMatching { predicate } => controlled()
+                .filter(|&id| {
+                    self.matches(id, predicate, None)
+                        && (!matches!(value, EffectValue::AttackingMatching { .. })
+                            || self.game.live_permanent(id).attacking)
+                })
+                .count() as i32,
+            EffectValue::GraveyardMatching { base, predicate } => {
+                base.saturating_add(self.graveyard_count(controller, predicate))
+            }
+            _ => self.game.controller_value(value, controller),
+        }
+    }
+
     fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
         match condition {
+            Condition::Compare { left, op, right } => op.test(
+                self.comparison_value(left, source),
+                self.comparison_value(right, source),
+            ),
             Condition::BattlefieldAtLeast { count, predicate } => {
                 self.objects
                     .keys()
@@ -1029,6 +1228,17 @@ impl<'a> Context<'a> {
             let id = instruction.target;
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
+            let clock = |ability: &crate::state::ability::Ability, index| {
+                let crate::state::ability::Ability::Triggered { condition, .. } = ability;
+                condition
+                    .once_each_turn()
+                    .then(|| crate::state::ability::GrantClock {
+                        timestamp: node.timestamp,
+                        grantor: node.source,
+                        static_slot: (node.key[1] != usize::MAX).then_some(node.key[1]),
+                        ability_index: index,
+                    })
+            };
             match &instruction.operation {
                 Operation::Name(name) => {
                     view.name = name.clone();
@@ -1050,17 +1260,20 @@ impl<'a> Context<'a> {
                     if let Some(definition) = self.game.inherited_definition(id) {
                         view.activated_abilities
                             .extend(definition.activated_abilities.clone());
-                        view.triggered_abilities
-                            .extend(definition.abilities.iter().cloned().map(|ability| {
-                                EffectiveTrigger {
+                        view.triggered_abilities.extend(
+                            definition.abilities.iter().cloned().enumerate().map(
+                                |(index, ability)| EffectiveTrigger {
+                                    clock: clock(&ability, index),
                                     ability,
                                     program: false,
-                                }
-                            }));
+                                },
+                            ),
+                        );
                     }
                 }
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
+                        clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
                     })
@@ -1117,6 +1330,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
+                            clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
                         })
@@ -1125,6 +1339,7 @@ impl<'a> Context<'a> {
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
+                                clock: None,
                                 ability: crate::state::ability::Ability::ward(cost.clone()),
                                 program: true,
                             });

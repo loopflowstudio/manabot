@@ -800,6 +800,24 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
+        EffectValue::Property {
+            of,
+            property,
+            aggregate,
+        } => {
+            use crate::state::ability::{Aggregate, ObjectProperty};
+            let noun = match property {
+                ObjectProperty::Power => "power",
+                ObjectProperty::Toughness => "toughness",
+                ObjectProperty::ManaValue => "mana value",
+            };
+            let how = match of.as_ref() {
+                ObjectSelector::This | ObjectSelector::Target(_) | ObjectSelector::Triggering => "",
+                _ if *aggregate == Aggregate::Sum => "total ",
+                _ => "greatest ",
+            };
+            format!("the {how}{noun} of {}", selector_description(of))
+        }
         EffectValue::DistinctManaValues { of } => format!(
             "the number of different mana values among {}",
             selector_description(of)

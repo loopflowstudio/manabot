@@ -87,12 +87,14 @@ mod spm;
 mod sth;
 mod stx;
 mod tdm;
+mod thb;
 mod ths;
 mod tla;
 mod tle;
 mod tokens;
 mod ulg;
 mod vis;
+mod vow;
 mod war;
 mod woe;
 mod wth;
@@ -203,11 +205,13 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     sth::cards,
     stx::cards,
     tdm::cards,
+    thb::cards,
     ths::cards,
     tla::cards,
     tle::cards,
     ulg::cards,
     vis::cards,
+    vow::cards,
     war::cards,
     woe::cards,
     wth::cards,

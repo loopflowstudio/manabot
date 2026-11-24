@@ -114,6 +114,7 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
@@ -158,6 +159,11 @@ export interface PlayerTurnHistory {
   /** Life lost this turn (CR 119.3). */
   life_lost?: number;
   life_gains?: number;
+  life_gained?: number;
+  creatures_died?: number;
+  permanents_left?: number;
+  nonland_permanents_left?: number;
+  warped_this_turn?: boolean;
   mana_spent_casting?: number;
 }
 
@@ -252,6 +258,7 @@ export interface DecisionContextView {
 }
 
 export interface StackEntryView {
+  mana_spent?: number;
   combat_damage_to_players?: number[];
   ability_resolutions?: number;
   id: number;

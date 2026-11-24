@@ -1,16 +1,25 @@
 //! Dragons of Tarkir.
 use managym_state::{
-    ability::{Condition, Effect, ObjectSelector, Scope, TargetSpec},
-    card::{
-        CardDefinition, CardType, CardTypes, PrintedCharacteristics, SpellCostReduction,
-        StaticAbility,
+    ability::{
+        Ability, Actor, Aggregate, CompareOp, Condition, Effect, ObjectProperty, ObjectSelector,
+        Scope, TargetSpec, TriggerCondition, TurnStep,
     },
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        SpellCostReduction, StaticAbility,
+    },
+    effect::Modification,
     mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![clone_legion(), dragonlords_servant(), rending_volley()]
+    vec![
+        surrak_the_hunt_caller(),
+        clone_legion(),
+        dragonlords_servant(),
+        rending_volley(),
+    ]
 }
 
 fn clone_legion() -> CardDefinition {
@@ -80,6 +89,41 @@ fn dragonlords_servant() -> CardDefinition {
                 condition: Condition::Always,
                 generic: 1,
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn surrak_the_hunt_caller() -> CardDefinition {
+    let text_box = "Formidable — At the beginning of combat on your turn, if creatures you control have total power 8 or greater, target creature you control gains haste until end of turn. (It can attack and {T} no matter when it came under your control.)";
+    CardDefinition {
+        key: "dtk.surrak_the_hunt_caller",
+        scryfall_id: "b374446d-44bc-4ac5-9829-8c49f0cca173",
+        printed: PrintedCharacteristics {
+            name: "Surrak, the Hunt Caller".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(5),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                intervening_if: Some(Condition::Compare {
+                    left: Box::new(
+                        ObjectSelector::each_you_control(CardPredicate::creature())
+                            .property(ObjectProperty::Power, Aggregate::Sum),
+                    ),
+                    op: CompareOp::Ge,
+                    right: Box::new(8.into()),
+                }),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                )],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

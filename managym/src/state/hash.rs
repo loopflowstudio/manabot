@@ -88,6 +88,8 @@ struct CanonicalTurn<'a> {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     ability_triggers_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
+    #[serde(skip_serializing_if = "crate::flow::turn::UsedTriggerGrants::is_empty")]
+    used_trigger_grants: &'a crate::flow::turn::UsedTriggerGrants,
     #[serde(serialize_with = "crate::state::game_object::exact")]
     ability_resolutions_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -117,6 +119,7 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             attacks_this_turn: turn.attacks_this_turn.clone(),
 
             history: turn.history,
+            used_trigger_grants: &turn.used_trigger_grants,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()

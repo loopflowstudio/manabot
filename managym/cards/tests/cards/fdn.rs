@@ -1724,7 +1724,9 @@ fn attack_batch_each_doubled_occurrence_keeps_its_attacker() {
         inspect::counters,
     };
     use managym::state::{
-        ability::{Ability, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Condition, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject,
+        },
         effect::Modification,
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -1734,10 +1736,13 @@ fn attack_batch_each_doubled_occurrence_keeps_its_attacker() {
     let mut s = five_color_setup(&["Katara, the Fearless", "Gray Ogre"]);
     let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
     let listener = Ability::Triggered {
-        condition: TriggerCondition::attacks(
-            TriggerSubject::you_control(CardPredicate::creature()),
-            Per::Object,
-        ),
+        condition: TriggerCondition::ActiveIf {
+            active_if: Condition::YourTurn,
+            condition: Box::new(TriggerCondition::attacks(
+                TriggerSubject::you_control(CardPredicate::creature()),
+                Per::Object,
+            )),
+        },
         intervening_if: None,
         effects: vec![Effect::put_counters(
             ObjectSelector::Triggering,
@@ -2005,4 +2010,566 @@ fn attack_batch_spell_payment_comparison_survives_countering() {
             .is_empty());
         assert_eq!(s.game().state.players[1].life, before + i32::from(discount));
     }
+}
+
+#[test]
+fn power_batch_goblin_and_ruby_qualify_at_declaration() {
+    use crate::support::game::{clear_summoning_sickness, set_counters};
+    use managym::state::permanent::CounterKind;
+    for (name, qualified) in [
+        ("Courageous Goblin", (3, 2)),
+        ("Ruby, Daring Tracker", (3, 4)),
+    ] {
+        let mut s = five_color_setup(&[name, "Gray Ogre"]);
+        let source = s.force_permanent_on_battlefield(0, name);
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        clear_summoning_sickness(&mut s, source);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        let base = s.game().characteristics(source).pt();
+        let root = s.game().clone();
+        for before in [false, true] {
+            *s.game_mut() = root.clone();
+            if before {
+                set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 2);
+            }
+            attack_with(&mut s, source);
+            assert_eq!(s.game().state.stack_objects.len(), usize::from(before));
+            set_counters(
+                &mut s,
+                ogre,
+                CounterKind::PlusOnePlusOne,
+                if before { 0 } else { 2 },
+            );
+            settle(&mut s);
+            let view = s.game().characteristics(source);
+            assert_eq!(view.pt(), if before { qualified } else { base });
+            assert_eq!(
+                view.keywords.has(Keyword::Menace),
+                before && name == "Courageous Goblin"
+            );
+        }
+    }
+}
+
+#[test]
+fn power_batch_ruby_taps_for_either_color() {
+    use crate::support::play::choose_mode;
+    use managym::state::mana::Mana;
+    let mut s = five_color_setup(&["Ruby, Daring Tracker"]);
+    let ruby = s.force_permanent_on_battlefield(0, "Ruby, Daring Tracker");
+    s.set_player_mana_pool(0, "");
+    s.allow_priority_floats();
+    activate(&mut s, ruby, 0);
+    let choice = s.game().clone();
+    assert_eq!(s.action_space().actions.len(), 2);
+    for (mode, color) in ["R", "G"].into_iter().enumerate() {
+        *s.game_mut() = choice.clone();
+        choose_mode(&mut s, mode);
+        assert!(crate::support::inspect::tapped(&s, ruby));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(color));
+    }
+}
+
+#[test]
+fn power_batch_hornbeetle_excludes_itself_and_rechecks_other_power() {
+    use crate::support::{game::set_counters, inspect::counters};
+    use managym::state::permanent::CounterKind;
+    let mut s = five_color_setup(&["Nessian Hornbeetle", "Gray Ogre"]);
+    let beetle = s.force_permanent_on_battlefield(0, "Nessian Hornbeetle");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    set_counters(&mut s, beetle, CounterKind::PlusOnePlusOne, 2);
+    let root = s.game().clone();
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(s.game().state.stack_objects.is_empty());
+    *s.game_mut() = root;
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 2);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let pending = s.game().clone();
+    for stays in [true, false] {
+        *s.game_mut() = pending.clone();
+        if !stays {
+            let obj = card_of(&s, ogre);
+            move_card(&mut s, obj, ZoneType::Hand);
+        }
+        settle(&mut s);
+        assert_eq!(counters(&s, beetle), 2 + i32::from(stays));
+    }
+}
+
+#[test]
+fn power_batch_surrak_sums_signed_power_and_rechecks_after_targeting() {
+    use crate::support::game::{set_counters, until_end_of_turn};
+    use managym::{
+        agent::action::Action,
+        state::{effect::Modification, game_object::Target, permanent::CounterKind},
+    };
+    let name = "Surrak, the Hunt Caller";
+    let mut s = five_color_setup(&[name, "Hill Giant", "Gray Ogre"]);
+    let surrak = s.force_permanent_on_battlefield(0, name);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: -3,
+            toughness: 0,
+        },
+    );
+    let root = s.game().clone(); // 5 + 3 - 1
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(s.game().state.stack_objects.is_empty());
+    *s.game_mut() = root;
+    set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 1);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    let offered: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseTarget {
+                target: Target::Permanent(id),
+                ..
+            } => Some(*id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered.len(), 3);
+    assert!([surrak, giant, ogre].iter().all(|id| offered.contains(id)));
+    s.choose_target_named("Gray Ogre");
+    let pending = s.game().clone();
+    for meets in [false, true] {
+        *s.game_mut() = pending.clone();
+        if !meets {
+            set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 0);
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.game().characteristics(ogre).keywords.has(Keyword::Haste),
+            meets
+        );
+    }
+}
+
+#[test]
+fn power_batch_ashroot_and_partners_read_live_or_departed_source() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        inspect::counters,
+    };
+    use managym::{
+        agent::observation::Observation,
+        state::{game_object::Target, permanent::CounterKind},
+    };
+    for (name, base, keyword) in [
+        ("Ashroot Animist", 4, Keyword::Trample),
+        ("Halana and Alena, Partners", 2, Keyword::Haste),
+    ] {
+        let mut s = five_color_setup(&[name, "Gray Ogre", "Hill Giant", "Lightning Bolt"]);
+        let source = s.force_permanent_on_battlefield(0, name);
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        s.force_permanent_on_battlefield(0, "Hill Giant");
+        // A cast offer at priority binds the Ogre's exact incarnation. Carry that
+        // address into the targeted trigger to distinguish reentry at the same revision.
+        s.force_card_in_hand(0, "Lightning Bolt");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let main = s.game().semantic_decision_frame().unwrap();
+        let compound = s.game().structured_offers().unwrap();
+        let cast = compound
+            .projection()
+            .offers
+            .iter()
+            .find(|o| o.label == "Cast Lightning Bolt")
+            .unwrap();
+        let managym::agent::structured_offer::ChoiceStep::Select { candidates, .. } =
+            &cast.choices[0];
+        let candidate = candidates
+            .initial
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|c| c.label.contains("Gray Ogre"))
+            .unwrap();
+        let address = main
+            .object_candidates
+            .iter()
+            .find(|a| a.offer_id == cast.id.0 && a.candidate_id == candidate.id.0)
+            .unwrap()
+            .clone();
+        if name == "Ashroot Animist" {
+            clear_summoning_sickness(&mut s, source);
+            s.advance_to_active_step(0, StepKind::DeclareAttackers);
+            attack_with(&mut s, source);
+        } else {
+            s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+        }
+        assert!(!s.choose_target(Target::Permanent(source)));
+        assert_eq!(s.action_space().actions.len(), 2);
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let index = s.action_space().actions.iter().position(|action| matches!(action,
+            managym::agent::action::Action::ChooseTarget {target:Target::Permanent(id),..} if *id==ogre)).unwrap();
+        let offer = &frame.offers[index];
+        let mut branch = s.clone();
+        let card = card_of(&branch, ogre);
+        let moved = move_card(&mut branch, card, ZoneType::Exile);
+        move_card(&mut branch, moved, ZoneType::Battlefield);
+        let stale = managym::decision::Command {
+            command_id: "departed-target".into(),
+            expected_revision: frame.revision,
+            offer_id: offer.id.0,
+            answers: vec![],
+            object_preconditions: vec![address],
+        };
+        assert!(matches!(
+            branch.game_mut().execute_semantic_command(&stale),
+            Err(managym::decision::SemanticError::StaleObject)
+        ));
+        s.choose_target_named("Gray Ogre");
+        let pending = s.game().clone();
+        for (increase, blink) in [(0, false), (2, false), (2, true)] {
+            *s.game_mut() = pending.clone();
+            set_counters(&mut s, source, CounterKind::PlusOnePlusOne, increase);
+            if blink {
+                let object = card_of(&s, source);
+                let moved = move_card(&mut s, object, ZoneType::Exile);
+                move_card(&mut s, moved, ZoneType::Battlefield);
+            }
+            let power = base + increase;
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let obs = Observation::for_player(s.game(), viewer);
+                assert_eq!(obs.stack_objects[0].source_power, Some(power));
+            }
+            settle(&mut s);
+            let view = s.game().characteristics(ogre);
+            assert_eq!(view.pt(), (2 + power, 2 + power));
+            assert!(view.keywords.has(keyword));
+            assert_eq!(
+                counters(&s, ogre),
+                if keyword == Keyword::Haste { power } else { 0 }
+            );
+        }
+    }
+}
+
+#[test]
+fn power_batch_bulk_up_doubles_signed_resolution_power_and_flashes_back() {
+    use crate::support::{
+        game::{force_new_card_in_hand, until_end_of_turn},
+        inspect::now,
+        play::cast_card,
+    };
+    use managym::state::{effect::Modification, player::ManaPayment};
+    let mut s = five_color_setup(&["Bulk Up", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let spell = force_new_card_in_hand(&mut s, 0, "Bulk Up");
+    cast_card(&mut s, spell);
+    s.choose_target_named("Gray Ogre");
+    let pending = s.game().clone();
+    for delta in [-4, 1] {
+        *s.game_mut() = pending.clone();
+        until_end_of_turn(
+            &mut s,
+            ogre,
+            Modification::ModifyPt {
+                power: delta,
+                toughness: 0,
+            },
+        );
+        settle(&mut s);
+        let power = 2 * (2 + delta);
+        assert_eq!(s.game().characteristics(ogre).pt(), (power, 2));
+        assert_eq!(
+            s.game().state.zones.zone_of(now(&s, spell)),
+            Some(ZoneType::Graveyard)
+        );
+        s.set_player_mana_pool(0, "4RR");
+        cast_card(&mut s, spell);
+        s.choose_target_named("Gray Ogre");
+        settle(&mut s);
+        assert_eq!(s.game().characteristics(ogre).pt(), (2 * power, 2));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        assert_eq!(
+            s.game().state.zones.zone_of(now(&s, spell)),
+            Some(ZoneType::Exile)
+        );
+    }
+}
+
+#[test]
+fn power_batch_bite_down_binds_both_targets_and_damages_loyalty() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::cast_card,
+    };
+    use managym::state::{
+        card::{CardType, CardTypes},
+        permanent::CounterKind,
+        player::ManaPayment,
+    };
+    let mut s = five_color_setup(&["Bite Down", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let walker = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let card = card_of(&s, walker);
+    s.game_mut().state[card].types = CardTypes::new([CardType::Planeswalker]);
+    set_counters(&mut s, walker, CounterKind::Loyalty, 5);
+    let spell = force_new_card_in_hand(&mut s, 0, "Bite Down");
+    cast_card(&mut s, spell);
+    s.choose_target_named("Gray Ogre");
+    s.choose_target_named("Hill Giant");
+    let pending = s.game().clone();
+    for blink in [None, Some(source), Some(walker)] {
+        *s.game_mut() = pending.clone();
+        set_counters(&mut s, source, CounterKind::PlusOnePlusOne, 1);
+        let mut victim = walker;
+        if let Some(id) = blink {
+            let card = card_of(&s, id);
+            let moved = move_card(&mut s, card, ZoneType::Exile);
+            let returned = move_card(&mut s, moved, ZoneType::Battlefield);
+            if id == walker {
+                victim = permanent_of(&s, returned).unwrap();
+                set_counters(&mut s, victim, CounterKind::Loyalty, 5);
+            }
+        }
+        settle(&mut s);
+        assert_eq!(
+            counters_of(&s, victim, CounterKind::Loyalty),
+            if blink.is_some() { 5 } else { 2 }
+        );
+    }
+}
+
+#[test]
+fn power_batch_once_each_turn_checks_each_attacker_before_spending_the_grant() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters, until_end_of_turn},
+        inspect::counters,
+    };
+    use managym::{
+        flow::turn::AdditionalCombat,
+        state::{
+            ability::{
+                Ability, Condition, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject,
+            },
+            effect::Modification,
+            permanent::CounterKind,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Katara, the Fearless", "Savannah Lions", "Serra Angel"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+    let lions = s.force_permanent_on_battlefield(0, "Savannah Lions");
+    let angel = s.force_permanent_on_battlefield(0, "Serra Angel");
+    for id in [lions, angel] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    set_counters(&mut s, angel, CounterKind::PlusOnePlusOne, 1);
+    let listener = Ability::Triggered {
+        condition: TriggerCondition::ActiveIf {
+            active_if: Condition::YourTurn,
+            condition: Box::new(TriggerCondition::OnceEachTurn {
+                condition: Box::new(TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate::creature()),
+                    Per::Object,
+                )),
+            }),
+        },
+        intervening_if: Some(Condition::TriggeringHadCounters),
+        effects: vec![Effect::put_counters(
+            ObjectSelector::Triggering,
+            CounterKind::PlusOnePlusOne,
+            1,
+        )],
+    };
+    until_end_of_turn(
+        &mut s,
+        katara,
+        Modification::GrantTriggered(Box::new(listener)),
+    );
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.declare_attack();
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    settle(&mut s);
+    assert_eq!((counters(&s, lions), counters(&s, angel)), (0, 2));
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(AdditionalCombat { attackers: None });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, angel);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+#[test]
+fn power_batch_wrapped_hits_keep_the_creature_and_damage_of_each_hit() {
+    use crate::support::{
+        game::{clear_summoning_sickness, until_end_of_turn},
+        inspect::counters,
+    };
+    use managym::state::{
+        ability::{
+            Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, Per, TriggerCondition,
+            TriggerSubject,
+        },
+        effect::Modification,
+        permanent::CounterKind,
+        predicate::CardPredicate,
+    };
+    let mut s = five_color_setup(&["Katara, the Fearless", "Gray Ogre", "Hill Giant"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    for id in [ogre, giant] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    until_end_of_turn(
+        &mut s,
+        katara,
+        Modification::GrantTriggered(Box::new(Ability::Triggered {
+            condition: TriggerCondition::ActiveIf {
+                active_if: Condition::YourTurn,
+                condition: Box::new(TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    to: Actor::Opponent,
+                    per: Per::Object,
+                }),
+            },
+            intervening_if: None,
+            effects: vec![Effect::put_counters(
+                ObjectSelector::Triggering,
+                CounterKind::PlusOnePlusOne,
+                EffectValue::TriggeringDamage,
+            )],
+        })),
+    );
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!((counters(&s, ogre), counters(&s, giant)), (4, 6));
+}
+
+#[test]
+fn power_batch_suki_triggers_once_under_kataras_doubler() {
+    let mut s = five_color_setup(&[
+        "Katara, the Fearless",
+        "Suki, Courageous Rescuer",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+    s.force_permanent_on_battlefield(0, "Suki, Courageous Rescuer");
+    let ogres = [0, 1].map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"));
+    for ogre in ogres {
+        let object = card_of(&s, ogre);
+        move_card(&mut s, object, ZoneType::Graveyard);
+        s.pass_priority();
+        settle(&mut s);
+        assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
+    }
+}
+
+#[test]
+fn power_batch_printed_intervening_condition_publishes_pending_power() {
+    use crate::support::game::{clear_summoning_sickness, set_counters};
+    use managym::{
+        agent::observation::Observation,
+        state::{
+            ability::{
+                Ability, Aggregate, CompareOp, Condition, Effect, ObjectProperty, ObjectSelector,
+                Per, TriggerCondition, TriggerSubject,
+            },
+            permanent::CounterKind,
+        },
+    };
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    s.game_mut().state[card].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+        intervening_if: Some(Condition::Compare {
+            left: Box::new(ObjectSelector::This.property(ObjectProperty::Power, Aggregate::Sum)),
+            op: CompareOp::Ge,
+            right: Box::new(3.into()),
+        }),
+        effects: vec![Effect::gain_life(1)],
+    }];
+    clear_summoning_sickness(&mut s, ogre);
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    let life = s.game().state.players[0].life;
+    for (count, power) in [(1, 3), (0, 2)] {
+        set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, count);
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            let stack = &obs.stack_objects[0];
+            assert_eq!(stack.source_power, Some(power));
+            assert!(stack
+                .description
+                .as_ref()
+                .unwrap()
+                .contains(&format!("source power {power}")));
+        }
+    }
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, life);
+}
+
+#[test]
+fn power_batch_grantors_with_one_timestamp_have_separate_turn_limits() {
+    use crate::support::game::clear_summoning_sickness;
+    use managym::{
+        agent::observation::Observation,
+        state::{
+            ability::{Ability, Effect, Per, TriggerCondition, TriggerSubject},
+            card::{StaticAbility, StaticScope, StaticTriggeredGrant},
+            effect::{EffectDuration, Modification},
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Katara, the Fearless", "Gray Ogre"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+    clear_summoning_sickness(&mut s, katara);
+    let grantors = [0, 1].map(|_| {
+        let id = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        s.game().affected_permanent(id).unwrap()
+    });
+    let ability = Ability::Triggered {
+        condition: TriggerCondition::OnceEachTurn {
+            condition: Box::new(TriggerCondition::attacks(TriggerSubject::This, Per::Object)),
+        },
+        intervening_if: None,
+        effects: vec![Effect::gain_life(1)],
+    };
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        grantors,
+        Modification::GrantStatic(Box::new(StaticAbility::TriggeredGrant(
+            StaticTriggeredGrant {
+                scope: StaticScope::YouControl(CardPredicate::subtype("Ally")),
+                ability: Box::new(ability),
+            },
+        ))),
+        EffectDuration::EndOfTurn,
+    );
+    let life = s.game().state.players[0].life;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, katara);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, life + 2);
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let source = obs
+        .agent_permanents
+        .iter()
+        .find(|p| p.id == crate::support::inspect::permanent(&s, katara).id.0 as i32)
+        .unwrap();
+    assert_eq!(source.once_each_turn_used, 2);
 }

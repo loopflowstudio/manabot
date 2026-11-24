@@ -21,12 +21,14 @@ use crate::{
     state::{
         ability::{
             Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
-            LinkedChooser, LinkedExile, ObjectSelector, PlayerSelector, Scope, TargetRequirement,
-            TargetSpec,
+            LinkedChooser, LinkedExile, ObjectProperty, ObjectSelector, PlayerSelector, Scope,
+            TargetRequirement, TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
-        game_object::{AbilitySource, ObjectId, PermanentId, PlayerId, PublicId, Target},
+        game_object::{
+            AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
+        },
         mana::ManaCost,
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
@@ -39,26 +41,58 @@ use crate::{
 };
 
 impl Game {
-    /// A permanent's power and toughness as it is, or from its last known
-    /// information once it has left; zero for anything else.
-    fn power_toughness_or_lki(&self, target: Option<Target>) -> (i32, i32) {
-        match target {
-            Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
-                self.characteristics(id).pt()
-            }
-            Some(Target::Permanent(id)) => self
-                .departed_permanent_lki(id)
-                .map_or((0, 0), |lki| (lki.power, lki.toughness)),
-            _ => (0, 0),
+    pub(crate) fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
+        self.object_property_or_lki(object, ObjectProperty::Power)
+    }
+
+    fn object_property_or_lki(&self, object: ObjectId, property: ObjectProperty) -> Option<i32> {
+        self.state
+            .permanent_of(object)
+            .map(|id| self.live_property(id, property))
+            .or_else(|| {
+                self.object_lki(object)
+                    .map(|lki| self.departed_property(lki, property))
+            })
+    }
+
+    fn target_property(&self, target: Option<Target>, property: ObjectProperty) -> i32 {
+        let Some(Target::Permanent(id)) = target else {
+            return 0;
+        };
+        if self.permanent_object(id).is_some() {
+            self.live_property(id, property)
+        } else {
+            self.departed_permanent_lki(id)
+                .map_or(0, |lki| self.departed_property(lki, property))
         }
     }
 
-    /// Power of this exact battlefield appearance, including after departure.
-    pub(crate) fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
-        self.state
-            .permanent_of(object)
-            .map(|id| self.characteristics(id).power)
-            .or_else(|| self.object_lki(object).map(|lki| lki.power))
+    fn live_property(&self, id: PermanentId, property: ObjectProperty) -> i32 {
+        match property {
+            ObjectProperty::Power => self.layer_view(id).power,
+            ObjectProperty::Toughness => self.layer_view(id).toughness,
+            ObjectProperty::ManaValue => self.permanent_mana_value(id),
+        }
+    }
+
+    fn departed_property(&self, lki: &ObjectLki, property: ObjectProperty) -> i32 {
+        match property {
+            ObjectProperty::Power => lki.power,
+            ObjectProperty::Toughness => lki.toughness,
+            ObjectProperty::ManaValue => {
+                let printed = match &lki.copiable {
+                    Some(changed) => changed
+                        .front
+                        .as_ref()
+                        .map_or(&*changed.printed, |(_, front)| front),
+                    None => self.state.source_base(lki.object).1,
+                };
+                printed
+                    .mana_cost
+                    .as_ref()
+                    .map_or(0, |cost| i32::from(cost.mana_value))
+            }
+        }
     }
 
     fn spell_payment(&self, object: ObjectId) -> Option<crate::flow::decision::SpellPayment> {
@@ -76,6 +110,25 @@ impl Game {
     pub(crate) fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         let controller = frame.controller;
         match value {
+            EffectValue::Property {
+                of,
+                property,
+                aggregate,
+            } => match of.as_ref() {
+                ObjectSelector::This => frame
+                    .source_ref()
+                    .and_then(|source| self.object_property_or_lki(source, *property))
+                    .unwrap_or(0),
+                ObjectSelector::Triggering => self.target_property(frame.context_target, *property),
+                ObjectSelector::Target(_) => {
+                    self.target_property(frame.primary_target(), *property)
+                }
+                _ => aggregate.evaluate(
+                    self.selected_permanents(of, frame)
+                        .into_iter()
+                        .map(|id| self.live_property(id, *property)),
+                ),
+            },
             EffectValue::Objects {
                 of,
                 predicate: None,
@@ -125,7 +178,9 @@ impl Game {
                 })
             }
             EffectValue::X => i32::from(frame.x),
-            EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
+            EffectValue::TriggeringPower => {
+                self.target_property(frame.context_target, ObjectProperty::Power)
+            }
             EffectValue::TriggeringManaValue => match frame.context_target {
                 // A spell that has left the stack is read as the card it became.
                 Some(Target::StackSpell(spell)) => self
@@ -135,7 +190,9 @@ impl Game {
                     .map_or(0, |object| i32::from(self.object_mana_value(object))),
                 _ => 0,
             },
-            EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
+            EffectValue::TargetToughness => {
+                self.target_property(frame.primary_target(), ObjectProperty::Toughness)
+            }
             EffectValue::TriggeringDamage => frame.triggering_damage,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::LifeLostThisWay => frame.life_lost,
@@ -2293,6 +2350,7 @@ impl Game {
                     },
                 };
                 let excepted = self.excepted_permanent(*except, frame);
+                let source = self.source_permanent_id(frame);
                 let exact = exact_mana_value
                     .as_ref()
                     .map(|value| self.effect_value(value, frame));
@@ -2303,7 +2361,7 @@ impl Game {
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
                     .filter(|id| Some(*id) != excepted)
-                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                    .filter(|id| self.permanent_matches_with_source(*id, predicate, source))
                     .filter(|id| {
                         exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
                             && max_mana_value
@@ -2333,7 +2391,7 @@ impl Game {
 
     /// A battlefield permanent's mana value (CR 202.3): that of its card;
     /// 0 without a mana cost.
-    fn permanent_mana_value(&self, id: PermanentId) -> i32 {
+    pub(super) fn permanent_mana_value(&self, id: PermanentId) -> i32 {
         self.state.permanents[id]
             .as_ref()
             .and_then(|permanent| self.state[permanent.object].mana_value_cost())

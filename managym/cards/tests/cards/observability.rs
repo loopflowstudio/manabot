@@ -572,7 +572,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 33] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -582,6 +582,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 33] {
         history,
         graveyard_from_battlefield: _,
         ability_triggers_this_turn: _,
+        used_trigger_grants: _,
         attacks_this_turn: _,
         damage_pairs: _,
         ability_resolutions_this_turn: _,
@@ -613,6 +614,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 33] {
     } = history[0];
     [
         ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
+        ("used_trigger_grants", Seen::Via("permanent once_each_turn_used")),
         ("attacks_this_turn", Seen::Via("exact attacking permanent")),
         ("active_player", Seen::Player(player::IS_ACTIVE, player::LIBRARY_COUNT)),
         (
@@ -6134,4 +6136,26 @@ fn mazes_end_exposes_its_distinct_name_threshold_and_win_instruction() {
     assert!(maze.contains(&field));
     assert!(!passage.contains(&field));
     assert!(maze.contains(&(TokenKind::Variant, name_value("Effect::WinGame"))));
+}
+
+#[test]
+fn power_batch_catalog_tokens_distinguish_source_target_and_total() {
+    for (name, selector) in [
+        ("Halana and Alena, Partners", "ObjectSelector::This"),
+        ("Surrak, the Hunt Caller", "ObjectSelector::Each"),
+        ("Bulk Up", "ObjectSelector::Target"),
+    ] {
+        let tokens = tokens_of(&card_definition(name));
+        for variant in [
+            selector,
+            "EffectValue::Property",
+            "ObjectProperty::Power",
+            "Aggregate::Sum",
+        ] {
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(variant))),
+                "{name}: {variant}"
+            );
+        }
+    }
 }

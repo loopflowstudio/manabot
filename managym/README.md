@@ -986,3 +986,21 @@ Aurelia. Leaving and returning starts a new attack history for that creature.
 Extra combats preserve raid and each creature’s history until the turn ends.
 The same address rules as payment previews apply, and the
 call is read-only in the same way.
+
+### Reading power during combat
+
+Courageous Goblin and Ruby, Daring Tracker check for a creature with power
+four or greater as attackers are declared. Once either ability triggers, removing that
+creature leaves the bonus intact. Nessian Hornbeetle and Surrak, the Hunt
+Caller also check their conditions as their beginning-of-combat abilities
+resolve. Hornbeetle needs another creature with power four or greater.
+Surrak needs total power eight or greater, counting negative power as well.
+
+When Ashroot Animist or Halana and Alena, Partners has a trigger on the
+stack, both viewers can inspect the source power in the stack label. The
+amount follows changes to the source until resolution or departure. If the
+source leaves, the trigger retains its last battlefield power even if the
+card returns. Bulk Up similarly reads the target's power at resolution. A
+creature at −2 power goes to −4, and flashback uses the same calculation.
+Bite Down uses the power of the creature dealing damage at resolution.
+If either target leaves and returns first, it deals no damage.

@@ -16,8 +16,9 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, DelayedFrequency, Effect, EffectValue, EffectiveTrigger, KeywordAction,
-            Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            Ability, Actor, Condition, DelayedFrequency, Effect, EffectValue, EffectiveTrigger,
+            KeywordAction, Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
@@ -34,6 +35,7 @@ use crate::{
 #[derive(Clone, Copy)]
 struct FiredTrigger<'a> {
     member: TriggerMember,
+    once: bool,
     source: &'a TriggerSourceSnapshot,
     ability: TriggerAbility<'a>,
 }
@@ -942,28 +944,67 @@ impl Game {
                     intervening_if,
                     ..
                 } = ability;
-                if let (TriggerAbility::Printed(index), TriggerCondition::OnceEachTurn { .. }) =
-                    (origin, condition)
-                {
-                    if self.state.turn.ability_triggers_this_turn.contains_key(&(
-                        lki.object,
-                        lki.definition_id,
-                        index,
-                    )) {
+                let Some((leaf, once)) = self.match_trigger_wrappers(
+                    condition,
+                    event,
+                    lki.object,
+                    lki.controller,
+                    false,
+                ) else {
+                    continue;
+                };
+                if once {
+                    let used = match origin {
+                        TriggerAbility::Printed(index) => self
+                            .state
+                            .turn
+                            .ability_triggers_this_turn
+                            .contains_key(&(lki.object, lki.definition_id, index)),
+                        TriggerAbility::Granted(grant) => self
+                            .state
+                            .turn
+                            .used_trigger_grants
+                            .contains(lki.object, grant.clock.expect("limited grant clock")),
+                    };
+                    if used {
                         continue;
                     }
                 }
-                if intervening_if.as_ref().is_some_and(|condition| {
-                    !self.check_intervening_if(
-                        condition,
-                        lki.controller,
-                        Some(lki.object),
-                        self.triggering_permanent(event),
-                    )
-                }) {
-                    continue;
-                }
-                self.collect_occurrences(condition, event, source, origin, &mut fired);
+                let mut copies = None;
+                let mut emitted = false;
+                self.collect_occurrences(leaf, event, source, |member| {
+                    if once && emitted {
+                        return;
+                    }
+                    if intervening_if.as_ref().is_some_and(|condition| {
+                        !self.check_intervening_if(
+                            condition,
+                            lki.controller,
+                            Some(lki.object),
+                            self.member_permanent(member, event),
+                        )
+                    }) {
+                        return;
+                    }
+                    // CR 603.2d doubles each occurrence. A once-per-turn limit caps the entire ability.
+                    let count = *copies.get_or_insert_with(|| {
+                        if once {
+                            1
+                        } else {
+                            1 + self.additional_trigger_times(source)
+                        }
+                    });
+                    fired.extend(std::iter::repeat_n(
+                        FiredTrigger {
+                            source,
+                            ability: origin,
+                            member,
+                            once,
+                        },
+                        count,
+                    ));
+                    emitted = true;
+                });
             }
         }
 
@@ -983,6 +1024,7 @@ impl Game {
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
             member,
+            once,
             source,
             ability,
         } in fired
@@ -1014,32 +1056,33 @@ impl Game {
                     (0, Some(effects), grant.program)
                 }
             };
-            let (effects, once_each_turn) = if let Some(effects) = &granted {
-                (effects.as_slice(), false)
-            } else {
-                let Ability::Triggered {
-                    condition, effects, ..
-                } = &self
-                    .source_face(source_object, source_lki.definition_id)
-                    .expect("source face")
-                    .abilities[ability_index];
-                (
-                    effects.as_slice(),
-                    matches!(condition, TriggerCondition::OnceEachTurn { .. }),
-                )
+            let Ability::Triggered {
+                effects,
+                intervening_if,
+                ..
+            } = match ability {
+                TriggerAbility::Printed(index) => {
+                    &self
+                        .source_face(source_object, source_lki.definition_id)
+                        .expect("source face")
+                        .abilities[index]
+                }
+                TriggerAbility::Granted(grant) => &grant.ability,
             };
-            let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
-            let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
-            let context = if let TriggerMember::Attacker(attacker) = member {
-                Some(Target::Permanent(attacker))
-            } else if reads_triggering_permanent {
-                self.triggering_permanent(event)
+            let context = if matches!(member, TriggerMember::Attacker(_))
+                || effects.iter().any(Effect::reads_triggering_permanent)
+                || intervening_if
+                    .as_ref()
+                    .is_some_and(Condition::reads_triggering_permanent)
+            {
+                self.member_permanent(member, event)
+                    .or_else(|| self.trigger_context_for_event(event))
             } else if let (
                 true,
                 GameEvent::SpellCast {
                     object_id: object, ..
                 },
-            ) = (asks_triggering_spell, event)
+            ) = (effects.iter().any(Effect::asks_triggering_spell), event)
             {
                 Some(Target::StackSpell(*object))
             } else {
@@ -1087,8 +1130,19 @@ impl Game {
                     .find(|id| self.permanent_object(*id) == Some(source_lki.object)),
                 _ => None,
             };
-            if once_each_turn {
-                self.spend_once_each_turn((source_object, source_lki.definition_id, ability_index));
+            if once {
+                match ability {
+                    TriggerAbility::Printed(_) => self.spend_once_each_turn((
+                        source_object,
+                        source_lki.definition_id,
+                        ability_index,
+                    )),
+                    TriggerAbility::Granted(grant) => self
+                        .state
+                        .turn
+                        .used_trigger_grants
+                        .record(source_object, grant.clock.expect("limited grant clock")),
+                }
             }
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
@@ -1118,29 +1172,26 @@ impl Game {
         }
     }
 
-    fn collect_occurrences<'a>(
+    fn member_permanent(&self, member: TriggerMember, event: &GameEvent) -> Option<Target> {
+        match member {
+            TriggerMember::Attacker(id) => Some(Target::Permanent(id)),
+            TriggerMember::CombatHit(hit) => self
+                .state
+                .permanent_of(hit.source)
+                .or_else(|| self.object_lki(hit.source).map(|lki| lki.permanent))
+                .map(Target::Permanent),
+            TriggerMember::Event => self.triggering_permanent(event),
+        }
+    }
+
+    fn collect_occurrences(
         &self,
         condition: &TriggerCondition,
         event: &GameEvent,
-        source: &'a TriggerSourceSnapshot,
-        ability: TriggerAbility<'a>,
-        fired: &mut Vec<FiredTrigger<'a>>,
+        source: &TriggerSourceSnapshot,
+        mut emit: impl FnMut(TriggerMember),
     ) {
         let lki = &source.lki;
-        let mut copies = None;
-        // A doubler applies to each occurrence (CR 603.2d). Inspect static
-        // abilities only once, and only if a member actually matched.
-        let mut emit = |member| {
-            let count = *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
-            fired.extend(std::iter::repeat_n(
-                FiredTrigger {
-                    source,
-                    ability,
-                    member,
-                },
-                count,
-            ));
-        };
         match (condition, event) {
             (
                 TriggerCondition::Attacks {
@@ -1577,13 +1628,29 @@ impl Game {
                     else {
                         continue;
                     };
-                    if self.trigger_condition_fires(condition, object, owner, false, event) {
-                        fired.push((object, ability_index, owner));
+                    let Some((leaf, once)) =
+                        self.match_trigger_wrappers(condition, event, object, owner, false)
+                    else {
+                        continue;
+                    };
+                    let key = (object, self.state[object].definition_id, ability_index);
+                    if !(once
+                        && self
+                            .state
+                            .turn
+                            .ability_triggers_this_turn
+                            .contains_key(&key))
+                        && self.trigger_condition_fires(leaf, object, owner, false, event)
+                    {
+                        fired.push((object, ability_index, owner, once.then_some(key)));
                     }
                 }
             }
         }
-        for (object, ability_index, owner) in fired {
+        for (object, ability_index, owner, key) in fired {
+            if let Some(key) = key {
+                self.spend_once_each_turn(key);
+            }
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
@@ -1749,6 +1816,49 @@ impl Game {
         sources
     }
 
+    /// Test wrappers at event time, retaining the leaf's cardinality and bindings.
+    fn match_trigger_wrappers<'a>(
+        &self,
+        condition: &'a TriggerCondition,
+        event: &GameEvent,
+        object: ObjectId,
+        controller: PlayerId,
+        once: bool,
+    ) -> Option<(&'a TriggerCondition, bool)> {
+        let permanent = || {
+            self.state
+                .permanent_of(object)
+                .and_then(|id| self.state.permanents[id].as_ref())
+        };
+        let (inner, enabled) = match condition {
+            TriggerCondition::WasCast { condition } => {
+                (condition, permanent().is_some_and(|p| p.was_cast))
+            }
+            TriggerCondition::FromZone { zone, condition } => {
+                (condition, self.event_origin(event) == Some(*zone))
+            }
+            TriggerCondition::WhileSourceAttacking { condition } => {
+                (condition, permanent().is_some_and(|p| p.attacking))
+            }
+            TriggerCondition::ActiveIf {
+                active_if,
+                condition,
+            } => (
+                condition,
+                self.check_intervening_if(active_if, controller, Some(object), None),
+            ),
+            TriggerCondition::OnceEachTurn { condition } => {
+                return self.match_trigger_wrappers(condition, event, object, controller, true)
+            }
+            leaf => return Some((leaf, once)),
+        };
+        if enabled {
+            self.match_trigger_wrappers(inner, event, object, controller, once)
+        } else {
+            None
+        }
+    }
+
     fn trigger_condition_fires(
         &self,
         condition: &TriggerCondition,
@@ -1758,36 +1868,6 @@ impl Game {
         event: &GameEvent,
     ) -> bool {
         match (condition, event) {
-            (TriggerCondition::WasCast { condition }, _) => {
-                self.state
-                    .permanent_of(source_object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|source| source.was_cast)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            (TriggerCondition::FromZone { zone, condition }, _) => {
-                self.event_origin(event) == Some(*zone)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            (TriggerCondition::OnceEachTurn { condition }, _) => self.trigger_condition_fires(
-                condition,
-                source_object,
-                source_controller,
-                source_was_on_battlefield,
-                event,
-            ),
             (TriggerCondition::Sacrificed { subject }, GameEvent::PermanentSacrificed { .. }) => {
                 self.subject_matches_moved_object(
                     subject,
@@ -1796,19 +1876,6 @@ impl Game {
                     source_was_on_battlefield,
                     event,
                 )
-            }
-            (TriggerCondition::WhileSourceAttacking { condition }, _) => {
-                self.state
-                    .permanent_of(source_object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|source| source.attacking)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
             }
             (
                 TriggerCondition::Expend(threshold),
@@ -1843,26 +1910,6 @@ impl Game {
                             !targets.is_empty()
                                 && targets.iter().all(|target| Some(*target) == this)
                         })
-            }
-            // Conditionally-granted abilities: the ability only exists (and
-            // so only triggers) while the condition holds for its
-            // controller (CR 603.4 fire-time check).
-            (
-                TriggerCondition::ActiveIf {
-                    active_if,
-                    condition,
-                },
-                _,
-            ) => {
-                // "While saddled" asks about the exact source.
-                self.check_intervening_if(active_if, source_controller, Some(source_object), None)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
             }
             (
                 TriggerCondition::EntersTheBattlefield { subject },

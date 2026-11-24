@@ -446,7 +446,8 @@ impl Game {
     ) -> bool {
         debug_assert!(!matches!(
             condition,
-            Condition::ControlsAtLeast { .. }
+            Condition::Compare { .. }
+                | Condition::ControlsAtLeast { .. }
                 | Condition::BattlefieldAtLeast { .. }
                 | Condition::AllOf(_)
                 | Condition::AnyOf(_)
@@ -487,29 +488,42 @@ impl Game {
         object_id: ObjectId,
         predicate: &CardPredicate,
     ) -> bool {
-        if predicate.from_battlefield_this_turn {
-            let Some(object) = self.state.live(object_id) else {
-                return false;
-            };
-            return self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
-                && self.state.turn.graveyard_from_battlefield.contains(&object)
-                && self.object_matches_predicate(
-                    object_id,
-                    &CardPredicate {
-                        from_battlefield_this_turn: false,
-                        ..predicate.clone()
-                    },
-                );
-        }
         if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.permanent_matches_predicate(permanent, predicate);
         }
-        let power = if predicate.reads_power() {
-            self.object_power(object_id)
+        self.off_battlefield_matches(object_id, predicate, || self.object_power(object_id))
+    }
+
+    /// A layer calculation supplies the card's CDA power from its partial board.
+    pub(super) fn off_battlefield_matches(
+        &self,
+        object_id: ObjectId,
+        predicate: &CardPredicate,
+        power: impl FnOnce() -> i32,
+    ) -> bool {
+        let ordinary;
+        let predicate = if predicate.from_battlefield_this_turn {
+            if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard)
+                || !self
+                    .state
+                    .turn
+                    .graveyard_from_battlefield
+                    .contains(&object_id)
+            {
+                return false;
+            }
+            ordinary = CardPredicate {
+                from_battlefield_this_turn: false,
+                ..predicate.clone()
+            };
+            &ordinary
         } else {
-            0
+            predicate
         };
-        predicate.matches_object_with_power(&self.state[object_id], power)
+        predicate.matches_object_with_power(
+            &self.state[object_id],
+            if predicate.reads_power() { power() } else { 0 },
+        )
     }
 
     /// A recorded event can still ask what its departed card was. Read the
@@ -983,14 +997,16 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
-    fn permanent_matches_with_source(
+    pub(super) fn permanent_matches_with_source(
         &self,
         id: PermanentId,
         predicate: &CardPredicate,
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source = source.map(|id| self.layer_view(id));
+        let source = source
+            .filter(|_| predicate.reads_source())
+            .map(|id| self.layer_view(id));
         matches_view(
             self,
             id,
@@ -1201,6 +1217,58 @@ mod cache_tests {
         assert_eq!(branch.characteristics(id).pt(), (4, 4));
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default().into();
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
+    }
+
+    #[test]
+    fn power_comparison_uses_layer_creatures_and_invalidates_on_tap() {
+        use crate::state::ability::{Aggregate, CompareOp, ObjectProperty, ObjectSelector};
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let id = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let other = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::Compare {
+                    left: Box::new(
+                        ObjectSelector::each_you_control(CardPredicate {
+                            tapped: true,
+                            ..CardPredicate::creature()
+                        })
+                        .property(ObjectProperty::Power, Aggregate::Sum),
+                    ),
+                    op: CompareOp::Ge,
+                    right: Box::new(2.into()),
+                }),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(game.characteristics(id).power, 2);
+        game.state.tap(other);
+        assert_eq!(game.characteristics(id).power, 3);
+        game.state.untap(other);
+        assert_eq!(game.characteristics(id).power, 2);
     }
 
     #[test]

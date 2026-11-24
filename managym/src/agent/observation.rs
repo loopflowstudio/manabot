@@ -1536,6 +1536,7 @@ impl Observation {
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
+                + game.state.turn.used_trigger_grants.count(object)
                 + game
                     .state
                     .turn
@@ -1727,23 +1728,35 @@ impl Observation {
     }
 
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
-        let program = match stack_object {
-            StackObject::ActivatedAbility(a) => Some((a.source_object(), a.effects.as_slice())),
-            StackObject::TriggeredAbility(a) => a
-                .inline_effects
-                .as_deref()
-                .or_else(|| {
-                    game.source_face(a.source_object(), a.source_definition_id)?
-                        .abilities
-                        .get(a.ability_index)
-                        .map(|ability| ability.effects())
-                })
-                .map(|effects| (a.source_object(), effects)),
+        let reads_power = |program: &[Effect]| program.iter().any(Effect::reads_source_power);
+        let source_power = match stack_object {
+            StackObject::ActivatedAbility(a) => {
+                reads_power(&a.effects).then_some(a.source_object())
+            }
+            StackObject::TriggeredAbility(a) => {
+                let reads = match &a.inline_effects {
+                    Some(program) => reads_power(program),
+                    None => game
+                        .source_face(a.source_object(), a.source_definition_id)
+                        .and_then(|face| face.abilities.get(a.ability_index))
+                        .is_some_and(
+                            |crate::state::ability::Ability::Triggered {
+                                 effects,
+                                 intervening_if,
+                                 ..
+                             }| {
+                                reads_power(effects)
+                                    || intervening_if.as_ref().is_some_and(
+                                        crate::state::ability::Condition::reads_source_power,
+                                    )
+                            },
+                        ),
+                };
+                reads.then_some(a.source_object())
+            }
             StackObject::Spell(_) => None,
-        };
-        let source_power = program
-            .filter(|(_, effects)| effects.iter().any(Effect::reads_source_power))
-            .and_then(|(object, _)| game.permanent_power_or_lki(object));
+        }
+        .and_then(|object| game.permanent_power_or_lki(object));
         StackObjectData {
             mana_spent: match stack_object {
                 StackObject::Spell(spell) => spell.spent.total(),

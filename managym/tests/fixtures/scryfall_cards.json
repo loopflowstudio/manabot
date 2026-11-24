@@ -7288,5 +7288,116 @@
     "colors": [
       "U"
     ]
+  },
+  "Ashroot Animist": {
+    "name": "Ashroot Animist",
+    "mana_cost": "{2}{R}{G}",
+    "type_line": "Creature — Lizard Druid",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhenever this creature attacks, another target creature you control gains trample and gets +X/+X until end of turn, where X is this creature's power.",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Bite Down": {
+    "name": "Bite Down",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature you control deals damage equal to its power to target creature or planeswalker you don't control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Bulk Up": {
+    "name": "Bulk Up",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback",
+      "Double"
+    ],
+    "oracle_text": "Double target creature's power until end of turn.\nFlashback {4}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Courageous Goblin": {
+    "name": "Courageous Goblin",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks while you control a creature with power 4 or greater, this creature gets +1/+0 and gains menace until end of turn. (It can't be blocked except by two or more creatures.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Halana and Alena, Partners": {
+    "name": "Halana and Alena, Partners",
+    "mana_cost": "{2}{R}{G}",
+    "type_line": "Legendary Creature — Human Ranger",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Reach",
+      "First strike"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nFirst strike (This creature deals combat damage before creatures without first strike.)\nAt the beginning of combat on your turn, put X +1/+1 counters on another target creature you control, where X is Halana and Alena's power. That creature gains haste until end of turn.",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Nessian Hornbeetle": {
+    "name": "Nessian Hornbeetle",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Insect",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "At the beginning of combat on your turn, if you control another creature with power 4 or greater, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Ruby, Daring Tracker": {
+    "name": "Ruby, Daring Tracker",
+    "mana_cost": "{R}{G}",
+    "type_line": "Legendary Creature — Human Scout",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)\nWhenever Ruby attacks while you control a creature with power 4 or greater, Ruby gets +2/+2 until end of turn.\n{T}: Add {R} or {G}.",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Surrak, the Hunt Caller": {
+    "name": "Surrak, the Hunt Caller",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Formidable"
+    ],
+    "oracle_text": "Formidable — At the beginning of combat on your turn, if creatures you control have total power 8 or greater, target creature you control gains haste until end of turn. (It can attack and {T} no matter when it came under your control.)",
+    "colors": [
+      "G"
+    ]
   }
 }

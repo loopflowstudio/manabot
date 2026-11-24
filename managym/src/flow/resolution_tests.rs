@@ -5023,3 +5023,57 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     game.shuffle_unseen_libraries(12);
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
+
+#[test]
+fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
+    use super::{AbilitySource, EffectFrame, ResolutionTarget};
+    use crate::state::ability::{Aggregate, ObjectProperty};
+    let player = PlayerId(0);
+    let (mut game, first, other) = fixture(PlayerId(1));
+    let source = game.permanent_object(first).unwrap();
+    let target = game.permanent_object(other).unwrap();
+    let mut frame = EffectFrame::new(player, vec![]);
+    frame.source_identity = Some(AbilitySource::new(source, Some(source)));
+    frame.targets = vec![ResolutionTarget {
+        spell: None,
+        target: Target::Permanent(other),
+        requirement: 0,
+        legal: true,
+    }];
+    game.apply_continuous(
+        None,
+        player,
+        [game.affected_permanent(other).unwrap()],
+        Modification::ModifyPt {
+            power: 2,
+            toughness: 1,
+        },
+        EffectDuration::EndOfTurn,
+    );
+    let namesakes = ObjectSelector::each_other_you_control(CardPredicate {
+        namesake: true,
+        ..CardPredicate::default()
+    });
+    assert_eq!(
+        game.effect_value(
+            &namesakes.property(ObjectProperty::Toughness, Aggregate::Max),
+            &frame
+        ),
+        3
+    );
+    let object = game.move_object(target, ZoneType::Graveyard);
+    game.move_object(object, ZoneType::Battlefield);
+    for (property, expected) in [
+        (ObjectProperty::Power, 4),
+        (ObjectProperty::Toughness, 3),
+        (ObjectProperty::ManaValue, 3),
+    ] {
+        assert_eq!(
+            game.effect_value(
+                &ObjectSelector::Target(TargetSpec::Creature).property(property, Aggregate::Sum),
+                &frame
+            ),
+            expected
+        );
+    }
+}

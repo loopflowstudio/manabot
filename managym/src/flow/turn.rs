@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    ability::PlayerControlDuration,
+    ability::{GrantClock, PlayerControlDuration},
     game_object::{ObjectId, PlayerId},
     predicate::CardPredicate,
 };
@@ -209,6 +209,31 @@ impl DamageHistory {
     }
 }
 
+/// Used once-per-turn grants, ordered by recipient so a viewer can read the
+/// count for one permanent without scanning the rest of the battlefield.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct UsedTriggerGrants(
+    #[serde(serialize_with = "crate::state::game_object::exact")] Vec<(ObjectId, GrantClock)>,
+);
+
+impl UsedTriggerGrants {
+    pub fn contains(&self, source: ObjectId, grant: GrantClock) -> bool {
+        self.0.binary_search(&(source, grant)).is_ok()
+    }
+    pub fn record(&mut self, source: ObjectId, grant: GrantClock) {
+        if let Err(index) = self.0.binary_search(&(source, grant)) {
+            self.0.insert(index, (source, grant));
+        }
+    }
+    pub fn count(&self, source: ObjectId) -> usize {
+        let start = self.0.partition_point(|(id, _)| *id < source);
+        self.0[start..].partition_point(|(id, _)| *id == source)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -240,6 +265,8 @@ pub struct TurnState {
     /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub ability_triggers_this_turn: BTreeMap<OnceEachTurnKey, u32>,
+    #[serde(skip_serializing_if = "UsedTriggerGrants::is_empty")]
+    pub used_trigger_grants: UsedTriggerGrants,
     /// Times each triggered ability `(exact source, printed face, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
@@ -303,6 +330,7 @@ impl TurnState {
             graveyard_from_battlefield: Vec::new(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
+            used_trigger_grants: UsedTriggerGrants::default(),
             extra_turns: Vec::new(),
             resume_with: None,
             additional_combats: Vec::new(),
@@ -454,6 +482,7 @@ impl TurnState {
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();
+        self.used_trigger_grants.0.clear();
         self.active_player = self.next_turn_player();
     }
 

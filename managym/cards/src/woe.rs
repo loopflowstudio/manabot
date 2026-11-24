@@ -1,17 +1,25 @@
 //! Wilds of Eldraine.
 use managym_state::{
-    ability::{Condition, Effect, ObjectSelector, TargetSpec},
+    ability::{
+        Ability, CompareOp, Condition, Effect, ObjectSelector, Per, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SpellCostReduction, StaticAbility,
     },
     effect::Modification,
-    mana::ManaCost,
+    mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![archons_glory(), mocking_sprite(), scarecrow_guide()]
+    vec![
+        ruby_daring_tracker(),
+        archons_glory(),
+        mocking_sprite(),
+        scarecrow_guide(),
+    ]
 }
 
 fn scarecrow_guide() -> CardDefinition {
@@ -94,6 +102,56 @@ fn mocking_sprite() -> CardDefinition {
                 condition: Condition::Always,
                 generic: 1,
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ruby_daring_tracker() -> CardDefinition {
+    let text_box = "Haste (This creature can attack and {T} as soon as it comes under your control.)\nWhenever Ruby attacks while you control a creature with power 4 or greater, Ruby gets +2/+2 until end of turn.\n{T}: Add {R} or {G}.";
+    CardDefinition {
+        key: "woe.ruby_daring_tracker",
+        scryfall_id: "ffb5786b-6825-4ebf-a1e1-80011340adbb",
+        printed: PrintedCharacteristics {
+            name: "Ruby, Daring Tracker".into(),
+            mana_cost: Some(ManaCost::parse("{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Scout".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::Compare {
+                        left: Box::new(
+                            ObjectSelector::each_you_control(CardPredicate {
+                                min_power: Some(4),
+                                ..CardPredicate::creature()
+                            })
+                            .count(),
+                        ),
+                        op: CompareOp::Ge,
+                        right: Box::new(1.into()),
+                    },
+                    condition: Box::new(TriggerCondition::attacks(
+                        TriggerSubject::This,
+                        Per::Object,
+                    )),
+                },
+                intervening_if: None,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(2, 2),
+                )],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
