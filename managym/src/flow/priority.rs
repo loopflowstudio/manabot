@@ -161,9 +161,12 @@ mod tests {
     #[test]
     fn a_repeated_state_is_a_loop_unless_a_player_who_can_lose_is_losing() {
         let mut steady = MandatoryLoopWatch::default();
+        // The first cycle reaches a new low of 19; the next one, at no new
+        // low, repeats.
         assert!(!steady.repeats(sample(1, 20, 0)));
         assert!(!steady.repeats(sample(2, 19, 0)));
-        assert!(steady.repeats(sample(1, 20, 0)));
+        assert!(!steady.repeats(sample(1, 20, 0)));
+        assert!(steady.repeats(sample(2, 19, 0)));
 
         let mut draining = MandatoryLoopWatch::default();
         assert!((0..1000).all(|n| !draining.repeats(sample(n % 2, 2000 - n as i32, 0))));
