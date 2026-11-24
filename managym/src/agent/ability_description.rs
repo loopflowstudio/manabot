@@ -884,10 +884,10 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
         if let Some(restriction) = &class.restriction {
             let spend = restriction.describe();
             // An exclusion already limits the mana: "(anything but spells from hand)".
-            if spend.starts_with("anything but ") {
-                text.push_str(&format!(" ({spend})"));
-            } else {
+            if matches!(restriction, crate::state::mana::ManaRestriction::Only(_)) {
                 text.push_str(&format!(" ({spend} only)"));
+            } else {
+                text.push_str(&format!(" ({spend})"));
             }
         }
         if let Some(effect) = &class.effect {

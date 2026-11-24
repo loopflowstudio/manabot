@@ -112,12 +112,12 @@ export function labelText(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** Play permissions from the inspected card's viewer projection. */
 /** "2 stun counters", "1 stash counter": counters by kind, positive counts only. */
 export function counterTerms(counters: Record<string, number> | undefined): string[] {
   return Object.entries(counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${kind.replace(/_/g, ' ')} counter${n === 1 ? '' : 's'}`);
 }
 
+/** Play permissions from the inspected card's viewer projection. */
 export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_permissions'> | null, permanentName: (id: number) => string, playerName: (id: number) => string): string[] {
   const grants = card?.cast_permissions ?? (card?.cast_permission ? [card.cast_permission] : []);
   return grants.flatMap(grant => {

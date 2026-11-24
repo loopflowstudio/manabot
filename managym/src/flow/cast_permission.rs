@@ -523,27 +523,26 @@ impl Game {
             .map(|restriction| restriction.until_turn_of)
     }
 
-    /// Exiled candidates only. Priority already visits the player's graveyard.
     /// Exiled objects `player` may have a play for, each once: those they
-    /// hold grants for, then counter-marked cards a permanent of theirs lets
-    /// them play (`play_routes` decides which routes are open now).
+    /// hold grants for, then counter-marked cards while a permanent of theirs
+    /// lets them play some. Priority already visits their graveyard, and
+    /// `play_routes` decides which routes are open now.
     pub(crate) fn exile_playable_objects(
         &self,
         player: PlayerId,
     ) -> impl Iterator<Item = ObjectId> + '_ {
         let mut seen = std::collections::BTreeSet::new();
-        let counter_plays = self.layer_board().play_permissions[player.0]
+        let counter_plays = !self.layer_board().play_permissions[player.0]
             .exile_counter_plays
-            .clone();
+            .is_empty();
         let marked = self
             .state
             .object_counters
-            .iter()
-            .filter(move |(object, counters)| {
-                self.state.zones.zone_of(**object) == Some(ZoneType::Exile)
-                    && counter_plays.iter().any(|kind| counters.get(*kind) > 0)
-            })
-            .map(|(object, _)| *object);
+            .keys()
+            .copied()
+            .filter(move |object| {
+                counter_plays && self.state.zones.zone_of(*object) == Some(ZoneType::Exile)
+            });
         self.state
             .cast_permissions
             .grants
