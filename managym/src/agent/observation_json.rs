@@ -799,6 +799,8 @@ pub(super) struct WirePermanentData {
     /// marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entered_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -923,6 +925,7 @@ impl From<WirePermanentData> for PermanentData {
             damaged_permanents: w.damaged_permanents,
             ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
+            entered_this_turn: w.entered_this_turn,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
             effects: w.effects,
             timestamp: w.timestamp,
@@ -993,6 +996,7 @@ impl Serialize for PermanentData {
             damaged_permanents: self.damaged_permanents.clone(),
             ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
+            entered_this_turn: self.entered_this_turn,
             dealt_damage_this_turn: self.dealt_damage_this_turn,
             effects: self.effects.clone(),
             timestamp: self.timestamp,

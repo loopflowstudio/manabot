@@ -132,9 +132,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         }
         TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
-        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
-            EventKinds::of(EventKind::CountersPut)
-        }
+        TriggerCondition::NthCounter { .. }
+        | TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
     }
 }
 
@@ -851,6 +851,12 @@ impl Game {
         candidates
     }
 
+    /// Collect occurrences in order without placing them on the stack.
+    pub(crate) fn collect_waiting_triggers(&mut self) {
+        self.process_game_events();
+        self.check_state_triggers();
+    }
+
     /// Match pending committed events against the applicable exact sources.
     pub(crate) fn process_game_events(&mut self) {
         while !self.state.pending_events.is_empty() {
@@ -1420,7 +1426,7 @@ impl Game {
 
     /// State triggers (CR 603.8) of battlefield sources whose state holds,
     /// unless that exact source's occurrence is still waiting or on the stack.
-    pub(crate) fn check_state_triggers(&mut self) {
+    fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
         for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
             let Some(permanent) = self
@@ -1960,6 +1966,22 @@ impl Game {
                     && self.state.permanents[*attacker]
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
+            }
+            (
+                TriggerCondition::NthCounter { kind, nth },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    count,
+                    total,
+                    ..
+                },
+            ) => {
+                let threshold = i32::from(*nth);
+                kind == put
+                    && self.state.permanent_of(source_object) == Some(*permanent)
+                    && total - count < threshold
+                    && threshold <= *total
             }
             (
                 TriggerCondition::Chapter { chapter },

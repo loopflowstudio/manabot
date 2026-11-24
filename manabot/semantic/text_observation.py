@@ -89,6 +89,9 @@ _VERBS = (
 )
 _STAGES = frozenset(
     (
+        "opening_hand",
+        "opening_bottom",
+        "opening_entry",
         "priority",
         "targets",
         "announcement",
@@ -621,12 +624,15 @@ class _Renderer:
                 if len(focus) == 2
                 else f"Do not block with {first}"
             )
+        elif kind == "activate_ability":
+            label = f"Activate ability of {first}"
+            if len(focus) == 2:
+                label += f"; exile {focus[1]} as the cost"
         else:
             verb = {
                 "play_land": "Play land",
                 "cast": "Cast",
                 "pass_priority": "Pass priority",
-                "activate_ability": "Activate ability of",
                 "choose_target": "Target",
                 "scry_keep": "Keep on top",
                 "scry_bottom": "Put on bottom",
@@ -660,7 +666,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision', 'opening hand'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -677,6 +683,23 @@ class _Renderer:
             details.append(f"may select up to {relation.mode or 0} more cards")
         elif relation.kind == 6 and relation.decision == 29:
             details.append("choose the next event replacement")
+        elif relation.kind == 15:
+            stage = _enum(
+                (
+                    "unused",
+                    "choosing keep or mulligan",
+                    "kept",
+                    "waiting",
+                    "bottoming",
+                    "taking opening actions",
+                ),
+                relation.decision,
+            )
+            details.append(f"{stage}, {relation.mode or 0} mulligans")
+            if relation.active_clause is not None:
+                remaining = relation.active_clause
+                noun = "card" if remaining == 1 else "cards"
+                details.append(f"{remaining} {noun} left to bottom")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -705,9 +728,9 @@ class _Renderer:
             details.append(
                 f"{self.taken_cost(relation.source.definition).cost} included"
             )
-        if relation.active_clause is not None:
+        if relation.kind != 15 and relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision and relation.kind != 13:
+        if relation.decision and relation.kind not in (13, 15):
             details.append(_frame_decision(relation.kind, relation.decision))
         if relation.kind == 10:
             if relation.delayed_frequency is not None:
@@ -802,8 +825,12 @@ class _Renderer:
                 f"{zone} {count}"
                 for zone, count in zip(_ZONES, player.zone_counts, strict=True)
             )
+            counter_text = ", ".join(
+                f"{n} {kind}" for kind, n in player.counters.items()
+            )
+            counters = f"counters {counter_text}; " if counter_text else ""
             lines += [
-                f"{self.name(player.id)}: life {player.life}; active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
+                f"{self.name(player.id)}: life {player.life}; {counters}active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
                 "Mana pool: "
                 + ", ".join(
                     f"{symbol} {count}"
@@ -1019,6 +1046,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.entered_this_turn:
+            parts.append("entered this turn")
         for seat in permanent.combat_damage_to_players:
             parts.append(f"dealt combat damage to seat {seat} this turn")
         for target in permanent.damaged_permanents:

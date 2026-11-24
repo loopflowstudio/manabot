@@ -1370,6 +1370,10 @@
             "$ref": "#/$defs/ContinuousEffectView"
           }
         },
+        "entered_this_turn": {
+          "description": "It entered the battlefield during this turn.",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
           "type": "integer",
@@ -1503,6 +1507,13 @@
             "null"
           ],
           "format": "int32"
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "effects": {
           "description": "Continuous effects on this player, in timestamp order.",

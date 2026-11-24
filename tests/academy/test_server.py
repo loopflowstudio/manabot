@@ -94,6 +94,13 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
             initial = settled_message(websocket)
             frame = initial["recovery"]["frame"]
             assert frame["protocol"] == 1
+            keep = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
+            websocket.send_json(
+                {"type": "command", "command": _command(frame, keep, "bolt-keep")}
+            )
+            opening = settled_message(websocket)
+            assert opening["status"] == "accepted"
+            frame = opening["update"]["frame"]
             assert _offer(frame, action_type="PRIORITY_PASS_PRIORITY")["verb"] == (
                 "pass_priority"
             )
@@ -110,7 +117,6 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                     fixture_frame = PROTOCOL_V1_BOLT_FIXTURE["recovery"]["frame"]
                     for key in (
                         "protocol",
-                        "revision",
                         "content_hash",
                         "status",
                         "prompt",
@@ -119,11 +125,8 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                         "stops",
                     ):
                         if key == "prompt":
-                            assert {
-                                k: frame[key][k] for k in ("id", "actor", "kind")
-                            } == {
-                                k: fixture_frame[key][k]
-                                for k in ("id", "actor", "kind")
+                            assert {k: frame[key][k] for k in ("actor", "kind")} == {
+                                k: fixture_frame[key][k] for k in ("actor", "kind")
                             }
                             assert (
                                 frame[key]["instruction"]
@@ -133,9 +136,16 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                             )
                         elif key == "offers":
                             assert [
-                                {k: v for k, v in offer.items() if k != "subjects"}
+                                {
+                                    k: v
+                                    for k, v in offer.items()
+                                    if k not in {"id", "subjects"}
+                                }
                                 for offer in frame[key]
-                            ] == fixture_frame[key]
+                            ] == [
+                                {k: v for k, v in offer.items() if k != "id"}
+                                for offer in fixture_frame[key]
+                            ]
                         else:
                             assert frame[key] == fixture_frame[key]
                     # The retained fixture pins historical assets; the live
@@ -149,9 +159,6 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                     fixture_command = PROTOCOL_V1_BOLT_FIXTURE["command"]
                     for key in (
                         "command_id",
-                        "expected_revision",
-                        "prompt_id",
-                        "offer_id",
                         "answers",
                     ):
                         assert command[key] == fixture_command[key]
@@ -190,7 +197,11 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
     assert frame["revision"] > 4  # policy decisions now own intermediate revisions
     assert frame["projection"]["opponent"]["life"] == 17
     record = next(iter(server.SESSION_REGISTRY.values()))
-    assert [event.action_description for event in record.game.trace.events[:3]] == [
+    assert [
+        event.action_description
+        for event in record.game.trace.events
+        if event.action_description != "Keep hand"
+    ][:3] == [
         "Play Mountain",
         "Cast Lightning Bolt",
         "Target Villain",
@@ -234,12 +245,12 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             old_frame = settled_message(websocket)["frame"]
             first_command = _command(
                 old_frame,
-                _offer(old_frame, action_type="PRIORITY_PASS_PRIORITY"),
+                _offer(old_frame, action_type="CHOOSE_MODE", label="Keep hand"),
                 "same-command",
             )
             stale_command = _command(
                 old_frame,
-                _offer(old_frame, action_type="PRIORITY_PASS_PRIORITY"),
+                _offer(old_frame, action_type="CHOOSE_MODE", label="Keep hand"),
                 "stale-command",
             )
 
@@ -415,7 +426,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
             frame = initial["recovery"]["frame"]
             command = _command(
                 frame,
-                _offer(frame, action_type="PRIORITY_PASS_PRIORITY"),
+                _offer(frame, action_type="CHOOSE_MODE", label="Keep hand"),
                 "lost-response-command",
             )
             cursor = initial["recovery"]["presentation_cursor"]
@@ -489,7 +500,7 @@ def test_reload_during_slow_command_reads_cached_frame_then_commit(
             websocket.send_json({"type": "new_game", "config": config})
             initial = settled_message(websocket)
             frame = initial["recovery"]["frame"]
-            offer = _offer(frame, action_type="PRIORITY_PASS_PRIORITY")
+            offer = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
             websocket.send_json(
                 {"type": "command", "command": _command(frame, offer, "slow")}
             )

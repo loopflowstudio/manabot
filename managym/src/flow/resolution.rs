@@ -13,7 +13,7 @@ use crate::{
         game::Game,
         payment::{CostComponent, PaymentProgress},
         proposed_event::{
-            EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -259,6 +259,24 @@ impl Game {
             ..EffectFrame::new(spell.controller, effects)
         };
         self.run_frame(frame);
+    }
+
+    /// CR 725.1b: abilities cease to exist. All spells, including copies
+    /// and the resolving spell, leave the stack in one zone-change batch.
+    fn exile_stack(&mut self) -> EventBatch {
+        self.state
+            .stack_objects_mut()
+            .retain(|item| matches!(item, StackObject::Spell(_)));
+        let moves: Vec<_> = self
+            .state
+            .stack_objects
+            .iter()
+            .rev()
+            .map(|spell| {
+                self.zone_move_proposal(spell.source_object(), ZoneType::Exile, Default::default())
+            })
+            .collect();
+        self.event_batch(EventBinding::None, moves)
     }
 
     /// Counter an activated or triggered ability: it is removed from the
@@ -554,7 +572,7 @@ impl Game {
             }
             Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
             Target::StackAbility(id) => self.find_ability_on_stack_index(id).is_some(),
-            Target::Player(player) => self.state.players[player.0].alive,
+            Target::Player(player) => self.state.loss(player.0).is_none(),
         }
     }
 
@@ -943,6 +961,16 @@ impl Game {
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
                 self.distribute_counters(frame.controller, *kind, *count)
             }
+            Effect::GivePlayerCounters {
+                player,
+                kind,
+                count,
+            } => {
+                for seat in self.selected_players(player, frame) {
+                    self.state.players[seat.0].counters.change(*kind, *count);
+                }
+                None
+            }
             Effect::DealDamageToPlayer { player, amount } => {
                 let amount = self.effect_value(amount, frame);
                 frame.batch = Some(
@@ -1123,8 +1151,25 @@ impl Game {
                 }
                 None
             }
+            Effect::WinGame => {
+                self.win_game(frame.controller);
+                None
+            }
+            Effect::LoseGame => {
+                self.lose_game(frame.controller);
+                None
+            }
             Effect::EndTheTurn => {
-                self.end_the_turn();
+                // CR 725.1a: collect occurrences from earlier instructions
+                // before discarding them. Later triggers wait for cleanup.
+                self.collect_waiting_triggers();
+                self.state.pending_triggers_mut().clear();
+                self.capture_resolution(frame);
+                *frame = EffectFrame {
+                    batch: Some(self.exile_stack()),
+                    completion: FrameCompletion::EndTurn,
+                    ..EffectFrame::new(frame.controller, Vec::new())
+                };
                 None
             }
             Effect::ControlPlayer { what, duration } => {

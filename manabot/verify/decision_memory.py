@@ -18,6 +18,7 @@ from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
+from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.decision_memory import read_records
 
@@ -112,14 +113,7 @@ def _configs(disclosure: Literal["open", "closed"]) -> managym.GameSetup:
 
 def _root(disclosure: Literal["open", "closed"]) -> managym.Env:
     env = managym.Env(seed=23, decision_memory=True)
-    env.reset(_configs(disclosure))
-    for _ in range(20):
-        contract = SemanticDecisionContract.from_env(env)
-        if int(env.observation_for_player(contract.frame.actor).turn.phase) == 1:
-            break
-        contract.apply(env, contract.frame.find_verb("pass_priority")["id"])
-    else:
-        raise AssertionError("main phase not reached")
+    reset_to_first_main(env, _configs(disclosure))
     for seat in range(2):
         env.scenario_clear_hand(seat)
         for name in ("Accumulate Wisdom", "Lightning Bolt"):

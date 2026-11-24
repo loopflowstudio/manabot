@@ -21,6 +21,27 @@ use crate::{
     },
 };
 use std::{collections::BTreeMap, sync::Arc};
+/// Stop as soon as the threshold is met. Ordinary counts never read a name.
+pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
+    matching: impl Iterator<Item = T>,
+    count: usize,
+    distinct_names: bool,
+    name: impl FnMut(T) -> N,
+) -> bool {
+    if distinct_names {
+        let mut names = std::collections::BTreeSet::new();
+        matching
+            .map(name)
+            .filter(|n| !n.as_ref().is_empty())
+            .filter_map(|n| names.insert(n).then_some(()))
+            .take(count)
+            .count()
+            == count
+    } else {
+        matching.take(count).count() == count
+    }
+}
+
 /// A battlefield permanent's characteristics with every static ability and
 /// continuous-effect record applied (CR 613). A permanent that has left the
 /// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
@@ -74,7 +95,9 @@ impl Characteristics {
     /// Dynamic outputs and reductions can change without changing source plans.
     fn has_dynamic_activations(&self) -> bool {
         self.activated_abilities.iter().any(|ability| {
-            ability.cost_reduction_per.is_some()
+            ability.power_up
+                || ability.reduce_by_source_power
+                || ability.cost_reduction_per.is_some()
                 || matches!(
                     ability.effects.as_slice(),
                     [crate::state::ability::Effect::If { .. }
@@ -369,11 +392,20 @@ impl Game {
             return view;
         }
 
+        let power = view.power.clamp(0, u8::MAX.into()) as u8;
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
             if let [effect] = ability.effects.as_slice() {
                 if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
                     ability.effects = vec![effect];
                 }
+            }
+            if ability.power_up && permanent.entered_this_turn(self.state.turn.turn_number) {
+                if let Some(cost) = &self.state[permanent.object].mana_cost {
+                    ability.mana_cost = ability.mana_cost.reduced_by(cost);
+                }
+            }
+            if ability.reduce_by_source_power {
+                ability.mana_cost = ability.mana_cost.reduced_generic(power);
             }
             self.price_activation(permanent.controller, ability);
             let floor = ability.mana_cost.mana_value.saturating_sub(1);
@@ -774,13 +806,20 @@ impl Game {
             Condition::AnyGraveyardAtLeast { count } => [PlayerId(0), PlayerId(1)]
                 .into_iter()
                 .any(|player| self.state.zones.size(ZoneType::Graveyard, player) >= *count),
-            Condition::ControlsAtLeast { count, predicate } => {
+            Condition::ControlsAtLeast {
+                count,
+                predicate,
+                distinct_names,
+            } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                self.iter_battlefield_permanents(controller)
-                    .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
-                    .take(*count)
-                    .count()
-                    == *count
+                let source_view = source.map(|id| self.layer_view(id));
+                let source_name = source_view.as_ref().map(|view| view.name.as_str());
+                let matching = self
+                    .layer_views(self.iter_battlefield_permanents(controller))
+                    .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name));
+                controlled_threshold(matching, *count, *distinct_names, |(_, view)| {
+                    view.name.clone()
+                })
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
@@ -1187,6 +1226,7 @@ mod cache_tests {
             Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
                 effects: vec![Effect::If {
                     condition: Condition::ControlsAtLeast {
+                        distinct_names: false,
                         count: 1,
                         predicate: CardPredicate {
                             tapped: true,

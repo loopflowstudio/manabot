@@ -104,8 +104,9 @@ pub struct Player {
     pub known_library: super::knowledge::LibraryKnowledge,
     pub name: String,
     pub life: i32,
+    #[serde(skip_serializing_if = "super::permanent::Counters::is_empty")]
+    pub counters: super::permanent::Counters,
     pub drew_when_empty: bool,
-    pub alive: bool,
     pub mana_pool: ManaPool,
     /// Mana that lasts until end of combat (firebending) — persists across
     /// combat steps instead of emptying, empties as combat ends.
@@ -123,8 +124,8 @@ impl Player {
             known_library: Default::default(),
             name: name.into(),
             life: 20,
+            counters: Default::default(),
             drew_when_empty: false,
-            alive: true,
             mana_pool: ManaPool::default(),
             combat_mana_pool: ManaPool::default(),
         }

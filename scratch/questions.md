@@ -45,3 +45,5 @@ For the next batch, use the three second-draw listeners together. Their shared c
 
 The two-viewer text fixture uses Lunar Insight to draw three in one resolution. Wizard, Horde and Mystic supply its three distinct nonland mana values.
 Start the attack batch with Linden and Chart a Course to distinguish per-attacker triggers from raid across a partial declaration and restore.
+
+Sync onto main (dca0a901b6): state hash is now v26, combining main's v19 opening/victory fields with the branch's history fields. Main's `entered_this_turn` keeps permanent column 51; the two combat-damage flags move to 52 and 53. Incubation counters are appended after main's Poison and Plan. Two kinds of failure in the debug workspace run do not come from conflict resolution. First, four TLA activated-target tests (`disciple_*`, `north_pole_patrol_*`, `protectors_sacrifice_*`) fail because `activated_ability_targets` now calls `targets_for_source`, which leaves out the source only for `another` clauses. Main always left out an activated ability's own permanent. Second, the frozen semantic conformance cases (`evidence-opening-v1.json`) need re-recording under hash v26.

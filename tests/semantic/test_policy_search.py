@@ -6,6 +6,7 @@ import random
 import numpy as np
 import pytest
 
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym import search
 from managym.policy import (
@@ -202,6 +203,7 @@ def test_search_is_independent_of_the_actual_hidden_deal() -> None:
 
 def test_search_evaluates_the_live_root_projection_with_recent_events() -> None:
     engine, observation = _game()
+    observation = keep_opening_hands(engine, observation)
     action = next(
         index
         for index, choice in enumerate(observation.action_space.actions)

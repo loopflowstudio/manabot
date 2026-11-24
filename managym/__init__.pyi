@@ -864,6 +864,7 @@ class Player:
     sideboard_counts: Optional[Dict[int, int]]
     remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
+    counters: dict[str, int]
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
@@ -1075,6 +1076,7 @@ class Permanent:
     damaged_permanents: list[int]
     ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
+    entered_this_turn: bool
     dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]

@@ -1,18 +1,16 @@
 // sba.rs
 // State-based actions.
 
-use crate::state::card::Keyword;
-
-use crate::state::game_object::ObjectKind;
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
-        game::Game,
+        game::{Game, GameOutcome, GameProcedure, LossCauses},
         proposed_event::{EventBinding, ProposedEvent},
     },
     state::{
         ability::{Ability, TriggerCondition},
-        game_object::{ObjectId, PermanentId, PlayerId},
+        card::{Keyword, StaticAbility},
+        game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
         zone::ZoneType,
@@ -33,19 +31,17 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
-            let views: Vec<_> = self
-                .layer_views(self.iter_battlefield_permanents(player))
-                .collect();
-            if views.iter().any(|(_, characteristics)| {
-                characteristics
+            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
+            {
+                if characteristics
                     .static_abilities
-                    .contains(&crate::state::card::StaticAbility::LegendRuleDoesntApply)
-            }) {
-                continue;
-            }
-            for (id, characteristics) in views {
-                let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                    .contains(&StaticAbility::LegendRuleDoesntApply)
+                {
+                    names.clear();
+                    break;
+                }
                 if characteristics.is_legendary {
+                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                     names
                         .entry(characteristics.name.clone())
                         .or_default()
@@ -57,36 +53,85 @@ impl Game {
         groups
     }
 
+    fn protected_from_loss(&self, player: PlayerId) -> bool {
+        self.layer_views(self.iter_battlefield_permanents(player))
+            .any(|(_, view)| {
+                view.static_abilities
+                    .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
+            })
+    }
+
+    pub fn lose_game(&mut self, player: PlayerId) {
+        if !self.is_game_over() && !self.protected_from_loss(player) {
+            let mut losses = [LossCauses::default(); 2];
+            losses[player.0].instructed = true;
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
+        }
+    }
+
+    pub fn win_game(&mut self, winner: PlayerId) {
+        if !self.is_game_over() && !self.protected_from_loss(PlayerId(1 - winner.0)) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Victory { winner });
+        }
+    }
+
+    /// Evaluate both seats against the battlefield before applying this batch.
+    fn commit_state_based_losses(&mut self) -> bool {
+        let losses = std::array::from_fn(|seat| {
+            let player = &self.state.players[seat];
+            let causes = LossCauses {
+                life_total: player.life <= 0,
+                poison: player.counters.get(CounterKind::Poison) >= 10,
+                deck_empty: player.drew_when_empty,
+                ..Default::default()
+            };
+            if causes.any() && self.protected_from_loss(PlayerId(seat)) {
+                Default::default()
+            } else {
+                causes
+            }
+        });
+        // CR 704.5b considers draws only since the previous check.
+        for seat in 0..2 {
+            if self.state.players[seat].drew_when_empty {
+                self.state.players[seat].drew_when_empty = false;
+            }
+        }
+        if losses.iter().any(|causes| causes.any()) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
+            return true;
+        }
+        false
+    }
+
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
     pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
-        if self
-            .state
-            .players
-            .iter()
-            .all(|p| p.life > 0 && !p.drew_when_empty)
-        {
-            let groups = self.legend_groups();
-            if let Some(first) = groups.first() {
-                let id = self.state.permanent_of(first[0]).expect("legend");
-                let player = self.state.permanents[id]
-                    .as_ref()
-                    .expect("legend")
-                    .controller;
-                self.suspend_rule_decision(crate::flow::decision::Decision::LegendRule {
-                    player,
-                    groups,
-                    keep: Vec::new(),
-                });
-                return SbaProgress::Pending;
-            }
-            // No legend choice was needed, so this same simultaneous batch
-            // has no legend losers. Do not discover the groups a second time.
-            return self.perform_state_based_batch(&[]);
+        if self.is_game_over() {
+            return SbaProgress::Stable;
         }
-        self.perform_state_based_actions_with_legends(&[])
+        if self.commit_state_based_losses() {
+            return SbaProgress::Changed;
+        }
+        let groups = self.legend_groups();
+        if let Some(first) = groups.first() {
+            let id = self.state.permanent_of(first[0]).expect("legend");
+            let player = self.state.permanents[id]
+                .as_ref()
+                .expect("legend")
+                .controller;
+            self.suspend_rule_decision(crate::flow::decision::Decision::LegendRule {
+                player,
+                groups,
+                keep: Vec::new(),
+            });
+            return SbaProgress::Pending;
+        }
+        // No legend choice was needed, so this same simultaneous batch
+        // has no legend losers. Do not discover the groups a second time.
+        self.perform_state_based_batch(&[])
     }
 
     pub(crate) fn perform_state_based_actions_with_legends(
@@ -104,23 +149,6 @@ impl Game {
 
     fn perform_state_based_batch(&mut self, legend_losers: &[ObjectId]) -> SbaProgress {
         let mut performed = false;
-        for player in [PlayerId(0), PlayerId(1)] {
-            // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
-            if self.state.players[player.0].life <= 0
-                || self.state.players[player.0].drew_when_empty
-            {
-                performed |= self.lose_game(player);
-            }
-        }
-
-        if self.is_game_over() {
-            return if performed {
-                SbaProgress::Changed
-            } else {
-                SbaProgress::Stable
-            };
-        }
-
         // CR 704.5q — +1/+1 and -1/-1 counters on one permanent annihilate
         // in pairs. Power and toughness are unchanged, so the simultaneous
         // checks below read the same characteristics either way.
@@ -350,13 +378,5 @@ impl Game {
         !self.attached_permanent(aura).is_some_and(|object| {
             object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
         })
-    }
-
-    pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {
-        if !self.state.players[player.0].alive {
-            return false;
-        }
-        self.state.players[player.0].alive = false;
-        true
     }
 }

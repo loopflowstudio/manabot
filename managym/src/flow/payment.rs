@@ -109,6 +109,7 @@ pub enum CostComponent {
     /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
     /// functions from hand, "discard this card" (`Discarded`).
     Source(How),
+    ExileGrantor(ObjectId),
 }
 
 impl CostComponent {
@@ -549,10 +550,16 @@ impl Game {
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
+                if ability.exile_grantor {
+                    owed.push(CostComponent::ExileGrantor(
+                        ability.granted_by.expect("attached ability grant").grantor,
+                    ));
+                }
                 for (owes, how) in [
                     (ability.tap_source, How::Tapped),
                     (ability.sacrifice_source, How::Sacrificed),
                     (ability.exile_source, How::Exiled),
+                    (ability.return_source, How::Returned),
                     (ability.discard_source, How::Discarded),
                 ] {
                     if owes {
@@ -897,7 +904,8 @@ impl Game {
             }
             CostComponent::Life(_)
             | CostComponent::RemoveCounters(..)
-            | CostComponent::Source(_) => {
+            | CostComponent::Source(_)
+            | CostComponent::ExileGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -1067,8 +1075,10 @@ impl Game {
                         });
                         continue;
                     }
-                    let CostComponent::Source(how) = *component else {
-                        continue;
+                    let (source_object, how) = match *component {
+                        CostComponent::Source(how) => (source_object, how),
+                        CostComponent::ExileGrantor(object) => (object, How::Exiled),
+                        _ => continue,
                     };
                     payment
                         .receipt
@@ -1077,6 +1087,7 @@ impl Game {
                         How::Tapped | How::Sacrificed => continue,
                         How::Discarded => ZoneType::Graveyard,
                         How::Exiled => ZoneType::Exile,
+                        How::Returned => ZoneType::Hand,
                     };
                     source_costs.push(self.zone_move_proposal(
                         source_object,

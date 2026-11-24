@@ -1714,6 +1714,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::ENTERED_THIS_TURN] = bool_to_f32(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
@@ -1727,13 +1728,10 @@ fn encode_permanent_features(
         out[permanent::IS_LESSON] = bool_to_f32(card.is_lesson);
         out[permanent::HAS_WARD] = bool_to_f32(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = card.ward_cost as f32 / 10.0;
-    }
-    let valid = if layout == InputLayout::OneToken {
-        permanent::VALID
+        out[permanent::VALID] = 1.0;
     } else {
-        out.len() - 1
-    };
-    out[valid] = 1.0;
+        out[out.len() - 1] = 1.0;
+    }
 }
 
 /// Stack rows, top first, each indexed by its stack object id; a spell's card
@@ -1861,6 +1859,14 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
                 FactKind::LifeGains,
                 0,
                 player.turn_history.life_gains as f32,
+            );
+        }
+        for (kind, count) in &player.counters {
+            push(
+                player.id,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
             );
         }
     }
@@ -2461,6 +2467,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2499,6 +2506,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },

@@ -145,7 +145,7 @@ impl ReadSet {
         if !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying {
+        if p.flying || p.deathtouch {
             self.fields |= KEYWORDS;
         }
         if p.min_power.is_some() || p.max_power.is_some() {
@@ -159,8 +159,17 @@ impl ReadSet {
 
     fn condition(&mut self, condition: &Condition) {
         match condition {
-            Condition::ControlsAtLeast { predicate, .. }
-            | Condition::BattlefieldAtLeast { predicate, .. }
+            Condition::ControlsAtLeast {
+                predicate,
+                distinct_names,
+                ..
+            } => {
+                self.predicate(predicate);
+                if *distinct_names {
+                    self.fields |= NAME;
+                }
+            }
+            Condition::BattlefieldAtLeast { predicate, .. }
             | Condition::SourceMatches(predicate) => {
                 self.predicate(predicate);
             }
@@ -849,15 +858,18 @@ impl<'a> Context<'a> {
                     .count()
                     >= *count
             }
-            Condition::ControlsAtLeast { count, predicate } => {
-                self.objects
-                    .keys()
-                    .filter(|&&id| {
-                        self.controller(id) == self.controller(source)
-                            && self.matches(id, predicate, Some(source))
-                    })
-                    .count()
-                    >= *count
+            Condition::ControlsAtLeast {
+                count,
+                predicate,
+                distinct_names,
+            } => {
+                let matching = self.objects.keys().filter(|&&id| {
+                    self.controller(id) == self.controller(source)
+                        && self.matches(id, predicate, Some(source))
+                });
+                super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
+                    self.objects[id].view.name.as_str()
+                })
             }
             Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
             Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
@@ -1215,6 +1227,7 @@ pub(super) fn matches_view(
     // A permanent is on the battlefield, never a graveyard card.
     !p.from_battlefield_this_turn
         && (!p.namesake || source_name == Some(view.name.as_str()))
+        && (!p.deathtouch || view.keywords.has(Keyword::Deathtouch))
         && (!p.flying || view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))

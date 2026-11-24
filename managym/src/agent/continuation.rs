@@ -372,6 +372,9 @@ impl Game {
     pub fn continuation_frames(&self, viewer: PlayerId) -> Vec<ContinuationFrame> {
         // Same top-to-bottom ordering as Observation.stack_objects.
         let mut frames = Vec::new();
+        if let Some(opening) = self.state.opening() {
+            frames.extend(opening.frames());
+        }
         for object in self.state.stack_objects.iter().rev() {
             frames.push(self.stack_frame(object, viewer));
         }
@@ -1297,6 +1300,7 @@ mod tests {
             23,
             false,
         );
+        game.keep_opening_hands();
         let actor = game.agent_player();
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,

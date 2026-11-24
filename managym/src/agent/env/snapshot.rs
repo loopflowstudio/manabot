@@ -366,14 +366,15 @@ mod card_history_tests {
         ])
         .unwrap();
         let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
         let actor = game.active_player();
         let source = game
             .scenario_force_battlefield(actor, "Drake Hatcher", true)
             .unwrap();
-        game.state.combat = Some(CombatState {
+        game.state.combat = Some(Box::new(CombatState {
             attackers: vec![source],
             ..Default::default()
-        });
+        }));
         let combat = env.snapshot().unwrap();
         for amount in [1, 3] {
             let mut branch = combat.restore(Default::default()).unwrap();
@@ -427,6 +428,7 @@ mod card_history_tests {
         ])
         .unwrap();
         let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
         let actor = game.state.priority.holder;
         let victim = PlayerId(1 - actor.0);
         let hit = game
@@ -549,6 +551,7 @@ mod card_history_tests {
         ])
         .unwrap();
         let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
         let source = game
             .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)
             .unwrap();
@@ -633,6 +636,7 @@ mod card_history_tests {
         assert_eq!(die(&mut both, recipient), 2);
         assert_eq!(env.selected_witness().unwrap(), witness);
         let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
         let initial_turn = game.state.turn.turn_number;
         while game.state.turn.turn_number == initial_turn {
             game.state.turn.advance_step();
@@ -659,6 +663,7 @@ mod card_history_tests {
         ])
         .unwrap();
         let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
         let player = PlayerId(0);
         let panda = game
             .scenario_force_battlefield(player, "Fiendish Panda", true)

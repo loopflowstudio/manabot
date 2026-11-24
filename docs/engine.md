@@ -205,10 +205,12 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest. Version 19 records each life gain's ordinal when it happens. An ability
+digest. Version 26 records each life gain's ordinal when it happens. An ability
 that reads its resolution count keeps it for that turn under the source
 incarnation, printed face and ability index. A trigger still on the stack
 keeps that identity after the source leaves. A countered trigger adds zero.
+It also records the winning seat for a card-instructed victory, private
+opening progress and simultaneous loss causes.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.
@@ -1347,6 +1349,23 @@ put waiting triggers on the stack in APNAP order, and publish priority only
 when nothing remains. State-based actions discovered together share one
 pre-batch trigger snapshot and commit in `ObjectId` order; a stale id
 is rejected rather than followed after a zone change.
+
+Time Stop and Sundial of the Infinite end the turn during resolution. The
+engine drops earlier waiting triggers, exiles the stack, and checks state-based
+actions while still in the interrupted step. A required legend choice pauses
+the procedure there. New triggers wait until cleanup, after the active player
+discards and marked damage clears. If a player gets priority in cleanup,
+another cleanup step follows. Combat-only control ends when combat ends.
+Turn-long control applies to every cleanup discard that turn.
+
+The Dominion Bracelet locks its activation price using the equipped creature’s
+power. When several Bracelets grant that ability, each offer identifies the
+Bracelet it exiles. The payment receipt retains that object and the mana spent,
+even if the ability is countered. Construct a Cosmic Cube puts its sacrifice
+trigger on the stack when a placement crosses seven plan counters. A successful
+sacrifice puts a separate targeted control trigger on the stack. Once either
+card’s control effect resolves, the chooser makes decisions during the targeted
+opponent’s next turn using that opponent’s resources.
 
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.

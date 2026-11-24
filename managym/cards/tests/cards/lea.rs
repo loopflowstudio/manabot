@@ -309,7 +309,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     // witness includes definition ids from the name-ordered catalog.
     assert_eq!(
         s.game().state.deterministic_hash().to_string(),
-        "v21:356ac05d58a98ea5d35183cee8f22e0804d07a17df9d8a9015337f9ef2032709"
+        "v26:2381e6527d8f707bb749f3e942f5d1553be11d8b1ecfa3fac5725ab511477f44"
     );
     let pending = Observation::for_player(s.game(), PlayerId(0));
     let fork = s.game().clone();
