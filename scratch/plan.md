@@ -703,12 +703,27 @@ read Hatcher's concrete counter count in the LLM text and both Academy
 stack entries. The effect-execution model/text check and the named-layout
 check passed.
 
-**Next.** Repeat decomposition review at `dd68cdd888` against the four
-directed results (Greatwurm over 255, distinct Hatcher labels, countered Omen,
-nested Prepared); if it holds, go to `gate`. Integrated Watch privacy, Engine
-Budget measurements and the Academy baseline comparisons remain for gate. The
-1,697 passing native checks at synced head `60908f4ccf` predate the alignment
-pass and its compression; gate reruns the full debug suite.
+**Decomposition review at `76b037bad6` (2026-11-24): criterion met.**
+One amount carrier: `PendingTrigger.triggering_amount: i32` is set once from
+`event_amount` (`flow/triggers.rs:165`), copied to the resolution frame and
+read only through `EffectValue::TriggeringAmount`; Greatwurm, Hatcher, Khalni
+and FDN's draw/gain triggers author it the same way, and description, stack
+labels and the v11 fact read the same field. `SpellLki.profile` feeds the one
+`recorded_spell_matches_predicate` reader. Wrapper peeling is
+`TriggerCondition::inner`/`leaf`/`once_each_turn`; event-time gating stays in
+the single `match_trigger_wrappers` loop (LKI and graveyard callers), and
+description recursion is per-wrapper text. No card key in engine `src/` or
+`state/src/`; the deleted life conditions have no remaining readers.
+Debug nextest: 11 cards cases (four Greatwurm incl. 258 + 260 = 518 counters,
+Hatcher order offers and stack labels "that many (1)/(3)", Hatcher catalog,
+countered Omen, trample controls) and the state `prepared_preserves_a_nested_once_each_turn_limit`
+passed. Retained, not blockers: the legacy `CountersPut` `trigger.x` u8 binding
+(pinned pilots) and `match_trigger_wrappers`' `leaf =>` fallthrough, which
+would treat a nested `InGraveyard` as a leaf; only top-level use exists
+(`tla.rs:11197`).
+
+**Next.** `gate`: full debug suite, integrated Watch privacy, Engine Budget
+and the Academy baseline comparisons.
 
 ## Directed interactions for integrated validation
 
