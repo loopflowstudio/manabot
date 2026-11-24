@@ -21,6 +21,7 @@ their existing contracts.
 1. `fa2c52e493` — canonical weights, EMA, and Adam hooks, with per-leaf bias correction on MLX.
 2. `bb0c7267b6`, `5c91b7ff7d` — one Etude callback path for both backends, with native game and RNG recovery and a temporary Etude Git pin.
 3. `30db47c5c1` — tracked continuation acceptance, a smaller Metal fixture, CI wiring for the acceptance file, and training guide updates.
+4. Replaced the temporary Etude Git source with PyPI release 0.4.6. The package and its extras require `>=0.4.6,<0.5`. The play runtime and release smoke pin `==0.4.6`.
 
 The save contains `state.json` (Etude inventory and counts),
 `continuation.json` (collector and host RNGs), `learner.safetensors` (canonical
@@ -61,25 +62,12 @@ See `scratch/questions.md` for the format and optimizer choices.
   counts digest checked against that run's counts, which include measured
   training time.
 - All 42 package-boundary tests passed. Cross-backend cases used CPU.
-  The Metal case checked same-domain repeatability. GPU backend switches and
-  the released SDK remain unverified.
+  The Metal case checked same-domain repeatability. GPU backend switches
+  remain unverified.
+- Both training and play runtimes installed Etude SDK 0.4.6 from the lock on
+  Apple Silicon with CPython 3.13. The isolated play install included the
+  reports and evaluation extras and passed `uv pip check`. All seven
+  continuation cases passed against the PyPI release in 53.77 s, and all
+  39 release metadata fixtures passed.
 
-## Remaining slice — use released Etude SDK 0.4.6
-
-Etude PR #141 merged at `af71c109` after 0.4.5. PyPI still listed 0.4.5 on
-2026-11-23 and its release inventory had no 0.4.6. The dependency is the
-0.4.6 release with public callbacks and versioned storage listing.
-[Etude SDK on PyPI](https://pypi.org/project/etude-sdk/)
-
-When 0.4.6 is published, remove the Git source in `pyproject.toml`, set the
-base and extra requirements to `>=0.4.6,<0.5` and the `play-runtime` pin to
-`==0.4.6`. Update the matching release smoke pin in
-`.github/workflows/release.yml`, the metadata requirement in
-`scripts/release/validate.py` and its fixtures in `tests/infra/test_release.py`,
-and the requirements in `docs/development.md`. Existing experiment pins stay
-as recorded.
-
-After those edits, run `uv lock --upgrade-package etude-sdk` first. Verify
-locked sync and the cross-backend acceptance suite with the PyPI SDK. Run the
-release metadata fixtures with
-`uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q`.
+All four implementation slices are complete.

@@ -41,10 +41,11 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.5,<0.5`
-(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.5 adds Colab on-demand training on top of fixed axes for checkpoint behaviour rates. The repository's
-`uv.lock` records the registry release; dedicated training and play runtime
-groups retain their backend choices.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.6,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.6
+provides the save and restore callbacks used by tracked training and the
+versioned storage listing used by training-time reports. The repository's
+`uv.lock` records the PyPI release for the training and play runtime groups.
 
 Install the locked client and inspect its database:
 
@@ -863,7 +864,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.5,<0.5`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.6,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact

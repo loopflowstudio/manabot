@@ -915,9 +915,9 @@ continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
 `etude continue` queues the child in the parent's pool with its rental settings.
 A backend or device config override must be runnable in that pool.
 
-The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
-for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
-errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+The repository requires `etude-sdk>=0.4.6,<0.5` from PyPI for training
+continuation callbacks and versioned storage listing. Etude's shared records,
+storage and errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
 A resumed tracker uses `resume=True`; its first logged row sets the supersession
