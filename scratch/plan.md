@@ -79,7 +79,7 @@ Behavior review of D7 at `b35dfe9ef0` (2026-11-24): fixed, no new defects. `boun
 
 ## Remaining work
 
-Decomposition is done (see Later phases); next is **gate**. Gate owns:
+Decomposition and its compress are done (see Later phases; realign at `6f0cd50f70` found plan and code in agreement); next is **gate**. Gate owns:
 
 - Clippy, the full debug workspace, the measured 10% Engine Budget (search/decision digests move: new card, new routes, `play_lands` in state hashes), `conformance/` receipts for the final catalog.
 - Compare against main: `tests/academy/test_play_modes.py::test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture` and four `tests/belief` tests stop at the opening Keep/Mulligan decision (opening procedure from main `d12eb496b3`); `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails (16 Islands make Islandcycling ask for a manual tap; Slice 5 does not touch payment).
@@ -149,7 +149,7 @@ Validation (debug) after the removal: cards 917, `managym --lib` 361, `rules_tes
 
 Not generalized (one consumer each, so no shared shape to extract yet): `StaticAbility::GraveyardSpellsHaveFlashback` with Iroh's Lesson {1} price in `granted_flashback_cost` (TLA, predates this branch); `LinkedGrant`'s two forms (Hama, Azula). A second card of either kind should move the price or terms into the variant's data.
 
-**Performance.** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
+**Performance (gate).** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
 - Muldrotha with a graveyard of duplicate artifact creatures, overlapped by a Zul grant (now reading cached `StaticPlayPermissions.graveyard_type_sources` instead of scanning the battlefield per card).
 - A hand of Dragon/Omen cards with restricted mana and several Charring Bite targets.
 - Many Phytomedics with their own Seed Sutures, with one transfer and a zero-link control.
