@@ -41,8 +41,13 @@ class CollectionSession:
     def device_name(self) -> str:
         return str(self.device)
 
-    def snapshot_rng(self) -> object:
+    def snapshot_rng(self) -> torch.Tensor:
         return self.rng.get_state().clone()
+
+    def restore_rng(self, state: object) -> None:
+        if not isinstance(state, torch.Tensor):
+            raise ValueError("expected Torch generator state")
+        self.rng.set_state(state)
 
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:

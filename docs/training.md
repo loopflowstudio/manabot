@@ -339,16 +339,17 @@ def self_play(
             saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
         model = resume_model(saved_model, settings.model)
         readings = resume_readings(counts, learner.agent.readings, learner.agent.observation_space)
-        export = state.restore(run, learner, ema, counts)
+        staged = state.restore(run, learner, ema, counts)
         counts.model = model
         counts.readings = readings
-        if export is not None:
-            run.save(export=export)
+        host = staged.host if staged is not None else None
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
-        # Repair an unrecorded milestone without rewriting its immutable bytes.
-        if counts.updates == 0 or is_checkpoint(settings, counts.updates):
-            publish(settings, run, learner, ema, counts, backend=backend)
-        with self_play_games(settings, run, counts, backend=backend) as collector:
+        with self_play_games(
+            settings, run, counts, backend=backend,
+            snapshot=host.collector if host is not None else None,
+        ) as collector:
+            if counts.updates == 0 or is_checkpoint(settings, counts.updates):
+                publish(settings, run, learner, ema, counts, backend=backend)
             if counts.updates == 0:
                 log_corpus_setup(
                     run,
@@ -361,6 +362,15 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
+            if staged is not None:
+                if host is not None:
+                    restore_host_rng(host, rng)
+                    staged.restore_sampling(collector.numerics)
+
+                def export(folder: Path) -> None:
+                    staged.export(folder, capture_host(collector, rng), collector.numerics)
+
+                run.save(export=export)
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
                 if kind is not None:
@@ -381,8 +391,8 @@ training-time report shows the run as `unclassified`; the local recipe supplies
 
 The loop records and returns the EMA checkpoint by default when averaging is
 enabled. Set `checkpoint_weights="raw"` to evaluate the raw learner while
-keeping both exports. Without averaging, the loop always records the raw learner. There is no resume
-branch, stop check or state file in it. Those are the run's:
+keeping both exports. Without averaging, the loop always records the raw learner.
+Etude owns the committed state directory and decides when to stop.
 
 | From Etude | What the loop gets |
 | --- | --- |

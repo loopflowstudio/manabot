@@ -1,13 +1,12 @@
 """MLX continuation and numerical evidence for tracked self-play.
 
-Etude commits the callback's safetensors and its own state.json together. The
-latter owns the counts, model settings and column readings. Restore checks the
+Etude commits the host continuation, backend tensors and state.json together.
+Its state.json owns the counts, model settings and column readings. Restore checks the
 complete array layout before changing either policy or Adam.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -24,7 +23,9 @@ from manabot.backends.mlx.arrays import all_finite
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
+from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
+from manabot.training.state.continuation import HostContinuation, StagedContinuation
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
@@ -48,7 +49,7 @@ def training_arrays(
 
 def restore(
     run: TrainingRun, learner: Learner, ema: MLXActorCritic | None, counts: Counts
-) -> Callable[[Path], None]:
+) -> StagedContinuation:
     """Admit the committed snapshot and supply the writer for Etude's staged folder."""
     filename = "training.safetensors"
     agent = learner.agent
@@ -72,11 +73,12 @@ def restore(
     def metadata() -> dict[str, str]:
         return {
             "backend": "mlx",
-            "schema": "1",
             "binding": binding,
             "counts": canonical_sha256(counts.model_dump(mode="json")),
         }
 
+    host = None
+    sampling: dict[str, mx.array] = {}
     found = read_state(run.out / "state")
     if found is not None:
         path = found.path / filename
@@ -89,10 +91,32 @@ def restore(
         ):
             raise ValueError("incompatible MLX saved counts or input contract")
         arrays, saved = mx.load(path, return_metadata=True)
-        if saved != metadata():
+        header = metadata() | {"schema": "1"}
+        host_file = found.path / "continuation.json"
+        payload = None
+        if saved.get("schema") == "2":
+            if not host_file.is_file():
+                raise ValueError("missing MLX continuation.json")
+            payload = host_file.read_bytes()
+            header.update(
+                schema="2", continuation_sha256=hashlib.sha256(payload).hexdigest()
+            )
+            for key in ("rng.collector", "rng.mlx"):
+                value = arrays.pop(key, None)
+                if value is None or value.shape != (2,) or value.dtype != mx.uint32:
+                    raise ValueError(
+                        f"incompatible MLX snapshot RNG shape or dtype for {key}"
+                    )
+                sampling[key] = value
+            header["rng_sha256"] = sampling_digest(sampling)
+        elif host_file.exists():
+            raise ValueError("incompatible MLX snapshot schema with host continuation")
+        if saved != header:
             raise ValueError(
                 "incompatible MLX snapshot backend, schema, input binding or counts"
             )
+        if payload is not None:
+            host = HostContinuation.model_validate_json(payload)
         expected = training_arrays(learner, ema)
         # Adam creates its two moments lazily on the first accepted step.
         if counts.optimizer_updates:
@@ -119,12 +143,38 @@ def restore(
             ema.clear_cache()
         learner.optimizer.state = trees["adam"]
 
-    def export(folder: Path) -> None:
+    def restore_sampling(session: CollectionSession) -> None:
+        if sampling:
+            session.restore_rng(sampling["rng.collector"])
+            high, low = sampling["rng.mlx"].tolist()
+            mx.random.seed((high << 32) | low)
+
+    def export(
+        folder: Path, host: HostContinuation, session: CollectionSession
+    ) -> None:
+        keys = {
+            "rng.collector": mx.array(session.snapshot_rng()),
+            "rng.mlx": mx.random.state[0],
+        }
+        payload = host.model_dump_json().encode()
+        (folder / "continuation.json").write_bytes(payload)
+        header = metadata() | {
+            "schema": "2",
+            "continuation_sha256": hashlib.sha256(payload).hexdigest(),
+            "rng_sha256": sampling_digest(keys),
+        }
         mx.save_safetensors(
-            folder / filename, training_arrays(learner, ema), metadata()
+            folder / filename, training_arrays(learner, ema) | keys, header
         )
 
-    return export
+    return StagedContinuation(host, restore_sampling, export)
+
+
+def sampling_digest(keys: dict[str, mx.array]) -> str:
+    """Bind the two small RNG payloads, including same-shape bit corruption."""
+    return hashlib.sha256(
+        b"".join(np.asarray(keys[k]).tobytes() for k in sorted(keys))
+    ).hexdigest()
 
 
 @dataclass

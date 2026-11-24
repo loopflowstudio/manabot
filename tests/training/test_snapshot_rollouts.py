@@ -56,8 +56,10 @@ from manabot.training.loops.self_play import (
 )
 from manabot.training.rollout.collection import (
     Collector,
+    CollectorSnapshot,
     RolloutBatch,
     TrajectorySpan,
+    capture_collector,
     close_collector,
     collect,
     open_collector,
@@ -138,8 +140,8 @@ def replay_root(
         ],
         decklists="closed",
     )
-    memory = space.config.max_decision_records > 0
     own = space.config.decision_memory_include_own
+    memory = space.config.max_decision_records > 0 or own
     scalar = managym.Env(
         seed=42, decision_memory=memory, decision_memory_include_own=own
     )
@@ -167,6 +169,7 @@ def replay_collector(
     recipe: SnapshotRecipe,
     *,
     num_envs: int = 1,
+    snapshot: CollectorSnapshot | None = None,
     game_errors: GameErrorPolicy | None = None,
     record_attempt: RecordAttempt | None = None,
 ) -> Iterator[Collector]:
@@ -177,6 +180,7 @@ def replay_collector(
         Reward(RewardConfig()),
         num_envs=num_envs,
         opponent_mode="self",
+        snapshot=snapshot,
         snapshot_vector=vector,
         game_errors=game_errors,
         record_attempt=record_attempt,
@@ -522,6 +526,49 @@ def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
     assert (game.seed, game.actions) == (recipe.seed, list(recipe.actions))
     [summary] = read_statistics(statistics)
     assert summary.seed == recipe.seed
+
+
+def test_collector_restores_parked_source_before_next_fresh_game(
+    tmp_path: Path,
+) -> None:
+    space = ObservationSpace(ObservationConfig(decision_memory_include_own=True))
+    agent = small_agent(space)
+    recipe, _ = replay_root(space)
+    branch = SnapshotBranch(7, recipe, horizon=1)
+    with replay_collector(space, recipe) as collector:
+        collect(collector, agent, 1, snapshot_starts=[branch])
+        saved = capture_collector(collector)
+        assert saved.parked_fresh and saved.streams[0] != saved.parked_fresh[0]
+        assert any(cursor[0] > 0 for cursor in saved.streams[0].memory_cursors)
+        control = collect(collector, agent, 1)
+        after = capture_collector(collector)
+
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(record_games=1, statistics=True)
+    )
+    with (
+        capture_scope(scope),
+        replay_collector(space, recipe, snapshot=saved) as collector,
+    ):
+        assert capture_collector(collector) == saved
+        assert not list(tmp_path.rglob("*.jsonl"))
+        resumed = collect(collector, agent, 1)
+        np.testing.assert_array_equal(resumed.actions, control.actions)
+        assert capture_collector(collector) == after
+
+    played = [
+        game
+        for record in read_records(tmp_path / "games")
+        for game in record.games
+        if game.actions
+    ]
+    assert len(played) == 1 and played[0].end.status == "complete"
+    statistics = [
+        r
+        for path in (tmp_path / "statistics").glob("*.jsonl")
+        for r in read_statistics(path)
+    ]
+    assert [r.seed for r in statistics if r.terminal] == [played[0].seed]
 
 
 def test_slot_reuse_packs_snapshot_and_fresh_rows_and_counts_one_fresh_game() -> None:

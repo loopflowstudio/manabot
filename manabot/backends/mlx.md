@@ -119,7 +119,9 @@ settings, saved column readings, lookup tables, backend, schema, the
 weights, EMA and Adam state, reopens streams directly into their committed roots
 or replayed action prefixes (verifying every slot's native state digest, chooser
 and decision-memory cursors, including across changed worker counts), and
-installs host and backend RNGs last.
+installs host and backend RNGs last. Prefix replay rebuilds native game statistics
+and preserves any recorded policy probabilities and values. Policy cutoff counts
+and durable game records resume with live play.
 
 On CPU float32, stopping between updates (via `--until` or `ETUDE_STOP_FILE`)
 and resuming reproduces the next update's native decisions, counts, weights, EMA

@@ -5,7 +5,7 @@ Incident payloads use Any: their nested tensors belong to the framework.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
     from manabot.training.rollout.selection_data import SelectionPredictor
+    from manabot.training.state.continuation import StagedContinuation
     from managym import PlayerConfig
 
 
@@ -195,7 +196,7 @@ class Continuation(TrainingState, Protocol):
         learner: SelfPlayLearner,
         ema: BackendPolicy | None,
         counts: Counts,
-    ) -> Callable[[Path], None] | None:
+    ) -> StagedContinuation | None:
         """Restore the live objects and supply a staged export for callback saves."""
         ...
 

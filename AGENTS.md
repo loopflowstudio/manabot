@@ -483,7 +483,9 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 **No test runs for five minutes.** Keep learning tests bounded under CI's
 parallel workers. Use bucketed shapes for small boards when they preserve the
 comparison, and restore any Torch thread limit changed by the test.
-Run targeted tests of the change and its existing consumers.
+Run targeted tests of the change and its existing consumers. For Python edits
+under `managym/` with a wheel already installed, run `uv run python -m pytest`
+from the repository root so the tests import the checkout’s Python modules.
 When policy input width or scale changes, include model tests that call
 projections directly. Dense reference tests should apply the model's saved
 readings before projection and keep the control that proves the behavior.

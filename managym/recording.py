@@ -612,6 +612,7 @@ class _Capture:
         self._outputs: dict[Path, BinaryIO] = {}
         self._statistics_generations: dict[int, int] = {}
         self.started = time.perf_counter()
+        self._reconstructing = False
         self._failed = False
         self._raised: GameRecord | None = None
         self.identities = runtime_identities().copy()
@@ -689,6 +690,8 @@ class _Capture:
             )
 
     def _append_row(self, path: Path, row: object) -> None:
+        if self._reconstructing:
+            return
         output = self._outputs.get(path)
         if output is None:
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -764,7 +767,8 @@ class _Capture:
                 len(game.actions) - 1 if game.frame is not None else None
                 for game in evidence.games
             ]
-        self._game_journal.publish(evidence, self._boundary, counts)
+        if not self._reconstructing:
+            self._game_journal.publish(evidence, self._boundary, counts)
 
     def _begin_boundary(
         self,
@@ -886,6 +890,8 @@ class _Capture:
     def _failure(
         self, error: BaseException, evidence: Callable[[], GameRecord]
     ) -> None:
+        if self._reconstructing:
+            return
         self._failed = True
         # Capture failures must never disguise the original native failure.
         try:
@@ -1302,6 +1308,21 @@ class CapturedVector(_Capture):
         self._sampled_roots = False
         self._action_cutoff: int | None = None
         self._start_cursor(f"vector-{stream_offset}")
+
+    @contextmanager
+    def reconstructing(self) -> Iterator[None]:
+        """Replay installed roots with native counters but without durable emissions."""
+        self._reconstructing = True
+        cutoff, self._action_cutoff = self._action_cutoff, None
+        try:
+            yield
+        except BaseException:
+            # Closing a rejected prefix must not emit a partial game.
+            self.close()
+            raise
+        finally:
+            self._action_cutoff = cutoff
+            self._reconstructing = False
 
     def __getattr__(self, name: str) -> Any:
         # Only reads delegate: an undelegated mutation would leave the retained
