@@ -738,10 +738,13 @@ class MLXActorCritic(nn.Module):
         return prepare(
             obs,
             self._static.tables,
-            inference=inference,
+            attention="used_columns"
+            if inference
+            else ("packed_groups" if self.bucketed_shapes else "padded"),
+            facts=("padded" if self.bucketed_shapes else "used_columns")
+            if inference
+            else ("live_rows" if self.bucketed_shapes else "padded"),
             select_programs=not inference,
-            compact_learner=self.bucketed_shapes,
-            bucketed=self.bucketed_shapes,
             binding=self._binding(),
         )
 

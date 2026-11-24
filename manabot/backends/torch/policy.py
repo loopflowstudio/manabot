@@ -57,7 +57,14 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
+from manabot.policy.prepare import (
+    AttentionLayout,
+    BeliefRows,
+    Layout,
+    Prepared,
+    Tables,
+    prepare,
+)
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 from manabot.policy.spans import (
@@ -602,12 +609,22 @@ class ActorCritic(nn.Module):
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
+        device = device_of(self).type
+        # Learners and CUDA inference keep padded attention; power-of-two
+        # column counts on MPS bound the distinct Metal attention graphs.
+        attention: AttentionLayout = "padded"
+        if self.config.attention_on and self.live_tokens:
+            attention = "live_tokens"
+        elif self.config.attention_on and inference and device == "cpu":
+            attention = "used_columns"
+        elif self.config.attention_on and inference and device == "mps":
+            attention = "bucketed_columns"
+        compact_facts = inference and device == "cpu" and not self.bucketed_shapes
         return prepare(
             obs,
             tables,
-            inference=inference and device_of(self).type == "cpu",
-            bucketed=self.bucketed_shapes,
-            live_tokens=self.live_tokens and self.config.attention_on,
+            attention=attention,
+            facts="used_columns" if compact_facts else "padded",
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
