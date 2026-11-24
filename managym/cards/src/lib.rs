@@ -78,6 +78,7 @@ mod roe;
 mod rtr;
 mod shm;
 mod soi;
+mod sos;
 mod spm;
 mod sth;
 mod stx;
@@ -188,6 +189,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     rtr::cards,
     shm::cards,
     soi::cards,
+    sos::cards,
     spm::cards,
     sth::cards,
     stx::cards,

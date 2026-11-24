@@ -36,6 +36,11 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         spirit(),
         treasure(),
         zeppelin(),
+        cadet(),
+        fractal(),
+        heartwood(),
+        blue_red_elemental(),
+        red_white_spirit(),
     ]
 }
 
@@ -393,4 +398,80 @@ fn zeppelin() -> TokenDefinition {
             )
         },
     }
+}
+
+fn cadet() -> TokenDefinition {
+    token(
+        "token.cadet",
+        "8f4534d8-2783-484f-8ebf-a47b1cc4c6df",
+        creature(
+            face("Cadet", [CardType::Creature], &["Wizard", "Soldier"], ""),
+            2,
+            2,
+            [],
+        ),
+    )
+}
+
+fn heartwood() -> TokenDefinition {
+    token(
+        "token.heartwood",
+        "eb4bf635-04d7-4994-9f70-4ff573a767e7",
+        PrintedCharacteristics {
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
+                ..Default::default()
+            }],
+            color_override: Some(Colors::from_iter([Color::Red, Color::Green])),
+            ..face(
+                "Heartwood",
+                [CardType::Artifact],
+                &["Heartwood"],
+                "{T}: Add {R} or {G}.",
+            )
+        },
+    )
+}
+
+fn blue_red_elemental() -> TokenDefinition {
+    token(
+        "token.blue_red_elemental",
+        "57b98846-85e3-47c7-a903-29953d0b0e8a",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(
+                face("Elemental", [CardType::Creature], &["Elemental"], "Flying"),
+                3,
+                3,
+                [Color::Blue, Color::Red],
+            )
+        },
+    )
+}
+
+fn red_white_spirit() -> TokenDefinition {
+    token(
+        "token.red_white_spirit",
+        "877f7ddb-ed70-41a0-b845-d9bf8ac65f9b",
+        creature(
+            face("Spirit", [CardType::Creature], &["Spirit"], ""),
+            2,
+            2,
+            [Color::Red, Color::White],
+        ),
+    )
+}
+
+fn fractal() -> TokenDefinition {
+    token(
+        "token.fractal",
+        "910f48ab-b04e-4874-b31d-a86a7bc5af14",
+        creature(
+            face("Fractal", [CardType::Creature], &["Fractal"], ""),
+            0,
+            0,
+            [Color::Green, Color::Blue],
+        ),
+    )
 }
