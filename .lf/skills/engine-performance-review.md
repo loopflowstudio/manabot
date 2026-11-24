@@ -1,24 +1,23 @@
 ---
-requires: baseline, optimization diff and bounded comparison evidence
-produces: performance findings and remaining bottlenecks in the existing design
+requires: the baseline, the optimization diff and same-runner comparisons
+produces: performance findings in `scratch/plan.md` and the phase's loop decision
 ---
-Judge measured gains against preserved semantics and the remaining useful opportunities.
+Judge the measured gains against unchanged behavior, then decide whether optimization is done.
 
-1. Compare representative workloads on the same hardware/build profile. Confirm
-   source/workload identities and behavior digests, not just elapsed time.
-   Read the `bench_states` table for the large-board states the change touches
-   beside the ordinary workloads: a cell whose work grows much faster than its
-   size is a finding even when the curated decks are no slower.
-2. Inspect debug invariant checks and affected behavior evidence. If semantics
-   changed, invalidate the speed comparison and record the required contract fix
-   before dependent results can stand. Never accept narrower choices or lost
-   observations as an optimization.
-3. Record supported gains, negative results, worthwhile remaining bottlenecks and
-   justified stopping tradeoffs. Do not claim an absolute optimum or treat the
-   regression threshold as proof that optimization is complete. Missing capable
-   hardware is a named gate/CI check, not fabricated measurement.
+1. Compare the workloads on the same hardware and build profile. Confirm
+   source and workload identities and behavior digests, not just elapsed time.
+   Read the `bench_states` rows for the large-board states the change touches:
+   a cell whose work grows much faster than its size is a finding even when
+   the curated decks are no slower.
+2. Check debug invariants and affected behavior. Changed semantics void the
+   comparison until the contract is fixed; narrower choices or lost
+   observations are never an optimization.
+3. Record supported gains, negative results and the bottlenecks still worth
+   attacking. Missing hardware is a named gate or CI check, never a made-up
+   number. Don't change code: the next implement pass does, so the loop
+   reviews the final diff. Adopting a new budget reference stays its own
+   reviewed operation.
 
-Update existing findings and `scratch/plan.md` for the navigation decision.
-Don't change code; leave fixes for `implement` so the loop re-reviews the final
-diff. Preserve performance budget reference adoption as its existing reviewed
-operation, not automatic regeneration.
+Iterate with the next bottleneck when one has a credible measured gain.
+Advance when none does, saying what was ruled out. There is no absolute
+optimum, and a passing regression threshold doesn't end the search.

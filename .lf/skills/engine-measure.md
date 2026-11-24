@@ -1,27 +1,26 @@
 ---
-requires: working implementation and representative consumer workloads
-produces: measured optimization plan in the existing scratch design
+requires: a working implementation and the workloads that exercise it
+produces: a measured optimization plan in `scratch/plan.md`
 ---
-Measure the engine's real bottlenecks and plan worthwhile behavior-preserving improvements.
+Measure where the engine actually spends time on this change's workloads, and plan the improvements worth making.
 
-1. Select bounded ordinary training/play/search workloads and the established
-   engine budget harness. Ordinary play rarely builds a big board, so also name
-   the game states where the changed code's cost could grow badly (large
-   duplicative boards, large diverse boards) and run them through
+1. Pick bounded ordinary training, play and search workloads and the engine
+   budget harness. Ordinary play rarely builds a big board, so also name the
+   states where the changed code's cost could grow badly (large duplicative
+   boards, large diverse ones) and run them through
    `cargo run --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml`
-   ([stress states](../../docs/development.md#stress-states)); add a state when
-   none has the shape. Fix hardware, build, workload identity and measurement
-   limits before comparing. Never create artificial resource pressure or a stress
-   loop; a large constructed board run once is a workload, not induced load.
-   Use controlled fixtures for scheduling/resource-monitoring behavior.
-2. Retain baseline time, throughput and relevant memory/allocation evidence with
-   behavior/decision digests. Profile within the declared limits; select measured
-   bottlenecks rather than optimizing by inspection alone.
-3. Write the active phase's implementation, deletion targets and focused checks
-   into the existing design. Preserve complete choices, observation capacity
-   semantics, native skipping and cache/debug invariants. Same-runner comparisons
-   own speed claims; unrelated historical wall times do not.
-4. State what useful improvement is feasible and which tradeoffs need review.
-   An already efficient implementation can justify no change with evidence.
-   Merely passing the 10% regression allowance is insufficient. Leave unavailable
-   hardware measurements to gate/CI with the exact command; make no speed claim.
+   ([stress states](../../docs/development.md#stress-states)); add a state
+   when none has the shape. A large constructed board run once is a workload;
+   never create resource pressure or a stress loop.
+2. Fix hardware, build, workload identity and limits before comparing. Record
+   baseline time, throughput, memory or allocation counts and behavior
+   digests. Profile, and pick bottlenecks from the profile, not from reading
+   code.
+3. Write each improvement into the plan as a slice: its hypothesis, what it
+   deletes and its focused check. Complete choices, observation capacity
+   semantics, native skipping and cache and debug invariants hold.
+   Same-runner comparisons own speed claims.
+4. When the implementation is already efficient, say so with the numbers and
+   plan no slices; passing the 10% regression allowance alone doesn't show
+   that. Leave measurements needing unavailable hardware to gate or CI with the
+   exact command, and claim no speed.

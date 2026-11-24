@@ -1,18 +1,19 @@
 ---
-requires: working cohort and behavior evidence
-produces: decomposition-phase plan in the existing scratch design
+requires: a working card batch and its behavior checks
+produces: the decomposition-phase plan in `scratch/plan.md`, cut into slices
 ---
-Find the reusable decomposition that makes the working mechanics support further cards.
+Find the reusable shape that lets the next cards in this area compose without new engine code.
 
-1. Map selectors, rules types, observation/token projections and ownership using
-   the working examples. Choose distinct real consumers or interactions that
-   expose duplicated rules or special paths; do not invent future mechanics.
-2. Update the phase plan and Delete — do not maintain list with the deepest
-   obsolete owners first. Move real consumers in the same cut and retain directed
-   behavior tests. Keep one implementation of each fact.
-3. Set a concrete review criterion: named representative cards compose from the
-   shared mechanism without card-specific engine logic or duplicate state.
-   This phase concerns growing the card file, not runtime speed. If the existing
-   structure already meets it, document why and preserve the passing evidence.
-4. A semantic counterexample invalidates dependent evidence. Revise the working
-   contract before dependent refactoring; do not hide it behind a cleaner API.
+1. Map the batch's selectors, rules types, observation and token projections
+   and their owners. Pick real consumers or interactions that expose
+   duplicated rules or special paths; don't invent future mechanics.
+2. Write the **Delete — do not maintain** list, deepest obsolete owner first,
+   and group it into slices: one shared mechanism and every caller it moves.
+   Each slice moves its real consumers in the same cut and keeps the directed
+   behavior tests on the surviving owner.
+3. Set the review criterion: named representative cards compose from the
+   shared mechanism with no card-specific engine logic or duplicate state.
+   This phase is about growing the card file, not runtime speed. If the
+   structure already meets it, say why and plan no slices.
+4. A semantic counterexample sends the work back to the working contract
+   before any refactoring on top of it; don't hide it behind a cleaner API.

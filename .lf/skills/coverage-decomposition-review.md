@@ -1,15 +1,18 @@
 ---
-requires: decomposition plan, changed consumers and preserved behavior evidence
-produces: scalability findings in the existing scratch design
+requires: the decomposition plan, the changed consumers and their behavior checks
+produces: scalability findings in `scratch/plan.md` and the phase's loop decision
 ---
-Review whether real cards now compose through one maintainable rules authority.
+Judge whether real cards now compose through one rules authority, then decide whether the decomposition phase is done.
 
-1. Follow at least two distinct representative consumers where available. Check
-   that the planned deletion cut removed exclusive predecessors, tests and data
-   paths while retaining required behavior on the surviving owner.
-2. Look for card-specific dispatch, duplicated rules state, adapters and unused
-   abstractions. A smaller diff or renamed type is not evidence of scalability.
-3. Retain concrete findings and whether the phase criterion is met. A discovered
-   rules defect requires revising the working contract and rerunning affected
-   evidence before this phase can pass. Later performance evidence is invalidated
-   by semantic changes. Gate owns affected suites once; reuse focused results.
+1. Follow at least two distinct representative consumers through the shared
+   mechanism. The planned deletions removed their exclusive predecessors,
+   tests and data paths, and required behavior lives on the surviving owner.
+2. Look for card-specific dispatch, duplicated rules state, adapters and
+   unused abstractions. A smaller diff or a renamed type doesn't show
+   scalability.
+3. Reuse the focused results for the current head; gate owns the suites.
+
+Iterate, naming the remaining duplication or unbuilt slices, while the
+criterion fails. A rules defect found here goes back to the working contract
+and its affected checks before this phase can pass, and voids later
+performance numbers. Advance when the criterion holds.

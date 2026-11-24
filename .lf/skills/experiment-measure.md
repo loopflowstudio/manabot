@@ -1,75 +1,53 @@
 ---
-requires: training or evaluation speed question and representative workloads
-produces: measured bottleneck, bounded comparison plan and checks in the existing scratch design
+requires: a training or evaluation speed question and its workloads
+produces: the measured bottleneck and comparison plan in `scratch/plan.md`
 ---
-Measure what training and evaluation spend time on, then select a worthwhile software improvement.
+Measure what training and evaluation spend time on, then choose a software improvement worth making.
 
-1. Read `docs/workflows.md` (training and evaluation performance),
-   `experiments/reports/training-update-time.md` and the relevant retained receipts before
-   running anything. Separate observations from suspected causes. Use the current
-   task's workload and model sizes; do not expand a speed question into a campaign.
-   This skill grants no campaign, resource or spending authority. Preserve frozen
-   worlds, observation versions and recipes. Never induce artificial load.
-2. Declare a bounded baseline/candidate comparison on the same machine: source
-   revisions, build profile, CPU and quota, GPU/device, world, input version and
-   capacities, effective record vocabulary, precision, model size/parameter count,
-   recipe/checkpoint, seeds, streams, producers and batch/serving settings. Read
-   `TrainingRun.host`; a GPU label alone is not host identity. Keep warmup,
-   included update ordinals, repetitions, memory and time limits explicit. Use
-   interleaved comparisons to expose shared-host drift. Do not compare wall time
-   across machines or pool different sizes into one gain.
-   State whether the objective is one seed's progress or aggregate throughput/cost.
-   For packed runs, retain per-seed latency and aggregate throughput separately,
-   using overlapping post-warmup samples and matched solo ordinals.
-3. Start with the **Update time** Perf series and its retained per-update rows.
-   Separate collection's native stepping, observation encoding, preparation,
-   policy inference/action selection, recording and assembly from learner targets
-   and minibatches. Retain inference calls, inferred rows and rows per call beside
-   seconds/update, decisions/update and games/update. Missing older series stay
-   missing; nested clocks are not additive. Across recovery, read per-update rows:
-   receipt timers can cover only the last attempt while counts span attempts.
-   Inspect complete-game closure and `StageRecord.idle_stream_steps` before
-   attributing small inference batches to a serving limit: streams that reach
-   their closure target wait for the remaining games. Older receipts default
-   this counter to zero, which does not establish that no streams idled.
-4. Use the maintained tools on available, authorized hardware:
-   - Training: use `scripts/bench_training_update.py` through the retained-output
-     command in [Training and evaluation performance](../../docs/workflows.md#training-and-evaluation-performance).
-     Select the declared `--recipe`, `--seed` and `--device` explicitly, with
-     separate baseline/candidate output paths. The builder must return
-     current-world `SelfPlay` settings without arguments;
-     regime JSON and `TrainingRun` output are retired. Read the JSON update
-     rows and summary; the tool does not rebind frozen experiments.
-     Capacity failure stops the reading; do not truncate or shrink the workload.
-   - When Task 855bff's standing size-ladder benchmark and retained baseline land,
-     read its shipped documentation and use that command as the reference
-     reading. Until then use the current benchmark per declared size; do not
-     invent the future command, block on it or implement a second ladder here.
-   - CUDA diagnostics: run the training command separately with `--device cuda`
-     and `--cuda-counts PATH`. Counts cover the whole run, not individual phases;
-     instrumented timings are not ordinary throughput. Read
-     `scripts/diagnose_training_transfers.py` for bounded `recording`/`transfers`
-     probes on retained inputs. These probes do not establish whole-update gains.
-   - Evaluation: follow [Performance evidence and calibration](../../docs/evaluation.md#performance-evidence-and-calibration)
-     for the `manabot.eval.serving_benchmark` command and `BenchmarkPlan`
-     requirements, using the predeclared plan and output paths. Retain
-     `performance.json` with match/deal/checkpoint identities, rows, journals and
-     traces. Compare evaluation time to training at the declared cadence, by size.
-     Distinguish cell, allocation and evaluator intervals; they overlap and exclude
-     preparation and billing. Label any cost projection and its rate source.
-5. Retain behavior/decision digests and numerical checks with the timings. For a
-   deterministic training comparison, include raw/EMA weights, optimizer state
-   and sampled-game evidence; for evaluation, include matched decisions/traces
-   and numerical/action agreement. Identify expected nondeterminism and declared
-   tolerances before comparing; finite metrics alone are not learning evidence.
-   Changes to precision, policy lag or batch composition require separate learning
-   evidence, which this software workflow does not produce or authorize.
-6. Update the existing design with the measured bottleneck, proposed change,
-   **Delete — do not maintain** list, focused behavior checks and exact comparison
-   commands. Keep receipt paths/hashes, included samples, negative findings and
-   limits next to each claim. If no useful change is supported, record why and stop
-   without manufacturing edits. If required hardware or evidence is unavailable,
-   name the missing input and exact command as a deferred check for gate/CI or
-   separately authorized execution; do not rent, substitute CPU for CUDA, or claim
-   a gain. A counterexample invalidates dependent comparisons and requires revising
-   the plan before implementation.
+1. Read [training and evaluation performance](../../docs/workflows.md#training-and-evaluation-performance),
+   `experiments/reports/training-update-time.md` and the retained receipts
+   first. Keep observations apart from suspected causes. Use this Task's
+   workload and model sizes: a speed question is not a campaign, and this
+   skill grants no resource or spending authority. Frozen worlds, observation
+   versions and recipes don't change. Never induce load.
+2. Declare the comparison before running it, on one machine: revisions,
+   build, CPU and quota, device, world, input version and capacities,
+   vocabulary, precision, model size, recipe or checkpoint, seeds, streams,
+   batch and serving settings, warmup, included updates, repetitions and
+   limits. Read `TrainingRun.host`; a GPU label isn't host identity.
+   Interleave baseline and candidate runs to expose drift. Say whether the
+   goal is one seed's progress or aggregate throughput or cost; for packed
+   runs keep per-seed latency and aggregate throughput apart, from overlapping
+   post-warmup samples and matched solo ordinals.
+3. Start from the **Update time** Perf series and its per-update rows. Split
+   collection (native stepping, encoding, preparation, inference and action
+   selection, recording, assembly) from learner work, with inference calls and
+   rows per call beside seconds, decisions and games per update. Nested clocks
+   don't add; missing older series stay missing; across a recovery read
+   per-update rows, not the last attempt's timers. Check complete-game closure
+   and `StageRecord.idle_stream_steps` before blaming small batches on serving
+   (older receipts default it to zero).
+4. Measure with the maintained tools:
+   - Training: `scripts/bench_training_update.py` with explicit `--recipe`,
+     `--seed` and `--device` and separate `--json` paths. A capacity failure
+     stops the reading; don't shrink the workload.
+   - Once Task 855bff's size-ladder benchmark ships, its documented command is
+     the reference; until then measure each size with the current benchmark
+     and build no second ladder.
+   - CUDA: a separate `--device cuda --cuda-counts PATH` run counts kernels
+     for the whole run, not per phase; `scripts/diagnose_training_transfers.py`
+     probes recording and transfers. Neither is throughput.
+   - Evaluation: `manabot.eval.serving_benchmark` with a declared
+     `BenchmarkPlan`, per [performance evidence and calibration](../../docs/evaluation.md#performance-evidence-and-calibration).
+     Keep `performance.json` with its identities; cell, allocation and
+     evaluator intervals overlap and exclude preparation and billing.
+5. Keep behavior digests beside the timings: raw and EMA weights, optimizer
+   state and sampled games for deterministic training; matched decisions and
+   action agreement for evaluation; declared tolerances for what isn't
+   deterministic. Precision, policy-lag or batch-composition changes need
+   learning evidence this workflow doesn't produce.
+6. Write the plan: the bottleneck, the change as slices, the **Delete — do not
+   maintain** list, focused checks and exact commands, with receipt paths and
+   limits beside each claim. When no useful change is supported, say why and
+   plan no slices. Unavailable hardware is a deferred check with its exact
+   command; don't rent, substitute CPU for CUDA or claim a gain.
