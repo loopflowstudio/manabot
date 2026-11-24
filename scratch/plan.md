@@ -25,9 +25,9 @@ Muldrotha, Vizier, Etali, Smaug, Bilbo, Twinmaw and Scavenger Regent. The
 first 44 preparation rows include linked copies, source transfers, preparation
 during resolution and Emeritus of Truce.
 
-- Yue offers Spew Flame from hand. Solstice Revelations offers Charring Bite from exile. The spell's own cost, predicate and targets determine eligibility in both fixtures. The caster sees the selected profile in the announcement frame and its name in the decision context.
+- Yue offers Spew Flame from hand and Solstice Revelations offers Charring Bite from exile. Evaluating the card's front face before enumerating its spell profiles suppressed both legal casts. `f3d84a7abe` moved the restrictions into the per-profile check. The two fixtures in `tla.rs` check the legal offer, the selected spell in the caster's announcement frame and decision context, and the spell's resolution and departure.
 - Monica Rambeau and Photon use one front/back definition pair. Photon pays its printed cost, enters back face up and returns to Monica on leaving. A compound cast binds its own face, permission and payable target. The compact priority API retains its recorded candidate addresses.
-- The Foundations fixtures cover 11 of 17 rows. Omniscience supplies an alternative hand route. High Fae Trickster supplies timing. Harbinger's surcharge and required sacrifices still apply on a free cast. Sphinx adds an exact-object flashback route alongside Think Twice's printed route. Reassembling Skeleton and Suspicious Shambler exercise graveyard activation and exact source identity.
+- The Foundations fixtures cover 11 of 17 rows. Omniscience supplies an alternative hand route. A free Burst Lightning still allows manual spending on kicker. High Fae Trickster supplies timing. Harbinger's surcharge and required sacrifices still apply on a free cast. Sphinx adds an exact-object flashback route alongside Think Twice's printed route. Reassembling Skeleton and Suspicious Shambler exercise graveyard activation and exact source identity.
 - Harmonized Trio and Joined Researchers bring preparation to 46 of 62. Their fixtures exercise the complete tap cost, choosing the library order, intervening-if checks and the two players drawing.
 - The HOB fixtures cover 12 of 17 Adventures plus Bilbo's separate permission. The TDM fixtures cover 12 of 13 Omens. They exercise both the permanent and the inset. Feral Deathgorger binds both targets to the same graveyard. Till and Tend stacks extra land plays until cleanup. Multiple Omnisciences grant one free route.
 
@@ -55,37 +55,40 @@ the shared rules listed below. Six further preparation rows belong to MTG-418.
 | Foundations | Flamewake Phoenix and Gate Colossus | Identify the graveyard source of a beginning-of-combat or land-entry trigger and retain that appearance through an optional return. |
 | Foundations | Quilled Greatwurm | Pay a graveyard casting cost by removing a distributed total of counters from creatures. |
 | Foundations | Redcap Gutter-Dweller | Commit the optional sacrifice before the counter and impulse permission. Create the printed Rats with their blocking restriction. |
-| Preparation | Spiritcall Enthusiast and Kirol, History Buff | Trigger once per batch of matching entries or graveyard departures. |
+| Preparation | Spiritcall Enthusiast and Kirol, History Buff | Trigger once per batch of matching entries or graveyard departures. `process_event_batch` currently matches each movement separately. |
 | Preparation | Grave Researcher | Surveil before the graveyard count. Charge life from the reanimated object's mana value. |
 | Preparation | Emeritus of Ideation and Lluwen, Exchange Student | Distinct graveyard cards as actual costs for an attack trigger or a sorcery-speed activation. Lluwen also creates the printed Pest. |
 | Preparation | Variable Chaser | Separate optional whole-hand discards and draws for the two players in order. |
 | Preparation | Pyre Rhymer | A turn-scoped mana trigger applies to each Mountain its controller taps for mana, including later arrivals. |
 | Preparation | Heartwood Crafter | Restricted mana reads the spell's casting zone in the spending context. |
-| Preparation | Sanar, Unfinished Genius | Gate Treasure activation on an instant or sorcery actually cast this turn. |
+| Preparation | Sanar, Unfinished Genius | Gate Treasure activation on an instant or sorcery actually cast this turn. Use the cast appearances in `TurnState.spells_cast`, as the first-spell discount already does in `flow/play.rs`. |
 | Preparation | Codie, Ravenous Codex | Preserve prepared-cast provenance through announcement and the stack. Copy and retarget the cast spell without granting its copies that provenance. |
+
+**Next slice.** Build the casting-provenance cohort with Heartwood Crafter
+and Codie. Use the same linked prepared spell cast from exile as the positive
+case for restricted mana and Codie's copy trigger. Fork to an ordinary hand
+spell for the spending restriction, then choose separate targets for the
+original and stack copy and check that the copy cannot trigger Codie. Pay
+through the normal announcement and payment path and restore a pending
+Command across replay. Update the FRA ledger after the native fixtures pass.
 
 MTG-418 owns six history-dependent rows. Emeritus of Woe and Bloodline
 Recollector need creature deaths this turn. Leech Collector needs the first
 life gain, Scheming Silvertongue the total life gained, Whiplash Wordsmith
 noncombat damage to an opponent, and Hexhaven Dueling Arena the specific
-creature that attacked.
+creature that attacked. The unblock is MTG-418's merged history and query
+authority with these facts available to trigger conditions. On that merged
+revision, start with
+`cargo test --manifest-path managym/Cargo.toml -p managym --lib preparation_resolution`
+as the preparation control before adding the six directed fixtures.
 
 ## Interaction evidence still owed
 
 | Position | Required fork or outcome |
 |---|---|
-| Muldrotha and Omniscience | Manual spending on an optional cost under Omniscience. The directed fixtures already cover Muldrotha/Zul overlap, both type quotas, a fresh Muldrotha, next-turn reset and land allowance. The free-cast forks cover paid or free kicker, bargain, required sacrifices and printed X. |
 | Tinybones, opposing discarded land and spell with stash counters, second Tinybones | The current controller plays foreign cards that an earlier Tinybones exiled. Check own-turn timing, foreign land control (enters under Tinybones’s controller, not owner), ownership versus control, mana spending, High Fae Trickster non-bypass of own-turn timing, and a hand-only prohibition (blocks spell, allows land). Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
-| Codie and a prepared spell | Copy and retarget the spell after the original cast. The copy must not trigger Codie again. |
 
-## Resolution-cast review
-
-The reviewed position with Yue, Smaug and Gray Ogre originally produced no cast
-decision. Solstice Revelations moved Twinmaw Stormbrood to hand despite
-Charring Bite being below the mana-value limit. `f3d84a7a` fixed both and
-retained the positions in `tla.rs`. `be710917` projects the selected profile
-and names Spew Flame during announcement. The opposing viewer sees the spell
-once the cast commits.
+## Validation
 
 **Consumer checks per slice.** Compare native observations for both viewers with the Python bindings, semantic capture/LLM text and Academy offers at priority, at mid-announcement (`AnnounceX`/`ChooseTargets`/`Pay`), with a spell on the stack, and at a nested decision. Use v11 rows and learning tokens. Keep hidden information out of the other viewer's data. Fork-and-replay checks need exact preconditions and stale rejection. Existing controls:
 
@@ -110,11 +113,19 @@ agreed at 194 checkpoints across 1,164 viewer projections; stale object and
 stale revision Commands were rejected. The casting-catalog receipts are
 stored alongside the original opening receipts.
 
+MTG-422's opening and terminal procedure is already in the branch
+(`d12eb496b3`). The later upstream sync at `edee24dad5` changed native snapshot
+and replay plumbing. Eight focused Python checks on that merge passed,
+covering semantic casting profiles and cold restores for the pending Adventure,
+Exude Toxin, Etali, transferred Seed Suture and Waypoint. The native `offers_`
+filter passed 11 tests including both nested announcements and the manual
+Omniscience payment.
+
 Gate owns the full debug workspace, Clippy and the measured 10% Engine Budget.
 
 ## Later phases
 
-**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Omniscience and Harbinger from hand, Tinybones from counter-marked exile, and an Adventure, Modal BackFace, and linked prepare copy through stack and departure. One permission owner (`PlayRoute`) and one profile owner (`SpellProfile`) must explain all of them, including airbend, flashback and modal regressions. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
+**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Omniscience and Harbinger from hand, Tinybones from counter-marked exile, and an Adventure, Modal BackFace, and linked prepare copy through stack and departure. One permission owner (`PlayRoute`) and one profile owner (`SpellProfile`) must explain all of them, including airbend, flashback and modal regressions. Priority currently derives `CastChoices.free` and `flashback` from the route, while resolution casts set them from the effect. When adding provenance, check whether one cast-choice constructor can derive that treatment for both paths before eligibility and announcement. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
 
 **Performance.** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
 - Muldrotha with a graveyard of duplicate artifact creatures, overlapped by a Zul grant.

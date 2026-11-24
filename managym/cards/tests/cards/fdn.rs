@@ -1187,15 +1187,15 @@ fn omniscience_offers_paid_and_free_casts_with_optional_costs() {
     use crate::support::{
         game::{five_color_unfunded_setup, move_from_library},
         inspect::top_spell,
-        play::{choose, fork_choosing},
+        play::{choose, fork_choosing, spend_named},
     };
     use managym::{
         agent::{action::Action, observation::Observation},
         flow::cast_permission::PlayRoute,
-        state::target::Target,
+        state::{mana::Color, player::ManaPayment, target::Target},
     };
     let mut s = five_color_unfunded_setup(&["Omniscience", "Burst Lightning"]);
-    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
     for _ in 0..2 {
         s.force_permanent_on_battlefield(0, "Omniscience");
     }
@@ -1237,6 +1237,34 @@ fn omniscience_offers_paid_and_free_casts_with_optional_costs() {
             );
         }
     }
+
+    s.game_mut().mana_payment[0] = ManaPayment::Manual;
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, route: Some(PlayRoute::FreeFromHand), .. } if *object == burst),
+    );
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_named(&mut s, |label| label == "Spend {R} (expires at step end)");
+    spend_colorless(&mut s);
+    let spell = top_spell(&s);
+    assert!(spell.kicked);
+    assert_eq!(
+        spell
+            .spent
+            .mana()
+            .iter()
+            .map(|unit| unit.color)
+            .collect::<Vec<_>>(),
+        [
+            Color::Red as u8,
+            Color::Colorless as u8,
+            Color::Colorless as u8,
+            Color::Colorless as u8,
+        ]
+    );
+    settle(&mut s);
+    s.assert_life(1, 16);
 }
 
 #[test]

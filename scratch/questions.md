@@ -68,3 +68,5 @@ Preserve the compact priority projection's existing front-face AnyTarget orderin
 Use the original M11, M13 and Time Spiral printing keys for the Foundations reprints. Their game fixtures stay with the Foundations permission cohort.
 
 Keep the prior opening authority and parity receipts by recording the casting catalog in new files. Their definition ordinals come from the catalog at `d12eb496b3`. Comparing the retained and current Commands by printed name also resolves the source of each CARD_REVEALED event.
+
+Use Heartwood Crafter and Codie for the next casting-provenance slice. An exile cast of a linked prepared spell exercises both the spending restriction and Codie's copy. Use the existing Burst Lightning fixture for manual kicker, with one red unit spent on the generic cost.

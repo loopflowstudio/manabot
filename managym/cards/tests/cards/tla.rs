@@ -2499,6 +2499,14 @@ fn solstice_revelations_offers_charring_bite_from_exile() {
         &mut s,
         |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == exiled),
     );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "targets");
+    assert_eq!(context.source.0.unwrap().label, "Charring Bite");
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(0))
+        .iter()
+        .any(|frame| frame.kind == 4 && frame.spell_profile == 2));
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
@@ -10685,6 +10693,19 @@ fn yue_offers_spew_flame_from_hand() {
         &mut s,
         |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == smaug),
     );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "targets");
+    assert_eq!(context.source.0.unwrap().label, "Spew Flame");
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(0))
+        .iter()
+        .any(|frame| frame.kind == 4 && frame.spell_profile == 1));
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(1))
+        .iter()
+        .all(|frame| frame.spell_profile == 0));
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
