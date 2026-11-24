@@ -916,10 +916,10 @@
         },
         {
           "path": "tests/academy/test_authored_match_parity.py",
-          "sha256": "758abaeba2740bbd49e6f0db8ed231c002ccd1fec52f19b5ec45ce9fcc304965"
+          "sha256": "991d0a7badccdb35bd6ddaa34e46910e30dd5fcd1c7a4d992192fd1ae2d306e1"
         }
       ],
-      "sha256": "b78f0f77873481aa80bc82efa89d4adfeef2632c0154f0b94a38ec1810223c16"
+      "sha256": "1ee7a51c04c05a11348f7ffe665ef5e936a0a0dded1be41dc47a8692e3c52f93"
     },
     "seed": 0
   },
