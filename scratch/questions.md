@@ -34,15 +34,6 @@
   masking continuation context by object validity. That table row passed the
   existing forward, gradient and Adam tolerances with the mask.
 
-## Realign after Slice 2
-
-- Use the two declared jobs in `experiments/belief.py` for the demo. In
-  Etude SDK 0.4.5, `etude/controller/local.py:train` forwards the `--config`
-  override to `_prepare` for the selected job and places the declared inputs.
-  Both jobs use the same fresh experiment label so the sampler declaration
-  sees the policy's final checkpoint. The linked MLX run is still Slice 3
-  acceptance.
-
 ## Slice 3 (2026-11-23)
 
 - MLX computes physical log-binomial odds on the host in float64 and centers
@@ -56,3 +47,13 @@
   The sampler histories named those policy bytes. `belief-mlx/sampler@0`
   registered its four-step checkpoint with SHA-256
   `16c5ae2e14ab3080eb2b825a6fda8dfe5592b285bfc38199bbd6b3117c7c2a2f`.
+  Etude SDK 0.4.5 forwarded each `--config` override to the selected job and
+  placed the registered policy at `run.input("start")` under the shared
+  experiment label. The commands are in `manabot/backends/mlx.md`.
+
+## Realign after Slice 3
+
+- Share the serving cache's record traversal across backends. In
+  `manabot/backends/torch/_decision_memory.py`, the root selection rules use
+  host record keys, viewer identities and native epochs. A second traversal
+  could diverge on the restored branches introduced by `82c5d1d1b7`.
