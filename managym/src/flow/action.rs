@@ -13,6 +13,7 @@ use crate::{
     flow::{
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{CostComponent, Operation, Payment, TapPayment},
+        play::CastAuthority,
     },
     state::{
         ability::Effect,
@@ -52,29 +53,19 @@ impl Game {
         match action {
             Action::CastSpell {
                 object,
-                profile,
                 route: None,
                 ..
-            } if !profile.is_front() => Some(format!(
-                "Cast {}",
-                default_content_pack()
-                    .spell_definition(&self.state[*object], *profile)?
-                    .name
+            } if let Some(source) = self.preparation_source(*object) => Some(format!(
+                "Cast {} from {} (object {})",
+                self.state[*object].name, self.state[source].name, self.state[source].id.0
             )),
-            Action::CastSpell {
-                object,
-                route: Some(route),
-                ..
-            }
-            | Action::PlayLand {
-                object,
-                route: Some(route),
-                ..
-            } => {
+            Action::CastSpell { object, .. } | Action::PlayLand { object, .. }
+                if let Some(route) = self.resolved_play_route(action) =>
+            {
                 use crate::flow::cast_permission::PlayRoute;
                 let card = default_content_pack()
                     .spell_definition(&self.state[*object], action.spell_profile())?;
-                let terms = match route {
+                let terms = match &route {
                     PlayRoute::GraveyardType { source, kind, .. } => format!(
                         "using {} (object {}, {kind:?} for this turn)",
                         self.state[*source].name, self.state[*source].id.0
@@ -107,13 +98,17 @@ impl Game {
                 let verb = if card.types.is_land() { "Play" } else { "Cast" };
                 Some(format!("{verb} {} {terms}", card.name))
             }
-            Action::CastSpell { object, .. } => {
-                let source = self.preparation_source(*object)?;
-                Some(format!(
-                    "Cast {} from {} (object {})",
-                    self.state[*object].name, self.state[source].name, self.state[source].id.0
-                ))
-            }
+            Action::CastSpell {
+                object,
+                profile,
+                route: None,
+                ..
+            } if !profile.is_front() => Some(format!(
+                "Cast {}",
+                default_content_pack()
+                    .spell_definition(&self.state[*object], *profile)?
+                    .name
+            )),
             Action::ActivateAbility {
                 permanent,
                 ability_index,
@@ -682,7 +677,11 @@ impl Game {
         for &permission in routes.iter() {
             let route = (routes.len() > 1).then_some(permission);
             for profile in self.state[object].spell_profiles() {
-                let cast = self.cast_via(player, object, permission, profile);
+                let Some(cast) =
+                    self.cast_choices(player, object, profile, CastAuthority::Priority(permission))
+                else {
+                    continue;
+                };
                 if !self.permits_spell(player, object, cast) {
                     continue;
                 }

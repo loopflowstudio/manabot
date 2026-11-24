@@ -14,10 +14,10 @@
 use std::{borrow::Cow, sync::Arc};
 
 use crate::{
-    agent::action::AgentError,
+    agent::action::{Action, AgentError},
     flow::{
         cast_permission::PlayRoute,
-        decision::{EffectFrame, FrameCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, ResolutionCastOffer},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{bargain_cost, Help, Operation},
@@ -93,14 +93,49 @@ impl CastChoices {
     }
 }
 
+/// What permits a cast: a priority play over one route (CR 601.2a), or the
+/// resolving instruction that offers it (CR 608.2g).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CastAuthority<'a> {
+    Priority(PlayRoute),
+    Resolution(&'a Decision),
+}
+
 impl Game {
-    pub(crate) fn cast_via(
+    /// The one construction of a cast's choices for every way of casting.
+    /// None when `profile` has no definition for `object`, or when a
+    /// resolution authority is not a `CastDuringResolution` decision.
+    pub(crate) fn cast_choices(
         &self,
         player: PlayerId,
         object: ObjectId,
-        route: PlayRoute,
         profile: SpellProfile,
-    ) -> CastChoices {
+        authority: CastAuthority<'_>,
+    ) -> Option<CastChoices> {
+        let spell = crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], profile)?;
+        let route = match authority {
+            CastAuthority::Resolution(Decision::CastDuringResolution { offer, paid, .. }) => {
+                // The instruction supplies timing and zone permission for
+                // every resolution cast, paid or free, so no permission
+                // surcharge (flash) is ever bought here.
+                return Some(CastChoices {
+                    profile,
+                    free: !paid,
+                    resolving: true,
+                    exile_instead_of_graveyard: matches!(
+                        offer,
+                        ResolutionCastOffer::Graveyard {
+                            exile_instants_and_sorceries: true,
+                            ..
+                        }
+                    ) && spell.types.is_spell(),
+                    ..Default::default()
+                });
+            }
+            CastAuthority::Resolution(_) => return None,
+            CastAuthority::Priority(route) => route,
+        };
         let flashback = match route {
             PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback => true,
             PlayRoute::Grant(key) => self
@@ -117,15 +152,13 @@ impl Game {
         };
         // A surcharge is mandatory only when this is the permission that
         // makes casting timely. Other flash grants still allow normal payment.
-        if crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], profile)
-            .is_some_and(|spell| spell.flash_surcharge().is_some())
+        if spell.flash_surcharge().is_some()
             && !self.can_cast_sorceries(player)
             && !self.has_instant_timing(player, object, cast)
         {
             cast.flash_surcharge = true;
         }
-        cast
+        Some(cast)
     }
 
     pub fn can_cast_sorceries(&self, player: PlayerId) -> bool {
@@ -311,6 +344,38 @@ impl Game {
             (None, [only]) => Ok(*only),
             _ => Err(AgentError("missing or ambiguous play permission".into())),
         }
+    }
+
+    /// The route a priority play uses, including the lone permission a
+    /// single-route Command leaves unnamed. None for an ordinary hand play
+    /// and for every other action.
+    pub(crate) fn resolved_play_route(&self, action: &Action) -> Option<PlayRoute> {
+        let (Action::CastSpell {
+            player,
+            object,
+            route,
+            ..
+        }
+        | Action::PlayLand {
+            player,
+            object,
+            route,
+        }) = action
+        else {
+            return None;
+        };
+        if route.is_some() {
+            return *route;
+        }
+        // A lone hand route is the ordinary play; overlap always names a route.
+        if self.state.zones.zone_of(*object) == Some(ZoneType::Hand)
+            && self.state[*object].owner == *player
+        {
+            return None;
+        }
+        self.selected_play_route(*player, *object, None)
+            .ok()
+            .filter(|route| *route != PlayRoute::Hand)
     }
 
     pub(super) fn spend_play_route(&mut self, player: PlayerId, route: Option<PlayRoute>) {
@@ -516,7 +581,9 @@ impl Game {
             return Err(AgentError("land cards cannot be cast".into()));
         }
         let route = self.selected_play_route(player, object, selected)?;
-        let cast = self.cast_via(player, object, route, profile);
+        let cast = self
+            .cast_choices(player, object, profile, CastAuthority::Priority(route))
+            .ok_or_else(|| AgentError("the card has no such spell".into()))?;
         if !self.permits_spell(player, object, cast) {
             return Err(AgentError("permission does not allow this spell".into()));
         }

@@ -337,12 +337,12 @@ pub struct CastChoices {
     /// The announced value of X (CR 107.3, 601.2b).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
-    /// Cast without paying its mana cost (CR 118.9), as an effect directs;
-    /// timing and zone permissions don't apply (CR 608.2g).
+    /// Cast without paying its mana cost (CR 118.9): a resolving effect's
+    /// free offer or a permission such as Omniscience.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
-    /// Cast, paying its costs, as a resolving effect directs ("you may
-    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    /// Cast as a resolving effect directs, paid or free: timing and zone
+    /// permissions don't apply (CR 608.2g), so no flash surcharge is owed.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub resolving: bool,
 }

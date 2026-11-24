@@ -205,6 +205,49 @@ fn bilbo_graveyard_adventure_replacement_owns_the_exile_permission() {
     }
 }
 
+/// A paid resolution offer previews its payment whichever profile it casts:
+/// the front-face Bolt (a card selection) and the Adventure Spew Flame.
+#[test]
+fn bilbo_previews_front_face_and_adventure_graveyard_casts_alike() {
+    use crate::support::{
+        game::{force_lands, move_from_library},
+        play::attack_with,
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&[
+        "Bilbo, Thief in the Night",
+        "Smaug, the Great Calamity",
+        "Lightning Bolt",
+    ]);
+    let bilbo = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Bilbo, Thief in the Night", true)
+        .unwrap();
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Graveyard);
+    let bolt = move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Graveyard);
+    force_lands(&mut s, 0, "Mountain", 4);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, bilbo);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let preview = |offered: &dyn Fn(&Action) -> bool| {
+        let index = s.action_space().actions.iter().position(offered).unwrap();
+        let preview = s
+            .game()
+            .payment_preview(PlayerId(0), frame.revision, &frame.fingerprint, index)
+            .unwrap();
+        serde_json::to_value(&preview).unwrap()
+    };
+    let front = preview(&|a| matches!(a, Action::SelectCard { object, .. } if *object == bolt));
+    let adventure = preview(
+        &|a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == smaug),
+    );
+    assert_eq!(front["state"], adventure["state"], "{front} {adventure}");
+    assert_eq!(front["cost"], "{R}", "{front}");
+    assert!(adventure["cost"].is_string(), "{adventure}");
+    assert_eq!(front["sources"].as_array().unwrap().len(), 1, "{front}");
+}
+
 #[test]
 fn spew_flame_cost_reductions_read_the_sorcery_profile() {
     use crate::support::{game::move_from_library, inspect::can_cast};

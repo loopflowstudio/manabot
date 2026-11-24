@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     agent::action::{Action, ActionSpaceKind},
     cards::content_pack::default_content_pack,
-    flow::{cast_permission::PlayRoute, game::Game},
+    flow::{cast_permission::PlayRoute, game::Game, play::CastAuthority},
     state::{
         ability::TargetSpec,
         card::{Keyword, Restriction, SpellProfile},
@@ -1219,12 +1219,12 @@ impl Game {
         {
             return None;
         }
-        let cast = self.cast_via(
+        let cast = self.cast_choices(
             player,
             object,
-            self.selected_play_route(player, object, route).ok()?,
             profile,
-        );
+            CastAuthority::Priority(self.selected_play_route(player, object, route).ok()?),
+        )?;
         if self.cast_needs_x_announcement(object, cast) {
             return None;
         }

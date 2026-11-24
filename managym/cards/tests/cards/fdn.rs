@@ -1032,6 +1032,69 @@ fn muldrotha_and_zul_offer_independent_casts() {
 }
 
 #[test]
+fn lone_graveyard_routes_keep_their_permission_in_the_observation() {
+    use crate::support::game::{five_color_unfunded_setup, move_from_library};
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::game_object::Target,
+    };
+    // A single-route Command names no route, but the offer still shows which
+    // permission it uses: Muldrotha's quota and focus, or a grant's price.
+    let lone_offer = |s: &crate::support::game::Scenario, card| {
+        let obs = Observation::for_player(s.game(), PlayerId(0));
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(
+                |a| matches!(a, Action::CastSpell { object, route: None, .. } if *object == card),
+            )
+            .expect("a single-route cast of the graveyard card");
+        obs.action_space.actions[index].clone()
+    };
+
+    let mut s = five_color_unfunded_setup(&["Muldrotha, the Gravetide", "Hungry Ghoul"]);
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let offer = lone_offer(&s, ghoul);
+    let source = s.game().state.permanents[muldrotha]
+        .as_ref()
+        .unwrap()
+        .object;
+    assert_eq!(
+        offer.quota_type,
+        Some(managym::state::card::CardType::Creature as u8 + 1)
+    );
+    assert_eq!(
+        offer.focus,
+        [
+            s.game().state[ghoul].id.0 as i32,
+            s.game().state[source].id.0 as i32
+        ]
+    );
+    assert!(offer.description.unwrap().contains("Muldrotha"));
+
+    let mut s = five_color_unfunded_setup(&["Zul Ashur, Lich Lord", "Hungry Ghoul"]);
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    assert!(s.choose_target(Target::GraveyardCard(ghoul)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let offer = lone_offer(&s, ghoul);
+    assert_eq!(offer.route_mana_value, Some(2));
+    assert_eq!(offer.quota_type, None);
+    assert!(offer.description.unwrap().contains("Zul Ashur"));
+}
+
+#[test]
 fn stale_ghoul_precondition_preserves_mana_and_muldrotha_allowance() {
     use crate::support::game::{five_color_unfunded_setup, move_from_library};
     use managym::{
@@ -1537,6 +1600,37 @@ fn sphinx_grants_its_target_flashback_alongside_the_printed_cost() {
         settle(&mut branch);
         assert_eq!(zone_of(&branch, object), Some(ZoneType::Exile));
     }
+}
+
+/// A resolving effect supplies the timing of its casts (CR 608.2g), so Etali's
+/// free combat cast of Harbinger owes no flash surcharge even with {2} open.
+#[test]
+fn harbinger_cast_by_a_resolving_effect_owes_no_flash_surcharge() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, pin_top},
+        inspect::{now, top_spell},
+        play::{attack_with, choose, pass_until},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut s = five_color_unfunded_setup(&["Etali, Primal Storm", "Harbinger of the Tides"]);
+    let etali = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Etali, Primal Storm", true)
+        .unwrap();
+    let harbinger = pin_top(&mut s, &["Harbinger of the Tides"])[0];
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, etali);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    s.set_player_mana_pool(0, "2");
+    let harbinger = now(&s, harbinger);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == harbinger),
+    );
+    assert_ne!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    assert_eq!(top_spell(&s).object, now(&s, harbinger));
+    assert_eq!(top_spell(&s).spent.total(), 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
 }
 
 #[test]

@@ -8,6 +8,7 @@ use crate::{
         decision::Decision,
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
+        play::CastAuthority,
         statics::Characteristics,
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
@@ -1085,13 +1086,16 @@ impl Observation {
                                 _ => (None, None, None),
                             };
                             let profile = action.spell_profile();
-                            let (route_mana_value, quota_type) = match action {
-                                Action::CastSpell { object, route: Some(route), .. }
-                                | Action::PlayLand { object, route: Some(route), .. } => {
-                                    let cast = game.cast_via(action.player(), *object, *route, profile);
-                                    let cost = game.casting_mana_cost(*object, cast);
+                            let (route_mana_value, quota_type) = match (action, game.resolved_play_route(action)) {
+                                (
+                                    Action::CastSpell { object, .. } | Action::PlayLand { object, .. },
+                                    Some(route),
+                                ) => {
+                                    let cost = game
+                                        .cast_choices(action.player(), *object, profile, CastAuthority::Priority(route))
+                                        .and_then(|cast| game.casting_mana_cost(*object, cast));
                                     let quota = match route {
-                                        crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(*kind as u8 + 1),
+                                        crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(kind as u8 + 1),
                                         _ => None,
                                     };
                                     (cost.map(|cost| cost.mana_value), quota)
@@ -2158,16 +2162,14 @@ impl Observation {
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
-            Action::PlayLand {
-                object,
-                route: Some(crate::flow::cast_permission::PlayRoute::GraveyardType { source, .. }),
-                ..
+            Action::PlayLand { object, .. } | Action::CastSpell { object, .. }
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    ..
+                }) = game.resolved_play_route(action) =>
+            {
+                vec![game.state[object].id, game.state[source].id]
             }
-            | Action::CastSpell {
-                object,
-                route: Some(crate::flow::cast_permission::PlayRoute::GraveyardType { source, .. }),
-                ..
-            } => vec![game.state[object].id, game.state[source].id],
             Action::CastSpell { object, .. } => {
                 let mut focus = vec![game.state[object].id];
                 if let Some(source) = game.preparation_source(*object) {

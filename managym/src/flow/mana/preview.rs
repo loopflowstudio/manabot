@@ -5,6 +5,7 @@ use crate::agent::ability_description::cost_description;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
 use crate::flow::payment::CostComponent;
+use crate::flow::play::CastAuthority;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -165,27 +166,39 @@ impl Game {
             Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
             _ => None,
         };
+        // A resolving instruction's offer (CR 608.2g) or a priority play;
+        // front-face resolution offers are card selections.
+        let offered_cast = match (action, self.state.suspended_decision.as_ref()) {
+            (
+                Action::CastSpell { object, .. } | Action::SelectCard { object, .. },
+                Some(suspended),
+            ) if matches!(suspended.decision, Decision::CastDuringResolution { .. }) => self
+                .cast_choices(
+                    player,
+                    *object,
+                    action.spell_profile(),
+                    CastAuthority::Resolution(&suspended.decision),
+                ),
+            (
+                Action::CastSpell {
+                    object,
+                    route,
+                    profile,
+                    ..
+                },
+                _,
+            ) => self.cast_choices(
+                player,
+                *object,
+                *profile,
+                CastAuthority::Priority(self.selected_play_route(player, *object, *route)?),
+            ),
+            _ => None,
+        };
         let cost = match action {
-            Action::CastSpell {
-                object,
-                route,
-                profile,
-                ..
-            } => {
-                let cast = if let Some(cast) =
-                    self.state.suspended_decision.as_ref().and_then(|s| {
-                        s.decision
-                            .resolution_cast_choices(&self.state[*object], *profile)
-                    }) {
-                    cast
-                } else {
-                    self.cast_via(
-                        player,
-                        *object,
-                        self.selected_play_route(player, *object, *route)?,
-                        *profile,
-                    )
-                };
+            Action::CastSpell { object, .. } | Action::SelectCard { object, .. }
+                if let Some(cast) = offered_cast =>
+            {
                 let card = cast.spell(&self.state[*object]);
                 if self.cast_needs_x_announcement(*object, cast) {
                     return Ok(PaymentPreview::message(

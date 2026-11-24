@@ -18,8 +18,9 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game},
+        game::Game,
         payment::{CostComponent, Operation, Payment, PaymentProgress},
+        play::CastAuthority,
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
@@ -725,33 +726,6 @@ pub enum Decision {
 }
 
 impl Decision {
-    pub(super) fn resolution_cast_choices(
-        &self,
-        object: &crate::state::game_object::Object,
-        profile: SpellProfile,
-    ) -> Option<CastChoices> {
-        let Self::CastDuringResolution { offer, paid, .. } = self else {
-            return None;
-        };
-        let exile_instead_of_graveyard = matches!(
-            offer,
-            ResolutionCastOffer::Graveyard {
-                exile_instants_and_sorceries: true,
-                ..
-            }
-        ) && crate::cards::content_pack::default_content_pack()
-            .spell_definition(object, profile)?
-            .types
-            .is_spell();
-        Some(CastChoices {
-            profile,
-            free: !paid,
-            resolving: *paid,
-            exile_instead_of_graveyard,
-            ..Default::default()
-        })
-    }
-
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
@@ -2956,9 +2930,13 @@ impl Game {
                     self.spend_once_each_turn(key);
                 }
                 let (player, object_id) = (suspended.decision.player(), *object_id);
-                let cast = suspended
-                    .decision
-                    .resolution_cast_choices(&self.state[object_id], profile)
+                let cast = self
+                    .cast_choices(
+                        player,
+                        object_id,
+                        profile,
+                        CastAuthority::Resolution(&suspended.decision),
+                    )
                     .expect("cast decision");
                 if let Decision::CastDuringResolution {
                     offer: ResolutionCastOffer::AmongExiled { objects },
@@ -3387,8 +3365,13 @@ impl Game {
             let object = self.state.object_of(card);
             let definition = &self.state[object];
             for profile in definition.spell_profiles() {
-                let cast = decision
-                    .resolution_cast_choices(definition, profile)
+                let cast = self
+                    .cast_choices(
+                        *player,
+                        object,
+                        profile,
+                        CastAuthority::Resolution(decision),
+                    )
                     .expect("cast decision");
                 let spell = cast.spell(definition);
                 if !spell.types.is_castable() {
