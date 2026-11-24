@@ -1227,11 +1227,10 @@ buffers fails when the saved state loads.
   (Torch ↔ MLX, or Torch across CUDA/MPS/CPU) still verifies
   `sampling.safetensors`'s digest, reseeds sampling deterministically from
   `(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1` on the first
-  resumed update. On Torch → MLX, any parameter whose per-parameter Adam step
-  `t_p` trailed the global step `T` (such as a conditional module skipped on a
-  minibatch with `grad is None`) has its moments rescaled by
-  `(1 - β^T) / (1 - β^{t_p})` to preserve bias-corrected updates under MLX's
-  global step, logging `run/adam_steps_aligned=<count>`.
+  resumed update. On Torch → MLX, a conditional parameter can have fewer Adam
+  updates than the global step. MLX restores its moments and uses its saved
+  update count for bias correction. The first resumed update reports how many
+  parameter clocks trailed the global step in `run/adam_steps_aligned`.
 - **A check that a fix is compatible.** After a bug fix, `--resume` runs the
   current code as another attempt of the same run; `--source-repair-reason`
   is gone. Each attempt records its commit, existing checkpoints stay as

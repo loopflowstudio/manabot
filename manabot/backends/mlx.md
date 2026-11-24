@@ -156,11 +156,10 @@ Across sampling domains (Torch → MLX or MLX → Torch), resume still verifies
 `sampling_sha256` (tampering fails closed), ignores the incompatible generator
 arrays, reseeds sampling deterministically from `(run.seed, counts.updates)`,
 and logs `run/sampling_reseeded=1` on the first resumed update. On Torch → MLX,
-any parameter whose saved `param_steps[name]` was strictly between `0` and
-`adam/step` (from a Torch conditional module that received `grad is None` on
-some minibatch) has its Adam moments rescaled by `(1 - β^T) / (1 - β^{t_p})` to
-preserve bias-corrected updates under MLX's global step, logging
-`run/adam_steps_aligned=<count>`.
+a conditional parameter can have fewer Adam updates than the global step.
+MLX restores its original moments and uses its own update count for bias
+correction, including on its first gradient. The first resumed update reports
+the number of these parameters in `run/adam_steps_aligned`.
 
 Legacy Torch saves (`learner.pt` / `optimizer.pt` / `ema.pt`) are refused on MLX
 with `"this save was written by Torch object registration; resume once on Torch

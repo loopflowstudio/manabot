@@ -7,6 +7,7 @@ complete array layout before changing either policy or Adam.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -21,6 +22,14 @@ from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
 from manabot.backends.mlx.arrays import all_finite
+from manabot.backends.mlx.checkpoint import (
+    canonical_from_mlx,
+    canonical_groups,
+    mlx_names,
+    mlx_parameters,
+    policy_arrays as policy_arrays,
+    policy_buffers as policy_buffers,
+)
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
@@ -33,12 +42,82 @@ from manabot.training.state.continuation import (
     host_sha256,
     read_host,
 )
+from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
 
     from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
+
+
+def parameter_shapes(agent: MLXActorCritic) -> dict[str, tuple[int, ...]]:
+    native = dict(tree_flatten(agent.trainable_parameters()))
+    shapes = {}
+    for name, leaves in canonical_groups(native.keys()).items():
+        shape = native[leaves[0]].shape
+        shapes[name] = (
+            shape if len(leaves) == 1 else (len(leaves) * shape[0], *shape[1:])
+        )
+    return shapes
+
+
+def load_policy_arrays(agent: MLXActorCritic, arrays: Mapping[str, np.ndarray]) -> None:
+    """Install validated master weights and drop cached inference programs."""
+    admit_policy_arrays(arrays, parameter_shapes(agent))
+    agent.update(
+        tree_unflatten([(k, mx.array(v)) for k, v in mlx_parameters(arrays).items()])
+    )
+    agent.clear_cache()
+    mx.eval(agent.parameters())
+
+
+def adam_state(learner: Learner, *, step: int) -> AdamState:
+    state = dict(tree_flatten(learner.optimizer.state))
+    if int(state["step"]) != step:
+        raise ValueError("adam/step differs from the optimizer count")
+    steps: dict[str, int] = {}
+    first: dict[str, np.ndarray] = {}
+    second: dict[str, np.ndarray] = {}
+    shapes = parameter_shapes(learner.agent)
+    if step:
+        for name in shapes:
+            leaves = mlx_names(name)
+            ages = {step - int(state.get(f"{leaf}.lag", 0)) for leaf in leaves}
+            if len(ages) != 1:
+                raise ValueError(f"adam/param_steps/{name}: split projections differ")
+            steps[name] = ages.pop()
+            if steps[name]:
+                for leaf in leaves:
+                    first[leaf] = np.asarray(state[f"{leaf}.m"])
+                    second[leaf] = np.asarray(state[f"{leaf}.v"])
+    adam = AdamState(step, steps, canonical_from_mlx(first), canonical_from_mlx(second))
+    admit_adam(adam, shapes, step=step)
+    return adam
+
+
+def load_adam(learner: Learner, adam: AdamState) -> int:
+    """Retain each leaf's bias-correction clock across dense MLX updates."""
+    shapes = parameter_shapes(learner.agent)
+    admit_adam(adam, shapes, step=adam.step)
+    native = dict(tree_flatten(learner.agent.trainable_parameters()))
+    first, second = mlx_parameters(adam.exp_avg), mlx_parameters(adam.exp_avg_sq)
+    state = {
+        "step": mx.array(adam.step, dtype=mx.uint64),
+        "learning_rate": learner.optimizer.learning_rate,
+    }
+    for name, count in adam.param_steps.items():
+        for leaf in mlx_names(name):
+            state[f"{leaf}.m"] = (
+                mx.array(first[leaf]) if count else mx.zeros_like(native[leaf])
+            )
+            state[f"{leaf}.v"] = (
+                mx.array(second[leaf]) if count else mx.zeros_like(native[leaf])
+            )
+            if count < adam.step:
+                state[f"{leaf}.lag"] = mx.array(adam.step - count, dtype=mx.uint64)
+    learner.optimizer.state = tree_unflatten(state)
+    return sum(count < adam.step for count in adam.param_steps.values())
 
 
 def framework() -> dict[str, str | None]:

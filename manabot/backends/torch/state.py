@@ -1,4 +1,4 @@
-"""Torch tensors for a numerical incident, and their serialization.
+"""Torch policy and Adam continuation, and bounded numerical incident evidence.
 
 `capture_incident` bounds the evidence it keeps; the host owns the incident
 directory and its metadata (`training/state/incidents.py`).
@@ -14,17 +14,76 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from manabot.backends.torch.checkpoint import (
+    policy_arrays as policy_arrays,
+    policy_buffers as policy_buffers,
+)
 from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import PrefixObservation, archive_memory
+from manabot.policy.checkpoint import canonical_name
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
+from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
 
     from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
+
+
+def parameter_shapes(agent: ActorCritic) -> dict[str, tuple[int, ...]]:
+    return {
+        canonical_name(name): tuple(p.shape) for name, p in agent.named_parameters()
+    }
+
+
+def load_policy_arrays(agent: ActorCritic, arrays: Mapping[str, np.ndarray]) -> None:
+    """Copy into the live parameters so the optimizer keeps its references."""
+    admit_policy_arrays(arrays, parameter_shapes(agent))
+    with torch.no_grad():
+        for name, parameter in agent.named_parameters():
+            parameter.copy_(torch.from_numpy(arrays[canonical_name(name)]))
+    agent.clear_cache()
+
+
+def adam_state(learner: Learner, *, step: int) -> AdamState:
+    steps: dict[str, int] = {}
+    first: dict[str, np.ndarray] = {}
+    second: dict[str, np.ndarray] = {}
+    for name, parameter in learner.agent.named_parameters():
+        key = canonical_name(name)
+        entry = learner.optimizer.state.get(parameter)
+        if entry:
+            steps[key] = int(entry["step"].item())
+            first[key] = entry["exp_avg"].detach().cpu().numpy()
+            second[key] = entry["exp_avg_sq"].detach().cpu().numpy()
+        elif step:
+            steps[key] = 0
+    adam = AdamState(step, steps, first, second)
+    admit_adam(adam, parameter_shapes(learner.agent), step=step)
+    return adam
+
+
+def load_adam(learner: Learner, adam: AdamState) -> int:
+    """Replace live Adam history while preserving optimizer groups and rate."""
+    admit_adam(adam, parameter_shapes(learner.agent), step=adam.step)
+    entries = {}
+    for name, parameter in learner.agent.named_parameters():
+        key = canonical_name(name)
+        if count := adam.param_steps.get(key, 0):
+            entries[parameter] = {
+                "step": torch.tensor(float(count), dtype=torch.float32, device="cpu"),
+                "exp_avg": torch.tensor(adam.exp_avg[key], device=parameter.device),
+                "exp_avg_sq": torch.tensor(
+                    adam.exp_avg_sq[key], device=parameter.device
+                ),
+            }
+    learner.optimizer.state.clear()
+    learner.optimizer.state.update(entries)
+    return 0
 
 
 def save(value: object, stream: BinaryIO) -> None:

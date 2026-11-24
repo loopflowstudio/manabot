@@ -243,6 +243,28 @@ def assemble(
     return agent
 
 
+def policy_arrays(agent: ActorCritic) -> dict[str, np.ndarray]:
+    """Live master parameters in the portable layout."""
+    parameters = {}
+    for name, parameter in agent.named_parameters():
+        if parameter.dtype != torch.float32:
+            raise TypeError(
+                f"parameter {name}: expected float32, got {parameter.dtype}"
+            )
+        parameters[canonical_name(name)] = parameter.detach().cpu().numpy()
+    return parameters
+
+
+def policy_buffers(agent: ActorCritic) -> dict[str, np.ndarray]:
+    """Only persistent buffers participate in the saved input contract."""
+    names = dict(agent.named_parameters())
+    return {
+        name: tensor.cpu().numpy()
+        for name, tensor in agent.state_dict().items()
+        if name not in names
+    }
+
+
 def save_checkpoint(
     agent: ActorCritic,
     obs_space: ObservationSpace,
@@ -257,21 +279,12 @@ def save_checkpoint(
     Pass `player_configs` to record the exact setups in the binding. Passing
     `None` allows the policy to play any admitted deck.
     """
-    state = agent.state_dict()
-    parameters = {}
-    for name, parameter in agent.named_parameters():
-        # NumPy cannot represent every Torch floating dtype.
-        if parameter.dtype != torch.float32:
-            raise TypeError(
-                f"parameter {name}: expected float32, got {parameter.dtype}"
-            )
-        parameters[canonical_name(name)] = state.pop(name).detach().cpu().numpy()
     save_policy_checkpoint(
         agent,
         obs_space,
         path,
-        parameters=parameters,
-        buffers={name: tensor.detach().cpu().numpy() for name, tensor in state.items()},
+        parameters=policy_arrays(agent),
+        buffers=policy_buffers(agent),
         readings=agent.readings,
         architecture=agent.architecture_receipt(),
         player_configs=player_configs,

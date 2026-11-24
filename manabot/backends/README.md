@@ -182,11 +182,12 @@ resumed update.
 
 Because PyTorch `Adam` skips `state[p]["step"]` when a conditional module
 receives `grad is None`, `learner.safetensors` records per-parameter
-`param_steps` (`0` means unstepped and omits zero moment tensors). Torch → Torch
-and MLX → Torch restore `param_steps` bit-exact; Torch → MLX rescales any
-parameter with `0 < t_p < T` by `(1 - β^T) / (1 - β^{t_p})` to preserve
-bias-corrected moments under MLX's global step and logs `run/adam_steps_aligned`
-on the first resumed update.
+`param_steps` (`0` means unstepped and omits zero moment tensors). Both backends
+restore each parameter's moments and update count. MLX uses the difference
+between that count and the global step for bias correction on subsequent dense
+updates, including a previously unused parameter's first update. On Torch → MLX,
+`run/adam_steps_aligned` counts the parameters whose clocks trailed the global
+step when training resumed.
 
 Published policy milestones (`out/policies/NNNNNNNN-{raw,ema}.safetensors`)
 stay separate from `out/state/save-NNNNNNNN/`: milestones carry `world_binding`,
