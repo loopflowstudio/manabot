@@ -2,7 +2,6 @@
 // Resolving stack objects. Effects execute through an EffectFrame so a
 // resolution can suspend on a mid-resolution decision (see decision.rs).
 
-use crate::state::subtype::CreatureTypes;
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
@@ -35,6 +34,7 @@ use crate::{
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
+        subtype::CreatureTypes,
         zone::ZoneType,
     },
 };
@@ -2553,7 +2553,6 @@ impl Game {
             equipment.attached_to = Some(object);
             // CR 613.7e: an attachment receives a new timestamp.
             equipment.timestamp = timestamp;
-            // Its grants leave one creature, whoever controls it, for another.
         }
     }
 

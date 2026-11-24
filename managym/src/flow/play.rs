@@ -11,7 +11,6 @@
 // ability functions from its owner's hand or graveyard (cycling, "return
 // this card from your graveyard").
 
-use crate::state::subtype::CreatureTypes;
 use crate::{
     agent::action::AgentError,
     flow::{
@@ -28,6 +27,7 @@ use crate::{
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
         stack_object::ActivatedAbilityOnStack,
+        subtype::CreatureTypes,
         zone::ZoneType,
     },
 };

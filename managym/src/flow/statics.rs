@@ -1,7 +1,6 @@
 //! Derived characteristics and rules questions. `layers::Context` owns CR 613
 //! evaluation; this module caches its immutable board and exposes the one public
 //! view. Activation prices and dynamic mana outputs are finalized afterwards.
-use crate::state::subtype::{is_creature_type, CreatureTypes};
 use crate::{
     flow::{
         decision::EffectFrame,
@@ -19,6 +18,7 @@ use crate::{
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
+        subtype::{is_creature_type, CreatureTypes},
         zone::ZoneType,
     },
 };

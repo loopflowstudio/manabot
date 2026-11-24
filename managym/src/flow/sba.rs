@@ -380,11 +380,9 @@ impl Game {
         })
     }
 
-    /// Whether an Aura is unattached, or attached to itself or an object its
-    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
-    /// CR 704.5m, read from the Aura's layered characteristics: something
-    /// that is an Aura now is illegally attached when it enchants nothing,
-    /// enchants what its enchant ability forbids, or has lost that ability.
+    /// Whether something that is an Aura now (its layered `view`) is
+    /// unattached, attached to itself or to an object its enchant ability
+    /// doesn't allow, or has lost that ability (CR 303.4d, 704.5m).
     fn aura_attachment_illegal(&self, aura: PermanentId, view: &Characteristics) -> bool {
         if !view.has_subtype("Aura") {
             return false;

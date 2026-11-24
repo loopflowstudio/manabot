@@ -303,14 +303,6 @@ impl CreatureTypes {
             }
         }
     }
-
-    /// How many creature types it has, at most `max`.
-    pub fn count_up_to(&self, max: usize) -> usize {
-        match self {
-            Self::Listed(listed) => listed.len().min(max),
-            Self::All => max,
-        }
-    }
 }
 
 /// A listed set serializes as its names, so retained records keep their

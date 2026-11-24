@@ -869,10 +869,6 @@ impl Game {
             self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
         }
 
-        if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
-            // The permanent's controller gains or loses its mana abilities,
-            // whoever owns the card.
-        }
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             object_id,
@@ -954,7 +950,6 @@ impl Game {
             .as_mut()
             .unwrap()
             .transforms += 1;
-        // Its mana abilities and static grants may change for either player.
     }
 
     /// Show a card's back face; false when it has none.

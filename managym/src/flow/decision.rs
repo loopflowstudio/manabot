@@ -1558,13 +1558,11 @@ impl Game {
                 for object in &frame.moved {
                     let object_id = *object;
                     let owner = self.state[object_id].owner;
-                    match self.state.zones.zone_of(object_id) {
-                        Some(ZoneType::Library) if shuffle => {
-                            if !owners.contains(&owner) {
-                                owners.push(owner);
-                            }
-                        }
-                        _ => {}
+                    if shuffle
+                        && self.state.zones.zone_of(object_id) == Some(ZoneType::Library)
+                        && !owners.contains(&owner)
+                    {
+                        owners.push(owner);
                     }
                 }
                 for owner in owners {
