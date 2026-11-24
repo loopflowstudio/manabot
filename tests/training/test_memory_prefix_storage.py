@@ -573,7 +573,18 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
     # Switching viewers must capture, and changing generation must re-admit.
     seats[0] = 1
     epochs[2] += 1
-    store.capture_live_rows(buffers, np.arange(3), seeds, seats, epochs, cursors)
+    restored = store.capture_live_rows(
+        buffers, np.arange(3), seeds, seats, epochs, cursors
+    )
+    assert restored[2].identity.branch == str(epochs[2])
+    assert restored[2].identity != first[2].identity
+    assert restored[2].tail is first[2].tail
+    assert restored[2].serving.segment is not first[2].serving.segment
+    retained = gather_memory([first[1], changed[1]])
+    assert retained["decision_records"][:, 0, 3].tolist() == [
+        first[1].tail.chunk.rows[0][0, 3],
+        first[1].tail.chunk.rows[0][0, 3] + 1,
+    ]
     assert calls == [1, 0, 2]
     # A seed change inside the same generation is a regression, not a hit.
     seeds[0] += 1

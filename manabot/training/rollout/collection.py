@@ -25,7 +25,7 @@ Collection never updates model weights; the calling loop owns learning.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -36,7 +36,7 @@ from typing import Any, Literal, Protocol, TypedDict
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
@@ -79,10 +79,9 @@ from manabot.training.rollout.matchups import (
     stream_matches,
 )
 from manabot.training.rollout.numerics import CollectionScope, CollectionSession
-from manabot.training.rollout.producers import BufferedStreams, ShardedVectorEnv
+from manabot.training.rollout.producers import BufferedStreams, open_native_streams
 from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.rollout.snapshot_vector import (
-    InMemorySnapshotVector,
     SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
@@ -205,6 +204,7 @@ class _EpisodeAssignment:
     generation: int | None = None
     ordinal: int = -1
     choices: int = 0
+    fresh_ready: bool = False
 
 
 @dataclass
@@ -650,7 +650,7 @@ class Collector:
     # The calling loop owns enablement and resets this timer. Only the
     # collecting thread records host intervals; workers never share it.
     profiler: Profiler
-    # ShardedVectorEnv, CapturedVector or a diagnostic root's Python vector.
+    # ShardedVectorEnv, RecordedVectorEnv or a diagnostic root's Python vector.
     _env: Any
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
@@ -716,7 +716,8 @@ class CollectorSnapshot(BaseModel):
     batch_closure: BatchClosure
     opponent_mode: str
     streams: list[StreamRootState]
-    # None denotes an ordinary producer. A snapshot producer may park no slots.
+    # None denotes an ordinary producer. Native snapshot producers park none;
+    # a save holding parked sources is rejected on restore.
     parked_fresh: list[StreamRootState] | None
     learned_game_rows: dict[int, int]
     opponent_rng: dict[str, Any] | None
@@ -740,7 +741,7 @@ class CollectorSnapshot(BaseModel):
         return self
 
 
-def stream_roots(env: CapturedVector | BufferedStreams) -> list[StreamRootState]:
+def stream_roots(env: RecordedVectorEnv | BufferedStreams) -> list[StreamRootState]:
     roots = []
     for game, digest, chooser, cursors in zip(
         env.games,
@@ -751,20 +752,33 @@ def stream_roots(env: CapturedVector | BufferedStreams) -> list[StreamRootState]
     ):
         if digest is None or chooser not in (0, 1):
             raise ValueError(f"stream {game.stream} has no live decision")
+        # A branch records only its suffix; join its root's prefix so the save
+        # replays the whole game from its seed. The prefix carries no annotations.
+        inputs = env.game_inputs(game.stream)
+        prefix = [None] * (len(inputs.actions) - len(game.actions))
         roots.append(
             StreamRootState(
                 slot=game.stream,
-                recipe=SnapshotRecipe.from_inputs(game, digest, chooser),
+                recipe=SnapshotRecipe.from_inputs(inputs, digest, chooser),
                 memory_cursors=cursors,
-                annotations=game.annotations[: game.committed],
+                annotations=[*prefix, *game.annotations][: inputs.committed]
+                if game.annotations
+                else [],
             )
         )
     return roots
 
 
 def capture_collector(collector: Collector) -> CollectorSnapshot:
-    """Capture settled slots without drawing from the collector or its opponent."""
+    """Capture settled slots without drawing from the collector or its opponent.
+
+    A snapshot collector first opens the fresh game its next allocation would
+    install in each parked slot. Playing that opening, or overwriting it with a
+    branch and refunding its seed, matches the uncaptured collector.
+    """
     env = collector._env
+    if collector._episodes:
+        _open_fresh_roots(collector)
     return CollectorSnapshot(
         schema_version=1,
         num_envs=collector.num_envs,
@@ -772,9 +786,7 @@ def capture_collector(collector: Collector) -> CollectorSnapshot:
         batch_closure=collector.batch_closure,
         opponent_mode=collector.opponent_mode,
         streams=stream_roots(env),
-        parked_fresh=[stream_roots(source)[0] for source in env.parked_fresh().values()]
-        if isinstance(env, InMemorySnapshotVector)
-        else None,
+        parked_fresh=[] if collector.stats.snapshot is not None else None,
         learned_game_rows=collector.stats.learned_game_rows,
         opponent_rng=collector._opponent.snapshot_rng()
         if collector.opponent_mode == "random"
@@ -783,7 +795,7 @@ def capture_collector(collector: Collector) -> CollectorSnapshot:
 
 
 def reconstruct_roots(
-    env: CapturedVector | BufferedStreams,
+    env: RecordedVectorEnv | BufferedStreams,
     roots: list[StreamRootState],
     deck_source: UniformDecks | None,
 ) -> None:
@@ -828,17 +840,14 @@ def reconstruct_collector(
             or collector.learning_seats != snapshot.learning_seats
             or collector.batch_closure != snapshot.batch_closure
             or collector.opponent_mode != snapshot.opponent_mode
-            or isinstance(env, InMemorySnapshotVector)
+            or (collector.stats.snapshot is not None)
             != (snapshot.parked_fresh is not None)
         ):
             raise ValueError("incompatible collector stream geometry")
-        parked = {root.slot: root for root in snapshot.parked_fresh or ()}
-        reconstruct_roots(
-            env, [parked.get(r.slot, r) for r in snapshot.streams], deck_source
-        )
-        for slot in parked:
-            replay = env.park_fresh(slot)
-            reconstruct_roots(replay, [snapshot.streams[slot]], None)
+        if snapshot.parked_fresh:
+            # Native snapshot producers keep one playing state per slot.
+            raise ValueError("parked fresh sources cannot be restored")
+        reconstruct_roots(env, snapshot.streams, deck_source)
         collector.stats.learned_game_rows = snapshot.learned_game_rows.copy()
         if (
             collector.game_errors is not None
@@ -894,6 +903,7 @@ def open_collector(
     adaptive: AdaptiveConfig | None = None,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
+    snapshots: bool = False,
     snapshot: CollectorSnapshot | None = None,
     capture_predicate: CapturePredicate | None = None,
     operation: OperationScope = no_operation,
@@ -912,18 +922,17 @@ def open_collector(
     RNG for learner rows and current-self opponents. The caller closes the
     collector with `close_collector`.
     """
-    if snapshot_bank is not None and snapshot_vector is None:
-        raise ValueError("snapshot bank requires a snapshot vector")
+    snapshots = snapshots or snapshot_bank is not None or snapshot_vector is not None
     if snapshot_vector is not None and workers != 1:
-        raise ValueError("snapshot collection requires workers=1")
-    if snapshot_vector is not None and (
+        raise ValueError("a custom snapshot vector requires workers=1")
+    if snapshots and (
         opponent_mode != "self"
         or learning_seats == "one"
         or adaptive is not None
         or root is not None
     ):
         raise ValueError(
-            "snapshot collection requires a snapshot vector and both-seat self-play"
+            "snapshot collection requires both-seat self-play with ordinary roots and no adaptive sampler"
         )
     if adaptive is not None and (
         opponent_mode != "self"
@@ -971,8 +980,8 @@ def open_collector(
         raise ValueError(
             "per-game roster sampling requires current-self and ordinary roots"
         )
-    if workers not in (1, 2, 4) or workers > num_envs:
-        raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
+    if workers < 1 or workers > num_envs:
+        raise ValueError("workers must be at least 1 and cannot exceed streams")
     if workers != 1 and root is not None:
         raise ValueError("diagnostic roots require one producer")
     if opponent_mode not in OPPONENT_MODES:
@@ -1016,30 +1025,15 @@ def open_collector(
         # Native decision capture is opt-in from the observation's capacity.
         memory = observation_space.config
         capture_decisions = memory.max_decision_records > 0
-        env = (
-            ShardedVectorEnv(
-                num_envs,
-                seed,
-                workers,
-                decision_memory=capture_decisions,
-                decision_memory_include_own=memory.decision_memory_include_own,
-                games_path=games_path,
-                record_fraction=record_fraction,
-            )
-            if workers > 1
-            else CapturedVector(
-                num_envs=num_envs,
-                seed=seed,
-                decision_memory=capture_decisions,
-                decision_memory_include_own=memory.decision_memory_include_own,
-                skip_trivial=True,
-                player_policies=("agent", "agent"),
-                **(
-                    {"games_path": games_path, "record_fraction": record_fraction}
-                    if games_path is not None
-                    else {}
-                ),
-            )
+        env = open_native_streams(
+            num_envs,
+            seed,
+            workers,
+            auto_reset=not snapshots,
+            decision_memory=capture_decisions,
+            decision_memory_include_own=memory.decision_memory_include_own,
+            games_path=games_path,
+            record_fraction=record_fraction,
         )
     else:
         from manabot.env.target_practice import TargetPracticeVector
@@ -1048,7 +1042,7 @@ def open_collector(
             raise ValueError("unsupported training root")
         env = TargetPracticeVector(observation_space, match, num_envs, seed)
     try:
-        if snapshot_vector is not None:
+        if snapshots:
             if not isinstance(env, SnapshotVector):
                 raise ValueError("snapshot collection requires a snapshot vector")
             if not env.skip_trivial:
@@ -1076,9 +1070,7 @@ def open_collector(
             game_errors=game_errors,
             learner_seat=np.arange(num_envs, dtype=np.int64) % 2,
             stream_matches=[match] * num_envs,
-            stats=CollectorStats(
-                snapshot=SnapshotStats() if snapshot_vector is not None else None
-            ),
+            stats=CollectorStats(snapshot=SnapshotStats() if snapshots else None),
             snapshot_bank=snapshot_bank,
             game_error_state=GameErrorState(),
             profiler=Profiler(enabled=False),
@@ -1110,8 +1102,8 @@ def open_collector(
             _ordinals=[0] * num_envs,
             _reverse_cells=reverse_cells,
             capture_predicate=capture_predicate,
-            _episodes=[_EpisodeAssignment() for _ in range(num_envs)]
-            if snapshot_vector is not None
+            _episodes=[_EpisodeAssignment(fresh_ready=True) for _ in range(num_envs)]
+            if snapshots
             else [],
         )
         env.set_buffers(
@@ -1159,7 +1151,7 @@ def open_collector(
             for row in range(num_envs):
                 _record_assignment(collector, row)
 
-        if snapshot_vector is None and snapshot is None:
+        if not snapshots and snapshot is None:
             for row in range(num_envs):
                 _expose(collector, row, "game_roots")
     except BaseException:
@@ -1268,7 +1260,7 @@ def _capture_memory(
     collector: Collector,
     rows: np.ndarray,
     buffers: ObservationBuffers,
-    players: list[int] | None = None,
+    players: Sequence[int | None] | None = None,
 ) -> tuple[Prefix, ...]:
     if collector._memory_store is None:
         return ()
@@ -1278,7 +1270,9 @@ def _capture_memory(
             buffers,
             rows,
             env.current_game_seeds(),
-            env.current_agent_indices() if players is None else players,
+            env.current_agent_indices()
+            if players is None
+            else [p if p is not None else -1 for p in players],
             env.current_game_generations(),
             env.decision_memory_cursors(),
         )
@@ -1501,9 +1495,12 @@ def _collect(
             raise
         with collector.profiler.track("Stream bookkeeping"):
             if snapshots is not None and snapshots.ready:
-                _start_episodes(collector, snapshots, completed, num_steps)
+                if _start_episodes(collector, snapshots, games, completed, num_steps):
+                    continue
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
             for row in range(num_envs):
+                if completed[row] or acting[row] < 0:
+                    continue
                 slot = 2 * row + int(acting[row]) if both else row
                 if (both or acting[row] == collector.learner_seat[row]) and (
                     collector._pending[slot] is not None
@@ -1816,15 +1813,36 @@ def _install_roots(
                 f"snapshot {request.snapshot_id} did not install a new game in slot {slot}"
             )
         recipe = request.recipe
-        if recipe is not None and (result.root_digest, choosers[slot], seeds[slot]) != (
-            recipe.root_digest,
-            recipe.root_chooser,
-            recipe.seed,
+        forced = (
+            request.restore_options is not None
+            and request.restore_options.forced_first_action is not None
+        )
+        terminal = bool(collector._buffers["terminated"][slot])
+        if terminal != (choosers[slot] == -1) or (terminal and not forced):
+            raise ValueError(
+                f"snapshot {request.snapshot_id} has invalid installed terminal state"
+            )
+        if recipe is not None and (
+            result.root_digest != recipe.root_digest
+            or seeds[slot] != recipe.seed
+            or (not forced and choosers[slot] != recipe.root_chooser)
         ):
             raise ValueError(
                 f"snapshot {request.snapshot_id} root identity mismatch in slot {slot}"
             )
     return {request.slot: generations[request.slot] for request in requests}
+
+
+def _open_fresh_roots(collector: Collector) -> None:
+    """Open the next fresh game of each slot whose last episode ended or was cut."""
+    slots = [i for i, e in enumerate(collector._episodes) if not e.fresh_ready]
+    generations = _install_roots(
+        collector, [SlotInstall(slot, -1, None) for slot in slots], None
+    )
+    for slot in slots:
+        collector._episodes[slot] = _EpisodeAssignment(
+            generation=generations[slot], fresh_ready=True
+        )
 
 
 def _capture_decisions(
@@ -1875,10 +1893,11 @@ def _discard_group_rows(collector: Collector, groups: set[int]) -> None:
 def _start_episodes(
     collector: Collector,
     snapshots: _SnapshotRollout,
+    games: np.ndarray,
     completed: np.ndarray,
     num_steps: int,
-) -> None:
-    """Park free streams at the batch floor, except to drain already drawn siblings."""
+) -> bool:
+    """Allocate ready slots. Return True if a forced terminal needs another allocation."""
     plan = snapshots.plan
     starts: dict[int, _EpisodeAssignment] = {}
     parked = []
@@ -1905,19 +1924,21 @@ def _start_episodes(
                 starts[slot] = _EpisodeAssignment(plan.next_episode(), ordinal=ordinal)
     snapshots.ready = parked
     if not starts:
-        return
+        return False
     installs = []
-    env = collector._env
-    parked_sources = (
-        env.parked_fresh() if isinstance(env, InMemorySnapshotVector) else {}
-    )
     for slot, episode in starts.items():
         branch = episode.branch
         if branch is not None:
             installs.append(
-                SlotInstall(slot, branch.snapshot_id, branch.recipe, branch.hot_handle)
+                SlotInstall(
+                    slot,
+                    branch.snapshot_id,
+                    branch.recipe,
+                    branch.hot_handle,
+                    branch.restore_options,
+                )
             )
-        elif slot in parked_sources or collector._episodes[slot].branch is not None:
+        elif not collector._episodes[slot].fresh_ready:
             installs.append(SlotInstall(slot, -1, None))
     generations = _install_roots(collector, installs, plan)
     assert collector.stats.snapshot is not None
@@ -1926,8 +1947,27 @@ def _start_episodes(
         collector._episodes[slot] = episode
         collector.stats.snapshot.starts += int(episode.branch is not None)
     _refresh_roots(collector, np.asarray(list(starts), dtype=np.intp))
-    for slot in starts:
+    for slot, episode in starts.items():
         _expose(collector, slot, "game_roots")
+        if episode.branch is None or not collector._buffers["terminated"][slot]:
+            continue
+        # A forced opening committed inside restore, before either seat sampled.
+        assert plan is None
+        collector.stats.snapshot.terminals += 1
+        branch = episode.branch
+        if collector.game_errors:
+            _settle_attempt(
+                collector,
+                slot,
+                branch.recipe.seed,
+                branch.recipe.root_chooser,
+                "completed",
+            )
+        games[slot] += 1
+        completed[slot] = _stream_at_floor(collector, slot, games, num_steps)
+        if not completed[slot]:
+            snapshots.ready.append(slot)
+    return plan is None and bool(snapshots.ready)
 
 
 def _close_horizons(
@@ -1951,7 +1991,7 @@ def _close_horizons(
         rows = np.array(
             [row for row, seats in viewers.items() if index < len(seats)], dtype=np.intp
         )
-        players = env.current_agent_indices()
+        players: list[int | None] = [None] * collector.num_envs
         for row in rows:
             players[row] = viewers[row][index]
         reads = env.write_observations_for_players(
@@ -1960,10 +2000,9 @@ def _close_horizons(
             layout=space.layout,
             action_overflow=space.config.action_overflow,
         )
-        if len(reads) != collector.num_envs:
+        if len(reads) != len(rows):
             raise ValueError("missing snapshot horizon read")
-        for row in rows:
-            read = reads[row]
+        for row, read in zip(rows, reads, strict=True):
             episode = collector._episodes[row]
             assert episode.branch is not None
             if (
@@ -1977,12 +2016,13 @@ def _close_horizons(
                     f"snapshot horizon read identity mismatch in slot {row}"
                 )
         first = frozen.append(
-            rows, prefixes=_capture_memory(collector, rows, frozen.buffers, players)
+            rows,
+            prefixes=_capture_memory(collector, rows, frozen.buffers, players),
         )
         for offset, row in enumerate(rows):
             _finalize(
                 collector,
-                2 * int(row) + players[row],
+                2 * int(row) + viewers[row][index],
                 reward=0.0,
                 done=False,
                 bootstrap_index=first + offset,
@@ -2123,11 +2163,11 @@ def _settle_step(
             episode.choices += 1
             if branch and not done[row] and branch.horizon == episode.choices:
                 cuts.append(int(row))
-    # Settle the attempted choices before checking the error limit. Restore
-    # poisoned peers before reading healthy horizon cuts through the vector.
+    # Deferred slots keep their scheduler allocation until the next start.
     if collector.game_error_state.stop_reason:
         raise GameErrorLimit(collector.game_error_state.stop_reason)
-    if replace.any():
+    auto_reset = getattr(env, "auto_reset", True)
+    if replace.any() and auto_reset:
         env.replace_failed_into_buffers(replace.tolist())
     closed = done
     if cuts:
@@ -2140,15 +2180,7 @@ def _settle_step(
     if complete_games and (snapshots is None or snapshots.plan is None):
         for row in np.flatnonzero(closed):
             games[row] += 1
-            completed[row] = (
-                games[row] >= collector.games_per_stream
-                if collector.games_per_stream is not None
-                else sum(
-                    len(collector._streams[slot])
-                    for slot in _game_slots(collector, int(row))
-                )
-                >= num_steps
-            )
+            completed[row] = _stream_at_floor(collector, int(row), games, num_steps)
 
     ended = np.flatnonzero(closed | failed)
     if collector._sampler is not None:
@@ -2162,6 +2194,9 @@ def _settle_step(
             {row for row in collector._needs_assignment if not completed[row]},
         )
     if snapshots is not None:
+        for row in ended:
+            episode = collector._episodes[row]
+            episode.fresh_ready = auto_reset and episode.branch is None
         plan = snapshots.plan
         if plan is None:
             snapshots.ready.extend(int(row) for row in ended if not completed[row])
@@ -2187,10 +2222,21 @@ def _settle_step(
                 _expose(collector, int(row), "game_roots")
 
 
+def _stream_at_floor(
+    collector: Collector, row: int, games: np.ndarray, num_steps: int
+) -> bool:
+    if collector.games_per_stream is not None:
+        return bool(games[row] >= collector.games_per_stream)
+    return (
+        sum(len(collector._streams[slot]) for slot in _game_slots(collector, row))
+        >= num_steps
+    )
+
+
 @contextmanager
 def _native_step_split(collector: Collector) -> Iterator[None]:
     """Split the running step phase by the engine's clock; Python envs have none."""
-    if not isinstance(collector._env, (ShardedVectorEnv, CapturedVector)):
+    if not isinstance(collector._env, (BufferedStreams, RecordedVectorEnv)):
         yield
         return
     stepped, encoded = collector._env.buffered_call_timings()
@@ -2245,9 +2291,29 @@ def _settle_attempt(
             del collector._streams[slot][collector._game_start_rows[slot] :]
             collector._pending[slot] = None
         collector._game_start_rows[slot] = len(collector._streams[slot])
-    actions = [] if completed else list(collector._game_actions[row])
+    actions: list[int | str] = [] if completed else list(collector._game_actions[row])
+    inputs = None
     if branch is not None and not completed:
-        actions = [*branch.recipe.actions, *actions]
+        if not getattr(collector._env, "auto_reset", True):
+            inputs = collector._env.game_inputs(row)
+            actions = inputs.actions
+        else:
+            actions = [*branch.recipe.actions, *actions]
+    config = collector.observation_space.config
+    observation = (
+        config
+        if outcome == "resource_limit" or config.decision_memory_include_own
+        else None
+    )
+    # A restore may enable/disable capture at its boundary. Keep the reset
+    # setting when the receipt's encoder configuration would infer another.
+    initial_memory = (
+        inputs.decision_memory
+        if inputs is not None
+        and inputs.decision_memory
+        != bool(observation and observation.max_decision_records)
+        else None
+    )
     collector.game_error_state = collector._record_attempt(
         collector.game_error_state,
         GameAttempt(
@@ -2260,14 +2326,16 @@ def _settle_attempt(
             decks_digest=collector._decks_digest,
             outcome=outcome,
             actions=actions,
+            decision_memory=initial_memory,
+            interventions=inputs.interventions if inputs is not None else [],
+            object_candidate_frames=inputs.object_candidate_frames
+            if inputs is not None
+            else [],
             error_class=error_class,
             error=error,
             frame_json=frame_json,
             native_trace=native_trace,
-            observation=collector.observation_space.config
-            if outcome == "resource_limit"
-            or collector.observation_space.config.decision_memory_include_own
-            else None,
+            observation=observation,
             discarded_samples=discarded,
             learned_samples=learned,
             valid_samples=valid,

@@ -52,6 +52,14 @@ fn reference_hash(reference: &DecisionReference) -> [u8; 32] {
 }
 
 impl DecisionLog {
+    /// A new append-only timeline with the same immutable record and reference chunks.
+    pub(crate) fn fork_lineage(&self) -> Self {
+        Self {
+            origin: Arc::new(()),
+            ..self.clone()
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }

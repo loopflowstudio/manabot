@@ -108,7 +108,7 @@ print(performance.from_statistics(read_statistics(Path("statistics"))))
 print(performance.excluded_games)
 ```
 
-The same `statistics_path` option works on `CapturedVector`. Use one file per
+The same `statistics_path` option works on `RecordedVectorEnv`. Use one file per
 producer. Rows carry the card digest and the capture's `context` labels at the
 game's end, so a table can be split by run, update or cell; they use mode 0600, flush at each game boundary
 and fsync at close. The reader accepts a file or directory and ignores a torn
@@ -229,7 +229,7 @@ statistics; add `statistics_path` to collect those independently.
 `extra` for anything else JSON can hold. Academy shows the first three and
 marks an absent one "not retained"; it never recomputes them.
 
-For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`
+For native batches, `managym.recording.RecordedVectorEnv` owns its `VectorEnv`
 and takes the same options. Construct it with `num_envs` and `seed`, use
 `reset_all(players)` and `step(actions)` or the buffered methods, and pass
 `annotations=` with one entry (or `None`) per stream. Use `stream_offset` for
@@ -464,7 +464,10 @@ controller, including tokens), `stack_len`, `action_count`, `action_kind`
 sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
 stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
-observation JSON or opens hidden zones.
+observation JSON or opens hidden zones. `snapshot.state_digest` returns the
+cached state digest and `snapshot.seed` returns the originating reset seed.
+Use `snapshot.acting_player` to read the chooser alone. It returns `None`
+at a terminal and skips the board summary.
 
 `snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
@@ -485,6 +488,77 @@ forced-decision skipping is enabled, both seats use `agent`, and decklist
 disclosure agrees. The acting view hides the opponent’s hand. The spectator
 response includes both hands. The board draws the bottom seat’s cards and
 shows the top seat’s hand count. Branch seeds stay on the server.
+
+### Batched snapshots and deferred reset
+
+Use `auto_reset=False` when the next occupant of a finished slot may be a
+restored branch. Both `VectorEnv` and `RecordedVectorEnv` accept a mix of fresh
+starts and snapshots in one call.
+
+```python
+import numpy as np
+import managym
+
+layout = managym.ObservationLayout()
+buffers = {
+    **layout.allocate(2),
+    "rewards": np.zeros(2, dtype=np.float64),
+    "terminated": np.zeros(2, dtype=np.uint8),
+    "truncated": np.zeros(2, dtype=np.uint8),
+}
+games = managym.VectorEnv(num_envs=2, seed=42, auto_reset=False)
+games.set_buffers(buffers, layout=layout)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+games.reset_all_into_buffers(players)
+
+# Read metadata or clone snapshots only for masked slots.
+[meta, _] = games.slot_metadata([True, False])
+[snap, _] = games.snapshot_slots([True, False])
+assert meta is not None and snap is not None
+
+# Mix restored branches and fresh games in one sparse call.
+results = games.load_slots_into_buffers([
+    managym.SlotLoad.snapshot(
+        0, snap, managym.RestoreOptions.shuffle_libraries(seed=101)
+    ),
+    managym.SlotLoad.fresh(1),
+])
+for result in results:
+    print(result.slot, result.seed, result.acting_player, result.terminal)
+# 0 42 0 False
+# 1 45 0 False
+print(games.next_fresh_seeds())
+# [42, 47]
+```
+
+`slot_metadata(mask)` reads the live position without cloning it or advancing
+its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
+for skipped slots and reject requests to read an unset or poisoned slot.
+
+`load_slots_into_buffers` checks slot bounds and uniqueness, restore options
+and encoding capacity for the entire vector before changing any row. Each
+`SlotLoadResult` gives the slot, new generation, seed, acting player, terminal
+flag and source digest in request order. Replacing an untouched opening with
+a branch returns its seed to the fresh sequence. `next_fresh_seeds()` reports
+the next unspent seed for each slot.
+
+With deferred reset, a step reports the terminal reward, flags and winner once.
+The slot then reports chooser `-1` and requires a new load or reset before it
+can step again. The same replacement calls recover a poisoned slot. A forced
+opening can itself end a restored game. Its load result has `terminal=True`
+and `acting_player=None`, the buffer has `terminated=1`, and the slot's last
+info carries the winner when there is one.
+
+Game recordings, statistics and exposure count fresh games. Replacing a played
+fresh game retains its evidence. Replacing an untouched opening with a branch
+discards that opening. A recorded fresh terminal includes its winner and final
+digest even if the slot stays parked. For branch evidence,
+`RecordedVectorEnv.game_inputs(slot)` joins the original commitments and
+interventions to the attempted suffix on demand. Failure capture and durable
+journaling use the same replay inputs.
 
 ## Ask questions of recorded games
 
@@ -563,13 +637,13 @@ when the attack was good" belongs in a reducer of your own, since the engine
 has no opinion on good.
 
 The same reducers run during scalar or vector play. Pass `reducers=[...]` to
-`ScalarCapture` or `CapturedVector`, and call `capture.rows()` for tables from
+`ScalarCapture` or `RecordedVectorEnv`, and call `capture.rows()` for tables from
 completed or closed games:
 
 ```python
-from managym.recording import CapturedVector
+from managym.recording import RecordedVectorEnv
 
-capture = CapturedVector(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
+capture = RecordedVectorEnv(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
 # Reset and step through the capture, using ordinary or buffered vector calls.
 # No games_path is needed: these questions cover every game, not a saved sample.
 capture.close()
