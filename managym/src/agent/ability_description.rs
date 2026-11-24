@@ -19,10 +19,8 @@ use crate::state::{
 };
 
 /// A triggered ability's text with its X filled in where its event binds
-/// one. A trigger announces no X (CR 107.3): an entering permanent's own
-/// trigger reads its spell's X (CR 107.3m), a counters or per-creature
-/// combat-damage trigger reads its event's amount ("that many"), and any
-/// other keeps X symbolic until it is chosen while resolving.
+/// one (`bound_x`). A trigger announces no X (CR 107.3); an entering
+/// permanent's own trigger reads its spell's X (CR 107.3m).
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
@@ -47,12 +45,9 @@ pub(crate) fn trigger_description(
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
     let text = effects_description(effects);
-    let text = if enters_itself(condition) {
-        with_trigger_x(text, "X", x)
-    } else if event_binds_x(condition) {
-        with_trigger_x(text, "that many", x)
-    } else {
-        text
+    let text = match bound_x(condition) {
+        Some(amount) => with_trigger_x(text, amount, x),
+        None => text,
     };
     format!(
         "{} — {}{intervening}: {}",
@@ -69,52 +64,40 @@ fn with_trigger_x(text: String, amount: &str, x: u8) -> String {
     )
 }
 
-/// Whether the event is the source's own entering, beneath any wrapper.
-fn enters_itself(condition: &TriggerCondition) -> bool {
-    match condition {
-        TriggerCondition::EntersTheBattlefield {
-            subject: TriggerSubject::This,
-        } => true,
-        TriggerCondition::WasCast { condition }
-        | TriggerCondition::OnceEachTurn { condition }
-        | TriggerCondition::WhileSourceAttacking { condition }
-        | TriggerCondition::FromZone { condition, .. }
-        | TriggerCondition::Prepared { condition }
-        | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => enters_itself(condition),
-        _ => false,
-    }
-}
-
-/// Whether the event carries an amount the trigger's X reads: counters put
-/// or one creature's combat damage total, as `flow/triggers.rs` binds them.
-fn event_binds_x(condition: &TriggerCondition) -> bool {
+/// How the text names the X the trigger's event binds, as `flow/triggers.rs`
+/// assigns it: the source's own entering reads its spell's "X", counters put
+/// and one creature's combat damage total read "that many". `None` keeps X
+/// symbolic until the trigger chooses it while resolving.
+fn bound_x(condition: &TriggerCondition) -> Option<&'static str> {
     match condition {
         // The per-creature occurrence binds beneath a gate only.
-        TriggerCondition::ActiveIf { condition, .. } => event_binds_x(condition),
+        TriggerCondition::ActiveIf { condition, .. } => bound_x(condition),
         TriggerCondition::DealsCombatDamage {
             per: Per::Object,
             to: None,
             ..
-        } => true,
-        condition => counters_put(condition),
+        } => Some("that many"),
+        condition => wrapped_bound_x(condition),
     }
 }
 
-/// Whether the event is counters being put, beneath any wrapper.
-fn counters_put(condition: &TriggerCondition) -> bool {
+/// `bound_x` for the events that bind X beneath any wrapper.
+fn wrapped_bound_x(condition: &TriggerCondition) -> Option<&'static str> {
     match condition {
+        TriggerCondition::EntersTheBattlefield {
+            subject: TriggerSubject::This,
+        } => Some("X"),
         TriggerCondition::PutsCounters { .. }
         | TriggerCondition::NthCounter { .. }
-        | TriggerCondition::Chapter { .. } => true,
+        | TriggerCondition::Chapter { .. } => Some("that many"),
         TriggerCondition::WasCast { condition }
         | TriggerCondition::OnceEachTurn { condition }
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::FromZone { condition, .. }
         | TriggerCondition::Prepared { condition }
         | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => counters_put(condition),
-        _ => false,
+        | TriggerCondition::ActiveIf { condition, .. } => wrapped_bound_x(condition),
+        _ => None,
     }
 }
 

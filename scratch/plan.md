@@ -73,7 +73,7 @@ Behavior review of the alignment pass at `e2327b6a59` (2026-11-24). Items 1 and 
 
 ## Remaining work
 
-D7 delivered: `trigger_description` fills X only for the source's own entering (`enters_itself`) or an event that binds it (`event_binds_x`: counters put — `PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper — and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`). Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
+D7 delivered: `trigger_description` fills X only where `bound_x` names an amount: "X" for the source's own entering, "that many" for counters put (`PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper) and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`. Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
 
 Next is **gate**. Gate owns:
 
