@@ -960,9 +960,9 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
             predicate,
             in_zone,
         } if matches!(
-            of.as_ref(),
-            ObjectSelector::Moved | ObjectSelector::CardsThisWay
-        ) && (in_zone.is_some() || matches!(of.as_ref(), ObjectSelector::Moved)) =>
+            (of.as_ref(), in_zone),
+            (ObjectSelector::Moved, _) | (ObjectSelector::CardsThisWay, Some(_))
+        ) =>
         {
             let objects = match predicate {
                 None if in_zone.is_some() => "cards".into(),

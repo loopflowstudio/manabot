@@ -483,10 +483,6 @@ impl Game {
         (value, if sets_toughness { value } else { printed.1 })
     }
 
-    pub fn object_power(&self, object_id: ObjectId) -> i32 {
-        self.object_pt(object_id).0
-    }
-
     /// Contextual predicates must read CDA power rather than a printed star's
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn object_matches_predicate(
@@ -497,7 +493,7 @@ impl Game {
         if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.permanent_matches_predicate(permanent, predicate);
         }
-        self.off_battlefield_matches(object_id, predicate, || self.object_power(object_id))
+        self.off_battlefield_matches(object_id, predicate, || self.object_pt(object_id).0)
     }
 
     /// A layer calculation supplies the card's CDA power from its partial board.
@@ -599,15 +595,8 @@ impl Game {
             .provenance(object)
             .expect("recorded provenance");
         let power = if predicate.reads_power() {
-            self.object_lki(object).map_or_else(
-                || {
-                    printing.pt_cda().map_or_else(
-                        || printing.power.unwrap_or(0),
-                        |(cda, _)| self.cda_value(cda, owner),
-                    )
-                },
-                |lki| lki.power,
-            )
+            self.object_lki(object)
+                .map_or_else(|| self.printed_power(printing, owner), |lki| lki.power)
         } else {
             0
         };
@@ -638,14 +627,24 @@ impl Game {
         }
         let row = self.state.entry_object(object);
         let power = if predicate.reads_power() {
-            row.pt_cda().map_or_else(
-                || row.power.unwrap_or(0),
-                |(cda, _)| self.cda_value(cda, row.owner),
-            )
+            self.printed_power(&row, row.owner)
         } else {
             0
         };
         predicate.matches_object_with_power(row, power)
+    }
+
+    /// Power as printed, with a characteristic-defining ability evaluated
+    /// for `you` (CR 604.3) instead of the printed star's placeholder.
+    fn printed_power(
+        &self,
+        printing: &crate::state::card::PrintedCharacteristics,
+        you: PlayerId,
+    ) -> i32 {
+        printing.pt_cda().map_or_else(
+            || printing.power.unwrap_or(0),
+            |(cda, _)| self.cda_value(cda, you),
+        )
     }
 
     fn cda_value(&self, cda: &PowerCda, controller: PlayerId) -> i32 {

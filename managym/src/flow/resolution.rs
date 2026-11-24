@@ -725,8 +725,6 @@ impl Game {
         }
     }
 
-    /// The players a selector names as the effect resolves; a target player
-    /// that is no longer a legal target is skipped.
     /// Put library cards into their owners' graveyards as one simultaneous
     /// move (CR 701.17a), bound as the frame's `CardsThisWay`.
     fn mill_objects(&mut self, frame: &mut EffectFrame, object_ids: Vec<ObjectId>) {
@@ -740,6 +738,8 @@ impl Game {
         frame.batch = Some(self.event_batch(EventBinding::ThisWay, events));
     }
 
+    /// The players a selector names as the effect resolves; a target player
+    /// that is no longer a legal target is skipped.
     fn selected_players(&self, selector: &PlayerSelector, frame: &EffectFrame) -> Vec<PlayerId> {
         match selector {
             PlayerSelector::You => vec![frame.controller],
@@ -2752,7 +2752,7 @@ impl Game {
         let power = source
             .reference()
             .and_then(|object| self.permanent_power_or_lki(object))
-            .unwrap_or_else(|| self.object_power(source.object()));
+            .unwrap_or_else(|| self.object_pt(source.object()).0);
         i32::from(self.object_mana_value(object)) <= power
     }
 
