@@ -633,10 +633,7 @@ impl Game {
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
         // Mana spent on the spell can give it a keyword (CR 106.6).
-        if let Some(crate::state::stack_object::StackObject::Spell(spell)) = self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
+        if let Some(spell) = self.spell_on_stack(object) {
             keywords = keywords.union(spell.spent.keywords_gained());
         }
         for (_, owner, view) in self.static_sources() {
@@ -817,8 +814,15 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
         };
         match condition {
-            Condition::OwnsMeldPair { partner } => source.is_some_and(|object| self.meld_partners(controller, object, partner).next().is_some()),
-            Condition::AtMostHalfStartingLife => self.state.players[controller.0].life <= crate::state::player::Player::STARTING_LIFE / 2,
+            Condition::OwnsMeldPair { partner } => source.is_some_and(|object| {
+                self.meld_partners(controller, object, partner)
+                    .next()
+                    .is_some()
+            }),
+            Condition::AtMostHalfStartingLife => {
+                self.state.players[controller.0].life
+                    <= crate::state::player::Player::STARTING_LIFE / 2
+            }
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,
             Condition::CardsDrawnAtLeast { count } => {
@@ -886,11 +890,14 @@ impl Game {
                 self.condition_holds(condition, controller, frame, source, triggering)
             }),
             Condition::CastFromGraveyard => source
-                .and_then(|object| self.find_spell_on_stack_index(object))
-                .is_some_and(|index| matches!(&self.state.stack_objects[index],
-                    crate::state::stack_object::StackObject::Spell(spell) if self.was_cast_from_graveyard(spell))),
+                .and_then(|object| self.spell_on_stack(object))
+                .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
             Condition::Kicked => frame.map_or_else(
-                || source_permanent().and_then(|p| p.spell_entry.as_deref()).is_some_and(|entry| entry.kicked),
+                || {
+                    source
+                        .and_then(|object| self.state.spell_entry(object))
+                        .is_some_and(|entry| entry.kicked)
+                },
                 |frame| frame.kicked,
             ),
             Condition::TargetMatches(predicate) => frame
@@ -903,16 +910,20 @@ impl Game {
             // (CR 603.10a; Nine-Lives Familiar's intervening-if).
             Condition::SourceCountersAtLeast { kind, count } => source_permanent()
                 .map(|permanent| permanent.counter_count(*kind))
-                .or_else(|| source.and_then(|object| self.object_lki(object)).map(|lki| lki.counters.get(*kind)))
+                .or_else(|| {
+                    source
+                        .and_then(|object| self.object_lki(object))
+                        .map(|lki| lki.counters.get(*kind))
+                })
                 .is_some_and(|n| n >= *count),
-            Condition::SourceMatches(predicate) => source.is_some_and(|object| {
-                match self.lookup_current_permanent(object) {
+            Condition::SourceMatches(predicate) => {
+                source.is_some_and(|object| match self.lookup_current_permanent(object) {
                     Ok(id) => self.permanent_matches_predicate(id, predicate),
                     Err(_) => self
                         .object_lki(object)
                         .is_some_and(|lki| super::layers::matches_departure(lki, predicate)),
-                }
-            }),
+                })
+            }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::SourceSaddled => source
                 .and_then(|source| self.lookup_current_permanent(source).ok())

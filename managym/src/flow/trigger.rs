@@ -6,7 +6,7 @@ use crate::state::binding::ObjectBinding;
 
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
-    game_object::{ObjectId, ObjectLki, PlayerId, Target},
+    game_object::{AbilitySource, ObjectId, ObjectLki, PlayerId, Target},
     predicate::CardPredicate,
 };
 
@@ -55,7 +55,7 @@ pub struct PendingTrigger {
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     pub remembered: Vec<ObjectBinding>,
-    pub source_identity: crate::state::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
     pub requirement_index: usize,
@@ -99,7 +99,7 @@ pub struct DelayedTrigger {
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
     #[serde(flatten)]
-    pub source_identity: crate::state::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub effects: Vec<Effect>,
     pub frequency: DelayedFrequency,
     pub expiry: DelayedExpiry,
@@ -154,6 +154,37 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl PendingTrigger {
+    /// A newly fired occurrence, before its controller chooses modes or targets.
+    pub fn new(
+        id: TriggerId,
+        controller: PlayerId,
+        source_identity: AbilitySource,
+        ability_index: usize,
+    ) -> Self {
+        Self {
+            id,
+            controller,
+            source_identity,
+            ability_index,
+            source_lki: None,
+            ordering_class: TriggerOrderingClass::Ordinary,
+            inline_effects: None,
+            program: false,
+            remembered: Vec::new(),
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
+            chosen_modes: Vec::new(),
+            context: None,
+            player: None,
+            attacker: None,
+            trigger_damage: 0,
+            kicked: false,
+            x: 0,
+            spent: Default::default(),
+        }
+    }
+
     /// Targets already committed to the requirement being filled.
     pub(super) fn clause_targets(&self) -> impl Iterator<Item = Target> + '_ {
         self.targets

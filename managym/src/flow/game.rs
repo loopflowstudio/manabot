@@ -32,7 +32,7 @@ use crate::{
         },
         knowledge::LibraryKnowledge,
         mana::{Mana, ManaPool},
-        permanent::{CounterKind, Permanent},
+        permanent::{CounterKind, Permanent, SpellEntry},
         stack_object::StackObject,
         zone::{ZoneManager, ZoneType},
     },
@@ -265,6 +265,14 @@ impl GameState {
             .get(object.slot())
             .copied()
             .flatten()
+    }
+
+    /// Casting choices and payment belong to this exact battlefield appearance.
+    pub(crate) fn spell_entry(&self, object: ObjectId) -> Option<&SpellEntry> {
+        self.permanents[self.permanent_of(object)?]
+            .as_ref()?
+            .spell_entry
+            .as_deref()
     }
 
     /// The object the card behind `object` is now: a test follows one card

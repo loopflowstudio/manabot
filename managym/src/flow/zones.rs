@@ -222,18 +222,13 @@ impl Game {
     /// The controller of `card`'s spell on the stack (CR 110.2), or its
     /// owner once it has left the stack.
     pub(crate) fn spell_caster(&self, object: ObjectId) -> PlayerId {
-        self.find_spell_on_stack_index(object)
-            .and_then(|index| match &self.state.stack_objects[index] {
-                StackObject::Spell(spell) => Some(spell.controller),
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                self.state
-                    .objects
-                    .provenance(object)
-                    .expect("source provenance")
-                    .1
-            })
+        self.stack_spell_controller(object).unwrap_or_else(|| {
+            self.state
+                .objects
+                .provenance(object)
+                .expect("source provenance")
+                .1
+        })
     }
 
     /// The permanents `player` controls, in battlefield order.
@@ -715,10 +710,16 @@ impl Game {
         mut entry: ZoneEntry,
     ) -> ProposedEvent {
         let from = self.state.zones.zone_of(object_id);
-        let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
-            && self.find_spell_on_stack_index(object_id).is_some_and(|index| {
-                matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
-            }) { ZoneType::Exile } else { to_zone };
+        let to_zone = if from == Some(ZoneType::Stack)
+            && to_zone != ZoneType::Exile
+            && self
+                .spell_on_stack(object_id)
+                .is_some_and(|spell| spell.flashback)
+        {
+            ZoneType::Exile
+        } else {
+            to_zone
+        };
         entry = entry.for_zone(to_zone);
         if to_zone == ZoneType::Battlefield
             && self
@@ -817,7 +818,7 @@ impl Game {
             self.record_object_lki(lki);
         }
         if old_zone == Some(ZoneType::Stack) {
-            if let Some(index) = self.find_spell_on_stack_index(object_id) {
+            if let Some(index) = self.stack_index_of(Target::StackSpell(object_id)) {
                 self.state.stack_objects_mut().remove(index);
             }
         }
@@ -1135,38 +1136,29 @@ impl Game {
         }
     }
 
-    pub(crate) fn find_spell_on_stack_index(&self, object_id: ObjectId) -> Option<usize> {
-        self.state.stack_objects.iter().position(
-            |object| matches!(object, StackObject::Spell(spell) if spell.object == object_id),
-        )
-    }
-
-    /// The stack position of the activated or triggered ability `id`.
-    pub(crate) fn find_ability_on_stack_index(&self, id: PublicId) -> Option<usize> {
+    /// Stack targets identify a spell by its exact object and an ability by its stack id.
+    pub(crate) fn stack_index_of(&self, target: Target) -> Option<usize> {
         self.state
             .stack_objects
             .iter()
-            .position(|object| !matches!(object, StackObject::Spell(_)) && object.id() == id)
+            .position(|object| object.as_target() == target)
     }
 
     /// The card whose ability `id` is on the stack.
     pub(crate) fn stack_ability_source(&self, id: PublicId) -> Option<ObjectId> {
-        let index = self.find_ability_on_stack_index(id)?;
-        match &self.state.stack_objects[index] {
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
-            StackObject::TriggeredAbility(triggered) => Some(triggered.source_object()),
-            StackObject::Spell(_) => None,
-        }
+        let index = self.stack_index_of(Target::StackAbility(id))?;
+        Some(self.state.stack_objects[index].source_object())
+    }
+
+    pub(crate) fn spell_on_stack(&self, object: ObjectId) -> Option<&SpellOnStack> {
+        self.state.stack_objects.iter().find_map(|item| match item {
+            StackObject::Spell(spell) if spell.object == object => Some(spell),
+            _ => None,
+        })
     }
 
     /// The controller of `card` while it is a spell on the stack.
     pub(crate) fn stack_spell_controller(&self, object_id: ObjectId) -> Option<PlayerId> {
-        self.state
-            .stack_objects
-            .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell.controller),
-                _ => None,
-            })
+        self.spell_on_stack(object_id).map(|spell| spell.controller)
     }
 }

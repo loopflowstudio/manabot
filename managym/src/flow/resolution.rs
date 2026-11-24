@@ -303,18 +303,13 @@ impl Game {
     /// Counter an activated or triggered ability: it is removed from the
     /// stack and does nothing (CR 701.6b).
     pub(crate) fn counter_ability(&mut self, id: PublicId, by: Option<ObjectId>) {
-        let Some(index) = self.find_ability_on_stack_index(id) else {
+        let Some(index) = self.stack_index_of(Target::StackAbility(id)) else {
             return;
         };
         let ability = self.state.stack_objects_mut().remove(index);
-        let source_object = match &ability {
-            StackObject::ActivatedAbility(ability) => ability.source_object(),
-            StackObject::TriggeredAbility(ability) => ability.source_object(),
-            StackObject::Spell(_) => unreachable!("an ability index"),
-        };
         self.emit(GameEvent::AbilityCountered {
             ability: id,
-            source_object,
+            source_object: ability.source_object(),
             controller: ability.controller(),
             by,
         });
@@ -324,9 +319,9 @@ impl Game {
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        let Some(_) = self.find_spell_on_stack_index(object) else {
+        if self.spell_on_stack(object).is_none() {
             return;
-        };
+        }
         if self.state[object]
             .statics
             .iter()
@@ -588,8 +583,9 @@ impl Game {
                 self.state.card_of(object).is_some()
                     && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
             }
-            Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
-            Target::StackAbility(id) => self.find_ability_on_stack_index(id).is_some(),
+            Target::StackSpell(_) | Target::StackAbility(_) => {
+                self.stack_index_of(target).is_some()
+            }
             Target::Player(player) => self.state.loss(player.0).is_none(),
         }
     }
@@ -1634,7 +1630,7 @@ impl Game {
                 let spells: Vec<_> = self
                     .select(what, frame)
                     .into_iter()
-                    .filter(|object_id| self.find_spell_on_stack_index(*object_id).is_some())
+                    .filter(|object_id| self.spell_on_stack(*object_id).is_some())
                     .collect();
                 for spell in spells {
                     let to = if *exile {
@@ -1719,8 +1715,7 @@ impl Game {
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
                 let trigger = self.enqueue_inline_trigger(
-                    frame.source()?,
-                    frame.source_ref(),
+                    frame.source_identity?,
                     frame.controller,
                     effects.clone(),
                     frame.context_target,
@@ -1979,10 +1974,7 @@ impl Game {
                         remembered: remembered.clone(),
                         event,
                         controller: frame.controller,
-                        source_identity: crate::state::game_object::AbilitySource::new(
-                            frame.source()?,
-                            frame.source_ref(),
-                        ),
+                        source_identity: frame.source_identity?,
                         effects: effects.clone(),
                         frequency: *frequency,
                         expiry: *expiry,
@@ -2108,11 +2100,7 @@ impl Game {
             Effect::CounterUnlessPays { cost } => {
                 // The spell or ability may already have left the stack (e.g.
                 // it was countered in response) — the effect does nothing.
-                let index = match frame.primary_target()? {
-                    Target::StackSpell(spell) => self.find_spell_on_stack_index(spell)?,
-                    Target::StackAbility(ability) => self.find_ability_on_stack_index(ability)?,
-                    _ => return None,
-                };
+                let index = self.stack_index_of(frame.primary_target()?)?;
                 let spell_controller = self.state.stack_objects[index].controller();
                 let mut payment = PaymentProgress::new(
                     spell_controller,
@@ -2490,7 +2478,7 @@ impl Game {
                 .map_or_else(|| self.departure_arrivals(source), |object| vec![object]),
             None => frame
                 .source()
-                .filter(|source| self.find_spell_on_stack_index(*source).is_some())
+                .filter(|source| self.spell_on_stack(*source).is_some())
                 .into_iter()
                 .collect(),
         }
@@ -2574,8 +2562,8 @@ impl Game {
                 _ => false,
             },
             Target::StackSpell(object_id) => {
-                self.find_spell_on_stack_index(object_id).is_some()
-                    && match spec {
+                self.spell_on_stack(object_id)
+                    .is_some_and(|spell| match spec {
                         TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
                         TargetSpec::SpellMatching { predicate } => {
                             self.object_matches_predicate(object_id, predicate)
@@ -2583,23 +2571,18 @@ impl Game {
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
                             self.object_mana_value(object_id) >= *min_mana_value
                         }
-                        TargetSpec::SpellOrAbilityWithSingleTarget => self
-                            .find_spell_on_stack_index(object_id)
-                            .is_some_and(|index| {
-                                self.state.stack_objects[index].targets().len() == 1
-                            }),
-                        _ => false,
-                    }
-            }
-            Target::StackAbility(id) => {
-                self.find_ability_on_stack_index(id)
-                    .is_some_and(|index| match spec {
-                        TargetSpec::Ability => true,
-                        TargetSpec::SpellOrAbilityWithSingleTarget => {
-                            self.state.stack_objects[index].targets().len() == 1
-                        }
+                        TargetSpec::SpellOrAbilityWithSingleTarget => spell.targets.len() == 1,
                         _ => false,
                     })
+            }
+            Target::StackAbility(_) => {
+                self.stack_index_of(target).is_some_and(|index| match spec {
+                    TargetSpec::Ability => true,
+                    TargetSpec::SpellOrAbilityWithSingleTarget => {
+                        self.state.stack_objects[index].targets().len() == 1
+                    }
+                    _ => false,
+                })
             }
             Target::GraveyardCard(object) => {
                 let (predicate, you_own) = match spec {
@@ -2713,13 +2696,7 @@ impl Game {
         if cost.x == 0 {
             return cost.mana_value;
         }
-        let x = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) => spell.x,
-            _ => 0,
-        };
+        let x = self.spell_on_stack(object).map_or(0, |spell| spell.x);
         cost.mana_value.saturating_add(cost.x.saturating_mul(x))
     }
 }

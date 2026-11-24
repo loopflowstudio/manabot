@@ -1782,7 +1782,7 @@ impl Observation {
                 card_id: Some(game.state.object(object).ok()?.id.0 as i32),
             }),
             Target::StackSpell(object_id) => {
-                let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
+                let stack_object_id = game.spell_on_stack(object_id)?.id.0 as i32;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
@@ -1792,7 +1792,7 @@ impl Observation {
                 })
             }
             Target::StackAbility(id) => {
-                game.find_ability_on_stack_index(id)?;
+                game.stack_index_of(Target::StackAbility(id))?;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
@@ -1802,16 +1802,6 @@ impl Observation {
                 })
             }
         }
-    }
-
-    fn stack_spell_object_id(game: &Game, object_id: ObjectId) -> Option<PublicId> {
-        game.state
-            .stack_objects
-            .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell.id),
-                _ => None,
-            })
     }
 
     fn zone_from_index(index: usize) -> ZoneType {

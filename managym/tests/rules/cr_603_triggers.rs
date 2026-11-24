@@ -1,8 +1,11 @@
 use managym::{
     agent::action::ActionSpaceKind,
-    flow::{trigger::PendingTrigger, turn::StepKind},
+    flow::{
+        trigger::{PendingTrigger, TriggerId},
+        turn::StepKind,
+    },
     state::{
-        game_object::{ObjectId, ObjectLookupError, PermanentId, PlayerId},
+        game_object::{AbilitySource, ObjectId, ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -117,50 +120,18 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
     let p0_source = owned_card(&s, 0, "Man-o'-War");
     let p1_source = owned_card(&s, 1, "Man-o'-War");
     s.game_mut().state.pending_triggers = vec![
-        PendingTrigger {
-            kicked: false,
-            trigger_damage: 0,
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: managym::state::game_object::AbilitySource::new(p1_source, None),
-            source_lki: None,
-            ability_index: 0,
-            controller: PlayerId(1),
-            id: managym::flow::trigger::TriggerId(0),
-            ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-            context: None,
-            player: None,
-            chosen_modes: Vec::new(),
-            attacker: None,
-            inline_effects: None,
-            x: 0,
-            spent: Default::default(),
-        },
-        PendingTrigger {
-            kicked: false,
-            trigger_damage: 0,
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: managym::state::game_object::AbilitySource::new(p0_source, None),
-            source_lki: None,
-            ability_index: 0,
-            controller: PlayerId(0),
-            id: managym::flow::trigger::TriggerId(1),
-            ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-            context: None,
-            player: None,
-            chosen_modes: Vec::new(),
-            attacker: None,
-            inline_effects: None,
-            x: 0,
-            spent: Default::default(),
-        },
+        PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(1),
+            AbilitySource::new(p1_source, None),
+            0,
+        ),
+        PendingTrigger::new(
+            TriggerId(1),
+            PlayerId(0),
+            AbilitySource::new(p0_source, None),
+            0,
+        ),
     ];
 
     s.pass_priority();
@@ -273,28 +244,15 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         .damage = 2;
 
     let source = owned_card(&s, 0, "Man-o'-War");
-    s.game_mut().state.pending_triggers.push(PendingTrigger {
-        kicked: false,
-        trigger_damage: 0,
-        program: false,
-        remembered: Vec::new(),
-        targets: Vec::new(),
-        target_req_indices: Vec::new(),
-        requirement_index: 0,
-        source_identity: managym::state::game_object::AbilitySource::new(source, None),
-        source_lki: None,
-        ability_index: 0,
-        controller: PlayerId(0),
-        id: managym::flow::trigger::TriggerId(0),
-        ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-        context: None,
-        player: None,
-        chosen_modes: Vec::new(),
-        attacker: None,
-        inline_effects: None,
-        x: 0,
-        spent: Default::default(),
-    });
+    s.game_mut()
+        .state
+        .pending_triggers
+        .push(PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(0),
+            AbilitySource::new(source, None),
+            0,
+        ));
 
     s.pass_priority();
 

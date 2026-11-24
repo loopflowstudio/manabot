@@ -6,17 +6,14 @@
 //! source snapshot and returns its results with the consequences its caller
 //! runs next.
 
+use std::sync::Arc;
+
 use super::decision::Decision;
-use crate::state::{
-    card::{CardDefId, Keyword},
-    game_object::CardId,
-};
 use crate::{
     flow::{event::GameEvent, game::Game},
-    state::card::StaticAbility,
     state::{
-        card::ReplacementEffect,
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId},
+        card::{CardDefId, Keyword, ReplacementEffect, StaticAbility},
+        game_object::{CardId, ObjectId, ObjectLki, PermanentId, PlayerId},
         permanent::{CounterKind, Counters, SpellEntry},
         zone::ZoneType,
     },
@@ -33,7 +30,7 @@ pub(crate) struct ZoneEntry {
     /// stack and suspended frame already serialize these, except the entry's
     /// historical X projection.
     #[serde(rename = "x", serialize_with = "entry_x")]
-    pub spell: Option<std::sync::Arc<SpellEntry>>,
+    pub spell: Option<Arc<SpellEntry>>,
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
@@ -59,13 +56,30 @@ pub(crate) struct ZoneEntry {
 }
 
 fn entry_x<S: serde::Serializer>(
-    spell: &Option<std::sync::Arc<SpellEntry>>,
+    spell: &Option<Arc<SpellEntry>>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     serializer.serialize_u8(spell.as_ref().map_or(0, |entry| entry.x))
 }
 
 impl ZoneEntry {
+    /// Apply entry counters granted by the mana spent to cast this spell.
+    pub(crate) fn from_spell(controller: PlayerId, spell: SpellEntry) -> Self {
+        let mut counters = Counters::default();
+        if let Some(receipt) = &spell.payment {
+            counters.change(
+                CounterKind::PlusOnePlusOne,
+                i32::from(receipt.entry_counters()),
+            );
+        }
+        Self {
+            controller: Some(controller),
+            spell: Some(Arc::new(spell)),
+            counters,
+            ..Self::default()
+        }
+    }
+
     /// The terms `zone` takes: battlefield terms only for the battlefield,
     /// face down only for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {

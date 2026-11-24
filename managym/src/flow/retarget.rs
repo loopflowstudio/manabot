@@ -17,15 +17,6 @@ use crate::{
 };
 
 impl Game {
-    /// The stack index of a spell or ability target.
-    pub(crate) fn stack_index_of(&self, object: Target) -> Option<usize> {
-        match object {
-            Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id),
-            Target::StackAbility(id) => self.find_ability_on_stack_index(id),
-            _ => None,
-        }
-    }
-
     /// The targeting requirement a stack object's target slot was chosen for.
     pub(crate) fn stack_target_requirement(
         &self,

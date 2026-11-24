@@ -20,7 +20,7 @@ use crate::{
         game::{CastChoices, Game},
         payment::{CostComponent, Operation, Payment, PaymentProgress},
         proposed_event::{
-            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
+            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
         },
         sba::SbaProgress,
         turn::OnceEachTurnKey,
@@ -30,7 +30,7 @@ use crate::{
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         payment::PaymentReceipt,
-        permanent::CounterKind,
+        permanent::{CounterKind, SpellEntry},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -1415,29 +1415,16 @@ impl Game {
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
                             let (to, entry) = if self.state[object].types.is_permanent() {
-                                let payment =
-                                    self.state[object].is_card().then(|| frame.spent.clone());
-                                let mut counters = crate::state::permanent::Counters::default();
-                                if let Some(receipt) = &payment {
-                                    counters.change(
-                                        crate::state::permanent::CounterKind::PlusOnePlusOne,
-                                        i32::from(receipt.entry_counters()),
-                                    );
-                                }
+                                let spell = SpellEntry {
+                                    kicked: frame.kicked,
+                                    x: frame.x,
+                                    payment: self.state[object]
+                                        .is_card()
+                                        .then(|| frame.spent.clone()),
+                                };
                                 (
                                     ZoneType::Battlefield,
-                                    crate::flow::proposed_event::ZoneEntry {
-                                        controller: Some(frame.controller),
-                                        spell: Some(std::sync::Arc::new(
-                                            crate::state::permanent::SpellEntry {
-                                                kicked: frame.kicked,
-                                                x: frame.x,
-                                                payment,
-                                            },
-                                        )),
-                                        counters,
-                                        ..Default::default()
-                                    },
+                                    ZoneEntry::from_spell(frame.controller, spell),
                                 )
                             } else {
                                 (ZoneType::Graveyard, Default::default())
@@ -2961,7 +2948,7 @@ impl Game {
                         self.zone_move_proposal(
                             object_id,
                             ZoneType::Battlefield,
-                            crate::flow::proposed_event::ZoneEntry {
+                            ZoneEntry {
                                 tapped: true,
                                 ..Default::default()
                             },

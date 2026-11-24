@@ -4,14 +4,14 @@
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     flow::{
-        trigger::{PendingTrigger, TriggerId, TriggerOrderingClass},
+        trigger::{PendingTrigger, TriggerId},
         turn::StepKind,
     },
     state::{
         ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{ObjectId, PlayerId},
+        game_object::{AbilitySource, ObjectId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -24,26 +24,13 @@ use crate::support::{game::*, play::select_card};
 fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
     let source_ref = s.game().state.live(now(s, source));
     s.game_mut().state.pending_triggers.push(PendingTrigger {
-        kicked: false,
-        trigger_damage: 0,
-        program: false,
-        remembered: Vec::new(),
-        source_identity: managym::state::game_object::AbilitySource::new(source, source_ref),
-        source_lki: None,
-        ability_index: 0,
-        controller: PlayerId(0),
-        targets: Vec::new(),
-        target_req_indices: Vec::new(),
-        requirement_index: 0,
-        id: TriggerId(0),
-        ordering_class: TriggerOrderingClass::Ordinary,
-        context: None,
-        player: None,
-        chosen_modes: Vec::new(),
-        attacker: None,
         inline_effects: Some(effects),
-        x: 0,
-        spent: Default::default(),
+        ..PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(0),
+            AbilitySource::new(source, source_ref),
+            0,
+        )
     });
 }
 

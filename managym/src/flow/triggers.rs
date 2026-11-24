@@ -10,8 +10,7 @@ use crate::{
         event::{EventKind, GameEvent},
         game::Game,
         trigger::{
-            DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
-            TriggerPlacement,
+            DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerPlacement,
         },
         turn::{Bending, StepKind},
     },
@@ -22,7 +21,9 @@ use crate::{
         },
         card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
-        game_object::{ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
+        game_object::{
+            AbilitySource, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target,
+        },
         mana::{Color, Mana},
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -1064,33 +1065,6 @@ impl Game {
                 // "that player": who searched, scried, surveilled or bent.
                 _ => performed_action(event).map(|(player, _)| player),
             };
-            // CR 107.3m: an entering permanent's own trigger sees its spell's
-            // X and the mana spent to cast it; a counters trigger's X is how
-            // many were put ("that much").
-            let (kicked, x, spent) = match event {
-                GameEvent::CountersPut { count, .. } => (
-                    false,
-                    u8::try_from(*count).unwrap_or(u8::MAX),
-                    Default::default(),
-                ),
-                GameEvent::CardMoved {
-                    object_id: object,
-                    to: ZoneType::Battlefield,
-                    ..
-                } if *object == source_object => self
-                    .state
-                    .permanent_of(*object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .and_then(|permanent| permanent.spell_entry.as_deref())
-                    .map_or(Default::default(), |entry| {
-                        (
-                            entry.kicked,
-                            entry.x,
-                            entry.payment.clone().unwrap_or_default(),
-                        )
-                    }),
-                _ => Default::default(),
-            };
             let attacker = match event {
                 GameEvent::AttackersDeclared { attackers, .. } => attackers
                     .iter()
@@ -1099,34 +1073,45 @@ impl Game {
                 _ => None,
             };
             let id = self.next_trigger_id();
-            self.state.pending_triggers_mut().push(PendingTrigger {
+            let mut trigger = PendingTrigger {
                 trigger_damage: match event {
                     GameEvent::SourceDealtDamage { amount, .. } => *amount,
                     _ => 0,
                 },
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(
-                    source_object,
-                    Some(source_lki.object),
-                ),
                 source_lki: Some(source_lki),
-                ability_index,
-                controller,
-                id,
-                ordering_class: TriggerOrderingClass::Ordinary,
                 context,
                 player,
-                kicked,
-                x,
-                spent,
-                chosen_modes: Vec::new(),
                 attacker,
                 inline_effects: granted,
                 program,
-            });
+                ..PendingTrigger::new(
+                    id,
+                    controller,
+                    AbilitySource::new(source_object, Some(source_object)),
+                    ability_index,
+                )
+            };
+            match event {
+                // A counters trigger's "that much" is the number just put.
+                GameEvent::CountersPut { count, .. } => {
+                    trigger.x = u8::try_from(*count).unwrap_or(u8::MAX);
+                }
+                // CR 107.3m, 400.7d: an entering permanent's own trigger
+                // remembers the choices and payment from its spell.
+                GameEvent::CardMoved {
+                    object_id,
+                    to: ZoneType::Battlefield,
+                    ..
+                } if *object_id == source_object => {
+                    if let Some(spell) = self.state.spell_entry(source_object) {
+                        trigger.kicked = spell.kicked;
+                        trigger.x = spell.x;
+                        trigger.spent = spell.payment.clone().unwrap_or_default();
+                    }
+                }
+                _ => {}
+            }
+            self.state.pending_triggers_mut().push(trigger);
         }
     }
 
@@ -1212,12 +1197,12 @@ impl Game {
         let GameEvent::AttackersDeclared { attackers, .. } = event else {
             return;
         };
-        for attacker in attackers.clone() {
+        for &attacker in attackers {
             let amount = self.characteristics(attacker).firebending;
             let Some(permanent) = self.state.permanents[attacker].as_ref() else {
                 continue;
             };
-            let (controller, object) = (permanent.controller, permanent.object);
+            let controller = permanent.controller;
             if amount == 0 {
                 continue;
             }
@@ -1231,8 +1216,13 @@ impl Game {
                 amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             };
-            self.enqueue_inline_trigger(object, Some(source), controller, vec![effect], None)
-                .attacker = Some(attacker);
+            self.enqueue_inline_trigger(
+                AbilitySource::new(source, Some(source)),
+                controller,
+                vec![effect],
+                None,
+            )
+            .attacker = Some(attacker);
         }
     }
 
@@ -1245,7 +1235,7 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
-        let creature_died = match event {
+        let dead_creature = match event {
             GameEvent::CardMoved {
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
@@ -1253,21 +1243,15 @@ impl Game {
             } => event
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
-                .is_some_and(|lki| lki.battlefield.types.is_creature()),
-            _ => false,
+                .filter(|lki| lki.battlefield.types.is_creature())
+                .map(|lki| Target::Permanent(lki.permanent)),
+            _ => None,
         };
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, GameEvent::CardMoved { .. })
-                    if creature_died =>
-                {
-                    event
-                        .departed_object()
-                        .and_then(|object| self.object_lki(object))
-                        .map(|lki| Target::Permanent(lki.permanent))
-                }
+                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => dead_creature,
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
@@ -1312,8 +1296,7 @@ impl Game {
         context: Option<Target>,
     ) {
         let pending = self.enqueue_inline_trigger(
-            trigger.source_object(),
-            trigger.source_ref(),
+            trigger.source_identity,
             trigger.controller,
             trigger.effects.clone(),
             context,
@@ -1337,44 +1320,22 @@ impl Game {
     /// a battlefield object.
     pub(crate) fn enqueue_inline_trigger(
         &mut self,
-        source_object: ObjectId,
-        source_ref: Option<ObjectId>,
+        source: AbilitySource,
         controller: PlayerId,
         effects: Vec<Effect>,
         context: Option<Target>,
     ) -> &mut PendingTrigger {
-        let source_lki = source_ref.and_then(|source| {
-            self.object_lki(source).cloned().or_else(|| {
-                (source == source_object && self.state.live(source).is_some())
-                    .then(|| self.snapshot_current_permanent(source))
-                    .flatten()
-            })
+        let source_lki = source.reference().and_then(|object| {
+            self.object_lki(object)
+                .cloned()
+                .or_else(|| self.snapshot_current_permanent(object))
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
-            kicked: false,
-            trigger_damage: 0,
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: crate::state::game_object::AbilitySource::new(
-                source_object,
-                source_ref,
-            ),
             source_lki,
-            ability_index: 0,
-            controller,
-            id,
-            ordering_class: TriggerOrderingClass::Ordinary,
             context,
-            player: None,
-            x: 0,
-            spent: Default::default(),
-            chosen_modes: Vec::new(),
-            attacker: None,
             inline_effects: Some(effects),
+            ..PendingTrigger::new(id, controller, source, 0)
         });
         self.state
             .pending_triggers_mut()
@@ -1419,30 +1380,15 @@ impl Game {
         }
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
+            let object = source.lki.object;
             self.state.pending_triggers_mut().push(PendingTrigger {
-                kicked: false,
-                trigger_damage: 0,
-                program: false,
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(
-                    source.lki.object,
-                    Some(source.lki.object),
-                ),
                 source_lki: Some(source.lki),
-                ability_index,
-                controller: source.controller,
-                id,
-                ordering_class: TriggerOrderingClass::Ordinary,
-                context: None,
-                player: None,
-                x: 0,
-                spent: Default::default(),
-                chosen_modes: Vec::new(),
-                attacker: None,
-                inline_effects: None,
+                ..PendingTrigger::new(
+                    id,
+                    source.controller,
+                    AbilitySource::new(object, Some(object)),
+                    ability_index,
+                )
             });
         }
     }
@@ -1467,23 +1413,24 @@ impl Game {
             })
             .map(|ability| ability.effects().to_vec())
             .collect();
-        let source_ref = self.state.live(object);
+        let source = AbilitySource::new(object, self.state.live(object));
         for effects in fired {
-            self.enqueue_inline_trigger(object, source_ref, caster, effects, None);
+            self.enqueue_inline_trigger(source, caster, effects, None);
         }
+        let Some(spell) = self.spell_on_stack(object) else {
+            return;
+        };
+        let replicated = if self.state[object].replicate().is_some() {
+            usize::from(spell.x)
+        } else {
+            0
+        };
         // "When that mana is spent to cast [a spell], copy that spell": one
         // trigger of the object that made each such unit.
-        let copy_sources: Vec<_> = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) => spell.spent.copy_triggers().flatten().collect(),
-            _ => Vec::new(),
-        };
+        let copy_sources: Vec<_> = spell.spent.copy_triggers().flatten().collect();
         for origin in copy_sources {
             self.enqueue_inline_trigger(
-                origin.object,
-                Some(origin.object),
+                AbilitySource::new(origin.object, Some(origin.object)),
                 caster,
                 vec![Effect::CopyTriggeringObject],
                 Some(Target::StackSpell(object)),
@@ -1491,24 +1438,9 @@ impl Game {
         }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
-        let replicated = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) if self.state[object].replicate().is_some() => {
-                usize::from(spell.x)
-            }
-            _ => 0,
-        };
         if replicated > 0 {
             let copies = vec![Effect::CopyTriggeringObject; replicated];
-            self.enqueue_inline_trigger(
-                object,
-                source_ref,
-                caster,
-                copies,
-                Some(Target::StackSpell(object)),
-            );
+            self.enqueue_inline_trigger(source, caster, copies, Some(Target::StackSpell(object)));
         }
     }
 
@@ -1540,28 +1472,12 @@ impl Game {
         for (object, ability_index, owner) in fired {
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
-            self.state.pending_triggers_mut().push(PendingTrigger {
-                kicked: false,
-                trigger_damage: 0,
-                program: false,
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(object, source_ref),
-                source_lki: None,
-                ability_index,
-                controller: owner,
+            self.state.pending_triggers_mut().push(PendingTrigger::new(
                 id,
-                ordering_class: TriggerOrderingClass::Ordinary,
-                context: None,
-                player: None,
-                x: 0,
-                spent: Default::default(),
-                chosen_modes: Vec::new(),
-                attacker: None,
-                inline_effects: None,
-            });
+                owner,
+                AbilitySource::new(object, source_ref),
+                ability_index,
+            ));
         }
     }
 
@@ -1726,9 +1642,7 @@ impl Game {
         match (condition, event) {
             (TriggerCondition::WasCast { condition }, _) => {
                 self.state
-                    .permanent_of(source_object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .and_then(|source| source.spell_entry.as_deref())
+                    .spell_entry(source_object)
                     .is_some_and(|entry| entry.payment.is_some())
                     && self.trigger_condition_fires(
                         condition,
@@ -1786,19 +1700,17 @@ impl Game {
                     object_id: object, ..
                 },
             ) => {
-                let this = self
-                    .state
-                    .permanent_of(source_object)
-                    .map(Target::Permanent);
+                let Some(id) = self.state.permanent_of(source_object) else {
+                    return false;
+                };
                 self.object_matches_predicate(*object, predicate)
-                    && this.is_some()
-                    && self
-                        .find_spell_on_stack_index(*object)
-                        .is_some_and(|index| {
-                            let targets = self.state.stack_objects[index].targets();
-                            !targets.is_empty()
-                                && targets.iter().all(|target| Some(*target) == this)
-                        })
+                    && self.spell_on_stack(*object).is_some_and(|spell| {
+                        !spell.targets.is_empty()
+                            && spell
+                                .targets
+                                .iter()
+                                .all(|target| *target == Target::Permanent(id))
+                    })
             }
             // Conditionally-granted abilities: the ability only exists (and
             // so only triggers) while the condition holds for its
