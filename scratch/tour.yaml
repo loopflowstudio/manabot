@@ -1,4 +1,4 @@
-at: b5ff828c0aafed2316ec5646fa808f65ece88c3a
+at: eb05d70f33ba01135e4f60b0eb49c21e2ba02ec2
 first:
   - path: docs/engine.md
     why: Follow the linked copy from entry through casting
@@ -15,5 +15,5 @@ first:
   - path: managym/src/agent/observation.rs
     why: Join each cast offer to its source
   - path: managym/src/flow/resolution_tests.rs
-    why: Counter either copy and resolve the other
+    why: Select the surviving cast after either counter
 hide: []

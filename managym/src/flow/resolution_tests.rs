@@ -4711,10 +4711,7 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
             .zone_objects(ZoneType::Exile, player)
             .iter()
             .copied()
-            .find(|object| {
-                game.play_grants_on(*object)
-                    .any(|grant| grant.source == Some(source))
-            })
+            .find(|object| game.preparation_source(*object) == Some(source))
             .unwrap();
         assert_eq!(game.state[copy].name, "Seed Suture");
         for viewer in [player, opponent] {
@@ -4749,8 +4746,9 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
     let observation = crate::agent::observation::Observation::for_player(&game, player);
     let config = crate::agent::observation_encoder::ObservationEncoderConfig::default();
     let encoded = crate::agent::observation_encoder::encode(&observation, &config).unwrap();
-    let joins = copies.map(|copy| {
-        let source = game.preparation_source(copy).unwrap();
+    let joins = [0, 1].map(|i| {
+        let copy = copies[i];
+        let source = sources[i];
         let index = game
             .action_space()
             .unwrap()
@@ -4790,7 +4788,8 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
         assert!(fork.state.events.iter().any(|event| matches!(event, GameEvent::SpellCountered { object_id,.. } if object_id.slot()==chosen.slot())));
         assert!(cast(&fork, chosen).is_none());
         let life = fork.state.players[player.0].life;
-        checked_command(&mut fork, cast(&game, other).unwrap());
+        let surviving_offer = cast(&fork, other).expect("other Seed Suture remains castable");
+        checked_command(&mut fork, surviving_offer);
         checked_command(&mut fork, target);
         assert_eq!(fork.state.players[player.0].life, life + 1);
         let permanent = fork.lookup_current_permanent(sources[0]).unwrap();
