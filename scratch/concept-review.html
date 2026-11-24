@@ -1,138 +1,144 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Foundations · decision continuity</title>
-<style>:root{color-scheme:light dark}body{font:1.05rem/1.55 system-ui;margin:3rem auto;padding:0 1rem;max-width:52rem}h1,h2{line-height:1.2}td,th{padding:.6rem;text-align:left;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}</style>
-<main><h1>Do the card’s instructions and the engine’s concepts line up?</h1>
-<p>Foundations coverage through Batch 5c · reviewed at <code>87a6ff31</code>. A search caller must see each strategic choice, fork while it is pending, and let the engine finish mandatory consequences.</p>
-<h2>Batch 5c · Which object can the ability still move?</h2>
-<table><tr><th>Caller interaction</th><th>Existing native representation</th><th>Fit</th></tr>
-<tr><td>Pay for one of Lantern’s two abilities. Sacrifice it immediately. Resolve the chosen ability after priority passes.</td><td>Each ActivatedAbilityDefinition owns its costs and effects. The THB fixture observes the source in the graveyard before resolution on both branches. One branch exiles the opponent’s Island and leaves the controller’s Forest. The other draws one and leaves the Island.</td><td>Yes</td></tr>
-<tr><td>Activate Arcanis for {2}{U}{U}. Return the original permanent if it is still there.</td><td>The Onslaught definition wraps return_to_hand(This) in If(SourceMatches(an empty predicate)). The movement selector can follow a departed object to its graveyard or exile successor.</td><td>No · the identity restriction is expressed as a characteristic test.</td></tr></table>
-<p><strong>Biggest mismatch in this cohort.</strong> The card author has to know when “this” follows a zone change. In the Onslaught fixture the root returns Arcanis to hand. On the fork a response removes it first and it stays in the graveyard. Both settle the same paid activation. A search caller needs only the pending ability and its bound source reference to reproduce that distinction.</p>
-<p><strong>Proposed.</strong> Give the movement instruction an exact-source selector that uses the live bound object reference. Arcanis can then express its return in one effect. Preserve the existing successor-aware selector for programs that intentionally move the card after it changes zones. Keep both meanings in the native program vocabulary. A fork where Arcanis leaves and re-enters before resolution should leave the new permanent in play. A blanket rule that cancels abilities on departure would also break both Lantern activations.</p>
+<title>Foundations · concept review</title>
+<style>
+:root{color-scheme:light dark}
+body{font:1.02rem/1.55 system-ui,-apple-system,sans-serif;margin:2.5rem auto;padding:0 1.1rem;max-width:56rem}
+h1,h2,h3{line-height:1.25}
+h2{margin-top:2.2rem;border-top:1px solid color-mix(in srgb,GrayText 35%,transparent);padding-top:1rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+caption{text-align:left;font-weight:600;margin-bottom:.4rem}
+td,th{padding:.55rem .6rem;text-align:left;vertical-align:top;border-bottom:1px solid color-mix(in srgb,GrayText 40%,transparent)}
+code{font-size:.92em;overflow-wrap:anywhere}
+.tag{display:inline-block;padding:.1rem .45rem;border-radius:.3rem;font-size:.82rem;font-weight:600;letter-spacing:.01em}
+.existing{border:1px solid GrayText}
+.proposed{border:1px solid LinkText;color:LinkText}
+.no{font-weight:700;color:color-mix(in srgb,crimson 82%,CanvasText)}
+.yes{font-weight:700;color:color-mix(in srgb,seagreen 82%,CanvasText)}
+.callout{border-left:4px solid LinkText;padding:.7rem 1rem;margin:1rem 0;background:color-mix(in srgb,LinkText 8%,transparent)}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+@media (max-width:44rem){.compare{grid-template-columns:1fr}}
+.panel{border:1px solid color-mix(in srgb,GrayText 45%,transparent);border-radius:.45rem;padding:.8rem 1rem}
+.panel h3{margin-top:0;font-size:1rem}
+ul{padding-left:1.3rem}
+</style>
+<main>
+<h1>Do the product’s concepts and the code’s concepts line up?</h1>
+<p><strong>Area reviewed:</strong> Foundations card authoring across Batch 5d (36 grant, attachment, search, and optional-effect cards plus exact-source, attachment-LKI, and search-disclosure edits) widened to the shared decision surface (<code>Action::ChooseMode</code> descriptions, attachment resolution/traces, trigger subjects, library search/disclosure) and the upcoming Batch 5e modal/choice spell cohort · reviewed at <code>b8805c64</code> against base <code>dca0a901</code>.</p>
+
+<h2>Batch 5d &amp; shared decision surface · concept alignment <span class="tag existing">Existing</span></h2>
+<table>
+<caption>Product concepts a player or card author knows vs. code concepts at <code>b8805c64</code></caption>
+<tr><th>Product concept</th><th>Code concept</th><th>Aligned?</th></tr>
+<tr>
+  <td>Choose a spell mode (<code>Bushwhack</code>, <code>Deadly Plot</code>, upcoming <code>Boros Charm</code>) or a “you may” option at resolution (<code>Reclamation Sage</code>, <code>Crawling Barrens</code>, <code>Solemn Simulacrum</code>, <code>Battle-Rattle Shaman</code>, <code>Micromancer</code>, <code>Fierce Empath</code>). Every legal option tells the acting player what choosing it does.</td>
+  <td><code>Game::action_description</code> (<code>managym/src/flow/action.rs:153-239</code>) has three separate branches for <code>Action::ChooseMode</code>: trigger placement uses <code>effects_description</code>; <code>PendingChoice::SpellMode</code> falls into the trigger branch and returns <code>None</code>; <code>Decision::Modal</code> checks a 6-arm allowlist and returns <code>None</code> for everything else.</td>
+  <td><span class="no">No</span> · action with no single description owner. Academy renders identical <code>Choose a mode (Bushwhack)</code> buttons and <code>Choose a mode (Reclamation Sage)</code> vs. <code>Decline</code>; LLM text prints only <code>Choose mode …; mode 0</code>.</td>
+</tr>
+<tr>
+  <td>An Aura or Equipment ability acts on whatever it is attached to at resolution, or what it was last attached to if the Aura/Equipment left first (CR 608.2h).</td>
+  <td><code>frame_attached</code> (<code>flow/resolution.rs:557-564</code>) now reads <code>Permanent.attached_to</code> or <code>ObjectLki.attached_to</code> — but <code>ActivatedAbilityOnStack.attached</code> (<code>flow/play.rs:1698</code>), <code>resolve_activated_ability</code>’s <code>frame.context_target</code> (<code>flow/resolution.rs:335-362</code>), and <code>"attached at activation"</code> (<code>agent/effect_execution.rs:471</code>) still capture and project the activation-time wearer.</td>
+  <td><span class="no">No</span> · stale shadow record that contradicts resolution. Moving <code>Watery Grasp</code> to a new creature before resolution shuffles the new wearer while execution traces and continuation <code>context</code> still point at the old wearer.</td>
+</tr>
+<tr>
+  <td>Trigger on “enchanted creature” (Aura) or “equipped creature” (Equipment) — the same attachment relation on two permanent subtypes, matching <code>StaticScope::Attached</code> and <code>ObjectSelector::Attached</code>.</td>
+  <td><code>TriggerSubject::EnchantedCreature</code> and <code>TriggerSubject::EquippedCreature</code> (<code>state/src/ability.rs:488-490</code>), executed by one identical match arm <code>EnchantedCreature | EquippedCreature</code> in <code>flow/triggers.rs:2209, 2241</code>.</td>
+  <td><span class="no">No</span> · one concept under two names. Duplicates both the enum variant and catalog learning-token kind solely to print <code>equipped creature</code> instead of <code>enchanted creature</code>.</td>
+</tr>
+<tr>
+  <td>Single-card library search into hand: restricted searches allow fail-to-find and reveal the card into hand; unrestricted searches (<code>Rune-Scarred Demon</code>, <code>Vile Entomber</code>) require a card from a nonempty library without revealing into hand; “you may search” declines before shuffling.</td>
+  <td>Two separate search engines: (1) <code>Effect::search_library</code> / <code>search_for_card</code> → <code>SelectCards</code> + <code>Move { unrevealed }</code> + <code>ShuffleLibrary</code> (used by TLA, <code>Solemn Simulacrum</code>, <code>Rune-Scarred Demon</code>, <code>Vile Entomber</code>); (2) <code>Effect::SearchDistinctNames { count: 1 }</code> (used by <code>Bushwhack</code>, <code>Micromancer</code>, <code>Fierce Empath</code>), which bypasses <code>EventBatch</code>, prompts Decline-only on 0 matches, prints <code>up to 1 … with different names and reveal them</code>, and misses <code>Decision::Modal</code>’s <code>Search your library</code> label. Also <code>Move { unrevealed: true }</code> hardcodes hand text without checking <code>to == Hand</code> (<code>ability_description.rs:947</code>) and <code>proposed_event.rs:693</code> emits <code>CardRevealed</code> on public-zone Graveyard → Hand moves.</td>
+  <td><span class="no">No</span> · one idea under two engines, plus an unguarded negative flag and public-zone reveal conflation.</td>
+</tr>
+<tr>
+  <td>Act on this exact battlefield object only (<code>Arcanis</code>, <code>Skyknight Squire</code>, <code>Crawling Barrens</code>) vs. follow the card into graveyard/exile after departure (<code>Avatar Destiny</code>).</td>
+  <td><code>ObjectSelector::ExactSource</code> vs. <code>ObjectSelector::This</code> (<code>flow/resolution.rs:2181-2186</code>).</td>
+  <td><span class="yes">Yes</span> · genuinely distinct rules (CR 400.7 vs. CR 603.10a). Arcanis’s leave-and-return fork distinguishes graveyard and re-entered successors cleanly.</td>
+</tr>
+<tr>
+  <td>Batch 5e spell choices: <code>Refute</code> (caster draws then discards after countering), <code>Opt</code> (Scry 1 then draw), <code>Uncharted Voyage</code> (owner puts creature on top or bottom, then caster surveils 1).</td>
+  <td>Current <code>scratch/plan.md</code> Batch 5e notes erroneously ask for an “opponent chooser in Refute” and say “Opt should reuse Lightshell Duo’s retained-order surveil path.”</td>
+  <td><span class="no">No</span> · plan mismatch before Batch 5e starts. <code>Refute</code>’s discard chooser is the caster (already supported); <code>Opt</code> uses existing <code>Effect::Scry { count: 1 }</code> (top/bottom, not graveyard); <code>Uncharted Voyage</code> is the real chooser-handoff card and needs top-or-bottom on <code>OwnerPutsIntoLibrary</code>.</td>
+</tr>
+</table>
+
+<div class="callout">
+<strong>Biggest mismatch · blind <code>Action::ChooseMode</code> offers on the shared decision surface.</strong><br>
+Every modal spell cast (<code>Bushwhack</code>, <code>Deadly Plot</code>, <code>Seeker’s Folly</code>, upcoming <code>Boros Charm</code> and <code>Valorous Stance</code>) and every Batch 5d “you may” resolution choice (<code>Reclamation Sage</code>, <code>Crawling Barrens</code>, <code>Battle-Rattle Shaman</code>, <code>Solemn Simulacrum</code>’s draw, <code>Micromancer</code>, <code>Fierce Empath</code>) reaches Academy and LLM text with <code>ActionOption.description = None</code>. Native Rust tests did not see it because <code>choose_mode(&amp;mut s, 0)</code> selects by raw integer index without inspecting descriptions.
+</div>
+
+<h2>Before vs. after · one description authority <span class="tag proposed">Proposed</span></h2>
+<div class="compare">
+<div class="panel">
+<h3>Before <span class="tag existing">Existing</span></h3>
+<p><strong>Casting <code>Bushwhack</code> (<code>PendingChoice::SpellMode</code>)</strong></p>
+<ul>
+  <li>Academy button 0: <code>Choose a mode (Bushwhack)</code></li>
+  <li>Academy button 1: <code>Choose a mode (Bushwhack)</code></li>
+  <li>LLM text: <code>Choose mode Bushwhack; mode 0</code> / <code>mode 1</code></li>
+</ul>
+<p><strong>Resolving <code>Reclamation Sage</code> (<code>Decision::Modal</code>)</strong></p>
+<ul>
+  <li>Academy button 0: <code>Choose a mode (Reclamation Sage)</code></li>
+  <li>Academy button 1: <code>Decline</code></li>
+  <li>LLM text: <code>Choose mode Reclamation Sage; mode 0</code> / <code>mode 1. Native description: Decline</code></li>
+</ul>
+</div>
+<div class="panel">
+<h3>After <span class="tag proposed">Proposed</span></h3>
+<p><strong>Casting <code>Bushwhack</code> (<code>PendingChoice::SpellMode</code>)</strong></p>
+<ul>
+  <li>Button 0: <code>Search your library for up to 1 basic land card…</code></li>
+  <li>Button 1: <code>Choose 1–1 creature you control…</code></li>
+  <li>Same native <code>effects_description</code> across Academy and LLM text.</li>
+</ul>
+<p><strong>Resolving <code>Reclamation Sage</code> (<code>Decision::Modal</code>)</strong></p>
+<ul>
+  <li>Button 0: <code>Destroy target artifact or enchantment</code></li>
+  <li>Button 1: <code>Decline</code></li>
+  <li>Keep concise idioms (<code>Decline</code>, <code>Add …</code>, <code>Create a … token</code>, <code>On top</code> / <code>Second from the top</code> / <code>On the bottom</code>, <code>Search your library</code>), fall back to <code>effects_description(effects)</code> instead of <code>None</code>.</li>
+</ul>
+</div>
+</div>
+
+<h3>Stress-testing the proposed cleanups (normal, failure, recovery, counterexamples)</h3>
+<ul>
+  <li><strong>Modal descriptions (<code>flow/action.rs</code>):</strong> Pure presentation derived from the pending choice’s effect list. Policy v11 tensors, <code>mode_index</code>, Command binding, stale rejection, state hashes, and pinned pilots are untouched. <em>Counterexample check:</em> keep the concise <code>PlaceTargetInLibrary</code> / <code>AddMana</code> / <code>Decline</code> arms ahead of the fallback so existing short labels do not regress; audit any existing text-observation snapshot that pinned the old blank fallback.</li>
+  <li><strong>Single attachment authority (<code>flow/play.rs</code>, <code>flow/resolution.rs</code>, <code>agent/effect_execution.rs</code>):</strong> Normal path: <code>Watery Grasp</code> or <code>Adventuring Gear</code> reads current attachment at resolution; <code>Path to Redemption</code> (sacrificed as cost) or removed <code>Starlight Snare</code> reads <code>ObjectLki.attached_to</code>. Failure/fork: moving <code>Watery Grasp</code> to Hill Giant while activated on Gray Ogre shuffles Hill Giant and projects Hill Giant consistently with no contradictory <code>attached at activation</code> trace. <em>Counterexample check:</em> no activated ability uses <code>ObjectSelector::Triggering</code> or <code>TriggeringPower</code>, so removing <code>ActivatedAbilityOnStack.attached</code> and its <code>frame.context_target</code> assignment breaks zero callers; verify <code>Path to Redemption</code>’s sacrifice-cost LKI still captures <code>attached_to</code> before departure.</li>
+  <li><strong>One attached trigger subject (<code>state/src/ability.rs</code>, <code>flow/triggers.rs</code>, <code>cards/token_renames.rs</code>):</strong> Replace <code>TriggerSubject::EnchantedCreature</code> + <code>EquippedCreature</code> with <code>TriggerSubject::Attached</code>, register a <code>token_renames.rs</code> alias to <code>TriggerSubject::EnchantedCreature</code> so pinned TLA pilots compute identical token IDs, and render <code>equipped creature</code> vs. <code>enchanted creature</code> in <code>ability_description.rs</code> from the card’s printed subtype. <em>Counterexample check:</em> confirm <code>tests/model/test_pinned_pilot.py</code> passes unchanged.</li>
+  <li><strong>One single-card library search path (<code>cards/src/{bro,dmu,scg}.rs</code>, <code>flow/proposed_event.rs</code>, <code>agent/ability_description.rs</code>):</strong> Switch <code>Bushwhack</code>, <code>Micromancer</code>, and <code>Fierce Empath</code> from <code>SearchDistinctNames { count: 1 }</code> to <code>Effect::search_library(predicate, 1.into(), vec![Effect::return_to_hand(ObjectSelector::Selected)])</code> (matching TLA). On zero matching cards, <code>SelectCards</code> auto-shuffles without a dead Decline-only prompt, and moves flow through <code>EventBatch</code>. Guard <code>ability_description.rs:947</code> with <code>*to == ZoneType::Hand</code>, and only emit <code>GameEvent::CardRevealed</code> when moving from a hidden zone (<code>Library</code>), while public-zone returns (<code>Graveyard</code> → <code>Hand</code>) update <code>known_hand</code> without a spurious reveal event. <em>Counterexample check:</em> verify no existing graveyard-return test asserts <code>GameEvent::CardRevealed</code>; preserve <code>unrevealed: bool</code> with <code>skip_serializing_if = "Not::not"</code> so existing TLA catalog token digests do not shift.</li>
+  <li><strong>Batch 5e library placement (<code>Uncharted Voyage</code>):</strong> Extend <code>OwnerPutsIntoLibrary</code> / <code>PlaceTargetInLibrary</code> with a placement-choice mode (<code>TopOrBottom</code> vs. default <code>SecondFromTopOrBottom</code> via <code>skip_serializing_if</code> so TLA tokens stay identical) rather than cloning a second effect variant. Fork at the owner’s top/bottom choice before the caster’s private Surveil 1 to test chooser handoff and private order retention.</li>
+</ul>
+
+<h2>Batch 5c · archived review (resolved at <code>229eb493</code>)</h2>
+<table><tr><th>Caller interaction</th><th>Native representation</th><th>Fit</th></tr>
+<tr><td>Pay for one of Lantern’s two abilities. Sacrifice it immediately. Resolve the chosen ability after priority passes.</td><td>Each ActivatedAbilityDefinition owns its costs and effects. The THB fixture observes the source in the graveyard before resolution on both branches.</td><td><span class="yes">Yes</span></td></tr>
+<tr><td>Activate Arcanis for {2}{U}{U}. Return the original permanent if it is still there.</td><td>Resolved at <code>229eb493</code>: Arcanis now uses <code>ObjectSelector::ExactSource</code>. The Onslaught leave-and-return fork keeps a re-entered Arcanis on the battlefield.</td><td><span class="yes">Yes</span></td></tr></table>
+
 <h2>Batch 5b · existing behavior</h2>
 <table><tr><th>Card instruction</th><th>Native owner</th><th>Fit</th></tr>
-<tr><td>Choose a mode and its target</td><td>Deadly Plot’s casting fixture plays both branches, including returning Hungry Ghoul tapped.</td><td>Yes</td></tr>
-<tr><td>Deal 3 damage to any target</td><td>Lightning Strike’s target offer and resolution check the opposing permanent’s current hexproof. The damage instruction applies to every applicable type on the chosen object.</td><td>Yes</td></tr>
-<tr><td>Deal 3 damage to each player</td><td><code>DealDamageToPlayer</code> builds one event batch from <code>PlayerSelector</code>. No selector includes every seat.</td><td>No</td></tr></table>
-<h2>Lightning Strike across a response window</h2>
-<p>The Theros fixture targets a Wall with creature, planeswalker and battle types. Resolution marks 3 damage and takes loyalty and defense from 5 to 2. Granting hexproof after target selection leaves damage at zero and both counters at 5. The spell finishes with its original target binding. A policy has no retarget decision.</p>
-<p><strong>Recovery to check at gate.</strong> Fork after target commitment. Grant hexproof on one branch and pass priority unchanged on the other. Replaying each branch must preserve its own outcome, and resubmitting the spent target Command must leave that branch untouched. The existing fixture constructs the two cases independently.</p>
-<h2>Largest mismatch · one simultaneous instruction</h2>
-<p><strong>Existing.</strong> Splitting Slagstorm into “you” followed by “each opponent” would create two damage batches. Even identical final life totals could conceal a replacement decision made after the first seat’s damage had committed.</p>
-<p><strong>Proposed when Slagstorm is unblocked.</strong> Give <code>PlayerSelector</code> an all-players case. Let the existing resolution frame retain one proposed damage event per seat in one batch. First fork at a pending replacement choice and inspect both life totals before commitment. Keep Slagstorm deferred in the ready-now cohort. No caller needs a recipient picker or a new Command.</p>
-<h2>Earlier branch interactions</h2><p>Foundations card authors compose native effects. Policies, search forks and Academy need the same legal choices and the information each seat earned. Lightshell Duo tests continuity within a seat. Curator of Destinies tests continuity when the chooser changes.</p>
-<h2>Lightshell Duo · existing</h2>
-<table><caption>One inspected prefix, two continuations. Positions counted from the top.</caption><tr><th>Command</th><th>Chooser at next priority</th><th>Closed opponent</th></tr><tr><td>Mill Gray Ogre, keep Hill Giant</td><td>Hill Giant first</td><td>Sees the milled card. Kept identity stays private.</td></tr><tr><td>Reverse Plains and Mountain</td><td>Mountain first, Plains second. Known Hill Giant fourth and Forest fifth survive.</td><td>Private order stays hidden.</td></tr></table>
-<table><tr><th>Caller concept</th><th>Native owner</th><th>Aligned?</th></tr><tr><td>Choose an inspected object</td><td>Surveil and OrderLibrary bind Commands to the pending decision</td><td>Yes</td></tr><tr><td>Remember a location</td><td>LibraryKnowledge carries private and public positions into native observations, v11 and text</td><td>Yes</td></tr><tr><td>Replay the same choice</td><td>Exact forks preserve objects and the pending decision. Snapshot library-order pins preserve physical witnesses.</td><td>Yes. Four Lightshell cases passed on the rebuilt merged snapshot.</td></tr><tr><td>Hand two piles to another chooser</td><td>LookAndSelect binds one chooser and sends selected cards to hand</td><td>No. It cannot retain both piles and express their different visibility at handoff.</td></tr></table>
-<p>Before the repair, a legal mill erased the surviving known card and a private reorder erased deeper facts. The movement now shifts positions on an actual departure. Ordering rewrites the inspected prefix. A stale Command is rejected. Recovery reads the current decision, and an independent fork can replay the original Command from its original root.</p>
-<h2>Largest remaining mismatch · readiness</h2>
-<p>An empty ledger dependency list describes the planning scan. Treating it as permission to author Curator would let the engine choose how to split the cards or reveal the hidden pile. Either would change the game.</p>
-<p><strong>Proposed.</strong> Judge each row by a complete native interaction. For Curator, the controller partitions the cards, the opponent sees one pile face up and chooses a pile, then that choice determines hand and graveyard. Both pile memberships must survive a fork between decisions. Defer the card to choice continuations until that authority exists.</p>
-<p>Of 222 selected names, sixteen are newly authored, three already had definitions, twelve have documented blockers and 191 await audit. For token, static, lifegain and damage batches, keep the interaction witnesses in the plan as the readiness test for each shared primitive.</p>
-<h2>Run Away Together · existing gap</h2>
-<table><caption>Two distinct creatures on the battlefield</caption><tr><th>Caller interaction</th><th>Native representation</th><th>Aligned?</th></tr>
-<tr><td>Pick one creature, then a creature controlled by a different player.</td><td><code>remaining_legal_targets</code> excludes the first object. Another creature under the same controller still passes the ordinary creature requirement.</td><td>No</td></tr>
-<tr><td>Resolve after both creatures exchange controllers.</td><td><code>resolution_targets</code> retains target slots and requirement indices. Its group recheck covers shared creature type. Two caster-relative slots would reject this still-valid pair.</td><td>No</td></tr></table>
-<p><strong>Proposed for the choice-continuations track.</strong> Put the controller relation on the target requirement. Use it to generate legal continuations at casting and evaluate the bound targets at resolution. A fork between those steps retains the chosen objects. Recompute their relation in each branch. A branch where both live creatures now share a controller must return neither. Keep the definition pending.</p>
-<h2>Arahbo and Helpful Hunter · existing</h2>
-<table><caption>One OrderTriggers decision, two exact forks. Changes are relative to Hunter’s entry.</caption><tr><th>First resolution</th><th>At the next priority</th><th>After both resolve</th></tr>
-<tr><td>Hunter draws</td><td>Hand +1, Cats unchanged</td><td>Hand +1, one new 2/2 Cat</td></tr>
-<tr><td>Arahbo creates a Cat</td><td>Hand unchanged, Cats +1</td><td>Hand +1, one new 2/2 Cat</td></tr></table>
-<p>The focused FDN fixture checks the intermediate priority window as well as the final board. A policy can respond in that window. Collapsing both triggers into one effect would preserve the final counts and erase that choice.</p>
-<table><tr><th>Rules concept</th><th>Code concept</th><th>Aligned?</th></tr>
-<tr><td>Arahbo itself or another qualifying Cat enters</td><td><code>TriggerSubject::ThisOr</code> checks object identity or a predicate on the entering permanent.</td><td>Yes. Both alternatives belong to one triggered ability.</td></tr>
-<tr><td>An ordinary Cat gets the bonus and its entry ends the chain</td><td>The token face supplies its base characteristics. The entry predicate excludes other tokens. The continuous effect supplies the bonus.</td><td>Yes. Both branches retain the original Cat and finish with no pending trigger.</td></tr>
-<tr><td>A token copy of Arahbo enters alone</td><td>Foggy Swamp Visions copies the exiled card. The self alternative matches once. The ordinary token it creates fails the other-Cat predicate.</td><td>Yes. The FDN fixture finds exactly one additional 2/2 Cat. Removing the self alternative changes the learning tokens.</td></tr>
-<tr><td>Choose which trigger to stack first</td><td>The text Command binds the source. The first trigger stacked resolves last.</td><td>Yes. Both Commands replay from the fork and reject stale reuse. The drawn Gray Ogre stays private in the opponent observation and Academy projection.</td></tr></table>
-<h2>Regal Caracal · existing</h2>
-<table><caption>Effective characteristics as the continuous source leaves</caption><tr><th>Permanent</th><th>Caracal present</th><th>Caracal gone</th><th>Owner in the model</th></tr>
-<tr><td>Ordinary friendly Cat token</td><td>2/2 lifelink</td><td>1/1</td><td>Yes · both bonuses come from the continuous effect</td></tr>
-<tr><td>Each of Caracal’s two tokens</td><td>2/2 lifelink</td><td>1/1 lifelink</td><td>Yes · the token face supplies intrinsic lifelink</td></tr></table>
-<p>Caracal and the opposing Cat receive neither grant. Storing the visible keywords as the token face would leave the ordinary Cat with lifelink after Caracal leaves. The Amonkhet fixture distinguishes these cases.</p>
-<h2>Prideful Parent and Anthem · existing</h2>
-<table><caption>Effective power and toughness at three points in the FDN fixture</caption><tr><th>Creature</th><th>Before Anthem</th><th>Anthem present</th><th>After removal</th></tr>
-<tr><td>Parent, with printed vigilance throughout</td><td>2/2</td><td>3/3</td><td>2/2</td></tr>
-<tr><td>Parent’s ordinary Cat</td><td>1/1</td><td>2/2</td><td>1/1</td></tr>
-<tr><td>Opposing Cat</td><td>1/1</td><td>1/1</td><td>1/1</td></tr></table>
-<p><strong>Yes.</strong> The permanent owns its token face or printed definition. Anthem supplies a controller-scoped modification. A caller reading the effective characteristics after removal needs no record of a bonus to undo.</p>
-<h2>Drakuseth · existing gap</h2>
-<p><strong>No.</strong> Choose A for 4 damage and optionally B and C for 3 each. The target-submission test allows A again in a second clause. The resolution arm for <code>Effect::DealDamage</code> computes one amount for its entire batch. Splitting the instruction gives each amount its own batch. Either representation loses a rule. The row stays pending.</p>
-<p><strong>Proposed acceptance position.</strong> Fork after A, B and C are bound. In one branch all receive their assigned damage. In the other, remove A before resolution. B and C must still take 3 simultaneously. Keep the identities and amounts bound across replay and retargeting.</p>
-<h2>Ajani’s Pridemate · existing batch behavior</h2>
-<table><caption>Same 2 damage to a creature and 3 to a player. Same final life total of 25.</caption><tr><th>Lifelink sources</th><th>Committed gains</th><th>Pridemate triggers</th><th>After resolution</th></tr>
-<tr><td>One Cat</td><td>+5</td><td>1</td><td>3/3</td></tr>
-<tr><td>Two Cats</td><td>+2, +3</td><td>2</td><td>4/4</td></tr></table>
-<p><strong>Yes.</strong> Previously each recipient caused a separate gain. Now <code>commit_damage</code> contributes damage actually dealt to a batch-local total keyed by source object and controller. Each total becomes one <code>LifeChange</code> proposal. <code>GainsLife</code> matches the resulting positive <code>LifeChanged</code> event. Policies can observe the separate triggers on the stack. An exact fork needs no independent lifelink counter.</p>
-<h2>Combat assignment · existing</h2>
-<p>A 5-power Foggy Swamp Spirit Keeper attacks into Gray Ogre, a 2/2. Ajani’s Pridemate watches. How much damage does the attacker deal, and who decides where it goes?</p>
-<table><caption>Damage to Gray Ogre / defending player</caption><tr><th>Position</th><th>Legal allocations</th><th>Caller action</th></tr>
-<tr><td>Without trample</td><td>5 / 0</td><td>Advance through the forced assignment.</td></tr>
-<tr><td>With trample</td><td>2 / 3 · 3 / 2 · 4 / 1 · 5 / 0</td><td>Select one offer. Choosing 2 / 3 leaves the players at 25 and 17.</td></tr></table>
-<p><strong>Yes · assignment.</strong> The old path treated lethal damage as the amount to deal. It lost three damage without trample and chose the destination of the excess with trample. Now <code>AssignCombatDamage</code> owns the pending allocation. Its modal offers identify the attacker and blocker. A Command binds the offer and revision. With several blockers, the suspended decision keeps prior amounts and the damage pass while the caller chooses the next amount. Damage commits together when assignment finishes.</p>
-<p><strong>Yes · recovery.</strong> The directed combat test applies the 2 / 3 Command on an independent fork, checks that the root witness survives, and submits it on the root. The witnesses match. Reusing that Command fails. Play continues from the accepted assignment through one gain of five and one counter. The fork comparison is at Command execution.</p>
-<p><strong>No · simultaneous spell damage.</strong> The largest outstanding damage mismatch is Drakuseth’s binding of amounts to distinct targets, shown above. Combat now produces the shared batch that lifelink needs. A spell also needs to retain which target receives which amount when a target becomes illegal.</p>
-<h2>Two attackers · existing at 21e5aa6e</h2>
-<table><caption>One combat damage step, two lifelink sources under the same controller</caption><tr><th>Caller action</th><th>Native result</th><th>Aligned?</th></tr>
-<tr><td>Attack with two Spirit Keepers, one carrying a counter</td><td>The sources deal 2 and 3. Two Pridemate triggers await ordering, with zero counters placed.</td><td>Yes</td></tr>
-<tr><td>Choose the second trigger first</td><td>The revision and offer identify the Command. Applying it to a clone leaves the root witness intact. Applying it to the root reproduces the clone’s witness.</td><td>Yes</td></tr>
-<tr><td>Retry the old Command, then continue from the accepted choice</td><td>The retry fails. At end of combat each branch records gains of +2 then +3, two Pridemate counters and 15 life for the defender.</td><td>Yes</td></tr></table>
-<p>Counting the controller’s net gain would also give +5 here. It would lose a trigger. Counting damaged recipients would fail the single-source trample case above. Source identity during commitment distinguishes both cases without adding state to a checkpoint.</p>
-<h2>Existing · the defender orders two replacements</h2>
-<table><caption>A 2-power Spirit Keeper attacks. The defender can prevent 2 or double the damage first.</caption><tr><th>First choice</th><th>Damage dealt</th><th>Gain events</th><th>Pridemate counters</th></tr>
-<tr><td>Prevent 2</td><td>0</td><td>None</td><td>0</td></tr>
-<tr><td>Double</td><td>2</td><td>One gain of 2</td><td>1</td></tr>
-<tr><td>Double with Giant Cindermaw present</td><td>2</td><td>None</td><td>0</td></tr></table>
-<p><strong>Yes.</strong> The defender owns the pending choice. Each bound Command replays independently from that decision. Both branches reach the same end-of-combat witness and the saved root retains its original witness. The middle row makes the last row diagnostic: damage survived replacement, and Cindermaw stopped the resulting life gain.</p>
-<h2>Drogskol Reaver · existing native behavior</h2>
-<table><caption>Unblocked Reaver, starting at 20 life each</caption><tr><th>Priority window</th><th>Life totals</th><th>On stack</th><th>After resolution</th></tr>
-<tr><td>First-strike damage</td><td>23 / 17</td><td>One draw trigger</td><td>One card drawn</td></tr>
-<tr><td>Regular damage</td><td>26 / 14</td><td>One draw trigger</td><td>Two cards drawn in total</td></tr></table>
-<p><strong>Yes · timing and resolution.</strong> The turn loop offers priority between hits. Removing Reaver on the fork after its first draw ends combat at 23 / 17 with one card drawn. Continuing the original position gives the second row. The card uses the same positive life-change condition as Pridemate. The directed DKA fixture passed.</p>
-<h3>Can the caller still prevent the second hit?</h3>
-<p>Previously both windows supplied only <code>CombatDamage</code>. A search policy starting from either position needed to know whether passing priority could lead to another hit. Counting draw events would fail if damage were prevented or a trigger were still on the stack.</p>
-<table><caption>Existing public observation at priority after damage, verified in the DKA fixture</caption><tr><th>Position</th><th>Another damage step?</th><th>Reaver participated in the first step?</th><th>Defender’s life</th></tr>
-<tr><td>First hit</td><td>Yes</td><td>Yes</td><td>17</td></tr>
-<tr><td>Second hit on original branch</td><td>No</td><td>Yes</td><td>14</td></tr>
-<tr><td>Abilities removed between steps on fork</td><td>No</td><td>Yes</td><td>17</td></tr></table>
-<p><strong>Yes · timing and history.</strong> The turn owns <code>another_damage_step</code>. Each live permanent owns its projected <code>first_strike_participant</code> flag. The last row shows why current keywords cannot supply that flag. Both seats receive the public facts through native observations and v11 rows. Assignment tokens identify the participant by public reference. Viewer text and Academy can describe the pending regular step directly. Academy’s “To regular damage” still submits the ordinary pass Command.</p>
-<h3>Existing · one gain triggers two abilities</h3>
-<table><caption>Reaver attacks alone with Blight-Priest in play. Life totals are attacker / defender.</caption><tr><th>After damage</th><th>Before triggers resolve</th><th>After both resolve</th><th>Cards drawn so far</th></tr>
-<tr><td>First strike</td><td>23 / 17</td><td>23 / 16</td><td>1</td></tr><tr><td>Regular damage</td><td>26 / 13</td><td>26 / 12</td><td>2</td></tr></table>
-<p><strong>Yes · one condition, independent consequences.</strong> Each hit offers a trigger-order decision. Both seats can read Blight-Priest’s gain condition and life-loss effect on the stack. Its catalog includes <code>TriggerCondition::GainsLife</code>. The Zendikar Rising fixture checks both windows.</p>
-<h2>Twinflame Tyrant · existing</h2>
-<table><caption>Lightning Bolt damage in the FDN fixture, relative to Tyrant’s controller</caption><tr><th>Source</th><th>Recipient</th><th>Player</th><th>Wall of Stone</th></tr>
-<tr><td>Friendly</td><td>Opposing</td><td>6</td><td>6</td></tr>
-<tr><td>Friendly</td><td>Friendly</td><td>3</td><td>3</td></tr>
-<tr><td>Opposing</td><td>Either side</td><td>3</td><td>3</td></tr></table>
-<p><strong>Yes.</strong> The card declares two controller scopes and one <code>DamageTransform::Double</code>. The native proposal owns the amount. In the separate CR 616 fixture the affected player is still at 20 when offered <code>OrderReplacement</code>. Preventing 1 first gives 4 damage. Doubling first gives 5. Replaying the first choice reproduces the committed events.</p>
-<h2>Fog Bank · existing</h2>
-<p><strong>Yes.</strong> A 1/3 Fog Bank blocks Healer’s Hawk while Twinflame Tyrant is in play. The defender chooses which effect applies to the Hawk’s incoming point. The two branches reach the same board, but a search fork must preserve how each got there.</p>
-<table><caption>Pending damage to Fog Bank in the native event fixture</caption><tr><th>First choice</th><th>Pending amount</th><th>Applied identities at completion</th></tr><tr><td>Prevent</td><td>1 → 0</td><td>Fog Bank</td></tr><tr><td>Double</td><td>1 → 2 → 0</td><td>Tyrant, then Fog Bank</td></tr></table>
-<p>The outgoing point uses the same ability identity on its own event. Both creatures survive unmarked and the attacker stays at 20. Matching only the recipient would kill the Hawk. The USG fixture resumes both Commands on forks. The event fixture checks noncombat damage in either direction and combat elsewhere.</p>
-<h2>Gratuitous Violence · existing source identity</h2>
-<table><caption>Damage after Fanatical Firebrand sacrifices itself. The second branch returns the card before resolution.</caption><tr><th>Departed source</th><th>Original branch</th><th>Returned with opposite creature status</th></tr>
-<tr><td>Friendly creature</td><td>2</td><td>2</td></tr><tr><td>Friendly artifact without creature type</td><td>1</td><td>1</td></tr><tr><td>Opposing creature</td><td>1</td><td>1</td></tr></table>
-<p><strong>Yes.</strong> The stacked ability retains its source object ID. Replacement discovery reads its effective type and controller from last known information. The Onslaught fixtures also distinguish Mongoose Lizard’s 2 damage from Lightning Bolt’s 3 against a friendly Wall of Stone.</p>
-<h2>Existing · one controller throughout damage resolution</h2>
-<p><strong>Yes.</strong> Seat 0 owns Lightning Bolt and targets itself. The fixture grants the spell lifelink and transfers stack control to seat 1, who controls Twinflame Tyrant. Previously Tyrant doubled the damage but lifelink credited the owner, leaving both at 20. Discovery and commitment now call <code>damage_source_facts</code> with the same object ID. The batch accumulates one gain per source and controller. Search needs no extra controller field in its saved choice.</p>
-<table><caption>Native fixture at fd4384cd. Life totals start at 20 each.</caption><tr><th>Seat 0’s replacement order</th><th>Damage</th><th>Owner’s life</th><th>Controller’s life</th></tr><tr><td>Doubling alone</td><td>6</td><td>14</td><td>26</td></tr><tr><td>Prevent 1 first</td><td>4</td><td>16</td><td>24</td></tr><tr><td>Double first</td><td>5</td><td>15</td><td>25</td></tr></table>
-<p>Each order runs twice from the pending decision on independent forks. The fixture compares the full event sequence and both life totals, and counts one life change for seat 1. The Firebrand controls above explain why following the physical card into its next incarnation would break the same model.</p>
-<h2>Existing · who controls the entering creature?</h2>
-<p><strong>Yes.</strong> Before this slice, the battlefield grant could match a creature by characteristics alone. That was insufficient for Authority. The entry proposal now compares its prospective controller with the controller of the indexed <code>OpponentsEnterTapped</code> ability. A match uses the ordinary <code>ReplacementEffect::EntersTapped</code>. The committed entry supplies a separate stack trigger.</p>
-<table><caption>Seat 0 owns the spell. Seat 1 takes control before resolution. Both begin at 20 life.</caption><tr><th>Authority’s seat</th><th>Entrant</th><th>At priority after entry</th><th>After resolution</th></tr><tr><td>0</td><td>Gray Ogre</td><td>Tapped · one trigger · 20/20</td><td>21/20 on both forks</td></tr><tr><td>1</td><td>Gray Ogre</td><td>Untapped · empty stack</td><td>20/20</td></tr><tr><td>0</td><td>Sol Ring</td><td>Untapped · empty stack</td><td>20/20</td></tr></table>
-<p>Checking the owner would reverse both Ogre results. Paying life gain at entry would lose the priority window. Cloning the existing stack at that window preserves the pending gain. Resolving each clone produced identical events, including exactly one gain for seat 0. The directed Kaladesh test passed on review.</p>
-<h2>Diregraf Ghoul · existing</h2>
-<p><strong>Yes.</strong> The Innistrad fixture casts each creature for {B} without Authority. At the first priority window the Ghoul is tapped, Typhoid Rats is untapped and the stack is empty in both cases. The entrant’s definition supplies <code>ReplacementEffect::EntersTapped</code>. Search reads the committed permanent directly. Authority’s separate life-gain trigger above shows when a fork really does need pending stack state.</p>
-<h2>Dragon Fodder and Impact Tremors · existing native interaction</h2>
-<table><caption>Impact Tremors controlled by the caster, opponent initially at 20</caption><tr><th>At first priority after Dragon Fodder resolves</th><th>Opponent now</th><th>After one trigger</th><th>After all triggers</th></tr><tr><td>2 distinct Goblins, 2 triggers</td><td>20</td><td>19, 1 pending</td><td>18</td></tr><tr><td>Doubling Season present, 4 distinct Goblins, 4 triggers</td><td>20</td><td>19, 3 pending</td><td>16</td></tr></table>
-<p><strong>Yes.</strong> Dragon Fodder supplies one quantity to <code>Effect::create_tokens</code>. Each Goblin has its own permanent identity. Impact Tremors supplies the source for each <code>StackObject::TriggeredAbility</code>. A single damage event could reproduce the final totals while erasing every response window between hits. The native fixture forks at first priority, resolves the top trigger and checks the entire surviving stack in order. The root retains 20 life and its original stack. Resolving there reproduces the fork. Live consumer parity, closed-deck privacy and end-to-end Commands remain for gate.</p>
-<h2>Existing · what happens when the copy resolves?</h2>
-<p><strong>Yes.</strong> Search can pass priority twice and inspect the next position. With Doubling Season in play, the TLA fixture forks after Azula copies Invasion Reinforcements. The original spell is the bottom stack object throughout the first resolution.</p>
-<table><caption>Invasion Reinforcements on the battlefield and stack</caption><tr><th>Window</th><th>Battlefield</th><th>Stack, top first</th></tr><tr><td>Before the pass</td><td>None</td><td>Copy, original</td></tr><tr><td>After the copy resolves</td><td>One 1/1 Human Warrior Ally token with flash</td><td>Entry trigger, original</td></tr><tr><td>After both entries and triggers</td><td>Two Reinforcements and four Ally tokens</td><td>Empty</td></tr></table>
-<p>The fixture checks <code>ObjectKind::Token</code>, effective characteristics and the unchanged original <code>StackObject::Spell</code>. Applying Season whenever a token appears would produce two Reinforcements at the middle window. Resolving from the untouched root reproduces the fork witness. Only the root is played to the final count.</p>
-<h2>Proposed · evidence for legal choices</h2>
-<p><strong>No.</strong> An unblocked attack and a printed keyword assertion can both pass if an illegal blocker is offered. This limits the evidence for the keyword cohort. Before, the creature fixture showed the final damage and keyword set. For a claim about evasion, start at blocker declaration and compare legal actions against otherwise identical eligible and ineligible blockers. Reuse a shared rules fixture where it already distinguishes the cases.</p>
-<p>Batch 5b exercised this distinction. The Stab fixture resolves the same toughness reduction against a creature it kills and one that survives until cleanup. It checks the zone change and the restored characteristics. Bind the Command to the live decision and retain that decision for replay and stale-reuse checks at gate.</p>
-<p><strong>Does the engine distinguish a cost from an effect? Yes at event resolution.</strong> The counter fixture submits a loyalty change directly with <code>CounterProvenance</code>. It checks that an unmodified +1 cost adds one and a +1 effect adds two. <strong>No at the caller boundary for a loyalty activation.</strong> That fixture offers no activation to a policy. A playable proof needs a printed loyalty ability, legal activation timing, payment at commitment and a pending ability that can resolve independently. Keep event-level evidence scoped to what it exercises.</p>
-<h2>Questions for review</h2><ol><li>What qualifies a row for authoring? <strong>1a · Complete native interaction (selected).</strong> 1b · Empty planning dependency list.</li><li>What should a policy receive at combat priority? <strong>2a · The native damage pass and remembered participants (selected).</strong> 2b · Reconstruct timing from prior observations.</li><li>How should Fog Bank identify its combat damage? <strong>3a · Match this permanent at either endpoint (selected).</strong> 3b · Give each direction a separate replacement identity.</li><li>Where should damage read source control? <strong>4a · One native lookup for discovery and commitment (selected).</strong> 4b · Independent lookups at both stages.</li><li>Which seat determines whether Authority applies? <strong>5a · Prospective controller (selected).</strong> 5b · Card owner.</li><li>Which Doubling Season boundary does the completed fixture exercise? <strong>6a · Resolve a permanent-spell copy beside the original (selected).</strong> 6b · Add a playable loyalty activation first.</li><li>What establishes an evasion claim? <strong>7a · Compare legal blocker offers (selected).</strong> 7b · Inspect the printed keyword and final damage.</li><li>How should Slagstorm select recipients? <strong>8a · Select every seat within one damage batch (recommended).</strong> 8b · Sequence separate controller and opponent batches.</li><li>How should an author specify the object Arcanis returns? <strong>9a · Choose the exact source object (recommended).</strong> 9b · Guard successor-aware movement with a battlefield predicate.</li></ol></main></html>
+<tr><td>Choose a mode and its target</td><td>Deadly Plot’s casting fixture plays both branches, including returning Hungry Ghoul tapped. (Mode action descriptions were blank in <code>action.rs</code>; fixed by the proposal above.)</td><td><span class="no">No</span> · blank mode labels on <code>PendingChoice::SpellMode</code></td></tr>
+<tr><td>Deal 3 damage to any target</td><td>Lightning Strike’s target offer and resolution check the opposing permanent’s current hexproof. The damage instruction applies to every applicable type on the chosen object.</td><td><span class="yes">Yes</span></td></tr>
+<tr><td>Deal 3 damage to each player</td><td><code>DealDamageToPlayer</code> builds one event batch from <code>PlayerSelector</code>. No selector includes every seat. Slagstorm stays pending.</td><td><span class="no">No</span> · deferred</td></tr></table>
+
+<h2>Earlier branch interactions (Slices 1–3 &amp; Batch 5a · existing)</h2>
+<p>Lightshell Duo’s surveil and private <code>LibraryKnowledge</code>, Arahbo + Helpful Hunter trigger ordering, Regal Caracal’s intrinsic vs. continuous lifelink, Prideful Parent + Anthem of Champions, Ajani’s Pridemate per-source lifelink batching, trample combat assignment, Drogskol Reaver’s between-step combat observation (<code>another_damage_step</code> and <code>first_strike_participant</code>), Twinflame Tyrant / Fog Bank / Gratuitous Violence / Authority of the Consuls / Diregraf Ghoul replacements, Dragon Fodder + Impact Tremors, and Azula’s copied permanent spell under Doubling Season all held their native alignment checks. Bucket C deferrals remain documented with concrete blockers: Curator of Destinies (two-pile handoff), Run Away Together (different-controller targeting relation), Drakuseth (cross-clause target distinctness and per-clause damage in one batch), Slagstorm (all-players simultaneous damage batch), Affectionate Indrik (source fights announced target), Dragon Mage (simultaneous two-player discard-hand before draw), and Joraga Invocation / Confiscate / quality hexproof / changeling / all-zone graveyard replacements. Gate still owns live Academy, LLM text, v11 tensor parity, closed-deck privacy, Command replay/stale rejection, and a playable planeswalker loyalty activation proof.</p>
+
+<h2>Questions for review</h2>
+<ol>
+  <li>What qualifies a row for authoring? <strong>1a · Complete native interaction (selected).</strong> 1b · Empty planning dependency list.</li>
+  <li>What should a policy receive at combat priority? <strong>2a · The native damage pass and remembered participants (selected).</strong> 2b · Reconstruct timing from prior observations.</li>
+  <li>How should Fog Bank identify its combat damage? <strong>3a · Match this permanent at either endpoint (selected).</strong> 3b · Give each direction a separate replacement identity.</li>
+  <li>Where should damage read source control? <strong>4a · One native lookup for discovery and commitment (selected).</strong> 4b · Independent lookups at both stages.</li>
+  <li>Which seat determines whether Authority applies? <strong>5a · Prospective controller (selected).</strong> 5b · Card owner.</li>
+  <li>Which Doubling Season boundary does the completed fixture exercise? <strong>6a · Resolve a permanent-spell copy beside the original (selected).</strong> 6b · Add a playable loyalty activation first.</li>
+  <li>What establishes an evasion claim? <strong>7a · Compare legal blocker offers (selected).</strong> 7b · Inspect the printed keyword and final damage.</li>
+  <li>How should Slagstorm select recipients? <strong>8a · Select every seat within one damage batch (recommended).</strong> 8b · Sequence separate controller and opponent batches.</li>
+  <li>How should an author specify the object Arcanis returns? <strong>9a · Choose the exact source object (delivered at <code>229eb493</code>).</strong> 9b · Guard successor-aware movement with a battlefield predicate.</li>
+  <li>How should <code>Action::ChooseMode</code> render for spell modes and “you may” resolution choices? <strong>10a · One shared authority in <code>action.rs</code> using <code>effects_description</code> (with concise idioms for Decline/AddMana/Library placement) (selected for review).</strong> 10b · Expand the manual allowlist per card family.</li>
+  <li>What owns attachment identity for resolving activated abilities? <strong>11a · Delete <code>ActivatedAbilityOnStack.attached</code> and read <code>Permanent.attached_to</code> / <code>ObjectLki.attached_to</code> everywhere (selected for review).</strong> 11b · Keep the activation-time snapshot alongside <code>frame_attached</code>.</li>
+  <li>How should triggered abilities refer to the attached creature? <strong>12a · One <code>TriggerSubject::Attached</code> (aliased to <code>EnchantedCreature</code> in <code>token_renames.rs</code>), deriving Aura/Equipment wording from card subtype (selected for review).</strong> 12b · Keep separate <code>EnchantedCreature</code> and <code>EquippedCreature</code> variants and tokens.</li>
+  <li>Which engine path should single-card tutors into hand use? <strong>13a · Standard <code>Effect::search_library</code> + <code>return_to_hand(Selected)</code> (reserving <code>SearchDistinctNames</code> for multi-card distinct-name tutors) (selected for review).</strong> 13b · Keep using <code>SearchDistinctNames { count: 1 }</code> for single-card tutors.</li>
+</ol>
+</main>
+</html>
