@@ -1,4 +1,4 @@
-at: 230c18b8790cb54c55886a9eb50a8e2da93e41f4
+at: 80040af53936652cff75fd6ee905aa2e159575a1
 first:
   - path: manabot/backends/mlx.md
     why: Supported architectures, training commands and checkpoint formats
@@ -6,6 +6,8 @@ first:
     why: Live-token coordinates and whole-game memory semantics
   - path: manabot/training/state/backend.py
     why: Backend admission for self-play execution
+  - path: manabot/policy/prepare.py
+    why: Prepare shared live-token indexes and compact attention coordinates
   - path: manabot/policy/collection_memory.py
     why: Shared GRU cache ownership and native lineage checks
   - path: manabot/backends/mlx/decision_memory.py
@@ -30,6 +32,8 @@ first:
     why: Physical odds and learned joint hand probabilities
   - path: manabot/backends/mlx/belief_fit.py
     why: Fit the recurrent corrections from private hand labels
+  - path: tests/model/test_prepare_rows.py
+    why: Check compact placement and shorter-board padding
   - path: tests/model/test_mlx_backend.py
     why: Compare forwards, gradients, optimizer steps and warm starts
   - path: tests/training/test_mlx_workflow.py
