@@ -1,4 +1,4 @@
-at: 7e1fa0b92e2a7efa536c41f5b99ac9001b81f0e3
+at: 24ac46fe41a18bb00b77fc8f9ecad852c0ccdeab
 first:
   - path: docs/engine.md
     why: Play the graveyard returns and battlefield form examples.
@@ -6,32 +6,32 @@ first:
     why: Delivered card cohorts and remaining rules work.
   - path: managym/cards/src/fdn.rs
     why: Panda and Healer describe different graveyard returns.
-  - path: managym/state/src/permanent.rs
-    why: Spell choices and payment survive battlefield entry.
   - path: managym/state/src/game_object.rs
     why: Exact sources and battlefield facts survive departure.
-  - path: managym/src/flow/trigger.rs
-    why: Required identity and initial state of each waiting trigger.
-  - path: managym/src/flow/proposed_event.rs
-    why: Commit entries and simultaneous life gains.
-  - path: managym/src/flow/zones.rs
-    why: Find the stacked spell and commit its battlefield entry.
+  - path: managym/state/src/stack_object.rs
+    why: Stack objects retain sources, target clauses and announced X.
+  - path: managym/state/src/permanent.rs
+    why: Spell choices and payment survive battlefield entry.
   - path: managym/src/flow/resolution.rs
-    why: Each target is checked against its exact source.
+    why: Check each target against its clause and exact source.
   - path: managym/src/flow/triggers.rs
     why: Place triggers with legal modes and targets.
   - path: managym/src/flow/retarget.rs
     why: Replace one target within its original clause.
-  - path: managym/cards/src/znr.rs
-    why: Nullpriest uses the same trigger for any creature.
-  - path: managym/cards/tests/cards.rs
-    why: Fork the kicker choice, then kill or blink.
-  - path: managym/tests/rules/cr_400_identity.rs
-    why: Spell copies retain choices and have no payment.
-  - path: managym/src/flow/target_authority_tests.rs
-    why: Targeting and ordering after the original source leaves.
+  - path: managym/src/agent/continuation.rs
+    why: Project stack choices and targets for each viewer.
+  - path: managym/src/flow/proposed_event.rs
+    why: Commit entries and simultaneous life gains.
+  - path: managym/src/flow/zones.rs
+    why: Commit battlefield entry and bind exact departure arrivals.
   - path: managym/cards/tests/cards/fdn.rs
     why: Fork Panda retargeting and shrink a live source.
+  - path: managym/src/flow/target_authority_tests.rs
+    why: Check replacement targets after the source reenters.
+  - path: managym/cards/tests/cards.rs
+    why: Fork kicker choices for Healer and Nullpriest.
+  - path: managym/tests/rules/cr_400_identity.rs
+    why: Spell copies retain choices and have no payment.
   - path: managym/cards/tests/cards/fin.rs
     why: Transform, meld and token movement.
   - path: managym/cards/tests/cards/dsk.rs
