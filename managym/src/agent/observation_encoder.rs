@@ -11,12 +11,12 @@ use std::{
 
 use crate::{
     agent::observation::{
-        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
-        RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
+        CardData, CastPermissionData, ContinuousEffectData, EventData, Observation, PermanentData,
+        PlayerData, RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
-    state::mana::ManaRestriction,
+    state::mana::{ManaCost, ManaRestriction},
 };
 
 // Feature widths. Column indices, names and value encodings live in
@@ -1986,6 +1986,120 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     out
 }
 
+/// One play grant's terms as learning tokens. The TLA terms are a fixed
+/// tuple; later terms follow it only when set, in a stable order (adventure,
+/// source-controller, flashback), and the named [`PlayGrantExtension`]
+/// closes the sequence, so a grant without later terms keeps the tokens it
+/// had when those terms did not exist.
+struct PlayGrantTerms<'a> {
+    terms: PlayGrantBase<'a>,
+    on_adventure: bool,
+    follows_source_controller: bool,
+    flashback: bool,
+    extension: Option<PlayGrantExtension<'a>>,
+}
+
+type PlayGrantBase<'a> = (
+    bool,
+    &'a Option<ManaCost>,
+    bool,
+    bool,
+    bool,
+    Option<u32>,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+);
+
+/// Grant terms added after the positional tuple, each omitted when unset.
+#[derive(serde::Serialize)]
+struct PlayGrantExtension<'a> {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    prepared: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    face_down: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    condition: Option<&'a str>,
+}
+
+impl<'a> PlayGrantTerms<'a> {
+    fn of(grant: &'a CastPermissionData, viewer: i32) -> Self {
+        let extension =
+            (grant.prepared || grant.face_down || grant.condition.is_some()).then(|| {
+                PlayGrantExtension {
+                    prepared: grant.prepared,
+                    face_down: grant.face_down,
+                    condition: grant.condition.as_deref(),
+                }
+            });
+        Self {
+            terms: (
+                grant.player_id == viewer,
+                &grant.cost,
+                grant.this_turn,
+                grant.through_next_turn,
+                grant.own_turn_only,
+                grant.after_turn,
+                grant.source_permanent_id.is_some(),
+                grant.flash,
+                grant.any_mana,
+                grant.waterbend,
+                grant.foretold,
+            ),
+            on_adventure: grant.on_adventure,
+            follows_source_controller: grant.follows_source_controller,
+            flashback: grant.flashback,
+            extension,
+        }
+    }
+
+    /// How many later terms follow the TLA tuple.
+    fn tail(&self) -> usize {
+        if self.extension.is_some() {
+            4
+        } else if self.flashback {
+            3
+        } else if self.follows_source_controller {
+            2
+        } else {
+            usize::from(self.on_adventure)
+        }
+    }
+
+    /// Whether the grant carries terms the card columns do not.
+    fn has_tail(&self) -> bool {
+        self.tail() > 0
+    }
+}
+
+impl serde::Serialize for PlayGrantTerms<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let tail = self.tail();
+        if tail == 0 {
+            return self.terms.serialize(serializer);
+        }
+        let mut tuple = serializer.serialize_tuple(tail + 1)?;
+        tuple.serialize_element(&self.terms)?;
+        for flag in [
+            self.on_adventure,
+            self.follows_source_controller,
+            self.flashback,
+        ]
+        .into_iter()
+        .take(tail.min(3))
+        {
+            tuple.serialize_element(&flag)?;
+        }
+        if let Some(extension) = &self.extension {
+            tuple.serialize_element(extension)?;
+        }
+        tuple.end()
+    }
+}
+
 fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     // Each occurrence starts at ordinal zero. The owner join identifies the
     // card or granting permanent; player terms are relative to this viewer.
@@ -2005,44 +2119,12 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
         for grant in &card.cast_permissions {
             let overlapping = card.cast_permissions.len() > 1;
-            if !overlapping
-                && grant.source_permanent_id.is_none()
-                && !grant.on_adventure
-                && !grant.flashback
-            {
+            let terms = PlayGrantTerms::of(grant, obs.agent.id);
+            if !overlapping && grant.source_permanent_id.is_none() && !terms.has_tail() {
                 continue;
             }
-            let terms = (
-                grant.player_id == obs.agent.id,
-                &grant.cost,
-                grant.this_turn,
-                grant.through_next_turn,
-                grant.own_turn_only,
-                grant.after_turn,
-                grant.source_permanent_id.is_some(),
-                grant.flash,
-                grant.any_mana,
-                grant.waterbend,
-                grant.foretold,
-            );
-            let tokens = if grant.flashback {
-                crate::cards::tokens::rules_tokens(
-                    &(
-                        terms,
-                        grant.on_adventure,
-                        grant.follows_source_controller,
-                        true,
-                    ),
-                    pack(),
-                )
-            } else if grant.follows_source_controller {
-                crate::cards::tokens::rules_tokens(&(terms, grant.on_adventure, true), pack())
-            } else if grant.on_adventure {
-                crate::cards::tokens::rules_tokens(&(terms, true), pack())
-            } else {
-                crate::cards::tokens::rules_tokens(&terms, pack())
-            }
-            .expect("public grant terms");
+            let tokens =
+                crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms");
             program(card.id, PLAY_GRANT, &tokens);
             // Adjacent source and card programs describe the same occurrence.
             // A singleton still carries its terms in the existing card columns.

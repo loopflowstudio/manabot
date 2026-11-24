@@ -3327,7 +3327,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             column(Permanent, permanent::IS_TOKEN),
             column(Stack, stack::IS_COPY),
         ],
-        face_down => [column(Card, card::PERMISSION_FORETOLD)],
+        face_down => [column(Card, card::PERMISSION_FORETOLD), FactOccurrence(FactKind::EffectProgram)],
         cast_permissions => [Rows("cast permission below"), FactOccurrence(FactKind::EffectProgram)],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
         from_battlefield_this_turn => [column(CardTurnState, 0)],
@@ -3346,6 +3346,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         flashback => [FactOccurrence(FactKind::EffectProgram)],
         follows_source_controller => [FactOccurrence(FactKind::EffectProgram)],
         on_adventure => [FactOccurrence(FactKind::EffectProgram)],
+        prepared => [FactOccurrence(FactKind::EffectProgram)],
+        face_down => [FactOccurrence(FactKind::EffectProgram)],
+        condition => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));

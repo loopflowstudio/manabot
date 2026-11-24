@@ -20,7 +20,7 @@
 use crate::state::card::SpellProfile;
 use crate::{
     agent::{
-        ability_description::predicate_description,
+        ability_description::{condition_text, predicate_description},
         effect_execution::EXECUTION_TEXT,
         observation::MODIFICATION_NAMES,
         observation_encoder::{PLAY_GRANT, PLAY_GRANT_SOURCE, POOLED_MANA, SPENT_TYPE, WARD},
@@ -162,6 +162,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
+    // A play grant's condition reaches its fact program as rules text.
+    for condition in play_grant_conditions() {
+        add(TokenKind::Text, &condition);
+    }
+    add(TokenKind::Structure, "PlayGrantExtension");
+    add(TokenKind::Structure, "/PlayGrantExtension");
     for name in [
         "PlayerId",
         "CardDefId",
@@ -285,9 +291,36 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "cost",
         "help",
         "waterbend",
+        "prepared",
+        "face_down",
+        "condition",
     ] {
         add(TokenKind::Field, field);
     }
+}
+
+/// The text of every condition a printed spell puts on the cards it lets
+/// you play (Flameshape's "you control a Wizard"), front face and inset.
+fn play_grant_conditions() -> Vec<String> {
+    let mut out = Vec::new();
+    for (_, definition) in default_content_pack().definition_entries() {
+        let printed = &definition.printed;
+        let inset = printed.inset.as_ref().map(|inset| inset.characteristics());
+        for effect in printed.spell_effects.iter().chain(
+            inset
+                .into_iter()
+                .flat_map(|inset| inset.spell_effects.iter()),
+        ) {
+            if let crate::state::ability::Effect::ExileTopCardsToPlay {
+                condition: Some(condition),
+                ..
+            } = effect
+            {
+                out.push(condition_text(condition));
+            }
+        }
+    }
+    out
 }
 
 /// Every JSON object nested in a serialized definition.

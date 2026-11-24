@@ -133,6 +133,21 @@ export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_
       const duration = grant.this_turn ? ' this turn' : '';
       terms.push(`${player} may cast this with flashback${duration}. Exile it when it leaves the stack.`);
     }
+    const rest: string[] = [];
+    if (grant.cost != null) rest.push(`for ${grant.cost}`);
+    if (grant.on_adventure) rest.push('as the permanent spell only');
+    if (grant.this_turn && !grant.flashback) rest.push('this turn only');
+    if (grant.through_next_turn) rest.push('until the end of their next turn');
+    if (grant.own_turn_only) rest.push('during their own turn only');
+    if (grant.after_turn != null) rest.push(`only after turn ${grant.after_turn}`);
+    if (grant.flash) rest.push('as though it had flash');
+    if (grant.any_mana) rest.push('spending mana of any type');
+    if (grant.waterbend) rest.push('paying generic mana by waterbending');
+    if (grant.foretold) rest.push('foretold, face down');
+    if (grant.face_down) rest.push('face down, seen only while it may be played');
+    if (grant.prepared) rest.push('as a prepared copy kept while linked to its source');
+    if (grant.condition) rest.push(`only if ${grant.condition}`);
+    if (rest.length) terms.push(`${player} may play this ${rest.join(', ')}.`);
     return terms;
   });
 }

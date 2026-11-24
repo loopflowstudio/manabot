@@ -311,6 +311,39 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
 
+def test_flameshape_cards_show_face_down_with_their_condition() -> None:
+    """With a Wizard in play, Flameshape's caster sees the exiled cards as face
+    down (not foretold) with the grant's condition; the opponent sees neither."""
+    env = priority_root(
+        ("Gandalf, Goblins' Bane",),
+        ("Gandalf, Goblins' Bane", "Mountain", "Mountain"),
+    )
+    decision = capture_text_decision(env)
+    flameshape = next(a for a in decision.actions if "Flameshape" in a.description)
+    submit_response(env, decision, flameshape.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "face down in exile" in decision.text:
+            break
+        pass_priority = next(a for a in decision.actions if "Pass" in a.description)
+        submit_response(env, decision, pass_priority.reference)
+    face_down = [
+        line
+        for line in decision.text.splitlines()
+        if "; face down in exile (hidden from players who cannot look at it)" in line
+    ]
+    assert len(face_down) == 2
+    assert all("only if you control a Wizard" in line for line in face_down)
+    assert "foretold" not in decision.text
+
+    pass_priority = next(a for a in decision.actions if "Pass" in a.description)
+    submit_response(env, decision, pass_priority.reference)
+    opponent = capture_text_decision(env)
+    observation = _viewer_observation(opponent)
+    assert observation.agent.player_index != _viewer_observation(decision).agent.player_index
+    assert "face down" not in opponent.text
+
+
 @pytest.mark.parametrize(
     "config",
     [

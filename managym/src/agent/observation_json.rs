@@ -269,8 +269,14 @@ impl Serialize for CastPermissionJson<'_> {
         if value.any_mana {
             map.serialize_entry("any_mana", &true)?;
         }
+        if let Some(condition) = &value.condition {
+            map.serialize_entry("condition", condition)?;
+        }
         if let Some(cost) = &value.cost {
             map.serialize_entry("cost", &ManaCostJson(cost))?;
+        }
+        if value.face_down {
+            map.serialize_entry("face_down", &true)?;
         }
         if value.flash {
             map.serialize_entry("flash", &true)?;
@@ -291,6 +297,9 @@ impl Serialize for CastPermissionJson<'_> {
             map.serialize_entry("own_turn_only", &true)?;
         }
         map.serialize_entry("player_id", &value.player_id)?;
+        if value.prepared {
+            map.serialize_entry("prepared", &true)?;
+        }
         if let Some(source_permanent_id) = &value.source_permanent_id {
             map.serialize_entry("source_permanent_id", source_permanent_id)?;
         }

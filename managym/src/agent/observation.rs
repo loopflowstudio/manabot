@@ -240,6 +240,15 @@ pub struct CastPermissionData {
     pub foretold: bool,
     #[serde(default)]
     pub on_adventure: bool,
+    /// This exact exiled copy stays prepared while linked to its source.
+    #[serde(default)]
+    pub prepared: bool,
+    /// Face down in exile without Foretell: seen only by whoever may play it.
+    #[serde(default)]
+    pub face_down: bool,
+    /// What must hold for the player to use it ("you control a Wizard").
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -1754,6 +1763,12 @@ impl Observation {
                     follows_source_controller: grant.follows_source_controller,
                     flashback: grant.flashback,
                     on_adventure: grant.on_adventure,
+                    prepared: grant.prepared,
+                    face_down: grant.face_down,
+                    condition: grant
+                        .condition
+                        .as_ref()
+                        .map(crate::agent::ability_description::condition_text),
                 })
                 .collect(),
             x: None,

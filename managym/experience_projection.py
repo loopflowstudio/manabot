@@ -91,9 +91,13 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         "flashback",
         "follows_source_controller",
         "on_adventure",
+        "prepared",
+        "face_down",
     ):
         if getattr(permission, key):
             terms[key] = True
+    if permission.condition is not None:
+        terms["condition"] = str(permission.condition)
     for key in ("after_turn", "source_permanent_id"):
         if (value := getattr(permission, key)) is not None:
             terms[key] = int(value)
@@ -478,7 +482,7 @@ def serialize_observation(
         _serialize_object(card)
         for card in obs.opponent_cards
         if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
-        or any(permission.foretold for permission in card.cast_permissions)
+        or card.face_down
     ]
     if inspected:
         data["agent"].setdefault("inspected", []).extend(inspected)
@@ -722,7 +726,7 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
 
 
 def _redact_face_down_exile(player_state: dict[str, Any]) -> None:
-    """Remove foretold cards: only their owner may see a face-down card."""
+    """Remove face-down exiled cards: only the players allowed to look see them."""
     exile = player_state.get("exile")
     if isinstance(exile, list):
         player_state["exile"] = [

@@ -950,7 +950,11 @@ class _Renderer:
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
             if card.face_down:
-                optional += "; foretold, face down (hidden from other players)"
+                optional += (
+                    "; foretold, face down (hidden from other players)"
+                    if any(permission.foretold for permission in card.cast_permissions)
+                    else "; face down in exile (hidden from players who cannot look at it)"
+                )
             if card.x is not None:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
@@ -996,6 +1000,10 @@ class _Renderer:
             terms.append("spending mana of any type")
         if permission.waterbend:
             terms.append("generic may be paid by waterbending")
+        if permission.prepared:
+            terms.append("prepared copy, kept while linked to its source")
+        if permission.condition is not None:
+            terms.append(f"only if {permission.condition}")
         return (
             f"may be played from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}: "
             + ", ".join(terms)

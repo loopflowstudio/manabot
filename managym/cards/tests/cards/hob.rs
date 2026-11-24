@@ -1103,3 +1103,77 @@ fn flameshape_and_foretold_slots_stay_disjoint_when_resampled() {
         }
     }
 }
+
+/// A visible Flameshape card's permission reaches its controller's policy
+/// input as a program naming its face-down and conditional terms, its JSON
+/// round trip and the semantic text; the opponent sees neither the card nor
+/// the program.
+#[test]
+fn flameshape_permission_terms_reach_the_policy_input() {
+    use crate::support::{
+        game::{move_from_library, pin_top},
+        inspect::now,
+        play::{cast_card, cast_profile},
+    };
+    use managym::{
+        agent::{
+            observation_encoder::{FACT_DIM, PLAY_GRANT},
+            observation_layout::fact,
+        },
+        cards::tokens::name_value,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Gandalf, Goblins' Bane", "Lightning Strike"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let gandalf = move_from_library(&mut s, 0, "Gandalf, Goblins' Bane", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Lightning Strike", "Mountain"]);
+    cast_profile(&mut s, gandalf, SpellProfile::Adventure);
+    settle(&mut s);
+    cast_card(&mut s, gandalf);
+    settle(&mut s);
+    let strike = now(&s, top[0]);
+    let id = s.game().state[strike].id.0 as i32;
+
+    let grant_details = |viewer: usize| {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let input = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+        input
+            .facts
+            .chunks_exact(FACT_DIM)
+            .filter(|row| {
+                let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
+                id == name_value(PLAY_GRANT) as u32
+            })
+            .map(|row| {
+                (
+                    row[fact::OBJECT],
+                    ((row[fact::DETAIL_HIGH] as u32) << 16) | row[fact::DETAIL_LOW] as u32,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    let card = owner.agent_cards.iter().find(|card| card.id == id).unwrap();
+    let permission = &card.cast_permissions[0];
+    assert!(card.face_down && permission.face_down && !permission.foretold);
+    let condition = permission.condition.clone().expect("conditional grant");
+    assert!(condition.contains("Wizard"), "{condition}");
+    let restored: Observation = serde_json::from_str(&owner.to_json()).unwrap();
+    assert_eq!(restored.to_json(), owner.to_json());
+
+    // Only the Flameshape cards carry face-down programs here.
+    let face_down = name_value("face_down") as u32;
+    let details: Vec<u32> = grant_details(0)
+        .into_iter()
+        .map(|(_, detail)| detail)
+        .collect();
+    for name in ["face_down", "condition", condition.as_str()] {
+        assert!(
+            details.contains(&(name_value(name) as u32)),
+            "{name} in the grant program"
+        );
+    }
+    assert!(grant_details(1)
+        .iter()
+        .all(|(_, detail)| *detail != face_down));
+}

@@ -331,7 +331,7 @@ fn ordinal(n: u32) -> String {
     }
 }
 
-fn condition_text(condition: &Condition) -> String {
+pub(crate) fn condition_text(condition: &Condition) -> String {
     match condition {
         Condition::YourTurn => "it is your turn".into(),
         Condition::Always => "always".into(),

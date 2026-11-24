@@ -2115,6 +2115,12 @@ pub struct PyCastPermission {
     pub flashback: bool,
     #[pyo3(get)]
     pub on_adventure: bool,
+    #[pyo3(get)]
+    pub prepared: bool,
+    #[pyo3(get)]
+    pub face_down: bool,
+    #[pyo3(get)]
+    pub condition: Option<String>,
 }
 
 #[cfg(feature = "python")]
@@ -2135,6 +2141,9 @@ impl From<CastPermissionData> for PyCastPermission {
             follows_source_controller: value.follows_source_controller,
             flashback: value.flashback,
             on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            condition: value.condition,
         }
     }
 }
@@ -2157,6 +2166,9 @@ impl From<PyCastPermission> for CastPermissionData {
             follows_source_controller: value.follows_source_controller,
             flashback: value.flashback,
             on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            condition: value.condition,
         }
     }
 }

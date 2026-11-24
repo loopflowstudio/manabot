@@ -361,6 +361,14 @@ pub struct LegacyCastPermissionView {
     pub flashback: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub on_adventure: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
+    /// Face down in exile without Foretell.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
+    /// What must hold for the player to use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 /// Mana spendable only on spells with one of `spells`' subtypes or abilities

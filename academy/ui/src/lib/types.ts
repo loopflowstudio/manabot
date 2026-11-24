@@ -26,7 +26,7 @@ export interface CardState {
   toughness: number;
   mana_value: number;
   types: CardTypes;
-  /** Foretold and face down in exile; only its owner's views list it. */
+  /** Face down in exile; only views of players who may look at it list it. */
   face_down?: boolean;
   /** The permission to play this card from its current zone, when it has one. */
   cast_permission?: CastPermission;
@@ -57,6 +57,12 @@ export interface CastPermission {
   flashback?: boolean;
   follows_source_controller?: boolean;
   on_adventure?: boolean;
+  /** This exact exiled copy stays prepared while linked to its source. */
+  prepared?: boolean;
+  /** Face down in exile without Foretell. */
+  face_down?: boolean;
+  /** What must hold to use it, such as "you control a Wizard". */
+  condition?: string;
 }
 
 /** Mana spendable only on the named spell or ability-source subtypes. */

@@ -2428,6 +2428,13 @@
           "title": "Any Mana",
           "type": "boolean"
         },
+        "condition": {
+          "description": "What must hold for the player to use it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cost": {
           "anyOf": [
             {
@@ -2439,6 +2446,10 @@
           ],
           "default": null,
           "title": "Cost"
+        },
+        "face_down": {
+          "description": "Face down in exile without Foretell.",
+          "type": "boolean"
         },
         "flash": {
           "default": false,
@@ -2469,6 +2480,9 @@
           "minimum": 0,
           "title": "Player Id",
           "type": "integer"
+        },
+        "prepared": {
+          "type": "boolean"
         },
         "source_permanent_id": {
           "anyOf": [

@@ -103,6 +103,21 @@ it('names who can cast before a source changes control', () => {
   ]);
 });
 
+it('lists every term of a face-down conditional grant', () => {
+  const player = (id: number) => id === 1 ? 'Alice' : 'Bob';
+  expect(permissionTerms({
+    cast_permissions: [
+      { player_id: 1, cost: '{1}{R}', face_down: true, condition: 'you control a Wizard' },
+      { player_id: 1, cost: '{2}{R}', foretold: true, after_turn: 3 },
+      { player_id: 1, cost: '{3}', own_turn_only: true, flash: true, any_mana: true, prepared: true },
+    ],
+  }, () => 'source', player)).toEqual([
+    'Alice may play this for {1}{R}, face down, seen only while it may be played, only if you control a Wizard.',
+    'Alice may play this for {2}{R}, only after turn 3, foretold, face down.',
+    'Alice may play this for {3}, during their own turn only, as though it had flash, spending mana of any type, as a prepared copy kept while linked to its source.',
+  ]);
+});
+
 describe('counter terms', () => {
   it('names each positive counter kind, singular or plural', () => {
     expect(counterTerms({ stash: 1, double_strike: 2, stun: 0 })).toEqual(['1 stash counter', '2 double strike counters']);

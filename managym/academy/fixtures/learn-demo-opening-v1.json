@@ -8,131 +8,131 @@
     {
       "label": "Keep hand",
       "offer_id": 0,
-      "before_digest": "a84b470d75f097fa7d563edd6ac89d0854d665df09f3511e5282dda64fde2b09"
+      "before_digest": "9ee4cf74c179fb99920bd79435e4e3678889a5a9ee471f1578d7797bf866cff1"
     },
     {
       "label": "Play Island",
       "offer_id": 1,
-      "before_digest": "0e6f4773439268b18540b1182cfb9806d8aea41b2cd4d2df45f4dd0180ce41c5"
+      "before_digest": "d9902f985eeeac93774ae4940646e9461fea0a9635da66a1f2a3dea78f8fcc6f"
     },
     {
       "label": "Pass priority",
       "offer_id": 1,
-      "before_digest": "ab7e2093c822b3003e768f17d0735ef833759dc5f1b48fd1bc358894d979e269"
+      "before_digest": "4dab67d390fa8b8df7d388b3dffd1ac7c26b17892168f17531716d04292810ed"
     },
     {
       "label": "Pass priority",
       "offer_id": 1,
-      "before_digest": "e4d40bb32e8d99d7dc83cf24fc2fe41922fe1f3b5806dac00c2521d507fbd429"
-    },
-    {
-      "label": "Play Island",
-      "offer_id": 2,
-      "before_digest": "2053ca817b522be4561c42b2d904277d4f25ae3f5a7fcc20525f7a14f00a22b4"
-    },
-    {
-      "label": "Pass priority",
-      "offer_id": 1,
-      "before_digest": "64ecc5ea943b619cee23bcf7cb1b3e0ebe1ef54847d8b6ca7785a13f1f3bc6e8"
-    },
-    {
-      "label": "Pass priority",
-      "offer_id": 1,
-      "before_digest": "003d96edaf885e9df1b79c3358dee9bbd0839a8401e7cf44697e5c6dca2dd32b"
+      "before_digest": "e07662ca95fd1f4dcb1af6bf7d433e7be70112048b58a76e7ef7161ea00cd30f"
     },
     {
       "label": "Play Island",
       "offer_id": 2,
-      "before_digest": "541e2db32c81f1efe66a0da73519963966f4f96f693b4783c91c31b9b6e2a174"
+      "before_digest": "5534fbdd47d93ee0cefedce8a1e07ee5e78b65db09b0dbfcbb2cc363b0af06e7"
     },
     {
       "label": "Pass priority",
       "offer_id": 1,
-      "before_digest": "b1c30dd2fa2f426baebcc4ac6ff95a3ee417ad368b3bed9f115ca82f635d9508"
+      "before_digest": "c65f23853def7da07e13dbae1533fe1b6ea69e7ad4a03acd242194bcc0cbfa3d"
     },
     {
       "label": "Pass priority",
       "offer_id": 1,
-      "before_digest": "afea829e2ec436039dbded2b6e60cce1077fae7e55b26b094a4e97ff7c19fe2f"
+      "before_digest": "9b5b9eb43c543abdeee7996e2ef6cb8c3d3dea206bbb95e1f2532d59540dcfdb"
+    },
+    {
+      "label": "Play Island",
+      "offer_id": 2,
+      "before_digest": "0143c1393fcb0a61845ed665920f43baf1fd9c0e1e45f3e36440ea8f2d3eaec6"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 1,
+      "before_digest": "9bb54474ccc97203c17807174ce5d81a52fca807fa5497636f767b07babc97dc"
+    },
+    {
+      "label": "Pass priority",
+      "offer_id": 1,
+      "before_digest": "a24dc6014684f31871532c093bb6b6129523919aea2b5ee3db56f0f2ce15f324"
     },
     {
       "label": "Play Mountain",
       "offer_id": 0,
-      "before_digest": "57caaf452cf495149ce7dbbaaad1a14e61e13cf3b1f0713212fa0f0b9322d50e"
+      "before_digest": "d90d845d601fcd8f2142f57bacdffac8b0df7e16763dc8b59a6b8088f2402571"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "fea3803accfb41d2fe7ea3f2153d9a55ab136d9826d6f18d68244e51643fb407"
+      "before_digest": "154b35ed26a8d8f855c5881907ecdeabdbbf36eae7b4530917dc54a2a15622e5"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "6bbed4d982dd312f7f962024905a5490f362bc1a511b2e92ebe50471e49f1716"
+      "before_digest": "b06320d5bf65684df8cfb35a81db142cd1d8eb081db726fceceb4add0a9b1d27"
     },
     {
       "label": "Play Mountain",
       "offer_id": 2,
-      "before_digest": "185247f2652f19638cd652cef816b6898569b5f5147514ad2ab42e942e8a56e5"
+      "before_digest": "5cb23226a3dbd81c9681c3398c87bb564a13ebd86989f9bc3809b760dae83920"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "41050c1b59b41811a645e2e0d54f518527d6bfb2c99f8fff694bcac4a3d8a07e"
+      "before_digest": "16e813ea787b26e04739190027b306ebfae3b8d43e79d9137a9b657b8376c89c"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "6cba4929edab847d4090dc645fc28b8eee7650196a022d356a9f4ca59dfe61e6"
+      "before_digest": "fa8d828417094d8ac7dce389db37e607cc9f4fb100ab93721ce91b17b9d26ae7"
     },
     {
       "label": "Play Island",
       "offer_id": 3,
-      "before_digest": "18581c5101616d253e0bfa250ea8322b483b831477abf1313eb872440943d31c"
+      "before_digest": "c5f41e119271e95c1d0cef7a187818d2adbf2c28c02d926db0391977973ec5f3"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "3026d1da519218fb4f7c0585280ac3aa63773ca4c49b829d160ba3995c4c05bc"
+      "before_digest": "2507b866419c5ce89217b4636a22f62f851328c4600603aa5c79a7d9fb321325"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "9dd025542bd6d451c592021b7176580d640a0fb25d670f11b850bf8f3f00e1b3"
+      "before_digest": "f96e23ffdaf34ec034df66a1feeaa416716a38bf7c6889f89eda098a31301fb3"
     },
     {
       "label": "Play Mountain",
       "offer_id": 3,
-      "before_digest": "0b72540b71008d7f4c7d19238b150f33cb8915d82e42b4d6ffbac5fc36cf9f33"
+      "before_digest": "e8fe09257969712863159f14c475b5e1cbf428606bb2a86ffe0dde25921098c0"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "0092bee244a86bfbc2d8945e6ecb54f25463946d6cb40c5863e58c43e0076c37"
+      "before_digest": "868a8e1bf8d41277f4f8d25ad70dbeba8f887dc8dbc1c1fa062595afe8bb0cc3"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "ace816315911feb5b4acbb1c0719c48fbeeb842c3790732ce8323f17d94cbbd2"
+      "before_digest": "cea68c7527e7f04cca61644ac0bf19460e0234bbddf2e46c5ec83a1565056f34"
     },
     {
       "label": "Cast Divide by Zero",
       "offer_id": 0,
-      "before_digest": "c4b927db1800e49d522a42d2a93c6dac69cb6c26bea8d7a0f0e409d8cbcc96d0"
+      "before_digest": "4121436acb76251986798d42ed30417671e4f1c51dd27389dc5f3704dfe7a65a"
     },
     {
       "label": "Pay the cost",
       "offer_id": 7,
-      "before_digest": "34d687b2ea1d31dea71046c43326509e6c4d4b7c4e040cb5c3e24b9188b625ab"
+      "before_digest": "a80282338b11796f9a7d8a4b4915fcc948a130d38a247289cddd86bf233a9b8b"
     },
     {
       "label": "Pass priority",
       "offer_id": 1,
-      "before_digest": "f6aef4e41602428bdf4dbc88c150ab10311ea69d0baa3d0ea3ffac27f0c8c8c4"
+      "before_digest": "ba60ccccd6017226f77f8795b0626bee1d03f450bd6f17fa4abb19fc9481c340"
     }
   ],
-  "decision_digest": "6b6c23b68f34dec0adc7d633a23f5edd8800fdb974b07c7a5b614ff2716522c4",
+  "decision_digest": "40bc06f6d28654a3de61c8303dc6b59962c4e86e48529b8d7d4090e140b207d3",
   "decision_revision": 58,
   "decision_kind": "LEARN",
-  "manifest_digest": "aee5f72501b584d60ef4c073e3d777aceb3252f4602f38a471020f5b602436e4"
+  "manifest_digest": "2e87149028b62d2ce1fdfb7effebde6b3bf408367308bac521ec0bba71766ad0"
 }
