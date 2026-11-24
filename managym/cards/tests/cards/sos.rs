@@ -311,3 +311,42 @@ fn sanar_makes_treasure_after_an_instant_and_wild_idea_finds_one() {
         "the found card is revealed"
     );
 }
+
+/// Sanar asks what was cast, not what the card shows now: an Adventure
+/// sorcery that resolved into exile and an Omen sorcery shuffled back into
+/// its library both still count, though each card is a creature again.
+#[test]
+fn sanar_counts_a_resolved_adventure_and_omen_as_the_sorceries_cast() {
+    use crate::support::{
+        game::{clear_summoning_sickness, move_from_library},
+        inspect::zone_of,
+        play::{cast_profile, offers_ability},
+    };
+    use managym::state::{card::SpellProfile, game_object::Target};
+    for (card, profile, departed) in [
+        (
+            "Smaug, the Great Calamity",
+            SpellProfile::Adventure,
+            ZoneType::Exile,
+        ),
+        ("Twinmaw Stormbrood", SpellProfile::Omen, ZoneType::Library),
+    ] {
+        let mut s = five_color_setup(&["Sanar, Unfinished Genius", card, "Gray Ogre"]);
+        s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let sanar = enter_battlefield(&mut s, "Sanar, Unfinished Genius");
+        settle(&mut s);
+        clear_summoning_sickness(&mut s, sanar);
+        let spell = move_from_library(&mut s, 0, card, ZoneType::Hand);
+        s.set_player_mana_pool(0, "4R");
+        cast_profile(&mut s, spell, profile);
+        assert!(s.choose_target(Target::Permanent(ogre)), "{card}");
+        assert!(offers_ability(&mut s, sanar, 0), "{card}: on the stack");
+        settle(&mut s);
+        assert_eq!(zone_of(&s, spell), Some(departed), "{card}");
+        assert!(
+            offers_ability(&mut s, sanar, 0),
+            "{card}: the {profile:?} still counts after it resolved"
+        );
+    }
+}

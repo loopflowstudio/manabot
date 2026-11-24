@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { shortName } from '$lib/opponent-name';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -316,5 +316,14 @@ describe('names in sentences', () => {
     expect(possessive(shortName('Heuristic · scripted'))).toBe("Heuristic's");
     expect(possessive('Invasion Reinforcements')).toBe("Invasion Reinforcements'");
     expect(possessive('You')).toBe('your');
+  });
+});
+
+describe('stack provenance', () => {
+  const spell = { id: 1, kind: 'spell', controller: 0, label: 'Soul Tether' };
+  it('tells a prepared spell from its copy and names flashback', () => {
+    expect(stackProvenance({ ...spell, from_prepared: true })).toEqual(['prepared']);
+    expect(stackProvenance(spell)).toEqual([]);
+    expect(stackProvenance({ ...spell, flashback: true })).toEqual(['flashback']);
   });
 });

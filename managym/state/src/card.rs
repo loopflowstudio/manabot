@@ -1315,7 +1315,7 @@ impl PrintedCharacteristics {
             .chain(self.modal_back.then_some(SpellProfile::BackFace))
     }
 
-    pub(crate) fn inset_definition(&self, profile: SpellProfile) -> Option<&Arc<Self>> {
+    pub fn inset_definition(&self, profile: SpellProfile) -> Option<&Arc<Self>> {
         self.inset
             .as_ref()
             .filter(|inset| inset.casting_profile() == Some(profile))

@@ -540,7 +540,7 @@ impl Game {
                 if reduction.first_on_own_turn
                     && (self.active_player() != player
                         || self.state.turn.spells_cast[player.0].iter().any(|cast| {
-                            self.recorded_object_matches_predicate(*cast, &reduction.predicate)
+                            self.recorded_cast_matches_predicate(*cast, &reduction.predicate)
                         }))
                 {
                     continue;
@@ -1358,7 +1358,10 @@ impl Game {
     ) -> Result<(), AgentError> {
         // Recorded before the move, so its invalidation precedes the move's
         // board reads; the move then names the stack appearance.
-        self.state.turn.spells_cast[player.0].push(object);
+        self.state.turn.spells_cast[player.0].push(crate::flow::turn::RecordedCast {
+            object,
+            profile: cast.profile,
+        });
         if cast.spell(&self.state[object]).types.is_creature() {
             self.end_next_creature_cast_flash(player);
         }

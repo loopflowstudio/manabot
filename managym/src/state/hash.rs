@@ -75,7 +75,7 @@ struct CanonicalTurn {
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
-    spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
+    spells_cast: [Vec<crate::flow::turn::RecordedCast>; 2],
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]

@@ -687,8 +687,8 @@ impl TrackedState {
         let cast = self.state.turn.spells_cast[player.0]
             .last_mut()
             .expect("a recorded cast");
-        debug_assert_eq!(cast.slot(), spell.slot(), "the cast's own spell");
-        *cast = spell;
+        debug_assert_eq!(cast.object.slot(), spell.slot(), "the cast's own spell");
+        cast.object = spell;
     }
 
     // Zone changes feed the derivations that read the zones they touch.

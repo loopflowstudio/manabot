@@ -2029,7 +2029,7 @@ impl Game {
                     && nth.is_none_or(|n| {
                         self.state.turn.spells_cast[caster.0]
                             .iter()
-                            .position(|cast| cast == object)
+                            .position(|cast| cast.object == *object)
                             == Some(n as usize - 1)
                     })
             }

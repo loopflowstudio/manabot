@@ -1040,9 +1040,19 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
             "combat": False,
             "program": [],
         },
+        {
+            "mana": [0, 0, 0, 0, 0, 1],
+            "restriction": "anything but spells from hand",
+            "combat": False,
+            "program": [],
+        },
     ]
     text = render_decision(_redigest(payload)).text
     assert "Of the mana above: R 2; expires at end of combat." in text
+    assert (
+        "Of the mana above: C 1; for anything but spells from hand; expires at step end."
+        in text
+    )
     assert (
         "Of the mana above: G 1; only for creature spells; puts a +1/+1 counter on a "
         "non-Human creature spell it casts; expires at step end."

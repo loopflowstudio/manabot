@@ -8187,6 +8187,37 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
         .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == next)));
 }
 
+/// An Omen sorcery is not Momo's first flying creature spell, even once it
+/// has shuffled back into the library as the flying Dragon it shows there.
+#[test]
+fn momo_still_discounts_the_first_flier_after_a_resolved_omen() {
+    use crate::support::play::cast_profile;
+    use managym::state::{card::SpellProfile, game_object::Target};
+    let mut s = five_color_setup(&[
+        "Momo, Friendly Flier",
+        "Twinmaw Stormbrood",
+        "Messenger Hawk",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Momo, Friendly Flier");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let twinmaw = library_card(&s, 0, "Twinmaw Stormbrood");
+    let twinmaw = move_card(&mut s, twinmaw, ZoneType::Hand);
+    s.set_player_mana_pool(0, "1R");
+    cast_profile(&mut s, twinmaw, SpellProfile::Omen);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let hawk = library_card(&s, 0, "Messenger Hawk");
+    let hawk = move_card(&mut s, hawk, ZoneType::Hand);
+    s.set_player_mana_pool(0, "1U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == hawk)));
+}
+
 #[test]
 fn momo_counts_earlier_matching_casts_before_it_entered_and_resets_next_turn() {
     let mut s = five_color_setup(&["Momo, Friendly Flier", "Messenger Hawk"]);

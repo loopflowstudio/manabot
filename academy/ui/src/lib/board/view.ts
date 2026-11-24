@@ -269,6 +269,11 @@ export function possessive(name: string): string {
 }
 
 /** A stack entry's short name: a spell's name, or "X's trigger" / "X's ability" for an ability of X. */
+/** How a spell was cast, when its exit differs: "prepared" (its copies are not), "flashback". */
+export function stackProvenance(entry: StackEntryView): string[] {
+  return [entry.from_prepared && 'prepared', entry.flashback && 'flashback'].filter((tag): tag is string => Boolean(tag));
+}
+
 export function stackName(entry: StackEntryView): string {
   if (entry.kind === 'spell') return entry.label;
   const source = entry.label.split(' — ')[0];

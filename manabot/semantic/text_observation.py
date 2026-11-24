@@ -344,6 +344,13 @@ def _spending(restricted: managym.RestrictedMana) -> str:
     return " or ".join(parts)
 
 
+def spend_phrase(spending: str) -> str:
+    """ "only for Lesson spells", but "for anything but spells from hand"."""
+    if spending.startswith("anything but "):
+        return f"for {spending}"
+    return f"only for {spending}"
+
+
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     if cost is None:
         return "no mana cost"
@@ -862,7 +869,11 @@ class _Renderer:
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
                         if count
                     )
-                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (
+                        f"; {spend_phrase(pooled.restriction)}"
+                        if pooled.restriction
+                        else ""
+                    )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
                     + (
                         "; expires at end of combat."

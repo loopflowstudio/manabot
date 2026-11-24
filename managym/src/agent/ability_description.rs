@@ -875,7 +875,13 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
             text.push_str(" (expires at end of combat)");
         }
         if let Some(restriction) = &class.restriction {
-            text.push_str(&format!(" ({} only)", restriction.describe()));
+            let spend = restriction.describe();
+            // An exclusion already limits the mana: "(anything but spells from hand)".
+            if spend.starts_with("anything but ") {
+                text.push_str(&format!(" ({spend})"));
+            } else {
+                text.push_str(&format!(" ({spend} only)"));
+            }
         }
         if let Some(effect) = &class.effect {
             text.push_str(&format!(" (puts {})", spend_effect_description(effect)));
@@ -1339,6 +1345,21 @@ fn roman(chapter: u8) -> &'static str {
 mod tests {
     use super::*;
     use crate::state::ability::TargetRequirement;
+
+    #[test]
+    fn restricted_mana_says_only_for_a_positive_class_and_not_an_exclusion() {
+        use crate::state::mana::{ManaRestriction, ManaRestriction::ExceptSpellsFromHand};
+        let colorless = [0, 0, 0, 0, 0, 1];
+        assert_eq!(
+            mana_description(&Mana::restricted_to(ExceptSpellsFromHand, colorless)),
+            "{C} (anything but spells from hand)"
+        );
+        assert!(mana_description(&Mana::restricted_to(
+            ManaRestriction::spell(["Lesson"]),
+            colorless
+        ))
+        .ends_with(" only)"));
+    }
 
     #[test]
     fn distinct_name_threshold_describes_the_required_permanents() {

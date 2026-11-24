@@ -7,6 +7,7 @@ use crate::{
         game::{Game, Revisions},
         layers::{matches_view, Context, SourceSeed},
         triggers::TriggerIndex,
+        turn::RecordedCast,
     },
     state::{
         ability::{Condition, PaymentCost},
@@ -594,6 +595,32 @@ impl Game {
         )
     }
 
+    /// A cast this turn asks what was cast: while the spell is on the stack
+    /// its appearance answers; once it departs, the profile it was cast as
+    /// selects the printed spell from the card's retained base, never the
+    /// front face the card shows again (an Adventure that resolved).
+    pub(crate) fn recorded_cast_matches_predicate(
+        &self,
+        cast: RecordedCast,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if cast.profile.is_front() || self.state.live(cast.object).is_some() {
+            return self.recorded_object_matches_predicate(cast.object, predicate);
+        }
+        let (definition, printing) = self.state.source_base(cast.object);
+        let (_, _, kind) = self
+            .state
+            .objects
+            .provenance(cast.object)
+            .expect("recorded provenance");
+        let spell = crate::cards::content_pack::default_content_pack().recorded_spell(
+            definition,
+            printing,
+            cast.profile,
+        );
+        predicate.matches_printed_spell(spell, kind)
+    }
+
     /// Entry replacements inspect allocated tokens before placement. This is
     /// distinct from rules predicates on current zone appearances.
     pub(crate) fn entry_matches_predicate(
@@ -910,7 +937,7 @@ impl Game {
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
             Condition::CastThisTurn(predicate) => self.state.turn.spells_cast[controller.0]
                 .iter()
-                .any(|&cast| self.recorded_object_matches_predicate(cast, predicate)),
+                .any(|&cast| self.recorded_cast_matches_predicate(cast, predicate)),
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {

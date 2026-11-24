@@ -264,6 +264,27 @@ impl ContentPack {
         object.front_or_inset(profile)
     }
 
+    /// The printed spell a departed card was cast as, from the base it
+    /// retains (`definition`, `printing`): its inset Adventure or Omen, or
+    /// its back face. The base already is that spell when it is the back
+    /// face itself or a spell copy's own printing.
+    pub fn recorded_spell<'a>(
+        &'a self,
+        definition: CardDefId,
+        printing: &'a PrintedCharacteristics,
+        profile: SpellProfile,
+    ) -> &'a PrintedCharacteristics {
+        match profile {
+            SpellProfile::Front => printing,
+            SpellProfile::Adventure | SpellProfile::Omen => printing
+                .inset_definition(profile)
+                .map_or(printing, |spell| &**spell),
+            SpellProfile::BackFace => self
+                .back_face_row(definition)
+                .map_or(printing, |(_, back)| &**back),
+        }
+    }
+
     /// The front face whose back face is `back`; `None` for any other row.
     pub fn front_face(&self, back: CardDefId) -> Option<CardDefId> {
         let front = CardDefId(back.0.checked_sub(1)?);
