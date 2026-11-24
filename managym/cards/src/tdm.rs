@@ -165,7 +165,7 @@ fn charring_bite() -> PrintedCharacteristics {
     use managym_state::ability::{ObjectSelector, TargetSpec};
     let target = TargetSpec::Permanent {
         predicate: CardPredicate {
-            flying: Some(false),
+            not_flying: true,
             ..CardPredicate::creature()
         },
     };

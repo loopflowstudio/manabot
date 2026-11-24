@@ -443,6 +443,9 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    first_strike_participant: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None

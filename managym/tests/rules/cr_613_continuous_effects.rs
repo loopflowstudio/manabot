@@ -1340,7 +1340,7 @@ fn cr_613_keyword_predicate_dependency_overrides_grant_timestamp() {
             vec![continuous(
                 StaticScope::All(CardPredicate {
                     any_of: vec![CardPredicate {
-                        flying: Some(true),
+                        flying: true,
                         ..Default::default()
                     }],
                     ..CardPredicate::creature()
@@ -1390,4 +1390,22 @@ fn cr_613_copiable_definition_changes_detach_warmed_forks() {
     assert_eq!(sibling.characteristics(ogre).pt(), (7, 2));
     assert_eq!(branch.characteristics(ogre).pt(), (9, 5));
     assert_eq!(root.characteristics(ogre).pt(), (2, 2));
+}
+
+/// A static ability's modification outside the layer system (a prohibition or
+/// prevention) has no reader in CR 613 evaluation. Debug builds refuse it where
+/// the definition is first evaluated rather than letting the card do nothing.
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "has no layer")]
+fn cr_613_continuous_static_without_a_layer_is_refused() {
+    use managym::state::card::StaticScope;
+
+    let (s, ogre) = ogre_scenario();
+    let object = card_of(&s, ogre);
+    let mut game = s.game().clone();
+    game.state[object]
+        .statics
+        .push(continuous(StaticScope::This, vec![Modification::CantBlock]));
+    game.characteristics(ogre);
 }

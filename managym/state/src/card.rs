@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, EffectValue, ObjectSelector,
+        PaymentCost, TargetRequirement, TargetSpec,
     },
     game_object::ObjectId,
     mana::{Color, Colors, Mana, ManaCost},
@@ -474,6 +474,15 @@ pub enum Restriction {
     CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// "Attacks each combat if able" (CR 508.1d): a requirement on the
+    /// attack declaration, obeyed whenever the creature can attack.
+    AttacksEachCombat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageTransform {
+    Double,
+    Prevent(u32),
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -485,15 +494,19 @@ pub enum Restriction {
 pub enum ReplacementEffect {
     AdventureExile,
     ExileInsteadOfGraveyard,
-    /// Prevent `amount` damage that would be dealt to this permanent's
-    /// controller or a permanent they control.
-    PreventDamageToController {
-        amount: i32,
-    },
-    /// Double damage that would be dealt to this permanent's controller or a
-    /// permanent they control. This driver makes ordering observable.
-    DoubleDamageToController,
     EntersPrepared,
+    PreventCombatDamageToOrFromSelf,
+    /// Combat damage that would be dealt to the protected permanent is
+    /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
+    /// record offers it; no definition prints it.
+    PreventCombatDamage,
+    ModifyDamage {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        creature_source: bool,
+        source_by: super::ability::Actor,
+        recipient_by: super::ability::Actor,
+        transform: DamageTransform,
+    },
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
     /// This object enters tapped unless its entering controller already
@@ -573,6 +586,18 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
+    pub fn equip(mana_cost: ManaCost) -> Self {
+        Self {
+            sorcery_timing: true,
+            mana_cost,
+            effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            }],
+            ..Default::default()
+        }
+    }
+
     /// The outputs of a mana ability (CR 605.1a): an untargeted activation
     /// whose leading effect adds one of these mana, optionally followed by
     /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
@@ -884,6 +909,12 @@ pub enum LayerValue {
     },
 }
 
+impl From<i32> for LayerValue {
+    fn from(value: i32) -> Self {
+        Self::Fixed(value)
+    }
+}
+
 /// One static effect: once its first part applies, later layers retain its
 /// affected objects even if its generating ability disappears (CR 613.6).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1017,6 +1048,8 @@ pub enum StaticAbility {
     /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
     /// nonbasic lands), for every player (CR 614.1c).
     EntersTapped(CardPredicate),
+    /// Matching permanents entering under an opponent’s control enter tapped.
+    OpponentsEnterTapped(CardPredicate),
     /// "As long as this has [threshold], [predicate] lands are [subtype]"
     /// (CR 305.7): they lose all other land types and abilities and have
     /// that basic land type's mana ability.
@@ -1042,6 +1075,22 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+}
+
+impl StaticAbility {
+    /// A battlefield effect applying its modifications together across layers (CR 613.6).
+    pub fn continuous(
+        scope: StaticScope,
+        condition: Option<Condition>,
+        modifications: Vec<crate::effect::Modification<LayerValue>>,
+    ) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope,
+            condition,
+            characteristic_defining: false,
+            modifications,
+        })
+    }
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).

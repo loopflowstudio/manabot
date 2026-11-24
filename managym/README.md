@@ -783,12 +783,23 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
+that activated its ability. A zone change ends that identity. Avatar Destiny
+uses `ObjectSelector::This` to return the Aura from the graveyard after the
+enchanted creature dies.
+An effect on the enchanted or equipped permanent uses `ObjectSelector::Attached`.
+It reads the attachment at resolution. If the source left in response, its last
+known attachment identifies the exact permanent it last enchanted or equipped.
+
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
 result independently of a later `Move`; the caller keeps those results while
 selection effects run. Mill, optional discard/draw and basic/tutor searches use
 ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+An unrestricted `Effect::search_for_card` requires a choice while the library
+contains cards. Rune-Scarred Demon uses an unrevealed move into hand. Micromancer
+reveals the chosen card, which gives both viewers knowledge of it in hand.
 `ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
 materializers refresh unknown selected subsets throughout saved callers and child
 scopes, preserving cardinality and exact viewer-known choices. Restricted partial
@@ -1018,3 +1029,17 @@ menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
 would finish it. The same address rules as payment previews apply, and the
 call is read-only in the same way.
+
+At the combat damage step, the attacking player assigns damage among the
+remaining blockers. Each choice names the attacker, the current blocker and
+the amount. A trampler can assign damage to the defending player once every
+blocker has been assigned lethal damage. For example, a 5-power trampler
+blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
+the rest. Without trample, that sole blocker takes all 5. The engine deals
+the assignments together after the final choice.
+
+When a combatant has first strike or double strike (CR 510.4), the first damage
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
+followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
+permanent's `first_strike_participant` remembers whether it had first strike or
+double strike when the first step began, including after its abilities change.

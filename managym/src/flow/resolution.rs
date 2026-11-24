@@ -339,12 +339,6 @@ impl Game {
             Vec::new()
         };
         let requirements = crate::state::ability::effect_target_requirements(&effects);
-        // The object an Aura or Equipment was attached to as the ability was
-        // activated (last known information once the source has left).
-        let attached = ability
-            .attached
-            .and_then(|object| self.lookup_current_permanent(object).ok())
-            .map(Target::Permanent);
         let Some(targets) = self.resolution_targets(
             &ability.targets,
             &ability.target_req_indices,
@@ -368,7 +362,6 @@ impl Game {
             x: ability.x,
             spent: ability.paid,
             targets,
-            context_target: attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
             ..EffectFrame::new(
                 ability.controller,
@@ -561,18 +554,15 @@ impl Game {
         }
     }
 
-    /// The object the resolving ability's Aura or Equipment is attached to:
-    /// the one captured as an activated ability was activated, or else the
-    /// source's current attachment (a triggered ability).
+    /// Read the attachment at resolution (CR 608.2h). If the source left,
+    /// use its last known wearer, which may itself have left.
     fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
-        match frame.context_target {
-            Some(Target::Permanent(id)) => Some(id),
-            Some(_) => None,
-            None => frame
-                .source_ref()
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .and_then(|source| self.attached_permanent(source)),
+        let source = frame.source_ref()?;
+        if let Ok(permanent) = self.lookup_current_permanent(source) {
+            return self.attached_permanent(permanent);
         }
+        self.lookup_current_permanent(self.object_lki(source)?.attached_to?)
+            .ok()
     }
 
     /// The players a selector names as the effect resolves; a target player
@@ -796,6 +786,7 @@ impl Game {
                 None
             }
             Effect::Move {
+                unrevealed,
                 library_end,
                 what,
                 to,
@@ -840,6 +831,9 @@ impl Game {
                         (from, *to, library_end)
                     {
                         self.reorder_in_library(object, *end);
+                        if *end == crate::state::ability::LibraryEnd::Top {
+                            self.remember_placed_top(object, frame);
+                        }
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
@@ -877,7 +871,7 @@ impl Game {
                     }),
                     shuffle: *to == ZoneType::Library && library_end.is_none(),
                     library_end: *library_end,
-                    reveal: *to == ZoneType::Hand,
+                    reveal: *to == ZoneType::Hand && !unrevealed,
                 };
                 frame.batch = Some(batch);
                 None
@@ -1361,7 +1355,7 @@ impl Game {
                 if !self.resolution_cast_candidates(&decision).is_empty() {
                     return Some(decision);
                 }
-                self.reveal_object_to_hand(object_id, player);
+                self.reveal_object_to_hand(object_id, player, ZoneEntry::default());
                 None
             }
             Effect::CumulativeUpkeep { each } => {
@@ -1429,6 +1423,20 @@ impl Game {
                 }
                 decision
             }
+            Effect::Reveal { what } => {
+                for object in self.select(what, frame) {
+                    self.emit(GameEvent::CardRevealed {
+                        owner: self.state[object].owner,
+                        definition: self.state[object].definition_id,
+                    });
+                }
+                frame.selected_revealed |= *what == ObjectSelector::Selected;
+                None
+            }
+            Effect::RevealUntilToHand { predicate } => {
+                self.reveal_until_to_hand(frame.controller, predicate);
+                None
+            }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
                 let Some(Target::Player(owner)) = self.present_primary_target(frame) else {
                     return None;
@@ -1457,18 +1465,33 @@ impl Game {
                     end: *end,
                 })
             }
-            Effect::OwnerPutsIntoLibrary { .. } => {
+            Effect::OwnerPutsIntoLibrary { target, top } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
                 let object_id = self.state.permanents[id].as_ref()?.object;
-                Some(Decision::Modal {
-                    player: self.state[object_id].owner,
-                    modes: [true, false]
+                let modes = if *top {
+                    [
+                        crate::state::ability::LibraryEnd::Top,
+                        crate::state::ability::LibraryEnd::Bottom,
+                    ]
+                    .map(|end| {
+                        vec![Effect::put_in_library(
+                            ObjectSelector::Target(target.clone()),
+                            end,
+                        )]
+                    })
+                    .to_vec()
+                } else {
+                    [true, false]
                         .map(|second_from_top| {
                             vec![Effect::PlaceTargetInLibrary { second_from_top }]
                         })
-                        .to_vec(),
+                        .to_vec()
+                };
+                Some(Decision::Modal {
+                    player: self.state[object_id].owner,
+                    modes,
                 })
             }
             Effect::PlaceTargetInLibrary { second_from_top } => {
@@ -2163,6 +2186,7 @@ impl Game {
                             Some(watched),
                         ),
                         effects: vec![Effect::Move {
+                            unrevealed: false,
                             library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
@@ -2265,6 +2289,11 @@ impl Game {
                 .collect()
         };
         match what {
+            ObjectSelector::ExactSource => frame
+                .source_ref()
+                .and_then(|source| self.state.live(source))
+                .into_iter()
+                .collect(),
             ObjectSelector::This => self.source_object(frame).into_iter().collect(),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)
@@ -2556,7 +2585,9 @@ impl Game {
             // the player, theirs included (CR 702.16b, 702.16j).
             Target::Player(player) if self.has_protection_from_everything(player) => false,
             Target::Player(player) => match spec {
-                TargetSpec::Player | TargetSpec::AnyTarget => true,
+                TargetSpec::Player | TargetSpec::AnyTarget | TargetSpec::PlayerOrPlaneswalker => {
+                    true
+                }
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
@@ -2669,6 +2700,7 @@ impl Game {
                 let types = &self.characteristics(id).types;
                 types.is_creature() || types.is_planeswalker() || types.is_battle()
             }
+            TargetSpec::PlayerOrPlaneswalker => self.characteristics(id).types.is_planeswalker(),
             TargetSpec::Creature => self.characteristics(id).is_creature(),
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature()

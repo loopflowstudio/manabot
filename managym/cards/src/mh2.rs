@@ -1,12 +1,13 @@
 use managym_state::{
     ability::{Ability, Effect, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![tireless_provisioner()]
+    vec![vile_entomber(), tireless_provisioner()]
 }
 
 fn tireless_provisioner() -> CardDefinition {
@@ -37,6 +38,30 @@ fn tireless_provisioner() -> CardDefinition {
                     ],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vile_entomber() -> CardDefinition {
+    let text_box = "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhen this creature enters, search your library for a card, put that card into your graveyard, then shuffle.";
+    CardDefinition {
+        key: "mh2.vile_entomber",
+        scryfall_id: "d890ae71-da2b-44fa-8cfa-9c3016c9f696",
+        printed: PrintedCharacteristics {
+            name: "Vile Entomber".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into(), "Warlock".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::search_for_card(ZoneType::Graveyard)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

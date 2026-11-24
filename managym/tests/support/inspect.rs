@@ -407,6 +407,22 @@ pub fn offer_labels(s: &Scenario) -> Vec<String> {
         .collect()
 }
 
+/// The current modal decision's offer labels, checked to be distinct,
+/// non-empty descriptions rather than the bare action-type fallback.
+pub fn mode_labels(s: &Scenario) -> Vec<String> {
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let labels = offer_labels(s);
+    let distinct: std::collections::BTreeSet<_> = labels.iter().collect();
+    assert_eq!(distinct.len(), labels.len(), "{labels:?}");
+    assert!(
+        labels
+            .iter()
+            .all(|label| !label.is_empty() && label != "ChooseMode"),
+        "{labels:?}"
+    );
+    labels
+}
+
 /// The shared focus and mode codes of an observed tap payment choice.
 pub struct TapPaysChoice {
     pub focus: Vec<i32>,

@@ -49,10 +49,15 @@ pub(crate) fn trigger_description(
         Some(amount) => with_trigger_x(text, amount, x),
         None => text,
     };
+    let attached = if object.subtypes.iter().any(|subtype| subtype == "Equipment") {
+        "equipped creature"
+    } else {
+        "enchanted creature"
+    };
     format!(
         "{} — {}{intervening}: {}",
         object.name,
-        condition_description(condition),
+        condition_description(condition, attached),
         text
     )
 }
@@ -101,24 +106,26 @@ fn wrapped_bound_x(condition: &TriggerCondition) -> Option<&'static str> {
     }
 }
 
-fn condition_description(condition: &TriggerCondition) -> String {
+/// `attached` names the object an attached source watches ("enchanted
+/// creature" for an Aura, "equipped creature" for Equipment).
+fn condition_description(condition: &TriggerCondition, attached: &str) -> String {
     match condition {
         TriggerCondition::WasCast { condition } => {
-            format!("{} (if this was cast)", condition_description(condition))
+            format!("{} (if this was cast)", condition_description(condition, attached))
         }
         TriggerCondition::OnceEachTurn { condition } => {
-            format!("{} (once each turn)", condition_description(condition))
+            format!("{} (once each turn)", condition_description(condition, attached))
         }
         TriggerCondition::ActiveIf {
             active_if,
             condition,
         } => format!(
             "{} (while {})",
-            condition_description(condition),
+            condition_description(condition, attached),
             condition_text(active_if)
         ),
         TriggerCondition::Sacrificed { subject } => {
-            format!("Whenever {} is sacrificed", subject_description(subject))
+            format!("Whenever {} is sacrificed", subject_description(subject, attached))
         }
         TriggerCondition::YouCastThis => "When you cast this spell".into(),
         TriggerCondition::NoCounters { kind } => {
@@ -130,17 +137,17 @@ fn condition_description(condition: &TriggerCondition) -> String {
         ),
         TriggerCondition::EntersTheBattlefield { subject } => format!(
             "When {} enters the battlefield",
-            subject_description(subject)
+            subject_description(subject, attached)
         ),
-        TriggerCondition::Dies { subject } => format!("When {} dies", subject_description(subject)),
+        TriggerCondition::Dies { subject } => format!("When {} dies", subject_description(subject, attached)),
         TriggerCondition::Attacks {
             subject,
             per,
             attackers,
         } => {
             let attack = match per {
-                Per::Object => format!("{} attacks", subject_description(subject)),
-                Per::Batch => format!("{} attack", one_or_more(subject, "permanents")),
+                Per::Object => format!("{} attacks", subject_description(subject, attached)),
+                Per::Batch => format!("{} attack", one_or_more(subject, "permanents", attached)),
             };
             match attackers {
                 AttackSize::Any => format!("Whenever {attack}"),
@@ -152,33 +159,33 @@ fn condition_description(condition: &TriggerCondition) -> String {
         }
         TriggerCondition::FromZone { zone, condition } => format!(
             "{} (from {})",
-            condition_description(condition),
+            condition_description(condition, attached),
             format!("{zone:?}").to_lowercase()
         ),
         TriggerCondition::Prepared { condition } => {
-            format!("{} (a prepared spell)", condition_description(condition))
+            format!("{} (a prepared spell)", condition_description(condition, attached))
         }
         TriggerCondition::BecomesTapped { subject } => {
-            format!("When {} becomes tapped", subject_description(subject))
+            format!("When {} becomes tapped", subject_description(subject, attached))
         }
         TriggerCondition::TappedForMana { subject } => {
-            format!("When {} is tapped for mana", subject_description(subject))
+            format!("When {} is tapped for mana", subject_description(subject, attached))
         }
         TriggerCondition::BecomesTargeted { subject } => format!(
             "When {} becomes the target of an opponent's spell or ability",
-            subject_description(subject)
+            subject_description(subject, attached)
         ),
         TriggerCondition::YourAttackingCreatureTriggers => "Whenever a creature you control attacking causes a triggered ability of that creature to trigger".into(),
         TriggerCondition::WhileSourceAttacking { condition } => format!(
             "{} while this is attacking",
-            condition_description(condition)
+            condition_description(condition, attached)
         ),
         TriggerCondition::NthCounter { kind, nth } => format!("When the number of {} counters on this reaches {}", kind.name(), nth),
         TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
         TriggerCondition::LeavesTheBattlefield { subject } => {
             format!(
                 "When {} leaves the battlefield",
-                subject_description(subject)
+                subject_description(subject, attached)
             )
         }
         TriggerCondition::PutsCounters { who, kind, on } => format!(
@@ -207,6 +214,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             ordinal(*n),
             predicate_description(predicate, "spell")
         ),
+        TriggerCondition::GainsLife { who } => format!("Whenever {} life", actor_does(*who, "gain", "gains")),
         TriggerCondition::Draws { who, nth: None } => {
             format!("Whenever {} a card", actor_does(*who, "draw", "draws"))
         }
@@ -258,40 +266,56 @@ fn condition_description(condition: &TriggerCondition) -> String {
             match per {
                 Per::Object => format!(
                     "Whenever {} deals combat damage{to}",
-                    subject_description(subject)
+                    subject_description(subject, attached)
                 ),
                 Per::Batch => format!(
                     "Whenever {} deal combat damage{to}",
-                    one_or_more(subject, "creatures")
+                    one_or_more(subject, "creatures", attached)
                 ),
             }
         }
         TriggerCondition::InGraveyard { condition } => {
             format!(
                 "{} (while this is in your graveyard)",
-                condition_description(condition)
+                condition_description(condition, attached)
             )
         }
     }
 }
 
-fn subject_description(subject: &TriggerSubject) -> String {
-    subject_phrase(subject, ["a", "another"], "permanent")
+fn subject_description(subject: &TriggerSubject, attached: &str) -> String {
+    subject_phrase(subject, ["a", "another"], "permanent", attached)
 }
 
 /// A subject read as a batch ("one or more other Allies you control"); a
 /// single object reads as itself.
-fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
-    subject_phrase(subject, ["one or more", "one or more other"], plural)
+fn one_or_more(subject: &TriggerSubject, plural: &str, attached: &str) -> String {
+    subject_phrase(
+        subject,
+        ["one or more", "one or more other"],
+        plural,
+        attached,
+    )
 }
 
 /// "[quantity] [objects] [controller controls]", where `quantity` is the
 /// words for any object and for another one; any player's objects name no
 /// controller.
-fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) -> String {
+fn subject_phrase(
+    subject: &TriggerSubject,
+    quantity: [&str; 2],
+    objects: &str,
+    attached: &str,
+) -> String {
     match subject {
+        TriggerSubject::ThisOr(other) => {
+            format!(
+                "this or {}",
+                subject_phrase(other, quantity, objects, attached)
+            )
+        }
         TriggerSubject::This => "this".into(),
-        TriggerSubject::EnchantedCreature => "enchanted creature".into(),
+        TriggerSubject::Attached => attached.into(),
         TriggerSubject::Matching {
             controlled_by,
             predicate,
@@ -437,6 +461,7 @@ pub(crate) fn condition_text(condition: &Condition) -> String {
         Condition::CardsInHandAtLeast { count } => {
             format!("you have {count} or more cards in hand")
         }
+        Condition::LifeAtLeast { amount } => format!("you have {amount} or more life"),
         Condition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")
         }
@@ -531,6 +556,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
         flying,
+        not_flying,
         deathtouch,
         no_counters,
         in_combat,
@@ -546,6 +572,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         nonbasic,
         any_of,
         min_power,
+        min_toughness,
         card_type: kind,
         card_types_any,
         not_card_types,
@@ -570,8 +597,8 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     if *deathtouch {
         terms.push("deathtouch".into());
     }
-    if let Some(flying) = flying {
-        terms.push(if *flying { "flying" } else { "without flying" }.into());
+    if *flying {
+        terms.push("flying".into());
     }
     terms.extend(supertype.iter().cloned());
     if *nonbasic {
@@ -628,6 +655,12 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if let Some(n) = max_power {
         terms.push(format!("with power at most {n}"));
+    }
+    if let Some(n) = min_toughness {
+        terms.push(format!("with toughness {n} or greater"));
+    }
+    if *not_flying {
+        terms.push("without flying".into());
     }
     if let Some(n) = max_mana_value {
         terms.push(format!("with mana value {n} or less"));
@@ -693,6 +726,7 @@ fn target_description(t: &TargetSpec) -> String {
         TargetSpec::Opponent => "opponent".into(),
         TargetSpec::Creature => "creature".into(),
         TargetSpec::AnyTarget => "any target".into(),
+        TargetSpec::PlayerOrPlaneswalker => "player or planeswalker".into(),
         TargetSpec::Spell => "spell".into(),
         TargetSpec::SpellMatching { predicate } => predicate_description(predicate, "spell"),
         TargetSpec::CreatureOrSpell => "creature or spell".into(),
@@ -724,6 +758,7 @@ fn player_description(player: &PlayerSelector) -> String {
 
 fn selector_description(selector: &ObjectSelector) -> String {
     match selector {
+        ObjectSelector::ExactSource => "this object".into(),
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
         ObjectSelector::Targets(target) => format!("each chosen {}", target_description(target)),
@@ -1026,8 +1061,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
-        Move { what, to, tapped, transformed, under, with_counter, linked, library_end } => {
+        Move { what, to, tapped, transformed, under, with_counter, linked, library_end, unrevealed } => {
             if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(what), format!("{end:?}").to_lowercase()) }
+            else if *unrevealed && *to == ZoneType::Hand { format!("Put {} into its owner's hand without revealing it", selector_description(what)) }
             else { move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
         },
         Prepare { what } => format!("Prepare {}", selector_description(what)),
@@ -1146,6 +1182,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
+        Reveal { what } => format!("Reveal {}", selector_description(what)),
+        RevealUntilToHand { predicate } => format!("Reveal cards from the top of your library until you reveal a {} card. Put that card into your hand and the rest on the bottom of your library in a random order", predicate_description(predicate, "card")),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
         SearchDistinctNames { predicate, count, end } => {
             let search = format!("Search your library for up to {count} {} with different names and reveal them", predicate_description(predicate, "card"));
@@ -1154,7 +1192,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
                 DistinctSearchEnd::Hand => format!("{search}, put them into your hand, then shuffle"),
             }
         }
-        OwnerPutsIntoLibrary { target } => format!("The owner of {} puts it into their library second from the top or on the bottom", target_description(target)),
+        OwnerPutsIntoLibrary { target, top: true } => format!("The owner of {} puts it on their choice of the top or bottom of their library", target_description(target)),
+        OwnerPutsIntoLibrary { target, top: false } => format!("The owner of {} puts it into their library second from the top or on the bottom", target_description(target)),
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
         MayOnceEachTurn { effects } => format!(
@@ -1246,6 +1285,7 @@ pub(super) fn continuous_description(
         None => "unchanged".to_string(),
     };
     match modification {
+        Modification::SetName(name) => format!("{subject} is named {name}{until}"),
         Modification::SetCreatureTypes(types) => {
             format!("{subject} becomes {}{until}", types.join(" "))
         }
@@ -1297,7 +1337,7 @@ pub(super) fn continuous_description(
                 .unwrap_or_default();
             format!(
                 "{subject} gains ‘{}{intervening}, {}’{until}",
-                condition_description(condition),
+                condition_description(condition, "attached creature"),
                 effects_description(effects)
             )
         }
@@ -1353,6 +1393,10 @@ pub(super) fn continuous_description(
         }
         Modification::ExileIfWouldLeave => format!(
             "If {} would leave the battlefield{until}, exile it instead",
+            subject.to_lowercase()
+        ),
+        Modification::PreventCombatDamage => format!(
+            "Prevent all combat damage that would be dealt to {}{until}",
             subject.to_lowercase()
         ),
         Modification::ExileIfWouldDie => {
@@ -1546,7 +1590,10 @@ mod tests {
             ),
         ];
         for (condition, expected) in cases {
-            assert_eq!(condition_description(&condition), expected);
+            assert_eq!(
+                condition_description(&condition, "enchanted creature"),
+                expected
+            );
         }
     }
 
@@ -1599,6 +1646,7 @@ mod tests {
             effects_description(&[
                 Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                 Effect::Move {
+                    unrevealed: false,
                     what: ObjectSelector::Moved,
                     to: ZoneType::Battlefield,
                     tapped: false,

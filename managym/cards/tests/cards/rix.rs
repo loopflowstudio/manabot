@@ -35,6 +35,73 @@ fn thrashing_brontodon_sacrifices_itself_to_destroy_an_artifact() {
 }
 
 #[test]
+fn token_producer_gleaming_barrier() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Gleaming Barrier"]);
+    let barrier = enter_and_settle(&mut s, "Gleaming Barrier");
+    assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
+    crate::support::play::move_and_settle(
+        &mut s,
+        barrier,
+        managym::state::zone::ZoneType::Graveyard,
+    );
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+}
+
+#[test]
+fn printed_creature_swab_goblin() {
+    crate::printed_creature_combat("Swab Goblin", 2, 2, &[]);
+}
+
+#[test]
+fn printed_creature_zetalpa_primal_dawn() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Zetalpa, Primal Dawn",
+        4,
+        8,
+        &[
+            Keyword::Flying,
+            Keyword::Indestructible,
+            Keyword::Vigilance,
+            Keyword::Trample,
+            Keyword::DoubleStrike,
+        ],
+    );
+}
+
+#[test]
+fn foundations_5e_moment_of_craving() {
+    crate::assert_targeted_pump("Moment of Craving", "Hill Giant", 1, (1, 1), &[], 2, 0);
+}
+
+#[test]
+fn foundations_5e_moment_of_triumph() {
+    crate::assert_targeted_pump("Moment of Triumph", "Gray Ogre", 0, (4, 4), &[], 2, 0);
+}
+
+/// "This creature has flying as long as it's attacking": flying from the
+/// declaration until combat ends.
+#[test]
+fn foundations_5f_kitesail_corsair() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::keywords,
+        play::attack_with,
+    };
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+    let mut s = five_color_setup(&["Kitesail Corsair"]);
+    let corsair = s.force_permanent_on_battlefield(0, "Kitesail Corsair");
+    clear_summoning_sickness(&mut s, corsair);
+    assert!(!keywords(&s, corsair).has(Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, corsair);
+    assert!(keywords(&s, corsair).has(Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert!(!keywords(&s, corsair).has(Keyword::Flying));
+}
+
+#[test]
 fn etali_casts_exiled_spells_in_either_order_or_stops() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_lands, move_from_library, pin_top},

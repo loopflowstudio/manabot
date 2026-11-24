@@ -42,6 +42,7 @@ const STATES: &[(&str, &str)] = &[
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
+    ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
@@ -108,6 +109,20 @@ const GRAVEYARD: &[&str] = &[
     "Kyoshi Warriors",
     "Prophetic Prism",
     "Tiger-Seal",
+];
+const CASCADE: &[&str] = &[
+    "Helpful Hunter",
+    "Ajani's Pridemate",
+    "Hinterland Sanctifier",
+    "Felidar Savior",
+    "Fog Bank",
+];
+const CASCADE_ENGINES: &[&str] = &[
+    "Arahbo, the First Fang",
+    "Impact Tremors",
+    "Doubling Season",
+    "Gratuitous Violence",
+    "Goblin Oriflamme",
 ];
 const STATICS: &[&str] = &[
     "White Lotus Reinforcements",
@@ -337,6 +352,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "diverse-statics"
         | "attachments"
         | "triggers"
+        | "entry-cascade"
         | "zones"
         | "mixed" => {
             for seat in &mut seats {
@@ -348,6 +364,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
                         }
                         if name != "diverse-statics" {
                             seat.add("Herald of Eternal Dawn", 1);
+                        }
+                    }
+                    "entry-cascade" => {
+                        seat.cycle(CASCADE, size);
+                        for engine in CASCADE_ENGINES {
+                            seat.add(engine, 1);
                         }
                     }
                     "triggers" => {
@@ -697,11 +719,33 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
 fn damage(root: &Env) -> Option<Env> {
     use managym::flow::turn::StepKind;
     let mut env = combat(root, true)?;
+    // One blocker per attacker: a gang block would stop the measured step
+    // at the attacker's damage assignment instead of dealing damage.
+    let mut blocked = Vec::new();
     for _ in 0..256 {
         if env.action_space_kind() != Some(ActionSpaceKind::DeclareBlocker) {
             break;
         }
-        let index = first_action(&mut env, "block").unwrap_or(0);
+        let offered = actions(&mut env);
+        let index = offered
+            .iter()
+            .position(|action| {
+                matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                    if !blocked.contains(attacker))
+            })
+            .or_else(|| {
+                offered.iter().position(|action| {
+                    matches!(action, Action::DeclareBlocker { attacker: None, .. })
+                })
+            })
+            .unwrap_or(0);
+        if let Action::DeclareBlocker {
+            attacker: Some(attacker),
+            ..
+        } = offered[index]
+        {
+            blocked.push(attacker);
+        }
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
@@ -759,11 +803,15 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     if recipe.state == "names" {
         return vec![("name".into(), reach(root, "name"))];
     }
-    if recipe.state == "triggers" {
+    if let Some(token) = match recipe.state.as_str() {
+        "triggers" => Some("token.ally"),
+        "entry-cascade" => Some("token.cat_1_1_w"),
+        _ => None,
+    } {
         let mut entered = root.fork().unwrap();
         entered
             .benchmark_game_mut()
-            .create_token("token.ally", PlayerId(0), false)
+            .create_token(token, PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
     }
@@ -948,7 +996,12 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state[p.object].name == "Gray Ogre")
+                        .find(|p| {
+                            matches!(
+                                game.state[p.object].name.as_str(),
+                                "Gray Ogre" | "Helpful Hunter"
+                            )
+                        })
                         .or_else(|| game.state.permanents.iter().flatten().next())
                         .map(|p| p.object);
                     if let Some(card) = source {

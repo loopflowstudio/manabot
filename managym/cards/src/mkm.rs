@@ -7,10 +7,11 @@ use managym_state::{
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
     mana::ManaCost,
     permanent::CounterKind,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![proft_s_eidetic_memory()]
+    vec![make_your_move(), proft_s_eidetic_memory()]
 }
 
 fn proft_s_eidetic_memory() -> CardDefinition {
@@ -46,6 +47,39 @@ fn proft_s_eidetic_memory() -> CardDefinition {
                 },
             ],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn make_your_move() -> CardDefinition {
+    CardDefinition {
+        key: "mkm.make_your_move",
+        scryfall_id: "73475d29-2673-4614-86d3-404232426aa8",
+        printed: PrintedCharacteristics {
+            name: "Make Your Move".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        any_of: vec![
+                            CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
+                            CardPredicate {
+                                min_power: Some(4),
+                                ..CardPredicate::creature()
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target artifact, enchantment, or creature with power 4 or greater."
+                .into(),
             ..Default::default()
         },
         ..Default::default()

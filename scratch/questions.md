@@ -209,3 +209,5 @@ Two reversible choices recorded in `scratch/concept-review.html` and `scratch/pl
 
 - The two sync conflicts converged on main's shared `RowWriter`. Only v11 reads the new continuation profile and off-battlefield counter rows. V9 and v10 keep the 49-column continuation layout they were released with.
 - The casting receipts introduced on this branch bind the integrated casting catalog. Opening-hand receipts and the earlier kernel corpus evidence stay at their original paths.
+- Main advanced to `a2931b6b2f` during the gate. It supplies the first-strike priority window and the combat damage assignment decision. The casting branch uses that damage model and keeps its Adventure exile choices and per-creature damage totals for Quilled Greatwurm.
+- Kept main's `flying` and `not_flying` predicates and its mode-description function. Casting uses the selected profile for spell modes and adds the counter-removal text there. Both card cohorts and both test cohorts remain registered.

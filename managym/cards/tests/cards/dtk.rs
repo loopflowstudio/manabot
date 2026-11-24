@@ -102,3 +102,90 @@ fn dragonlords_servant_reduces_only_dragon_spells() {
     cast_card(&mut s, giant);
     assert_eq!(top_spell(&s).spent.total(), 4);
 }
+
+#[test]
+fn impact_tremors_triggers_for_each_goblin() {
+    use crate::support::{
+        inspect::card_of,
+        play::{cast_owned, pass_until, resolve_top, spend_colorless},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::{
+        mana::{Color, Colors},
+        stack_object::StackObject,
+    };
+    use std::collections::HashSet;
+
+    for (doubling_season, count) in [(false, 2), (true, 4)] {
+        let mut s = five_color_setup(&["Impact Tremors", "Dragon Fodder", "Doubling Season"]);
+        let tremors = s.force_permanent_on_battlefield(0, "Impact Tremors");
+        s.set_player_mana_pool(0, "1R");
+        if doubling_season {
+            s.force_permanent_on_battlefield(0, "Doubling Season");
+        }
+        cast_owned(&mut s, "Dragon Fodder");
+        spend_colorless(&mut s);
+        resolve_top(&mut s);
+        pass_until(&mut s, ActionSpaceKind::Priority);
+        let goblins = s.battlefield_permanents_named(0, "Goblin");
+        assert_eq!(goblins.len(), count);
+        assert_eq!(goblins.iter().collect::<HashSet<_>>().len(), count);
+        for goblin in goblins {
+            let face = s.game().characteristics(goblin);
+            assert_eq!(face.pt(), (1, 1));
+            assert_eq!(face.colors, Colors::from_iter([Color::Red]));
+            assert_eq!(face.creature_types, ["Goblin"]);
+        }
+        s.assert_life(1, 20);
+        let stack = s.game().state.stack_objects.clone();
+        assert_eq!(stack.len(), count);
+        assert!(stack
+            .iter()
+            .all(|item| matches!(item, StackObject::TriggeredAbility(_))
+                && item.source_object() == card_of(&s, tremors)));
+        let mut fork = s.clone();
+        resolve_top(&mut fork);
+        fork.assert_life(1, 19);
+        assert_eq!(fork.game().state.stack_objects, stack[..count - 1]);
+        s.assert_life(1, 20);
+        assert_eq!(s.game().state.stack_objects, stack);
+        resolve_top(&mut s);
+        s.assert_life(1, 19);
+        assert_eq!(
+            s.game().state.stack_objects,
+            fork.game().state.stack_objects
+        );
+        for branch in [&mut s, &mut fork] {
+            settle(branch);
+            branch.assert_life(1, 20 - count as i32);
+        }
+    }
+}
+
+#[test]
+fn foundations_5e_seismic_rupture() {
+    use crate::support::game::{five_color_setup, until_end_of_turn};
+    use crate::support::inspect::{card_of, permanent, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::card::{Keyword, Keywords};
+    use managym::state::effect::Modification;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Seismic Rupture", "Gray Ogre", "Hill Giant", "Wind Drake"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    // A creature that gained flying is a creature with flying.
+    let lifted = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        lifted,
+        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+    );
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Seismic Rupture");
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Graveyard));
+    assert_eq!(permanent(&s, giant).damage, 2);
+    assert_eq!(permanent(&s, drake).damage, 0);
+    assert_eq!(permanent(&s, lifted).damage, 0);
+}

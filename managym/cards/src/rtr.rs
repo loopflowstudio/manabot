@@ -1,15 +1,21 @@
 //! Return to Ravnica.
 use managym_state::{
-    ability::Effect,
+    ability::{
+        Ability, Actor, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerCondition,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, ReplacementEffect,
+        ManaAbility, PrintedCharacteristics, ReplacementEffect,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        rogues_passage(),
+        guttersnipe(),
         azorius_guildgate(),
         fencing_ace(),
         golgari_guildgate(),
@@ -116,4 +122,57 @@ fn selesnya_guildgate() -> CardDefinition {
         "Selesnya Guildgate",
         ["G", "W"],
     )
+}
+
+fn guttersnipe() -> CardDefinition {
+    let text_box = "Whenever you cast an instant or sorcery spell, this creature deals 2 damage to each opponent.";
+    CardDefinition {
+        key: "rtr.guttersnipe",
+        scryfall_id: "9d8590ea-512c-4e09-97cc-7f07d0706f2b",
+        printed: PrintedCharacteristics {
+            name: "Guttersnipe".into(),
+            subtypes: vec!["Goblin".into(), "Shaman".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::instant_or_sorcery()),
+                intervening_if: None,
+                effects: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: 2.into(),
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rogues_passage() -> CardDefinition {
+    CardDefinition {
+        key: "rtr.rogues_passage",
+        scryfall_id: "f416e36a-15cb-43c8-b27f-82f65a95ddef",
+        printed: PrintedCharacteristics {
+            name: "Rogue's Passage".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{4}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::CantBeBlocked,
+                )],
+                ..Default::default()
+            }],
+            text_box: "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

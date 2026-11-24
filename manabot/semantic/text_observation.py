@@ -51,6 +51,8 @@ _STEPS = (
     "second main",
     "end",
     "cleanup",
+    # Appended at index 12 to match StepEnum; reorder before "combat damage" in 0.3.0.
+    "first-strike combat damage",
 )
 _SPACES = (
     "game over",
@@ -115,6 +117,7 @@ _STAGES = frozenset(
         "select_milled",
         "select_cards",
         "order_replacement",
+        "assign_combat_damage",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -219,6 +222,7 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
+    "assign combat damage",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -436,6 +440,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantActivateAbilities": "its activated abilities can't be activated",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "PreventCombatDamage": "combat damage dealt to it is prevented",
         "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
@@ -1018,6 +1023,8 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.first_strike_participant:
+                optional += "; participated in the first-strike damage step"
             if permanent.attacking:
                 optional += "; attacking"
             if permanent.colors is not None:

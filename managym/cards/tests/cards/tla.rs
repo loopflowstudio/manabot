@@ -5719,6 +5719,30 @@ fn watery_grasp_holds_a_creature_tapped_then_shuffles_it_away() {
     assert_eq!(zone_of(&s, grasp_card), Some(ZoneType::Graveyard));
 }
 
+/// CR 608.2h: "enchanted creature" is read as the ability resolves. Watery
+/// Grasp moved to another creature after activation shuffles that creature,
+/// not the one it enchanted when activated.
+#[test]
+fn watery_grasp_shuffles_the_creature_it_enchants_at_resolution() {
+    let mut s = five_color_unfunded_setup(&["Watery Grasp", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let grasp = enchant(&mut s, "Watery Grasp", "U", first);
+    let (first_card, second_card) = (card_of(&s, first), card_of(&s, second));
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, grasp, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let second_object = now(&s, second_card);
+    s.game_mut().state.permanents[grasp]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(second_object);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, second_card), Some(ZoneType::Library));
+    assert_eq!(zone_of(&s, first_card), Some(ZoneType::Battlefield));
+}
+
 #[test]
 fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
     let mut s = five_color_unfunded_setup(&["Swampsnare Trap", "Wind Drake", "Craw Wurm"]);
@@ -15479,23 +15503,54 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
 /// A copy of a permanent spell resolves into a token (CR 707.10f).
 #[test]
 fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
-    let mut s = five_color_setup(&["Fire Lord Azula", "Invasion Reinforcements"]);
+    let mut s = five_color_setup(&[
+        "Fire Lord Azula",
+        "Invasion Reinforcements",
+        "Doubling Season",
+    ]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
     let azula = s.force_permanent_on_battlefield(0, "Fire Lord Azula");
     clear_summoning_sickness(&mut s, azula);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, azula);
     settle(&mut s);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.set_player_mana_pool(0, "1W");
     cast(&mut s, "Invasion Reinforcements");
+    spend_colorless(&mut s);
+    resolve_top(&mut s); // Azula's trigger puts the copy above the original.
+    let pending = s.game().state.stack_objects.clone();
+    assert_eq!(pending.len(), 2);
+    let before = witness(s.game());
+    let mut fork = s.clone();
+    for branch in [&mut fork, &mut s] {
+        assert_eq!(witness(branch.game()), before);
+        resolve_top(branch);
+        let copies = branch.battlefield_permanents_named(0, "Invasion Reinforcements");
+        assert_eq!(copies.len(), 1);
+        let id = copies[0];
+        assert_eq!(
+            branch.game().state[card_of(branch, id)].kind(),
+            ObjectKind::Token
+        );
+        let face = branch.game().characteristics(id);
+        assert_eq!(face.pt(), (1, 1));
+        assert!(face.keywords.has(Keyword::Flash));
+        assert_eq!(face.creature_types, ["Ally", "Human", "Warrior"]);
+        assert_eq!(branch.game().state.stack_objects[0], pending[0]);
+        assert!(matches!(
+            &branch.game().state.stack_objects[..],
+            [StackObject::Spell(_), StackObject::TriggeredAbility(_)]
+        ));
+    }
+    assert_eq!(witness(s.game()), witness(fork.game()));
     resolve_everything(&mut s);
-    let reinforcements = s.battlefield_permanents_named(0, "Invasion Reinforcements");
-    assert_eq!(reinforcements.len(), 2);
-    let tokens = reinforcements
-        .iter()
-        .filter(|id| s.game().state[card_of(&s, **id)].kind() == ObjectKind::Token)
-        .count();
-    assert_eq!(tokens, 1);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Invasion Reinforcements")
+            .len(),
+        2
+    );
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 4);
 }
 
 /// Earthbend 0 with an empty hand: the 0/0 land dies and still returns
@@ -16767,5 +16822,211 @@ fn aang_returning_to_library_cannot_remember_its_departed_back_face() {
             observation.opponent
         };
         assert!(player.known_library.is_empty());
+    }
+}
+
+fn attacker_life_gains(s: &Scenario, combat_start: usize) -> Vec<i32> {
+    s.game()
+        .state
+        .events
+        .iter()
+        .skip(combat_start)
+        .filter_map(|event| match event {
+            GameEvent::LifeChanged {
+                player: PlayerId(0),
+                old,
+                new,
+            } if new > old => Some(new - old),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn combat_assignment_deals_all_five_damage_as_one_lifelink_gain() {
+    for trample in [false, true] {
+        let mut s = five_color_setup(&[
+            "Foggy Swamp Spirit Keeper",
+            "Gray Ogre",
+            "Ajani's Pridemate",
+        ]);
+        let attacker = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+        let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+        let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        clear_summoning_sickness(&mut s, attacker);
+        set_counters(&mut s, attacker, CounterKind::PlusOnePlusOne, 3);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        if trample {
+            until_end_of_turn(
+                &mut s,
+                attacker,
+                Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+            );
+        }
+        attack_with(&mut s, attacker);
+        s.advance_to_active_step(0, StepKind::DeclareBlockers);
+        let combat_start = s.game().state.events.len();
+        s.declare_block();
+        if trample {
+            pass_until(&mut s, ActionSpaceKind::Modal);
+            let splits = offer_labels(&s);
+            assert_eq!(splits.len(), 4);
+            for (label, blocker) in splits.iter().zip(2..=5) {
+                assert!(
+                    label.contains(&format!(
+                        "{blocker} to Gray Ogre, {} to defending player",
+                        5 - blocker
+                    )),
+                    "{label}"
+                );
+            }
+            crate::support::play::command(&mut s, |a| {
+                matches!(a, Action::ChooseMode { mode: 2, .. })
+            });
+        }
+        s.advance_to_active_step(0, StepKind::EndOfCombat);
+        assert_eq!(attacker_life_gains(&s, combat_start), [5]);
+        let blocker_damage: Vec<_> = s
+            .game()
+            .state
+            .events
+            .iter()
+            .skip(combat_start)
+            .filter_map(|event| match event {
+                GameEvent::DamageDealt {
+                    target: managym::flow::event::DamageTarget::Permanent(id),
+                    amount,
+                    ..
+                } if *id == blocker => Some(*amount),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(blocker_damage, [if trample { 2 } else { 5 }]);
+        assert_eq!(s.life(0), 25);
+        assert_eq!(s.life(1), if trample { 17 } else { 20 });
+        assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 1);
+    }
+}
+
+#[test]
+fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
+    let mut s = five_color_setup(&["Foggy Swamp Spirit Keeper", "Ajani's Pridemate"]);
+    let small = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+    let large = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+    let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+    set_counters(&mut s, large, CounterKind::PlusOnePlusOne, 1);
+    for attacker in [small, large] {
+        clear_summoning_sickness(&mut s, attacker);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let combat_start = s.game().state.events.len();
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == [small, large].contains(permanent))
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::OrderTriggers);
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 0);
+    let second = s.action_space().actions[1].clone();
+    let mut replay = crate::support::play::command(&mut s, |a| *a == second);
+    for branch in [&mut s, &mut replay] {
+        branch.advance_to_active_step(0, StepKind::EndOfCombat);
+        assert_eq!(attacker_life_gains(branch, combat_start), [2, 3]);
+        assert_eq!(branch.life(1), 15);
+        assert_eq!(
+            counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
+            2
+        );
+    }
+}
+
+#[test]
+fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink() {
+    use managym::flow::event::DamageTarget;
+    use managym::state::{
+        ability::Actor,
+        card::{DamageTransform, ReplacementEffect},
+    };
+
+    // Preventing first absorbs the hit. Doubling first leaves two damage,
+    // so only Cindermaw distinguishes the last two outcomes.
+    for (prohibit_gain, mode, hits_expected, gains_expected) in [
+        (false, 0, &[][..], &[][..]),
+        (false, 1, &[2][..], &[2][..]),
+        (true, 1, &[2][..], &[][..]),
+    ] {
+        let mut s = five_color_setup(&[
+            "Foggy Swamp Spirit Keeper",
+            "Ajani's Pridemate",
+            "Giant Cindermaw",
+        ]);
+        let attacker = s.force_permanent_on_battlefield(0, "Foggy Swamp Spirit Keeper");
+        let pridemate = s.force_permanent_on_battlefield(0, "Ajani's Pridemate");
+        if prohibit_gain {
+            s.force_permanent_on_battlefield(0, "Giant Cindermaw");
+        }
+        let shield = s.force_permanent_on_battlefield(1, "Island");
+        let object = card_of(&s, shield);
+        s.game_mut().state[object].replacement_effects = vec![
+            ReplacementEffect::ModifyDamage {
+                creature_source: false,
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Prevent(2),
+            },
+            ReplacementEffect::ModifyDamage {
+                creature_source: false,
+                source_by: Actor::AnyPlayer,
+                recipient_by: Actor::You,
+                transform: DamageTransform::Double,
+            },
+        ];
+        clear_summoning_sickness(&mut s, attacker);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        let combat_start = s.game().state.events.len();
+        attack_with(&mut s, attacker);
+        pass_until(&mut s, ActionSpaceKind::Modal);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert_eq!(s.action_space().actions.len(), 2);
+        assert_eq!(s.life(1), 20);
+        let root = s.game().clone();
+        let before = witness(&root);
+        let mut replay = crate::support::play::command(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode { mode: choice, .. } if *choice == mode),
+        );
+        for branch in [&mut s, &mut replay] {
+            branch.advance_to_active_step(0, StepKind::EndOfCombat);
+            let hits: Vec<_> = branch
+                .game()
+                .state
+                .events
+                .iter()
+                .skip(combat_start)
+                .filter_map(|event| match event {
+                    GameEvent::DamageDealt {
+                        target: DamageTarget::Player(PlayerId(1)),
+                        amount,
+                        ..
+                    } => Some(*amount),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(hits, hits_expected);
+            assert_eq!(
+                branch.life(1),
+                20 - hits_expected.iter().sum::<u32>() as i32
+            );
+            assert_eq!(attacker_life_gains(branch, combat_start), gains_expected);
+            assert_eq!(branch.life(0), 20 + gains_expected.iter().sum::<i32>());
+            assert_eq!(
+                counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),
+                gains_expected.len() as i32
+            );
+        }
+        assert_eq!(witness(s.game()), witness(replay.game()));
+        assert_eq!(witness(&root), before);
     }
 }

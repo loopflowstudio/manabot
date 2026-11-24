@@ -75,10 +75,7 @@ fn the_cabbage_merchant() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::casts(
                         Actor::Opponent,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
+                        CardPredicate::noncreature(),
                     ),
                     effects: vec![Effect::create_tokens("token.food", 1)],
                 },
@@ -935,17 +932,7 @@ fn uncle_s_musings() -> CardDefinition {
             spell_effects: vec![
                 Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Graveyard),
-                    predicate: CardPredicate {
-                        card_types_any: vec![
-                            CardType::Artifact,
-                            CardType::Battle,
-                            CardType::Creature,
-                            CardType::Enchantment,
-                            CardType::Land,
-                            CardType::Planeswalker,
-                        ],
-                        ..Default::default()
-                    },
+                    predicate: CardPredicate::permanent(),
                     min: 0,
                     max: EffectValue::ColorsSpentToCast,
                     effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

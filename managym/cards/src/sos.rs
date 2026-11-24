@@ -515,6 +515,7 @@ fn all_aboard() -> PrintedCharacteristics {
                 ZoneType::Exile,
             ),
             Effect::Move {
+                unrevealed: false,
                 what: ObjectSelector::Moved,
                 to: ZoneType::Battlefield,
                 under: Some(PlayerSelector::Owner),

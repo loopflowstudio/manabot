@@ -31,7 +31,7 @@
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
-  import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
+  import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames } from './recent';
@@ -199,7 +199,7 @@
     if (drafting) saveDraft(frame, draft);
   });
 
-  const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names) : null);
+  const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names, committedOf(frame)) : null);
   const declarable = $derived(new Map((preview?.declarable ?? []).map(creature => [creature.creature.entity, creature])));
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
@@ -207,10 +207,11 @@
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     if (preview.kind === 'attackers') {
-      for (const id of declarable.keys()) {
+      for (const [id, creature] of declarable) {
         const drafted = draft.attackers.includes(id);
         places.set(id, drafted ? 'in' : 'can');
-        notes.set(id, drafted ? 'in the drafted attack; press to leave it out' : 'can attack; press to add it to the attack');
+        notes.set(id, drafted ? 'in the drafted attack; press to leave it out'
+          : creature.must_attack ? 'must attack; press to add it to the attack' : 'can attack; press to add it to the attack');
       }
     } else {
       const blocks = new Map(draft.blocks);

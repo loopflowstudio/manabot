@@ -852,6 +852,8 @@ class StepEnum(IntEnum):
     POSTCOMBAT_MAIN_STEP = 9
     ENDING_END = 10
     ENDING_CLEANUP = 11
+    # Appended as 12 to preserve Observation JSON discriminants; reorder before COMBAT_DAMAGE in 0.3.0.
+    COMBAT_FIRST_STRIKE_DAMAGE = 12
 
 class ActionEnum(IntEnum):
     PRIORITY_PLAY_LAND = 0
@@ -1180,6 +1182,7 @@ class Permanent:
     has_exile_link: bool
     exile_if_dies_this_turn: bool
     attacking: bool
+    first_strike_participant: bool
     exhausted_abilities: int
     once_each_turn_used: int
     granted_firebending: int

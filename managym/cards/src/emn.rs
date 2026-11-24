@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Colors, Mana, ManaCost},
@@ -32,10 +32,7 @@ fn mirrorwing_dragon() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::SpellTargetsOnlyThis {
-                    predicate: CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
+                    predicate: CardPredicate::instant_or_sorcery(),
                 },
                 intervening_if: None,
                 effects: vec![Effect::ForPlayer {
@@ -70,11 +67,10 @@ fn imprisoned_in_the_moon() -> CardDefinition {
             subtypes: vec!["Aura".into()],
             // One effect across layers 4, 5 and 6; the loss precedes the grant
             // it keeps.
-            statics: vec![StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::Attached,
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
                     Modification::SetTypes {
                         types: vec![CardType::Land],
                         subtypes: vec![],
@@ -87,10 +83,8 @@ fn imprisoned_in_the_moon() -> CardDefinition {
                         ..Default::default()
                     })),
                 ],
-            })],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(enchantable.clone()),
-            }],
+            )],
+            spell_effects: vec![Effect::enchant(enchantable.clone())],
             targeting: vec![TargetRequirement::one(enchantable)],
             text_box: text_box.into(),
             ..Default::default()

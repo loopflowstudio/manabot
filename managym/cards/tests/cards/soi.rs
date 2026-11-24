@@ -57,3 +57,21 @@ fn fevered_visions_draws_each_end_step_and_burns_an_opponent_with_four_cards() {
         s.assert_life(1, life);
     }
 }
+
+/// "When this creature enters or dies, mill two cards": two separate
+/// triggers, each milling its controller's library.
+#[test]
+fn foundations_5f_crow_of_dark_tidings() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{enter_and_settle, move_and_settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Crow of Dark Tidings"]);
+    let library = s.zone_size(0, ZoneType::Library);
+    let crow = enter_and_settle(&mut s, "Crow of Dark Tidings");
+    s.assert_zone_size(0, ZoneType::Library, library - 3);
+    s.assert_zone_size(0, ZoneType::Graveyard, 2);
+    s.assert_zone_size(1, ZoneType::Graveyard, 0);
+    move_and_settle(&mut s, crow, ZoneType::Graveyard);
+    s.assert_zone_size(0, ZoneType::Library, library - 5);
+    s.assert_zone_size(0, ZoneType::Graveyard, 5);
+}

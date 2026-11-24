@@ -657,9 +657,9 @@ Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `agent_player`, `opponent_player` | 1 × 74 | Player state and public game disclosure |
+| `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
-| `agent_permanents`, `opponent_permanents` | 40 × 52 | Permanents with their characteristics |
+| `agent_permanents`, `opponent_permanents` | 40 × 53 | Permanents with their characteristics |
 | `stack`, `stack_valid` | 32 × 40 (`max_stack_objects`), 32 | Spells and abilities, top first |
 | `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
 | `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
@@ -682,9 +682,11 @@ modes are offered, and the choice's focus is the permanent just tapped.
 The same `mode` column carries every indexed choice: a mode of a modal spell,
 a mana-spend option, a replacement order and a value of X. In v11, columns 23
 and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
-value for X (for a spell, an activation or a payment, or a replicate count),
-and `x` is that value in tenths, named and scaled as the stack row's `has_x`
-and `x` are. The native `Action.announces_x` says the same of an offer:
+value for X (for a spell, an activation or a payment, or a replicate count)
+or an amount of combat damage an attacker assigns to a blocker, and `x` is
+that value in tenths, named and scaled as the stack row's `has_x` and `x`
+are, so amounts past the mode's one-hot range stay distinct. A combat damage
+offer's focus is the attacker and then the blocker. The native `Action.announces_x` says the same of an offer:
 
 ```python
 # arrays = game.encode_observation(observation), at a decision that chooses X
