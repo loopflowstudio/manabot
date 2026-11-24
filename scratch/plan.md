@@ -317,6 +317,45 @@ both viewer JSON round trips, v11 permanent rows, history-free LLM text and
 the Academy Python projection. A separate pending Serra Angel cast showed
 five spent mana to both choosers through the same surfaces.
 
+**Power batch behavior review at `59a8f767a2`**
+
+The working phase for the power batch is satisfied. All 13 `power_batch_` debug
+cases passed, as did the whole debug `cards` target (877), the `managym` lib
+(358), and `search_state_contract` plus `canonical_replay_tests` (12). After
+the extension was rebuilt at this head and replaced atomically, 120 focused
+Python checks passed and one skipped (the optional u1952 checkpoint). They
+covered text, effect execution, v10 input, named layout, pinned pilots and
+Immolator source power. All eight ledger rows link to their source and fixture.
+
+- The definitions match the printed rules. Goblin and Ruby check "while"
+  only when the trigger fires (`ActiveIf`). Hornbeetle and Surrak use
+  intervening-if conditions that resolution checks again (CR 603.4), and
+  Surrak's total includes negative power. Ashroot and the Partners fix X at
+  resolution from live power or LKI (CR 608.2h). For negative power, Bulk Up
+  follows the Unleash Fury doubling ruling. Bite Down does nothing if either
+  target is illegal (CR 608.2b).
+- `match_trigger_wrappers` removes `WasCast`, `FromZone`,
+  `WhileSourceAttacking`, `ActiveIf` and `OnceEachTurn` before the leaf
+  emits members. The battlefield and graveyard paths share it. A
+  once-per-turn limit keeps the first member that passes the intervening
+  condition and caps doublers at one. There is no official ruling for that
+  cap; it follows a judge answer (Teysa/Sefris) and is recorded as the rules
+  reading. Grant clocks key on (recipient object, grantor, timestamp, static
+  slot, ability index), so a reentered recipient or grantor gets a fresh limit.
+  Used grants count toward the public `once_each_turn_used` and enter the
+  match hash only when nonempty.
+- Fixed during review: `flow/triggers.rs` imported `Condition` without using
+  it, so the debug build warned and clippy would fail under `-D warnings`.
+  The import is gone.
+- Constraints for later batches, not defects here:
+  `EffectValue::Property { of: Target(_) }` reads `frame.primary_target()`,
+  so a card that reads the property of its second target needs the clause's
+  own target. Static `Condition::Compare` in `layers.rs` reads power at the
+  current point in the layer system and mana value from the live card, not a
+  layer-1 copy. No authored static depends on either case. No fixture changes
+  Ashroot's power after resolution to show the pump stays fixed; the
+  `ModifyPt` path already stores a fixed value.
+
 **Findings still open after the power batch**
 
 The power batch closed the wrapped-member, once-per-turn, layer-comparison

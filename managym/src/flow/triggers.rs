@@ -16,9 +16,8 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, Condition, DelayedFrequency, Effect, EffectValue, EffectiveTrigger,
-            KeywordAction, Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-            TurnStep,
+            Ability, Actor, DelayedFrequency, Effect, EffectValue, EffectiveTrigger, KeywordAction,
+            Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
