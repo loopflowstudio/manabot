@@ -10,7 +10,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
-from manabot.backends.mlx.gru import PackedGRU, packed_steps
+from manabot.backends.mlx.gru import PackedGRU
 from manabot.policy.decision_memory import MemoryRows
 
 
@@ -146,7 +146,7 @@ class DecisionMemory(nn.Module):
         if "gru" in self:
             if fold is None:
                 _, hidden = self.gru.run(
-                    records, packed_steps(rows.schedule.gather, rows.schedule)
+                    records, mx.array(rows.schedule.gather), rows.schedule.sizes
                 )
                 hidden = hidden[mx.array(rows.schedule.restore)]
                 result[mx.array(rows.nonempty_batches)] = self.join_norm(
@@ -160,7 +160,8 @@ class DecisionMemory(nn.Module):
             for level in fold.levels:
                 every, final = self.gru.run(
                     records,
-                    packed_steps(level.records, level.schedule),
+                    mx.array(level.records),
+                    level.schedule.sizes,
                     states[mx.array(level.parents)],
                 )
                 if level.record_nodes is None:

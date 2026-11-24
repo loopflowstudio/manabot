@@ -5,10 +5,9 @@ module.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
-The catalog GRU always encodes every definition. PyTorch learning encodes
-only the rows a batch references; the others never reach the loss, so their
-outputs receive no gradient either way. GRU input and recurrent biases remain
-separate parameters, preserving Adam state and global gradient-norm clipping.
+Learner batches select the catalog programs their observations reference.
+Inference uses the full catalog schedule. The GRU keeps separate input and
+recurrent biases for Adam and global gradient-norm clipping.
 
 Compute precision is policy-owned. Unless given, it follows the model's width
 (`manabot.backends.mlx.arrays.default_precision`): bfloat16 from
@@ -40,7 +39,7 @@ from manabot.backends.mlx.arrays import (
     to_numpy,
 )
 from manabot.backends.mlx.decision_memory import DecisionMemory
-from manabot.backends.mlx.gru import PackedGRU, packed_steps
+from manabot.backends.mlx.gru import PackedGRU
 from manabot.backends.mlx.live_tokens import attend_live
 from manabot.backends.mlx.rl import (
     NumericalError,
@@ -59,9 +58,10 @@ from manabot.policy.buckets import (
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
+    CatalogPrograms,
     CompactAttention,
     EventRows,
-    Packed,
+    PackedAttention,
     Prepared,
     Tables,
     prepare,
@@ -295,8 +295,6 @@ class Continuation(nn.Module):
 class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
-    catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed[np.ndarray] | None
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -443,7 +441,6 @@ class MLXActorCritic(nn.Module):
         # as a masked-mean policy constructed with the same seed.
         if config.value_aggregation == "attention_readout":
             self.value_readout = AttentionReadout(hidden, dims.heads)
-        programs = tables.full_programs if self.has_programs else None
         named = (
             np.flatnonzero(tables.name_definitions)
             if self.has_programs
@@ -454,10 +451,6 @@ class MLXActorCritic(nn.Module):
             self,
             "_static",
             _Static(
-                packed_steps(programs.tokens, programs.schedule)
-                if programs is not None
-                else [],
-                programs.schedule if programs is not None else None,
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
                 tables,
@@ -709,6 +702,9 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             inference=inference,
+            select_programs=not inference,
+            # Compact rows change padding values, which only inert padding allows.
+            compact_learner=self.bucketed_shapes and self.object_trimming(),
             bucketed=self.bucketed_shapes,
             binding=self._binding(),
             memory_summaries=self.config.decision_memory_summaries
@@ -746,21 +742,29 @@ class MLXActorCritic(nn.Module):
 
     # Programs ----------------------------------------------------------------------
 
-    def programs(self) -> mx.array | None:
-        """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
+    def programs(
+        self, programs: CatalogPrograms[np.ndarray] | None = None
+    ) -> mx.array | None:
+        """Encode selected definitions at their one-based catalog rows; others stay
+        zero. None when the model has no semantic catalog."""
         with self.forward_precision():
-            static: _Static = self._static
             cards = self.semantic_cards
             if cards is None:
                 return None
-            assert static.catalog is not None
+            full = self._static.tables.full_programs
+            if programs is None:
+                programs = full
+            weights = cards.token_embedding.weight
+            table = mx.zeros(
+                (len(full.rows) + 1, self.dims.hidden), dtype=weights.dtype
+            )
+            if not len(programs.rows):
+                return table
             _, finished = cards.encoder.run(
-                cards.token_embedding.weight, static.catalog_steps
+                weights, mx.array(programs.tokens), programs.schedule.sizes
             )
-            encoded = _take(finished, mx.array(static.catalog.restore))
-            return mx.concatenate(
-                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
-            )
+            encoded = _take(finished, mx.array(programs.schedule.restore))
+            return table.at[mx.array(programs.rows)].add(encoded)
 
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
@@ -853,7 +857,7 @@ class MLXActorCritic(nn.Module):
         b = batch.batch
         programs = static.cache.get("programs")
         if programs is None:
-            programs = self.programs()
+            programs = self.programs(batch.programs)
         # Every object reader sees the normalized table; raw `programs` keep
         # scoring naming candidates.
         cards = self.semantic_cards
@@ -1095,6 +1099,8 @@ class MLXActorCritic(nn.Module):
             return objects
         count = objects.shape[1]
         sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
+        if batch.packed_attention is not None:
+            return self._attend_groups(objects, sign, batch.packed_attention)
         attended, attended_validity = objects, validity
         columns = batch.attention_columns
         if columns is not None:
@@ -1147,6 +1153,29 @@ class MLXActorCritic(nn.Module):
             restored[:, mx.array(columns)] = encoded_objects
             return restored
         return encoded_objects
+
+    def _attend_groups(
+        self, objects: mx.array, sign: mx.array, packed: PackedAttention[np.ndarray]
+    ) -> mx.array:
+        """Attend each group of rows sorted by live length at its own width, then
+        restore [B,N,D]; missing objects read a constant zero vector."""
+        hidden = objects.shape[-1]
+        encoded = []
+        for group in packed.groups:
+            slots = mx.array(group)
+            indices = mx.maximum(slots, 0)
+            attended = _take(objects.reshape(-1, hidden), indices)
+            owners = _take(sign.reshape(-1, 1), indices)
+            keep = slots >= 0
+            mask = mx.where(keep, 0.0, -mx.inf).astype(attended.dtype)[:, None, None, :]
+            keep = keep[..., None].astype(attended.dtype)
+            for layer in (self.attention, *self.extra_attention):
+                attended = layer(attended, owners, mask, keep)
+            if "final_norm" in self:
+                attended = self.final_norm(attended) * keep
+            encoded.append(attended.reshape(-1, hidden))
+        encoded.append(mx.zeros((1, hidden), objects.dtype))
+        return _take(mx.concatenate(encoded), mx.array(packed.restore))
 
     def _value_from_objects(self, encoded: mx.array, validity: mx.array) -> mx.array:
         aggregation = self.config.value_aggregation
@@ -1254,7 +1283,7 @@ class MLXActorCritic(nn.Module):
                 ]
             )
             states, _ = facts.program_sequence.run(
-                program, packed_steps(schedule.gather, schedule)
+                program, mx.array(schedule.gather), schedule.sizes
             )
             program = program + _take(states, mx.array(schedule.unpack))
             flat = mx.where(
@@ -1330,7 +1359,7 @@ class MLXActorCritic(nn.Module):
         sequence = _take(table, mx.array(routes.token_indexes))
         schedule = routes.schedule
         _, finished = effects.reducer.gru.run(
-            sequence, packed_steps(schedule.gather, schedule)
+            sequence, mx.array(schedule.gather), schedule.sizes
         )
         pooled = _take(finished, mx.array(schedule.restore))
         encoded = effects.reducer.output(mx.tanh(pooled))

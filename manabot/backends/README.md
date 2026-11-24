@@ -367,10 +367,14 @@ change a default learner batch into an inference batch. Torch rollout `rows`
 and `minibatches` always prepare learner rows; `next_observation` always
 prepares inference rows for bootstrapping.
 
-For parity, Torch’s `BACKEND.load` returns an
-`ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
-names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
-back).
+`Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
+refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
+than silently falling back to float32. For parity, Torch’s `BACKEND.load`
+accepts optional `device`, `precision` and `bucketed_shapes` (defaulting to
+CPU, float32 and padded; `"bfloat16"` translates to `"bf16"` for `Learner`)
+and returns an `ActorCritic` and a `Learner`, whose parameters and gradients
+keep torch's names (`torch_name` in `manabot.policy.checkpoint` maps canonical
+names back).
 
 Read card-program rows through `SemanticCardEncoder.lookup`
 (`manabot/backends/torch/_semantic_cards.py`), never `table[rows]`. Card and fact IDs
@@ -496,28 +500,45 @@ mlx    gradient extra_attention.5.mlp.layers.0.weight min cosine 1.000000 over 2
 parity: pass (torch, mlx)
 ```
 
-The check runs the PyTorch model in float32 on CPU as the reference and every
-installed backend, torch included, on the same inputs, each side computing
-the damped update's `minibatch_objective` through its own backend: a
-retained capture directory written by the frozen MLX pilot (real learner
-minibatches with their targets and settings, and real collection calls). Each
-backend loads the reference's weights through the canonical names and is
-compared in its own parameter layout. The check compares logits on legal
-actions and values (absolute difference), the update's loss (relative difference),
-each parameter's gradient (cosine similarity), and every weight after one
-Adam step with gradient clipping. Float32 tolerances remain fixed:
-logits and values within 1e-4, loss within 0.1%, every gradient cosine at
-least 0.999, post-step weights within 1e-6 absolute. The weight bar includes
-every parameter; only the gradient-cosine check treats negligible tensors as
-zero. A tensor whose gradient norm is below 1e-6 of the global norm in
-both frameworks counts as zero: the policy-score bias and every attention key
-bias have analytically zero gradients (softmax ignores a shift shared by all
-its inputs), so both sides hold rounding noise. The check exits 1 naming each
-failing backend's worst components, and 2 when the checkpoint or capture
-cannot be read, the checkpoint is refused or no backend is installed; a
-timing in the ordinary MLX pilot requires passing parity. The MPS retest
-explicitly retains approximate arms and reports their numerical differences.
+The reference is padded Torch CPU float32. Every candidate loads the same
+weights and replays the same learner minibatches and collection calls from
+`manabot.backends.torch.capture`. Both learners compute the production
+damped objective. After comparing one clipped Adam step, parity reloads the
+checkpoint on each side for the remaining comparisons.
 
-For explicit MLX half precision, select `--backend mlx --precision bfloat16`.
-See the [compute precision guide](mlx.md#compute-precision) for
-the API and dtype-specific numerical gates.
+Float32 requires legal logits and critic values within 1e-4, relative loss
+within 0.1%, per-tensor gradient cosine of at least 0.999 and every post-step
+weight within 1e-6. Gradients below 1e-6 of the reference's global norm on
+both sides count as zero. A constant shift of all softmax inputs leaves its
+output unchanged, so policy-score and attention-key biases can have only
+rounding noise in their gradients. Bfloat16 uses a full-gradient cosine and
+calibrated forward and loss limits. [Compute precision guide](mlx.md#compute-precision)
+
+To check a bucketed Torch MPS candidate in bfloat16, run
+
+```sh
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture \
+  --backend torch --device mps --precision bfloat16 --bucketed --threads 4 --json parity.json
+```
+
+On the M1 w64l2 baseline capture, this command checked eight minibatches and
+eight collection calls. The bucketed Torch MPS forward ran in bfloat16 and
+the clipped Adam step was finite. The largest relative learner-loss difference
+was 3.63% against the 1% tolerance, so the command exited 1 and wrote
+`"failures": ["learner loss"]` to the report.
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--backend` | all installed | Select `torch` or `mlx`. |
+| `--device` | `cpu` (Torch), `mps` (MLX) | Torch accepts `cpu`, `mps`, or `cuda`. MLX accepts `cpu`, `mps`, or its alias `gpu`. |
+| `--precision` | `float32` | Use `float32` or `bfloat16` for the forward. The loss takes float32 logits and values. Torch bfloat16 requires MPS or CUDA. |
+| `--bucketed` | off (padded) | Trim candidate inputs to bucketed shapes. |
+| `--threads` | current Torch thread count | Set Torch threads during the check. MLX manages its own thread pool. |
+
+The JSON records the checkpoint digest, sample indices, actual device,
+layout and observed critic dtype before float32 promotion. A target mismatch,
+empty learner or collection sample, nonfinite computation or tolerance miss
+fails the check (exit 1). Invalid inputs and unavailable devices exit 2.
+The M1 benchmark also reports timings for finite bfloat16 candidates that
+miss a numerical tolerance and identifies each failed check.
+[M1 benchmark results](../../experiments/reports/mini_baseline_backends.md)
