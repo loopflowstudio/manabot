@@ -4,6 +4,14 @@ import re
 
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
+import managym
+
+
+def take(env: managym.Env, pattern: str) -> str:
+    decision = capture_text_decision(env)
+    action = next(a for a in decision.actions if re.search(pattern, a.description))
+    submit_response(env, decision, action.reference)
+    return action.description
 
 
 def test_manifest_target_alias_from_both_seats() -> None:
@@ -17,18 +25,12 @@ def test_manifest_target_alias_from_both_seats() -> None:
     env.scenario_force_card_in_hand(1 - owner, "Lightning Bolt")
     env.scenario_refresh()
 
-    def take(pattern: str) -> str:
-        decision = capture_text_decision(env)
-        action = next(a for a in decision.actions if re.search(pattern, a.description))
-        submit_response(env, decision, action.reference)
-        return action.description
-
-    take(r"Cast .*Manifest Dread")
-    take(r"Tap for mana .*Forest")
-    take(r"Tap for mana .*Forest")
-    take("Pass priority")
-    take("Pass priority")
-    choice = take("Select")
+    take(env, r"Cast .*Manifest Dread")
+    take(env, r"Tap for mana .*Forest")
+    take(env, r"Tap for mana .*Forest")
+    take(env, "Pass priority")
+    take(env, "Pass priority")
+    choice = take(env, "Select")
     selected = re.search(r"Native description: Manifest (.+)", choice)
     assert selected is not None
 
@@ -50,14 +52,8 @@ def test_manifest_target_alias_from_both_seats() -> None:
             assert printing is None
 
         branch = env.clone_env()
-        priority = capture_text_decision(branch)
-        bolt = next(
-            a
-            for a in priority.actions
-            if "Cast" in a.description and "Lightning Bolt" in a.description
-        )
-        submit_response(branch, priority, bolt.reference)
+        take(branch, r"Cast .*Lightning Bolt")
         targets = capture_text_decision(branch)
         assert any(alias[0] in a.description for a in targets.actions)
         if viewer == owner:
-            take("Pass priority")
+            take(env, "Pass priority")

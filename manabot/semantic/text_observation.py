@@ -477,26 +477,19 @@ class _Renderer:
             self.seats[player.player_index] = label
         # One alias per game thing: a listed card, a permanent (its object
         # and permanent ids) or a stack object (a spell's object id too).
-        for index, card in enumerate(
-            self.state.agent_cards + self.state.opponent_cards
-        ):
+        cards = self.state.agent_cards + self.state.opponent_cards
+        for index, card in enumerate(cards):
             self._alias(f"C{index + 1} ({card.characteristics.name})", card.id)
-        historical_cards = [
-            card
-            for card in self.state.agent_cards + self.state.opponent_cards
-            if int(card.zone) == 2
-        ]
-        historical_index = 0
+        # Older captures list battlefield cards in permanent order.
+        historical_ids = (card.id for card in cards if int(card.zone) == 2)
         for index, permanent in enumerate(
             self.state.agent_permanents + self.state.opponent_permanents
         ):
-            card = permanent.characteristics
             object_id = permanent.object_id
             if object_id is None:
-                object_id = historical_cards[historical_index].id
-                historical_index += 1
-            label = f"P{index + 1} ({card.name or 'nameless permanent'})"
-            self.names[permanent.id] = label
+                object_id = next(historical_ids)
+            name = permanent.characteristics.name or "nameless permanent"
+            label = f"P{index + 1} ({name})"
             self._alias(label, object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
             label = f"S{index + 1}" + (
@@ -510,11 +503,10 @@ class _Renderer:
 
     def _alias(self, label: str, object_id: int, *others: int) -> None:
         """Name `object_id`, and its current incarnation, plus any `others`."""
-        self.names[object_id] = label
         link = self.capture.objects[str(object_id)]
-        self.objects[object_id, link.incarnation] = label
-        for other in others:
-            self.objects[other, link.incarnation] = label
+        for identity in (object_id, *others):
+            self.names[identity] = label
+            self.objects[identity, link.incarnation] = label
 
     def name(self, identity: int) -> str:
         try:

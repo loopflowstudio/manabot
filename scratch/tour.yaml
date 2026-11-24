@@ -1,4 +1,4 @@
-at: f9d37056f136340bbbaf227c57b49c996b6e2051
+at: 052344c4d99ac3dfd781831dcdbfe59210827529
 first:
   - path: managym/cards/tests/cards/dsk.rs
     why: Follow two Clone Legions across the original’s departure.
@@ -10,6 +10,8 @@ first:
     why: Find each viewer’s permitted printing and public identity.
   - path: managym/src/decision_capture.rs
     why: Bind the public alias in a decision capture.
+  - path: manabot/semantic/text_observation.py
+    why: Bind object and permanent identities to one public name.
   - path: tests/semantic/test_manifest_text.py
     why: Target the same nameless creature from both seats.
 hide: []
