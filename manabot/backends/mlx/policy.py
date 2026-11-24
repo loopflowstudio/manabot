@@ -39,7 +39,11 @@ from manabot.backends.mlx.arrays import (
     to_numpy,
 )
 from manabot.backends.mlx.rl import NumericalError
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    PolicyObservation,
+)
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.buckets import (
@@ -56,6 +60,12 @@ from manabot.policy.prepare import (
 )
 from manabot.policy.protocol import InferenceResult, Precision
 from manabot.policy.readings import Readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
+import managym
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -689,7 +699,7 @@ class MLXActorCritic(nn.Module):
         )
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self, obs: PolicyObservation, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
         measured = self._admit_observation(obs)
@@ -697,13 +707,22 @@ class MLXActorCritic(nn.Module):
 
     def prepare_admitted(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            rows = observation_spans(
+                obs,
+                space,
+                bucketed=self.bucketed_shapes,
+                objects=self.object_trimming(),
+                minimum_needs=needs,
+            )
+            return self._prepare_rows(rows, inference)
         bucketed = (
             bucket_observation(obs, space, needs, objects=self.object_trimming())
             if self.bucketed_shapes
@@ -712,7 +731,9 @@ class MLXActorCritic(nn.Module):
         return self._prepare_rows(bucketed or obs, inference)
 
     def _prepare_rows(
-        self, obs: ObservationBuffers | BucketedObservation, inference: bool
+        self,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        inference: bool,
     ) -> Prepared[np.ndarray]:
         return prepare(
             obs,
@@ -724,12 +745,17 @@ class MLXActorCritic(nn.Module):
             binding=self._binding(),
         )
 
-    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
+    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
         """The shared admission checks on raw rows, before booleans or lookups."""
         measured = self._admit_observation(obs)
         return None if measured is None else measured.needs
 
-    def _admit_observation(self, obs: ObservationBuffers) -> BucketedObservation | None:
+    def _admit_observation(
+        self, obs: PolicyObservation
+    ) -> BucketedObservation | ObservationSpans | None:
+        spec = admission.Spec(self.config, self._static.space, self._static.tables, 0)
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            return admission.admit_native(obs, spec, bucketed=self.bucketed_shapes)
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -740,9 +766,6 @@ class MLXActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": mx.array(mask), "failed": mx.array(failed)},
             ) from error
-        spec = admission.Spec(
-            self.config, self.observation_space, self._static.tables, 0
-        )
         return admission.admit(obs, spec, legal, bucketed=self.bucketed_shapes)
 
     # Programs ----------------------------------------------------------------------
@@ -1327,13 +1350,13 @@ class PolicyInference:
         self._closed = True
         self.agent.clear_cache()
 
-    def prepare(self, obs: ObservationBuffers) -> Prepared[np.ndarray]:
+    def prepare(self, obs: PolicyObservation) -> Prepared[np.ndarray]:
         self._check()
         return self.agent.prepare(obs, inference=True)
 
     def infer(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         span: Callable[[str], AbstractContextManager[object]] | None = None,
     ) -> InferenceResult:

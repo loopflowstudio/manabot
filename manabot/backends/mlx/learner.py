@@ -73,6 +73,35 @@ def update_ema(ema: "MLXActorCritic", agent: "MLXActorCritic", decay: float) -> 
     mx.eval(ema.parameters())
 
 
+class Adam(optim.Optimizer):
+    """Bias-corrected Adam on float32 masters with each leaf's saved update count.
+
+    MLX supplies a dense gradient tree. Each leaf advances with the global
+    clock, so its lag at import stays constant. Fresh leaves share the global
+    clock. The arithmetic follows mlx.optimizers.Adam with bias correction.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.learning_rate = 2.5e-4
+
+    def init_single(self, parameter: mx.array, state: dict[str, mx.array]) -> None:
+        state["m"] = mx.zeros_like(parameter)
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: dict[str, mx.array]
+    ) -> mx.array:
+        step = self.step if "lag" not in state else self.step - state["lag"]
+        beta1, beta2 = 0.9, 0.999
+        m = beta1 * state["m"] + (1 - beta1) * gradient
+        v = beta2 * state["v"] + (1 - beta2) * mx.square(gradient)
+        state["m"], state["v"] = m, v
+        rate = self.learning_rate / (1 - beta1**step)
+        correction = mx.rsqrt(1 - beta2**step)
+        return parameter - (rate * m) / (mx.sqrt(v) * correction + 1e-5)
+
+
 class Learner:
     """Trainable policy and Adam state shared by every update."""
 
@@ -100,9 +129,7 @@ class Learner:
         # Cached programs are constants of the weights they were encoded from.
         agent.clear_cache()
         self.minibatch_rows = minibatch_rows
-        self.optimizer = optim.Adam(
-            learning_rate=2.5e-4, betas=[0.9, 0.999], eps=1e-5, bias_correction=True
-        )
+        self.optimizer = Adam()
         self.profiler = Profiler()
         # The loss `loss` last returned and its parameter gradients.
         self._pending: tuple[mx.array, dict[str, object]] | None = None

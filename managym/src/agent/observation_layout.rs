@@ -781,6 +781,65 @@ pub struct ArrayLayout {
     pub row_kind_names: BTreeMap<&'static str, u8>,
 }
 
+/// Packed records use native endian fields, in logical column order. A signed
+/// word replaces its high/low pair. Scalar-element arrays repeat one field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Storage {
+    Int32,
+    Uint8,
+    Float32,
+}
+
+impl Storage {
+    pub fn dtype(self) -> &'static str {
+        match self {
+            Self::Int32 => "int32",
+            Self::Uint8 => "uint8",
+            Self::Float32 => "float32",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PackedField {
+    pub name: &'static str,
+    pub index: usize,
+    pub storage: Storage,
+}
+
+impl ArrayLayout {
+    pub fn packed_fields(&self, table: &str) -> Vec<PackedField> {
+        let field = |name: &'static str, index, kind: ValueKind| {
+            let memory_flag = table.starts_with("decision_")
+                && (name.ends_with("_present")
+                    || matches!(
+                        name,
+                        "valid" | "declared" | "tapped" | "ready" | "attacking" | "blocking"
+                    ));
+            let storage = if memory_flag || kind == ValueKind::Flag {
+                Storage::Uint8
+            } else if kind.scale().is_some_and(|n| n > 1) {
+                Storage::Float32
+            } else {
+                Storage::Int32
+            };
+            PackedField {
+                name: name.strip_suffix("_high").unwrap_or(name),
+                index,
+                storage,
+            }
+        };
+        if let Some(element) = &self.element {
+            return vec![field("value", 0, element.kind)];
+        }
+        self.columns
+            .iter()
+            .filter(|c| !c.name.ends_with("_low"))
+            .map(|c| field(c.name, c.index, c.value.kind))
+            .collect()
+    }
+}
+
 impl ArrayLayout {
     fn features(axes: &[&'static str], shape: &[Option<usize>], columns: &[Column]) -> Self {
         let mut axes = axes.to_vec();

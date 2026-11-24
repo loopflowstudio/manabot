@@ -136,7 +136,7 @@ class TestEnvironment:
             if done or truncated:
                 break
 
-    def test_vectorenv_tensor_outputs(self, vector_env):
+    def test_vectorenv_tensor_outputs(self, vector_env: VectorEnv) -> None:
         """Test that VectorEnv properly converts everything to tensors."""
         num_envs = vector_env.num_envs
         device = vector_env.device
@@ -148,7 +148,9 @@ class TestEnvironment:
         assert isinstance(observations, dict)
         for key, tensor in observations.items():
             assert isinstance(tensor, torch.Tensor), f"{key} is not a tensor"
-            assert tensor.dtype == torch.float32, f"{key} has wrong dtype"
+            assert tensor.dtype == (
+                torch.int32 if key == "action_focus" else torch.float32
+            )
             assert tensor.shape[0] == num_envs, f"{key} missing batch dimension"
 
         # Test step with tensor action
@@ -158,7 +160,7 @@ class TestEnvironment:
         # Verify observation tensors maintain properties
         for key, tensor in next_obs.items():
             assert isinstance(tensor, torch.Tensor)
-            assert tensor.dtype == torch.float32
+            assert tensor.dtype == observations[key].dtype
             assert tensor.shape[0] == num_envs
 
         # Verify reward and flags are correct tensor types

@@ -1,3 +1,4 @@
+//! Deprecated dense extent scanner; removed in 0.3.0.
 //! Pin the layout's batched NumPy buffers, then scan their occupied and referenced rows.
 use super::layout_bindings::ObservationLayout;
 use crate::agent::observation_extents::{joins, row_axis, Join};

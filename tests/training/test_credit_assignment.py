@@ -38,6 +38,7 @@ from manabot.training.updates.damped_policy import (
     update_damped_iteration,
 )
 from managym import SlotLoad
+from tests.fixtures.dense_collector import dense_collector
 
 Kind = Literal["scalar", "categorical_wdl"]
 Seats = Literal["one", "both"]
@@ -201,7 +202,7 @@ def collector_for(
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(
-        collector._buffers, swapped=swapped, draw=draw, truncated=truncated
+        dense_collector(collector), swapped=swapped, draw=draw, truncated=truncated
     )
     return collector
 
@@ -465,7 +466,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
         games_per_stream=1,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = CreditGames(collector._buffers)
+    collector._env = CreditGames(dense_collector(collector))
     batch = collect(collector, agent, 1)
     assert markers(batch) == [0, 1, 3, 10, 12]
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)

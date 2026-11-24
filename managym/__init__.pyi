@@ -83,18 +83,26 @@ class ObservationLayout:
     @property
     def arrays(self) -> dict[str, ObservationArrayLayout]: ...
     @property
+    def csr_fact_divisors(self) -> dict[int, int]: ...
+    @property
+    def csr_fields(self) -> dict[str, list[tuple[str, str, int]]]: ...
+    @property
     def shapes(self) -> dict[str, tuple[int, ...]]: ...
     @property
     def axis_buffers(self) -> dict[str, list[tuple[str, int]]]: ...
     @property
-    def object_references(self) -> dict[str, list[tuple[int | None, int]]]: ...
+    def object_references(self) -> dict[str, list[tuple[int | None, int]]]:
+        """Deprecated; removed with dense observation admission in 0.3.0."""
+        ...
     @property
     def dtypes(self) -> dict[str, str]: ...
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
     def axis_extents(
         self, obs: Mapping[str, np.ndarray], *, omit_decision_memory: bool = False
     ) -> dict[str, np.ndarray] | None:
-        """Per-item occupied and referenced row extents, or None on a layout mismatch.
+        """Deprecated; use `ObservationBatch` offsets for v11 observations. Removed in 0.3.0.
+
+        Per-item occupied and referenced row extents, or None on a layout mismatch.
 
         Keep the buffers stable until return. With omit_decision_memory, memory
         arrays may be absent. Present arrays must have their declared shapes.
@@ -113,7 +121,7 @@ def observation_layout(
     is a caller-selected capacity. `policy_history` selects the public history
     rows of `events` instead of raw events; `turn_state` adds
     `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
-    selects the deprecated v9/v10 object rows (removed in 0.4.0) instead of
+    selects the deprecated v9/v10 object rows (removed in 0.3.0) instead of
     input v11's one-token rows and `stack`. Seats are viewer-relative.
     No game or buffer is created.
     """
@@ -421,14 +429,14 @@ class Env:
         obs: Observation,
         max_facts: int | None = None,
     ) -> Dict[str, np.ndarray]:
-        """Deprecated: arrays at native default capacities; removal in 0.4.0."""
+        """Deprecated: arrays at native default capacities; removal in 0.3.0."""
     def encode_observation_into(
         self,
         obs: Observation,
         out: Dict[str, np.ndarray],
         action_overflow: str = "error",
     ) -> None:
-        """Deprecated alias of `managym.encode_observation_into`; removal in 0.4.0."""
+        """Deprecated alias of `managym.encode_observation_into`; removal in 0.3.0."""
 
 class StructuredOfferSet:
     def projection_json(self) -> str: ...
@@ -490,17 +498,42 @@ class RolloutPool:
     def hero_index(self) -> int: ...
     def acting_players(self) -> list[int]: ...
     def root_actions(self) -> list[int]: ...
+    def set_observation_layout(
+        self, layout: ObservationLayout, action_overflow: str = "error"
+    ) -> None: ...
+    def encode_active_batch(self) -> tuple[list[int], ObservationBatch]: ...
+    def step_active_batch(
+        self, actions: Sequence[int]
+    ) -> tuple[list[int], ObservationBatch]: ...
     def set_buffers(
         self,
         buffers: dict[str, np.ndarray],
         capacity: int,
         *,
         layout: ObservationLayout | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
+        ...
     def encode_active(self) -> list[int]: ...
     def step_active(self, actions: Sequence[int]) -> list[int]: ...
     def finish_random(self) -> int: ...
     def scores(self) -> tuple[list[float], int, int]: ...
+
+class ObservationBatch:
+    """Immutable v11 values and native-endian int32 offsets, grouped by observation."""
+    @property
+    def layout(self) -> ObservationLayout: ...
+    @property
+    def batch_size(self) -> int: ...
+    @property
+    def action_counts(self) -> list[int]: ...
+    def gather(
+        self, rows: Sequence[tuple[ObservationBatch, int]]
+    ) -> ObservationBatch: ...
+    def blank_decision_memory(self) -> ObservationBatch: ...
+    def tables(self) -> dict[str, tuple[bool, bytes, bytes]]:
+        """Seat grouping, offsets and live values for each table. Masks derive from spans."""
+        ...
 
 class SlotLoad:
     @property
@@ -560,13 +593,31 @@ class VectorEnv:
     def step(
         self, actions: List[int]
     ) -> List[Tuple[Observation, float, bool, bool, Dict[str, Any]]]: ...
+    def step_observation_batch(
+        self,
+        actions: Sequence[int],
+        layout: ObservationLayout,
+        action_overflow: str = "error",
+    ) -> tuple[ObservationBatch, list[float], list[bool], list[bool]]: ...
+    def set_observation_layout(
+        self,
+        state: dict[str, np.ndarray],
+        layout: ObservationLayout,
+        action_overflow: str = "error",
+    ) -> None: ...
+    def observation_rows(self) -> list[tuple[ObservationBatch, int]]: ...
+    def observations_for_players(
+        self, players: Sequence[int | None]
+    ) -> tuple[list[ObservationRead], ObservationBatch]: ...
     def set_buffers(
         self,
         buffers: Dict[str, np.ndarray],
         action_overflow: str = "error",
         *,
         layout: ObservationLayout | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
+        ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
         self, player_configs: GameSetup | list[PlayerConfig]
@@ -657,7 +708,7 @@ class PlayerConfig:
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Deprecated per-seat hint, removed in 0.4.0; use GameSetup.decklists.
+    # Deprecated per-seat hint, removed in 0.3.0; use GameSetup.decklists.
     disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
@@ -1019,7 +1070,7 @@ class ObservationCharacteristics:
 class Card:
     """A visible card outside the battlefield and stack.
 
-    Flat characteristic accessors are deprecated aliases, removed in 0.4.0.
+    Flat characteristic accessors are deprecated aliases, removed in 0.3.0.
     """
 
     characteristics: ObservationCharacteristics
@@ -1117,7 +1168,7 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
-    # Derived characteristic aliases warn; removed in 0.4.0.
+    # Derived characteristic aliases warn; removed in 0.3.0.
     power: int
     toughness: int
     is_animated: bool
@@ -1155,7 +1206,7 @@ class Permanent:
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
     @property
-    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.4.0")
+    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.3.0")
     def card(self) -> Card | None: ...
 
 class Turn:
@@ -1225,7 +1276,7 @@ class StackObject:
     # Whether a spell's kicker cost was paid.
     kicked: bool
     @property
-    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.4.0")
+    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.3.0")
     def card(self) -> Card | None: ...
 
 class EventData:
@@ -1262,7 +1313,7 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
-    # Deprecated input v9/v10 card rows (removed in 0.4.0).
+    # Deprecated input v9/v10 card rows (removed in 0.3.0).
     def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
@@ -1273,7 +1324,7 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
-# Deprecated: the label of the last numbered world; removed in 0.4.0.
+# Deprecated: the label of the last numbered world; removed in 0.3.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
@@ -1358,7 +1409,9 @@ def encode_observation_into(
     out: Dict[str, np.ndarray],
     action_overflow: str = "error",
 ) -> None:
-    """Write any observation (live, restored or a viewer projection) into out.
+    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
+
+    Write any observation (live, restored or a viewer projection) into out.
 
     The supplied layout determines every buffer key, shape and dtype. The whole buffer
     contract is checked before encoding: a missing array, wrong shape or
@@ -1370,13 +1423,20 @@ def encode_observation_into(
     """
     ...
 
+def encode_observation_batch(
+    envs: Sequence[Env | Observation],
+    layout: ObservationLayout,
+    action_overflow: str = "error",
+) -> ObservationBatch: ...
 def encode_observations_into(
     envs: Sequence[Env],
     layout: ObservationLayout,
     buffers: Dict[str, np.ndarray],
     capacity: int,
 ) -> list[int]:
-    """Write each env's acting-player view into rows 0..len(envs) of buffers.
+    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
+
+    Write each env's acting-player view into rows 0..len(envs) of buffers.
 
     Buffers come from `ObservationSpace.allocate(capacity)`; later rows are
     untouched. Returns each row's legal-action count. Shape, dtype and

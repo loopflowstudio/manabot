@@ -11,7 +11,7 @@ from managym.bots import (
 __all__ = ["DEFAULT_SEARCH_SIMS", "DEFAULT_ROLLOUTS_PER_WORLD", "FlatSearchPolicy"]
 
 warnings.warn(
-    "manabot.sim.search.flat is deprecated; use managym.bots. Removed in 0.4.0.",
+    "manabot.sim.search.flat is deprecated; use managym.bots. Removed in 0.3.0.",
     DeprecationWarning,
     stacklevel=2,
 )

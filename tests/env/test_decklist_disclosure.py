@@ -143,7 +143,7 @@ def test_open_is_the_default_and_omitted_from_serialized_configuration() -> None
     assert _match("closed").model_dump()["decklists"] == "closed"
     setup = Match(_match("closed")).swapped().to_rust()
     assert setup.decklists == "closed"
-    with pytest.warns(DeprecationWarning, match="0.4.0"), pytest.raises(ValueError):
+    with pytest.warns(DeprecationWarning, match="0.3.0"), pytest.raises(ValueError):
         managym.PlayerConfig("x", {"Island": 1}, disclosure="partial")
 
 
@@ -282,9 +282,9 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
 
 
 def test_deprecated_seat_disclosure_rejects_disagreement() -> None:
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         first = managym.PlayerConfig("first", {"Island": 12}, disclosure="closed")
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure="open")
     with pytest.raises(ValueError, match="per-seat disclosure values disagree"):
         managym.Env(seed=7).reset([first, second])
@@ -298,9 +298,9 @@ def test_deprecated_seat_disclosure_rejects_game_conflict(
     hint: DecklistDisclosure,
     decklists: DecklistSampling,
 ) -> None:
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         first = managym.PlayerConfig("first", {"Island": 12}, disclosure=hint)
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure=hint)
     # Omission exercises the constructor's ordinary open default.
     setup = (
@@ -324,7 +324,7 @@ def test_deprecated_seat_disclosure_ignores_unset_hints(
         managym.PlayerConfig("first", {"Island": 12}),
         managym.PlayerConfig("second", {"Mountain": 12}),
     ]
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         players[hinted_seat].disclosure = hint
     for setup in (players, managym.GameSetup(players, decklists=hint)):
         observation, _ = managym.Env(seed=7).reset(setup)

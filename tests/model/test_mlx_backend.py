@@ -709,6 +709,28 @@ def test_mlx_seeded_diagnostics_restore_outer_random_stream(exceptional: bool) -
     assert mx.random.uniform().item() == expected
 
 
+def test_mlx_prepares_observation_spans_at_checkpoint_shape() -> None:
+    space = ObservationSpace()
+    source = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            world=managym.WORLD_SETUP,
+            value_aggregation="masked_mean",
+        ),
+    )
+    policy = assemble(policy_weights(source), bucketed_shapes=True)
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    dense = space.allocate(1)
+    managym.encode_observations_into([env], space.layout, dense, 1)
+    batch = managym.encode_observation_batch([env], space.layout)
+    np.testing.assert_equal(
+        asdict(policy.prepare(batch)), asdict(policy.prepare(dense))
+    )
+
+
 def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
     _, target, _ = _converted(tmp_path)
     policy, space = resolve("mlx").load_policy(str(target))
