@@ -353,13 +353,13 @@ impl GameState {
 const LOOP_COUNT_SATURATION: u64 = 16;
 
 impl GameState {
-    /// CR 104.4b: the rules-relevant state a mandatory loop returns to. The
-    /// canonical match state, without what every repetition advances on its
-    /// own: life and poison totals (the loop watch tracks their progress
-    /// itself), the event logs, priority bookkeeping, identity and timestamp
-    /// allocation, waiting triggers' and stack objects' ids, and turn-history
-    /// counts past [`LOOP_COUNT_SATURATION`]. Anything a finite chain uses up
-    /// (other counters, objects, cards, mana) stays in.
+    /// CR 104.4b: the rules-relevant state a mandatory loop returns to,
+    /// sampled after stabilization. The canonical match state, without what
+    /// every repetition advances on its own: life and poison totals (the loop
+    /// watch tracks their progress itself), the event logs, priority
+    /// bookkeeping, identity and timestamp allocation, stack objects' ids,
+    /// and turn-history counts past [`LOOP_COUNT_SATURATION`]. Anything a
+    /// finite chain uses up (other counters, objects, cards, mana) stays in.
     pub(crate) fn loop_fingerprint(&self) -> u64 {
         use serde_json::Value;
 
@@ -406,30 +406,18 @@ impl GameState {
                 }
             }
         }
-        // A waiting trigger's or stack object's id is its allocation order,
-        // renumbered each cycle.
-        fn forget_id(value: &mut Value) {
-            if let Some(fields) = value.as_object_mut() {
-                fields.remove("id");
-            }
-        }
-        if let Some(Value::Array(pending)) = state.get_mut("pending_triggers") {
-            pending.iter_mut().for_each(forget_id);
-        }
+        // A stack object's id is its allocation order, renumbered each cycle.
+        // Each entry is `{variant: body}`; the id lives in the body.
+        // Stabilization already emptied `pending_triggers` and `trigger_placement`.
         if let Some(Value::Array(stack)) = state.get_mut("stack_objects") {
-            // Each entry is `{variant: body}`; the id lives in the body.
             for entry in stack {
                 if let Some(variant) = entry.as_object_mut() {
-                    variant.values_mut().for_each(forget_id);
+                    for body in variant.values_mut() {
+                        if let Some(fields) = body.as_object_mut() {
+                            fields.remove("id");
+                        }
+                    }
                 }
-            }
-        }
-        if let Some(Value::Object(placement)) = state.get_mut("trigger_placement") {
-            if let Some(Value::Array(remaining)) = placement.get_mut("remaining") {
-                remaining.iter_mut().for_each(forget_id);
-            }
-            if let Some(placing) = placement.get_mut("placing") {
-                forget_id(placing);
             }
         }
         if let Some(Value::Object(turn)) = state.get_mut("turn") {

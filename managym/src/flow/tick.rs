@@ -528,8 +528,7 @@ impl Game {
 
     /// Count one finished resolution toward the CR 104.4b watch, ending the
     /// game in a draw once it shows a mandatory loop; true if it did. An
-    /// emptied stack with nothing waiting to trigger ends any chain, so it
-    /// ends the watch instead.
+    /// emptied stabilized stack ends any chain, so it ends the watch instead.
     fn end_mandatory_loop(&mut self) -> bool {
         if self.stack_is_empty() {
             self.state.priority_mut().clear_loop_watch();

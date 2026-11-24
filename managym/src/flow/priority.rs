@@ -67,7 +67,7 @@ impl PriorityState {
 }
 
 /// What one watched resolution left behind. `fingerprint` is the
-/// rules-relevant state with life totals masked
+/// rules-relevant state with life and poison totals masked
 /// ([`crate::flow::game::GameState::loop_fingerprint`]).
 #[derive(Clone, Copy, Debug)]
 pub struct LoopSample {

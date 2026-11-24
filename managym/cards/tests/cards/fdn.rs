@@ -3390,10 +3390,7 @@ fn conqueror_drain_loop(
     opponent_life: i32,
     spare_bolts: usize,
     poison: bool,
-) -> (
-    crate::support::game::Scenario,
-    managym::state::game_object::PermanentId,
-) {
+) -> (Scenario, managym::state::game_object::PermanentId) {
     use crate::support::{
         game::{clear_hand, force_new_card_in_hand, inject_ability},
         play::{cast_card, target_opponent},
@@ -3451,7 +3448,7 @@ fn conqueror_drain_loop(
 }
 
 /// Pass priority, whoever holds it, until the game ends or `passes` run out.
-fn pass_until_over(s: &mut crate::support::game::Scenario, passes: usize) {
+fn pass_until_over(s: &mut Scenario, passes: usize) {
     for _ in 0..passes {
         if s.game().is_game_over() {
             return;
@@ -3646,16 +3643,17 @@ fn a_rejected_action_leaves_the_loop_watch() {
     assert_eq!(witness(s.game()), before);
 }
 
-/// A spell or ability that stops for a decision is still resolving (CR
-/// 608.2m): the watch counts no resolution for it. Bolt sets off the
-/// Conqueror, whose gain sets off the Ogre's discard of the one card in hand.
-#[test]
-fn a_suspended_resolution_is_not_counted_toward_a_loop() {
+/// Conqueror beside a Gray Ogre with an injected "whenever you gain life"
+/// trigger, empty hands, and Lightning Bolt on the stack at the opponent.
+fn conqueror_gain_chain(
+    intervening_if: Option<managym::state::ability::Condition>,
+    effects: Vec<managym::state::ability::Effect>,
+) -> (Scenario, managym::state::game_object::PermanentId) {
     use crate::support::{
         game::{clear_hand, force_new_card_in_hand, inject_ability},
         play::{cast_card, target_opponent},
     };
-    use managym::state::ability::{Ability, Actor, Effect, TriggerCondition};
+    use managym::state::ability::{Ability, Actor, TriggerCondition};
 
     let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
     s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
@@ -3665,21 +3663,33 @@ fn a_suspended_resolution_is_not_counted_toward_a_loop() {
         &mut s,
         ogre_card,
         Ability::Triggered {
-            intervening_if: None,
+            intervening_if,
             condition: TriggerCondition::GainsLife {
                 who: Actor::You,
                 nth: None,
             },
-            effects: vec![Effect::discard()],
+            effects,
         },
     );
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
     s.set_player_mana_pool(0, "R");
     let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-    force_new_card_in_hand(&mut s, 0, "Gray Ogre");
     cast_card(&mut s, bolt);
     target_opponent(&mut s);
+    (s, ogre)
+}
+
+/// A spell or ability that stops for a decision is still resolving (CR
+/// 608.2m): the watch counts no resolution for it. Bolt sets off the
+/// Conqueror, whose gain sets off the Ogre's discard of the one card in hand.
+#[test]
+fn a_suspended_resolution_is_not_counted_toward_a_loop() {
+    use crate::support::game::force_new_card_in_hand;
+    use managym::state::ability::Effect;
+
+    let (mut s, _) = conqueror_gain_chain(None, vec![Effect::discard()]);
+    force_new_card_in_hand(&mut s, 0, "Gray Ogre");
     // Offer the one-card discard rather than skipping it.
     s.game_mut().skip_trivial = false;
     for _ in 0..20 {
@@ -3697,46 +3707,24 @@ fn a_suspended_resolution_is_not_counted_toward_a_loop() {
 
 /// Bolt starts a life-gain trigger that taps a chosen Ogre and gains life again.
 fn suspending_gain_loop() -> Scenario {
-    use crate::support::{
-        game::{clear_hand, force_new_card_in_hand, inject_ability},
-        play::{cast_card, target_opponent},
-    };
     use managym::state::{
-        ability::{Ability, Actor, Effect, ObjectSelector, TriggerCondition},
+        ability::{Effect, ObjectSelector},
         predicate::CardPredicate,
     };
 
-    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
-    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let ogre_card = card_of(&s, ogre);
-    inject_ability(
-        &mut s,
-        ogre_card,
-        Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::GainsLife {
-                who: Actor::You,
-                nth: None,
+    conqueror_gain_chain(
+        None,
+        vec![
+            Effect::Tap {
+                what: ObjectSelector::chosen(CardPredicate {
+                    named: Some("Gray Ogre".into()),
+                    ..Default::default()
+                }),
             },
-            effects: vec![
-                Effect::Tap {
-                    what: ObjectSelector::chosen(CardPredicate {
-                        named: Some("Gray Ogre".into()),
-                        ..Default::default()
-                    }),
-                },
-                Effect::gain_life(1),
-            ],
-        },
-    );
-    clear_hand(&mut s, 0);
-    clear_hand(&mut s, 1);
-    s.set_player_mana_pool(0, "R");
-    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-    cast_card(&mut s, bolt);
-    target_opponent(&mut s);
-    s
+            Effect::gain_life(1),
+        ],
+    )
+    .0
 }
 
 /// A loop made only of resolutions that stop for a decision is still a loop:
@@ -3776,49 +3764,27 @@ fn a_choice_during_resolution_clears_the_loop_watch() {
 /// ends on its own with every counter spent.
 #[test]
 fn a_finite_chain_over_counters_is_no_mandatory_loop() {
-    use crate::support::{
-        game::{clear_hand, force_new_card_in_hand, inject_ability, set_counters},
-        inspect::counters_of,
-        play::{cast_card, target_opponent},
-    };
+    use crate::support::{game::set_counters, inspect::counters_of};
     use managym::state::{
-        ability::{Ability, Actor, Condition, Effect, ObjectSelector, TriggerCondition},
+        ability::{Condition, Effect, ObjectSelector},
         permanent::CounterKind,
     };
 
-    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
-    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 100);
-    let ogre_card = card_of(&s, ogre);
-    inject_ability(
-        &mut s,
-        ogre_card,
-        Ability::Triggered {
-            intervening_if: Some(Condition::SourceCountersAtLeast {
-                kind: CounterKind::PlusOnePlusOne,
-                count: 1,
-            }),
-            condition: TriggerCondition::GainsLife {
-                who: Actor::You,
-                nth: None,
+    let (mut s, ogre) = conqueror_gain_chain(
+        Some(Condition::SourceCountersAtLeast {
+            kind: CounterKind::PlusOnePlusOne,
+            count: 1,
+        }),
+        vec![
+            Effect::RemoveCounters {
+                from: ObjectSelector::This,
+                up_to: 1,
+                chosen: Some(CounterKind::PlusOnePlusOne),
             },
-            effects: vec![
-                Effect::RemoveCounters {
-                    from: ObjectSelector::This,
-                    up_to: 1,
-                    chosen: Some(CounterKind::PlusOnePlusOne),
-                },
-                Effect::gain_life(1),
-            ],
-        },
+            Effect::gain_life(1),
+        ],
     );
-    clear_hand(&mut s, 0);
-    clear_hand(&mut s, 1);
-    s.set_player_mana_pool(0, "R");
-    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-    cast_card(&mut s, bolt);
-    target_opponent(&mut s);
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 100);
     s.game_mut().skip_trivial = true;
     s.pass_priority();
     assert!(!s.game().is_game_over());

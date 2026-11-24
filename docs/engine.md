@@ -218,7 +218,7 @@ actions finish and waiting triggers reach the stack. A win or loss at that
 point takes precedence over a loop draw. An empty stabilized stack, a new step, a
 successful non-pass priority action, or a decision with several choices ends
 the watch and cancels any pending count. After 64 resolutions it fingerprints
-the state with life totals, event logs, priority and identity allocation masked
+the state with life and poison totals, event logs, priority and identity allocation masked
 (`GameState::loop_fingerprint`). A repeated fingerprint with no new low of
 life or high of poison for a player who can lose ends the game as
 `GameOutcome::Draw { mandatory_loop: true }`, and Env reports
