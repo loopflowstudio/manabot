@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Literal, overload
 if TYPE_CHECKING:
     from manabot.backends.mlx.checkpoint import MLXBackend
     from manabot.backends.torch.checkpoint import TorchBackend
-    from manabot.policy.protocol import Precision
+    from manabot.policy.protocol import BackendName, Precision
 
 
 @overload
@@ -50,3 +50,10 @@ def resolve(
     if name == "mlx":
         return checkpoint.MLXBackend(precision=precision)
     return checkpoint.BACKEND
+
+
+def local_cpu_backend(name: "BackendName") -> "TorchBackend | MLXBackend":
+    """Configure a standalone evaluation child before it loads any policies."""
+    backend = resolve(name, precision="float32")
+    backend.configure_cpu_inference()
+    return backend

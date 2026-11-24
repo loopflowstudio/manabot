@@ -28,6 +28,7 @@ from manabot.env.memory_store import (
     archive_memory,
     gather_memory,
     restore_memory,
+    select_rows,
 )
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import ObservationConfig, RewardConfig
@@ -93,6 +94,21 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
     assert space.shapes["decision_records"] == (4, 74)
+
+
+def test_slicing_a_compact_export_preserves_edits_and_prefix_order() -> None:
+    _, dense = memory_input()
+    store = MemoryStore((4, 1024, 1024, 16384))
+    full = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
+    empty = Prefix(PrefixIdentity("empty", 0, "root"), None)
+    obs = CompactObservation({}, (full, empty, full), (4, 1024, 1024, 16384))
+    obs["decision_records"][2, 0, 3] = 21
+    selected = select_rows(obs, slice(1, 3))
+    assert isinstance(selected, CompactObservation)
+    assert selected.prefixes == (empty, full)
+    assert selected.memory_capacities == obs.memory_capacities
+    assert selected["decision_records"][1, 0, 3] == 21
+    assert np.shares_memory(selected["decision_records"], obs["decision_records"])
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -557,7 +573,18 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
     # Switching viewers must capture, and changing generation must re-admit.
     seats[0] = 1
     epochs[2] += 1
-    store.capture_live_rows(buffers, np.arange(3), seeds, seats, epochs, cursors)
+    restored = store.capture_live_rows(
+        buffers, np.arange(3), seeds, seats, epochs, cursors
+    )
+    assert restored[2].identity.branch == str(epochs[2])
+    assert restored[2].identity != first[2].identity
+    assert restored[2].tail is first[2].tail
+    assert restored[2].serving.segment is not first[2].serving.segment
+    retained = gather_memory([first[1], changed[1]])
+    assert retained["decision_records"][:, 0, 3].tolist() == [
+        first[1].tail.chunk.rows[0][0, 3],
+        first[1].tail.chunk.rows[0][0, 3] + 1,
+    ]
     assert calls == [1, 0, 2]
     # A seed change inside the same generation is a regression, not a hit.
     seeds[0] += 1

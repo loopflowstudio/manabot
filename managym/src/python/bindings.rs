@@ -4285,7 +4285,7 @@ impl PyEnv {
                 .lock()
                 .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
                 .snapshot()
-                .map(super::snapshot_bindings::PyGameSnapshot)
+                .map(|s| super::snapshot_bindings::PyGameSnapshot(s.into()))
                 .map_err(map_agent_err)
         })
     }

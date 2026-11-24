@@ -6,7 +6,7 @@ the rollout; only a selected minibatch reconstructs the dense policy ABI. Native
 buffers and returned logits retain their configured action axis.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -51,7 +51,7 @@ class PackedActions:
     @classmethod
     def pack(
         cls,
-        observation: dict[str, NDArray[np.generic]],
+        observation: Mapping[str, NDArray[np.generic]],
         log_probabilities: NDArray[np.generic],
         *,
         validator: ActionValidator,

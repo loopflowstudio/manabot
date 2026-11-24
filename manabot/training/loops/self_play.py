@@ -5,9 +5,9 @@ registered with the run. `step` collects and learns in place. `self_play`
 registers raw weights, Adam, EMA and counts, then publishes immutable
 policies for evaluation. Snapshot runs also save root recipes and scheduler RNG.
 
-Model initialization uses the run seed s. At starting update u, native streams
-use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
-run preserves the retired executor's offsets; resume starts fresh streams.
+Fresh streams at starting update u use run seed s + 10000 + u, framework
+sampling s + u, and minibatches s + 20000 + u. A host continuation
+reinstalls the saved streams and RNGs.
 """
 
 from __future__ import annotations
@@ -70,6 +70,7 @@ from manabot.training.learning import (
 )
 from manabot.training.rollout.collection import (
     Collector,
+    CollectorSnapshot,
     OperationScope,
     RolloutBatch,
     close_collector,
@@ -94,6 +95,11 @@ from manabot.training.state.backend import (
     SelfPlayBackend,
     SelfPlayLearner,
     require_continuation,
+)
+from manabot.training.state.continuation import (
+    capture_host,
+    restore_host_rng,
+    write_host,
 )
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -170,8 +176,8 @@ class SelfPlay(BaseModel):
     )
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
-    workers: Literal[1, 2, 4] = 1
-    threads: int = Field(default=1, ge=1, le=4)
+    workers: int = Field(default=1, ge=1)
+    threads: int = Field(default=1, ge=1)
     bucketed_shapes: bool = False
     live_tokens: bool = False
     # Rows per forward in collection, bootstrap and learning. They bound how
@@ -341,13 +347,14 @@ def self_play_collector(
     record_attempt: RecordAttempt | None = None,
     operation: OperationScope = no_operation,
     backend: SelfPlayBackend | None = None,
+    snapshot: CollectorSnapshot | None = None,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
     snapshot_state: SnapshotBankState | None = None,
     snapshot_scorer: SnapshotScorer | None = None,
     capture_predicate: CapturePredicate | None = None,
 ) -> Collector:
-    """Native streams seeded from the run seed and the update they start at.
+    """Open saved native roots or seed new streams from the run seed and update.
 
     The caller closes it with `close_collector`. `record_attempt` persists
     each settled game when `game_errors` is set.
@@ -400,6 +407,7 @@ def self_play_collector(
         operation=operation,
         matchup_curriculum=settings.matchup_curriculum,
         deck_source=settings.deck_source,
+        snapshot=snapshot,
         snapshot_vector=snapshot_vector,
         snapshot_bank=snapshot_bank,
         capture_predicate=capture_predicate,
@@ -975,12 +983,13 @@ def self_play_games(
     counts: Counts,
     *,
     backend: SelfPlayBackend | None = None,
+    snapshot: CollectorSnapshot | None = None,
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
     snapshot_scorer: SnapshotScorer | None = None,
     capture_predicate: CapturePredicate | None = None,
 ) -> Iterator[Collector]:
-    """Scope fresh native streams, append-only game ledgers and failure capture."""
+    """Scope native streams, append-only game ledgers and failure capture."""
     backend = backend or default_backend()
     failures = CaptureScope(
         run.out / "failures",
@@ -1007,6 +1016,7 @@ def self_play_games(
             backend=backend,
             snapshot_state=counts.snapshot_bank,
             snapshot_scorer=snapshot_scorer,
+            snapshot=snapshot,
             snapshot_vector=snapshot_vector,
             snapshot_bank=snapshot_bank,
             capture_predicate=capture_predicate,
@@ -1059,26 +1069,25 @@ def self_play(
             learner.agent.readings,
             learner.agent.observation_space,
         )
-        export = state.restore(run, learner, ema, counts)
+        staged = state.restore(run, learner, ema, counts)
         counts.model = model
         counts.readings = readings
-        if export is not None:
-            # Install before steps() can save at a deadline, even at update zero.
-            run.save(export=export)
+        host = staged.host if staged is not None else None
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
-        # Repair an unrecorded milestone without rewriting its immutable bytes.
-        if counts.updates == 0 or is_checkpoint(settings, counts.updates):
-            publish(settings, run, learner, ema, counts, backend=backend)
         with self_play_games(
             settings,
             run,
             counts,
             backend=backend,
+            snapshot=host.collector if host is not None else None,
             snapshot_vector=snapshot_vector,
             snapshot_bank=snapshot_bank,
             snapshot_scorer=snapshot_scorer,
             capture_predicate=capture_predicate,
         ) as collector:
+            # Validate every replayed root before repairing an unrecorded milestone.
+            if counts.updates == 0 or is_checkpoint(settings, counts.updates):
+                publish(settings, run, learner, ema, counts, backend=backend)
             if counts.updates == 0:
                 log_corpus_setup(
                     run,
@@ -1091,6 +1100,16 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
+            if staged is not None:
+                if host is not None:
+                    restore_host_rng(host, rng)
+                    staged.restore_sampling(collector.numerics)
+
+                def export(folder: Path) -> None:
+                    host_sha256 = write_host(folder, capture_host(collector, rng))
+                    staged.export(folder, host_sha256, collector.numerics)
+
+                run.save(export=export)
             for update in run.steps("updates", to=updates):
                 row = step(
                     settings,
