@@ -268,20 +268,18 @@ impl Game {
                 if zone != ZoneType::Graveyard || !own {
                     return routes.into();
                 }
-                if card.types.is_spell() {
-                    let printed = card.flashback();
-                    if printed.is_some() {
-                        routes.push(PlayRoute::PrintedFlashback);
-                    }
-                    if active
-                        && permissions.graveyard_flashback
-                        && self
-                            .granted_flashback_cost(object)
-                            .as_ref()
-                            .is_some_and(|cost| Some(cost) != printed)
-                    {
-                        routes.push(PlayRoute::GrantedFlashback);
-                    }
+                let printed = card.flashback();
+                if printed.is_some() {
+                    routes.push(PlayRoute::PrintedFlashback);
+                }
+                if active
+                    && permissions.graveyard_flashback
+                    && self
+                        .granted_flashback_cost(object)
+                        .as_ref()
+                        .is_some_and(|cost| Some(cost) != printed)
+                {
+                    routes.push(PlayRoute::GrantedFlashback);
                 }
                 if card.graveyard_counter_cast().is_some() {
                     routes.push(PlayRoute::PrintedGraveyard);
