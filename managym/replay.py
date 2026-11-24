@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Literal, Never
+from typing import Literal, Never, Protocol
 
 import numpy as np
 
@@ -82,7 +82,12 @@ def _build_name(identities: Mapping[str, object]) -> str:
     )
 
 
-def interventions_by_offset(game: GameInputs) -> dict[int, list[Intervention]]:
+class InterventionHistory(Protocol):
+    @property
+    def interventions(self) -> Sequence[Intervention]: ...
+
+
+def interventions_by_offset(game: InterventionHistory) -> dict[int, list[Intervention]]:
     boundaries: dict[int, list[Intervention]] = defaultdict(list)
     for op in game.interventions:
         boundaries[op.at_action].append(op)
@@ -521,6 +526,13 @@ def _replay_game_inputs(
         retained_index = len(evidence.search.operations) - 1
     else:
         retained_phase, retained_index = "prefix", len(game.actions) - 1
+    # Branch operations and semantic Commands belong to the scalar executor.
+    # The retained batch still owns the (unknown) original vector outcome.
+    vector_steps = evidence.mode == "vector" and not (
+        game.interventions
+        or game.object_candidate_frames
+        or any(isinstance(a, str) for a in game.actions)
+    )
     env = (
         managym.VectorEnv(
             num_envs=1,
@@ -531,7 +543,7 @@ def _replay_game_inputs(
             skip_trivial=evidence.skip_trivial,
             player_policies=evidence.resolved_player_policies,
         )
-        if evidence.mode == "vector"
+        if vector_steps
         else managym.Env(
             player_policies=evidence.resolved_player_policies,
             seed=game.seed,
@@ -553,7 +565,7 @@ def _replay_game_inputs(
         setup = (
             [] if evidence.operation == "reset" and not game.players else game.setup()
         )
-        if evidence.mode == "vector":
+        if vector_steps:
             reached = env.reset_all(setup)[0][0]
         else:
             reached = env.reset(setup)[0]
@@ -565,8 +577,7 @@ def _replay_game_inputs(
             if operations or remaining_frames:
                 index, phase = offset, "intervention"
                 agreement.at_retained_failure = False
-                if not isinstance(env, managym.Env):
-                    raise ValueError("branch interventions require a scalar replay")
+                assert isinstance(env, managym.Env)
                 apply_boundary(env, operations, remaining_frames)
                 if operations:
                     reached = env.observation_for_player(env.current_agent_index() or 0)
@@ -582,7 +593,7 @@ def _replay_game_inputs(
             ):
                 frame = (
                     env.semantic_decision_frames_json()[0]
-                    if evidence.mode == "vector"
+                    if vector_steps
                     else env.semantic_decision_frame_json()
                 )
                 agreement.matches_binding = frame == game.frame
@@ -607,7 +618,7 @@ def _replay_game_inputs(
             agreement.at_retained_failure = (
                 phase == retained_phase and index == retained_index
             )
-            if evidence.mode == "vector":
+            if vector_steps:
                 reached = env.step([action])[0][0]
             elif isinstance(action, str):
                 env.execute_semantic_command_json(action)

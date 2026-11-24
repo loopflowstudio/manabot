@@ -155,6 +155,12 @@ pub struct Env {
     pub(crate) capture_generation: u64,
 }
 
+#[derive(Default)]
+pub(crate) struct GameRecording {
+    statistics: Option<crate::flow::statistics::GameStatistics>,
+    exposure: Option<String>,
+}
+
 /// One canonical space prepared for bounded materialization against the same
 /// live `Env` root. It retains no source snapshot and never re-enumerates.
 #[derive(Debug)]
@@ -262,7 +268,11 @@ impl Env {
         Ok(PossibleWorldSpace::for_viewer(game, viewer))
     }
 
-    fn branch_from_game(&self, game: Game) -> Env {
+    fn branch_from_game(&self, mut game: Game) -> Env {
+        game.decision_memory = game
+            .decision_memory
+            .each_ref()
+            .map(|log| log.fork_lineage());
         // Materialized worlds have no replay prefix. Exact forks restore theirs.
         Env {
             game: Some(game),
@@ -316,14 +326,9 @@ impl Env {
             }
         }
         let _scope = self.profiler.track("env_reset");
-        if self.capture == Some(CaptureMode::Exposure) && self.game.is_some() {
-            self.retained_exposure.push(self.exposure_json()?);
-        }
-        if self.drained_generation != Some(self.capture_generation) {
-            if let Some(summary) = self.statistics() {
-                self.retained_statistics.push(summary);
-            }
-        }
+        let evidence = self.current_recording()?;
+        self.retained_exposure.extend(evidence.exposure);
+        self.retained_statistics.extend(evidence.statistics);
         let mut game = Game::construct(
             &player_configs,
             self.seed,
@@ -358,30 +363,49 @@ impl Env {
         Ok((observation, info))
     }
 
-    /// Prepare an atomic root replacement without dropping optional recording sinks.
-    /// Unlike a search branch, this continues the producer's retained evidence.
-    pub(crate) fn replacement_root(&self) -> Result<Self, AgentError> {
-        let mut replacement = Self::new(self.seed(), self.skip_trivial, false, false)
+    /// Recording belongs to a fresh game. A restored branch has no game sinks,
+    /// even when its slot will enable them again at the next reset.
+    pub(crate) fn current_recording(&self) -> Result<GameRecording, AgentError> {
+        let exposure = if self.capture == Some(CaptureMode::Exposure)
+            && self
+                .game
+                .as_ref()
+                .is_some_and(|game| game.card_capture.is_some())
+        {
+            Some(self.exposure_json()?)
+        } else {
+            None
+        };
+        let statistics = (self.drained_generation != Some(self.capture_generation))
+            .then(|| self.statistics())
+            .flatten();
+        Ok(GameRecording {
+            exposure,
+            statistics,
+        })
+    }
+
+    pub(crate) fn replacement_root(&self, seed: u64) -> Self {
+        let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled(), false)
             .with_player_policies(self.player_policies)
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
-        replacement.collect_statistics = self.collect_statistics;
-        replacement.capture = self.capture;
-        replacement.record_terminal = self.record_terminal;
-        replacement.retained_statistics = self.retained_statistics.clone();
-        if self.drained_generation != Some(self.capture_generation) {
-            if let Some(summary) = self.statistics() {
-                replacement.retained_statistics.push(summary);
-            }
-        }
-        replacement.retained_exposure = self.retained_exposure.clone();
-        if self.capture == Some(CaptureMode::Exposure) && self.game.is_some() {
-            replacement.retained_exposure.push(self.exposure_json()?);
-        }
-        if self.profiler.is_enabled() {
-            replacement.profiler = Profiler::new(true, 64);
-        }
-        Ok(replacement)
+        next.collect_statistics = self.collect_statistics;
+        next.capture = self.capture;
+        next
+    }
+
+    /// Publish a prepared slot, moving undrained evidence only after admission.
+    pub(crate) fn replace_slot(&mut self, mut next: Self, evidence: GameRecording) {
+        next.collect_statistics = self.collect_statistics;
+        next.capture = self.capture;
+        next.record_terminal = self.record_terminal;
+        std::mem::swap(&mut next.profiler, &mut self.profiler);
+        next.retained_statistics = std::mem::take(&mut self.retained_statistics);
+        next.retained_statistics.extend(evidence.statistics);
+        next.retained_exposure = std::mem::take(&mut self.retained_exposure);
+        next.retained_exposure.extend(evidence.exposure);
+        *self = next;
     }
 
     pub fn enable_statistics(&mut self) -> Result<(), AgentError> {
