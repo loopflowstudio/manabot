@@ -852,8 +852,10 @@ kind 11 under the id `Ward`, in the tokens the card's definition uses
 (`PaymentCost::Life`, then the amount). The LLM text says "ward: pay 7 life".
 
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
-enters with an additional +1/+1 counter") counts in its player's ordinary
-or restricted mana aggregate, according to its restriction, and is stated as
+enters with an additional +1/+1 counter"), and mana with a restriction the
+player columns do not name ("can't be spent to cast spells from your hand"),
+counts in its player's ordinary or restricted mana aggregate, according to
+its restriction, and is stated as
 an effect program on that player: fact kind 11
 under the id `PooledMana`, one program per class, in the tokens the producing
 card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is

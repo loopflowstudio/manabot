@@ -1210,6 +1210,11 @@ stack mana value 2. Both viewers can inspect this value. The v11 stack row
 keeps the selected printing’s base value in `mana_value` and reports the
 on-stack value in `effective_mana_value`.
 
+A spell cast from a prepared copy is a prepared spell; one cast with flashback
+is exiled as it leaves the stack. Both facts belong to the cast, so a copy of
+the spell has neither. Observations, the v11 stack row (`from_prepared`,
+`flashback`), the text and Academy's stack entries show them to both viewers.
+
 Entry replacements supply instructions for the new object, rather than facts
 carried from the old one. An "enters as a copy" choice (CR 614.1c) supplies
 copiable values before the other entry replacements are considered (CR

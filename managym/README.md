@@ -631,14 +631,15 @@ payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
-source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
-Every cost carries a `SpendingContext`: `Cast` with the spell's announced
-subtypes and types, `Activate` with the source's zone and subtypes, or
+source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
+`ExceptSpellsFromHand` is Heartwood Crafter's. Every cost carries a
+`SpendingContext`: `Cast` with the spell's announced subtypes and types and
+the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
 Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every encoder refuses other restricted mana (`unrepresentable_state`)
-rather than drop it.
+mana); every other restriction is a `pooled_mana_classes` class and a
+`PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v6: the schema-8 semantic Observation, shared native continuation frames, bound public card
