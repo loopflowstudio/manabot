@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Full-Branch Audit at HEAD 31c81eda80</title>
+<title>MTG-418 Concept Review · Full-Branch Audit at HEAD 7efb2bd6ce</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -77,10 +77,10 @@
     padding: 1rem 1.1rem;
     background: var(--card);
   }
-  .panel.proposed-box { border-color: var(--prop-fg); }
+  .panel.yes-box { border-color: var(--yes-fg); }
   .panel.existing-box { border-color: var(--ex-fg); }
   .callout {
-    border-inline-start: 4px solid var(--no-fg);
+    border-inline-start: 4px solid var(--yes-fg);
     background: var(--card);
     padding: .9rem 1.1rem;
     border-radius: 0 8px 8px 0;
@@ -95,40 +95,40 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Post-Alignment Full-Branch Concept Review · HEAD 31c81eda80</div>
+  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Full-Branch Concept Review · HEAD 7efb2bd6ce</div>
   <h1>Do MTG-418’s event-history, query, state-trigger, grantor-cost, draw, and CR 104.4b loop models line up?</h1>
   <p>
     <strong>Area reviewed:</strong> The entire built MTG-418 surface across <code>managym</code>,
     <code>manabot</code>, and <code>managym.academy</code> / <code>academy/ui</code> against branch base
-    <code>5d85077748</code> (221 files changed; <strong>81/81 primary FDN rows</strong>,
-    <strong>15/17 cost-primary rows</strong> with explicit blockers on <em>Quilled Greatwurm</em> and
-    <em>Ovika</em>, and all 5 cross-set query families on hash contract <strong>v31</strong>):
+    <code>5d85077748</code> (83 non-card core engine/Python/UI files plus card modules and fixtures;
+    <strong>81/81 primary FDN rows</strong>, <strong>15/17 cost-primary rows</strong> with explicit blockers
+    on <em>Quilled Greatwurm</em> and <em>Ovika</em>, and all 5 cross-set query families on hash contract
+    <strong>v31</strong>):
     <code>state/src/{ability,card,game_object,permanent,stack_object}.rs</code>,
-    <code>src/flow/{action,damage,game,layers,mana,payment,play,priority,resolution,statics,tick,triggers,turn,zones}.rs</code>,
+    <code>src/flow/{action,damage,decision,game,layers,mana,payment,play,priority,proposed_event,resolution,statics,tick,triggers,turn,zones}.rs</code>,
     <code>src/agent/{ability_description,effect_execution,env,observation,observation_encoder,observation_layout}.rs</code>,
-    <code>src/state/{hash,player}.rs</code>, <code>managym/academy/{recording,server,trace}.py</code>,
-    and <code>academy/ui/src/lib/recording.ts</code>.
+    <code>src/state/{hash,loop_fingerprint_tests,player}.rs</code>,
+    <code>managym/academy/{recording,server,trace}.py</code>, and
+    <code>academy/ui/src/lib/recording.ts</code>.
   </p>
   <p class="small">
-    The event-history, turn-counter, LKI, contextual-query, CDA, mana-split, state-trigger, untap, and
-    cross-consumer draw-orientation models now line up end-to-end. However, reviewing the whole branch
-    after the closing-slice alignment (<code>86c6f44a8a</code>–<code>89632b774e</code>) exposed
-    <strong>one conceptual mismatch inside the new CR 104.4b loop-watch contract</strong> (across
-    <code>hash.rs::loop_fingerprint</code>, <code>action.rs::execute_action</code>, and
-    <code>tick.rs::tick_priority</code>) plus <strong>one residual grantor-tap reservation split</strong>
-    in <code>mana.rs</code>. None require bumping hash contract v31 or churning conformance evidence.
+    <strong>Outcome: Nothing to change.</strong> Commits <code>c36ed44f43</code> and
+    <code>c36a622534</code> closed both mismatches flagged at <code>31c81eda80</code> (the four CR 104.4b
+    loop-watch/fingerprint seams and the split tap-grantor sacrifice reservation) without bumping hash
+    contract <strong>v31</strong> or drifting conformance evidence. Every product/rules concept across the
+    full branch now maps to one clear owner in the code. Ready for <code>gate</code>.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 31c81eda80 vs. Base 5d85077748</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 7efb2bd6ce vs. Base 5d85077748</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>31c81eda80</code>)</th>
+        <th style="width:43%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>7efb2bd6ce</code>)</th>
         <th style="width:9%">Line up?</th>
-        <th style="width:29%">Mismatch</th>
+        <th style="width:27%">Notes &amp; Verification</th>
       </tr>
     </thead>
     <tbody>
@@ -136,102 +136,109 @@
         <td><strong>Turn-scoped player &amp; exact-object history</strong><br><span class="small">CR 119.9, 400.7, 508.1, 603.2d: what happened this turn, to whom, how often</span></td>
         <td>
           <code>TurnState</code> owns <code>PlayerTurnHistory</code> (13 per-seat counters projected to v11
-          <code>player_turn_state</code> + LLM text), <code>DamageHistory</code> (exact source→permanent &amp;
-          combat-player pairs, v11 relation kind 11 + seat flags), <code>attacks_this_turn</code>,
-          <code>ability_triggers_this_turn</code>, <code>used_trigger_grants</code>, and
-          <code>ability_resolutions_this_turn</code>.
+          <code>player_turn_state</code> + LLM text), <code>DamageHistory</code> (sorted exact
+          source&rarr;permanent &amp; combat-player pairs, v11 relation kind 11 + viewer-relative seat flags),
+          <code>attacks_this_turn</code>, <code>ability_triggers_this_turn</code>,
+          <code>used_trigger_grants</code>, and <code>ability_resolutions_this_turn</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Single owner, one turn reset, exact CR 400.7 identity, canonical hash v31, and viewer-safe
-          projections across all 81/81 primary FDN rows and 5 cross-set query families.
+          Single owner, single turn reset, exact CR 400.7 object identity, canonical hash v31, and
+          viewer-safe projections across all 81/81 primary FDN rows and 5 cross-set query families.
         </td>
       </tr>
       <tr>
         <td><strong>Instruction results, permanent/spell LKI, queries, CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
         <td>
-          <code>EventBinding</code> + <code>EffectFrame</code> results; <code>ObjectLki.renamed</code> +
-          <code>lki_face_printing</code> / <code>lki_mana_printing</code> + unified
+          <code>EventBinding</code> + <code>EffectFrame</code> committed results; <code>ObjectLki.renamed</code>
+          + <code>lki_face_printing</code> / <code>lki_mana_printing</code> + unified
           <code>matches_permanent_facts</code>; <code>SpellLki</code> + <code>Game::spell_info</code>;
           <code>ObjectProperty::{Power, Toughness, ManaValue, Colors, Counters}</code>;
           <code>ContextRead::{SourcePower, SourceLki, TriggeringObject, PaidCost}</code>;
-          <code>is_mana_ability</code> vs. finalized <code>mana_choices</code>; all-zone <code>Game::object_pt</code>.
+          <code>ActivatedAbilityDefinition::is_mana_ability</code> vs. finalized <code>mana_choices</code>;
+          all-zone <code>Game::object_pt</code>; unified <code>TriggerCondition::DealsDamage</code>,
+          <code>triggering_amount</code>, and threaded <code>triggering_noun</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Aligned across rules, hash v31, v11 tensors, LLM text, and pinned pilots (legacy serialized variants
-          intentionally retained for TLA pilot token stability while delegating to shared runtime readers).
+          Aligned across rules, hash v31, v11 tensors, LLM text, and pinned pilots. Legacy serialized
+          variants (<code>PutsCounters</code>, <code>DealsCombatDamage</code>,
+          <code>TriggeringHadCounters</code>, <code>NoCounters</code>, <code>MillCards.target</code>,
+          <code>CharacteristicPower</code>) stay intentionally for TLA pinned-pilot token stability while
+          delegating to shared runtime readers.
         </td>
       </tr>
       <tr>
         <td><strong>Untap transitions &amp; CR 603.8 state triggers</strong><br><span class="small">CR 122.1d, 502.3, 603.3a, 603.8</span></td>
         <td>
-          Single <code>Game::untap_permanent</code> emits <code>PermanentUntapped</code>;
-          <code>TriggerCondition::State(Condition)</code> + legacy <code>NoCounters</code> share
-          <code>EventKinds::STATE_TRIGGER</code> (<code>1 &lt;&lt; 31</code>) and
-          <code>state_trigger_waiting</code> (now checking <code>inline_effects.is_none()</code> across
-          pending, placement, and stack).
+          Single <code>Game::untap_permanent</code> emits <code>PermanentUntapped</code> (respecting stun
+          counter replacement); <code>TriggerCondition::State(Condition)</code> + legacy
+          <code>NoCounters</code> share <code>EventKinds::STATE_TRIGGER</code> (<code>1 &lt;&lt; 31</code>)
+          and <code>state_trigger_waiting</code> (requiring <code>inline_effects.is_none()</code> across
+          <code>pending_triggers</code>, <code>trigger_placement</code>, and <code>stack_objects</code>).
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Cleanly aligned; granted/delayed triggers at index 0 no longer suppress printed state triggers.
+          Granted/delayed triggers at ability index 0 cannot suppress printed state triggers; stun counters
+          prevent false untap triggers.
         </td>
       </tr>
       <tr>
         <td><strong>Draw outcome projection across consumers</strong><br><span class="small">In a draw (<code>winner = None</code>), neither player won in Env, live play, Watch, or traces</span></td>
         <td>
           <code>GameOutcome::Draw { mandatory_loop }</code> flows through <code>env.rs</code>
-          (<code>draw_reason</code>, <code>winner_index = None</code>), <code>academy/ui/src/lib/recording.ts::orientBoard</code>,
+          (<code>draw_reason: "mandatory_loop"</code>, <code>winner_index() = None</code>),
+          <code>academy/ui/src/lib/recording.ts::orientBoard</code>,
           <code>managym/academy/server.py::viewer_view</code>,
           <code>managym/academy/trace.py::normalize_observation_to_hero</code>, and
-          <code>managym/academy/recording.py::person_board</code> — all taking <code>winner: int | None</code>.
+          <code>managym/academy/recording.py::person_board</code> — all taking explicit
+          <code>winner: int | None</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Draw stays unwon for both seats across native observations, Python Academy, Svelte UI, and saved traces.
+          Draw stays unwon for both seats across native observations, Python Academy, Svelte UI, and saved
+          traces without churning <code>experience-v1</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>CR 104.4b mandatory-loop watch &amp; state fingerprint</strong><br><span class="small">A rejected action never mutates game state; a repeating loop state matches what the watch checks for progress; only finished resolutions count</span></td>
+        <td><strong>CR 104.4b mandatory-loop watch &amp; state fingerprint</strong><br><span class="small">Rejected actions never mutate state; repeating loop states match tracked progress; only finished resolutions count</span></td>
         <td>
-          <code>PriorityState.loop_watch</code> + <code>MandatoryLoopWatch::repeats</code>
-          (<code>priority.rs:94</code>) tracks <code>life_low</code> and <code>poison_high</code> gated by
-          <code>can_lose</code>; <code>GameState::loop_fingerprint</code> (<code>hash.rs:363</code>) masks
-          <code>players[*].life</code> and waiting trigger <code>id</code>s; <code>execute_action</code>
-          (<code>action.rs:994</code>) clears <code>loop_watch</code> before validation;
-          <code>tick_priority</code> (<code>tick.rs:500</code>) calls <code>watch_for_mandatory_loop</code>
-          before checking <code>suspended_decision</code>.
+          <code>PriorityState.loop_watch: Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;</code> with lazy
+          sampling past <code>UNWATCHED = 64</code> (<code>CAP = 10_000</code>);
+          <code>action.rs::execute_action</code> clears <code>loop_watch</code> only after
+          <code>dispatch_action(action)?</code> succeeds for a non-pass priority action;
+          <code>tick.rs::tick_priority</code> skips <code>watch_for_mandatory_loop()</code> when
+          <code>suspended_decision.is_some()</code>; <code>hash.rs::loop_fingerprint()</code> masks
+          <code>players[*].life</code> and only <code>players[*].counters["poison"]</code> (dropping empty
+          <code>"counters"</code>), strips <code>"id"</code> across <code>pending_triggers</code>,
+          <code>trigger_placement</code>, and <code>stack_objects[*].{variant}</code>, and saturates only
+          <code>turn.history</code> plus <code>entry[2]</code> of
+          <code>ability_{triggers,resolutions}_this_turn</code>.
         </td>
-        <td><span class="badge no">No</span></td>
+        <td><span class="badge yes">Yes</span></td>
         <td>
-          <strong>Biggest mismatch — four seams in one contract:</strong>
-          (1) <code>execute_action</code> clears hashed <code>loop_watch</code> <em>before</em> validating the
-          action, so a rejected/stale priority action mutates <code>GameState::deterministic_hash()</code>;
-          (2) <code>loop_fingerprint</code> forgets to mask <code>players[*].counters["poison"]</code> (making
-          <code>MandatoryLoopWatch</code>’s poison/<code>can_lose</code> tracking unreachable in real games) and
-          forgets <code>stack_objects[*].id</code> (breaking loops with &ge;2 objects on the stack);
-          (3) <code>saturate</code> clamps <code>ObjectId</code> and <code>CardDefId</code> to 16 inside
-          <code>ability_{triggers,resolutions}_this_turn</code> instead of only the count;
-          (4) <code>watch_for_mandatory_loop</code> counts an unfinished resolution whenever
-          <code>resolve_top_of_stack</code> suspends on a mid-resolution decision.
+          Closed in <code>c36ed44f43</code> on hash v31 with zero digest drift. Directed checks verify
+          rejected-action witness invariance, prompt poison-vs-Herald draws, suspended-resolution exclusion,
+          non-poison counter preservation, stack-id stripping, and exact source identity under count
+          saturation.
         </td>
       </tr>
       <tr>
-        <td><strong>Grantor-cost activated abilities</strong><br><span class="small">CR 302.6, 602.2b: paying an activation cost by exiling or tapping the attaching Aura/Equipment</span></td>
+        <td><strong>Grantor-cost activated abilities &amp; owed source reservations</strong><br><span class="small">CR 302.6, 602.2b: paying an activation cost by exiling or tapping the attaching Aura/Equipment</span></td>
         <td>
-          <code>ActivatedAbilityDefinition::has_grantor_cost()</code> now unifies action focus
-          (<code>observation.rs:2208</code>) and descriptions (<code>action.rs:58</code>). In
-          <code>mana.rs</code>, however, <code>reserve_announced_payment</code> (<code>mana.rs:1883</code>) and
-          <code>announced_model</code> (<code>mana.rs:1911</code>) reserve <code>tap_grantor</code> with
-          <code>sacrifice: false</code>, unlike every other tap reservation (<code>owed_reservation</code>,
-          <code>payment_reservation</code>, <code>ManaUpfront</code>).
+          <code>ActivatedAbilityDefinition::has_grantor_cost()</code> unifies action focus
+          (<code>observation.rs:2208</code>), descriptions (<code>action.rs:58</code>), and
+          <code>announced_model</code> (<code>mana.rs:1911</code>).
+          <code>SourceReservation::owed(permanent, tap, leaves)</code> (<code>mana.rs:193</code>,
+          setting <code>sacrifice: tap || leaves</code>) is the sole constructor across all eight
+          owed-source reservation sites (<code>owed_reservation</code>,
+          <code>reserve_announced_payment</code>, <code>announced_model</code>,
+          <code>payment_reservation</code>, and upfront mana costs).
         </td>
-        <td><span class="badge no">No</span></td>
+        <td><span class="badge yes">Yes</span></td>
         <td>
-          <strong>Split reservation rule:</strong> tapping a permanent requires it to remain on the
-          battlefield until paid, so every other tap reservation sets <code>sacrifice: true</code>. Leaving
-          <code>sacrifice: false</code> lets a sacrifice-for-mana ability on a tap-grantor consume the grantor
-          mid-payment.
+          Closed in <code>c36ed44f43</code> + compressed into one constructor in <code>c36a622534</code>.
+          Both tap and exile grantors hold against sacrifice uniformly with every other owed tap/leave cost.
         </td>
       </tr>
     </tbody>
@@ -239,208 +246,108 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch: CR 104.4b Watch &amp; Fingerprint Disagree on State Boundaries</h2>
+  <h2>2. Previously Flagged Mismatches &mdash; Verified Closed at <code>7efb2bd6ce</code></h2>
   <div class="callout">
-    <strong>The core problem:</strong> Moving <code>MandatoryLoopWatch</code> onto hashed
-    <code>PriorityState</code> made the watch part of authoritative <code>GameState</code>, and replacing
-    no-extreme checks with <code>GameState::loop_fingerprint()</code> split loop detection into two halves:
-    <em>what the fingerprint ignores</em> and <em>what <code>MandatoryLoopWatch</code> tracks for progress</em>.
-    Right now those two halves don’t match (poison and stacked trigger IDs leak into the fingerprint while
-    object/definition IDs get clamped to 16), and the watch’s lifecycle fires on the wrong sides of validation
-    (clearing before an action is checked) and suspension (counting a spell that paused mid-resolution).
+    <strong>Resolution summary:</strong> At <code>31c81eda80</code>, the only remaining mismatches on the
+    branch were the four CR 104.4b loop-watch/fingerprint seams and the split tap-grantor sacrifice
+    reservation. All five are now fixed in the code (<code>c36ed44f43</code>, <code>c36a622534</code>),
+    exercised by directed tests, and confirmed free of hash-v31 drift. No new conceptual mismatch was found
+    across the full 83-file core diff.
   </div>
-
-  <h3>Concrete interaction walkthrough</h3>
-  <p>
-    <strong>Normal path (<em>Bloodthirsty Conqueror</em> + life-gain drain + <em>Herald of Eternal Dawn</em>):</strong>
-    Players pass priority; after 64 resolutions, <code>loop_fingerprint()</code> masks life totals and
-    waiting-trigger IDs, sees the same fingerprint with no losable progress, and ends in
-    <code>GameOutcome::Draw { mandatory_loop: true }</code>.<br>
-    <strong>Failure #1 (Stale action breaks witness invariance):</strong> Mid-chain (<code>loop_watch.is_some()</code>,
-    e.g., after one trigger resolves with another still on the stack), a client submits a stale
-    <code>CastSpell</code> or wrong-seat <code>PlayLand</code>. <code>execute_action</code> clears
-    <code>self.state.priority_mut().loop_watch = None</code> at line 1003 <em>before</em> returning
-    <code>Err(...)</code>. The rejected command silently changed <code>GameState::deterministic_hash()</code>.<br>
-    <strong>Failure #2 (Poison loop vs. Herald &amp; multi-trigger stack loop):</strong> Seat 0 triggers an
-    infinite poison loop against Seat 1 controlling <em>Herald of Eternal Dawn</em> (<code>can_lose = false</code>),
-    or a loop where two triggers sit on the stack simultaneously. <code>MandatoryLoopWatch</code> checks
-    <code>!now.can_lose[seat]</code> on poison, expecting a repeated fingerprint at resolution 66 — but
-    <code>loop_fingerprint()</code> never stripped <code>players[*].counters["poison"]</code> or
-    <code>stack_objects[*].id</code>. Every cycle produces a fresh hash until <code>CAP = 10_000</code>.<br>
-    <strong>Failure #3 (Suspending spell miscounted):</strong> A lone <em>Incinerating Blast</em> or forced
-    single-discard spell resolves and suspends (<code>suspended_decision.is_some()</code>). Because CR 608.2m
-    keeps the spell on the stack while resolving, <code>watch_for_mandatory_loop()</code> sees a nonempty stack,
-    allocates <code>Box&lt;MandatoryLoopWatch&gt;</code>, and records <code>resolutions = 1</code> before the
-    spell has even resolved.<br>
-    <strong>Recovery (proposed alignment):</strong> (1) Clear <code>loop_watch</code> only <em>after</em> a
-    non-pass priority action returns <code>Ok(())</code>; (2) mask <code>players[*].counters["poison"]</code>
-    and <code>stack_objects[*].id</code> in <code>loop_fingerprint()</code>, and saturate only the count
-    element of <code>ability_{triggers,resolutions}_this_turn</code>; (3) skip <code>watch_for_mandatory_loop()</code>
-    when <code>suspended_decision.is_some()</code>; (4) reserve <code>sacrifice: true</code> for
-    <code>tap_grantor</code> just like every other tap reservation.
-  </p>
 
   <div class="grid">
     <div class="panel existing-box">
-      <h3>Before <span class="badge existing">Existing at 31c81eda80</span></h3>
-      <pre>// managym/src/flow/action.rs:994 — mutates BEFORE validation!
-if matches!(action, Action::PlayLand { .. } | Action::CastSpell { .. } | ...) {
-    self.state.priority_mut().loop_watch = None; // leaks on Err!
-}
-
-// managym/src/flow/tick.rs:495 — counts suspended spells!
-self.resolve_top_of_stack();
-if !self.state.turn.step_initialized || self.is_game_over() { return None; }
-if self.watch_for_mandatory_loop() { ... } // runs even if suspended!
-
-// managym/src/state/hash.rs:393 — forgets poison &amp; stack_objects[*].id!
-player.remove("life"); // leaves counters["poison"]!
-// pending_triggers &amp; trigger_placement forget "id", stack_objects does not!
-// saturate() clamps ObjectId &amp; CardDefId inside ability_*_this_turn to 16!
-
-// managym/src/flow/mana.rs:1883, 1911 — tap_grantor skips sacrifice lock
-SourceReservation { permanent, tap, sacrifice: !tap }</pre>
-      <p class="small">
-        A rejected priority action mutates the state hash; poison-vs-Herald and 2-trigger stack loops never
-        repeat a fingerprint before 10,000; suspending spells allocate and increment <code>loop_watch</code>;
-        tap-grantors omit sacrifice reservation.
-      </p>
+      <h3>Before <span class="badge existing">31c81eda80 (Findings 11&ndash;16)</span></h3>
+      <pre>// action.rs: cleared loop_watch before dispatch (mutated hash on Err)
+// tick.rs: counted watch_for_mandatory_loop while suspended_decision.is_some()
+// hash.rs: left players[*].counters["poison"] and stack_objects[*].id;
+//          saturated ObjectId/CardDefId inside ability_*_this_turn
+// mana.rs: 8 struct literals; TapGrantor used sacrifice: !tap (false)</pre>
     </div>
-    <div class="panel proposed-box">
-      <h3>After <span class="badge proposed">Proposed · Loop-Watch &amp; Reservation Alignment (Still Hash v31)</span></h3>
-      <pre>// managym/src/flow/action.rs — clear ONLY on Ok(())
-let result = match action { ... };
-if result.is_ok() &amp;&amp; matches!(action, Action::PlayLand { .. } | Action::CastSpell { .. } | ...) {
-    self.state.priority_mut().loop_watch = None;
-}
-result
-
-// managym/src/flow/tick.rs — do not count a suspended resolution
-self.resolve_top_of_stack();
-if !self.state.turn.step_initialized || self.is_game_over() { return None; }
-if self.state.suspended_decision.is_some() { continue; }
-if self.watch_for_mandatory_loop() { ... }
-
-// managym/src/state/hash.rs — match MandatoryLoopWatch’s exact contract
-// 1. Mask players[*].counters["poison"] (removing empty "counters" map).
-// 2. Strip "id" on stack_objects[*] alongside pending_triggers / trigger_placement.
-// 3. Saturate only entry[2] (the count) in ability_{triggers,resolutions}_this_turn.
-
-// managym/src/flow/mana.rs — match owed_reservation / payment_reservation
-SourceReservation { permanent, tap, sacrifice: true } // tap or exile both lock sacrifice</pre>
-      <p class="small">
-        Zero hash-version bump (hash v31 stays intact). Rejected actions never mutate state; poison and
-        stacked-trigger loops match fingerprints at 66 resolutions; suspending spells never touch
-        <code>loop_watch</code>; grantor reservations match every other tap cost.
-      </p>
+    <div class="panel yes-box">
+      <h3>After <span class="badge yes">Existing at 7efb2bd6ce (Still Hash v31)</span></h3>
+      <pre>// action.rs:994 — self.dispatch_action(action)?; then clear loop_watch
+// tick.rs:500   — if self.state.suspended_decision.is_some() { continue; }
+// hash.rs:401   — mask only counters["poison"], strip stack_objects[*].id,
+//                 saturate only entry[2] on ability_{triggers,resolutions}
+// mana.rs:193   — single SourceReservation::owed(p, tap, leaves) with
+//                 sacrifice: tap || leaves across all 8 call sites</pre>
     </div>
   </div>
 
-  <h3>Counterexample stress tests</h3>
+  <h3>Counterexample stress tests verified at <code>7efb2bd6ce</code></h3>
   <table>
     <thead>
       <tr>
-        <th style="width:27%">Counterexample</th>
-        <th style="width:36%">What breaks at <code>31c81eda80</code></th>
-        <th style="width:37%">How the repaired model survives</th>
+        <th style="width:30%">Counterexample</th>
+        <th style="width:42%">Behavior at <code>7efb2bd6ce</code></th>
+        <th style="width:28%">Witness / Owner</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Stale <code>CastSpell</code> or wrong-seat <code>PlayLand</code> while <code>loop_watch.is_some()</code></strong></td>
-        <td><code>execute_action</code> clears <code>loop_watch = None</code> before returning <code>Err</code>; <code>witness(&amp;game)</code> changes despite rejection.</td>
-        <td><code>loop_watch</code> clears only when <code>result.is_ok()</code>; rejected actions leave <code>witness(&amp;game)</code> byte-identical.</td>
+        <td><strong>Rejected priority action while <code>loop_watch.is_some()</code></strong></td>
+        <td><code>dispatch_action(action)?</code> returns <code>Err</code> before <code>loop_watch</code> is touched; <code>witness(&amp;game)</code> is byte-identical.</td>
+        <td><code>fdn::a_rejected_action_leaves_the_loop_watch</code></td>
       </tr>
       <tr>
-        <td><strong>Mandatory poison loop vs. <em>Herald of Eternal Dawn</em> (<code>can_lose = false</code>)</strong></td>
-        <td><code>players[1].counters["poison"]</code> grows every cycle in <code>loop_fingerprint()</code>; never repeats, burning 10,000 resolutions to <code>CAP</code>.</td>
-        <td><code>loop_fingerprint()</code> masks <code>counters["poison"]</code> while preserving any non-poison player counters; draws cleanly right after <code>UNWATCHED</code>.</td>
+        <td><strong>Mandatory poison loop vs. <em>Herald of Eternal Dawn</em></strong></td>
+        <td><code>loop_fingerprint()</code> masks <code>counters["poison"]</code> (keeping other player counters); draws within <code>UNWATCHED + 64</code> instead of 10,000.</td>
+        <td><code>fdn::a_poison_loop_against_a_protected_player_draws_promptly</code> &amp; <code>loop_fingerprint_tests</code></td>
       </tr>
       <tr>
-        <td><strong>Mandatory loop with two triggers on the stack at once (e.g., two Conquerors or repeating trigger over a spell)</strong></td>
-        <td>Each cycle mints a new <code>TriggeredAbilityOnStack.id</code>; <code>stack_objects[*].id</code> stays in <code>loop_fingerprint()</code>, preventing repeat detection until <code>CAP</code>.</td>
-        <td><code>forget_stack_id</code> strips <code>id</code> on <code>stack_objects</code> entries just like <code>pending_triggers</code>, matching the loop state immediately.</td>
+        <td><strong>Loop with stacked object IDs &amp; large source IDs</strong></td>
+        <td><code>stack_objects[*].{variant}.id</code> stripped; only <code>entry[2]</code> saturates in <code>ability_{triggers,resolutions}_this_turn</code>, keeping sources distinct.</td>
+        <td><code>state/loop_fingerprint_tests.rs</code> (3 units)</td>
       </tr>
       <tr>
-        <td><strong>Finite chain on objects with <code>ObjectId</code> / <code>CardDefId</code> &gt; 16 in <code>ability_*_this_turn</code></strong></td>
-        <td><code>saturate()</code> recursively clamps IDs and ability indices to 16 alongside the count.</td>
-        <td>Saturating only the count element (<code>entry[2]</code>) preserves exact object, face, and ability identities.</td>
+        <td><strong>Suspending spell/trigger (CR 608.2m)</strong></td>
+        <td><code>tick_priority</code> skips <code>watch_for_mandatory_loop()</code> while <code>suspended_decision.is_some()</code>; count stays at finished resolutions only.</td>
+        <td><code>fdn::a_suspended_resolution_is_not_counted_toward_a_loop</code></td>
       </tr>
       <tr>
-        <td><strong>Spell that suspends on a mid-resolution decision (e.g., <em>Incinerating Blast</em>, forced single discard)</strong></td>
-        <td><code>watch_for_mandatory_loop()</code> allocates <code>Box&lt;MandatoryLoopWatch&gt;</code> and records <code>resolutions = 1</code> while the spell is still unresolved on the stack.</td>
-        <td><code>if self.state.suspended_decision.is_some() { continue; }</code> skips watching until a stack object actually finishes resolving.</td>
+        <td><strong>Finite 100-counter chain &amp; player intervention</strong></td>
+        <td>Counter chain runs to completion (0 counters left, not a draw); casting Bolt mid-loop clears <code>loop_watch</code> and unwinds cleanly.</td>
+        <td><code>fdn::a_finite_chain_over_counters_is_no_mandatory_loop</code> &amp; <code>..._kills_the_drain</code></td>
       </tr>
       <tr>
-        <td><strong>Tap-grantor permanent with a sacrifice-without-tap mana ability</strong></td>
-        <td><code>tap: true, sacrifice: false</code> allows the payment planner to sacrifice the grantor before paying <code>TapGrantor</code>.</td>
-        <td><code>sacrifice: true</code> for both <code>TapGrantor</code> and <code>ExileGrantor</code> matches <code>payment_reservation</code> and <code>owed_reservation</code>.</td>
+        <td><strong>Two <em>Fishing Poles</em> on one creature &amp; owed tap-grantor lock</strong></td>
+        <td>Action focus and descriptions name each Pole; <code>SourceReservation::owed</code> locks both tap and sacrifice on all owed tap/exile costs.</td>
+        <td><code>fdn::two_fishing_poles_...</code> &amp; <code>mana.rs::SourceReservation::owed</code></td>
       </tr>
     </tbody>
   </table>
 </section>
 
 <section>
-  <h2>3. Architectural Plan Before Closing-Slice Behavior Review <span class="badge proposed">Written into scratch/plan.md</span></h2>
-  <p>
-    Land one tiny, zero-hash-bump alignment commit (~35 lines + 4 directed tests) before running the
-    closing-slice behavior review and gate:
-  </p>
-  <pre>
-Pre-Review Alignment Fix (keeps hash contract v31 and refreshed receipts intact):
-  1. action.rs::execute_action: clear `priority_mut().loop_watch = None` only when a non-pass priority
-     action returns `Ok(())`, preserving rejected-action witness invariance.
-  2. tick.rs::tick_priority: skip `watch_for_mandatory_loop()` when `self.state.suspended_decision.is_some()`
-     so suspending spells neither allocate nor increment `loop_watch`.
-  3. hash.rs::loop_fingerprint:
-     - Mask `players[*].counters["poison"]` (deleting `"counters"` if empty) to match MandatoryLoopWatch’s
-       poison/can_lose progress tracking.
-     - Strip `"id"` inside `stack_objects[*]` entries just like `pending_triggers` and `trigger_placement`.
-     - Saturate only the count slot (`entry[2]`) in `turn.ability_triggers_this_turn` and
-       `turn.ability_resolutions_this_turn` instead of clamping object/definition IDs to 16.
-  4. mana.rs::reserve_announced_payment &amp; announced_model: set `sacrifice: true` for `tap_grantor` /
-     `CostComponent::TapGrantor` to match `owed_reservation` and `payment_reservation`.
-  5. Directed tests:
-     - Stale priority action while `loop_watch.is_some()` returns `Err` with unchanged `witness(&amp;game)`.
-     - Poison loop vs. Herald of Eternal Dawn draws right after `UNWATCHED` (far below `CAP`).
-     - Loop with a trigger still sitting on `stack_objects` draws right after `UNWATCHED` (far below `CAP`).
-     - Suspending spell leaves `priority.loop_watch.is_none()`.
-  6. Run the priority/hash/fdn/m21/conformance debug tests (verifying zero v31 digest drift), then proceed
-     to closing-slice behavior review and gate.
-  </pre>
+  <h2>3. Intentional Boundaries Kept Outside This Change</h2>
+  <ul>
+    <li><strong>Single-trigger self-suspending forced loops:</strong> <code>watch_for_mandatory_loop()</code> stays owned by <code>tick_priority()</code> rather than moving into <code>run_frame()</code>. Any realistic mandatory loop with a forced 1-option choice (e.g. sacrifice/discard + reanimation) includes a non-suspending trigger that hits <code>tick_priority()</code> every cycle; moving loop detection into <code>run_frame()</code> would entangle sub-frames, SBA batches, and direct unit-test calls to <code>resolve_top_of_stack()</code>.</li>
+    <li><strong>Pinned-pilot serialized compatibility:</strong> Legacy serialized shapes (<code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>PutsCounters</code>, <code>DealsCombatDamage</code>, <code>TriggeringHadCounters</code>, <code>NoCounters</code>) stay intact so <code>tests/model/test_pinned_pilot.py</code> remains unbroken; all runtime logic already routes through the unified readers.</li>
+    <li><strong>Pre-existing <code>TurnState::graveyard_from_battlefield</code> omission in <code>CanonicalTurn</code>:</strong> Predates MTG-418 (<em>Brought Back</em>) and is untouched here; fixing it is a separate hash-contract task, not MTG-418 scope.</li>
+    <li><strong>Two blocked cost-primary FDN rows:</strong> <em>Quilled Greatwurm</em> (needs <code>play_permissions</code> + distributed counter removal) and <em>Ovika, Enigma Goliath</em> (needs composite mana-and-life ward) remain explicitly documented in <code>fdn.jsonl</code>.</li>
+  </ul>
 </section>
 
 <section>
-  <h2>4. Choices Made for Review (Reply with e.g. “1a, 2a”)</h2>
+  <h2>4. Review Decisions (Reply with e.g. &ldquo;1a&rdquo;)</h2>
   <p class="small">
-    Running headless in a Graph step: bold, reversible choices are recorded below and written into
-    <code>scratch/plan.md</code> and <code>scratch/questions.md</code> so implement proceeds without waiting.
+    Running headless in a Graph step: no plan changes are needed and the branch proceeds to <code>gate</code>.
+    Any reviewer reading this page afterward can override the boundary choices below if desired.
   </p>
   <ol class="questions">
     <li>
-      <strong>How should <code>loop_fingerprint()</code> handle player counters so poison matches <code>MandatoryLoopWatch</code>?</strong>
+      <strong>Proceed directly to <code>gate</code> on hash contract v31 with no further model changes?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Strip only <code>"poison"</code> from
-        <code>players[*].counters</code> (and drop the <code>"counters"</code> key when empty to match
-        <code>skip_serializing_if = "Counters::is_empty"</code>). Keeps any future non-poison player counters
-        (energy, experience, tickets) in the fingerprint so finite chains over them never falsely draw.
+        <span class="selected">1a (Selected):</span> Proceed to <code>gate</code> (full CI workspace,
+        rebuilt Python extension check, Engine Budget comparison, and verification of the four pre-existing
+        Academy failures noted in <code>scratch/questions.md</code>).
       </div>
       <div class="choice">
-        1b: Remove the entire <code>players[*].counters</code> map in <code>loop_fingerprint()</code>.
-        (Passed over: would falsely collapse finite chains over future energy/experience player counters.)
-      </div>
-    </li>
-    <li>
-      <strong>Should the four CR 104.4b watch/fingerprint seams and tap-grantor sacrifice lock be fixed now before behavior review?</strong>
-      <div class="choice">
-        <span class="selected">2a (Selected):</span> Fix all of them now in one small pass (~35 lines + 4
-        directed tests) with no hash-version bump, so the closing-slice behavior review verifies one clean
-        contract on hash v31.
-      </div>
-      <div class="choice">
-        2b: Leave them for a post-MTG-418 follow-up. (Passed over: clearing hashed <code>loop_watch</code>
-        before validation breaks stale-action witness invariance directly, and the poison/stack-ID leaks leave
-        <code>MandatoryLoopWatch</code>’s own tested contract broken in live games.)
+        1b: Hold <code>gate</code> to also route completed single-action suspended resolutions through
+        <code>watch_for_mandatory_loop()</code> or fold <code>graveyard_from_battlefield</code> into a new
+        hash contract v32. (Passed over: no catalog card triggers a self-suspending 1-trigger loop, and
+        <code>graveyard_from_battlefield</code> predates MTG-418.)
       </div>
     </li>
   </ol>
