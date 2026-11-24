@@ -26,3 +26,4 @@
 - Keep constructed snapshot helpers in the card test binary. It enables benchmark access and owns all current callers.
 - The merged GameState exceeded its 4096-byte inline budget. Keep the budget and allocate trigger placement only while a trigger batch is being placed.
 - Use a restricted copy-exception type for the named-token batch. The current release path can record an unsupported modification even when its application returns false.
+- Use a temporary three-life death trigger on the named Coil to distinguish its recipient in either sacrifice order. Replay the serialized ordering Command from its constructed native snapshot.
