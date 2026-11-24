@@ -37,13 +37,12 @@ addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
-`record_vocabulary` in `managym`; consumer-specific names in `manabot`), and
-qualify generic role names with the domain unit they act on (`decision_weights`
-over `weights` or `loss_weights`, `SnapshotScorer` / `snapshot_scorer` over
-`ScorerFn` / `scorer`). Do not reuse established repository terms (`recipe` for
-training recipes, `manifest` for content packs, `replay` for seed-and-action
-replays) for unrelated concepts, even in internal types or when a brief uses
-them informally. Rename published names via a deprecated alias stating the
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`), keep
+the wrapped interface's noun on wrappers (`RecordedVectorEnv`), and qualify
+generic roles with their domain unit (`decision_weights`, `SnapshotScorer`). Do
+not reuse established terms (`recipe` for training recipes, `manifest` for
+content packs, `replay` for seed-and-action replays) for unrelated concepts,
+even internally. Rename published names via a deprecated alias stating the
 removal release; serialized keys, checkpoint fields and frozen evidence keep
 their spelling.
 
@@ -104,6 +103,9 @@ checkpoints or experiment evidence.
   `lf pr publish` stages tracked edits, including edits left after a path-scoped
   commit. Temporarily preserve unrelated edits outside the checkout and restore
   them after publication.
+- In a Loopflow Graph step, commit your own edits, scratch notes included,
+  before finishing. A clean tree skips the separate commit-message session
+  Loopflow otherwise starts for what a step leaves behind.
 
 ### Experiments
 
@@ -164,6 +166,9 @@ checkpoints or experiment evidence.
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Standalone local checkpoint admission and scalar games can run with
+  `manabot.training` unavailable. Load the backend learner on first training
+  use so opening a policy in these children needs only inference.
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -209,14 +214,13 @@ Etude saves those same objects through `run.resume`.
 Where classes are valuable here, with the examples to copy:
 
 - **Configurations and records** (`ObservationConfig`, `ModelConfig`,
-  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
-  records). A config is the model object: it refuses a bad value when it is
-  built, compares and hashes by content, serializes with stable keys into
-  checkpoints and frozen evidence, and is copied rather than edited
-  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
-  and pure derivations of its own fields (a digest, a derived size). It does
-  not open files, build runtime objects or run anything; a function that
-  takes the config does.
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, `llm/schema.py`). A config
+  enforces real domain and structural invariants when built (never arbitrary
+  upper caps or tested-grid `Literal` sets on resource counts), compares and
+  hashes by content, serializes with stable keys, and is copied rather than
+  edited (`model_copy(update=...)`, `dataclasses.replace`). It may own
+  validators and pure derivations, never I/O, runtime construction, or
+  execution.
 - **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
   construction and `forward` there; training logic is functions over the
   module.
@@ -454,6 +458,9 @@ Optional statistics and private recording share native setup, movement and
 committed-choice facts. Search clones omit those sinks and their copy provenance;
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
+Install retained vector roots with `reset_each_into_buffers(setups, seeds=seeds)`.
+An ordinary reset followed by a seed reset creates a separate interrupted game
+in recording and statistics. Enable native statistics before the first reset.
 
 `protocol/*.schema.json` has no generator. Patch the files when a protocol
 type changes; the Rust schema tests compare them byte for byte with what
@@ -480,7 +487,9 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 **No test runs for five minutes.** Keep learning tests bounded under CI's
 parallel workers. Use bucketed shapes for small boards when they preserve the
 comparison, and restore any Torch thread limit changed by the test.
-Run targeted tests of the change and its existing consumers.
+Run targeted tests of the change and its existing consumers. For Python edits
+under `managym/` with a wheel already installed, run `uv run python -m pytest`
+from the repository root so the tests import the checkout’s Python modules.
 When policy input width or scale changes, include model tests that call
 projections directly. Dense reference tests should apply the model's saved
 readings before projection and keep the control that proves the behavior.
@@ -809,7 +818,7 @@ Read-only native transport metadata must also be exposed through
 collectors use these wrappers rather than raw native vectors.
 Runtime-checkable vector extension protocols list their concrete capability
 methods. Python 3.12+ protocol checks use static lookup and miss the ordinary
-native reads delegated by `CapturedVector.__getattr__`.
+native reads delegated by `RecordedVectorEnv.__getattr__`.
 CLI subcommands import their execution runtime at the command boundary when
 needed to keep migration/help available without the training SDK.
 
@@ -901,8 +910,8 @@ through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
 
-The repository depends on the released Etude SDK from PyPI (0.4.4 or newer
-for fixed behaviour curve ranges). Etude's shared records, storage and
+The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
+for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
 errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.

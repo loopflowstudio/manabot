@@ -3,7 +3,7 @@
 A BatchPlan spends replay allowance in actual episode-start order. Its receipt
 joins capture-time observation rows to packed learner rows. Preparation scores
 the batch before learning and publication installs that generation afterwards.
-Hot handles belong to the collecting vector and never enter the cold state.
+Detached native handles can serve any producer. Only replay recipes enter saved state.
 """
 
 from collections import defaultdict, deque
@@ -23,6 +23,7 @@ from pydantic import ConfigDict, Field, TypeAdapter
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.schema import Strict
 from manabot.training.rollout.adaptive import rank_weights
+from manabot.training.rollout.producers import BufferedStreams
 from manabot.training.rollout.signals import BatchSignals
 from manabot.training.rollout.snapshot_vector import (
     CapturedSnapshot,
@@ -31,11 +32,14 @@ from manabot.training.rollout.snapshot_vector import (
     SnapshotBranch,
     SnapshotRecipe,
     SnapshotVector,
+    bind_cold_start,
 )
+import managym
 
 
 def release_handles(vector: SnapshotVector, handles: Sequence[object]) -> None:
     """Cleanup failures must not turn a published generation into a failed commit."""
+    handles = [h for h in handles if not isinstance(h, managym.GameSnapshot)]
     if handles:
         try:
             vector.release_handles(handles)
@@ -43,6 +47,17 @@ def release_handles(vector: SnapshotVector, handles: Sequence[object]) -> None:
             logging.getLogger(__name__).exception(
                 "Snapshot vector failed to release handles"
             )
+
+
+# Native snapshots outlive their producers. Opaque handles must be returned
+# to the custom vector that captured them.
+type CachedHandle = managym.GameSnapshot | tuple[SnapshotVector, object]
+
+
+def release_cached_handle(cached: CachedHandle | None) -> None:
+    if isinstance(cached, tuple):
+        owner, handle = cached
+        release_handles(owner, [handle])
 
 
 class CapturePolicy(Strict):
@@ -313,6 +328,11 @@ class BatchPlan:
                         self.config.snapshot_weight,
                     )
                 )
+        options = self.pending[0].restore_options if self.pending else None
+        if options is not None and options.forced_first_action is not None:
+            raise ValueError(
+                "a grouped snapshot schedule cannot force an opening action"
+            )
         self.scheduler.starts += 1
         if self.entries:
             self.scheduler.allowance += self.rate.numerator
@@ -513,7 +533,7 @@ class SnapshotBank:
             config_digest=canonical_sha256(config.model_dump(mode="json")),
             scheduler=SchedulerState(rng=rng, capture_rng=rng),
         )
-        self._hot: dict[int, tuple[SnapshotVector, object]] = {}
+        self._hot: dict[int, CachedHandle] = {}
 
     @property
     def generation(self) -> int:
@@ -551,23 +571,34 @@ class SnapshotBank:
     def install(
         self, vector: SnapshotVector, requests: list[SlotInstall]
     ) -> list[InstalledSlot]:
-        # A concurrent commit may evict the root between sibling allocations.
-        # Borrow its vector-local handle only for the synchronous native call.
         with self._lock:
             installs = []
+            replayed: dict[int, tuple[SnapshotRecipe, managym.GameSnapshot]] = {}
             for request in requests:
                 cached = self._hot.get(request.snapshot_id)
-                installs.append(
-                    replace(request, hot_handle=cached[1])
-                    if cached and cached[0] is vector
-                    else request
-                )
-            return vector.install_slots(installs)
+                if isinstance(cached, managym.GameSnapshot):
+                    request = replace(request, hot_handle=cached)
+                elif cached is not None and cached[0] is vector:
+                    request = replace(request, hot_handle=cached[1])
+                elif isinstance(vector, BufferedStreams):
+                    request = bind_cold_start(request, replayed)
+                installs.append(request)
+            results = vector.install_slots(installs)
+            if replayed:
+                # An older open plan may still draw an evicted root. Serve it
+                # for this allocation without extending the current bank.
+                for entry in self._state.entries:
+                    key = entry.snapshot_id
+                    if key in replayed and replayed[key][0] == entry.recipe:
+                        previous = self._hot.get(key)
+                        self._hot[key] = replayed[key][1]
+                        release_cached_handle(previous)
+            return results
 
     def close(self) -> None:
         with self._lock:
-            for owner, handle in self._hot.values():
-                release_handles(owner, [handle])
+            for cached in self._hot.values():
+                release_cached_handle(cached)
             self._hot.clear()
 
     def commit(self, receipt: BatchReceipt, signals: BatchSignals) -> None:
@@ -691,12 +722,17 @@ class SnapshotBank:
             transferred = set()
             for key, capture in prepared._captures:
                 assert plan.vector is not None and capture.hot_handle is not None
-                hot[key] = (plan.vector, capture.hot_handle)
+                handle = capture.hot_handle
+                hot[key] = (
+                    handle
+                    if isinstance(handle, managym.GameSnapshot)
+                    else (plan.vector, handle)
+                )
                 transferred.add(id(capture))
             old_hot, self._state, self._hot = self._hot, state, hot
-            for key, (owner, handle) in old_hot.items():
-                if hot.get(key) is not old_hot[key]:
-                    release_handles(owner, [handle])
+            for key, cached in old_hot.items():
+                if hot.get(key) is not cached:
+                    release_cached_handle(cached)
             if plan.vector is not None:
                 release_handles(
                     plan.vector,

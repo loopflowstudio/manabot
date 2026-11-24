@@ -204,7 +204,9 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
             if bool((done | truncated).any()):
                 break
         else:
-            pytest.fail("fixture failed to reach native auto-reset")
+            pytest.fail(
+                "fixture failed to reach a terminal before the wrapper refilled it"
+            )
         seeds = env._rust_env.current_game_seeds()
         with pytest.raises(managym.AgentError):
             env.step(torch.tensor([-1, 0]))

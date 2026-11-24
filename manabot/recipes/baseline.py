@@ -97,5 +97,5 @@ def evaluate(
         updates=config.updates,
         deals=BASELINE_DEALS,
         seconds=seconds,
-        backend=resolve("torch"),
+        backend=resolve(config.backend, precision="float32"),
     )

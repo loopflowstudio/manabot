@@ -1,8 +1,8 @@
 - engine-measure
 - loop:
-    - implement
+    - loop:
+        - implement                    # one measured improvement
+        - cmd: sync
+        - realign                 # decides: next slice, or on
     - compress
-    - graph: refresh
-    - concept-review
-    - engine-performance-review
-    - loop-or-next
+    - engine-performance-review        # decides: another bottleneck, or done

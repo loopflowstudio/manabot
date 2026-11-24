@@ -9,13 +9,14 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from manabot.env.failures import (
-    CapturedVector,
     CaptureScope,
+    RecordedVectorEnv,
     ScalarCapture,
     capture_scope,
 )
@@ -102,7 +103,7 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
             else:
                 capture.step(wrapped, 0)
         else:
-            vector = CapturedVector(num_envs=2, seed=24)
+            vector = RecordedVectorEnv(num_envs=2, seed=24)
             vector.set_buffers(_buffers(2), layout=_SPACE.layout)
             if phase == "sampled_reset":
                 vector.set_uniform_roster(_roster())
@@ -113,10 +114,15 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
                     os._exit(73)
             if phase == "executing":
                 vector.step_into_buffers([0, 0])
+            if phase == "synchronizing":
+                # The return is durable before the journal publishes the ready state.
+                with patch.object(
+                    vector, "_publish_ready", side_effect=lambda: os._exit(73)
+                ):
+                    vector.step_into_buffers([0, 0], [True, False])
             method = {
                 "preparing": "semantic_decision_frames_json",
                 "executing": "step_into_buffers",
-                "synchronizing": "current_game_seeds",
                 "sampled_reset": "current_player_configs",
             }[phase]
             vector.native = _ExitNative(vector.native, method)
@@ -232,7 +238,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
                 capture.step(env, 0)
             capture.reset(_ExitNative(env, "reset"), list(reversed(_players())))
         else:
-            vector = CapturedVector(num_envs=2, seed=24)
+            vector = RecordedVectorEnv(num_envs=2, seed=24)
             vector.set_buffers(_buffers(2), layout=_SPACE.layout)
             vector.set_uniform_roster(_roster())
             if first != "first":
@@ -241,19 +247,15 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
             method = {
                 "reset_each": "reset_each_into_buffers",
                 "reset_seeds": "reset_seeds_into_buffers",
-                "reassign_roots": "reassign_roots_into_buffers",
-                "replace_failed": "replace_failed_into_buffers",
-                "reassign_preparing": "current_game_seeds",
+                "load_slots": "load_slots_into_buffers",
             }[operation]
             vector.native = _ExitNative(vector.native, method)
             if operation == "reset_each":
                 vector.reset_each_into_buffers([_players(), _players()])
             elif operation == "reset_seeds":
                 vector.reset_seeds_into_buffers([31, 32])
-            elif operation in {"reassign_roots", "reassign_preparing"}:
-                vector.reassign_roots_into_buffers([list(reversed(_players())), None])
             else:
-                vector.replace_failed_into_buffers([True, False])
+                vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
     raise AssertionError("injected reset boundary was not reached")
 
 
@@ -265,9 +267,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
         ("reset_each", "prior"),
         ("reset_each", "first"),
         ("reset_seeds", "prior"),
-        ("reassign_roots", "prior"),
-        ("replace_failed", "prior"),
-        ("reassign_preparing", "prior"),
+        ("load_slots", "prior"),
     ],
 )
 def test_interrupted_reset_replays_prior_game_without_binding_claim(
@@ -278,16 +278,8 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
     evidence = read_record(cursor)
     boundary = evidence.boundary
     assert boundary is not None
-    assert boundary.phase == (
-        "preparing" if operation == "reassign_preparing" else "executing"
-    )
-    assert boundary.operation == (
-        "reset"
-        if operation == "scalar_reset"
-        else "reassign_roots"
-        if operation == "reassign_preparing"
-        else operation
-    )
+    assert boundary.phase == "executing"
+    assert boundary.operation == ("reset" if operation == "scalar_reset" else operation)
     assert not boundary.returned
     assert evidence.execution_outcome == "execution_outcome_unknown"
     assert [game.seed for game in evidence.games] == (
@@ -302,7 +294,7 @@ def test_interrupted_reset_replays_prior_game_without_binding_claim(
         assert evidence.games[0].players[0].name == "a"
         assert boundary.proposed_players[0][0].name == "b"
     else:
-        assert not boundary.setup_known or operation.startswith("reassign")
+        assert not boundary.setup_known
         assert evidence.games[0].players[0].name in {
             player.name for player in _roster()
         }
@@ -334,7 +326,7 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
         settings=RunSettings(diagnostics="off"),
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=1)
+        vector = RecordedVectorEnv(num_envs=1)
         vector.set_buffers(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
@@ -353,7 +345,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=1, seed=24)
+        vector = RecordedVectorEnv(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         frame = vector.semantic_decision_frames_json()[0]
@@ -373,9 +365,9 @@ def test_executing_replay_requires_active_fresh_step_binding(
     assert result["at_retained_failure"] == (binding == "fresh")
     assert result["matches_binding"] is (True if binding == "fresh" else None)
     assert evidence.games[0].actions == [0]
-    # The operator reads the turn from replay; a bound attempt names it first.
+    # The first two decisions take place at turn zero during opening hands.
     reached = result["reached"]
-    assert isinstance(reached, dict) and reached["turn"] >= 1
+    assert isinstance(reached, dict) and reached["turn"] == 0
     attempts = [
         json.loads(line)["replay_attempt"]
         for line in capsys.readouterr().err.splitlines()
@@ -384,7 +376,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
     assert len(attempts) == (1 if binding == "fresh" else 0)
     if attempts:
         assert attempts[0]["action_index"] == 0
-        assert attempts[0]["position"]["turn"] >= 1
+        assert attempts[0]["position"]["turn"] == 0
 
 
 @pytest.mark.parametrize("seed", [24, 2**64 - 1])
@@ -399,7 +391,7 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
             settings=RunSettings(diagnostics="detailed" if enabled else "standard"),
         )
         with capture_scope(scope):
-            vector = CapturedVector(num_envs=2, seed=seed)
+            vector = RecordedVectorEnv(num_envs=2, seed=seed)
             buffers = _buffers(2)
             vector.set_buffers(buffers, layout=_SPACE.layout)
             if sampled:
@@ -464,7 +456,7 @@ def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=1, seed=24)
+        vector = RecordedVectorEnv(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         before = vector.native.semantic_decision_frames_json()
@@ -522,7 +514,7 @@ def test_return_acknowledgment_storage_error_names_executed_call(
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=1, seed=24)
+        vector = RecordedVectorEnv(num_envs=1, seed=24)
         vector.set_buffers(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         frame = vector.native.semantic_decision_frames_json()
@@ -552,10 +544,12 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=2, seed=24)
+        vector = RecordedVectorEnv(num_envs=2, seed=24)
         vector.set_buffers(_buffers(2), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
-        vector.reassign_roots_into_buffers([list(reversed(_players())), None])
+        vector.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(0, list(reversed(_players())))]
+        )
         cursor = next(_cursors(scope.journal_directory))
         reassigned = read_record(cursor)
         assert reassigned.games[0].players[0].name == "b"
@@ -564,23 +558,25 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
         assert failed.boundary is not None and failed.boundary.returned
         assert failed.execution_outcome == "execution_outcome_unknown"
         assert replay_failure_inputs(failed)[0]["status"] == "failed"
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         replaced = read_record(cursor)
         assert replaced.games[0].actions == []
         assert replaced.games[1].actions == [0]
         assert (
             replaced.boundary is not None
-            and replaced.boundary.operation == "replace_failed"
+            and replaced.boundary.operation == "load_slots"
         )
         vector.close()
 
 
-def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) -> None:
+def test_explicit_refill_replaces_prefix_and_bounds_retained_files(
+    tmp_path: Path,
+) -> None:
     scope = CaptureScope(
         tmp_path / "failures", settings=RunSettings(diagnostics="detailed")
     )
     with capture_scope(scope):
-        vector = CapturedVector(num_envs=1, seed=24)
+        vector = RecordedVectorEnv(num_envs=1, seed=24)
         buffers = _buffers(1)
         vector.set_buffers(buffers, layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
@@ -591,6 +587,18 @@ def test_auto_reset_replaces_prefix_and_bounds_retained_files(tmp_path: Path) ->
         else:
             pytest.fail("tiny native game did not settle")
         cursor = next(_cursors(scope.journal_directory))
+        evidence = read_record(cursor)
+        assert evidence.games[0].seed == 24 and evidence.games[0].actions
+        with pytest.raises(managym.AgentError, match="invalid or duplicate slot"):
+            vector.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(0), managym.SlotLoad.fresh(1)]
+            )
+        rejected = read_record(cursor)
+        assert rejected.boundary is not None and rejected.boundary.phase == "ready"
+        assert rejected.boundary.setup_known
+        assert not rejected.needs_reproduction
+        assert rejected.games == evidence.games
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         evidence = read_record(cursor)
         assert evidence.games[0].seed == 25
         assert evidence.games[0].actions == []
@@ -1034,22 +1042,29 @@ def test_native_statistics_preserve_recorded_choices(tmp_path: Path) -> None:
         root = tmp_path / str(enabled)
         settings = RunSettings(record_games=1, diagnostics="off", statistics=enabled)
         with capture_scope(CaptureScope(root / "failures", settings=settings)):
-            vector = CapturedVector(num_envs=1, seed=24)
+            vector = RecordedVectorEnv(num_envs=1, seed=24)
             try:
                 vector.reset_all(_players())
-                for _ in range(10):
-                    vector.step([0])
+                for _ in range(32):
+                    if vector.step([0])[0][2]:
+                        break
+                else:
+                    pytest.fail("short statistics game did not finish")
+                vector.reset_all(_players())
+                vector.step([0])
                 assert (vector.statistics()[0] is not None) is enabled
             finally:
                 vector.close()
-        records.append(next(read_records(root / "games")))
-    assert records[0].games == records[1].games
-    assert records[0].identities == records[1].identities
+        records.append(list(read_records(root / "games")))
+    assert len(records[0]) == 2
+    for plain, measured in zip(*records, strict=True):
+        assert plain.games == measured.games
+        assert plain.identities == measured.identities
     from managym.statistics import read_statistics
 
     assert not (tmp_path / "False" / "statistics").exists()
     rows = list(read_statistics(tmp_path / "True" / "statistics"))
-    games = [record.games[0] for record in read_records(tmp_path / "True" / "games")]
+    games = [record.games[0] for record in records[1]]
     assert [(row.seed, row.terminal) for row in rows] == [
         (game.seed, game.end.status == "complete") for game in games
     ]

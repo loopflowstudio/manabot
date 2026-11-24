@@ -42,3 +42,14 @@ NUMBER_TOKEN_KINDS = tuple(
     int(PROGRAM_TOKEN_KIND[DETAIL_KIND_NAMES[name]])
     for name in ("program_integer", "program_boolean")
 )
+
+
+def effect_span_rows(
+    offsets: np.ndarray, counts: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Owning header and batch-local row index for each detail or member, in order."""
+    owners = np.repeat(np.arange(len(counts)), counts)
+    # Source offsets restart in each batch. Packed offsets run across the group.
+    packed_offsets = np.cumsum(counts) - counts
+    within_header = np.arange(len(owners)) - packed_offsets[owners]
+    return owners, offsets[owners] + within_header

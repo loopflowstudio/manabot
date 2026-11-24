@@ -237,7 +237,9 @@ def collect_choices(
                             space.actions = actions
                             raw.action_space = space
                         expected = reorder_offers(
-                            obs, np.arange(len(actions) - 1, -1, -1)
+                            obs,
+                            np.arange(len(actions) - 1, -1, -1),
+                            observation_space.layout,
                         )
                         for key in obs:
                             np.testing.assert_array_equal(

@@ -3,6 +3,10 @@
 use crate::state::player::{ManaFloats, ManaPayment};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+mod slots;
+#[cfg(feature = "python")]
+pub(crate) use slots::SlotReplacement;
+pub use slots::{SlotLoad, SlotLoadResult};
 
 use crate::{
     agent::{
@@ -91,6 +95,41 @@ impl RootRoster {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum SlotState {
+    Unset,
+    /// Replacing an untouched opening with a snapshot returns its seed.
+    FreshOpening,
+    Playing,
+    Terminal,
+    Poisoned,
+}
+
+impl SlotState {
+    fn gameplay_failure(&mut self, class: &str, message: String, frame: String) -> InfoDict {
+        *self = Self::Poisoned;
+        InfoDict::from([
+            ("game_error".into(), InfoValue::String(message)),
+            ("game_error_class".into(), InfoValue::String(class.into())),
+            ("game_error_frame".into(), InfoValue::String(frame)),
+            (
+                "game_error_trace".into(),
+                InfoValue::String(std::backtrace::Backtrace::force_capture().to_string()),
+            ),
+        ])
+    }
+
+    fn readable(self) -> Result<(), AgentError> {
+        match self {
+            Self::Unset => Err(AgentError(
+                "vector env must be reset before reading observations".into(),
+            )),
+            Self::Poisoned => Err(AgentError("cannot read a poisoned slot".into())),
+            _ => Ok(()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
@@ -102,7 +141,7 @@ pub struct VectorEnv {
     skip_trivial: bool,
     decision_memory_enabled: bool,
     decision_memory_include_own: bool,
-    fresh_roots: Vec<bool>,
+    slots: Vec<SlotState>,
 }
 
 impl VectorEnv {
@@ -161,8 +200,19 @@ impl VectorEnv {
             skip_trivial,
             decision_memory_enabled: false,
             decision_memory_include_own: false,
-            fresh_roots: vec![false; num_envs],
+            slots: vec![SlotState::Unset; num_envs],
         }
+    }
+
+    #[cfg(feature = "python")]
+    pub(crate) fn parked_slots(&self) -> impl Iterator<Item = usize> + '_ {
+        self.slots.iter().enumerate().filter_map(|(slot, state)| {
+            matches!(state, SlotState::Terminal | SlotState::Poisoned).then_some(slot)
+        })
+    }
+
+    pub fn next_fresh_seeds(&self) -> &[u64] {
+        &self.next_seeds
     }
 
     pub fn decision_memory_enabled(&self) -> bool {
@@ -264,7 +314,22 @@ impl VectorEnv {
     }
 
     pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
-        self.envs.iter().map(Env::exposure_json).collect()
+        self.selected_exposure(None)
+    }
+
+    pub(crate) fn selected_exposure(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<String>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| active.is_none_or(|mask| mask[*slot]))
+            .map(|(_, env)| env.exposure_json())
+            .collect()
     }
 
     /// Configure only before allocation of roots; native authored setups are the authority.
@@ -367,16 +432,26 @@ impl VectorEnv {
             .collect()
     }
 
-    /// Current ordered indices into the fixed Elemental roster; empty otherwise.
-    /// Replaceable training decks report actual setups via `current_player_configs`.
+    /// Current ordered indices when all games use decks from the fixed Elemental
+    /// roster. A detached branch carries its own resolved seats and seed.
     pub fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
         if !self.uniform_roster.elemental {
             return Vec::new();
         }
+        let index = |player: &PlayerConfig| {
+            self.uniform_roster
+                .players
+                .iter()
+                .position(|p| p.deck == player.deck)
+        };
         self.envs
             .iter()
-            .map(|env| self.uniform_roster.pair(env.seed()))
-            .collect()
+            .map(|env| match env.player_configs() {
+                [a, b] => Some((index(a)?, index(b)?)),
+                _ => Some(self.uniform_roster.pair(env.seed())),
+            })
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default()
     }
 
     pub fn len(&self) -> usize {
@@ -402,7 +477,7 @@ impl VectorEnv {
         self.envs.is_empty()
     }
 
-    /// Exact current-game seeds; auto-reset succession remains native authority.
+    /// Seeds of the current games, including parked terminals.
     pub fn current_game_seeds(&self) -> Vec<u64> {
         self.envs.iter().map(Env::seed).collect()
     }
@@ -429,7 +504,7 @@ impl VectorEnv {
         }
     }
 
-    /// Select terminal digest retention for the next call, before autoreset.
+    /// Select terminal digest retention for the next step.
     pub fn record_games(&mut self, active: &[bool]) -> Result<(), AgentError> {
         self.validate_actions_len(active.len())?;
         for (env, selected) in self.envs.iter_mut().zip(active) {
@@ -459,8 +534,7 @@ impl VectorEnv {
             .collect()
     }
 
-    /// Read all requested seats in slot order. After autoreset these describe the
-    /// replacement games; no terminal hands are cached and no capacities apply.
+    /// Read all requested seats in slot order, including parked terminal hands.
     pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {
         if players.len() != self.len() {
             return Err(AgentError(format!(
@@ -484,7 +558,7 @@ impl VectorEnv {
     /// can leave a written prefix, so callers must discard all rows on failure.
     pub fn write_observations_for_players(
         &self,
-        players: &[usize],
+        players: &[Option<usize>],
         mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
     ) -> Result<Vec<ObservationRead>, AgentError> {
         if players.len() != self.len() {
@@ -494,18 +568,16 @@ impl VectorEnv {
                 players.len()
             )));
         }
-        if players.iter().any(|&player| player > 1) {
+        if players.iter().flatten().any(|&player| player > 1) {
             return Err(AgentError("observation player must be 0 or 1".into()));
         }
-        self.validate_ready_for_step().map_err(|_| {
-            AgentError("vector env must be reset before reading observations".into())
-        })?;
-        let reads = self
-            .envs
+        let reads = players
             .iter()
-            .zip(players)
             .enumerate()
-            .map(|(slot, (env, &player))| {
+            .filter_map(|(slot, player)| player.map(|player| (slot, player)))
+            .map(|(slot, player)| {
+                self.slots[slot].readable()?;
+                let env = &self.envs[slot];
                 Ok(ObservationRead {
                     slot,
                     player,
@@ -515,8 +587,11 @@ impl VectorEnv {
                 })
             })
             .collect::<Result<Vec<_>, AgentError>>()?;
-        for (env, read) in self.envs.iter().zip(&reads) {
-            write(read.slot, &env.observation_for_player(read.player)?)?;
+        for read in &reads {
+            write(
+                read.slot,
+                &self.envs[read.slot].observation_for_player(read.player)?,
+            )?;
         }
         Ok(reads)
     }
@@ -554,10 +629,8 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.validate_actions_len(seeds.len())?;
         self.validate_ready_for_step()?;
-        self.next_seeds = seeds;
-        self.reset_each_into(self.player_configs.clone(), write)
+        self.reset_each_into_at(self.player_configs.clone(), Some(seeds), write)
     }
 
     /// Per-env `skip_trivial` collapse counters for the current games.
@@ -572,7 +645,13 @@ impl VectorEnv {
     pub fn current_agent_indices(&self) -> Vec<i64> {
         self.envs
             .iter()
-            .map(|env| env.current_agent_index().map_or(-1, |index| index as i64))
+            .zip(&self.slots)
+            .map(|(env, state)| match state {
+                SlotState::FreshOpening | SlotState::Playing => {
+                    env.current_agent_index().map_or(-1, |i| i as i64)
+                }
+                _ => -1,
+            })
             .collect()
     }
 
@@ -586,61 +665,18 @@ impl VectorEnv {
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
         let player_configs = player_configs.into();
         Self::validate_player_configs(player_configs.len())?;
-        self.fresh_roots.fill(true);
-        self.player_configs = vec![player_configs; self.envs.len()];
-        let player_configs = &self.player_configs;
-        let seed_stride = self.seed_stride;
-        let roster = &self.uniform_roster;
 
-        let mut results = Vec::with_capacity(self.envs.len());
-        for (index, (env, next_seed)) in self
-            .envs
-            .iter_mut()
-            .zip(self.next_seeds.iter_mut())
-            .enumerate()
-        {
-            let (obs, info) = Self::reset_env_on_env(
-                roster,
-                env,
-                next_seed,
-                seed_stride,
-                &player_configs[index],
-            )?;
-            results.push((obs, info));
-        }
-        Ok(results)
+        self.player_configs = vec![player_configs; self.envs.len()];
+        (0..self.len()).map(|slot| self.reset_slot(slot)).collect()
     }
 
     pub fn step(&mut self, actions: &[i64]) -> Result<Vec<StepResult>, AgentError> {
-        self.validate_actions_len(actions.len())?;
-        self.validate_ready_for_step()?;
-
-        let player_configs = &self.player_configs;
-        let seed_stride = self.seed_stride;
-        let roster = &self.uniform_roster;
-
-        let mut results = Vec::with_capacity(self.envs.len());
-        for (index, ((env, next_seed), action)) in self
-            .envs
-            .iter_mut()
-            .zip(self.next_seeds.iter_mut())
-            .zip(actions.iter())
+        self.validate_step(actions, None)?;
+        actions
+            .iter()
             .enumerate()
-        {
-            self.fresh_roots[index] = false;
-            let out = Self::step_with_autoreset_on_env(
-                roster,
-                env,
-                next_seed,
-                *action,
-                &player_configs[index],
-                seed_stride,
-            )?;
-            self.fresh_roots[index] = out.terminated || out.truncated;
-            results.push(out);
-        }
-
-        Ok(results)
+            .map(|(slot, &action)| self.step_slot(slot, action))
+            .collect()
     }
 
     pub fn reset_all_into<F>(
@@ -654,10 +690,23 @@ impl VectorEnv {
         self.reset_each_into(vec![player_configs.into(); self.envs.len()], write)
     }
 
-    /// Retain one exact setup per stream, including through terminal auto-reset.
+    /// Retain one exact setup per stream, for subsequent fresh loads.
     pub fn reset_each_into<F, S: Into<GameSetup>>(
         &mut self,
         player_configs: Vec<S>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.reset_each_into_at(player_configs, None, write)
+    }
+
+    /// Install the supplied roots directly. Each next game continues by the vector stride.
+    pub fn reset_each_into_at<F, S: Into<GameSetup>>(
+        &mut self,
+        player_configs: Vec<S>,
+        seeds: Option<Vec<u64>>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
@@ -668,60 +717,19 @@ impl VectorEnv {
         for configs in &player_configs {
             Self::validate_player_configs(configs.len())?;
         }
+        if let Some(seeds) = seeds {
+            self.validate_actions_len(seeds.len())?;
+            self.next_seeds = seeds;
+        }
         self.player_configs = player_configs;
 
-        let seed_stride = self.seed_stride;
-
-        self.for_each_env(|env_index, env, next_seed, configs, roster, fresh| {
-            let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, seed_stride, configs)?;
-            *fresh = true;
-            write(env_index, &obs, 0.0, false, false)?;
-            Ok(info)
-        })
-    }
-
-    /// Change only untouched reset roots, keeping their native seed succession.
-    /// Every setup is built (game creation admits its decks against the world's
-    /// one catalog) and encoded before any new root is published. A live
-    /// game cannot be reassigned, even when its stream was masked in the last step.
-    pub fn reassign_roots_into<V, F, S: Into<GameSetup>>(
-        &mut self,
-        configs: Vec<Option<S>>,
-        validate: V,
-        write: F,
-    ) -> Result<Vec<InfoDict>, AgentError>
-    where
-        V: Fn(usize, &Observation) -> Result<(), AgentError>,
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
-    {
-        self.validate_actions_len(configs.len())?;
-        self.validate_ready_for_step()?;
-        if !self.uniform_roster.is_empty() || self.player_policies != [PlayerPolicy::Agent; 2] {
-            return Err(AgentError(
-                "root reassignment requires externally routed fixed setups".into(),
-            ));
-        }
-        let mut prepared = Vec::new();
-        for (index, setup) in configs.into_iter().enumerate() {
-            if let Some(setup) = setup {
-                let setup: GameSetup = setup.into();
-                if !self.fresh_roots[index] {
-                    return Err(AgentError("cannot reassign a live game".into()));
-                }
-                let mut env = self.envs[index].replacement_root()?;
-                let (obs, info) = env.reset(setup.clone())?;
-                validate(index, &obs)?;
-                prepared.push((index, setup, env, obs, info));
-            }
-        }
-        let mut infos = vec![InfoDict::new(); self.len()];
-        for (index, setup, env, obs, info) in prepared {
-            write(index, &obs, 0.0, false, false)?;
-            self.envs[index] = env;
-            self.player_configs[index] = setup;
-            infos[index] = info;
-        }
-        Ok(infos)
+        (0..self.len())
+            .map(|slot| {
+                let (obs, info) = self.reset_slot(slot)?;
+                write(slot, &obs, 0.0, false, false)?;
+                Ok(info)
+            })
+            .collect()
     }
 
     pub fn step_into<F>(
@@ -733,38 +741,25 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.validate_actions_len(actions.len())?;
-        self.validate_ready_for_step()?;
-
-        let seed_stride = self.seed_stride;
-
-        if let Some(mask) = active {
-            self.validate_actions_len(mask.len())?;
-        }
-        self.for_each_env(|env_index, env, next_seed, configs, roster, fresh| {
-            if active.is_some_and(|mask| !mask[env_index]) {
-                return Ok(InfoDict::new());
-            }
-            *fresh = false;
-            let action = actions[env_index];
-            let result = Self::step_with_autoreset_on_env(
-                roster,
-                env,
-                next_seed,
-                action,
-                configs,
-                seed_stride,
-            )?;
-            *fresh = result.terminated || result.truncated;
-            write(
-                env_index,
-                &result.obs,
-                result.reward,
-                result.terminated,
-                result.truncated,
-            )?;
-            Ok(result.info)
-        })
+        self.validate_step(actions, active)?;
+        actions
+            .iter()
+            .enumerate()
+            .map(|(slot, &action)| {
+                if active.is_some_and(|mask| !mask[slot]) {
+                    return Ok(InfoDict::new());
+                }
+                let result = self.step_slot(slot, action)?;
+                write(
+                    slot,
+                    &result.obs,
+                    result.reward,
+                    result.terminated,
+                    result.truncated,
+                )?;
+                Ok(result.info)
+            })
+            .collect()
     }
 
     /// Settle each active gameplay call independently. Failed games are poisoned:
@@ -781,63 +776,50 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
-        self.validate_actions_len(actions.len())?;
-        self.validate_actions_len(active.len())?;
-        self.validate_ready_for_step()?;
-        let stride = self.seed_stride;
-        self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
-            if !active[index] {
-                return Ok(InfoDict::new());
-            }
-            *fresh = false;
-            let frame = serde_json::to_string(&env.semantic_decision_frame()?)
-                .map_err(|error| AgentError(error.to_string()))?;
-            // A Rust unwind is contained only around gameplay of a disposable
-            // stream. Buffer errors and invalid setup must never be tolerated.
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                Self::step_one_on_env(env, actions[index])
-            }));
-            let mut out = match result {
-                Ok(Ok(out)) => out,
-                failure => {
-                    let (class, message) = match failure {
-                        Ok(Err(error)) => ("AgentError", error.to_string()),
-                        Err(payload) => (
-                            "NativePanic",
-                            payload
-                                .downcast_ref::<String>()
-                                .cloned()
-                                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-                                .unwrap_or_else(|| "native gameplay panic".into()),
-                        ),
-                        Ok(Ok(_)) => unreachable!(),
-                    };
-                    return Ok(InfoDict::from([
-                        ("game_error".into(), InfoValue::String(message)),
-                        ("game_error_class".into(), InfoValue::String(class.into())),
-                        ("game_error_frame".into(), InfoValue::String(frame)),
-                        (
-                            "game_error_trace".into(),
-                            InfoValue::String(
-                                std::backtrace::Backtrace::force_capture().to_string(),
-                            ),
-                        ),
-                    ]));
+        self.validate_step(actions, Some(active))?;
+        actions
+            .iter()
+            .enumerate()
+            .map(|(index, &action)| {
+                if !active[index] {
+                    return Ok(InfoDict::new());
                 }
-            };
-            *fresh = false;
-            if out.terminated || out.truncated {
-                *fresh = true;
-                let (obs, _) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
-                out.obs = obs;
-            }
-            if let Err(error) = write(index, &out.obs, out.reward, out.terminated, out.truncated) {
-                if recover_capacity && !out.terminated && !out.truncated {
-                    if let ObservationWriteError::Encoding(
+                let frame = serde_json::to_string(&self.envs[index].semantic_decision_frame()?)
+                    .map_err(|error| AgentError(error.to_string()))?;
+                // A Rust unwind is contained only around gameplay of a disposable
+                // stream. Buffer errors and invalid setup must never be tolerated.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    self.step_slot(index, action)
+                }));
+                let out = match result {
+                    Ok(Ok(out)) => out,
+                    Ok(Err(error)) => {
+                        return Ok(self.slots[index].gameplay_failure(
+                            "AgentError",
+                            error.to_string(),
+                            frame,
+                        ))
+                    }
+                    Err(payload) => {
+                        let message = payload
+                            .downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                            .unwrap_or_else(|| "native gameplay panic".into());
+                        return Ok(self.slots[index].gameplay_failure(
+                            "NativePanic",
+                            message,
+                            frame,
+                        ));
+                    }
+                };
+                match write(index, &out.obs, out.reward, out.terminated, out.truncated) {
+                    Ok(()) => Ok(out.info),
+                    Err(ObservationWriteError::Encoding(
                         error @ ObservationEncodeError::Capacity { .. },
-                    ) = &error
-                    {
-                        return Ok(InfoDict::from([
+                    )) if recover_capacity && !out.terminated && !out.truncated => {
+                        self.slots[index] = SlotState::Poisoned;
+                        Ok(InfoDict::from([
                             ("game_error".into(), InfoValue::String(error.to_string())),
                             (
                                 "game_error_class".into(),
@@ -848,76 +830,10 @@ impl VectorEnv {
                                 InfoValue::String("resource_limit".into()),
                             ),
                             ("game_error_frame".into(), InfoValue::String(frame)),
-                        ]));
+                        ]))
                     }
+                    Err(error) => Err(error.into()),
                 }
-                return Err(error.into());
-            }
-            Ok(out.info)
-        })
-    }
-
-    /// Replace quarantined games under the unchanged native seed succession.
-    pub fn replace_failed_into<F>(
-        &mut self,
-        failed: &[bool],
-        write: F,
-    ) -> Result<Vec<InfoDict>, AgentError>
-    where
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
-    {
-        self.validate_actions_len(failed.len())?;
-        self.validate_ready_for_step()?;
-        let policy = self.player_policies;
-        let stride = self.seed_stride;
-        let skip_trivial = self.skip_trivial;
-        let include_own = self.decision_memory_include_own;
-        let memory_enabled = self.decision_memory_enabled;
-        self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
-            if !failed[index] {
-                return Ok(InfoDict::new());
-            }
-            *env = Env::new(*next_seed, skip_trivial, false, false)
-                .with_player_policies(policy)
-                .with_decision_memory(memory_enabled)
-                .with_decision_memory_include_own(include_own);
-            *fresh = true;
-            let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
-            write(index, &obs, 0.0, false, false)?;
-            Ok(info)
-        })
-    }
-
-    fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
-    where
-        F: Fn(
-            usize,
-            &mut Env,
-            &mut u64,
-            &GameSetup,
-            &RootRoster,
-            &mut bool,
-        ) -> Result<R, AgentError>,
-    {
-        // Setups are immutable between resets. Borrow each stream's setup while
-        // mutating its environment/seed, including when most streams are paused.
-        // Cloning the complete setup list here would repeat deck allocations on
-        // every micro-step even for streams excluded by the active mask.
-        let configs = &self.player_configs;
-        self.envs
-            .iter_mut()
-            .zip(self.next_seeds.iter_mut())
-            .zip(self.fresh_roots.iter_mut())
-            .enumerate()
-            .map(|(env_index, ((env, next_seed), fresh))| {
-                work(
-                    env_index,
-                    env,
-                    next_seed,
-                    &configs[env_index],
-                    &self.uniform_roster,
-                    fresh,
-                )
             })
             .collect()
     }
@@ -950,38 +866,30 @@ impl VectorEnv {
         Ok(())
     }
 
-    fn step_with_autoreset_on_env(
-        roster: &RootRoster,
-        env: &mut Env,
-        next_seed: &mut u64,
-        action: i64,
-        player_configs: &GameSetup,
-        seed_stride: u64,
-    ) -> Result<StepResult, AgentError> {
-        let mut out = Self::step_one_on_env(env, action)?;
-
-        if out.terminated || out.truncated {
-            let terminal_reward = out.reward;
-            let terminal_terminated = out.terminated;
-            let terminal_truncated = out.truncated;
-            let terminal_info = out.info;
-
-            let (reset_obs, _) =
-                Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
-
-            out = StepResult {
-                obs: reset_obs,
-                reward: terminal_reward,
-                terminated: terminal_terminated,
-                truncated: terminal_truncated,
-                info: terminal_info,
-            };
+    fn validate_step(&self, actions: &[i64], active: Option<&[bool]>) -> Result<(), AgentError> {
+        self.validate_actions_len(actions.len())?;
+        self.validate_ready_for_step()?;
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
         }
-
-        Ok(out)
+        for (slot, state) in self.slots.iter().enumerate() {
+            if active.is_none_or(|mask| mask[slot])
+                && matches!(
+                    state,
+                    SlotState::Terminal | SlotState::Poisoned | SlotState::Unset
+                )
+            {
+                return Err(AgentError(format!(
+                    "cannot step {state:?} slot {slot} before reset or replacement"
+                )));
+            }
+        }
+        Ok(())
     }
 
-    fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
+    fn step_slot(&mut self, slot: usize, action: i64) -> Result<StepResult, AgentError> {
+        self.slots[slot] = SlotState::Playing;
+        let env = &mut self.envs[slot];
         let (obs, reward, terminated, truncated, mut info) = env.step(action).map_err(|error| {
             AgentError(format!(
                 "{}; native_failure={}",
@@ -990,16 +898,17 @@ impl VectorEnv {
             ))
         })?;
         if terminated || truncated {
+            self.slots[slot] = SlotState::Terminal;
             info.insert(
                 "skipped_decisions".into(),
                 InfoValue::Int(env.skip_trivial_count() as i64),
             );
-        }
-        if env.record_terminal && (terminated || truncated) {
-            info.insert(
-                "record_terminal_digest".into(),
-                InfoValue::String(env.state_digest()?),
-            );
+            if env.record_terminal {
+                info.insert(
+                    "record_terminal_digest".into(),
+                    InfoValue::String(env.state_digest()?),
+                );
+            }
         }
         Ok(StepResult {
             obs,
@@ -1010,7 +919,28 @@ impl VectorEnv {
         })
     }
 
-    fn reset_env_on_env(
+    fn reset_slot(&mut self, slot: usize) -> Result<(Observation, InfoDict), AgentError> {
+        let env = &mut self.envs[slot];
+        let next_seed = &mut self.next_seeds[slot];
+        if self.slots[slot] == SlotState::Poisoned {
+            env.replace_slot(env.replacement_root(*next_seed), Default::default());
+        }
+        let opening = Self::deal_fresh_game(
+            &self.uniform_roster,
+            env,
+            next_seed,
+            self.seed_stride,
+            &self.player_configs[slot],
+        )?;
+        self.slots[slot] = if env.is_game_over() {
+            SlotState::Terminal
+        } else {
+            SlotState::FreshOpening
+        };
+        Ok(opening)
+    }
+
+    fn deal_fresh_game(
         roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
@@ -1048,12 +978,98 @@ mod tests {
 
     use crate::{
         agent::{
-            action::AgentError, env::Env, observation_encoder::ObservationEncodeError,
-            player_policy::PlayerPolicy, vector_env::VectorEnv,
+            action::AgentError,
+            env::Env,
+            observation_encoder::ObservationEncodeError,
+            player_policy::PlayerPolicy,
+            vector_env::{SlotLoad, VectorEnv},
         },
         infra::profiler::InfoValue,
         state::player::{GameSetup, PlayerConfig},
     };
+
+    fn load_fresh(vector: &mut VectorEnv, slot: usize, setup: Option<GameSetup>) {
+        vector
+            .load_slots_into(
+                &[SlotLoad::Fresh(slot, setup)],
+                |_, _| Ok(()),
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn deferred_steps_construct_and_encode_only_requested_games() {
+        use crate::flow::setup::CONSTRUCTIONS;
+        let load = |vector: &mut VectorEnv, request: SlotLoad| {
+            vector
+                .load_slots_into(
+                    &[request],
+                    |_, _| Ok(()),
+                    |_, _, terminal| {
+                        assert!(!terminal);
+                        Ok(())
+                    },
+                )
+                .unwrap()
+                .pop()
+                .unwrap()
+                .0
+        };
+        for isolated in [false, true] {
+            let mut vector = VectorEnv::new(1, u64::MAX, true, [PlayerPolicy::Agent; 2]);
+            let before = CONSTRUCTIONS.get();
+            let players = ["a", "b"]
+                .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 12)])));
+            vector.reset_all(players.to_vec()).unwrap();
+            let root = vector
+                .snapshot_slots(&[true])
+                .unwrap()
+                .pop()
+                .flatten()
+                .unwrap();
+            let branch = || SlotLoad::Snapshot(0, root.clone(), Default::default());
+            load(&mut vector, branch());
+            assert_eq!(vector.next_fresh_seeds(), [u64::MAX]);
+            let writes = std::cell::Cell::new(0);
+            let observe = |obs: &crate::agent::observation::Observation, done| {
+                writes.set(writes.get() + 1);
+                assert_eq!(obs.action_space.actions.is_empty(), done);
+            };
+            for steps in 1..=64 {
+                if isolated {
+                    vector
+                        .step_isolated_into(&[0], &[true], false, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                } else {
+                    vector
+                        .step_into(&[0], None, |_, obs, _, done, _| {
+                            observe(obs, done);
+                            Ok(())
+                        })
+                        .unwrap();
+                }
+                assert_eq!(writes.get(), steps);
+                if vector.current_agent_indices() == [-1] {
+                    break;
+                }
+            }
+            assert_eq!(vector.current_agent_indices(), [-1]);
+            load(&mut vector, branch());
+            vector
+                .step_isolated_into(&[999], &[true], false, |_, _, _, _, _| {
+                    panic!("a poisoned slot must not encode a replacement opening")
+                })
+                .unwrap();
+            load(&mut vector, branch());
+            assert_eq!(CONSTRUCTIONS.get() - before, 1);
+            assert_eq!(load(&mut vector, SlotLoad::Fresh(0, None)).seed, u64::MAX);
+            assert_eq!(CONSTRUCTIONS.get() - before, 2);
+        }
+    }
 
     #[test]
     fn decision_observations_keep_chooser_and_active_mask() {
@@ -1092,7 +1108,7 @@ mod tests {
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         let mut writes = 0;
         assert!(vector
-            .write_observations_for_players(&[0, 1], |_, _| {
+            .write_observations_for_players(&[Some(0), Some(1)], |_, _| {
                 writes += 1;
                 Ok(())
             })
@@ -1106,7 +1122,7 @@ mod tests {
         for _ in 0..2 {
             vector.envs[0].step(0).unwrap(); // Both seats keep.
         }
-        for players in [vec![], vec![0], vec![0, 2]] {
+        for players in [vec![], vec![Some(0)], vec![Some(0), Some(2)]] {
             assert!(vector
                 .write_observations_for_players(&players, |_, _| {
                     writes += 1;
@@ -1123,7 +1139,7 @@ mod tests {
         let frames = vector.semantic_decision_frames_json(None).unwrap();
         for players in [[0, 1], [1, 0]] {
             let reads = vector
-                .write_observations_for_players(&players, |slot, obs| {
+                .write_observations_for_players(&players.map(Some), |slot, obs| {
                     assert_eq!(
                         obs.to_json(),
                         vector.envs[slot]
@@ -1231,20 +1247,12 @@ mod tests {
             assert_eq!(before.seed, after.seed);
             assert_eq!(before.cards, after.cards);
         }
-        vector
-            .reassign_roots_into(
-                vec![Some(sample_player_configs()), None],
-                |_, _| Ok(()),
-                |_, _, _, _, _| Ok(()),
-            )
-            .unwrap();
+        load_fresh(&mut vector, 0, Some(sample_player_configs().into()));
         let reassigned = vector.hand_snapshots(&[0, 1]).unwrap();
         assert_ne!(reset[0].game_id, reassigned[0].game_id);
-        assert_eq!(reset[0].seed, reassigned[0].seed);
+        assert_eq!(reassigned[0].seed, reset[0].seed + 2);
         assert_eq!(reset[1], reassigned[1]);
-        vector
-            .replace_failed_into(&[true, false], |_, _, _, _, _| Ok(()))
-            .unwrap();
+        load_fresh(&mut vector, 0, None);
         let replaced = vector.hand_snapshots(&[0, 1]).unwrap();
         assert_ne!(reassigned[0].game_id, replaced[0].game_id);
         assert_eq!(reassigned[1], replaced[1]);
@@ -1506,49 +1514,47 @@ mod tests {
         for _ in 0..1200 {
             let previous = vector.current_matchup_indices();
             let results = vector.step(&[0, 0]).unwrap();
+            for (slot, result) in results.iter().enumerate() {
+                if result.terminated || result.truncated {
+                    load_fresh(&mut vector, slot, None);
+                }
+            }
             let pairs = vector.current_matchup_indices();
             for index in 0..2 {
-                let (mut obs, _, done, trunc, _) = scalar[index].step(0).unwrap();
+                let (obs, _, done, trunc, _) = scalar[index].step(0).unwrap();
+                assert_eq!(format!("{:?}", results[index].obs), format!("{obs:?}"));
                 if done || trunc {
                     terminals += 1;
                     changed += usize::from(previous[index] != pairs[index]);
                     scalar[index].set_seed(vector.current_game_seeds()[index]);
                     let (a, b) = pairs[index];
-                    obs = scalar[index]
+                    scalar[index]
                         .reset(vec![roster[a].clone(), roster[b].clone()])
-                        .unwrap()
-                        .0;
+                        .unwrap();
                 }
-                assert_eq!(format!("{:?}", results[index].obs), format!("{obs:?}"));
             }
         }
         assert!(terminals > 0 && changed > 0);
     }
 
     #[test]
-    fn reassignment_preserves_recording_sinks_and_rejected_setup() {
+    fn fresh_load_preserves_recording_sinks_after_rejected_setup() {
         let mut vector = VectorEnv::new(1, 23, true, [PlayerPolicy::Agent; 2]);
         vector.enable_statistics().unwrap();
         vector.enable_exposure_capture().unwrap();
         vector.reset_all(sample_player_configs()).unwrap();
         let generation = vector.current_game_generations();
         assert!(vector
-            .reassign_roots_into(
-                vec![Some(sample_player_configs())],
-                |_, _| Err(AgentError("injected admission".into())),
-                |_, _, _, _, _| Ok(()),
+            .load_slots_into(
+                &[SlotLoad::Fresh(0, Some(sample_player_configs().into()))],
+                |_, _| Err(AgentError("injected admission".into()).into()),
+                |_, _, _| Ok(())
             )
             .is_err());
         assert_eq!(vector.current_game_generations(), generation);
         assert!(vector.take_exposure()[0].is_empty());
         assert!(vector.take_statistics().is_empty());
-        vector
-            .reassign_roots_into(
-                vec![Some(sample_player_configs())],
-                |_, _| Ok(()),
-                |_, _, _, _, _| Ok(()),
-            )
-            .unwrap();
+        load_fresh(&mut vector, 0, Some(sample_player_configs().into()));
         assert_eq!(vector.take_exposure()[0].len(), 1);
         let summaries = vector.take_statistics();
         assert_eq!(summaries.len(), 1);
@@ -1563,87 +1569,35 @@ mod tests {
     }
 
     #[test]
-    fn reassignment_preserves_live_games_seeds_and_atomic_validation() {
+    fn fresh_setups_commit_only_after_admission_and_persist_on_the_slot() {
         let mut vector = VectorEnv::new(3, 23, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
-        vector
-            .step_into(&[0, 0, 0], Some(&[true, false, false]), |_, _, _, _, _| {
-                Ok(())
-            })
-            .unwrap();
-        assert!(!vector.fresh_roots[0]);
+        vector.step(&[0; 3]).unwrap();
+        let original = vector.player_configs.clone();
         let seeds = vector.current_game_seeds();
         let next = vector.next_seeds.clone();
-        assert!(vector
-            .reassign_roots_into(
-                vec![Some(sample_player_configs()), None, None],
-                |_, _| Ok(()),
-                |_, _, _, _, _| Ok(()),
-            )
-            .is_err());
+        let mut swapped = sample_player_configs();
+        swapped.reverse();
+        let replacement = SlotLoad::Fresh(0, Some(swapped.clone().into()));
         let mut invalid = sample_player_configs();
         invalid[0].deck.main.insert("Not A Real Card".into(), 1);
-        assert!(vector
-            .reassign_roots_into(
-                vec![None, Some(sample_player_configs()), Some(invalid)],
-                |_, _| Ok(()),
-                |_, _, _, _, _| Ok(()),
-            )
-            .is_err());
-        assert!(vector
-            .reassign_roots_into(
-                vec![
-                    None,
-                    Some(sample_player_configs()),
-                    Some(sample_player_configs())
-                ],
-                |index, _| if index == 2 {
-                    Err(AgentError("encoding capacity".into()))
-                } else {
-                    Ok(())
-                },
-                |_, _, _, _, _| Ok(()),
-            )
-            .is_err());
-        assert_eq!(vector.current_game_seeds(), seeds);
-        assert_eq!(vector.next_seeds, next);
-        let done = std::cell::Cell::new(false);
-        for _ in 0..2000 {
-            vector
-                .step_into(
-                    &[0, 0, 0],
-                    Some(&[true, false, false]),
-                    |_, _, _, terminal, truncated| {
-                        assert!(!truncated);
-                        done.set(terminal);
-                        Ok(())
-                    },
+        for bad in [invalid, vec![]] {
+            assert!(vector
+                .load_slots_into(
+                    &[replacement.clone(), SlotLoad::Fresh(2, Some(bad.into()))],
+                    |_, _| Ok(()),
+                    |_, _, _| panic!("failed admission wrote a row")
                 )
-                .unwrap();
-            if done.get() {
-                break;
-            }
+                .is_err());
         }
-        assert!(done.get());
-        let seeds = vector.current_game_seeds();
-        let next = vector.next_seeds.clone();
-        let mut setup = sample_player_configs();
-        setup.reverse();
-        vector
-            .reassign_roots_into(
-                vec![Some(setup.clone()), None, None],
-                |_, _| Ok(()),
-                |index, _, reward, terminal, truncated| {
-                    assert_eq!(index, 0);
-                    assert_eq!(reward, 0.0);
-                    assert!(!terminal && !truncated);
-                    Ok(())
-                },
-            )
-            .unwrap();
+        assert_eq!(vector.player_configs, original);
         assert_eq!(vector.current_game_seeds(), seeds);
         assert_eq!(vector.next_seeds, next);
-        assert_eq!(vector.player_configs[0][0].deck, setup[0].deck);
+        load_fresh(&mut vector, 0, Some(swapped.clone().into()));
+        assert_eq!(vector.current_game_seeds(), [26, 24, 25]);
+        load_fresh(&mut vector, 0, None);
+        assert_eq!(vector.current_game_seeds(), [29, 24, 25]);
+        assert_eq!(vector.current_player_configs()[0], swapped);
     }
 
     #[test]
@@ -1694,9 +1648,7 @@ mod tests {
                 assert!(!info[0].contains_key("game_error"));
                 assert!(!info[2].contains_key("game_error"));
                 control.step(&[0; 3]).unwrap();
-                vector
-                    .replace_failed_into(&[false, true, false], |_, _, _, _, _| Ok(()))
-                    .unwrap();
+                load_fresh(&mut vector, 1, None);
                 assert_eq!(vector.current_game_seeds(), vec![7, 11, 9]);
                 for index in [0, 2] {
                     assert_eq!(
@@ -1736,9 +1688,7 @@ mod tests {
                 control.envs[index].state_digest().unwrap()
             );
         }
-        vector
-            .replace_failed_into(&[false, true, false], |_, _, _, _, _| Ok(()))
-            .unwrap();
+        load_fresh(&mut vector, 1, None);
         assert_eq!(vector.current_game_seeds(), vec![7, 11, 9]);
         for index in [0, 2] {
             assert_eq!(
@@ -1758,7 +1708,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_step_returns_post_reset_observation() {
+    fn terminal_step_parks_the_finished_game() {
         let mut env = VectorEnv::new(1, 23, true, [PlayerPolicy::Agent, PlayerPolicy::Random]);
         env.reset_all(sample_player_configs())
             .expect("reset_all should succeed");
@@ -1770,7 +1720,10 @@ mod tests {
             assert_eq!(result.obs.agent.player_index, 0);
             if result.terminated {
                 found_terminal = true;
-                assert!(!result.obs.game_over);
+                assert!(result.obs.game_over);
+                assert_eq!(env.current_agent_indices(), [-1]);
+                assert_eq!(env.next_fresh_seeds(), [24]);
+                assert!(env.step(&[0]).unwrap_err().0.contains("Terminal slot 0"));
                 break;
             }
         }
@@ -1826,7 +1779,7 @@ mod tests {
     }
 
     #[test]
-    fn restored_game_seeds_preserve_future_autoreset_stride() {
+    fn restored_game_seeds_preserve_fresh_seed_stride() {
         let mut vector = VectorEnv::new(2, 1, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
         let mut seeds = [33_u64, 71_u64];
@@ -1841,14 +1794,15 @@ mod tests {
         for _ in 0..1000 {
             let actual = vector.step(&[0, 0]).unwrap();
             for index in 0..2 {
-                let (mut obs, _, done, truncated, _) = scalar[index].step(0).unwrap();
+                let (obs, _, done, truncated, _) = scalar[index].step(0).unwrap();
+                assert_eq!(format!("{:?}", actual[index].obs), format!("{obs:?}"));
                 if done || truncated {
                     terminals += 1;
                     seeds[index] += 2;
                     scalar[index].set_seed(seeds[index]);
-                    obs = scalar[index].reset(sample_player_configs()).unwrap().0;
+                    scalar[index].reset(sample_player_configs()).unwrap();
+                    load_fresh(&mut vector, index, None);
                 }
-                assert_eq!(format!("{:?}", actual[index].obs), format!("{obs:?}"));
             }
             assert_eq!(vector.current_game_seeds(), seeds);
         }
@@ -1901,7 +1855,7 @@ mod tests {
     }
 
     #[test]
-    fn masked_mixed_setups_preserve_scalar_autoreset() {
+    fn masked_mixed_setups_match_scalar_games() {
         let configs: Vec<_> = (0..3)
             .map(|index| {
                 let mut players = sample_player_configs();
@@ -1949,19 +1903,20 @@ mod tests {
                 active.iter().filter(|x| **x).count()
             );
             for (index, actual, reward, done, trunc) in observed.into_inner() {
-                let (mut obs, expected_reward, expected_done, expected_trunc, _) =
+                let (obs, expected_reward, expected_done, expected_trunc, _) =
                     scalar[index].step(0).unwrap();
                 assert_eq!(
                     (reward, done, trunc),
                     (expected_reward, expected_done, expected_trunc)
                 );
+                assert_eq!(actual, format!("{obs:?}"));
                 if done || trunc {
                     terminals[index] += 1;
                     seeds[index] += 3;
                     scalar[index].set_seed(seeds[index]);
-                    obs = scalar[index].reset(configs[index].clone()).unwrap().0;
+                    scalar[index].reset(configs[index].clone()).unwrap();
+                    load_fresh(&mut vector, index, None);
                 }
-                assert_eq!(actual, format!("{obs:?}"));
             }
             assert_eq!(vector.current_game_seeds(), seeds);
         }
@@ -1973,7 +1928,7 @@ mod tests {
     }
 
     #[test]
-    fn shards_preserve_global_seeds_through_autoreset_and_restore() {
+    fn shards_preserve_global_seeds_through_fresh_load_and_restore() {
         let mut whole = VectorEnv::new(3, 19, true, [PlayerPolicy::Agent; 2]);
         let mut left = VectorEnv::new(2, 19, true, [PlayerPolicy::Agent; 2])
             .with_seed_stride(3)
@@ -2006,6 +1961,16 @@ mod tests {
                 assert_eq!(expected.terminated, actual.terminated);
                 assert_eq!(expected.truncated, actual.truncated);
                 terminals += usize::from(actual.terminated);
+            }
+            for (slot, result) in expected.iter().enumerate() {
+                if result.terminated || result.truncated {
+                    load_fresh(&mut whole, slot, None);
+                    if slot < 2 {
+                        load_fresh(&mut left, slot, None);
+                    } else {
+                        load_fresh(&mut right, 0, None);
+                    }
+                }
             }
             let mut seeds = left.current_game_seeds();
             seeds.extend(right.current_game_seeds());
