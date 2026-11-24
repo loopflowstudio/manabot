@@ -1,7 +1,9 @@
-at: 7ce9093dabc0b884cc9a823082a8d4b3ffe9ecd9
+at: 6d3cf02810e197ea2ee4d48bfb84cccb61bb7db9
 first:
   - path: docs/engine-python.md
     why: Working example of mixed snapshot and fresh loads
+  - path: docs/training-loop.md
+    why: When training starts the next game
   - path: managym/src/agent/vector_env.rs
     why: Native steps park terminals and retain outcomes
   - path: managym/src/agent/vector_env/slots.rs
@@ -12,8 +14,18 @@ first:
     why: Settle terminal evidence and bind admitted replay roots
   - path: manabot/training/rollout/producers.py
     why: Map sparse global requests to shard slots
+  - path: manabot/training/rollout/collection.py
+    why: Quotas and adaptive scores determine refill timing
+  - path: manabot/env/memory_store.py
+    why: Live memory capture requires an actual viewer
+  - path: manabot/env/target_practice.py
+    why: Diagnostic target roots follow the collector lifecycle
   - path: manabot/env/vector_env.py
     why: Gym returns terminal outcomes with fresh observations
   - path: tests/env/test_vector_snapshot_slots.py
     why: Seed progression, rollback and retry across shards
+  - path: tests/training/test_adaptive_two_seat.py
+    why: Completed game records, seed progression and action limits
+  - path: tests/training/test_memory_prefix_storage.py
+    why: Live and parked bootstrap rows share a batch
 hide: []
