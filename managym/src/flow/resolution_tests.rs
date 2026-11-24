@@ -5135,7 +5135,6 @@ fn preparation_resolution_waypoint_preserves_existing_link_after_payment() {
         .scenario_force_battlefield(player, "Blossom-Blessed Angel", true)
         .unwrap();
     let source = root.permanent_object(angel).unwrap();
-    root.skip_trivial = false;
     root.state.players[player.0].mana_pool = Mana::parse("CCC").into();
     root.publish_action_space(root.priority_action_space(player));
     checked_command(
@@ -5429,7 +5428,6 @@ fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
             } else {
                 let copy = game.prepared_copy(source).unwrap();
                 let object = game.permanent_object(lions).unwrap();
-                game.skip_trivial = false;
                 game.state.players[player.0].mana_pool =
                     crate::state::mana::Mana::parse("W").into();
                 game.publish_action_space(game.priority_action_space(player));
