@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PermanentState } from '$lib/types';
 import type { CardFace } from '$lib/card-faces.svelte';
-import { keywordsOf, labelText, permissionTerms, ptProvenance, signed, statusesOf } from './inspect';
+import { counterTerms, keywordsOf, labelText, permissionTerms, ptProvenance, signed, statusesOf } from './inspect';
 
 const face: CardFace = { cost: '{G}{W}', colors: ['G', 'W'], type_line: 'Creature — Human Soldier Ally', keywords: ['trample'], power: 1, toughness: 1 };
 function permanent(extra: Partial<PermanentState>): PermanentState {
@@ -101,4 +101,11 @@ it('names who can cast before a source changes control', () => {
     'Alice may cast this while they control Blossom-Blessed Angel.',
     'Alice may cast this with flashback this turn. Exile it when it leaves the stack.',
   ]);
+});
+
+describe('counter terms', () => {
+  it('names each positive counter kind, singular or plural', () => {
+    expect(counterTerms({ stash: 1, double_strike: 2, stun: 0 })).toEqual(['1 stash counter', '2 double strike counters']);
+    expect(counterTerms(undefined)).toEqual([]);
+  });
 });

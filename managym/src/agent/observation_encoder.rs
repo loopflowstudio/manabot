@@ -1782,8 +1782,9 @@ struct Fact {
     effect: Option<(f32, i32, Option<i32>)>,
 }
 
-/// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
-/// object order (agent, opponent, agent permanents, opponent permanents).
+/// The facts `PlayerData`, `CardData` and `PermanentData` state as open
+/// vocabularies, in object order (agent, opponent, agent cards, opponent
+/// cards, agent permanents, opponent permanents).
 fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
@@ -1800,6 +1801,17 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         for (kind, count) in &player.counters {
             push(
                 player.id,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
+            );
+        }
+    }
+    // Counters on a visible card off the battlefield ("with a stash counter").
+    for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+        for (kind, count) in &card.counters {
+            push(
+                card.id,
                 FactKind::Counter,
                 name_value(&format!("CounterKind::{kind}")),
                 *count as f32 / 10.0,
@@ -2666,6 +2678,7 @@ mod tests {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            counters: Default::default(),
         }
     }
 

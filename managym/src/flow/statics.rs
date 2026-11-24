@@ -200,6 +200,9 @@ pub(super) struct StaticPlayPermissions {
     /// each permanent type from their graveyard once per turn (Muldrotha):
     /// its object and public id.
     pub graveyard_type_sources: Vec<(ObjectId, crate::state::game_object::PublicId)>,
+    /// Counter kinds marking exiled cards this player doesn't own that they
+    /// may play during their turn, spending mana of any type (Tinybones).
+    pub exile_counter_plays: Vec<CounterKind>,
     /// Land plays beyond the first this turn (CR 305.2) granted by
     /// permanents: the seat's own grants plus each "each player" grant.
     pub extra_land_plays: u32,
@@ -282,6 +285,11 @@ impl Game {
                             restrictions.push((id, controller, rule.clone()))
                         }
                         StaticAbility::AdditionalLandPlayEachPlayer => land_plays_each_player += 1,
+                        StaticAbility::PlayUnownedExiledWithCounter(kind) => {
+                            if !permissions.exile_counter_plays.contains(kind) {
+                                permissions.exile_counter_plays.push(*kind)
+                            }
+                        }
                         StaticAbility::PlayGraveyardByPermanentType => permissions
                             .graveyard_type_sources
                             .push((permanent.object, permanent.id)),

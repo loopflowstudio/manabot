@@ -2312,6 +2312,14 @@
             "$ref": "#/$defs/LegacyCastPermissionView"
           }
         },
+        "counters": {
+          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
         "face_down": {
           "default": false,
           "title": "Face Down",

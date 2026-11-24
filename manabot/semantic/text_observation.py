@@ -955,6 +955,8 @@ class _Renderer:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
+            for kind, count in sorted(card.counters.items()):
+                optional += f"; {kind.replace('_', ' ')} counters {count}"
             for permission in card.cast_permissions:
                 optional += "; " + self._cast_permission(permission, int(card.zone))
             lines.append(

@@ -304,6 +304,7 @@ fn keyword_action_text(who: Actor, action: KeywordAction) -> String {
         KeywordAction::Earthbend => ("earthbend", "earthbends"),
         KeywordAction::Firebend => ("firebend", "firebends"),
         KeywordAction::Airbend => ("airbend", "airbends"),
+        KeywordAction::Discard => ("discard a card", "discards a card"),
     };
     agree(who, plain, third_person).into()
 }

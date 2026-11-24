@@ -864,6 +864,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
+        "counters": "stash counters",
     },
     managym.StackObject: {
         "characteristics": "spell characteristics; absent for abilities",
@@ -1058,6 +1059,15 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
         "non-Human creature spell it casts; expires at step end."
     ) in text
     assert "Combat mana:" not in text
+
+
+def test_counters_on_a_card_off_the_battlefield_reach_text() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    payload = json.loads(capture_text_decision(env).capture_json)
+    cards = payload["observation"]["viewer_state"]["agent_cards"]
+    cards[0]["counters"] = {"stash": 1}
+    text = render_decision(_redigest(payload)).text
+    assert "; stash counters 1;" in text
 
 
 def test_player_poison_count_reaches_text_and_academy() -> None:

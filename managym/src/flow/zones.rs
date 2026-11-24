@@ -785,6 +785,11 @@ impl Game {
         if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
             self.state.turn.graveyard_from_battlefield.push(object_id);
         }
+        if to_zone == ZoneType::Exile && !entry.counters.is_empty() {
+            self.state
+                .object_counters
+                .insert(object_id, entry.counters.clone());
+        }
 
         if to_zone == ZoneType::Battlefield {
             if entry.transformed {

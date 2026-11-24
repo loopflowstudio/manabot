@@ -351,6 +351,9 @@ pub struct CardData {
     /// A graveyard card that was put there from the battlefield this turn
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
     pub from_battlefield_this_turn: bool,
+    /// Counters on it off the battlefield ("with a stash counter on it"),
+    /// by `CounterKind` name.
+    pub counters: BTreeMap<String, i32>,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -1758,6 +1761,14 @@ impl Observation {
                 && game.state.live(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
+            counters: game
+                .state
+                .object_counters
+                .get(&object_id)
+                .into_iter()
+                .flat_map(|counters| counters.iter())
+                .map(|(kind, count)| (kind.name().to_string(), count))
+                .collect(),
         }
     }
 

@@ -252,6 +252,20 @@ impl Game {
                     .live_grants(player, object)
                     .map(|grant| PlayRoute::Grant(grant.key))
                     .collect();
+                if zone == ZoneType::Exile
+                    && self.active_player() == player
+                    && self.state[object].owner != player
+                {
+                    if let Some(counters) = self.state.object_counters.get(&object) {
+                        routes.extend(
+                            self.layer_board().play_permissions[player.0]
+                                .exile_counter_plays
+                                .iter()
+                                .filter(|kind| counters.get(**kind) > 0)
+                                .map(|kind| PlayRoute::ExileCounter(*kind)),
+                        );
+                    }
+                }
                 if zone != ZoneType::Graveyard || self.state[object].owner != player {
                     return routes.into();
                 }
@@ -344,7 +358,8 @@ impl Game {
                 .library_spells
                 .iter()
                 .any(|predicate| cast.matches_spell(self, object, predicate)),
-            PlayRoute::Hand | PlayRoute::FreeFromHand => true,
+            // Every printed spell of the card: its Adventure, Omen or back face too.
+            PlayRoute::Hand | PlayRoute::FreeFromHand | PlayRoute::ExileCounter(_) => true,
             PlayRoute::GraveyardType { kind, .. } => {
                 cast.spell(&self.state[object]).types.types.contains(&kind)
             }
@@ -525,7 +540,8 @@ impl Game {
                 cost = cost.reduced_generic(reduction.generic);
             }
         }
-        let mut any_mana = false;
+        // Tinybones: "mana of any type can be spent to cast those spells".
+        let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)));
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             for ability in &view.static_abilities {
                 if let StaticAbility::SpendAnyManaToCast(predicate) = ability {

@@ -141,6 +141,8 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
             details["cast_permission"] = permissions[0]
         elif permissions:
             details["cast_permissions"] = permissions
+        if card.counters:
+            details["counters"] = {kind: int(n) for kind, n in card.counters.items()}
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {

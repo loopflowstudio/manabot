@@ -33,6 +33,8 @@ export interface CardState {
   cast_permissions?: CastPermission[];
   /** The value of X announced for this spell on the stack. */
   x?: number;
+  /** Counters on the card off the battlefield ("with a stash counter on it"), by kind. */
+  counters?: Record<string, number>;
 }
 
 /** A public permission to play a card in its current zone; only set terms are present. */

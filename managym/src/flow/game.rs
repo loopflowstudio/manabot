@@ -119,6 +119,11 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Counters on objects off the battlefield (CR 122.1: "exile it with a
+    /// stash counter on it"), by exact appearance; a permanent's are on its
+    /// `Permanent`. A zone change ends the appearance and its counters (CR
+    /// 400.7), so only live objects have entries.
+    pub object_counters: BTreeMap<ObjectId, crate::state::permanent::Counters>,
     /// Continuous effects from resolved spells and abilities, in timestamp
     /// order (`state::effect`).
     pub effects: crate::state::effect::EffectRecords,
@@ -719,6 +724,7 @@ impl TrackedState {
             self.state.zones.is_latest(object),
             "retired mint appearance"
         );
+        self.state.object_counters.remove(&object);
         self.state.objects[object.slot()].mint_appearance(from_zone, to_zone, entry_copy);
         self.state
             .zones

@@ -1703,3 +1703,173 @@ fn harbinger_requires_its_surcharge_only_for_its_own_flash_permission() {
         assert!(!top_spell(&branch).kicked);
     }
 }
+
+/// Tinybones exiles each card an opponent discards with a stash counter.
+/// On its controller's turn they may play those cards they don't own: a
+/// foreign land enters under their control, either printed spell of an
+/// Adventure is offered, and mana of any type pays for it. Every viewer sees
+/// the counter. The permission is Tinybones's, not the exile's: it ends when
+/// Tinybones leaves, does not reach the opponent's turn even with flash from
+/// High Fae Trickster, and yields to Drannith Magistrate for spells only.
+#[test]
+fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, zone_of},
+        play::{activate, cast_profile, choose, resolve_top},
+    };
+    use managym::{
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM},
+            observation_layout::fact,
+        },
+        cards::tokens::name_value,
+        state::{card::SpellProfile, game_object::ObjectId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&[
+        "Tinybones, Bauble Burglar",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+        "High Fae Trickster",
+        "Drannith Magistrate",
+    ]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let tinybones = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let smaug = move_from_library(&mut s, 1, "Smaug, the Great Calamity", ZoneType::Hand);
+    let forest = move_from_library(&mut s, 1, "Forest", ZoneType::Hand);
+    move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+    for card in [smaug, forest] {
+        s.game_mut().state.permanents[tinybones]
+            .as_mut()
+            .unwrap()
+            .tapped = false;
+        activate(&mut s, tinybones, 0);
+        resolve_top(&mut s);
+        let object = now(&s, card);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object: chosen, .. } if *chosen == object),
+        );
+        settle(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+        let exiled = now(&s, card);
+        assert_eq!(
+            s.game().state.object_counters[&exiled].get(CounterKind::Stash),
+            1
+        );
+    }
+    let stash = name_value("CounterKind::stash") as u32;
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let stashed: Vec<_> = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .filter(|card| card.counters.get("stash") == Some(&1))
+            .map(|card| card.characteristics.name.as_str())
+            .collect();
+        assert_eq!(
+            stashed,
+            ["Smaug, the Great Calamity", "Forest"],
+            "{viewer:?}"
+        );
+        let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let rows = input
+            .facts
+            .chunks_exact(FACT_DIM)
+            .filter(|row| ((row[fact::ID_HIGH] as u32) << 16 | row[fact::ID_LOW] as u32) == stash)
+            .count();
+        assert_eq!(rows, 2, "a stash fact row per card for {viewer:?}");
+    }
+
+    let offers = |s: &mut crate::support::game::Scenario, card: ObjectId| -> Vec<Action> {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(s, card);
+        s.action_space()
+            .actions
+            .iter()
+            .filter(|a| {
+                matches!(a, Action::CastSpell { object: o, .. } | Action::PlayLand { object: o, .. } if o == &object)
+            })
+            .cloned()
+            .collect()
+    };
+    let profiles = |actions: &[Action]| -> Vec<SpellProfile> {
+        actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::CastSpell { profile, .. } => Some(*profile),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        profiles(&offers(&mut s, smaug)),
+        [SpellProfile::Front, SpellProfile::Adventure]
+    );
+    assert!(matches!(
+        offers(&mut s, forest)[..],
+        [Action::PlayLand { .. }]
+    ));
+
+    // Drannith Magistrate refuses the spells but not the land play.
+    let mut hand_only = s.clone();
+    hand_only.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    assert!(offers(&mut hand_only, smaug).is_empty());
+    assert_eq!(offers(&mut hand_only, forest).len(), 1);
+
+    // Without Tinybones, nothing; the counters stay.
+    let mut gone = s.clone();
+    let source = gone.game().state.permanents[tinybones]
+        .as_ref()
+        .unwrap()
+        .object;
+    move_card(&mut gone, source, ZoneType::Graveyard);
+    assert!(offers(&mut gone, smaug).is_empty());
+    assert!(offers(&mut gone, forest).is_empty());
+    assert_eq!(gone.game().state.object_counters.len(), 2);
+
+    // Not during the opponent's turn, even as though it had flash.
+    let mut theirs = s.clone();
+    theirs.force_permanent_on_battlefield(0, "High Fae Trickster");
+    theirs.advance_to_active_step(1, StepKind::Upkeep);
+    theirs.pass_priority();
+    assert_eq!(theirs.action_space().player, Some(PlayerId(0)));
+    assert!(offers(&mut theirs, smaug).is_empty());
+
+    // Mana of any type pays the Adventure: five blue for {4}{R}.
+    s.set_player_mana_pool(0, "UUUUU");
+    cast_profile(&mut s, smaug, SpellProfile::Adventure);
+    assert!(s.choose_target(managym::state::game_object::Target::Permanent(ogre)));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[ogre].is_none(),
+        "Spew Flame resolved"
+    );
+    assert_eq!(zone_of(&s, smaug), Some(ZoneType::Exile));
+    assert!(
+        !s.game().state.object_counters.contains_key(&now(&s, smaug)),
+        "the stash counter left with the stack appearance"
+    );
+
+    // The foreign land enters under Tinybones's controller.
+    let exiled = now(&s, forest);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand { object, .. } if *object == exiled),
+    );
+    settle(&mut s);
+    let land = s.game().state.permanent_of(now(&s, forest)).unwrap();
+    let land = s.game().state.permanents[land].as_ref().unwrap();
+    assert_eq!(
+        (land.controller, s.game().state[land.object].owner),
+        (PlayerId(0), PlayerId(1))
+    );
+}

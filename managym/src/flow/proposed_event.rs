@@ -36,7 +36,8 @@ pub(crate) struct ZoneEntry {
     pub prepared: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
-    /// Battlefield: enters with these counters.
+    /// Battlefield or exile: enters with these counters ("exile it with a
+    /// stash counter on it").
     pub counters: Counters,
     /// Battlefield: the announced X of the resolving spell becoming this
     /// permanent.
@@ -61,8 +62,8 @@ pub(crate) struct ZoneEntry {
 }
 
 impl ZoneEntry {
-    /// The terms `zone` takes: battlefield terms only for the battlefield,
-    /// face down only for exile.
+    /// The terms `zone` takes: battlefield terms only for the battlefield;
+    /// face down and counters for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {
         let mut entry = match zone {
             ZoneType::Battlefield => Self {
@@ -80,6 +81,7 @@ impl ZoneEntry {
             ZoneType::Exile => Self {
                 adventure_player: self.adventure_player,
                 face_down: self.face_down,
+                counters: self.counters.clone(),
                 ..Self::default()
             },
             _ => Self::default(),

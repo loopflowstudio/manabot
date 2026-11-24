@@ -165,6 +165,7 @@ impl Game {
                 trigger_placement: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
+                object_counters: Default::default(),
                 effects: crate::state::effect::EffectRecords::default(),
                 cast_permissions: Default::default(),
                 suspended_decision: None,

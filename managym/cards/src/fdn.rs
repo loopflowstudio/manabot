@@ -1,8 +1,9 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
-        PlayWindow, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, KeywordAction, ObjectSelector, PaymentCost,
+        Per, PlayWindow, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
@@ -13,6 +14,7 @@ use managym_state::{
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -28,6 +30,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         high_fae_trickster(),
         sphinx_of_forgotten_lore(),
         suspicious_shambler(),
+        tinybones_bauble_burglar(),
         zul_ashur_lich_lord(),
     ]
 }
@@ -391,6 +394,56 @@ fn suspicious_shambler() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tinybones_bauble_burglar() -> CardDefinition {
+    let text_box = "Whenever an opponent discards a card, exile it from their graveyard with a stash counter on it.\nDuring your turn, you may play cards you don't own with stash counters on them from exile, and mana of any type can be spent to cast those spells.\n{3}{B}, {T}: Each opponent discards a card. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fdn.tinybones_bauble_burglar",
+        scryfall_id: "ff3d85bc-ef2d-4251-baf4-a14bd0cee61e",
+        printed: PrintedCharacteristics {
+            name: "Tinybones, Bauble Burglar".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Skeleton".into(), "Rogue".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Performs {
+                    who: Actor::Opponent,
+                    any_of: vec![KeywordAction::Discard],
+                },
+                effects: vec![Effect::Move {
+                    library_end: None,
+                    what: ObjectSelector::Triggering,
+                    to: ZoneType::Exile,
+                    tapped: false,
+                    transformed: false,
+                    under: None,
+                    with_counter: Some(CounterKind::Stash),
+                    linked: None,
+                }],
+            }],
+            statics: vec![StaticAbility::PlayUnownedExiledWithCounter(
+                CounterKind::Stash,
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{B}"),
+                tap_source: true,
+                sorcery_timing: true,
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    effects: vec![Effect::discard()],
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

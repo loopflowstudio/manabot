@@ -1535,6 +1535,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         StaticAbility::PlayGraveyardByPermanentType => witnessed(
             "StaticAbility::PlayGraveyardByPermanentType", Seen::Actions("each remaining permanent type offers a graveyard play"), "Muldrotha, the Gravetide","fdn","muldrotha_and_zul_offer_independent_casts",
         ),
+        StaticAbility::PlayUnownedExiledWithCounter(_) => witnessed(
+            "StaticAbility::PlayUnownedExiledWithCounter",
+            Seen::Actions("stash-marked exiled cards are offered as plays on its controller's turn"),
+            "Tinybones, Bauble Burglar",
+            "fdn",
+            "tinybones_stashes_discards_and_plays_them_on_its_turn",
+        ),
         StaticAbility::SpendAnyManaToCast(_) => witnessed("StaticAbility::SpendAnyManaToCast", Seen::Actions("creature spells can spend any mana"), "Vizier of the Menagerie", "tdm", "vizier_filters_twinmaw_profiles_and_mana"),
         StaticAbility::CastFromLibraryTop(_) => witnessed(
             "StaticAbility::CastFromLibraryTop",
@@ -1821,6 +1828,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
         StaticAbility::PlayGraveyardByPermanentType,
+        StaticAbility::PlayUnownedExiledWithCounter(CounterKind::Stash),
         StaticAbility::CastFromLibraryTop(creature()),
         StaticAbility::SpendAnyManaToCast(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
@@ -3303,6 +3311,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         cast_permissions => [Rows("cast permission below"), FactOccurrence(FactKind::EffectProgram)],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
         from_battlefield_this_turn => [column(CardTurnState, 0)],
+        counters => [FactOccurrence(FactKind::Counter)],
     }));
     fields.extend(encoding!(CastPermissionData {
         player_id => [Columns(Card, card::PERMISSION, 2)],

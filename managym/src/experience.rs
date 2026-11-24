@@ -321,6 +321,9 @@ pub struct LegacyCardView {
     /// The value of X announced for this spell on the stack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
+    /// Counters on the card off the battlefield ("with a stash counter on it").
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
 }
 
 /// A public permission to play a card in its current zone. Only set terms are present.

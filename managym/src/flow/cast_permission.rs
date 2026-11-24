@@ -45,6 +45,9 @@ pub enum PlayRoute {
         permanent_id: crate::state::game_object::PublicId,
         kind: crate::state::card::CardType,
     },
+    /// A card someone else owns, in exile with a counter of this kind, on
+    /// its player's turn (Tinybones's stash counters).
+    ExileCounter(crate::state::permanent::CounterKind),
 }
 
 /// Permission for one player to cast or play a card in one exact zone appearance.
@@ -521,11 +524,26 @@ impl Game {
     }
 
     /// Exiled candidates only. Priority already visits the player's graveyard.
-    pub(crate) fn exile_granted_objects(
+    /// Exiled objects `player` may have a play for, each once: those they
+    /// hold grants for, then counter-marked cards a permanent of theirs lets
+    /// them play (`play_routes` decides which routes are open now).
+    pub(crate) fn exile_playable_objects(
         &self,
         player: PlayerId,
     ) -> impl Iterator<Item = ObjectId> + '_ {
         let mut seen = std::collections::BTreeSet::new();
+        let counter_plays = self.layer_board().play_permissions[player.0]
+            .exile_counter_plays
+            .clone();
+        let marked = self
+            .state
+            .object_counters
+            .iter()
+            .filter(move |(object, counters)| {
+                self.state.zones.zone_of(**object) == Some(ZoneType::Exile)
+                    && counter_plays.iter().any(|kind| counters.get(*kind) > 0)
+            })
+            .map(|(object, _)| *object);
         self.state
             .cast_permissions
             .grants
@@ -535,6 +553,7 @@ impl Game {
                     && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
             })
             .map(|grant| grant.object)
+            .chain(marked)
             .filter(move |object| seen.insert(*object))
     }
 }

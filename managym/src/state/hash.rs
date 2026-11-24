@@ -181,6 +181,10 @@ struct CanonicalMatchState<'a> {
     trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    /// Omitted when empty, keeping hashes of states without them unchanged.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    object_counters: Vec<(ObjectId, &'a crate::state::permanent::Counters)>,
     effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
     #[serde(skip_serializing_if = "no_cast_permissions")]
@@ -226,6 +230,7 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            object_counters,
             effects,
             cast_permissions,
             suspended_decision,
@@ -280,6 +285,10 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            object_counters: object_counters
+                .iter()
+                .map(|(&id, counters)| (id, counters))
+                .collect(),
             effects: effects.as_slice(),
             cast_permissions,
             suspended_decision,

@@ -204,7 +204,9 @@ class DecisionContextView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     # What objects have already paid toward the cost being paid, in paid order.
-    paid: list[PaidView] = Field(default_factory=list, exclude_if=lambda value: not value)
+    paid: list[PaidView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class OfferSubjectView(ProtocolModel):
@@ -365,6 +367,9 @@ class LegacyCardView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
 
 class ContinuousEffectView(ProtocolModel):

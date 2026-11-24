@@ -858,7 +858,11 @@ impl Game {
                             ..ZoneEntry::default()
                         }
                     } else {
-                        ZoneEntry::default()
+                        // "exile it with a stash counter on it" (CR 122.1).
+                        ZoneEntry {
+                            counters: counters.clone(),
+                            ..ZoneEntry::default()
+                        }
                     };
                     events.push(self.zone_move_proposal(object, *to, entry));
                 }
@@ -2245,10 +2249,13 @@ impl Game {
                 .filter(|slot| self.target_is_present(slot.target))
                 .filter_map(|slot| self.target_object(slot.target))
                 .collect(),
-            ObjectSelector::Triggering => permanent(match frame.context_target {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            }),
+            ObjectSelector::Triggering => match frame.context_target {
+                Some(Target::Permanent(id)) => permanent(Some(id)),
+                Some(Target::GraveyardCard(object)) => {
+                    self.state.live(object).into_iter().collect()
+                }
+                _ => Vec::new(),
+            },
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame
                 .created

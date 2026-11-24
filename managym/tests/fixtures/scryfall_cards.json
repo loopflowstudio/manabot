@@ -8089,5 +8089,17 @@
     ],
     "oracle_text": "Sanar enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Create a Treasure token. Activate only if you've cast an instant or sorcery spell this turn.",
     "colors": null
+  },
+  "Tinybones, Bauble Burglar": {
+    "name": "Tinybones, Bauble Burglar",
+    "mana_cost": "{1}{B}",
+    "type_line": "Legendary Creature — Skeleton Rogue",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever an opponent discards a card, exile it from their graveyard with a stash counter on it.\nDuring your turn, you may play cards you don't own with stash counters on them from exile, and mana of any type can be spent to cast those spells.\n{3}{B}, {T}: Each opponent discards a card. Activate only as a sorcery.",
+    "colors": [
+      "B"
+    ]
   }
 }

@@ -967,6 +967,10 @@ pub enum StaticAbility {
     CastFromLibraryTop(CardPredicate),
     SpendAnyManaToCast(CardPredicate),
     PlayGraveyardByPermanentType,
+    /// "During your turn, you may play cards you don't own with [kind]
+    /// counters on them from exile, and mana of any type can be spent to
+    /// cast those spells" (Tinybones, Bauble Burglar).
+    PlayUnownedExiledWithCounter(CounterKind),
     /// "Equipped creature has \"...\"": an activated ability the creature
     /// this is attached to has, listed after its own in printed order.
     AttachedHas(ActivatedAbilityDefinition),

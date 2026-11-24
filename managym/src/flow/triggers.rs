@@ -146,6 +146,7 @@ fn keyword_action_event(action: KeywordAction) -> EventKind {
         | KeywordAction::Earthbend
         | KeywordAction::Firebend
         | KeywordAction::Airbend => EventKind::Bent,
+        KeywordAction::Discard => EventKind::CardMoved,
     }
 }
 
@@ -164,6 +165,14 @@ fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
                 Bending::Air => KeywordAction::Airbend,
             },
         )),
+        // The engine discards by moving a card from hand to its owner's
+        // graveyard, the event's controller.
+        GameEvent::CardMoved {
+            from: Some(ZoneType::Hand),
+            to: ZoneType::Graveyard,
+            controller,
+            ..
+        } => Some((*controller, KeywordAction::Discard)),
         _ => None,
     }
 }
@@ -1079,7 +1088,16 @@ impl Game {
             let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
             let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
             let context = if reads_triggering_permanent {
-                self.triggering_permanent(event)
+                self.triggering_permanent(event).or(match event {
+                    // "exile it from their graveyard": the card a discard put there.
+                    GameEvent::CardMoved {
+                        object_id,
+                        from: Some(ZoneType::Hand),
+                        to: ZoneType::Graveyard,
+                        ..
+                    } => Some(Target::GraveyardCard(*object_id)),
+                    _ => None,
+                })
             } else if let (
                 true,
                 GameEvent::SpellCast {

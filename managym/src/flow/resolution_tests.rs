@@ -4511,7 +4511,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
     };
     spell(&mut game, "Time Stop");
     game.exile_top_cards_to_play(player, 1, crate::state::ability::PlayWindow::ThisTurn);
-    let playable = game.exile_granted_objects(player).next().unwrap();
+    let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     assert_eq!(

@@ -433,6 +433,9 @@ pub enum KeywordAction {
     Earthbend,
     Firebend,
     Airbend,
+    /// Discarding a card (CR 701.9): once for each card put into its
+    /// owner's graveyard from their hand.
+    Discard,
 }
 
 impl KeywordAction {

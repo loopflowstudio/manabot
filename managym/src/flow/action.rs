@@ -98,6 +98,10 @@ impl Game {
                     PlayRoute::LibraryTop => "from library".into(),
                     PlayRoute::Hand => "from hand".into(),
                     PlayRoute::FreeFromHand => "from hand without paying its mana cost".into(),
+                    PlayRoute::ExileCounter(kind) => format!(
+                        "from exile with a {} counter",
+                        kind.name().replace('_', " ")
+                    ),
                 };
                 let verb = if card.types.is_land() { "Play" } else { "Cast" };
                 Some(format!("{verb} {} {terms}", card.name))
@@ -422,7 +426,7 @@ impl Game {
             .zone_cards(ZoneType::Hand, player)
             .chain(self.state.zone_cards(ZoneType::Graveyard, player))
             .map(|card| self.state.object_of(card))
-            .chain(self.exile_granted_objects(player))
+            .chain(self.exile_playable_objects(player))
             .chain(
                 self.library_top_card(player)
                     .map(|card| self.state.object_of(card)),

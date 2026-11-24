@@ -197,6 +197,9 @@ impl Serialize for CardJson<'_> {
                     .collect::<Vec<_>>(),
             )?;
         }
+        if !value.counters.is_empty() {
+            map.serialize_entry("counters", &value.counters)?;
+        }
         if value.face_down {
             map.serialize_entry("face_down", &true)?;
         }
@@ -735,6 +738,9 @@ pub(super) struct WireCardData {
     /// (`TurnState::graveyard_from_battlefield`); policy input v10.
     #[serde(default)]
     pub from_battlefield_this_turn: bool,
+    /// Counters on the card off the battlefield, by kind name.
+    #[serde(default)]
+    pub counters: BTreeMap<String, i32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -896,6 +902,7 @@ impl From<WireCardData> for CardData {
                 .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
+            counters: w.counters,
             characteristics: CharacteristicsData {
                 name: w.name,
                 text_box: w.text_box,
@@ -980,6 +987,7 @@ impl PermanentData {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         })
     }
@@ -1078,6 +1086,7 @@ impl SpellData {
             cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
+            counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         }
     }

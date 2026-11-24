@@ -2065,6 +2065,15 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
+    /// Counters on the card off the battlefield, by kind name.
+    #[getter]
+    fn counters(&self) -> BTreeMap<String, i32> {
+        self.data.counters.clone()
+    }
+    #[setter]
+    fn set_counters(&mut self, value: BTreeMap<String, i32>) {
+        self.data.counters = value;
+    }
     #[getter]
     fn characteristics(&self) -> PyObservationCharacteristics {
         PyObservationCharacteristics {
