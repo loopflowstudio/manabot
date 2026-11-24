@@ -693,6 +693,9 @@ impl Game {
     pub fn compound_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         let mut complete = self.structured_search_offers()?;
         match self.current_action_space.as_ref().map(|space| space.kind) {
+            Some(ActionSpaceKind::DeclareAttacker) if self.attacker_declaration_is_required() => {
+                Ok(complete)
+            }
             Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
             Some(ActionSpaceKind::DeclareBlocker) => {
                 Ok(self.structured_blocker_offers()?.unwrap_or(complete))
@@ -742,8 +745,9 @@ impl Game {
     /// Independent blocker assignments are a product of authoritative pair
     /// supports. Menace couples assignments and the current engine repairs an
     /// illegal singleton after declaration; a blocker limit refuses a second
-    /// blocker. Both retain the sequential path until a dependent joint
-    /// support can exclude those aliases before sampling.
+    /// blocker; an attacker every able creature must block removes later
+    /// blockers' declines. All retain the sequential path until a dependent
+    /// joint support can exclude those aliases before sampling.
     fn structured_blocker_offers(
         &self,
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
@@ -765,6 +769,7 @@ impl Game {
                 .keywords
                 .has(Keyword::Menace)
                 || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
+                || self.must_be_blocked_by_all_able(*attacker)
         }) {
             return Ok(None);
         }
@@ -1159,6 +1164,11 @@ impl Game {
     pub fn structured_attacker_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
+        }
+        // `Select` cannot require one candidate, so a creature that attacks
+        // each combat (CR 508.1d) keeps the sequential path.
+        if self.attacker_declaration_is_required() {
+            return Err(StructuredOfferError::WrongDecision);
         }
         let (player, declaration_order) = self.current_attacker_declaration()?;
         let wire_actor = wire_player_id(
@@ -1612,6 +1622,28 @@ impl Game {
     /// Recover the complete, still-undecided attacker batch from the current
     /// sequential legacy prompt. The first permanent was popped while the
     /// prompt was built; the remainder will be popped from the back.
+    /// Whether a creature still to be declared in this combat must attack.
+    fn attacker_declaration_is_required(&self) -> bool {
+        let current = self
+            .current_action_space
+            .as_ref()
+            .into_iter()
+            .flat_map(|space| &space.actions)
+            .filter_map(|action| match action {
+                Action::DeclareAttacker { permanent, .. } => Some(*permanent),
+                _ => None,
+            });
+        let pending = self
+            .state
+            .combat
+            .as_ref()
+            .into_iter()
+            .flat_map(|combat| combat.attackers_to_declare.iter().copied());
+        current
+            .chain(pending)
+            .any(|attacker| self.has_restriction(attacker, Restriction::AttacksEachCombat))
+    }
+
     fn current_attacker_declaration(
         &self,
     ) -> Result<(PlayerId, Vec<PermanentId>), StructuredOfferError> {

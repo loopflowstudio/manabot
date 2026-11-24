@@ -206,10 +206,11 @@
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     if (preview.kind === 'attackers') {
-      for (const id of declarable.keys()) {
+      for (const [id, creature] of declarable) {
         const drafted = draft.attackers.includes(id);
         places.set(id, drafted ? 'in' : 'can');
-        notes.set(id, drafted ? 'in the drafted attack; press to leave it out' : 'can attack; press to add it to the attack');
+        notes.set(id, drafted ? 'in the drafted attack; press to leave it out'
+          : creature.must_attack ? 'must attack; press to add it to the attack' : 'can attack; press to add it to the attack');
       }
     } else {
       const blocks = new Map(draft.blocks);

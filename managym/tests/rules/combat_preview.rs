@@ -236,3 +236,84 @@ fn a_lone_block_of_a_menace_creature_is_refused_with_the_reason() {
         "Llanowar Elves can block only one attacker."
     );
 }
+
+/// Juggernaut attacks each combat (CR 508.1d): the preview marks it, refuses
+/// a plan that leaves it home, and a plan with it declares as planned.
+#[test]
+fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
+    for skip_trivial in [false, true] {
+        for order in [["Juggernaut", "Gray Ogre"], ["Gray Ogre", "Juggernaut"]] {
+            let mut s = Scenario::new(
+                deck(&[("Mountain", 30), ("Juggernaut", 4), ("Gray Ogre", 6)]),
+                deck(&[("Forest", 30), ("Llanowar Elves", 10)]),
+                7,
+            );
+            s.advance_to_active_step(0, StepKind::Main);
+            let ids: Vec<_> = order
+                .iter()
+                .map(|name| {
+                    let id = s.force_permanent_on_battlefield(0, name);
+                    clear_summoning_sickness(&mut s, id);
+                    id
+                })
+                .collect();
+            s.game_mut().skip_trivial = skip_trivial;
+            s.advance_to_active_step(0, StepKind::DeclareAttackers);
+            let game = s.game();
+            let juggernaut = render(
+                game,
+                ids[order.iter().position(|n| *n == "Juggernaut").unwrap()],
+            );
+            let ogre = render(
+                game,
+                ids[order.iter().position(|n| *n == "Gray Ogre").unwrap()],
+            );
+            let context = format!("skip_trivial {skip_trivial}, order {order:?}");
+
+            let home = preview(
+                game,
+                0,
+                &CombatPlan {
+                    attackers: vec![ogre],
+                    blocks: Vec::new(),
+                },
+            );
+            match home
+                .declarable
+                .iter()
+                .find(|creature| creature.creature == juggernaut)
+            {
+                Some(creature) => {
+                    assert!(creature.must_attack, "{context}");
+                    let refused = home
+                        .refused
+                        .as_ref()
+                        .expect("omitting Juggernaut is refused");
+                    assert_eq!(refused.creature, juggernaut, "{context}");
+                    assert_eq!(refused.reason, "Juggernaut must attack.", "{context}");
+                }
+                // Already declared without asking: the plan covers the rest.
+                None => {
+                    assert!(home.refused.is_none(), "{context}: {:?}", home.refused);
+                    assert!(home.declared_attackers.contains(&juggernaut), "{context}");
+                }
+            }
+            assert!(home
+                .declarable
+                .iter()
+                .all(|creature| creature.creature == juggernaut || !creature.must_attack));
+
+            let both = CombatPlan {
+                attackers: vec![juggernaut, ogre],
+                blocks: Vec::new(),
+            };
+            let result = preview(game, 0, &both);
+            assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
+            let mut declared = result.declared_attackers.clone();
+            declared.sort_by_key(|id| id.entity);
+            let mut planned = both.attackers.clone();
+            planned.sort_by_key(|id| id.entity);
+            assert_eq!(declared, planned, "{context}");
+        }
+    }
+}

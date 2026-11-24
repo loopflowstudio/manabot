@@ -19,6 +19,7 @@ use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
+use crate::state::card::Restriction;
 use crate::state::game_object::{PermanentId, PlayerId};
 
 /// One proposed block: `blocker` blocks `attacker`.
@@ -56,6 +57,8 @@ pub struct DeclarableCreature {
     pub can_block: Vec<ObjectRenderId>,
     /// Blockers only: a requirement (CR 509.1c) removes the option to not block.
     pub must_block: bool,
+    /// Attackers only: a requirement (CR 508.1d) removes the option to stay home.
+    pub must_attack: bool,
 }
 
 /// One per-creature answer the engine will ask for.
@@ -286,7 +289,12 @@ impl Game {
             label: self.label(creature),
             can_block: can_block.into_iter().map(|id| self.render_id(id)).collect(),
             must_block,
+            must_attack: kind == DeclarationKind::Attackers && self.must_attack(creature),
         }
+    }
+
+    fn must_attack(&self, attacker: PermanentId) -> bool {
+        self.has_restriction(attacker, Restriction::AttacksEachCombat)
     }
 
     fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
@@ -333,9 +341,17 @@ impl Game {
                         "is not blocking now: this is an attack.",
                     );
                 }
+                let declared = |id: ObjectRenderId| {
+                    self.permanent_by_render_id(id).is_some_and(|permanent| {
+                        self.state
+                            .combat
+                            .as_ref()
+                            .is_some_and(|combat| combat.attackers.contains(&permanent))
+                    })
+                };
                 plan.attackers
                     .iter()
-                    .find(|id| !asked(**id))
+                    .find(|id| !asked(**id) && !declared(**id))
                     .and_then(|id| refuse(*id, "can't attack now."))
             }
             DeclarationKind::Blockers => {
@@ -402,7 +418,8 @@ impl Game {
             Answer::Block(Some(attacker)) => {
                 format!("{label} can't block {}.", self.label(attacker))
             }
-            Answer::Attack(_) => format!("{label} has no such attack answer."),
+            Answer::Attack(false) => format!("{label} must attack."),
+            Answer::Attack(true) => format!("{label} can't attack now."),
         };
         DeclarationRefusal {
             creature: self.render_id(creature),
@@ -469,27 +486,44 @@ impl Game {
         };
         match kind {
             DeclarationKind::Attackers => {
+                // Creatures declared before this decision (a skipped
+                // creature that must attack) are not part of the plan.
                 let mut planned = plan.attackers.clone();
+                planned.extend(
+                    self.state
+                        .combat
+                        .iter()
+                        .flat_map(|combat| &combat.attackers)
+                        .map(|attacker| self.render_id(*attacker))
+                        .filter(|id| !plan.attackers.contains(id)),
+                );
                 let mut declared = preview.declared_attackers.clone();
                 planned.sort_by_key(|id| (id.entity, id.incarnation));
                 declared.sort_by_key(|id| (id.entity, id.incarnation));
                 (planned != declared).then(|| {
-                    let creature = plan
-                        .attackers
+                    let creature = planned
                         .iter()
                         .find(|id| !preview.declared_attackers.contains(id))
                         .or_else(|| {
                             preview
                                 .declared_attackers
                                 .iter()
-                                .find(|id| !plan.attackers.contains(id))
+                                .find(|id| !planned.contains(id))
                         })
                         .copied()
                         .expect("differing attacker sets");
                     let label = named(creature);
+                    let must_attack = self
+                        .permanent_by_render_id(creature)
+                        .is_some_and(|attacker| self.must_attack(attacker));
+                    let reason = if must_attack && !planned.contains(&creature) {
+                        format!("{label} must attack.")
+                    } else {
+                        format!("The engine would not declare {label} as planned.")
+                    };
                     DeclarationRefusal {
                         creature,
-                        reason: format!("The engine would not declare {label} as planned."),
+                        reason,
                         label,
                     }
                 })

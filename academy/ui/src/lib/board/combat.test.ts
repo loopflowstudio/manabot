@@ -16,7 +16,7 @@ const block = fixture.positions.DECLARE_BLOCKER.frame;
 const [otter, lieutenant] = [110, 105];
 
 const creature = (entity: number, label: string, canBlock: number[] = []): DeclarableCreature => ({
-  creature: { entity, incarnation: 2 }, label, can_block: canBlock.map(id => ({ entity: id, incarnation: 3 })), must_block: false,
+  creature: { entity, incarnation: 2 }, label, can_block: canBlock.map(id => ({ entity: id, incarnation: 3 })), must_block: false, must_attack: false,
 });
 const step = (creature: number, attack: boolean, blocks: number | null = null, index = 0): DeclarationStep => ({
   revision: 1, fingerprint: 'f', creature: { entity: creature, incarnation: 2 }, action_index: index, attack,

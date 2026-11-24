@@ -21,7 +21,7 @@ import { PRIMARY_CHARS } from './prompt';
 export interface RenderId { entity: number; incarnation: number }
 export interface PlannedBlock { blocker: RenderId; attacker: RenderId }
 export interface CombatPlan { attackers: RenderId[]; blocks: PlannedBlock[] }
-export interface DeclarableCreature { creature: RenderId; label: string; can_block: RenderId[]; must_block: boolean }
+export interface DeclarableCreature { creature: RenderId; label: string; can_block: RenderId[]; must_block: boolean; must_attack: boolean }
 export interface DeclarationStep {
   revision: number; fingerprint: string; creature: RenderId; action_index: number; attack: boolean; blocks: RenderId | null;
 }
