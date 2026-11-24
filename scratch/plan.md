@@ -115,14 +115,27 @@ Paired on the M4 Max against merge-base `5d85077748` built with this branch's be
 - Debug after the fixes: nextest `--profile ci` lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests` 583/584 (known base `historical_captures…`), cards 907/907; `cargo fmt --check` clean.
 - Nothing else worth changing: observation and identity reads are O(1) per row, and `retain_copiable_values` compares `Arc` rows that catalog objects share.
 - Review (engine-performance-review, 2026-11-24, at `3d04c0c75a`; no engine source changed since `29d7adc98d`): **accepted**. Both fixes preserve behaviour: `layer_views` over no attached permanents yields nothing, so skipping it only defers a cache rebuild; `melded_card(o).is_some()` holds exactly when `separate_melded_card(o)` finds an entry (`state/src/zone.rs:283–299`), so the read-first path returns the same object and removes the same entry. Behaviour evidence is digests (search and steps equal the baseline on both sides) and unchanged candidate output digests, with debug suites green apart from the known base failure. Supported gains: clone allocation 25–30% smaller on every state. No speed claim, gain or loss, from the contended host; CI's same-runner Engine Budget is the gate. No size-scaling finding: `duplicate-creatures` 8/16/32 and `face-down` 4/8/16 grow linearly with work counters equal to the reference. `face-down` has no merge-base cell (it needs the branch's manifests); it is compared with `duplicate-creatures` at 2N instead. Stopping here is a judgement, not a proven optimum: no counter differs from the reference, so no measured bottleneck remains for this branch.
-- Re-entry (engine-measure, 2026-11-24, at `080d1c0f9e`): only `scratch/` changed since `29d7adc98d`, so the measurement and review above still describe the engine; no new run, no new change.
-- Implement re-entry (engine-optimization, 2026-11-24, at `da4168fe90`): no engine source changed since `29d7adc98d` and no counter differs from the reference, so no optimization slice exists; nothing built.
+- **CI Engine Budget failure on PR #593 (run `45451658946`, job `138650180785`, `080d1c0f9e` vs `a451f8f596`):**
+  - All search (seeds 1–3) and steps (512 games, 118,255 steps) digests matched `main` identically.
+  - `bench_search` total: `116.197 s` vs `109.065 s` (+6.5%, `ok`); worst reply `2.989 s` vs `2.813 s` (+6.3%, `ok`).
+  - **`bench_steps` throughput FAILED:** `22,650.8/s` (`5.250 s`) vs `25,092.0/s` (`4.724 s`) — **~11% slower per step**, below the `22,811.0/s` (-10%) budget floor.
+  - Note: earlier re-entry steps (`da4168fe90`, `310340aa5e`) skipped because Codex→Claude failover dropped the steer and `bench_states` work counters matched `main`. Do **not** skip measurement or waive with `engine_budget.py record`.
 
-## Next
+## Next · Recover TLA `bench_steps` (~11%) and `bench_search` (+6.5%) regressions
 
-All batches and Batch 4 items are built; engine-optimization found no bottleneck left after `29d7adc98d`. Next slice: `pr-publish`, then gate. Gate owns:
+Profile `bench_steps` (and `bench_search`) directly against merge-base `main` (CPU hotspots, `samply`/sampling, and per-step allocation counts — not just `bench_states` work counters) and fix the real per-step hot-path costs while keeping all digests identical:
 
-- CI's same-runner Engine Budget for the speed verdict; digests may move (serialized `CopiableValues.faces`, hash fields, manifest rng draws when `M > 0`, ExileLinked program tokens), recorded with `scripts/engine_budget.py record --reason` if they do.
+1. **Unbox `ZoneManager.slots: SlotTable` (`managym/state/src/zone.rs:143`).** Commit `6ad847fba1` boxed the always-hot `SlotTable` (hit on every `zone_of`, `is_latest`, `object_of`, `state[id]`) to offset 24 inline bytes for `melded_cards: Vec<(ObjectId, CardId)>` (empty in 100% of TLA games), adding a double pointer chase on every checked lookup plus a heap allocation on every `GameState::clone()`. Put `slots: SlotTable` back inline; box the cold `melded_cards` (`Option<Box<Vec<...>>>`) instead if needed for the 4096B `GameState` ceiling.
+2. **Profile `bench_steps` CPU hotspots and per-step allocations vs `main` and cut the top contributors.** Inspect especially:
+   - `ObjectLki` / `BattlefieldFacts` allocating `Arc` + `subtypes`/`supertypes` `Vec<String>` + `name: String` on every permanent departure (avoid per-departure `String`/`Vec` clones on ordinary departures).
+   - `Permanent.spell_entry: Option<Arc<SpellEntry>>` allocating an `Arc` on every ordinary cast permanent spell (keep plain `was_cast`/`x` zero-alloc or share a static entry when payment is empty).
+   - `ObjectLkiLog.indexes: Box<DepartureIndexes>` and `GameState.trigger_placement: Option<Box<TriggerPlacement>>` heap churn.
+   - Any other hot functions in `layers.rs`, `triggers.rs`, `zones.rs`, `mana.rs`, or `sba.rs` ranked by the `bench_steps` profile.
+3. **Verify** paired `bench_steps` and `bench_search` speedups against merge-base `main` with identical digests (do not waive via `engine_budget.py record`).
+
+After `engine-optimization` clears the regression, run `pr-publish`, then `demo` and `deliver` (`gate`). Gate owns:
+
+- CI's same-runner Engine Budget for the final speed verdict.
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
 - Rerun vector/recording consumers and canonical replay after merges `361823be59`/`4c10520b67`.
 - The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's.
