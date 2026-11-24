@@ -1,11 +1,11 @@
-at: a82e9ba2aa83a418ddcd4ec3f4e46954bf8821ff
+at: 4ec08488d5119353cc431fbb36e482d2aff06d7b
 first:
+  - path: managym/cards/tests/cards/dtk.rs
+    why: Compare the first response window and both forks
   - path: managym/cards/src/ala.rs
     why: Dragon Fodder creates two Goblins
   - path: managym/cards/src/tokens.rs
     why: The Goblin face supplies its printed characteristics
   - path: managym/cards/src/dtk.rs
     why: Impact Tremors triggers on each controlled creature entry
-  - path: managym/cards/tests/cards/dtk.rs
-    why: Follow the response windows on both branches
 hide: []

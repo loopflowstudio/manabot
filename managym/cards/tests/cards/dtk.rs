@@ -116,11 +116,11 @@ fn impact_tremors_triggers_for_each_goblin() {
     };
     use std::collections::HashSet;
 
-    for count in [2, 4] {
+    for (doubling_season, count) in [(false, 2), (true, 4)] {
         let mut s = five_color_setup(&["Impact Tremors", "Dragon Fodder", "Doubling Season"]);
         let tremors = s.force_permanent_on_battlefield(0, "Impact Tremors");
         s.set_player_mana_pool(0, "1R");
-        if count == 4 {
+        if doubling_season {
             s.force_permanent_on_battlefield(0, "Doubling Season");
         }
         cast_owned(&mut s, "Dragon Fodder");
@@ -137,8 +137,8 @@ fn impact_tremors_triggers_for_each_goblin() {
             assert_eq!(face.creature_types, ["Goblin"]);
         }
         s.assert_life(1, 20);
-        assert_eq!(s.game().state.stack_objects.len(), count);
         let stack = s.game().state.stack_objects.clone();
+        assert_eq!(stack.len(), count);
         assert!(stack
             .iter()
             .all(|item| matches!(item, StackObject::TriggeredAbility(_))
@@ -146,9 +146,8 @@ fn impact_tremors_triggers_for_each_goblin() {
         let mut fork = s.clone();
         resolve_top(&mut fork);
         fork.assert_life(1, 19);
-        assert_eq!(fork.game().state.stack_objects.len(), count - 1);
+        assert_eq!(fork.game().state.stack_objects, stack[..count - 1]);
         s.assert_life(1, 20);
-        assert_eq!(s.game().state.stack_objects.len(), count);
         assert_eq!(s.game().state.stack_objects, stack);
         resolve_top(&mut s);
         s.assert_life(1, 19);
