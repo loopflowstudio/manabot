@@ -49,6 +49,15 @@ def test_only_finite_half_precision_tolerance_misses_can_be_timed(
     atomic_json(tmp_path / "parity.json", {"torch": evidence})
     gate, detail = verdict(tmp_path, "padded", arm, "same")
     assert gate == "approximate" and "2.00%" in detail
+    atomic_json(
+        tmp_path / "parity.json",
+        {"torch": evidence | {"failures": ["learner loss", "full gradient"]}},
+    )
+    gate, detail = verdict(tmp_path, "padded", arm, "same")
+    assert detail.startswith("learner loss 2.00%") and detail.endswith(
+        "), full gradient"
+    )
+    atomic_json(tmp_path / "parity.json", {"torch": evidence})
     assert verdict(tmp_path, "bucketed", arm, "same")[0] == "rejected"
     assert verdict(tmp_path, "padded", arm, "other")[0] == "rejected"
     proof_file = tmp_path / "parity.json"

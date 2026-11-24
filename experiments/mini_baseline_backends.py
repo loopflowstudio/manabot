@@ -243,13 +243,12 @@ def verdict(directory: Path, layout: str, arm: Arm, digest: str) -> tuple[str, s
         "learner loss",
         "full gradient",
     }
-    detail = ", ".join(failures)
-    if "learner loss" in failures:
-        worst = max(proof["minibatches"], key=lambda batch: batch["loss_relative"])
-        detail += (
-            f" {worst['loss_relative']:.2%} on batch {worst['index']}"
-            f" ({worst['loss_torch']:.8g} vs {worst['loss_backend']:.8g})"
-        )
+    worst = max(proof["minibatches"], key=lambda batch: batch["loss_relative"])
+    loss = (
+        f"learner loss {worst['loss_relative']:.2%} on batch {worst['index']}"
+        f" ({worst['loss_torch']:.8g} vs {worst['loss_backend']:.8g})"
+    )
+    detail = ", ".join(loss if f == "learner loss" else f for f in failures)
     return ("approximate" if approximate else "rejected"), detail
 
 

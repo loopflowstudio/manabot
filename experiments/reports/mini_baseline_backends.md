@@ -89,12 +89,13 @@ The run used about 2.9 hours of the owned mini (live timing 2.8 h, parity
 ## Evidence
 
 Receipts, Etude tracking rows and the three captures are in
-`experiments/data/mini_baseline_backends/` (fetch with
-`uv run --extra artifacts python -m manabot.data fetch experiments/data/mini_baseline_backends`).
-The archive omits the per-cell `training/` checkpoints. To reproduce the
-tables below, run
+`experiments/data/mini_baseline_backends/`. The archive omits the per-cell
+`training/` checkpoints. The tables read only the receipts (about 18 MiB);
+the captures (about 700 MiB) are needed only to repeat a parity check. To
+reproduce the tables below, run
 
 ```sh
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mini_baseline_backends/w{64,256,384}l2/{padded,bucketed,machine.json,source.json,capture-files.json}
 uv run python experiments/mini_baseline_backends.py report --out experiments/data/mini_baseline_backends
 ```
 
