@@ -195,6 +195,10 @@ fn deals_damage_binds_source_as_triggering_object() {
     let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 59);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let watcher = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().state.permanents[attacker]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     // Only the attacker can attack; the tapped watcher stays home.
     s.game_mut().state.permanents[watcher]
         .as_mut()

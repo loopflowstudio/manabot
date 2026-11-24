@@ -834,7 +834,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 87;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -2988,7 +2988,8 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 /// Every variant whose row names a tensor column moves that column when the
 /// ogre gains it: ward, kicker, optional waterbend and pay-life-or-mana set card
 /// columns; a P/T buff and
-/// characteristic power move the permanent's power column.
+/// characteristic power move the permanent's power column, characteristic
+/// power and toughness its toughness column.
 #[test]
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let (base_game, ogre) = ogre_game();
@@ -3027,7 +3028,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         assert!(moved, "{} did not move its column", row.token);
         checked += 1;
     }
-    assert_eq!(checked, 7);
+    assert_eq!(checked, 8);
 }
 
 /// With no maximum hand size, the hand-count column keeps its size through
