@@ -1,5 +1,17 @@
-at: 4547c080e3db9bc0429875e0b58ec984a5801a4e
+at: cc1061b7117c0f4a75339bff3079e92c84f17e9a
 first:
+  - path: scratch/plan.md
+    why: See the interaction outcomes and remaining cohort.
+  - path: managym/state/src/effect.rs
+    why: Retain intrinsic triggers in copiable characteristics.
+  - path: managym/cards/src/fdn.rs
+    why: Electroduplicate gives each copy its own sacrifice.
+  - path: managym/cards/src/fin.rs
+    why: The Fire Crystal schedules an exact-token sacrifice.
+  - path: managym/src/flow/resolution.rs
+    why: Construct simultaneous copies before applying token replacements.
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Follow both restored trigger orders and kicked Rite.
   - path: managym/cards/tests/cards/dsk.rs
     why: Follow paired deals, payment forks and both copies.
   - path: managym/src/flow/selection_sampling.rs
