@@ -3,14 +3,33 @@ use managym_state::{
     ability::{Effect, ObjectSelector, Scope},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        StaticAbility,
+        ReplacementEffect, StaticAbility,
     },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![blasphemous_act(), typhoid_rats()]
+    vec![blasphemous_act(), diregraf_ghoul(), typhoid_rats()]
+}
+
+fn diregraf_ghoul() -> CardDefinition {
+    CardDefinition {
+        key: "isd.diregraf_ghoul",
+        scryfall_id: "4ed5790a-3354-49c2-89b6-3fc0de8dcc7c",
+        printed: PrintedCharacteristics {
+            name: "Diregraf Ghoul".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(2),
+            toughness: Some(2),
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: "This creature enters tapped.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn typhoid_rats() -> CardDefinition {

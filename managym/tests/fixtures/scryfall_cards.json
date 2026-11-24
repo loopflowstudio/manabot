@@ -1,4 +1,16 @@
 {
+  "Diregraf Ghoul": {
+    "name": "Diregraf Ghoul",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Zombie",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "This creature enters tapped.",
+    "colors": [
+      "B"
+    ]
+  },
   "Authority of the Consuls": {
     "name": "Authority of the Consuls",
     "mana_cost": "{W}",

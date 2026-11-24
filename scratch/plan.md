@@ -144,10 +144,11 @@ At `2cc29796`, `damage_source_facts` in `managym/src/flow/proposed_event.rs` rea
 The concept review reran the three entry positions via the Kaladesh fixture at HEAD 2eb740bd. The native entry and trigger model holds. Gate retains the live consumer and stale Command checks.
 **Behavior review at `7ef9b6e3`.** The crossed-control Authority fixture, the Zhao regression and all 75 native observability tests passed. The Authority fixture checks both forks after the trigger reaches the stack, including the exact life-change event. The mandatory tap introduces no player choice. The observability inventory maps it to the permanent’s tapped column. Gate still needs to check the live Authority position through Academy, closed-deck text and v11 tensors, and exercise stale Commands end to end. Authority satisfies its native working obligation. Slice 3 remains open.
 
-1. Next, author Diregraf Ghoul in the Innistrad module with the existing `ReplacementEffect::EntersTapped`. Cast and resolve it without Authority and check its tapped state at the first priority window. Resolve an ordinary creature in the same setup and check it enters untapped. Register the definition, check the printing fixture and update the FDN ledger with the native proof.
-2. Add remaining FDN token faces needed for this slice (`token.goblin_1_1_r`, `token.knight_1_1_w`, `token.soldier_1_1_w`, `token.dragon_4_4_r_flying`, `token.elf_warrior_1_1_g`, `token.zombie_2_2_b`, `token.dog_1_1_w`, `token.beast_4_4_g`, `token.insect_1_1_bg_flying`, `token.faerie_1_1_u_flying`).
-3. Author **Dragon Fodder**, **Impact Tremors**, **Heroic Reinforcements**, and remaining ready replacement cards (`Elspeth's Smite`, `Scorching Dragonfire`, `Obliterating Bolt`, `Grappling Kraken`, `Fleeting Flight` if local).
-4. Verify:
+**Diregraf Ghoul.** The Innistrad definition uses the entrant’s printed `ReplacementEffect::EntersTapped`. The directed fixture `isd::diregraf_ghoul_enters_tapped` casts the Ghoul and Gray Ogre in the same game without Authority and checks each permanent when priority returns. The printing fixture records Innistrad #97.
+
+1. Add remaining FDN token faces needed for this slice (`token.goblin_1_1_r`, `token.knight_1_1_w`, `token.soldier_1_1_w`, `token.dragon_4_4_r_flying`, `token.elf_warrior_1_1_g`, `token.zombie_2_2_b`, `token.dog_1_1_w`, `token.beast_4_4_g`, `token.insect_1_1_bg_flying`, `token.faerie_1_1_u_flying`).
+2. Author **Dragon Fodder**, **Impact Tremors**, **Heroic Reinforcements**, and remaining ready replacement cards (`Elspeth's Smite`, `Scorching Dragonfire`, `Obliterating Bolt`, `Grappling Kraken`, `Fleeting Flight` if local).
+3. Verify:
    - **Doubling Season + Impact Tremors + Dragon Fodder:** 4 independently identifiable `token.goblin_1_1_r` enter and fire 4 Tremors triggers (vs. 2 without Season).
    - **Doubling Season boundary:** effect counters vs. loyalty cost vs. resolving permanent-spell copy becoming a token.
 
