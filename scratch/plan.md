@@ -602,34 +602,19 @@ and added five counters. With the rebuilt CPython 3.13 extension,
 chosen Giant gives 3 in the public label and 0.3 in both packed v11 rows.
 The remaining measurement belongs to the Engine Budget and stress-state pass.
 
-**Decomposition re-review at `d87fe6e918` (2026-11-24): criterion not met.**
-Followed Lunar Convocation and Bakersbane Duo end to end. Both compose
-through one owner: `PlayerTurnHistory.life_gained` is written only at
-`flow/zones.rs:549` and read only through `EffectValue::LifeGainedThisTurn`
-(`flow/resolution.rs:176`, encoder `turn_state::LIFE_GAINED`, description);
-`TriggerCondition::Expend` has one matcher (`flow/triggers.rs:1835`). No card
-key appears in engine `src/` or `state/src/`. Three defects from the
-post-merge concept review are confirmed in code and block this phase:
-
-- One fact, two carriers: Quilled Greatwurm (`cards/src/fdn.rs:3407`) reads
-  `EffectValue::X`, fed by the `CombatDamageTotals` arm at
-  `flow/triggers.rs:1010` that clamps the total to `u8::MAX`, while
-  `trigger.triggering_amount` (`flow/triggers.rs:1058`) already carries the
-  same total for Drake Hatcher, Lathril and the others. `bound_x`'s
-  `DealsCombatDamage { to: None }` case is the description-side adapter for
-  that second carrier. Rules defect above 255 damage.
-- `TriggerCondition::once_each_turn` (`state/src/ability.rs:3048`) has a
-  wildcard and omits `Prepared`; three wrapper walkers (`once_each_turn`,
-  `wrapped_bound_x`, the trigger matcher) each list wrappers by hand. Only
-  Codie uses `Prepared` today and without `OnceEachTurn`, so the panic at
-  `flow/triggers.rs:911` is latent.
-- `SpellLki` drops `SpellProfile`, so departed-spell predicates read the front
-  face (item 2 below).
-
-Kept, as before: `TargetSpec::GraveyardCardYouOwnWithinSourcePower` (one
-reader, six references, three cards). Next step: implement items 1–4 below,
-rerun the Greatwurm, Drake Hatcher and observability fixtures, then repeat
-this review before `gate`.
+**Decomposition re-review at `d87fe6e918` (2026-11-24): criterion not met,
+then resolved.** Lunar Convocation and Bakersbane Duo each compose through one
+owner (`PlayerTurnHistory.life_gained` written once in `flow/zones.rs`, read
+only through `EffectValue::LifeGainedThisTurn`; one `TriggerCondition::Expend`
+matcher). No card key appears in engine `src/` or `state/src/`. The three
+blocking defects (Greatwurm's second amount carrier clamped at 255, wrapper
+walkers omitting `Prepared`, `SpellLki` without `SpellProfile`) are fixed in
+the section below and compressed at `a721dc4cbb`; the code now has
+`EffectValue::TriggeringAmount` at `cards/src/fdn.rs:3407`, exhaustive
+`TriggerCondition::inner` (`state/src/ability.rs:3049`) and
+`SpellLki.profile` (`state/src/stack_object.rs:54`). The only remaining
+`u8` clamp on trigger X is the legacy `CountersPut` binding kept for pinned
+pilots. The review itself has not been repeated against these fixes.
 
 ## Post-merge concept alignment
 
@@ -718,10 +703,12 @@ read Hatcher's concrete counter count in the LLM text and both Academy
 stack entries. The effect-execution model/text check and the named-layout
 check passed.
 
-**Next.** Repeat decomposition review against the directed cases above.
-Integrated Watch privacy, Engine Budget measurements and the Academy
-baseline comparisons remain for gate. The 1,697 passing native checks
-at synced head `60908f4ccf` predate this alignment pass.
+**Next.** Repeat decomposition review at `dd68cdd888` against the four
+directed results (Greatwurm over 255, distinct Hatcher labels, countered Omen,
+nested Prepared); if it holds, go to `gate`. Integrated Watch privacy, Engine
+Budget measurements and the Academy baseline comparisons remain for gate. The
+1,697 passing native checks at synced head `60908f4ccf` predate the alignment
+pass and its compression; gate reruns the full debug suite.
 
 ## Directed interactions for integrated validation
 
