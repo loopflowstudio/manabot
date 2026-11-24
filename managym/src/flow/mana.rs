@@ -2856,25 +2856,6 @@ impl Game {
         resume
     }
 
-    pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
-        if let Some(cached) = &self.state.mana_cache[player.0] {
-            return cached.clone();
-        }
-        let mana = self.producible_mana(player);
-        self.state.mana_cache_mut()[player.0] = Some(mana.clone());
-        mana
-    }
-
-    pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.state.mana_cache_mut()[player.0] = None;
-    }
-
-    /// For a change that can reach either player's mana abilities, such as a
-    /// grant moving between permanents whoever controls them.
-    pub(crate) fn invalidate_mana_caches(&mut self) {
-        *self.state.mana_cache_mut() = Default::default();
-    }
-
     /// The same witness used by automatic production determines PayCost offers.
     pub(crate) fn can_pay_automatic_mana(&self, player: PlayerId, cost: &ManaCost) -> bool {
         let model = self.payment_model(player, None);
@@ -3338,7 +3319,9 @@ impl Game {
         }
     }
 
-    pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
+    /// The mana `player` could produce now by tapping each untapped
+    /// permanent's mana abilities once, read from the layered board.
+    pub fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         let triggers = self.mana_triggers();
         for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {

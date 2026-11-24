@@ -272,7 +272,6 @@ impl Game {
             }
             self.state.untap(permanent_id);
         }
-        self.invalidate_mana_cache(player);
     }
 
     /// Untap the other players' permanents that untap during each other
@@ -290,7 +289,6 @@ impl Game {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                     permanent.untap();
                 }
-                self.invalidate_mana_cache(other);
             }
         }
     }
@@ -337,32 +335,14 @@ impl Game {
     /// nothing here: triggered mana abilities wait for the mana ability to
     /// produce mana (CR 106.12a; `flow/mana.rs`).
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
-        let Some(controller) = self.permanent_controller(permanent_id) else {
-            return false;
-        };
         if !self.state.tap(permanent_id) {
             return false;
         }
-        self.invalidate_mana_cache(controller);
         self.emit(GameEvent::PermanentTapped {
             permanent: permanent_id,
             for_mana,
         });
         true
-    }
-
-    /// Untap a permanent; its controller's producible mana changes.
-    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) {
-        if let Some(controller) = self.permanent_controller(permanent_id) {
-            self.state.untap(permanent_id);
-            self.invalidate_mana_cache(controller);
-        }
-    }
-
-    fn permanent_controller(&self, permanent_id: PermanentId) -> Option<PlayerId> {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .map(|permanent| permanent.controller)
     }
 
     /// Create a token from the token definition keyed `key` (`token.<name>`)
@@ -826,11 +806,6 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        let departing_affects_mana = old_zone == Some(ZoneType::Battlefield)
-            && self.state[object_id]
-                .statics
-                .iter()
-                .any(StaticAbility::affects_mana);
         // From here `object_id` is the appearance this move makes.
         let object_id = self
             .state
@@ -897,7 +872,6 @@ impl Game {
         if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
             // The permanent's controller gains or loses its mana abilities,
             // whoever owns the card.
-            self.invalidate_mana_cache(event_controller);
         }
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
@@ -929,18 +903,6 @@ impl Game {
         }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_object, to_zone, followups);
-        }
-        // A static that grants or removes abilities changes the mana another
-        // permanent's controller, possibly the opponent, can produce. The
-        // departing form's statics are read before the move restores its card.
-        if departing_affects_mana
-            || (to_zone == ZoneType::Battlefield
-                && self.state[object_id]
-                    .statics
-                    .iter()
-                    .any(StaticAbility::affects_mana))
-        {
-            self.invalidate_mana_caches();
         }
         let second = second.map(|second| {
             let arrival = self.state.mint_appearance(second, owner, to_zone, false);
@@ -993,7 +955,6 @@ impl Game {
             .unwrap()
             .transforms += 1;
         // Its mana abilities and static grants may change for either player.
-        self.invalidate_mana_caches();
     }
 
     /// Show a card's back face; false when it has none.
@@ -1020,15 +981,13 @@ impl Game {
         if permanent.controller == controller {
             return;
         }
-        let (object_id, previous) = (permanent.object, permanent.controller);
+        let object_id = permanent.object;
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.controller = controller;
         permanent.summoning_sick = true;
         permanent.attacking = false;
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
-        self.invalidate_mana_cache(previous);
-        self.invalidate_mana_cache(controller);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
         }

@@ -872,32 +872,6 @@ pub struct StaticContinuous {
     pub modifications: Vec<crate::effect::Modification<LayerValue>>,
 }
 
-impl StaticAbility {
-    /// Whether this can change the mana abilities of a permanent other than
-    /// its source, whoever controls it: grants, losses and type changes that
-    /// add or remove intrinsic land mana abilities.
-    pub fn affects_mana(&self) -> bool {
-        use crate::effect::Modification as M;
-        match self {
-            Self::AttachedSetsCharacteristics(_)
-            | Self::AttachedHas(_)
-            | Self::SetsLandType(_)
-            | Self::GrantsAnyColorManaAbility(_) => true,
-            Self::Continuous(continuous) => continuous.modifications.iter().any(|m| {
-                matches!(
-                    m,
-                    M::LoseAllAbilities
-                        | M::LoseNonManaAbilities
-                        | M::GrantActivated(_)
-                        | M::SetTypes { .. }
-                        | M::AddSubtypes(_)
-                )
-            }),
-            _ => false,
-        }
-    }
-}
-
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {

@@ -31,7 +31,7 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::{Mana, ManaPool},
+        mana::ManaPool,
         permanent::{CounterKind, Permanent, SpellEntry},
         stack_object::StackObject,
         zone::{ZoneManager, ZoneType},
@@ -106,7 +106,6 @@ pub struct GameState {
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<Box<CombatState>>,
-    pub mana_cache: [Option<Mana>; 2],
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
@@ -516,11 +515,6 @@ impl TrackedState {
 
     pub(crate) fn observation_events_mut(&mut self) -> &mut Vec<GameEvent> {
         &mut self.state.observation_events
-    }
-
-    /// The producible-mana cache has its own invalidation (`invalidate_mana_cache`).
-    pub(crate) fn mana_cache_mut(&mut self) -> &mut [Option<Mana>; 2] {
-        &mut self.state.mana_cache
     }
 
     pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<StackObject> {

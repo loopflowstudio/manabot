@@ -1564,7 +1564,6 @@ impl Game {
                                 owners.push(owner);
                             }
                         }
-                        Some(ZoneType::Hand) => self.invalidate_mana_cache(owner),
                         _ => {}
                     }
                 }
@@ -2701,7 +2700,6 @@ impl Game {
                     }
                     None
                 };
-                self.invalidate_mana_cache(player);
 
                 let more_selectable = looked
                     .iter()
@@ -4556,7 +4554,6 @@ mod payment_tests {
         let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
         let prism = game.lookup_current_permanent(sources[1]).unwrap();
         game.state.players[0].mana_pool = Mana::parse("1").into();
-        game.invalidate_mana_cache(player);
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let root = witness(&game);
         let before_hand = game.state.zones.size(ZoneType::Hand, player);

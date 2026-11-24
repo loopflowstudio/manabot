@@ -949,7 +949,7 @@ impl Game {
             }
             Effect::Untap { what } => {
                 for id in self.selected_permanents(what, frame) {
-                    self.untap_permanent(id);
+                    self.state.untap(id);
                 }
                 None
             }
@@ -1592,7 +1592,6 @@ impl Game {
                 until_end_of_combat,
             } => {
                 let count = self.effect_value(amount, frame).max(0);
-                self.invalidate_mana_cache(frame.controller);
                 let origin = frame.source().map(|source| self.mana_origin(source));
                 let pool = if *until_end_of_combat {
                     self.state.combat_mana_pool_mut(frame.controller)
@@ -1908,7 +1907,6 @@ impl Game {
                         duration: EffectDuration::Indefinite,
                         source_object: None,
                     });
-                self.invalidate_mana_cache(frame.controller);
                 None
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
@@ -2111,7 +2109,6 @@ impl Game {
                 for object_id in self.library_top_objects(frame.controller, *count) {
                     self.put_library_top_in_hand(object_id);
                 }
-                self.invalidate_mana_cache(frame.controller);
                 None
             }
             Effect::Learn => Some(Decision::Learn {
@@ -2556,7 +2553,6 @@ impl Game {
             // CR 613.7e: an attachment receives a new timestamp.
             equipment.timestamp = timestamp;
             // Its grants leave one creature, whoever controls it, for another.
-            self.invalidate_mana_caches();
         }
     }
 

@@ -1919,7 +1919,7 @@ fn jasmine_dragon_tea_shop_taps_for_colorless_or_an_ally_token() {
     let mut s = five_color_setup(&["Jasmine Dragon Tea Shop"]);
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        s.game().producible_mana(PlayerId(0)).mana,
         [0, 0, 0, 0, 0, 1]
     );
     s.set_player_mana_pool(0, "5");
@@ -6716,7 +6716,7 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
     let mut s = five_color_unfunded_setup(&["Honest Work", "Llanowar Elves"]);
     let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
     clear_summoning_sickness(&mut s, elves);
-    let green = |s: &mut Scenario| s.game_mut().cached_producible_mana(PlayerId(1));
+    let green = |s: &mut Scenario| s.game().producible_mana(PlayerId(1));
     assert_eq!(green(&mut s), Mana::parse("G"));
 
     let aura = enchant(&mut s, "Honest Work", "U", elves);
@@ -6724,7 +6724,6 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
         .as_mut()
         .unwrap()
         .tapped = false;
-    s.game_mut().invalidate_mana_cache(PlayerId(1));
     assert_eq!(green(&mut s), Mana::default(), "no fixed {{G}} remains");
     assert!(!s.game().characteristics(elves).has_subtype("Elf"));
 
@@ -6811,10 +6810,7 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     };
     grant.keywords = Keywords::of(&[Keyword::Haste]);
     let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
-    let mana = |s: &mut Scenario| {
-        s.game_mut().invalidate_mana_cache(PlayerId(0));
-        s.game_mut().cached_producible_mana(PlayerId(0))
-    };
+    let mana = |s: &mut Scenario| s.game().producible_mana(PlayerId(0));
     assert_eq!(mana(&mut s), Mana::default(), "sick without the grant");
 
     add_counters(&mut s, elves, CounterKind::PlusOnePlusOne, 1);
@@ -6843,10 +6839,7 @@ fn secret_tunnel_makes_two_creatures_sharing_a_type_unblockable() {
     let tunnel = s.force_permanent_on_battlefield(0, "Secret Tunnel");
     let soldier = s.force_permanent_on_battlefield(0, "Earth Kingdom Soldier");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)),
-        Mana::parse("C")
-    );
+    assert_eq!(s.game().producible_mana(PlayerId(0)), Mana::parse("C"));
     s.set_player_mana_pool(0, "4");
     assert!(!offers_ability(&mut s, tunnel, 0), "no two share a type");
 
@@ -10311,7 +10304,7 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        s.game().producible_mana(PlayerId(0)).mana,
         [0, 0, 0, 0, 0, 1]
     );
     s.set_player_mana_pool(0, "");

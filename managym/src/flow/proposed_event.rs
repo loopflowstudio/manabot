@@ -1533,14 +1533,6 @@ impl Game {
         let Ok(permanent_id) = self.lookup_current_permanent(target) else {
             return false;
         };
-        // A land-type overwrite's counters change other players' mana.
-        if self.state[target]
-            .statics
-            .iter()
-            .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
-        {
-            self.invalidate_mana_caches();
-        }
         let timestamp =
             (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
