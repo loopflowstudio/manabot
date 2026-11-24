@@ -1346,21 +1346,6 @@ impl Game {
         Some(ability)
     }
 
-    /// Record an activation against its once-per-object or once-each-turn
-    /// limit.
-    pub(crate) fn record_activation(
-        &mut self,
-        permanent: PermanentId,
-        ability_index: usize,
-        ability: &ActivatedAbilityDefinition,
-    ) {
-        if !ability.is_use_limited() {
-            return;
-        }
-        self.state
-            .record_activation(permanent, ability_index, ability);
-    }
-
     /// The definition an activation of `source` uses; `None` once the
     /// source no longer exists where the ability functions.
     pub(crate) fn activation_ability(
@@ -1732,7 +1717,8 @@ impl Game {
             }
             self.tap_permanent(permanent_id, false);
         }
-        self.record_activation(permanent_id, ability_index, &ability);
+        self.state
+            .record_activation(permanent_id, ability_index, &ability);
 
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {

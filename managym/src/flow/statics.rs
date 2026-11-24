@@ -59,7 +59,9 @@ pub struct Characteristics {
     /// Whether a layer 3 effect set its name.
     pub name_set: bool,
     /// Whether a layer 4 effect replaced its creature types (Kellan's
-    /// upgrades, a Citizen, a Skeleton) or removed them with Creature.
+    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
+    /// later grant of all creature types clears it, so it never accompanies
+    /// `CreatureTypes::All`.
     pub creature_types_set: bool,
     /// Every subtype it has: printed or set, then added by records.
     pub subtypes: Vec<String>,
@@ -133,6 +135,12 @@ impl Characteristics {
         self.types.is_creature()
     }
 
+    /// Whether it has every creature type. Mid-pass, `CreatureTypes::All`
+    /// only marks the grant, which counts for a creature alone (CR 205.3d).
+    pub fn has_all_creature_types(&self) -> bool {
+        self.is_creature() && self.creature_types.is_all()
+    }
+
     /// Whether a summoning-sick permanent with these characteristics can't
     /// attack or pay {T} (CR 302.6): it is a creature without haste.
     pub fn restricted_by_summoning_sickness(&self) -> bool {
@@ -147,7 +155,7 @@ impl Characteristics {
     /// Whether it has this subtype, counting all creature types.
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
-            || (self.creature_types.is_all() && is_creature_type(subtype))
+            || (self.has_all_creature_types() && is_creature_type(subtype))
     }
 }
 

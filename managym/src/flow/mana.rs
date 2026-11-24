@@ -2490,7 +2490,8 @@ impl Game {
             return Err(AgentError("illegal mana activation".into()));
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
-        self.record_activation(permanent, ability_index, &ability);
+        self.state
+            .record_activation(permanent, ability_index, &ability);
         let (frame, resume) = match self.state.suspended_decision_mut().take() {
             Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
             None => (EffectFrame::new(player, Vec::new()), None),

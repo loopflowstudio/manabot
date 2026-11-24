@@ -1589,9 +1589,9 @@ impl Observation {
                 .name_set
                 .then(|| characteristics.name.to_string()),
             // All creature types is projected by its shared-effect row.
-            creature_types: (characteristics.creature_types_set
-                && !characteristics.creature_types.is_all())
-            .then(|| characteristics.creature_types.listed().to_vec()),
+            creature_types: characteristics
+                .creature_types_set
+                .then(|| characteristics.creature_types.listed().to_vec()),
             is_granted_land: characteristics.is_land() && !object.types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat

@@ -778,9 +778,7 @@ impl<'a> Context<'a> {
     fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
             let view = &self.objects[&id].view;
-            // Mid-pass `All` marks the grant; it counts only for a creature
-            // (CR 205.3d).
-            if view.is_creature() && view.creature_types.is_all() {
+            if view.has_all_creature_types() {
                 max
             } else {
                 (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
@@ -1266,7 +1264,7 @@ pub(super) fn matches_view(
     CharacteristicView {
         types: &view.types,
         subtypes: &view.subtypes,
-        all_creature_types: view.is_creature() && view.creature_types.is_all(),
+        all_creature_types: view.has_all_creature_types(),
         supertypes: &object.supertypes,
         colors: &view.colors,
         name: &view.name,

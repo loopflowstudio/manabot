@@ -663,6 +663,8 @@ impl TrackedState {
         }
     }
 
+    /// Record an activation against its once-per-object or once-each-turn
+    /// limit; an unlimited ability records nothing.
     pub(crate) fn record_activation(
         &mut self,
         permanent_id: PermanentId,

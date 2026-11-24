@@ -33,7 +33,7 @@ use managym::state::game_object::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
-        observation::{EventEntityKind, KeywordData, Observation, PermanentData},
+        observation::{EventEntityKind, KeywordData, Observation},
         policy_history::HistoryReference,
         structured_offer::{AtomicCommand, OfferSubmission, StructuredOfferError},
     },
