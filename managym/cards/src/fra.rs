@@ -1,13 +1,13 @@
 //! Reality Fracture.
+use super::enters_prepared;
 use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, KeywordAction, ObjectSelector, Per, TargetSpec,
         TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
-        Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility,
-        StaticContinuous, StaticScope,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        LayerValue, PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -17,12 +17,6 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    let prepared_creature = PrintedCharacteristics {
-        types: CardTypes::new([CardType::Creature]),
-        replacement_effects: vec![ReplacementEffect::EntersPrepared],
-        inset: Some(seed_suture()),
-        ..Default::default()
-    };
     vec![
         prudent_fateseer(),
         diviner_of_victory(),
@@ -37,7 +31,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
                 toughness: Some(4),
                 keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
                 text_box: "Flying, vigilance\nThis creature enters prepared.".into(),
-                ..prepared_creature.clone()
+                ..enters_prepared(seed_suture())
             },
             ..Default::default()
         },
@@ -51,7 +45,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
                 power: Some(1),
                 toughness: Some(1),
                 text_box: "This creature enters prepared.".into(),
-                ..prepared_creature
+                ..enters_prepared(seed_suture())
             },
             ..Default::default()
         },
@@ -75,7 +69,6 @@ fn carnivorous_cultivator() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Carnivorous Cultivator".into(),
             mana_cost: Some(ManaCost::parse("{1}{G}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Elf".into(), "Warlock".into()],
             power: Some(2),
@@ -97,9 +90,7 @@ fn carnivorous_cultivator() -> CardDefinition {
                     },
                 ))],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(enroot()),
-            ..Default::default()
+            ..enters_prepared(enroot())
         },
         ..Default::default()
     }
@@ -113,15 +104,12 @@ fn fatehold_chronologist() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Fatehold Chronologist".into(),
             mana_cost: Some(ManaCost::parse("{1}{W/U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Bird".into(), "Wizard".into()],
             power: Some(1),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Flying]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(peer_review()),
-            ..Default::default()
+            ..enters_prepared(peer_review())
         },
         ..Default::default()
     }
@@ -135,7 +123,6 @@ fn hallway_heckler() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Hallway Heckler".into(),
             mana_cost: Some(ManaCost::parse("{2}{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Elemental".into(), "Sorcerer".into()],
             power: Some(2),
@@ -146,9 +133,7 @@ fn hallway_heckler() -> CardDefinition {
                 effects: vec![Effect::DrawCards { count: 1.into() }],
                 ..Default::default()
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(vicious_verse()),
-            ..Default::default()
+            ..enters_prepared(vicious_verse())
         },
         ..Default::default()
     }
@@ -162,14 +147,11 @@ fn konstrari_improviser() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Konstrari Improviser".into(),
             mana_cost: Some(ManaCost::parse("{1}{R/G}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Human".into(), "Artificer".into()],
             power: Some(2),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(soul_tether()),
-            ..Default::default()
+            ..enters_prepared(soul_tether())
         },
         ..Default::default()
     }
@@ -183,7 +165,6 @@ fn pompous_battlemage() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Pompous Battlemage".into(),
             mana_cost: Some(ManaCost::parse("{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Goblin".into(), "Sorcerer".into()],
             power: Some(1),
@@ -202,9 +183,7 @@ fn pompous_battlemage() -> CardDefinition {
                     Modification::pump(1, 1),
                 )],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(improvised_act()),
-            ..Default::default()
+            ..enters_prepared(improvised_act())
         },
         ..Default::default()
     }
@@ -218,7 +197,6 @@ fn semester_foreseer() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Semester Foreseer".into(),
             mana_cost: Some(ManaCost::parse("{3}{U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Human".into(), "Wizard".into()],
             power: Some(3),
@@ -230,9 +208,7 @@ fn semester_foreseer() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::Surveil { count: 1 }],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(peer_review()),
-            ..Default::default()
+            ..enters_prepared(peer_review())
         },
         ..Default::default()
     }
@@ -246,7 +222,6 @@ fn theorix_metamage() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Theorix Metamage".into(),
             mana_cost: Some(ManaCost::parse("{2}{U/B}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Shade".into(), "Wizard".into()],
             power: Some(2),
@@ -266,9 +241,7 @@ fn theorix_metamage() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
                 ],
             })],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(omit_variables()),
-            ..Default::default()
+            ..enters_prepared(omit_variables())
         },
         ..Default::default()
     }
@@ -282,7 +255,6 @@ fn vigorbloom_vanguard() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Vigorbloom Vanguard".into(),
             mana_cost: Some(ManaCost::parse("{1}{G/W}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Troll".into(), "Druid".into()],
             power: Some(2),
@@ -298,9 +270,7 @@ fn vigorbloom_vanguard() -> CardDefinition {
                     Keyword::Vigilance,
                 ]))],
             })],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(seed_suture()),
-            ..Default::default()
+            ..enters_prepared(seed_suture())
         },
         ..Default::default()
     }
@@ -314,7 +284,6 @@ fn void_extrapolator() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Void Extrapolator".into(),
             mana_cost: Some(ManaCost::parse("{1}{B}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Aetherborn".into(), "Warlock".into()],
             power: Some(2),
@@ -331,147 +300,122 @@ fn void_extrapolator() -> CardDefinition {
                     toughness: LayerValue::Fixed(1),
                 }],
             })],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(omit_variables()),
-            ..Default::default()
+            ..enters_prepared(omit_variables())
         },
         ..Default::default()
     }
 }
 
-fn enroot() -> InsetSpell {
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Enroot".into(),
-            mana_cost: Some(ManaCost::parse("{G}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box:
-                "Search your library for a land card, put it into your graveyard, then shuffle."
-                    .into(),
-            spell_effects: vec![Effect::search_library(
-                CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
-                },
-                1.into(),
-                vec![Effect::move_to(
-                    ObjectSelector::Selected,
-                    ZoneType::Graveyard,
-                )],
+fn enroot() -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        name: "Enroot".into(),
+        mana_cost: Some(ManaCost::parse("{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: "Search your library for a land card, put it into your graveyard, then shuffle."
+            .into(),
+        spell_effects: vec![Effect::search_library(
+            CardPredicate {
+                card_type: Some(CardType::Land),
+                ..Default::default()
+            },
+            1.into(),
+            vec![Effect::move_to(
+                ObjectSelector::Selected,
+                ZoneType::Graveyard,
             )],
-            ..Default::default()
-        }
-        .into(),
-    )
+        )],
+        ..Default::default()
+    }
 }
 
-fn peer_review() -> InsetSpell {
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Peer Review".into(),
-            mana_cost: Some(ManaCost::parse("{2}{W/U}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box:
-                "Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1."
-                    .into(),
-            spell_effects: vec![
-                Effect::create_tokens("token.cadet", 1),
-                Effect::Surveil { count: 1 },
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+fn peer_review() -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        name: "Peer Review".into(),
+        mana_cost: Some(ManaCost::parse("{2}{W/U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: "Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1."
+            .into(),
+        spell_effects: vec![
+            Effect::create_tokens("token.cadet", 1),
+            Effect::Surveil { count: 1 },
+        ],
+        ..Default::default()
+    }
 }
 
-fn vicious_verse() -> InsetSpell {
+fn vicious_verse() -> PrintedCharacteristics {
     let text = "Vicious Verse deals 1 damage to target opponent.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Vicious Verse".into(),
-            mana_cost: Some(ManaCost::parse("{B/R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::deal_damage(
-                1,
-                ObjectSelector::Target(TargetSpec::Opponent),
-            )],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Vicious Verse".into(),
+        mana_cost: Some(ManaCost::parse("{B/R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::deal_damage(
+            1,
+            ObjectSelector::Target(TargetSpec::Opponent),
+        )],
+        ..Default::default()
+    }
 }
 
-fn soul_tether() -> InsetSpell {
+fn soul_tether() -> PrintedCharacteristics {
     let text =
         "Create a Heartwood token. (It's a red and green artifact with \"{T}: Add {R} or {G}.\")";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Soul Tether".into(),
-            mana_cost: Some(ManaCost::parse("{2}{R/G}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::create_tokens("token.heartwood", 1)],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Soul Tether".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R/G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::create_tokens("token.heartwood", 1)],
+        ..Default::default()
+    }
 }
 
-fn improvised_act() -> InsetSpell {
+fn improvised_act() -> PrintedCharacteristics {
     let text = "You may discard a card. If you do, draw a card.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Improvised Act".into(),
-            mana_cost: Some(ManaCost::parse("{R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::discard_draw(1, 1)],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Improvised Act".into(),
+        mana_cost: Some(ManaCost::parse("{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::discard_draw(1, 1)],
+        ..Default::default()
+    }
 }
 
-fn omit_variables() -> InsetSpell {
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Omit Variables".into(),
-            mana_cost: Some(ManaCost::parse("{U/B}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box:
-                "Mill three cards. (Put the top three cards of your library into your graveyard.)"
-                    .into(),
-            spell_effects: vec![Effect::MillCards {
-                count: 3.into(),
-                target: None,
-            }],
-            ..Default::default()
-        }
-        .into(),
-    )
+fn omit_variables() -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        name: "Omit Variables".into(),
+        mana_cost: Some(ManaCost::parse("{U/B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box:
+            "Mill three cards. (Put the top three cards of your library into your graveyard.)"
+                .into(),
+        spell_effects: vec![Effect::MillCards {
+            count: 3.into(),
+            target: None,
+        }],
+        ..Default::default()
+    }
 }
 
-fn seed_suture() -> InsetSpell {
+fn seed_suture() -> PrintedCharacteristics {
     let text = "Put a +1/+1 counter on target creature. You gain 1 life.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Seed Suture".into(),
-            mana_cost: Some(ManaCost::parse("{G/W}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![
-                Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                ),
-                Effect::gain_life(1),
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Seed Suture".into(),
+        mana_cost: Some(ManaCost::parse("{G/W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![
+            Effect::put_counters(
+                ObjectSelector::Target(TargetSpec::Creature),
+                CounterKind::PlusOnePlusOne,
+                1,
+            ),
+            Effect::gain_life(1),
+        ],
+        ..Default::default()
+    }
 }
 
 fn diviner_of_victory() -> CardDefinition {
@@ -482,7 +426,6 @@ fn diviner_of_victory() -> CardDefinition {
         scryfall_id: "0853bb80-8664-432a-8457-600139fd96d5",
         printed: PrintedCharacteristics {
             name: "Diviner of Victory".into(),
-            types: CardTypes::new([CardType::Creature]),
             mana_cost: Some(ManaCost::parse("{U}")),
             subtypes: vec!["Dwarf".into(), "Wizard".into()],
             power: Some(1),
@@ -498,30 +441,25 @@ fn diviner_of_victory() -> CardDefinition {
                     Modification::pump(1, 1),
                 )],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(InsetSpell::Prepared(
-                PrintedCharacteristics {
-                    name: "Unwind History".into(),
-                    mana_cost: Some(ManaCost::parse("{1}{U}")),
-                    types: CardTypes::new([CardType::Sorcery]),
-                    text_box: spell_text.into(),
-                    spell_effects: vec![
-                        Effect::return_to_hand(ObjectSelector::Target(
-                            TargetSpec::PermanentOpponentControls {
-                                predicate: CardPredicate {
-                                    max_mana_value: Some(3),
-                                    ..CardPredicate::creature()
-                                },
-                            },
-                        )),
-                        Effect::Surveil { count: 1 },
-                    ],
-                    ..Default::default()
-                }
-                .into(),
-            )),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(PrintedCharacteristics {
+                name: "Unwind History".into(),
+                mana_cost: Some(ManaCost::parse("{1}{U}")),
+                types: CardTypes::new([CardType::Sorcery]),
+                text_box: spell_text.into(),
+                spell_effects: vec![
+                    Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::PermanentOpponentControls {
+                            predicate: CardPredicate {
+                                max_mana_value: Some(3),
+                                ..CardPredicate::creature()
+                            },
+                        },
+                    )),
+                    Effect::Surveil { count: 1 },
+                ],
+                ..Default::default()
+            })
         },
         ..Default::default()
     }
@@ -534,7 +472,6 @@ fn prudent_fateseer() -> CardDefinition {
         scryfall_id: "6c1c790b-9e0e-4964-9ea3-554843907f06",
         printed: PrintedCharacteristics {
             name: "Prudent Fateseer".into(),
-            types: CardTypes::new([CardType::Creature]),
             mana_cost: Some(ManaCost::parse("{1}{W/U}{W/U}")),
             subtypes: vec!["Dwarf".into(), "Wizard".into()],
             power: Some(1),
@@ -552,10 +489,8 @@ fn prudent_fateseer() -> CardDefinition {
                     Modification::pump(1, 0),
                 )],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(peer_review()),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(peer_review())
         },
         ..Default::default()
     }

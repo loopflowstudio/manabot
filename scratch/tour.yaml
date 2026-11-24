@@ -1,17 +1,19 @@
-at: fae97841dafc8573f5fcec8900f9d98c28fb3511
+at: 8246e1c4db70e68464d148a7ce8ab3c5caf09bcb
 first:
   - path: docs/engine.md
     why: Follow the exile copy through transfer and blink
+  - path: managym/cards/src/lib.rs
+    why: See what every enters-prepared creature declares
+  - path: managym/cards/src/fra.rs
+    why: Follow shared spells across distinct source creatures
+  - path: managym/cards/src/sos.rs
+    why: Inspect the prepared creatures and their spells
   - path: managym/src/agent/observation.rs
     why: Read current caster and source entitlement together
   - path: managym/src/agent/observation_encoder.rs
     why: See which grant facts reach the policy
   - path: academy/ui/src/lib/board/inspect.ts
     why: See how a viewer reads source control
-  - path: managym/cards/src/fra.rs
-    why: Follow repeated spell programs across distinct sources
-  - path: managym/cards/src/sos.rs
-    why: Inspect the prepared creatures and inset programs
   - path: managym/src/flow/resolution_tests.rs
     why: Compare control transfer with a new battlefield incarnation
   - path: managym/cards/tests/cards/sos.rs

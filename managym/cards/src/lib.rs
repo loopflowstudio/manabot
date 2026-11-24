@@ -96,7 +96,19 @@ mod zen;
 
 use std::sync::OnceLock;
 
-use managym_state::card::{CardDefinition, TokenDefinition};
+use managym_state::card::{
+    CardDefinition, CardType, CardTypes, InsetSpell, PrintedCharacteristics, ReplacementEffect,
+    TokenDefinition,
+};
+
+fn enters_prepared(spell: PrintedCharacteristics) -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        types: CardTypes::new([CardType::Creature]),
+        replacement_effects: vec![ReplacementEffect::EntersPrepared],
+        inset: Some(InsetSpell::Prepared(spell.into())),
+        ..Default::default()
+    }
+}
 
 /// Every card definition from every set, sorted by key. Tokens are in
 /// [`token_catalog`].

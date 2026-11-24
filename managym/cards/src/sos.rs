@@ -1,12 +1,13 @@
 //! Secrets of Strixhaven.
+use super::enters_prepared;
 use managym_state::{
     ability::{
         Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
         ObjectSelector, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        CardDefinition, CardType, CardTypes, InsetSpell, Keyword, Keywords, PrintedCharacteristics,
-        ReplacementEffect, StaticAbility,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -45,14 +46,11 @@ fn adventurous_eater() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Adventurous Eater".into(),
             mana_cost: Some(ManaCost::parse("{2}{B}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Human".into(), "Warlock".into()],
             power: Some(3),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(have_a_bite()),
-            ..Default::default()
+            ..enters_prepared(have_a_bite())
         },
         ..Default::default()
     }
@@ -66,14 +64,11 @@ fn blazing_firesinger() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Blazing Firesinger".into(),
             mana_cost: Some(ManaCost::parse("{2}{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Dwarf".into(), "Bard".into()],
             power: Some(2),
             toughness: Some(3),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(seething_song()),
-            ..Default::default()
+            ..enters_prepared(seething_song())
         },
         ..Default::default()
     }
@@ -87,7 +82,6 @@ fn campus_composer() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Campus Composer".into(),
             mana_cost: Some(ManaCost::parse("{3}{U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Merfolk".into(), "Bard".into()],
             power: Some(3),
@@ -95,9 +89,7 @@ fn campus_composer() -> CardDefinition {
             statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
                 "{2}",
             )))],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(aqueous_aria()),
-            ..Default::default()
+            ..enters_prepared(aqueous_aria())
         },
         ..Default::default()
     }
@@ -111,14 +103,11 @@ fn cheerful_osteomancer() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Cheerful Osteomancer".into(),
             mana_cost: Some(ManaCost::parse("{3}{B}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Orc".into(), "Warlock".into()],
             power: Some(4),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(raise_dead()),
-            ..Default::default()
+            ..enters_prepared(raise_dead())
         },
         ..Default::default()
     }
@@ -132,14 +121,11 @@ fn goblin_glasswright() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Goblin Glasswright".into(),
             mana_cost: Some(ManaCost::parse("{1}{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Goblin".into(), "Sorcerer".into()],
             power: Some(2),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(craft_with_pride()),
-            ..Default::default()
+            ..enters_prepared(craft_with_pride())
         },
         ..Default::default()
     }
@@ -153,15 +139,12 @@ fn honorbound_page() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Honorbound Page".into(),
             mana_cost: Some(ManaCost::parse("{3}{W}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Cat".into(), "Cleric".into()],
             power: Some(3),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::FirstStrike]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(forum_s_favor()),
-            ..Default::default()
+            ..enters_prepared(forum_s_favor())
         },
         ..Default::default()
     }
@@ -175,14 +158,11 @@ fn infirmary_healer() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Infirmary Healer".into(),
             mana_cost: Some(ManaCost::parse("{1}{G}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Cat".into(), "Cleric".into()],
             power: Some(2),
             toughness: Some(3),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(stream_of_life()),
-            ..Default::default()
+            ..enters_prepared(stream_of_life())
         },
         ..Default::default()
     }
@@ -196,14 +176,11 @@ fn landscape_painter() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Landscape Painter".into(),
             mana_cost: Some(ManaCost::parse("{1}{U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Merfolk".into(), "Wizard".into()],
             power: Some(2),
             toughness: Some(1),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(vibrant_idea()),
-            ..Default::default()
+            ..enters_prepared(vibrant_idea())
         },
         ..Default::default()
     }
@@ -217,15 +194,12 @@ fn maelstrom_artisan() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Maelstrom Artisan".into(),
             mana_cost: Some(ManaCost::parse("{1}{R}{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Minotaur".into(), "Sorcerer".into()],
             power: Some(3),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Haste]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(rocket_volley()),
-            ..Default::default()
+            ..enters_prepared(rocket_volley())
         },
         ..Default::default()
     }
@@ -239,15 +213,12 @@ fn quill_blade_laureate() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Quill-Blade Laureate".into(),
             mana_cost: Some(ManaCost::parse("{1}{W}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Human".into(), "Cleric".into()],
             power: Some(1),
             toughness: Some(1),
             keywords: Keywords::of(&[Keyword::DoubleStrike]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(twofold_intent()),
-            ..Default::default()
+            ..enters_prepared(twofold_intent())
         },
         ..Default::default()
     }
@@ -261,15 +232,12 @@ fn skycoach_conductor() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Skycoach Conductor".into(),
             mana_cost: Some(ManaCost::parse("{2}{U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Bird".into(), "Pilot".into()],
             power: Some(2),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance, Keyword::Flash]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(all_aboard()),
-            ..Default::default()
+            ..enters_prepared(all_aboard())
         },
         ..Default::default()
     }
@@ -283,15 +251,12 @@ fn spellbook_seeker() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Spellbook Seeker".into(),
             mana_cost: Some(ManaCost::parse("{3}{U}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Bird".into(), "Wizard".into()],
             power: Some(3),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Flying]),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(careful_study()),
-            ..Default::default()
+            ..enters_prepared(careful_study())
         },
         ..Default::default()
     }
@@ -305,15 +270,12 @@ fn strife_scholar() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Strife Scholar".into(),
             mana_cost: Some(ManaCost::parse("{2}{R}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Orc".into(), "Sorcerer".into()],
             power: Some(3),
             toughness: Some(2),
             statics: vec![StaticAbility::Ward(PaymentCost::Life(2))],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(awaken_the_ages()),
-            ..Default::default()
+            ..enters_prepared(awaken_the_ages())
         },
         ..Default::default()
     }
@@ -327,300 +289,254 @@ fn studious_first_year() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Studious First-Year".into(),
             mana_cost: Some(ManaCost::parse("{G}")),
-            types: CardTypes::new([CardType::Creature]),
             text_box: text.into(),
             subtypes: vec!["Bear".into(), "Wizard".into()],
             power: Some(1),
             toughness: Some(1),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(rampant_growth()),
-            ..Default::default()
+            ..enters_prepared(rampant_growth())
         },
         ..Default::default()
     }
 }
 
-fn have_a_bite() -> InsetSpell {
+fn have_a_bite() -> PrintedCharacteristics {
     let text = "Put a +1/+1 counter on target creature. You gain 1 life.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Have a Bite".into(),
-            mana_cost: Some(ManaCost::parse("{B}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![
-                Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                ),
-                Effect::gain_life(1),
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Have a Bite".into(),
+        mana_cost: Some(ManaCost::parse("{B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![
+            Effect::put_counters(
+                ObjectSelector::Target(TargetSpec::Creature),
+                CounterKind::PlusOnePlusOne,
+                1,
+            ),
+            Effect::gain_life(1),
+        ],
+        ..Default::default()
+    }
 }
 
-fn seething_song() -> InsetSpell {
+fn seething_song() -> PrintedCharacteristics {
     let text = "Add {R}{R}{R}{R}{R}.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Seething Song".into(),
-            mana_cost: Some(ManaCost::parse("{2}{R}")),
-            types: CardTypes::new([CardType::Instant]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::add_mana(Mana::parse("RRRRR"))],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Seething Song".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}")),
+        types: CardTypes::new([CardType::Instant]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::add_mana(Mana::parse("RRRRR"))],
+        ..Default::default()
+    }
 }
 
-fn aqueous_aria() -> InsetSpell {
+fn aqueous_aria() -> PrintedCharacteristics {
     let text = "Create a 3/3 blue and red Elemental creature token with flying.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Aqueous Aria".into(),
-            mana_cost: Some(ManaCost::parse("{4}{U}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::create_tokens("token.blue_red_elemental", 1)],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Aqueous Aria".into(),
+        mana_cost: Some(ManaCost::parse("{4}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::create_tokens("token.blue_red_elemental", 1)],
+        ..Default::default()
+    }
 }
 
-fn raise_dead() -> InsetSpell {
+fn raise_dead() -> PrintedCharacteristics {
     let text = "Return target creature card from your graveyard to your hand.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Raise Dead".into(),
-            mana_cost: Some(ManaCost::parse("{B}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
-                TargetSpec::GraveyardCardYouOwn {
-                    predicate: CardPredicate::creature(),
-                },
-            ))],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Raise Dead".into(),
+        mana_cost: Some(ManaCost::parse("{B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+            TargetSpec::GraveyardCardYouOwn {
+                predicate: CardPredicate::creature(),
+            },
+        ))],
+        ..Default::default()
+    }
 }
 
-fn craft_with_pride() -> InsetSpell {
+fn craft_with_pride() -> PrintedCharacteristics {
     let text = "Create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Craft with Pride".into(),
-            mana_cost: Some(ManaCost::parse("{R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::create_tokens("token.treasure", 1)],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Craft with Pride".into(),
+        mana_cost: Some(ManaCost::parse("{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::create_tokens("token.treasure", 1)],
+        ..Default::default()
+    }
 }
 
-fn forum_s_favor() -> InsetSpell {
+fn forum_s_favor() -> PrintedCharacteristics {
     let text = "Target creature gets +1/+0 and gains flying until end of turn.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Forum's Favor".into(),
-            mana_cost: Some(ManaCost::parse("{W}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(1, 0),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
-                ),
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Forum's Favor".into(),
+        mana_cost: Some(ManaCost::parse("{W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![
+            Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::pump(1, 0),
+            ),
+            Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+            ),
+        ],
+        ..Default::default()
+    }
 }
 
-fn stream_of_life() -> InsetSpell {
+fn stream_of_life() -> PrintedCharacteristics {
     let text = "Target player gains X life.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Stream of Life".into(),
-            mana_cost: Some(ManaCost::parse("{X}{G}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::ForPlayer {
-                player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
-                effects: vec![Effect::gain_life(EffectValue::X)],
-            }],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Stream of Life".into(),
+        mana_cost: Some(ManaCost::parse("{X}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::ForPlayer {
+            player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
+            effects: vec![Effect::gain_life(EffectValue::X)],
+        }],
+        ..Default::default()
+    }
 }
 
-fn vibrant_idea() -> InsetSpell {
+fn vibrant_idea() -> PrintedCharacteristics {
     let text = "Draw two cards.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Vibrant Idea".into(),
-            mana_cost: Some(ManaCost::parse("{4}{U}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::DrawCards { count: 2.into() }],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Vibrant Idea".into(),
+        mana_cost: Some(ManaCost::parse("{4}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::DrawCards { count: 2.into() }],
+        ..Default::default()
+    }
 }
 
-fn rocket_volley() -> InsetSpell {
+fn rocket_volley() -> PrintedCharacteristics {
     let text = "Destroy target nonbasic land.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Rocket Volley".into(),
-            mana_cost: Some(ManaCost::parse("{1}{R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
-                TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Land),
-                        nonbasic: true,
-                        ..Default::default()
-                    },
+    PrintedCharacteristics {
+        name: "Rocket Volley".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+            TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Land),
+                    nonbasic: true,
+                    ..Default::default()
                 },
-            ))],
-            ..Default::default()
-        }
-        .into(),
-    )
+            },
+        ))],
+        ..Default::default()
+    }
 }
 
-fn twofold_intent() -> InsetSpell {
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Twofold Intent".into(),
-            mana_cost: Some(ManaCost::parse("{1}{W}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: "Target creature gets +1/+0 and gains double strike until end of turn."
-                .into(),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(1, 0),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
-                ),
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+fn twofold_intent() -> PrintedCharacteristics {
+    PrintedCharacteristics {
+        name: "Twofold Intent".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: "Target creature gets +1/+0 and gains double strike until end of turn.".into(),
+        spell_effects: vec![
+            Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::pump(1, 0),
+            ),
+            Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
+            ),
+        ],
+        ..Default::default()
+    }
 }
 
-fn all_aboard() -> InsetSpell {
+fn all_aboard() -> PrintedCharacteristics {
     let text = "Exile target non-Pilot creature you control, then return that card to the battlefield under its owner's control.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "All Aboard".into(),
-            mana_cost: Some(ManaCost::parse("{U}")),
-            types: CardTypes::new([CardType::Instant]),
-            text_box: text.into(),
-            spell_effects: vec![
-                Effect::move_to(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            not_subtypes: vec!["Pilot".into()],
-                            ..CardPredicate::creature()
-                        },
-                    }),
-                    ZoneType::Exile,
-                ),
-                Effect::Move {
-                    what: ObjectSelector::Moved,
-                    to: ZoneType::Battlefield,
-                    under: Some(PlayerSelector::Owner),
-                    tapped: false,
-                    transformed: false,
-                    with_counter: None,
-                    linked: None,
-                    library_end: None,
-                },
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "All Aboard".into(),
+        mana_cost: Some(ManaCost::parse("{U}")),
+        types: CardTypes::new([CardType::Instant]),
+        text_box: text.into(),
+        spell_effects: vec![
+            Effect::move_to(
+                ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                    predicate: CardPredicate {
+                        not_subtypes: vec!["Pilot".into()],
+                        ..CardPredicate::creature()
+                    },
+                }),
+                ZoneType::Exile,
+            ),
+            Effect::Move {
+                what: ObjectSelector::Moved,
+                to: ZoneType::Battlefield,
+                under: Some(PlayerSelector::Owner),
+                tapped: false,
+                transformed: false,
+                with_counter: None,
+                linked: None,
+                library_end: None,
+            },
+        ],
+        ..Default::default()
+    }
 }
 
-fn careful_study() -> InsetSpell {
+fn careful_study() -> PrintedCharacteristics {
     let text = "Draw two cards, then discard two cards.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Careful Study".into(),
-            mana_cost: Some(ManaCost::parse("{U}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![
-                Effect::DrawCards { count: 2.into() },
-                Effect::Discard {
-                    what: ObjectSelector::You,
-                    count: 2,
-                },
-            ],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Careful Study".into(),
+        mana_cost: Some(ManaCost::parse("{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![
+            Effect::DrawCards { count: 2.into() },
+            Effect::Discard {
+                what: ObjectSelector::You,
+                count: 2,
+            },
+        ],
+        ..Default::default()
+    }
 }
 
-fn awaken_the_ages() -> InsetSpell {
+fn awaken_the_ages() -> PrintedCharacteristics {
     let text = "Create two 2/2 red and white Spirit creature tokens.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Awaken the Ages".into(),
-            mana_cost: Some(ManaCost::parse("{5}{R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::create_tokens("token.red_white_spirit", 2)],
-            ..Default::default()
-        }
-        .into(),
-    )
+    PrintedCharacteristics {
+        name: "Awaken the Ages".into(),
+        mana_cost: Some(ManaCost::parse("{5}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::create_tokens("token.red_white_spirit", 2)],
+        ..Default::default()
+    }
 }
 
-fn rampant_growth() -> InsetSpell {
+fn rampant_growth() -> PrintedCharacteristics {
     let text = "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.";
-    InsetSpell::Prepared(
-        PrintedCharacteristics {
-            name: "Rampant Growth".into(),
-            mana_cost: Some(ManaCost::parse("{1}{G}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            text_box: text.into(),
-            spell_effects: vec![Effect::search_library(
-                CardPredicate::basic_land(),
-                1.into(),
-                vec![Effect::return_to_battlefield(
-                    ObjectSelector::Selected,
-                    true,
-                )],
+    PrintedCharacteristics {
+        name: "Rampant Growth".into(),
+        mana_cost: Some(ManaCost::parse("{1}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: text.into(),
+        spell_effects: vec![Effect::search_library(
+            CardPredicate::basic_land(),
+            1.into(),
+            vec![Effect::return_to_battlefield(
+                ObjectSelector::Selected,
+                true,
             )],
-            ..Default::default()
-        }
-        .into(),
-    )
+        )],
+        ..Default::default()
+    }
 }
 
 fn elite_interceptor() -> CardDefinition {
@@ -653,14 +569,11 @@ fn elite_interceptor() -> CardDefinition {
         printed: PrintedCharacteristics {
             name: "Elite Interceptor".into(),
             mana_cost: Some(ManaCost::parse("{W}")),
-            types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Human".into(), "Wizard".into()],
             power: Some(1),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(InsetSpell::Prepared(rejoinder.into())),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(rejoinder)
         },
         ..Default::default()
     }
@@ -674,7 +587,6 @@ fn jadzi_steward_of_fate() -> CardDefinition {
         scryfall_id: "a95b6baf-01e6-49c3-9a26-394b127d53c3",
         printed: PrintedCharacteristics {
             name: "Jadzi, Steward of Fate".into(),
-            types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
             mana_cost: Some(ManaCost::parse("{2}{U}")),
             subtypes: vec!["Human".into(), "Wizard".into()],
@@ -693,27 +605,22 @@ fn jadzi_steward_of_fate() -> CardDefinition {
                     },
                 ],
             }],
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(InsetSpell::Prepared(
-                PrintedCharacteristics {
-                    name: "Oracle's Gift".into(),
-                    mana_cost: Some(ManaCost::parse("{X}{X}{U}")),
-                    types: CardTypes::new([CardType::Sorcery]),
-                    text_box: spell_text.into(),
-                    spell_effects: vec![
-                        Effect::create_tokens("token.fractal", EffectValue::X),
-                        Effect::put_counters(
-                            ObjectSelector::each_you_control(CardPredicate::subtype("Fractal")),
-                            CounterKind::PlusOnePlusOne,
-                            EffectValue::X,
-                        ),
-                    ],
-                    ..Default::default()
-                }
-                .into(),
-            )),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(PrintedCharacteristics {
+                name: "Oracle's Gift".into(),
+                mana_cost: Some(ManaCost::parse("{X}{X}{U}")),
+                types: CardTypes::new([CardType::Sorcery]),
+                text_box: spell_text.into(),
+                spell_effects: vec![
+                    Effect::create_tokens("token.fractal", EffectValue::X),
+                    Effect::put_counters(
+                        ObjectSelector::each_you_control(CardPredicate::subtype("Fractal")),
+                        CounterKind::PlusOnePlusOne,
+                        EffectValue::X,
+                    ),
+                ],
+                ..Default::default()
+            })
         },
         ..Default::default()
     }
@@ -727,36 +634,30 @@ fn pigment_wrangler() -> CardDefinition {
         scryfall_id: "c2faf4cf-c4b6-4721-ac06-0e045dd9704a",
         printed: PrintedCharacteristics {
             name: "Pigment Wrangler".into(),
-            types: CardTypes::new([CardType::Creature]),
             mana_cost: Some(ManaCost::parse("{4}{R}")),
             subtypes: vec!["Orc".into(), "Sorcerer".into()],
             power: Some(4),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Flying]),
 
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(InsetSpell::Prepared(
-                PrintedCharacteristics {
-                    name: "Striking Palette".into(),
-                    mana_cost: Some(ManaCost::parse("{R}")),
-                    types: CardTypes::new([CardType::Sorcery]),
-                    text_box: spell_text.into(),
-                    spell_effects: vec![Effect::CreateDelayedTrigger {
-                        remember: None,
-                        event: DelayedEvent::YouCastSpell(Box::new(CardPredicate {
-                            card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                            ..Default::default()
-                        })),
-                        frequency: DelayedFrequency::Once,
-                        expiry: DelayedExpiry::ThisTurn,
-                        effects: vec![Effect::CopyTriggeringObject],
-                    }],
-                    ..Default::default()
-                }
-                .into(),
-            )),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(PrintedCharacteristics {
+                name: "Striking Palette".into(),
+                mana_cost: Some(ManaCost::parse("{R}")),
+                types: CardTypes::new([CardType::Sorcery]),
+                text_box: spell_text.into(),
+                spell_effects: vec![Effect::CreateDelayedTrigger {
+                    remember: None,
+                    event: DelayedEvent::YouCastSpell(Box::new(CardPredicate {
+                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                        ..Default::default()
+                    })),
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::ThisTurn,
+                    effects: vec![Effect::CopyTriggeringObject],
+                }],
+                ..Default::default()
+            })
         },
         ..Default::default()
     }
@@ -771,43 +672,37 @@ fn vastlands_scavenger() -> CardDefinition {
         scryfall_id: "476b6a4d-cc05-4e98-8a45-a5c6582ec514",
         printed: PrintedCharacteristics {
             name: "Vastlands Scavenger".into(),
-            types: CardTypes::new([CardType::Creature]),
             mana_cost: Some(ManaCost::parse("{1}{G}{G}")),
             subtypes: vec!["Bear".into(), "Druid".into()],
             power: Some(4),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Deathtouch]),
 
-            replacement_effects: vec![ReplacementEffect::EntersPrepared],
-            inset: Some(InsetSpell::Prepared(
-                PrintedCharacteristics {
-                    name: "Bind to Life".into(),
-                    mana_cost: Some(ManaCost::parse("{4}{G}")),
-                    types: CardTypes::new([CardType::Instant]),
-                    text_box: spell_text.into(),
-                    spell_effects: vec![
-                        Effect::MillCards {
-                            count: 7.into(),
-                            target: None,
-                        },
-                        Effect::SelectCards {
-                            from: ObjectSelector::CardsThisWay,
-                            predicate: CardPredicate::creature(),
-                            min: 0,
-                            max: 1.into(),
-                            effects: vec![Effect::return_to_battlefield(
-                                ObjectSelector::Selected,
-                                false,
-                            )],
-                            if_declined: vec![],
-                        },
-                    ],
-                    ..Default::default()
-                }
-                .into(),
-            )),
             text_box: text.into(),
-            ..Default::default()
+            ..enters_prepared(PrintedCharacteristics {
+                name: "Bind to Life".into(),
+                mana_cost: Some(ManaCost::parse("{4}{G}")),
+                types: CardTypes::new([CardType::Instant]),
+                text_box: spell_text.into(),
+                spell_effects: vec![
+                    Effect::MillCards {
+                        count: 7.into(),
+                        target: None,
+                    },
+                    Effect::SelectCards {
+                        from: ObjectSelector::CardsThisWay,
+                        predicate: CardPredicate::creature(),
+                        min: 0,
+                        max: 1.into(),
+                        effects: vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            false,
+                        )],
+                        if_declined: vec![],
+                    },
+                ],
+                ..Default::default()
+            })
         },
         ..Default::default()
     }
