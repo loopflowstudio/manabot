@@ -1,17 +1,17 @@
-at: 6c230ba7e545a3e58e037d64635878573cf9770c
+at: a5262a74bd0adeacaf7180e4991e8448d403659e
 first:
-  - path: tests/academy/test_incinerating_blast.py
-    why: Compare bound Commands on exact restores, then inspect each viewer and reconnect
   - path: scratch/plan.md
-    why: Card obligations, fixture results and remaining replay work
-  - path: managym/src/flow/turn.rs
-    why: Turn facts and exact-source damage history
-  - path: managym/cards/src/fdn.rs
-    why: Printed effects in resolution order
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Discard forks and target legality through native play
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Coverage evidence for each Foundations card
+    why: Implemented interactions and remaining Unravel comparison
+  - path: managym/cards/src/blb.rs
+    why: Bakersbane Duo's entry and expend abilities
+  - path: managym/src/flow/play.rs
+    why: Receipt and caster establish the spend crossing
+  - path: managym/src/flow/triggers.rs
+    why: Match each present listener against that crossing
+  - path: managym/cards/tests/cards/blb.rs
+    why: Countered and resolved casts share the same triggers
+  - path: tests/semantic/test_text_observation.py
+    why: Both seats read the same caster's spend
 hide:
   - path: protocol/
     why: Schema copies reflect the optional turn field
