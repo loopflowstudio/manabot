@@ -990,6 +990,11 @@ class CastPermission:
     flashback: bool
     follows_source_controller: bool
     on_adventure: bool
+    prepared: bool
+    face_down: bool
+    # "You may play": a land face may be played; otherwise only spells are cast.
+    play_lands: bool
+    condition: Optional[str]
 
 class ObservationCharacteristics:
     """Viewer-safe characteristics. P/T and keywords are effective on the battlefield.

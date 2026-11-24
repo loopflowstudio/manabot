@@ -366,6 +366,9 @@ pub struct LegacyCastPermissionView {
     /// Face down in exile without Foretell.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
+    /// A land face may be played with it ("you may play"); otherwise it casts spells only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub play_lands: bool,
     /// What must hold for the player to use it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,

@@ -1164,6 +1164,7 @@ fn flameshape_permission_terms_reach_the_policy_input() {
     let card = owner.agent_cards.iter().find(|card| card.id == id).unwrap();
     let permission = &card.cast_permissions[0];
     assert!(card.face_down && permission.face_down && !permission.foretold);
+    assert!(permission.play_lands, "Flameshape says \"you may play\"");
     let condition = permission.condition.clone().expect("conditional grant");
     assert!(condition.contains("Wizard"), "{condition}");
     let restored: Observation = serde_json::from_str(&owner.to_json()).unwrap();
@@ -1175,7 +1176,7 @@ fn flameshape_permission_terms_reach_the_policy_input() {
         .into_iter()
         .map(|(_, detail)| detail)
         .collect();
-    for name in ["face_down", "condition", condition.as_str()] {
+    for name in ["face_down", "condition", "play_lands", condition.as_str()] {
         assert!(
             details.contains(&(name_value(name) as u32)),
             "{name} in the grant program"
@@ -1184,4 +1185,52 @@ fn flameshape_permission_terms_reach_the_policy_input() {
     assert!(grant_details(1)
         .iter()
         .all(|(_, detail)| *detail != face_down));
+}
+
+/// Flameshape says "you may play": a land it exiles is played, the land back
+/// of a modal card included, while the sorcery front is cast.
+#[test]
+fn flameshape_plays_a_land_and_a_modal_land_face() {
+    use crate::support::{
+        game::{move_from_library, pin_top},
+        inspect::now,
+        play::{cast_card, cast_profile},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Gandalf, Goblins' Bane", "Tidal Errand"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let gandalf = move_from_library(&mut s, 0, "Gandalf, Goblins' Bane", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Tidal Errand", "Mountain"]);
+    cast_profile(&mut s, gandalf, SpellProfile::Adventure);
+    settle(&mut s);
+    cast_card(&mut s, gandalf);
+    settle(&mut s);
+    s.set_player_mana_pool(0, "1U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let (errand, mountain) = (now(&s, top[0]), now(&s, top[1]));
+    let mut plays: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match *action {
+            Action::PlayLand {
+                object, profile, ..
+            } if [errand, mountain].contains(&object) => Some(("play", object, profile)),
+            Action::CastSpell {
+                object, profile, ..
+            } if [errand, mountain].contains(&object) => Some(("cast", object, profile)),
+            _ => None,
+        })
+        .collect();
+    plays.sort_by_key(|(verb, object, _)| (*verb, *object));
+    let mut expected = vec![
+        ("cast", errand, SpellProfile::Front),
+        ("play", errand, SpellProfile::BackFace),
+        ("play", mountain, SpellProfile::Front),
+    ];
+    expected.sort_by_key(|(verb, object, _)| (*verb, *object));
+    assert_eq!(plays, expected);
 }

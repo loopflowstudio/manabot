@@ -187,7 +187,9 @@ impl Game {
                 player,
                 *object,
                 *profile,
-                CastAuthority::Priority(self.selected_play_route(player, *object, *route)?),
+                CastAuthority::Priority(
+                    self.selected_play_route(player, *object, *profile, *route)?,
+                ),
             ),
             _ => None,
         };

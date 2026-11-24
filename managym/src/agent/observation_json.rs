@@ -296,6 +296,9 @@ impl Serialize for CastPermissionJson<'_> {
         if value.own_turn_only {
             map.serialize_entry("own_turn_only", &true)?;
         }
+        if value.play_lands {
+            map.serialize_entry("play_lands", &true)?;
+        }
         map.serialize_entry("player_id", &value.player_id)?;
         if value.prepared {
             map.serialize_entry("prepared", &true)?;

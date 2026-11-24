@@ -1210,6 +1210,10 @@
         "own_turn_only": {
           "type": "boolean"
         },
+        "play_lands": {
+          "description": "A land face may be played with it (\"you may play\"); otherwise it casts spells only.",
+          "type": "boolean"
+        },
         "player_id": {
           "type": "integer",
           "format": "uint32",

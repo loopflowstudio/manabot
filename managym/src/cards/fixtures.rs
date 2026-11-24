@@ -64,6 +64,26 @@ pub(super) fn tidal_errand() -> CardDefinition {
     }
 }
 
+/// A land creature (CR 305.9): it can be played only as a land, never cast,
+/// even through a permission to cast creature spells.
+pub(super) fn thornwood_arbor() -> CardDefinition {
+    CardDefinition {
+        printed: PrintedCharacteristics {
+            name: "Thornwood Arbor".to_string(),
+            types: CardTypes::new([CardType::Land, CardType::Creature]),
+            subtypes: vec!["Forest".to_string(), "Dryad".to_string()],
+            power: Some(1),
+            toughness: Some(1),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("G"),
+            }],
+            text_box: "{T}: Add {G}.".to_string(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 /// A modal double-faced card with a land front and a creature back, so
 /// creature permissions reach a card that is a land in every zone.
 pub(super) fn kelp_hollow() -> CardDefinition {

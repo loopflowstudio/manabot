@@ -361,6 +361,52 @@ fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
     assert!(can_cast(&s, idle_card));
 }
 
+/// An earthbent land is a creature, so Airbender's Reversal may airbend it.
+/// Airbend grants "you may cast", and a land can't be cast (CR 305.9): while
+/// earthbend's return trigger waits, the Mountain in exile carries a
+/// cast-only grant, which never plays a land
+/// (`flow::action::identity_tests::an_airbent_land_cannot_be_played`).
+#[test]
+fn airbending_an_earthbent_land_grants_no_land_play() {
+    let mut s = five_color_setup(&["Airbender's Reversal", "Earthbending Lesson"]);
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let land = card_of(&s, mountain);
+    cast(&mut s, "Earthbending Lesson");
+    assert!(s.choose_target(Target::Permanent(mountain)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, mountain));
+    s.set_player_mana_pool(0, "20WWWW");
+    cast(&mut s, "Airbender's Reversal");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(mountain)));
+    // Settle only until the Reversal exiles it.
+    for _ in 0..20 {
+        if zone_of(&s, land) == Some(ZoneType::Exile) {
+            break;
+        }
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        s.step_action(index);
+    }
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Exile));
+    let exiled = now(&s, land);
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let card = observation
+        .agent_cards
+        .iter()
+        .find(|card| card.id == s.game().state[exiled].id.0 as i32)
+        .unwrap();
+    let permission = &card.cast_permissions[0];
+    assert!(!permission.play_lands && permission.cost.is_none());
+    // Earthbend returns it to the battlefield, ending the grant.
+    settle(&mut s);
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Battlefield));
+}
+
 /// Airbend exiles the target and lets its owner, and only its owner, cast
 /// that exiled card for {2} instead of its mana cost. Lands are not offered.
 #[test]

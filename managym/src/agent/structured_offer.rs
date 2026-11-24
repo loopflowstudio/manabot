@@ -1221,7 +1221,10 @@ impl Game {
             player,
             object,
             profile,
-            CastAuthority::Priority(self.selected_play_route(player, object, route).ok()?),
+            CastAuthority::Priority(
+                self.selected_play_route(player, object, profile, route)
+                    .ok()?,
+            ),
         )?;
         if self.cast_needs_x_announcement(object, cast) {
             return None;

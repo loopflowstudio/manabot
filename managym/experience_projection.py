@@ -93,6 +93,7 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         "on_adventure",
         "prepared",
         "face_down",
+        "play_lands",
     ):
         if getattr(permission, key):
             terms[key] = True

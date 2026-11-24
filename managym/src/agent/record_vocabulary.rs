@@ -296,6 +296,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "waterbend",
         "prepared",
         "face_down",
+        "play_lands",
         "condition",
     ] {
         add(TokenKind::Field, field);

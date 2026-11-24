@@ -328,6 +328,7 @@ class LegacyCastPermissionView(ProtocolModel):
     on_adventure: bool = Field(default=False, exclude_if=lambda value: not value)
     prepared: bool = Field(default=False, exclude_if=lambda value: not value)
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    play_lands: bool = Field(default=False, exclude_if=lambda value: not value)
     condition: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 

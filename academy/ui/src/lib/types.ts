@@ -61,6 +61,8 @@ export interface CastPermission {
   prepared?: boolean;
   /** Face down in exile without Foretell. */
   face_down?: boolean;
+  /** A land face may be played with it; otherwise it casts spells only. */
+  play_lands?: boolean;
   /** What must hold to use it, such as "you control a Wizard". */
   condition?: string;
 }

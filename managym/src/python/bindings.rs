@@ -2120,6 +2120,8 @@ pub struct PyCastPermission {
     #[pyo3(get)]
     pub face_down: bool,
     #[pyo3(get)]
+    pub play_lands: bool,
+    #[pyo3(get)]
     pub condition: Option<String>,
 }
 
@@ -2143,6 +2145,7 @@ impl From<CastPermissionData> for PyCastPermission {
             on_adventure: value.on_adventure,
             prepared: value.prepared,
             face_down: value.face_down,
+            play_lands: value.play_lands,
             condition: value.condition,
         }
     }
@@ -2168,6 +2171,7 @@ impl From<PyCastPermission> for CastPermissionData {
             on_adventure: value.on_adventure,
             prepared: value.prepared,
             face_down: value.face_down,
+            play_lands: value.play_lands,
             condition: value.condition,
         }
     }

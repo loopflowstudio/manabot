@@ -136,6 +136,7 @@ impl Default for ContentPack {
             fixtures::crossroads_of_destiny(),
             fixtures::tidal_errand(),
             fixtures::kelp_hollow(),
+            fixtures::thornwood_arbor(),
         ];
         let mut rows = managym_cards::catalog()
             .iter()

@@ -52,7 +52,7 @@ pub enum PlayRoute {
     ExileCounter(crate::state::permanent::CounterKind),
 }
 
-/// Permission for one player to cast or play a card in one exact zone appearance.
+/// Permission for one player to cast, or with `play_lands` play, a card in one exact zone appearance.
 /// The granting effect determines the eligible object and the duration.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayGrant {
@@ -64,6 +64,10 @@ pub struct PlayGrant {
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub object: ObjectId,
     pub player: PlayerId,
+    /// "You may play": a land face may be played with this grant (CR 305.1).
+    /// Otherwise the grant only casts spells ("you may cast").
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub play_lands: bool,
     /// Alternative cost; `None` pays the card's own mana cost.
     pub cost: Option<ManaCost>,
     /// "this turn": the grant ends in the cleanup step.
@@ -131,6 +135,7 @@ impl PlayGrant {
             origin: None,
             object,
             player,
+            play_lands: false,
             cost: None,
             this_turn: false,
             through_next_turn: None,
@@ -237,6 +242,7 @@ impl Game {
                 through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
                 face_down,
                 condition: condition.cloned(),
+                play_lands: true,
                 ..PlayGrant::new(object, player)
             });
         }

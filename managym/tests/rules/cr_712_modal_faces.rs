@@ -9,7 +9,7 @@ use managym::{
     agent::action::Action,
     flow::cast_permission::PlayRoute,
     state::{
-        card::{CardType, SpellProfile},
+        card::SpellProfile,
         game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
@@ -93,16 +93,16 @@ fn spell_land_back_face_is_played_back_face_up_once() {
     assert!(permanent_of(&played, errand).is_some());
     assert_eq!(played.game().state.turn.lands_played, 1);
 
-    // Omniscience adds a free route for the sorcery only: the land face is
-    // offered once, through its hand route.
+    // Omniscience adds a free route for the sorcery only. Routes are named
+    // per face: the land face keeps its lone, unnamed hand route, like Island.
     s.force_permanent_on_battlefield(0, "Omniscience");
     refresh(&mut s);
     assert_eq!(
         plays(&s, errand),
         [
             ("cast", SpellProfile::Front, Some(PlayRoute::Hand)),
-            ("play", SpellProfile::BackFace, Some(PlayRoute::Hand)),
             ("cast", SpellProfile::Front, Some(PlayRoute::FreeFromHand)),
+            ("play", SpellProfile::BackFace, None),
         ]
     );
     assert_eq!(plays(&s, island), [("play", SpellProfile::Front, None)]);
@@ -155,7 +155,7 @@ fn land_creature_back_face_reaches_spell_permissions() {
     assert_eq!(
         plays(&s, hollow),
         [
-            ("play", SpellProfile::Front, Some(PlayRoute::Hand)),
+            ("play", SpellProfile::Front, None),
             (
                 "cast",
                 SpellProfile::BackFace,
@@ -178,20 +178,19 @@ fn land_creature_back_face_reaches_spell_permissions() {
     let hollow = move_card(&mut s, hollow, ZoneType::Graveyard);
     s.set_player_mana_pool(0, "2U");
     refresh(&mut s);
-    let kinds: Vec<_> = plays(&s, hollow)
-        .into_iter()
-        .map(|(verb, profile, route)| match route {
-            Some(PlayRoute::GraveyardType { kind, .. }) => (verb, profile, kind),
-            other => panic!("unexpected route {other:?}"),
-        })
-        .collect();
+    // Each face has one Muldrotha permission (Land for the land face,
+    // Creature for the creature face), so neither Command names it.
     assert_eq!(
-        kinds,
+        plays(&s, hollow),
         [
-            ("play", SpellProfile::Front, CardType::Land),
-            ("cast", SpellProfile::BackFace, CardType::Creature),
+            ("play", SpellProfile::Front, None),
+            ("cast", SpellProfile::BackFace, None),
         ]
     );
+    let labels = offer_labels(&s);
+    for label in ["Play Kelp Hollow using Muldrotha", "Cast Kelp Warden"] {
+        assert!(labels.iter().any(|l| l.starts_with(label)), "{labels:?}");
+    }
 
     s.force_permanent_on_battlefield(0, "Vizier of the Menagerie");
     let hollow = move_card(&mut s, hollow, ZoneType::Library);
@@ -204,5 +203,48 @@ fn land_creature_back_face_reaches_spell_permissions() {
         plays(&s, hollow),
         [("cast", SpellProfile::BackFace, None)],
         "the top library card is cast as the creature, never played as a land"
+    );
+}
+
+/// CR 305.9: a land face is played only through a permission to play lands.
+/// A cast-only grant (Airbend, Zul, Hama, Azula: "you may cast") opens the
+/// sorcery front alone; a play grant (Redcap, Flameshape: "you may play")
+/// also plays the land back.
+#[test]
+fn cast_only_grant_never_plays_a_land_face() {
+    use managym::flow::cast_permission::PlayGrant;
+    for play_lands in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Tidal Errand"]);
+        let errand = move_from_library(&mut s, 0, "Tidal Errand", ZoneType::Exile);
+        s.game_mut().state.cast_permissions.grant(PlayGrant {
+            play_lands,
+            ..PlayGrant::new(errand, PlayerId(0))
+        });
+        s.set_player_mana_pool(0, "1U");
+        refresh(&mut s);
+        let mut expected = vec![("cast", SpellProfile::Front, None)];
+        if play_lands {
+            expected.push(("play", SpellProfile::BackFace, None));
+        }
+        assert_eq!(plays(&s, errand), expected, "play_lands {play_lands}");
+    }
+}
+
+/// CR 305.9: a land creature can be played only as a land, so Muldrotha's
+/// creature permission never casts it, and it uses one land permission.
+#[test]
+fn a_land_creature_uses_only_muldrothas_land_permission() {
+    let mut s = five_color_unfunded_setup(&["Thornwood Arbor", "Muldrotha, the Gravetide"]);
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let arbor = move_from_library(&mut s, 0, "Thornwood Arbor", ZoneType::Graveyard);
+    refresh(&mut s);
+    assert_eq!(plays(&s, arbor), [("play", SpellProfile::Front, None)]);
+    let labels = offer_labels(&s);
+    assert!(
+        labels.iter().any(
+            |label| label.starts_with("Play Thornwood Arbor using Muldrotha")
+                && label.contains("Land")
+        ),
+        "{labels:?}"
     );
 }

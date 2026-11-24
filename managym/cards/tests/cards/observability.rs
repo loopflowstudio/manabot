@@ -3348,6 +3348,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         on_adventure => [FactOccurrence(FactKind::EffectProgram)],
         prepared => [FactOccurrence(FactKind::EffectProgram)],
         face_down => [FactOccurrence(FactKind::EffectProgram)],
+        play_lands => [FactOccurrence(FactKind::EffectProgram)],
         condition => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],

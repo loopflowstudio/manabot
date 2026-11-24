@@ -38,6 +38,7 @@ const NOT_REAL_CARDS: &[&str] = &[
     "Kelp Warden",
     "Tidal Errand",
     "Tidal Haven",
+    "Thornwood Arbor",
 ];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall

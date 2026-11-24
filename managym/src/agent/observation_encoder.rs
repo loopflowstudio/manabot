@@ -2022,18 +2022,20 @@ struct PlayGrantExtension<'a> {
     face_down: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     condition: Option<&'a str>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    play_lands: bool,
 }
 
 impl<'a> PlayGrantTerms<'a> {
     fn of(grant: &'a CastPermissionData, viewer: i32) -> Self {
         let extension =
-            (grant.prepared || grant.face_down || grant.condition.is_some()).then(|| {
-                PlayGrantExtension {
+            (grant.prepared || grant.face_down || grant.condition.is_some() || grant.play_lands)
+                .then(|| PlayGrantExtension {
                     prepared: grant.prepared,
                     face_down: grant.face_down,
                     condition: grant.condition.as_deref(),
-                }
-            });
+                    play_lands: grant.play_lands,
+                });
         Self {
             terms: (
                 grant.player_id == viewer,

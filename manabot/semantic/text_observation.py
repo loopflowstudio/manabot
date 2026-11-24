@@ -971,11 +971,13 @@ class _Renderer:
         return lines
 
     def _cast_permission(self, permission: managym.CastPermission, zone: int) -> str:
-        terms = [
-            "as a land play"
-            if permission.cost is None
-            else f"cast for {_mana(permission.cost)}"
-        ]
+        # A cast-only grant never plays a land face (CR 305.9), so it has no
+        # land-play term; a land under it shows no cost.
+        terms = []
+        if permission.cost is not None:
+            terms.append(f"cast for {_mana(permission.cost)}")
+        elif permission.play_lands:
+            terms.append("as a land play")
         if permission.flashback:
             terms.append("with flashback, exiling the spell when it leaves the stack")
         if permission.on_adventure:
@@ -1004,9 +1006,10 @@ class _Renderer:
             terms.append("prepared copy, kept while linked to its source")
         if permission.condition is not None:
             terms.append(f"only if {permission.condition}")
+        verb = "played" if permission.play_lands else "cast"
         return (
-            f"may be played from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}: "
-            + ", ".join(terms)
+            f"may be {verb} from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}"
+            + (": " + ", ".join(terms) if terms else "")
         )
 
     def _permanents_lines(self) -> list[str]:

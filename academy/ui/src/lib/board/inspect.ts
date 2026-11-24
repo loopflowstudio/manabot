@@ -147,7 +147,7 @@ export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_
     if (grant.face_down) rest.push('face down, seen only while it may be played');
     if (grant.prepared) rest.push('as a prepared copy kept while linked to its source');
     if (grant.condition) rest.push(`only if ${grant.condition}`);
-    if (rest.length) terms.push(`${player} may play this ${rest.join(', ')}.`);
+    if (rest.length) terms.push(`${player} may ${grant.play_lands ? 'play' : 'cast'} this ${rest.join(', ')}.`);
     return terms;
   });
 }

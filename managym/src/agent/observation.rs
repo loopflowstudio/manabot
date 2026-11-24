@@ -246,6 +246,9 @@ pub struct CastPermissionData {
     /// Face down in exile without Foretell: seen only by whoever may play it.
     #[serde(default)]
     pub face_down: bool,
+    /// "You may play": a land face may be played. Otherwise only spells are cast.
+    #[serde(default)]
+    pub play_lands: bool,
     /// What must hold for the player to use it ("you control a Wizard").
     #[serde(default)]
     pub condition: Option<String>,
@@ -1765,6 +1768,7 @@ impl Observation {
                     on_adventure: grant.on_adventure,
                     prepared: grant.prepared,
                     face_down: grant.face_down,
+                    play_lands: grant.play_lands,
                     condition: grant
                         .condition
                         .as_ref()

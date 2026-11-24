@@ -296,20 +296,27 @@ impl Game {
                 if sources.is_empty() {
                     return routes.into();
                 }
+                // CR 305.9: a land face (even an artifact land) uses only the
+                // Land permission; other permanent types come from spell faces.
                 let card = &self.state[object];
                 let back = crate::cards::content_pack::default_content_pack()
                     .spell_definition(card, SpellProfile::BackFace);
-                let other_types: Vec<_> = back
-                    .into_iter()
-                    .flat_map(|spell| &spell.types.types)
-                    .filter(|kind| !card.types.types.contains(kind))
-                    .collect();
-                for &(source, permanent_id) in sources {
-                    for &kind in card.types.types.iter().chain(other_types.iter().copied()) {
-                        use crate::state::card::CardType::*;
-                        if matches!(kind, Instant | Sorcery | Kindred) {
-                            continue;
+                let mut kinds = Vec::new();
+                for types in std::iter::once(&card.types).chain(back.map(|spell| &spell.types)) {
+                    use crate::state::card::CardType::*;
+                    let face: Vec<_> = if types.is_land() {
+                        vec![Land]
+                    } else {
+                        types.types.iter().copied().collect()
+                    };
+                    for kind in face {
+                        if !matches!(kind, Instant | Sorcery | Kindred) && !kinds.contains(&kind) {
+                            kinds.push(kind);
                         }
+                    }
+                }
+                for &(source, permanent_id) in sources {
+                    for &kind in &kinds {
                         let route = PlayRoute::GraveyardType {
                             source,
                             kind,
@@ -350,39 +357,71 @@ impl Game {
             return false;
         }
         let route = cast.route.unwrap_or(PlayRoute::Hand);
+        let land = cast.spell(&self.state[object]).types.is_land();
         if !matches!(route, PlayRoute::Hand | PlayRoute::FreeFromHand)
             && self.casts_only_from_hand(player)
-            && !cast.spell(&self.state[object]).types.is_land()
+            && !land
         {
             return false;
         }
+        // The one land-play rule: a land face is played only through a
+        // permission to play lands ("you may play"), never one to cast
+        // spells (CR 305.9: a land can't be cast).
         match route {
-            PlayRoute::LibraryTop => self.layer_board().play_permissions[player.0]
-                .library_spells
-                .iter()
-                .any(|predicate| cast.matches_spell(self, object, predicate)),
             // Every printed face of the card: its Adventure, Omen or back face too.
             PlayRoute::Hand | PlayRoute::ExileCounter(_) => true,
-            // "Cast spells without paying": never a land play.
-            PlayRoute::FreeFromHand => !cast.spell(&self.state[object]).types.is_land(),
-            PlayRoute::GraveyardType { kind, .. } => {
-                cast.spell(&self.state[object]).types.types.contains(&kind)
+            // "Cast spells without paying" and "cast from the top of your library".
+            PlayRoute::FreeFromHand => !land,
+            PlayRoute::LibraryTop => {
+                !land
+                    && self.layer_board().play_permissions[player.0]
+                        .library_spells
+                        .iter()
+                        .any(|predicate| cast.matches_spell(self, object, predicate))
             }
-            PlayRoute::Grant(key) if !cast.profile.is_front() => self
-                .grant_by_key(object, key)
-                .is_some_and(|grant| !grant.on_adventure && !grant.foretold && !grant.flashback),
-            _ => cast.profile.is_front(),
+            PlayRoute::GraveyardType { kind, .. } => {
+                (kind == crate::state::card::CardType::Land) == land
+                    && cast.spell(&self.state[object]).types.types.contains(&kind)
+            }
+            PlayRoute::Grant(key) => self.grant_by_key(object, key).is_some_and(|grant| {
+                (!land || grant.play_lands)
+                    && (cast.profile.is_front()
+                        || (!grant.on_adventure && !grant.foretold && !grant.flashback))
+            }),
+            PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback => {
+                !land && cast.profile.is_front()
+            }
         }
+    }
+
+    /// The routes that permit `profile` of `object`, before timing and
+    /// payment. A face with one route leaves its Command unnamed even when
+    /// another face of the card overlaps.
+    pub(crate) fn permitted_play_routes(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        profile: SpellProfile,
+    ) -> Vec<PlayRoute> {
+        self.play_routes(player, object)
+            .iter()
+            .copied()
+            .filter(|&route| {
+                self.cast_choices(player, object, profile, CastAuthority::Priority(route))
+                    .is_some_and(|cast| self.permits_spell(player, object, cast))
+            })
+            .collect()
     }
 
     pub(crate) fn selected_play_route(
         &self,
         player: PlayerId,
         object: ObjectId,
+        profile: SpellProfile,
         selected: Option<PlayRoute>,
     ) -> Result<PlayRoute, AgentError> {
-        let routes = self.play_routes(player, object);
-        match (selected, routes.as_ref()) {
+        let routes = self.permitted_play_routes(player, object, profile);
+        match (selected, routes.as_slice()) {
             (Some(route), _) if routes.contains(&route) => Ok(route),
             (None, [only]) => Ok(*only),
             _ => Err(AgentError("missing or ambiguous play permission".into())),
@@ -397,13 +436,13 @@ impl Game {
             player,
             object,
             route,
-            ..
+            profile,
         }
         | Action::PlayLand {
             player,
             object,
             route,
-            ..
+            profile,
         }) = action
         else {
             return None;
@@ -417,7 +456,7 @@ impl Game {
         {
             return None;
         }
-        self.selected_play_route(*player, *object, None)
+        self.selected_play_route(*player, *object, *profile, None)
             .ok()
             .filter(|route| *route != PlayRoute::Hand)
     }
@@ -600,8 +639,14 @@ impl Game {
         selected: Option<PlayRoute>,
         profile: SpellProfile,
     ) -> Result<(), AgentError> {
+        if self.pending_choice.is_some() {
+            return Err(AgentError("a choice is already pending".to_string()));
+        }
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
+        }
         let object = self.state.object_of(card);
-        let route = self.selected_play_route(player, object, selected)?;
+        let route = self.selected_play_route(player, object, profile, selected)?;
         let cast = self
             .cast_choices(player, object, profile, CastAuthority::Priority(route))
             .ok_or_else(|| AgentError("the card has no such face".into()))?;
@@ -649,7 +694,7 @@ impl Game {
             .state
             .object(object)
             .map_err(|_| AgentError("spell must name a current object".into()))?;
-        let route = self.selected_play_route(player, object, selected)?;
+        let route = self.selected_play_route(player, object, profile, selected)?;
         let cast = self
             .cast_choices(player, object, profile, CastAuthority::Priority(route))
             .ok_or_else(|| AgentError("the card has no such spell".into()))?;

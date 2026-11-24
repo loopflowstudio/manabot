@@ -1457,10 +1457,10 @@ fn granted_foreign_land_enters_under_its_players_control() {
     use managym::{agent::action::Action, flow::cast_permission::PlayGrant};
     let mut s = five_color_setup(&[]);
     let land = move_from_library(&mut s, 1, "Swamp", ZoneType::Exile);
-    s.game_mut()
-        .state
-        .cast_permissions
-        .grant(PlayGrant::new(land, PlayerId(0)));
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        play_lands: true,
+        ..PlayGrant::new(land, PlayerId(0))
+    });
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
@@ -1934,10 +1934,20 @@ fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
     assert_eq!(routes(&mut s), [None], "the later Tinybones's lone route");
 
     let exiled = now(&s, forest);
+    // A cast-only grant never plays a land (CR 305.9): only the stash route.
     s.game_mut()
         .state
         .cast_permissions
         .grant(PlayGrant::new(exiled, PlayerId(0)));
+    assert_eq!(
+        routes(&mut s),
+        [None],
+        "a cast-only grant adds no land play"
+    );
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        play_lands: true,
+        ..PlayGrant::new(exiled, PlayerId(0))
+    });
     let offered = routes(&mut s);
     assert_eq!(offered.len(), 2, "{offered:?}");
     assert!(matches!(offered[0], Some(PlayRoute::Grant(_))));

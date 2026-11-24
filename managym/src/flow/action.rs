@@ -683,20 +683,18 @@ impl Game {
         object: ObjectId,
         mut offer: impl FnMut(Action, u8, CastChoices),
     ) {
-        // Preserve the original single-route Command. On overlap every offer
-        // names its route, even if only one survives the affordability check.
-        let routes = self.play_routes(player, object);
-        for &permission in routes.iter() {
-            let route = (routes.len() > 1).then_some(permission);
-            for profile in self.state[object].spell_profiles() {
+        // Preserve the original single-route Command. When routes overlap
+        // for one face, each of its offers names its route, even if only one
+        // survives the affordability check.
+        for profile in self.state[object].spell_profiles() {
+            let routes = self.permitted_play_routes(player, object, profile);
+            for &permission in &routes {
+                let route = (routes.len() > 1).then_some(permission);
                 let Some(cast) =
                     self.cast_choices(player, object, profile, CastAuthority::Priority(permission))
                 else {
                     continue;
                 };
-                if !self.permits_spell(player, object, cast) {
-                    continue;
-                }
                 let spell = cast.spell(&self.state[object]);
                 let types = &spell.types;
                 if types.is_land() {
@@ -1383,6 +1381,90 @@ mod identity_tests {
             game.state.zones.zone_of(game.state.object_of(card)),
             Some(ZoneType::Battlefield)
         );
+    }
+
+    /// A land play, like a cast, needs priority and no pending choice.
+    #[test]
+    fn play_land_requires_priority_and_no_pending_choice() {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            305_1,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        let land = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let play = Action::PlayLand {
+            player,
+            object: land,
+            route: None,
+            profile: crate::state::card::SpellProfile::Front,
+        };
+        let before = witness(&game);
+        game.state.priority.holder = PlayerId(1 - player.0);
+        assert!(game.execute_action(&play).is_err());
+        game.state.priority.holder = player;
+        game.pending_choice = Some(PendingChoice::AnnounceX {
+            player,
+            object: land,
+            cast: Default::default(),
+        });
+        assert!(game.execute_action(&play).is_err());
+        game.pending_choice = None;
+        assert_eq!(witness(&game), before);
+        assert!(game.execute_action(&play).is_ok());
+    }
+
+    /// Airbend's grant is "you may cast" (CR 701.65a), and a land can't be
+    /// cast (CR 305.9): an airbent land is never played, even by a Command
+    /// naming its grant.
+    #[test]
+    fn an_airbent_land_cannot_be_played() {
+        use crate::{flow::cast_permission::PlayRoute, state::card::SpellProfile};
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            701_65,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        let permanent = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let mountain = game.state.permanents[permanent].as_ref().unwrap().object;
+        game.airbend(mountain);
+        let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
+        assert!(game.live_grants(player, exiled).next().is_some());
+        game.scenario_refresh_priority().unwrap();
+        assert!(!game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::PlayLand { .. })));
+        let before = witness(&game);
+        for route in [None, Some(PlayRoute::Grant(0))] {
+            assert!(game
+                .execute_action(&Action::PlayLand {
+                    player,
+                    object: exiled,
+                    route,
+                    profile: SpellProfile::Front,
+                })
+                .is_err());
+            assert_eq!(witness(&game), before);
+        }
     }
 
     /// Commands come from offers, but the executor still owns the
