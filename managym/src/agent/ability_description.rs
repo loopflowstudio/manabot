@@ -107,10 +107,10 @@ fn triggering_noun(condition: &TriggerCondition) -> &'static str {
 /// Effect text names `ObjectSelector::Triggering` "that permanent"; a
 /// trigger whose event is about a spell or card says so instead.
 fn name_triggering_object(program: String, condition: &TriggerCondition) -> String {
-    match triggering_noun(condition) {
-        "permanent" => program,
-        noun => program.replace("that permanent", &format!("that {noun}")),
-    }
+    program.replace(
+        "that permanent",
+        &format!("that {}", triggering_noun(condition)),
+    )
 }
 
 fn condition_description(condition: &TriggerCondition) -> String {
@@ -284,15 +284,16 @@ fn condition_description(condition: &TriggerCondition) -> String {
                 ),
             }
         }
-        TriggerCondition::DealsNoncombatDamage { source, to } => format!(
-            "Whenever {} deals noncombat damage to {}",
-            match source {
-                Actor::You => "a source you control",
-                Actor::Opponent => "a source an opponent controls",
-                Actor::AnyPlayer => "a source",
-            },
-            actor_noun(*to)
-        ),
+        TriggerCondition::DealsNoncombatDamage { source, to } => {
+            let source = match source {
+                Actor::AnyPlayer => "a source".into(),
+                _ => format!("a source {}", actor_does(*source, "control", "controls")),
+            };
+            format!(
+                "Whenever {source} deals noncombat damage to {}",
+                actor_noun(*to)
+            )
+        }
         TriggerCondition::InGraveyard { condition } => {
             format!(
                 "{} (while this is in your graveyard)",
