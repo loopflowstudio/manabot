@@ -135,7 +135,7 @@ None of these change the update; call them when you want the numbers.
 | Piece | Module | Records |
 | --- | --- | --- |
 | `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
-| `OptimizerHealth(health, iteration, profiler=None, *, backend)` | `manabot.training.updates.health` | The player's step recorder. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count completed and rejected steps. Torch supplies gradient norms, including the critic readout's, and parameter displacement on the first step of iteration 1 and every 25th iteration. With a profiler, backward and the optimizer step are timed. |
+| `OptimizerHealth(health, iteration, profiler=None, *, backend)` | `manabot.training.updates.health` | The player's `StepRecorder`. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count completed and rejected steps. Both Torch and MLX learners supply gradient norms, including the critic readout's and optional `value_token`, tensor counts and parameter displacement on the first step of iteration 1 and every 25th iteration. With a profiler, backward and the optimizer step are timed. |
 | `clip_fraction(log_ratio, clip)` | `backend.rl` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
 | `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]` host rows (NumPy, or CPU tensors): `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
 | `combat_probe(policy, batch, *, limit=256, execution_rows=None)` | `manabot.training.combat_probe` | Attack and block declare/decline log-odds (`gap`) and board-edit `shift` metrics on evenly spaced two-offer decisions from `batch`, through `policy.prepare` and `policy.evaluate` ([combat probe](experiment-metrics.md#combat-probe)). |
@@ -171,11 +171,12 @@ loss, so you choose the reduction, mask and weight.
 stepping on a detached or nonfinite loss, a loss with no gradients, or
 nonfinite gradients, and after a step that leaves a nonfinite parameter. Its
 `invariant` names the check and its `tensors` hold the offending values. Any
-object with the `StepRecorder` methods observes the step; `OptimizerHealth`
-is the player's. A Torch recorder requests a sample with `sampling()` and receives
-its measurements through `record_sample(sample)`. Gradient measurements arrive
-after clipping, so they remain available if Adam produces a nonfinite parameter.
-Both learners call `record_step()` after the updated parameters pass the finite check.
+object implementing `StepRecorder` (`manabot.training.updates.health`) observes
+the step; `OptimizerHealth` is the player's. Both Torch and MLX learners check
+`sampling()` and deliver their `StepSample` measurements through
+`record_sample(sample)`. Gradient measurements arrive after clipping, so they
+remain available if Adam produces a nonfinite parameter. Both learners call
+`record_step()` after the updated parameters pass the finite check.
 Set the learning rate with `learner.set_learning_rate(rate)`
 (or on `optimizer.param_groups`) before stepping to schedule it.
 

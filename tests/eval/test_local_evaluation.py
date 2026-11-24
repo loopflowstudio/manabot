@@ -26,6 +26,7 @@ from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.checkpoint import read_safetensors, write_safetensors
+from manabot.policy.protocol import BackendName
 from manabot.sim.match import play_game
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.replay import read_trace, write_trace
@@ -166,14 +167,31 @@ def test_cli_describes_deal_uncertainty_without_changing_statistics(
     )
 
     def evaluate_local(
-        request: EvaluationRequest, *, deadline: float, out_dir: Path
+        request: EvaluationRequest,
+        *,
+        deadline: float,
+        out_dir: Path,
+        backend_name: BackendName,
     ) -> EvaluationResult:
+        assert backend_name == "mlx"
         return result
 
     monkeypatch.setattr("manabot.eval.local.evaluate_local", evaluate_local)
     source = tmp_path / "request.json"
     source.write_text(request.model_dump_json())
-    assert local_main(["--request", str(source), "--out", str(tmp_path / "cli")]) == 0
+    assert (
+        local_main(
+            [
+                "--request",
+                str(source),
+                "--backend",
+                "mlx",
+                "--out",
+                str(tmp_path / "cli"),
+            ]
+        )
+        == 0
+    )
     output = capsys.readouterr().out
     if len(seeds) == 1:
         assert "score: 1.000 (1 deal block; uncertainty unavailable" in output
@@ -404,6 +422,9 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
         seeds, directory = kwargs["deal_seeds"], kwargs["out_dir"]
         assert isinstance(seeds, tuple) and isinstance(directory, Path)
+        assert kwargs["backend_name"] == (
+            "mlx" if directory.parent.name == "attempts" else "torch"
+        )
         cohorts.append(seeds)
         selected = bound.model_copy(update={"deal_seeds": seeds})
         rows = _replayed_rows(selected)
@@ -423,7 +444,8 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     assert status.complete_deals() == tuple(range(40))
     assert status.score is None
     before = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
-    second = continue_evaluation(out)
+    assert local_main(["--continue", str(out), "--backend", "mlx"]) == 0
+    second = evaluation_status(out)
     assert second.status == "completed"
     assert second.evaluation_id == first.evaluation_id
     assert len(second.rows) == 200

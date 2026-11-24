@@ -520,8 +520,13 @@ class VectorEnv:
         self, player_configs: GameSetup | list[PlayerConfig]
     ) -> None: ...
     def reset_each_into_buffers(
-        self, player_configs: list[GameSetup | list[PlayerConfig]]
-    ) -> None: ...
+        self,
+        player_configs: list[GameSetup | list[PlayerConfig]],
+        *,
+        seeds: list[int] | None = None,
+    ) -> None:
+        """Deal each setup at its supplied seed, or at the stream's next seed."""
+        ...
     def reassign_roots_into_buffers(
         self, player_configs: list[GameSetup | list[PlayerConfig] | None]
     ) -> None: ...
