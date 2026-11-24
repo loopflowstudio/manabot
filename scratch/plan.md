@@ -438,6 +438,10 @@ Shared changes:
 
 Checks: the debug cards target (887) and engine lib (359), rules/content-pack/engine/hash targets, `search_state_contract` and `canonical_replay_tests` passed. The Clone state hash moved with the eight new catalog ids. After the rebuild, the focused Python selection passed (120 passed, 1 skipped optional checkpoint).
 
+Compression (`86d1c65815`) replaced the per-reader contribution filters with `PaymentReceipt::paid_as(How)` and dropped a `RefCell` from the paid-cost amount search.
+
+**Blocker before publication.** `managym --test semantic_conformance_tests` cases `frozen_sacrifice_162` and `frozen_sacrifice_163` still fail at `f8104bf1af`: their regenerated hashes (`bf4ed233…`, `b549c0b7…`) differ from `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` (`2a490fbd…`, `cdea442c…`). Find which life-batch commit moved the trace (`942d89cc91` amounts, `d0321cdc58` activation terms / granted firebending / live attackers, `724ae4afc1` heuristic pump), then restore the behavior or record the shift with its cause.
+
 Not built in this slice:
 
 - **CR 104.4b mandatory-loop draw** (`GameOutcome::Draw` and cycle detection in `flow/tick.rs`). Conqueror's ledger row records it as pending. It needs a loop partner such as Vito, Thorn of the Dusk Rose, which isn't defined yet. It also touches every outcome reader: `winner_index`, Env rewards and Academy. It should be its own slice with that partner card.
@@ -445,10 +449,23 @@ Not built in this slice:
 
 Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent cleanup for the working review.
 
+### Next slice · Creature deaths and turn death history
+
+Start with the frozen-sacrifice blocker above, then author the batch. Eight primary rows plus the cost-primary Kalastria Highborn; all read deaths, through the turn history Hunter and Prowler already use or through pre-event sources of a simultaneous batch.
+
+- **Tragic Banshee**: the entry trigger's amount changes with this turn's death history, read at resolution. Check a death between trigger and resolution.
+- **Vengeful Bloodwitch**: own-team deaths, including its own in a simultaneous batch, each trigger a targeted drain from pre-event sources.
+- **Midnight Reaper**: an own-team nontoken death deals damage to its controller and draws, including the Reaper's own death; a token death does not.
+- **Massacre Wurm**: an entry team shrink kills several opponent creatures at once; each opponent creature death loses life through the Wurm's pre-event listener.
+- **Garna, Bloodfist of Keld**: another creature's death reads its LKI attacking status, choosing draw versus damage.
+- **Needletooth Pack**, **Slumbering Cerberus**, **Wardens of the Cycle**: end-step conditions on whether a creature died this turn — two targeted counters, an untap past Cerberus's untap prohibition, and a modal trigger (lifegain or draw/loss). Distinguish no death, an opponent's creature, and a death in an earlier turn.
+- **Kalastria Highborn†**: a Vampire death trigger announces its target before the optional mana payment, then drains.
+
+Record each verified row in the FDN ledger; a row the batch cannot finish keeps its concrete missing interaction.
+
 ### Later slices
 
 - **Draw-step and individual draw listeners** — Scrawling Crawler; Dictate of Kruphix.
-- **Creature deaths and turn death history** — Tragic Banshee; Vengeful Bloodwitch; Slumbering Cerberus; Needletooth Pack; Wardens of the Cycle; Midnight Reaper; Garna, Bloodfist of Keld; Kalastria Highborn†; Massacre Wurm.
 - **Filtered casts, targets and spell attributes** — Archmage of Runes†; Brineborn Cutthroat; Painful Quandary†; Mindsparker; Gnarlback Rhino; Mold Adder; Ovika, Enigma Goliath†; Ramos, Dragon Engine†; Firespitter Whelp.
 - **Stack payment and counter results** — An Offer You Can't Refuse; Unravel (EOE, discounted and full-price targets after an intervening cast, with announced X included in stack mana value).
 - **Damage recipients, amounts and results** — Goblin Negotiation; Quilled Greatwurm†; Koma, World-Eater†; Niv-Mizzet, Visionary; Lathril, Blade of the Elves†; Gateway Sneak; Trygon Predator.
@@ -470,7 +487,9 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
   retarget and resolution reads. The special case still sits in
   `flow/resolution.rs::target_meets_requirement`, and the stack projection
   recognizes it by variant. Source power and power tapped to pay share
-  `permanent_power_or_lki`. Triggering power and target toughness use the
+  `permanent_power_or_lki`; `EffectValue::PowerTappedToPay` is now the
+  clamped sum of power over `ObjectSelector::Paid(How::Tapped)` and can
+  become a property query once the clamp has a home. Triggering power and target toughness use the
   battlefield slot and its departure record. Preserve the Combustion Man,
   Panda and Sandbender controls and existing learning-token meanings.
 - Keep occurrence and amount queries with their event, turn, game or
