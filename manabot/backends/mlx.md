@@ -172,7 +172,10 @@ gradient detail of `OptimizerHealth` is absent
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. Collection samples once per group across execution chunks.
+and its reverse are compiled. Each `PackedGRU` gathers and projects its tokens
+once, and its recurrence is an `mx.custom_function` with a hand-written VJP:
+autograd never traces the per-step slices, whose whole-input zero cotangents
+would make the backward quadratic in the number of steps. Collection samples once per group across execution chunks.
 Portable exports contain the policy’s float32 parameters and lookup buffers.
 
 Results, machine and cost are in

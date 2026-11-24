@@ -44,7 +44,6 @@ from manabot.backends.mlx.policy import (
     ObjectAttention,
     PackedGRU,
     attend,
-    packed_steps,
 )
 from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
 from manabot.backends.parity import (
@@ -106,7 +105,9 @@ def _mlx_names(torch_named: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
     return mlx_parameters(canonical_parameters(torch_named))
 
 
-def test_packed_gru_matches_torch_final_and_every_step() -> None:
+def test_packed_gru_matches_torch_states_and_gradients() -> None:
+    """States, final states and every gradient of the hand-written recurrence
+    VJP match PyTorch's GRU on sequences of mixed lengths."""
     torch.manual_seed(3)
     width = 8
     reference = torch.nn.GRU(width, width, batch_first=True)
@@ -119,17 +120,34 @@ def test_packed_gru_matches_torch_final_and_every_step() -> None:
         setattr(gru, key.rsplit(".", 1)[1], mx.array(value))
 
     lengths = [3, 5, 1, 5, 2]
-    tokens = (
-        np.random.default_rng(0).normal(size=(sum(lengths), width)).astype(np.float32)
-    )
+    rng = np.random.default_rng(0)
+    tokens = rng.normal(size=(sum(lengths), width)).astype(np.float32)
+    every_weight = rng.normal(size=(sum(lengths), width)).astype(np.float32)
+    last_weight = rng.normal(size=(len(lengths), width)).astype(np.float32)
     schedule = pack(lengths)
-    outputs, finals = gru.run(mx.array(tokens), packed_steps(schedule.gather, schedule))
-    every = np.array(outputs)[schedule.unpack]
-    last = np.array(finals)[schedule.restore]
+    rows = mx.array(schedule.gather)
 
+    def run(table: mx.array) -> tuple[mx.array, mx.array]:
+        outputs, finals = gru.run(table, rows, schedule.sizes)
+        return outputs[mx.array(schedule.unpack)], finals[mx.array(schedule.restore)]
+
+    def loss(parameters: dict[str, mx.array], table: mx.array) -> mx.array:
+        gru.update(parameters)
+        every, last = run(table)
+        return (every * mx.array(every_weight)).sum() + (
+            last * mx.array(last_weight)
+        ).sum()
+
+    every, last = (np.array(part) for part in run(mx.array(tokens)))
+    gradients, table_gradient = mx.grad(loss, argnums=(0, 1))(
+        dict(gru.parameters()), mx.array(tokens)
+    )
+
+    table = torch.from_numpy(tokens).requires_grad_()
     offsets = np.concatenate(([0], np.cumsum(lengths)))
-    for index, length in enumerate(lengths):
-        sequence = torch.from_numpy(tokens[offsets[index] : offsets[index + 1]])[None]
+    total = torch.zeros(())
+    for index in range(len(lengths)):
+        sequence = table[offsets[index] : offsets[index + 1]][None]
         expected, hidden = reference(sequence)
         np.testing.assert_allclose(
             every[offsets[index] : offsets[index + 1]],
@@ -139,6 +157,27 @@ def test_packed_gru_matches_torch_final_and_every_step() -> None:
         np.testing.assert_allclose(
             last[index], hidden[0, 0].detach().numpy(), atol=1e-6
         )
+        total = (
+            total
+            + (
+                expected[0]
+                * torch.from_numpy(every_weight[offsets[index] : offsets[index + 1]])
+            ).sum()
+            + (hidden[0, 0] * torch.from_numpy(last_weight[index])).sum()
+        )
+    total.backward()
+
+    expected_gradients = _mlx_names(
+        {
+            f"{prefix}.{name}": parameter.grad.numpy()
+            for name, parameter in reference.named_parameters()
+        }
+    )
+    for key, value in expected_gradients.items():
+        np.testing.assert_allclose(
+            np.array(gradients[key.rsplit(".", 1)[1]]), value, atol=1e-5
+        )
+    np.testing.assert_allclose(np.array(table_gradient), table.grad.numpy(), atol=1e-5)
 
 
 def test_split_attention_projections_match_packed_multihead_attention() -> None:
@@ -424,11 +463,11 @@ def test_mlx_learner_encodes_only_referenced_catalog_programs(
     run = PackedGRU.run
 
     def counted(
-        gru: PackedGRU, table: mx.array, steps: Sequence[mx.array]
+        gru: PackedGRU, table: mx.array, rows: mx.array, sizes: Sequence[int]
     ) -> tuple[mx.array, mx.array]:
         if gru is policy.semantic_cards.encoder:
-            sequences.append(steps[0].size)
-        return run(gru, table, steps)
+            sequences.append(sizes[0])
+        return run(gru, table, rows, sizes)
 
     monkeypatch.setattr(PackedGRU, "run", counted)
     actual = policy.evaluate(batch)
