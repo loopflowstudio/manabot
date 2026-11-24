@@ -673,12 +673,33 @@ leaves the streams advanced.
 
 Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
 each value buffer to `(seat_axis, offsets, values)`, with immutable byte
-strings for native-endian int32 row offsets and the layout's value dtype.
+strings for native-endian int32 row offsets and packed, native-endian records.
 One span belongs to each batch item, or to each (item, seat) if `seat_axis`
 is true. Subtract consecutive offsets for live counts, including all-zero
 live rows. Companion validity masks derive from those counts. Object joins
 retain the layout's coordinates. The default overflow policy rejects excess
 actions. With `"first-legal"`, `action_counts` gives the retained prefix.
+
+`layout.csr_fields[key]` lists each record field's name, dtype and logical
+column index in byte order. IDs, joins, enums, unscaled counts and full signed
+words use int32. Flags use uint8 and scaled scalars use float32. In a dense
+input a word occupies two 16-bit columns. The packed field takes their common
+name and the first column's index. Both fact payloads use raw integer units.
+Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+Decision memory includes separate presence flags for optional selectors.
+
+```python
+fields = batch.layout.csr_fields["actions"]
+dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+_, offsets, values = batch.tables()["actions"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+actions = np.frombuffer(values, dtype=dtype)
+first_game_modes = actions["mode"][starts[0]:starts[1]]
+```
+
+For element arrays, the single field describes each element. An action-focus
+row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
+with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
 
 For dense batched buffers, `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed

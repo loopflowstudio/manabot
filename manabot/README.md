@@ -335,7 +335,9 @@ relabels an existing experiment's receipts or registrations.
 
 A v11 teacher passes the live branches to
 `managym.encode_observation_batch(envs, space.layout)`. The returned batch
-owns immutable live rows and their offsets in frontier order. The teacher
+owns immutable typed rows and their int32 offsets in frontier order. Both
+backends bind the checkpoint's vocabulary and apply its saved readings to these
+rows through the shared host preparation. The teacher
 reads each branch's legal support from `batch.action_counts`. Search requires
 every legal action to fit the checkpoint's layout. V9 and v10 teachers use
 `managym.encode_observations_into` with reusable dense buffers.

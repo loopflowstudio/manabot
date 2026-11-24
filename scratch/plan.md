@@ -19,6 +19,8 @@ forced-decision skipping, replay identity and debug cache invariants.
 1. `fe46e6b375` skips all-zero object rows and reads only valid relations. The eight paired snapshots matched every `Prepared` array. Learning preparation fell from 72.47 to 34.59 CPU ms per batch and inference from 68.76 to 22.02. The v9/v11 pinned games and layer-input checks passed. Optional u1952 was unconfigured.
 2. `f21f8fe4f5` carries immutable v11 CSR spans from live frontiers and unmasked vector steps through layout and vocabulary admission into Torch and MLX preparation. V11 native search uses it. The directed count, capacity, cutoff, external rejection, memory preparation and search checks passed. The paired transport result is below.
 
+3. The shared v11 encoder emits live rows directly into dense destinations or typed CSR records. Torch and MLX read the same checkpoint-bound `Prepared`. The median 256-stream typed batch used 1,858,818 bytes. The eight paired batches matched every projected buffer, outcome and learning and inference input. Signed words and event IDs above float32 precision have independent exact-integer fixtures.
+
 The task incorporated `b9b09bc6d9`, which added `axis_extents` for dense inputs
 and normalized admitted references to integer slots. Dense mappings need that
 scanner for gaps, nonzero masked features and referenced empty slots. Native
@@ -26,33 +28,6 @@ admission uses offsets and trusts encoded joins. Keep checkpoint-dependent
 admission on both paths.
 
 ## Remaining slices
-
-### 3. Emit typed v11 spans and consume them through Prepared
-
-- Let `ObservationLayout` describe the physical types of the CSR fields.
-  Write exact int32 IDs, references, enums, offsets and full record words,
-  with uint8 or bool flags and float32 real scalars. Cover facts, shared
-  effects, decision memory, actions and their focus, events and the
-  remaining tables. Optional blocks and tagged payloads must retain their
-  meaning and absence conventions.
-- Slice 2's `batch` in `managym/src/python/observation_batch.rs` repacks a
-  reusable padded `EncodedObservation` workspace. Marshal typed live rows
-  from the shared encoder as it writes them. Keep one owner for row counts,
-  column semantics and joins. A cast of the float workspace would still
-  lose source integers before export. Eliminate padding writes and the
-  separate float repack on the native typed path.
-- Wire typed fields through `manabot/policy/native_rows.py`, `admission.py`,
-  `prepare.py` and decision-memory preparation. Remove float ID/reference
-  unpacking, split-word reconstruction and integer-domain rechecks from
-  the native path. Follow `action_focus` through consumers, including the
-  float tensor conversion in `manabot/env/vector_env.py`. Keep legacy and
-  external dense formats readable with full strict checks. Preserve
-  native type and checkpoint layout binding and retain one `Prepared`.
-- Check exact signed words beyond float32 precision, flags and full
-  dtype/layout coverage on a directed native fixture. Reuse
-  `scratch/compare_spans.py` for parity of logical values, joins and
-  `Prepared` under saved readings. Check pinned pilots, Torch and MLX,
-  package boundaries, Academy, LLM text and retained replay/capture readers.
 
 ### 4. Use owned spans in training collection, retention and minibatches
 
@@ -113,6 +88,33 @@ retention-specific compaction, against at least 3.7 GB dense non-action
 storage. This is a volume estimate. Recompute it from typed values in
 slice 4. The full historical profiles and occupancy table are in
 `f21f8fe4f5:scratch/plan.md`.
+
+### Typed producer and preparation
+
+The release build ran the same eight-batch probe through step 320 with packed
+native-endian fields in logical column order. Values and offsets occupied
+1,858,818 bytes per batch at the median, 51% below slice 2's 3,797,400
+bytes and 97% below the dense allocation. At 16,384 rows this projects to
+119 MB of transport. Collection storage and peak RSS still need measurement.
+
+| Stage (median CPU ms per batch) | Dense | Typed CSR |
+| --- | ---: | ---: |
+| Step and encode with outcomes | 30.43 | 31.68 |
+| Admission | 10.64 | 0.87 |
+| Admitted learning preparation | 30.82 | 19.66 |
+| Admitted inference preparation | 22.67 | 19.71 |
+
+The paired measurement includes freezing the immutable bytes. The typed
+producer cost 1.25 ms more per batch in this run. Whole-update throughput
+remains a slice 4 measurement. The probe checks dense projection parity on
+ordinary game states. The directed native and decision-memory fixtures
+exercise signed words and IDs beyond float32 precision separately.
+
+The focused encoder and incremental-memory Rust tests passed. Python checks
+covered both backends, v9/v11 pilot replays, the v10 vector path, search,
+external admission, memory, Academy, LLM and capture readers. The optional
+u1952 checkpoint was unavailable. Strict all-feature Clippy reported four
+existing PyO3 binding lints for constructor arity and a step return type.
 
 ### Deferred same-machine checks
 

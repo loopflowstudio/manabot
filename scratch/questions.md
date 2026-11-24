@@ -5,3 +5,6 @@
   PassPriority action is present. Keep this separate from the transport slices.
 - Use v11 with the small TLA frontier setup for the paired probes. This
   assumes the v9 recipe remains a compatibility workload.
+
+- Use native-endian packed records in logical field order so each table keeps
+  one immutable values buffer and its existing CSR offsets.

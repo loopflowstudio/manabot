@@ -182,7 +182,10 @@ For dense observation dictionaries, `historical_mean` includes masked
 object slots. Preserve their supplied numeric features when skipping zero
 padding. Relation features use the relation validity column. V11 native
 `ObservationBatch` offsets certify live rows and native joins. Keep model layout
-and vocabulary admission on that path. Read-only NumPy dictionaries get full
+and vocabulary admission on that path. Read packed fields from
+`layout.csr_fields` and fact units from `layout.csr_fact_divisors`. Use full
+int32 words for lookups and saved logical columns for numeric readings.
+Read-only NumPy dictionaries get full
 admission because their origin and writable aliases are unknown.
 
 Execution row limits bound prefix materialization before preparation, independently

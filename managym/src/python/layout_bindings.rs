@@ -240,6 +240,36 @@ impl ObservationLayout {
         arrays_dict(py, &self.arrays)
     }
 
+    /// Divisor of each fact kind's raw CSR payload in its logical v11 columns.
+    #[getter]
+    fn csr_fact_divisors(&self) -> BTreeMap<u8, u8> {
+        crate::agent::observation_encoder::FactKind::ALL
+            .into_iter()
+            .map(|kind| (kind as u8, kind.payload_divisor()))
+            .collect()
+    }
+
+    /// Physical fields of each v11 CSR record: name, NumPy dtype and logical column.
+    #[getter]
+    fn csr_fields(&self) -> BTreeMap<&str, Vec<(&str, &str, usize)>> {
+        self.arrays
+            .iter()
+            .filter(|(key, _)| {
+                self.config.layout == InputLayout::OneToken && !key.ends_with("_valid")
+            })
+            .map(|(key, array)| {
+                (
+                    key.as_str(),
+                    array
+                        .packed_fields(key)
+                        .into_iter()
+                        .map(|f| (f.name, f.storage.dtype(), f.index))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
     #[getter]
     fn shapes(&self, py: Python<'_>) -> PyResult<PyObject> {
         let out = PyDict::new_bound(py);

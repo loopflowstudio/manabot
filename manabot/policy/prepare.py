@@ -68,7 +68,7 @@ from manabot.env.shared_effects import (
 )
 from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
-from manabot.policy.native_rows import NativeRows
+from manabot.policy.native_rows import NativeRows, full_word
 from manabot.policy.readings import (
     DURATION_FLAGS,
     PROGRAM_KINDS,
@@ -661,11 +661,15 @@ def prepare(
             "agent_cards",
             "opponent_cards",
         }
-        dense = {
-            key: obs.dense(key)
-            for key in obs.tables
-            if key not in packed_keys and not key.startswith("decision_")
-        }
+        dense = {}
+        for key, span in obs.tables.items():
+            if key in packed_keys or key.startswith("decision_"):
+                continue
+            if key in ("agent_player", "opponent_player", "player_turn_state"):
+                values = span.features(tables.layout.readings[key])
+            else:
+                values = span.integers
+            dense[key] = span.scatter(values, obs.capacities[key])
         for key in (*OBJECT_KEYS, "stack", "actions", "events"):
             dense[key + "_valid"] = obs.dense(key + "_valid")
         obs = dense
@@ -693,7 +697,7 @@ def prepare(
             else native.capacities["facts"]
         )
         fact_mask = span.mask(stop)
-        facts = span.values[:, : tables.layout.widths["facts"]]
+        facts = span.integers[:, : tables.layout.widths["facts"]]
     else:
         facts = obs["facts"]
         fact_mask = None
@@ -734,7 +738,7 @@ def prepare(
         if native is None:
             return read_object_numeric(obs[key], layout.readings[key])
         spans = native.tables[key]
-        values = spans.values[..., : layout.widths[key]]
+        values = spans.features(layout.readings[key])
         return spans.scatter(
             read_numeric(values, layout.readings[key]), native.capacities[key]
         )
@@ -773,7 +777,7 @@ def prepare(
     live = (
         relations[valid]
         if native is None
-        else native.tables["relations"].values[:, : relations.shape[-1]].copy()
+        else native.tables["relations"].integers[:, : relations.shape[-1]].copy()
     )
     pending = np.isin(live[:, _RELATION_FRAME_KIND], (7, 8, 10))
     live[pending, _RELATION_FRAME_IDS] = 0
@@ -808,13 +812,17 @@ def prepare(
         names = obs["name_candidates"][legal_batches, legal_slots]
         focus = obs["action_focus"][legal_batches, legal_slots]
     else:
-        action_rows = native.tables["actions"].values[:, : layout.widths["actions"]]
-        names = native.tables["name_candidates"].values[
+        action_rows = native.tables["actions"].features(layout.readings["actions"])
+        names = native.tables["name_candidates"].integers[
             :, : layout.widths["name_candidates"]
         ]
-        focus = native.tables["action_focus"].values
+        focus = native.tables["action_focus"].integers
     action_features = read_numeric(action_rows, layout.readings["actions"])
-    frames = action_rows[:, ACTION_CONTINUATION_INDEX].astype(np.int64)
+    frames = (
+        action_rows[:, ACTION_CONTINUATION_INDEX]
+        if native is None
+        else native.tables["actions"].records["continuation"]
+    ).astype(np.int64, copy=False)
     candidates = names.astype(np.int64)
     focus = focus.astype(np.int64)
     if candidates.shape[-1] > max(_GROUP_FIRST, _GROUP_LAST):
@@ -888,7 +896,7 @@ def prepare(
         library_weights=np.divide(
             np.float32(1),
             library[..., _LIBRARY_POSITION],
-            out=np.zeros_like(library[..., _LIBRARY_POSITION]),
+            out=np.zeros(library.shape[:-1], dtype=f32),
             where=library[..., _LIBRARY_POSITION] > 0,
         ).astype(f32),
         deck_rows=tables.rows(decklists[..., _DECK_DEFINITION]),
@@ -913,6 +921,7 @@ def prepare(
             tables,
             objects,
             object_remap,
+            native=native,
             valid=fact_mask,
             coordinates=native.tables["facts"].coordinates
             if native is not None
@@ -999,7 +1008,7 @@ def _referenced_definitions(
             ("effects", EFFECT_SOURCE_DEFINITION, EFFECT_VALID),
         ):
             references.append(
-                native.tables[key].values[:, source]
+                native.tables[key].integers[:, source]
                 if native is not None
                 else obs[key][..., source][obs[key][..., valid] == 1]
             )
@@ -1017,9 +1026,11 @@ def _facts(
     objects: int,
     object_remap: Array | None = None,
     *,
+    native: NativeRows | None = None,
     valid: Array | None = None,
     coordinates: tuple[Array, Array] | None = None,
 ) -> FactRoutes[Array]:
+    word = record_word if native is None else full_word
     if valid is None:
         valid = facts[..., FACT_VALID_INDEX] == 1
         live = facts[valid]
@@ -1033,8 +1044,8 @@ def _facts(
 
     kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
     ident, detail = (
-        record_word(live, FACT_ID_INDEX),
-        record_word(live, FACT_DETAIL_INDEX),
+        word(live, FACT_ID_INDEX),
+        word(live, FACT_DETAIL_INDEX),
     )
     ordinal = np.isin(kinds, ORDINAL_ID_KINDS)
     # Numeric columns in parameter order: the two payloads, the duration flags,
@@ -1042,7 +1053,8 @@ def _facts(
     readings = tables.layout.readings["facts"]
     payload = slice(FACT_VALUE_INDEX, FACT_VALUE_INDEX + 2)
     timestamp = slice(FACT_ORDER_INDEX, FACT_ORDER_INDEX + 1)
-    payloads = read_numeric(live[..., payload], readings[payload], kinds)
+    values = native.fact_payloads(live) if native is not None else live[..., payload]
+    payloads = read_numeric(values, readings[payload], kinds)
     order = read_numeric(live[..., timestamp], readings[timestamp])
     columns = np.concatenate(
         [
@@ -1109,6 +1121,7 @@ def _facts(
         linked=(valid & (links > 0)).astype(np.float32),
         programs=_fact_programs(
             live[program],
+            detail[program],
             all_programs,
             (coordinates[0][program] * valid.shape[1] + coordinates[1][program]),
             tables.order_lengths,
@@ -1118,6 +1131,7 @@ def _facts(
 
 def _fact_programs(
     program_facts: Array,
+    word: Array,
     program: Array,
     rows: Array,
     order_lengths: Callable[[Array], Array] | None = None,
@@ -1128,7 +1142,6 @@ def _fact_programs(
         return None
     starts = np.nonzero(program_facts[:, _FACT_VALUE_2] == 0)[0]
     lengths = np.diff(np.append(starts, len(rows)))
-    word = record_word(program_facts, FACT_DETAIL_INDEX)
     signed = np.where(word >= 2**31, word - 2**32, word).astype(np.float32)
     kind = program_facts[:, FACT_VALUE_INDEX]
     numbers = np.where((kind == 4) | (kind == 5), signed, 0)
@@ -1158,11 +1171,15 @@ def _effects(
     else:
         spans = native.tables["effects"]
         live_batches, _ = spans.coordinates
-        selected = spans.values[:, : tables.layout.widths["effects"]]
+        selected = spans.integers[:, : tables.layout.widths["effects"]]
     if not len(selected):
         return None
     live = selected.astype(np.int64)
-    halves = live[:, EFFECT_MODIFICATION]
+    modification = (
+        record_word(live, EFFECT_MODIFICATION[0])
+        if native is None
+        else full_word(selected, EFFECT_MODIFICATION[0])
+    )
     source = live[:, EFFECT_SOURCE_DEFINITION]
     links = live[:, EFFECT_LINKS]
     detail_offsets, counts, member_offsets, member_counts = live[:, EFFECT_SPANS].T
@@ -1170,15 +1187,15 @@ def _effects(
         detail_records, detail_rows = effect_span_rows(detail_offsets, counts)
         detail_values = obs["effect_details"][live_batches[detail_records], detail_rows]
     else:
-        detail_values = native.tables["effect_details"].values
+        detail_values = native.tables["effect_details"].integers
     detail_host = detail_values.astype(np.int64)
-    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
+    kinds = detail_host[:, DETAIL_KIND]
     records, member_rows = effect_span_rows(member_offsets, member_counts)
     member_batches = live_batches[records]
     targets = (
         obs["effect_members"][member_batches, member_rows, MEMBER_OBJECT]
         if native is None
-        else native.tables["effect_members"].values[:, MEMBER_OBJECT]
+        else native.tables["effect_members"].integers[:, MEMBER_OBJECT]
     ).astype(np.int64)
 
     # Each sequence reads its three header tokens followed by its detail tokens.
@@ -1188,9 +1205,16 @@ def _effects(
         token_indexes.extend(range(3 * i, 3 * i + 3))
         token_indexes.extend(range(detail_start, detail_start + count))
         detail_start += count
-    numeric = read_numeric(selected, tables.layout.readings["effects"])
+    effect_readings = tables.layout.readings["effects"]
+    if native is not None:
+        selected = spans.features(effect_readings)
+    numeric = read_numeric(selected, effect_readings)
     base = live_batches * objects
-    unsigned = (ids[:, 0] << 16) | ids[:, 1]
+    unsigned = (
+        record_word(detail_host, DETAIL_VALUE[0])
+        if native is None
+        else full_word(detail_values, DETAIL_VALUE[0])
+    )
     token_kinds = PROGRAM_TOKEN_KIND[kinds]
     program = token_kinds != 0
     detail_embedding_rows = np.zeros(len(kinds), dtype=np.int64)
@@ -1209,9 +1233,7 @@ def _effects(
         controller_mask=(links[:, 0] > 0).astype(np.float32),
         source_object=base + object_slots(links[:, 1], object_remap),
         source_object_mask=(links[:, 1] > 0).astype(np.float32),
-        modification_rows=tables.names(
-            RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
-        ),
+        modification_rows=tables.names(RecordNamespace.TOKEN, modification),
         source_rows=tables.rows(source)
         if tables.catalog_records
         else source % tables.record_buckets,

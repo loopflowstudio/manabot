@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS, integer_words
+from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS
 from manabot.env.observation import column, column_names
 from manabot.env.shared_effects import NUMBER_TOKEN_KINDS
 from manabot.policy.readings import signed_log
@@ -528,11 +528,11 @@ def _catalog_program_rows() -> _ProgramRows:
         counts = np.array([len(program.tokens) for program in source], np.int64)
         rows = np.array(
             [
-                [0, kind, *integer_words(value), ordinal, 1]
+                [0, kind, value, 0, ordinal, 1]
                 for program in source
                 for ordinal, (kind, value) in enumerate(program.tokens)
             ],
-            np.float32,
+            np.int32,
         ).reshape(-1, 6)
         _program_rows = _ProgramRows(source, rows, counts.cumsum() - counts, counts)
     return _program_rows
@@ -563,7 +563,7 @@ def _expand_details(
         expanded_counts.cumsum() - expanded_counts, expanded_counts
     )
     catalog = positions < shortcut_counts[owners]
-    expanded = np.empty((len(owners), 6), np.float32)
+    expanded = np.empty((len(owners), 6), np.int32)
     if programs is not None:
         expanded[catalog] = programs.rows[
             shortcut_starts[owners[catalog]] + positions[catalog]
@@ -1044,6 +1044,7 @@ def prepare_memory(
 def _prepare_memory_rows(
     obs: "ObservationBuffers", tables: "Tables", *, native: "NativeRows | None" = None
 ) -> MemoryRows[np.ndarray] | None:
+    from manabot.policy.native_rows import full_word
     from manabot.policy.prepare import pack, record_word
 
     if native is None:
@@ -1059,10 +1060,14 @@ def _prepare_memory_rows(
         spans = native.tables[_RECORDS]
         lengths = spans.counts.astype(np.int64)
         batches, slots = spans.coordinates
-        selected = spans.values
+        selected = spans.integers
+
+    word = record_word if native is None else full_word
 
     def word_pairs(rows: np.ndarray, span: slice) -> np.ndarray:
         halves = rows[:, span]
+        if native is not None:
+            return halves[:, ::2].view(np.uint32).astype(np.int64)
         return record_word(halves.reshape(len(rows), halves.shape[1] // 2, 2), 0)
 
     temporal = word_pairs(selected, _RECORD_TEMPORAL)
@@ -1072,7 +1077,7 @@ def _prepare_memory_rows(
     for index, offset in enumerate(_RECORD_SELECTORS):
         selectors[:, index * 2] = selected[:, offset]
         if offset in _RECORD_NUMBERED_SELECTORS:
-            selectors[:, index * 2 + 1] = signed_log(record_word(selected, offset + 1))
+            selectors[:, index * 2 + 1] = signed_log(word(selected, offset + 1))
     selectors[:, 8:] = selected[:, _RECORD_DECLARATION]
     numbers = np.concatenate(
         (
@@ -1084,13 +1089,11 @@ def _prepare_memory_rows(
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, record_word(selected, _RECORD_KIND))
+    kinds = tables.names(1, word(selected, _RECORD_KIND))
     choices = np.zeros(len(selected), np.int64)
     present = selected[:, _RECORD_CHOICE_PRESENT] == 1
-    choices[present] = tables.names(
-        1, record_word(selected[present, _RECORD_CHOICE_KIND], 0)
-    )
-    choice_names = record_word(selected, _RECORD_NAME)
+    choices[present] = tables.names(1, word(selected[present, _RECORD_CHOICE_KIND], 0))
+    choice_names = word(selected, _RECORD_NAME)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
     detail_routes: list[np.ndarray] = []
@@ -1103,7 +1106,12 @@ def _prepare_memory_rows(
             _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
             records = obs[_RECORDS][batch, :length]
             references = obs[_REFERENCES][batch, :reference_count]
-            raw_details = obs[_DETAILS][batch, :detail_count]
+            raw_details = obs[_DETAILS][batch, :detail_count].astype(np.int32)
+            raw_details[:, _DETAIL_VALUE_HIGH] = (
+                record_word(raw_details, _DETAIL_VALUE_HIGH)
+                .astype(np.uint32)
+                .view(np.int32)
+            )
             members = obs[_MEMBERS][batch, :member_count]
         else:
             records, raw_details, references, members = (
@@ -1126,12 +1134,12 @@ def _prepare_memory_rows(
     references = (
         np.concatenate(references_list)
         if references_list
-        else np.zeros((0, MEMORY_WIDTHS[_REFERENCES]), np.float32)
+        else np.zeros((0, MEMORY_WIDTHS[_REFERENCES]), np.int32)
     )
     details = (
         np.concatenate(details_list)
         if details_list
-        else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.float32)
+        else np.zeros((0, MEMORY_WIDTHS[_DETAILS]), np.int32)
     )
     numeric = word_pairs(references, _REFERENCE_WORDS).astype(np.uint32).view(np.int32)
     reference_numbers = np.concatenate(
@@ -1143,7 +1151,7 @@ def _prepare_memory_rows(
         ),
         -1,
     ).astype(np.float32)
-    payloads = record_word(details, _DETAIL_VALUE_HIGH)
+    payloads = full_word(details, _DETAIL_VALUE_HIGH)
     token_kinds = details[:, _DETAIL_TOKEN_KIND].astype(np.int64)
     values = np.zeros(len(details), np.int64)
     program = details[:, _DETAIL_FIELD] == 0

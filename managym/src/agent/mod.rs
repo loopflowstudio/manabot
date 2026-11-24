@@ -12,6 +12,7 @@ pub mod observation_encoder;
 pub(crate) mod observation_extents;
 pub mod observation_json;
 pub mod observation_layout;
+pub mod observation_rows;
 pub mod player_policy;
 pub mod policy_history;
 pub mod record_vocabulary;

@@ -418,8 +418,14 @@ def test_native_batch_freezes_live_rows_and_retains_first_legal(
     seat_axis, offsets, data = tables["actions"]
     assert not seat_axis
     np.testing.assert_array_equal(np.frombuffer(offsets, np.int32), [0, 1, 2])
-    values = np.frombuffer(data, np.float32)
-    assert values.size == 2 * space.shapes["actions"][-1]
+    fields = batch.layout.csr_fields["actions"]
+    dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+    values = np.frombuffer(data, dtype)
+    assert values.shape == (2,)
+    assert dtype["valid"] == np.uint8
+    assert dtype["mode"] == np.int32
+    assert dtype["x"] == np.float32
+    assert values["valid"].tolist() == [1, 1]
     for source in (values, np.frombuffer(offsets, np.int32)):
         with pytest.raises(ValueError):
             source.setflags(write=True)
@@ -451,7 +457,7 @@ def test_vector_step_batch_keeps_outcomes_and_emitted_events(
             encoded = encode_observation(space, obs)
             table = batch.tables()["events"]
             offsets = np.frombuffer(table[1], np.int32)
-            values = np.frombuffer(table[2], np.float32).reshape(
+            values = np.frombuffer(table[2], np.int32).reshape(
                 -1, space.shapes["events"][-1]
             )
             np.testing.assert_array_equal(
@@ -459,3 +465,56 @@ def test_vector_step_batch_keeps_outcomes_and_emitted_events(
                 encoded["events"][encoded["events_valid"] == 1],
             )
             assert batch.action_counts[i] == int(encoded["actions_valid"].sum())
+
+
+def test_csr_fields_cover_every_logical_column_and_optional_table() -> None:
+    for history in (False, True):
+        layout = managym.ObservationLayout(
+            policy_history=history,
+            max_decision_records=8,
+            max_decision_references=8,
+            max_decision_reference_details=16,
+            max_decision_members=16,
+        )
+        arrays = layout.arrays
+        assert set(layout.csr_fields) == {
+            key for key in arrays if not key.endswith("_valid")
+        }
+        for key, fields in layout.csr_fields.items():
+            columns = arrays[key]["columns"]
+            if not columns:
+                assert fields == [
+                    ("value", "uint8" if key == "card_turn_state" else "int32", 0)
+                ]
+                continue
+            names = list(columns)
+            logical = []
+            for name, dtype, index in fields:
+                assert index == len(logical)
+                if names[index] == name + "_high":
+                    assert dtype == "int32"
+                    logical.extend((name + "_high", name + "_low"))
+                else:
+                    logical.append(name)
+                    kind = columns[name]
+                    if kind["kind"] == "flag" or (
+                        key.startswith("decision_")
+                        and (
+                            name.endswith("_present")
+                            or name
+                            in (
+                                "valid",
+                                "declared",
+                                "tapped",
+                                "ready",
+                                "attacking",
+                                "blocking",
+                            )
+                        )
+                    ):
+                        assert dtype == "uint8"
+                    elif kind.get("scale", 1) > 1:
+                        assert dtype == "float32"
+                    else:
+                        assert dtype == "int32"
+            assert logical == names

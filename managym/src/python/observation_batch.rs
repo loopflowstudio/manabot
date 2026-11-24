@@ -1,9 +1,12 @@
 //! Freeze the encoder's live prefixes before they cross the Python boundary.
+// PyO3 wrappers generate identity conversions for PyResult.
+#![allow(clippy::useless_conversion)]
 use super::bindings::{map_agent_err, map_encode_err, PyEnv};
 use super::layout_bindings::ObservationLayout;
 use crate::agent::{
     observation::Observation,
-    observation_encoder::{allocate, encode_counted, InputLayout, ObservationEncoderConfig},
+    observation_encoder::{InputLayout, ObservationEncoderConfig},
+    observation_rows::PackedRows,
 };
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
@@ -11,41 +14,6 @@ use pyo3::{
     types::{PyBytes, PyDict},
 };
 use std::collections::BTreeMap;
-
-struct Table {
-    offsets: Vec<i32>,
-    values: Vec<u8>,
-    capacity: usize,
-    width: usize,
-    seat_axis: bool,
-}
-
-impl Table {
-    fn append<T: Copy>(
-        &mut self,
-        source: &[T],
-        counts: &[usize],
-        bytes: fn(T) -> [u8; 4],
-    ) -> PyResult<()> {
-        for (seat, &count) in counts.iter().enumerate() {
-            let end = i32::try_from(count)
-                .ok()
-                .and_then(|n| self.offsets.last()?.checked_add(n))
-                .ok_or_else(|| {
-                    PyValueError::new_err("observation batch exceeds int32 row offsets")
-                })?;
-            let start = seat * self.capacity * self.width;
-            self.values.extend(
-                source[start..start + count * self.width]
-                    .iter()
-                    .copied()
-                    .flat_map(bytes),
-            );
-            self.offsets.push(end);
-        }
-        Ok(())
-    }
-}
 
 struct FrozenTable {
     seat_axis: bool,
@@ -70,7 +38,7 @@ impl ObservationBatch {
     }
 
     /// Per table: a seat axis flag, native-endian int32 row offsets and packed
-    /// values in layout dtype. Both byte exports are immutable. A two-seat
+    /// records described by layout.csr_fields. Both byte exports are immutable. A two-seat
     /// table has two consecutive spans per observation.
     fn tables<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let out = PyDict::new_bound(py);
@@ -123,75 +91,15 @@ pub(super) fn batch(
     config: ObservationEncoderConfig,
     observations: impl Iterator<Item = PyResult<Observation>>,
 ) -> PyResult<ObservationBatch> {
-    let mut tables: BTreeMap<_, _> = layout
-        .borrow(py)
-        .arrays
-        .iter()
-        .filter(|(key, _)| !key.ends_with("_valid"))
-        .map(|(key, array)| {
-            let seat_axis = array.axes[0] == "viewer_relative_seat" && key != "player_turn_state";
-            let axis = usize::from(seat_axis);
-            (
-                key.clone(),
-                Table {
-                    capacity: array.shape[axis].unwrap(),
-                    width: array.shape[axis + 1..].iter().map(|n| n.unwrap()).product(),
-                    seat_axis,
-                    offsets: vec![0],
-                    values: Vec::new(),
-                },
-            )
-        })
-        .collect();
-    let mut row = allocate(&config);
+    let mut rows = PackedRows::new(&layout.borrow(py).arrays);
     let mut batch_size = 0;
     for observation in observations {
-        let n =
-            encode_counted(&observation?, &config, row.buffers_mut()).map_err(map_encode_err)?;
-        macro_rules! append {
-            ($field:ident, $counts:expr) => {
-                tables.get_mut(stringify!($field)).unwrap().append(
-                    &row.$field,
-                    &$counts,
-                    f32::to_ne_bytes,
-                )?
-            };
-        }
-        append!(agent_player, [1]);
-        append!(opponent_player, [1]);
-        append!(player_turn_state, [2]);
-        append!(agent_cards, [n.cards[0]]);
-        append!(opponent_cards, [n.cards[1]]);
-        append!(semantic_cards, n.cards);
-        append!(card_turn_state, n.cards);
-        append!(known_hand, n.known_hand);
-        append!(known_library, n.known_library);
-        append!(decklists, n.decklists);
-        append!(agent_permanents, [n.permanents[0]]);
-        append!(opponent_permanents, [n.permanents[1]]);
-        append!(stack, [n.stack]);
-        append!(events, [n.events]);
-        append!(actions, [n.actions]);
-        append!(name_candidates, [n.actions]);
-        tables.get_mut("action_focus").unwrap().append(
-            &row.action_focus,
-            &[n.actions],
-            i32::to_ne_bytes,
-        )?;
-        append!(relations, [n.relations]);
-        append!(facts, [n.facts]);
-        append!(effects, [n.effects]);
-        append!(effect_details, [n.effect_details]);
-        append!(effect_members, [n.effect_members]);
-        if config.max_decision_records > 0 {
-            append!(decision_records, [n.decision_memory[0]]);
-            append!(decision_reference_details, [n.decision_memory[1]]);
-            append!(decision_references, [n.decision_memory[2]]);
-            append!(decision_members, [n.decision_memory[3]]);
-        }
+        rows.append(&observation?, &config)
+            .map_err(map_encode_err)?;
         batch_size += 1;
     }
-    let tables = tables
+    let tables = rows
+        .tables
         .into_iter()
         .map(|(key, table)| {
             let offsets: Vec<_> = table

@@ -63,7 +63,7 @@ pub fn history(
     obs: &Observation,
     capacity: usize,
     cards_per_player: usize,
-) -> Vec<[f32; HISTORY_DIM]> {
+) -> Vec<[i64; HISTORY_DIM]> {
     let agent: HashMap<i32, usize> = obs
         .agent_cards
         .iter()

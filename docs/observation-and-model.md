@@ -218,8 +218,10 @@ refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 ### Bucketed padding
 
 A dense observation mapping reserves the declared capacity of every table.
-A v11 `managym.ObservationBatch` carries each table's live rows with int32
-offsets. Both use the same logical object and action coordinates. Across 300 captured collection batches the median batch needed 59
+A v11 `managym.ObservationBatch` carries each table's typed live rows with int32
+offsets. Its native record fields keep integer joins and full signed words exact
+through vocabulary lookup. Both transports use the same logical object and
+action coordinates and saved numeric readings. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.

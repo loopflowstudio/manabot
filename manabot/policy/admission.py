@@ -6,6 +6,7 @@ NumPy rows before `prepare` turns validity into booleans or performs lookups.
 Padding is ignored where a validity column owns it and checked otherwise.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -65,12 +66,11 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.decision_memory import (
     admit_memory,
-    memory_vocabulary,
     retained_memory,
     validate_memory_vocabulary,
     validate_retained_memory,
 )
-from manabot.policy.native_rows import NativeRows, native_rows
+from manabot.policy.native_rows import NativeRows, full_word, native_rows
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     OBJECT_KEYS,
@@ -299,42 +299,51 @@ def admit_native(
     rows = native_rows(
         batch, spec.space, bucketed=bucketed, objects=object_trimming(spec.model)
     )
-    data = {key: table.values for key, table in rows.tables.items()}
+    data = rows.tables
     if spec.model.belief_count_buckets:
-        beliefs(data, spec.model)
+        # Belief state is supplied by the policy and needs an external mapping.
+        beliefs({}, spec.model)
     lookup = spec.tables.definition_rows
     size = spec.definition_count if lookup is None else len(lookup)
     ids = [
-        data["semantic_cards"],
-        data["agent_permanents"][:, PERMANENT_DEFINITION_INDEX],
-        data["opponent_permanents"][:, PERMANENT_DEFINITION_INDEX],
-        data["stack"][:, STACK_DEFINITION_INDEX],
-        data["relations"][:, _RELATION_DEFINITIONS],
+        data["semantic_cards"].records,
+        *(
+            data[key].records["definition"]
+            for key in ("agent_permanents", "opponent_permanents", "stack")
+        ),
+        *(
+            data["relations"].records[name]
+            for name in ("source_definition", "reference_definition")
+        ),
     ]
-    candidates = data["name_candidates"]
-    names(candidates, spec.tables.name_definitions)
+    name_vocabulary(data["name_candidates"].integers, spec.tables.name_definitions)
     if lookup is not None:
         ids.extend(
-            data[key][:, column(key, "definition")]
+            data[key].records["definition"]
             for key in ("known_hand", "known_library", "decklists", "name_candidates")
         )
     if spec.model.recent_events:
-        ids.append(data["events"][:, _EVENT_SUBJECTS])
+        ids.extend(
+            data["events"].records[name]
+            for name in ("source_definition", "target_definition")
+        )
     if "decision_records" in data:
-        refs = data["decision_references"]
-        details = data["decision_reference_details"]
+        refs = data["decision_references"].integers
+        details = data["decision_reference_details"].integers
         ids.append(refs[:, column("decision_references", "definition")])
         definition = (details[:, _DETAIL_FIELD] == 0) & (
             details[:, _DETAIL_TOKEN_KIND] == 7
         )
-        ids.append(record_word(details, _DETAIL_VALUE)[definition] + 1)
-        headers = data["decision_records"]
+        ids.append(full_word(details, _DETAIL_VALUE)[definition] + 1)
+        headers = data["decision_records"].integers
         if (
             not spec.space.config.decision_memory_include_own
             and (headers[:, column("decision_records", "chooser_role")] == 1).any()
         ):
             raise ValueError("own-seat decision memory is disabled")
-        memory_vocabulary(headers, details, refs, spec.tables)
+        named = data["decision_records"].records["name"].view(np.uint32)
+        if (named >= len(spec.tables.name_definitions)).any():
+            raise ValueError("invalid decision-memory name row")
     for values in ids:
         definition_ids(values, size, lookup)
     if spec.model.catalog_records():
@@ -342,16 +351,28 @@ def admit_native(
         catalog = Catalog(
             lookup, spec.tables.record_name_keys, spec.tables.record_token_keys
         )
-        live = data["facts"]
+        if "decision_records" in data and spec.model.decision_memory != "none":
+            headers = data["decision_records"].records
+            chosen = headers["choice_kind_present"].astype(bool)
+            for words in (headers["kind"], headers["choice_kind"][chosen]):
+                catalog.require_names(RecordNamespace.TOKEN, words)
+            details = data["decision_reference_details"].records
+            program = details["field"] == 0
+            catalog.require_tokens(
+                details["token_kind"][program], details["value"][program]
+            )
+        live = data["facts"].integers
         kinds = live[:, FACT_KIND_INDEX]
-        fact_vocabulary(live, kinds, np.isin(kinds, PROGRAM_KINDS), catalog)
-        effects = data["effects"]
-        details = data["effect_details"]
+        fact_vocabulary(
+            live, kinds, np.isin(kinds, PROGRAM_KINDS), catalog, word=full_word
+        )
+        effects = data["effects"].records
+        details = data["effect_details"].records
         effect_vocabulary(
-            effects[:, EFFECT_MODIFICATION].astype(np.int64),
-            effects[:, EFFECT_SOURCE_DEFINITION],
-            details[:, DETAIL_KIND].astype(np.int64),
-            details[:, DETAIL_VALUE].astype(np.int64),
+            effects["modification"],
+            effects["source_definition"],
+            details["kind"],
+            details["value"],
             catalog,
         )
     return rows
@@ -404,7 +425,9 @@ def definition_ids(
     """Validate transport ids and return their optional catalog rows."""
     kind = "semantic" if lookup is not None else "card"
     message = f"policy received an unadmitted {kind} definition"
-    if not ((ids == np.floor(ids)) & (ids >= 0) & (ids < size)).all():
+    if (ids.dtype.kind not in "iu" and not (ids == np.floor(ids)).all()) or not (
+        (ids >= 0) & (ids < size)
+    ).all():
         raise ValueError(message)
     rows = ids.astype(np.int64)
     if lookup is not None:
@@ -501,11 +524,16 @@ def facts(
 
 
 def fact_vocabulary(
-    rows: np.ndarray, kinds: np.ndarray, program: np.ndarray, catalog: Catalog
+    rows: np.ndarray,
+    kinds: np.ndarray,
+    program: np.ndarray,
+    catalog: Catalog,
+    *,
+    word: Callable[[np.ndarray, int], np.ndarray] = record_word,
 ) -> None:
     ident, detail = (
-        record_word(rows, FACT_ID_INDEX),
-        record_word(rows, FACT_DETAIL_INDEX),
+        word(rows, FACT_ID_INDEX),
+        word(rows, FACT_DETAIL_INDEX),
     )
     named = (kinds > 0) & ~np.isin(kinds, ORDINAL_ID_KINDS)
     restriction = kinds == FACT_COMBAT_RESTRICTION
@@ -603,23 +631,28 @@ def shared_effects(
     if len(np.unique(global_orders)) != len(global_orders):
         raise ValueError("duplicate effect membership order")
     if catalog is not None:
-        effect_vocabulary(halves, source, kinds, ids, catalog)
+        effect_vocabulary(
+            (halves[:, 0] << 16) | halves[:, 1],
+            source,
+            kinds,
+            (ids[:, 0] << 16) | ids[:, 1],
+            catalog,
+        )
 
 
 def effect_vocabulary(
-    halves: np.ndarray,
+    modification: np.ndarray,
     source: np.ndarray,
     kinds: np.ndarray,
     ids: np.ndarray,
     catalog: Catalog,
 ) -> None:
-    catalog.require_names(RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1])
+    catalog.require_names(RecordNamespace.TOKEN, modification)
     definition_ids(source, len(catalog.definitions), catalog.definitions)
-    unsigned = (ids[:, 0] << 16) | ids[:, 1]
     token_kinds = PROGRAM_TOKEN_KIND[kinds]
     program = token_kinds != 0
-    catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
-    catalog.require_tokens(token_kinds[program], unsigned[program])
+    catalog.require_names(RecordNamespace.TOKEN, ids[~program])
+    catalog.require_tokens(token_kinds[program], ids[program])
 
 
 def relations(
@@ -646,18 +679,17 @@ def relations(
         raise ValueError("invalid continuation frame reference")
 
 
-def names(candidates: np.ndarray, definitions: np.ndarray) -> None:
-    """Validate name rows, optional definitions and balanced-group endpoints."""
+def name_vocabulary(candidates: np.ndarray, definitions: np.ndarray) -> None:
+    """Bind names, optional definitions and group endpoints to the checkpoint."""
     rows = definition_ids(candidates[..., _NAME_ROW], len(definitions))
     if not np.array_equal(
         candidates[..., _NAME_DEFINITION], definitions[rows].astype(candidates.dtype)
     ):
         raise ValueError("name candidate definition disagrees with vocabulary")
     if candidates.shape[-1] > _NAME_GROUP_LAST:
-        first = definition_ids(candidates[..., _NAME_GROUP_FIRST], len(definitions))
-        last = definition_ids(candidates[..., _NAME_GROUP_LAST], len(definitions))
-        if not np.array_equal(first > 0, last > 0) or (first > last).any():
-            raise ValueError("invalid naming group span")
+        definition_ids(
+            candidates[..., _NAME_GROUP_FIRST : _NAME_GROUP_LAST + 1], len(definitions)
+        )
 
 
 def permanent_links(obs: ObservationBuffers, objects: int) -> None:
@@ -696,7 +728,14 @@ def actions(
     if ((indexes != 0) & ~present).any():
         raise ValueError("action continuation reference has no frame")
     candidates = obs["name_candidates"][batches, slots]
-    names(candidates, name_definitions)
+    name_vocabulary(candidates, name_definitions)
+    if candidates.shape[-1] > _NAME_GROUP_LAST:
+        first, last = (
+            candidates[..., _NAME_GROUP_FIRST],
+            candidates[..., _NAME_GROUP_LAST],
+        )
+        if not np.array_equal(first > 0, last > 0) or (first > last).any():
+            raise ValueError("invalid naming group span")
     if lookup is not None:
         definition_ids(candidates[..., _NAME_DEFINITION], len(lookup), lookup)
     focus = obs["action_focus"][batches, slots]
