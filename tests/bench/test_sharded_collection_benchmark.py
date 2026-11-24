@@ -1,9 +1,23 @@
+import json
 import sys
 
 import pytest
 
 import managym
 from scripts.bench_sharded_collection import main
+
+
+def test_sharded_collection_continues_across_short_games(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def short_deck(setup: str, key: str) -> managym.PlayerConfig:
+        return managym.PlayerConfig(key, {"Forest": 8})
+
+    monkeypatch.setattr(managym, "authored_deck_setup", short_deck)
+    monkeypatch.setattr(managym, "ALLOCATION_COUNTING", False)
+    monkeypatch.setattr(sys, "argv", ["bench_sharded_collection"])
+    main()
+    assert json.loads(capsys.readouterr().out)["steps"] == 2048
 
 
 @pytest.mark.parametrize(

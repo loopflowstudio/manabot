@@ -1,8 +1,8 @@
 """Explicit stream strata over a regime's two complete deck/sideboard setups.
 
 Each stream contributes the same learner transitions per update. Fixed strata
-therefore balance transition exposure, not completed games or wall time. Native
-auto-reset retains the stream's setup; recovery replays the same assignment.
+therefore balance transition exposure, not completed games or wall time. Fresh
+loads retain the stream's setup, and recovery replays the same assignment.
 Elemental uniform sampling instead belongs to native game roots, not stream strata.
 """
 

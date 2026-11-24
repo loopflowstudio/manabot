@@ -36,9 +36,9 @@ def test_scalar_vector_players_finish_with_same_rewards(
         next_obs, reward, done, truncated, _ = scalar.step(0 if external else None)
         other = batch.step([0 if external else -1])[0]
         assert (reward, done, truncated) == other[1:4]
+        assert next_obs.toJSON() == other[0].toJSON()
         if done:
             return
-        assert next_obs.toJSON() == other[0].toJSON()
     pytest.fail("bounded fixture did not finish")
 
 
