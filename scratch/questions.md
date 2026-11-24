@@ -44,3 +44,4 @@ Bakersbane Duo uses Tolarian Terror discounted by five graveyard spells for the 
 For the next batch, use the three second-draw listeners together. Their shared crossing and three different outcomes can be checked from one draw sequence.
 
 The two-viewer text fixture uses Lunar Insight to draw three in one resolution. Wizard, Horde and Mystic supply its three distinct nonland mana values.
+Start the attack batch with Linden and Chart a Course to distinguish per-attacker triggers from raid across a partial declaration and restore.
