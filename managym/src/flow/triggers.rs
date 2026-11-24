@@ -106,6 +106,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         // an event.
         TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
         TriggerCondition::Casts { .. }
+        | TriggerCondition::Expend(_)
         | TriggerCondition::YouCastThis
         | TriggerCondition::SpellTargetsOnlyThis { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
@@ -1057,9 +1058,7 @@ impl Game {
             };
             let player = match event {
                 GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
-                GameEvent::SpellCast {
-                    object_id: object, ..
-                } => Some(self.spell_caster(*object)),
+                GameEvent::SpellCast { caster, .. } => Some(*caster),
                 GameEvent::CardDrawn { player, .. } => Some(*player),
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
@@ -1320,9 +1319,11 @@ impl Game {
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast {
-                        object_id: object, ..
+                        object_id: object,
+                        caster,
+                        ..
                     },
-                ) if self.spell_caster(*object) == trigger.controller
+                ) if *caster == trigger.controller
                     && self.object_matches_predicate(*object, predicate) =>
                 {
                     Some(Target::StackSpell(*object))
@@ -1485,13 +1486,15 @@ impl Game {
     /// is the source and its caster controls the trigger.
     fn cast_triggers(&mut self, event: &GameEvent) {
         let GameEvent::SpellCast {
-            object_id: object, ..
+            object_id: object,
+            caster,
+            ..
         } = event
         else {
             return;
         };
         let object = *object;
-        let caster = self.spell_caster(object);
+        let caster = *caster;
         let fired: Vec<Vec<Effect>> = self.state[object]
             .abilities
             .iter()
@@ -1809,6 +1812,17 @@ impl Game {
                         event,
                     )
             }
+            (
+                TriggerCondition::Expend(threshold),
+                GameEvent::SpellCast {
+                    caster,
+                    spend_before,
+                    spend_after,
+                    ..
+                },
+            ) => {
+                *caster == source_controller && spend_before < threshold && threshold <= spend_after
+            }
             // `check_state_triggers` and `cast_triggers` own these; a
             // battlefield source never fires them from an event.
             (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
@@ -1983,10 +1997,12 @@ impl Game {
                     nth,
                 },
                 GameEvent::SpellCast {
-                    object_id: object, ..
+                    object_id: object,
+                    caster,
+                    ..
                 },
             ) => {
-                let caster = self.spell_caster(*object);
+                let caster = *caster;
                 who.includes(source_controller, caster)
                     && self.object_matches_predicate(*object, predicate)
                     && nth.is_none_or(|n| {

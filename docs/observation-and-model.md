@@ -529,6 +529,11 @@ relation references, history contexts) names that row:
 | `agent_permanents`, `opponent_permanents` | a permanent, by controller, with its characteristics: mana value, six card types, legendary, token, Ally, Lesson and ward beside its state |
 | `stack` | a spell, activated ability or triggered ability, top first, one segment with `is_mine` for its controller; a spell's characteristics, an ability's index and source link, mode, X and kicker |
 
+Each player's `turn_history.mana_spent_casting` totals the mana they paid to cast
+spells during the current turn, including spells later countered. Both viewers
+see positive totals in text and in the v11 `mana_spent_casting` fact on that
+player's row. Paying for an ability leaves the total unchanged.
+
 The published observation exposes `card.characteristics` and
 `permanent.characteristics` as `ObservationCharacteristics`. Effective P/T,
 name, types, keywords and ward come from one layered projection on a permanent;

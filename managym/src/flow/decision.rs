@@ -18,7 +18,7 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game},
-        payment::{CostComponent, Operation, Payment, PaymentProgress},
+        payment::{CostComponent, Payment, PaymentProgress},
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
         },
@@ -1333,24 +1333,7 @@ impl Game {
                         continue;
                     }
                     FrameCompletion::Paid { player, payment } => {
-                        let Operation::Spell {
-                            object,
-                            cast,
-                            mode,
-                            targets,
-                            target_req_indices,
-                        } = payment.operation
-                        else {
-                            unreachable!("activation prepared before costs")
-                        };
-                        self.cast_spell(player, object, targets, target_req_indices, cast)
-                            .expect("announced spell");
-                        if let Some(crate::state::stack_object::StackObject::Spell(spell)) =
-                            self.state.stack_objects_mut().last_mut()
-                        {
-                            spell.mode = mode;
-                            spell.spent = payment.receipt;
-                        }
+                        self.commit_spell_payment(player, payment);
                     }
                     FrameCompletion::Activated {
                         mut ability,

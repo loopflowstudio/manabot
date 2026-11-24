@@ -87,6 +87,10 @@ pub enum GameEvent {
         #[serde(rename = "card")]
         object_id: ObjectId,
         targets: Vec<Target>,
+        caster: PlayerId,
+        /// Cumulative mana spent casting by the payer before and after payment.
+        spend_before: u32,
+        spend_after: u32,
     },
     SpellResolved {
         #[serde(rename = "card")]

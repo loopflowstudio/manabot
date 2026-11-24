@@ -63,6 +63,8 @@ pub enum TriggerCondition {
     /// "When you cast this spell" (CR 603.2): functions while the source is
     /// a spell on the stack, and its caster controls the trigger.
     YouCastThis,
+    /// Spend the threshold mana on spells during one turn.
+    Expend(u32),
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
     WhileSourceAttacking {

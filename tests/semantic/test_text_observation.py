@@ -18,6 +18,8 @@ from manabot.env.observation import (
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_LIFE_GAINS,
+    FACT_MANA_SPENT_CASTING,
+    FACT_OBJECT_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
@@ -729,6 +731,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "mana_spent_casting": "spent N mana casting spells",
         "life_gains": "gained life N times",
         "life_lost": "lost N life",
     },
@@ -1924,3 +1927,27 @@ def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
         )
         submit_response(env, decision, action.reference)
     pytest.fail("Drake Hatcher did not deal combat damage")
+
+
+def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
+    env = priority_root(("Serra Angel",), ("Bakersbane Duo",) + ("Plains",) * 5)
+    payer = env.current_agent_index()
+    _choose(env, "Cast")
+    if any(
+        "Pay the offered cost" in action.description
+        for action in capture_text_decision(env).actions
+    ):
+        _choose(env, "Pay the offered cost")
+
+    for viewer in (payer, 1 - payer):
+        assert env.current_agent_index() == viewer
+        obs = env.observation_for_player(viewer)
+        caster = obs.agent if viewer == payer else obs.opponent
+        assert caster.turn_history.mana_spent_casting == 5
+        facts = encode_observation(ObservationSpace(), obs)["facts"]
+        spend = facts[facts[:, FACT_KIND_INDEX] == FACT_MANA_SPENT_CASTING]
+        assert spend[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX]].tolist() == [
+            [1 if viewer == payer else 2, 5]
+        ]
+        assert "spent 5 mana casting spells" in capture_text_decision(env).text
+        _choose(env, "Pass priority")

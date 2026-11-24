@@ -69,10 +69,11 @@ pub enum FactKind {
     LifeGains = 16,
     TriggeringDamage = 17,
     CreatureDied = 18,
+    ManaSpentCasting = 19,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 17] = [
+    pub const ALL: [FactKind; 18] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -90,6 +91,7 @@ impl FactKind {
         FactKind::LifeGains,
         FactKind::TriggeringDamage,
         FactKind::CreatureDied,
+        FactKind::ManaSpentCasting,
     ];
 }
 
@@ -1845,6 +1847,14 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         push(obs.turn.active_player_id, FactKind::CreatureDied, 0, 1.0);
     }
     for player in [&obs.agent, &obs.opponent] {
+        if layout == InputLayout::OneToken && player.turn_history.mana_spent_casting > 0 {
+            push(
+                player.id,
+                FactKind::ManaSpentCasting,
+                0,
+                player.turn_history.mana_spent_casting as f32,
+            );
+        }
         if layout == InputLayout::OneToken && player.turn_history.life_gains > 0 {
             push(
                 player.id,

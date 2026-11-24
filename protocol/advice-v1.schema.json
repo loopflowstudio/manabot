@@ -3803,6 +3803,12 @@
           "title": "Life Lost",
           "type": "integer"
         },
+        "mana_spent_casting": {
+          "description": "Mana spent by this player to cast spells this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,

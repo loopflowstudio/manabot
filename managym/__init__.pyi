@@ -893,6 +893,7 @@ class PlayerTurnHistory:
     bent: int
     # Life lost this turn (CR 119.3).
     life_gains: int
+    mana_spent_casting: int
     life_lost: int
 
 class RestrictedMana:

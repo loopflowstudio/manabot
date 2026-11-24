@@ -235,6 +235,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "cards_drawn": history.cards_drawn,
         "bent": history.bent,
         "life_gains": history.life_gains,
+        "mana_spent_casting": history.mana_spent_casting,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}

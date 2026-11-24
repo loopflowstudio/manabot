@@ -112,6 +112,9 @@ pub struct PlayerTurnHistory {
     /// Separate occurrences, independent of the amount gained.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub life_gains: u32,
+    /// Mana spent by this player to cast spells this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_spent_casting: u32,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its

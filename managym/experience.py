@@ -341,6 +341,7 @@ class PlayerTurnHistoryView(ProtocolModel):
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     life_gains: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    mana_spent_casting: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 

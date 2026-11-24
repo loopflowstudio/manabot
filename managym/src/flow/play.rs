@@ -17,7 +17,7 @@ use crate::{
         decision::{EffectFrame, FrameCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{bargain_cost, Help, Operation},
+        payment::{bargain_cost, Help, Operation, Payment},
         proposed_event::EventBinding,
         turn::{PhaseKind, StepKind},
     },
@@ -1066,14 +1066,17 @@ impl Game {
             .collect()
     }
 
-    pub(crate) fn cast_spell(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-        cast: CastChoices,
-    ) -> Result<(), AgentError> {
+    pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
+        let Operation::Spell {
+            object,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+        } = payment.operation
+        else {
+            unreachable!("activation prepared before costs")
+        };
         // Recorded before the move, so its invalidation precedes the move's
         // board reads; the move then names the stack appearance.
         self.state.turn.spells_cast[player.0].push(object);
@@ -1084,12 +1087,26 @@ impl Game {
         let object =
             self.push_spell_to_stack(object, player, targets.clone(), target_req_indices, cast);
         self.state.name_last_cast(player, object);
+        let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+            self.state.stack_objects_mut().last_mut()
+        else {
+            unreachable!("just pushed spell")
+        };
+        let paid = u32::from(payment.receipt.total());
+        spell.mode = mode;
+        spell.spent = payment.receipt;
+        let total = &mut self.state.turn.history[player.0].mana_spent_casting;
+        let spend_before = *total;
+        *total = total.saturating_add(paid);
+        let spend_after = *total;
         self.emit(GameEvent::SpellCast {
+            caster: player,
+            spend_before,
+            spend_after,
             object_id: object,
             targets: targets.clone(),
         });
         self.emit_permanents_targeted(&targets, Target::StackSpell(object), player);
-        Ok(())
     }
 
     /// Ward (CR 702.21) — each targeted permanent sees, once, the spell or

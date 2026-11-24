@@ -189,23 +189,6 @@ impl Game {
         }
     }
 
-    /// The controller of `card`'s spell on the stack (CR 110.2), or its
-    /// owner once it has left the stack.
-    pub(crate) fn spell_caster(&self, object: ObjectId) -> PlayerId {
-        self.find_spell_on_stack_index(object)
-            .and_then(|index| match &self.state.stack_objects[index] {
-                StackObject::Spell(spell) => Some(spell.controller),
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                self.state
-                    .objects
-                    .provenance(object)
-                    .expect("source provenance")
-                    .1
-            })
-    }
-
     /// The permanents `player` controls, in battlefield order.
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.iter_battlefield_permanents(player).collect()

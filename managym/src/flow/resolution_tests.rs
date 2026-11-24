@@ -942,6 +942,9 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.emit(GameEvent::SpellCast {
             object_id: cast,
             targets: vec![],
+            caster: controller,
+            spend_before: 0,
+            spend_after: 0,
         });
         game.process_game_events();
         assert!(game.state.delayed_triggers.is_empty());

@@ -1261,6 +1261,8 @@ pub struct PyPlayerTurnHistory {
     pub life_lost: u32,
     #[pyo3(get, set)]
     pub life_gains: u32,
+    #[pyo3(get, set)]
+    pub mana_spent_casting: u32,
 }
 
 #[cfg(feature = "python")]
@@ -1283,6 +1285,7 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             bent: value.bent,
             life_lost: value.life_lost,
             life_gains: value.life_gains,
+            mana_spent_casting: value.mana_spent_casting,
         }
     }
 }
@@ -1298,6 +1301,7 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             bent: value.bent,
             life_lost: value.life_lost,
             life_gains: value.life_gains,
+            mana_spent_casting: value.mana_spent_casting,
         }
     }
 }

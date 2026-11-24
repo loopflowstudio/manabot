@@ -157,6 +157,7 @@ export interface PlayerTurnHistory {
   /** Life lost this turn (CR 119.3). */
   life_lost?: number;
   life_gains?: number;
+  mana_spent_casting?: number;
 }
 
 export interface PlayerState {

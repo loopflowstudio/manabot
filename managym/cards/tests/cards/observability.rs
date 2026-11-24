@@ -567,7 +567,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 27] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 28] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -597,6 +597,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 27] {
         cards_drawn: _,
         bent: _,
         life_gains: _,
+        mana_spent_casting: _,
         life_lost: _,
     } = history[0];
     [
@@ -637,6 +638,10 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 27] {
         (
             "resume_with",
             Seen::Via("the player after the interrupted turn: the extra-turn columns and the active player"),
+        ),
+        (
+            "history.mana_spent_casting",
+            Seen::Via("mana_spent_casting fact on the player"),
         ),
         (
             "history.life_gains",
@@ -1063,6 +1068,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::WasCast { .. } => "TriggerCondition::WasCast",
         TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
+        TriggerCondition::Expend(_) => "TriggerCondition::Expend",
         TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
@@ -1166,6 +1172,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::YourAttackingCreatureTriggers,
         TriggerCondition::Chapter { chapter: 2 },
         TriggerCondition::YouCastThis,
+        TriggerCondition::Expend(4),
         TriggerCondition::NoCounters {
             kind: CounterKind::Ice,
         },
@@ -3065,6 +3072,7 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::TriggeringDamage => "ContinuationFrame.triggering_damage",
         FactKind::CreatureDied => "TurnData.creature_died_this_turn",
         FactKind::LifeGains => "PlayerTurnHistory.life_gains",
+        FactKind::ManaSpentCasting => "PlayerTurnHistory.mana_spent_casting",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Copy => "PermanentData.copy",
@@ -3173,6 +3181,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         cards_drawn => [column(Player, player::CARDS_DRAWN)],
         bent => [Columns(Player, player::BENT_WATER, 4)],
         life_gains => [Fact(FactKind::LifeGains)],
+        mana_spent_casting => [Fact(FactKind::ManaSpentCasting)],
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
     fields.extend(encoding!(CharacteristicsData {

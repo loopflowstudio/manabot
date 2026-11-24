@@ -289,3 +289,95 @@ fn lunar_convocation_counts_equal_gain_and_loss_then_resets() {
         }
     }
 }
+
+#[test]
+fn bakersbane_duo_triggers_once_per_listener_at_committed_spell_payment() {
+    use crate::support::{
+        game::{force_new_card_in_hand, plant_in_graveyard},
+        inspect::top_spell,
+        play::{activate_first, cast_card, enter_and_settle, pass_until, play_and_settle},
+    };
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, player::ManaPayment},
+    };
+
+    let mut s = five_color_setup(&[
+        "Bakersbane Duo",
+        "Gray Ogre",
+        "Hill Giant",
+        "Tolarian Terror",
+        "Consider",
+        "Counterspell",
+    ]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let first = enter_and_settle(&mut s, "Bakersbane Duo");
+    let second = enter_and_settle(&mut s, "Bakersbane Duo");
+    let counter = force_new_card_in_hand(&mut s, 1, "Counterspell");
+    play_and_settle(&mut s, "Gray Ogre");
+    assert_eq!(s.game().state.turn.history[0].mana_spent_casting, 3);
+
+    let food = permanent_named(&s, "Food");
+    activate_first(&mut s, food);
+    settle(&mut s);
+    s.assert_life(0, 23);
+    assert_eq!(s.game().state.turn.history[0].mana_spent_casting, 3);
+
+    plant_in_graveyard(&mut s, 0, "Counterspell");
+    for _ in 0..4 {
+        plant_in_graveyard(&mut s, 0, "Consider");
+    }
+    cast(&mut s, "Tolarian Terror");
+    assert_eq!(top_spell(&s).spent.total(), 2);
+    let target = top_spell(&s).object;
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    assert_eq!(s.game().state.stack_objects.len(), 3);
+    let pending = s.game().clone();
+    for countered in [false, true] {
+        *s.game_mut() = pending.clone();
+        if countered {
+            s.pass_priority();
+            cast_card(&mut s, counter);
+            assert!(s.choose_target(Target::StackSpell(target)));
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Tolarian Terror").len(),
+            usize::from(!countered)
+        );
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            let (payer, opponent) = if viewer.0 == 0 {
+                (&obs.agent, &obs.opponent)
+            } else {
+                (&obs.opponent, &obs.agent)
+            };
+            assert_eq!(payer.turn_history.mana_spent_casting, 5);
+            assert_eq!(
+                opponent.turn_history.mana_spent_casting,
+                if countered { 2 } else { 0 }
+            );
+        }
+        let late = play_and_settle(&mut s, "Bakersbane Duo");
+        assert_eq!(s.game().state.turn.history[0].mana_spent_casting, 7);
+        // A full four spent with the late listener present cannot cross four again.
+        play_and_settle(&mut s, "Hill Giant");
+        assert_eq!(s.game().state.turn.history[0].mana_spent_casting, 11);
+        for (source, power) in [(first, 3), (second, 3), (late, 2)] {
+            let permanent = s.game().state.permanent_of(source).unwrap();
+            assert_eq!(s.game().characteristics(permanent).power, power);
+        }
+        s.advance_to_active_step(1, StepKind::Main);
+        assert!(s
+            .game()
+            .state
+            .turn
+            .history
+            .iter()
+            .all(|history| history.mana_spent_casting == 0));
+        for permanent in s.battlefield_permanents_named(0, "Bakersbane Duo") {
+            assert_eq!(s.game().characteristics(permanent).power, 2);
+        }
+    }
+}

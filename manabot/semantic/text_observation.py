@@ -323,6 +323,8 @@ def _turn_history(player: managym.Player) -> str:
         parts.append(f"gained life {count} time{'s' if count != 1 else ''}")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
+    if amount := history.mana_spent_casting:
+        parts.append(f"spent {amount} mana casting spells")
     if count := player.spells_cast:
         parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)

@@ -67,6 +67,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Sacrificed { subject } => {
             format!("Whenever {} is sacrificed", subject_description(subject))
         }
+        TriggerCondition::Expend(amount) => format!("Whenever you expend {amount}"),
         TriggerCondition::YouCastThis => "When you cast this spell".into(),
         TriggerCondition::NoCounters { kind } => {
             format!("When this has no {} counters on it", counter_description(*kind))

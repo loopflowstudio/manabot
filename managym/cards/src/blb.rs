@@ -14,7 +14,43 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![diresight(), feed_the_cycle(), lunar_convocation(), savor()]
+    vec![
+        bakersbane_duo(),
+        diresight(),
+        feed_the_cycle(),
+        lunar_convocation(),
+        savor(),
+    ]
+}
+
+fn bakersbane_duo() -> CardDefinition {
+    CardDefinition {
+        key: "blb.bakersbane_duo",
+        scryfall_id: "5309354f-1ff4-4fa9-9141-01ea2f7588ab",
+        printed: PrintedCharacteristics {
+            name: "Bakersbane Duo".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Squirrel".into(), "Raccoon".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield { subject: managym_state::ability::TriggerSubject::This },
+                    intervening_if: None,
+                    effects: vec![Effect::create_tokens("token.food", 1)],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::Expend(4),
+                    intervening_if: None,
+                    effects: vec![Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1))],
+                },
+            ],
+            text_box: "When this creature enters, create a Food token.\nWhenever you expend 4, this creature gets +1/+1 until end of turn. (You expend 4 as you spend your fourth total mana to cast spells during a turn.)".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn lunar_convocation() -> CardDefinition {

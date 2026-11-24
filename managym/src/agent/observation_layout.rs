@@ -807,6 +807,7 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
         FactKind::CreatureDied => ("creature_died_this_turn", "object: active player; a creature died during this turn"),
         FactKind::TriggeringDamage => ("triggering_damage", "object: controller; id: frame index + 1; value: combat damage dealt to the player"),
+        FactKind::ManaSpentCasting => ("mana_spent_casting", "value: mana this player spent casting spells this turn"),
         FactKind::LifeGains => ("life_gains","value: times this player gained life this turn"),
         FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
         FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
@@ -1035,6 +1036,7 @@ pub fn observation_layout(
                 kind,
                 FactKind::CreatureDied
                     | FactKind::LifeGains
+                    | FactKind::ManaSpentCasting
                     | FactKind::AbilityResolution
                     | FactKind::TriggeringDamage
             )
