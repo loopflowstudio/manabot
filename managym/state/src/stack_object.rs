@@ -1,6 +1,6 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
+use super::game_object::{AbilitySource, Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
 use crate::payment::PaymentReceipt;
 
@@ -106,7 +106,7 @@ pub struct TriggeredAbilityOnStack {
     pub id: PublicId,
     pub controller: PlayerId,
     #[serde(flatten)]
-    pub source_identity: crate::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
@@ -165,21 +165,27 @@ impl StackObject {
         }
     }
 
-    /// The spell's object, or the object whose ability this is.
-    pub fn source_object(&self) -> ObjectId {
+    /// An effect of a spell uses the spell itself as its exact source.
+    /// Abilities retain the source captured when they were created.
+    pub fn effect_source(&self) -> AbilitySource {
         match self {
-            StackObject::Spell(spell) => spell.object,
-            StackObject::ActivatedAbility(ability) => ability.source_object(),
-            StackObject::TriggeredAbility(triggered) => triggered.source_object(),
+            Self::Spell(spell) => AbilitySource::new(spell.object, Some(spell.object)),
+            Self::ActivatedAbility(ability) => {
+                AbilitySource::new(ability.source_object, Some(ability.source_object))
+            }
+            Self::TriggeredAbility(trigger) => trigger.source_identity,
         }
+    }
+
+    pub fn source_object(&self) -> ObjectId {
+        self.effect_source().object()
     }
 
     /// The exact source object of an ability; spells have none.
     pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
-            StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
+            Self::Spell(_) => None,
+            ability => ability.effect_source().reference(),
         }
     }
 
@@ -212,6 +218,22 @@ impl StackObject {
             StackObject::Spell(_) => None,
             StackObject::ActivatedAbility(ability) => Some(ability.ability_index),
             StackObject::TriggeredAbility(triggered) => Some(triggered.ability_index),
+        }
+    }
+
+    pub fn x(&self) -> u8 {
+        match self {
+            Self::Spell(spell) => spell.x,
+            Self::ActivatedAbility(ability) => ability.x,
+            Self::TriggeredAbility(trigger) => trigger.x,
+        }
+    }
+
+    pub fn target_req_indices(&self) -> &[usize] {
+        match self {
+            Self::Spell(spell) => &spell.target_req_indices,
+            Self::ActivatedAbility(ability) => &ability.target_req_indices,
+            Self::TriggeredAbility(trigger) => &trigger.target_req_indices,
         }
     }
 

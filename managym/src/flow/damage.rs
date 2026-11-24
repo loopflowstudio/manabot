@@ -1,7 +1,6 @@
 // damage.rs
 // Damage application, life changes, and cleanup.
 
-use crate::state::card::Keyword;
 use crate::{
     flow::{
         event::{DamageTarget, EventSubject, GameEvent},
@@ -10,7 +9,7 @@ use crate::{
     },
     state::{
         ability::DelayedExpiry,
-        card::StaticAbility,
+        card::{Keyword, Keywords, StaticAbility},
         game_object::{ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
     },
@@ -33,10 +32,8 @@ impl Game {
             return 0;
         }
         let remaining = (characteristics.toughness - permanent.damage).max(0);
-        let deathtouch = source.is_some_and(|object| {
-            self.source_keywords(object)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
+        let deathtouch =
+            source.is_some_and(|object| self.source_keywords(object).has(Keyword::Deathtouch));
         let lethal = if deathtouch {
             remaining.min(1)
         } else {
@@ -55,10 +52,8 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_has_deathtouch = source.is_some_and(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
+        let source_has_deathtouch = source
+            .is_some_and(|object_ref| self.source_keywords(object_ref).has(Keyword::Deathtouch));
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
@@ -187,21 +182,21 @@ impl Game {
     /// Damage-source keywords include until-EOT grants while the source is
     /// on the battlefield (Enter the Avatar State's lifelink), and static
     /// grants to a resolving spell (Lo and Li's Lesson spells).
-    fn source_keywords(&self, source: ObjectId) -> Option<crate::state::card::Keywords> {
+    fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return Some(self.characteristics(permanent_id).keywords);
+            return self.characteristics(permanent_id).keywords;
         }
         if let Some(lki) = self.object_lki(source) {
-            return Some(lki.keywords);
+            return lki.keywords;
         }
         if let Some(controller) = self.stack_spell_controller(source) {
-            return Some(self.spell_keywords(source, controller));
+            return self.spell_keywords(source, controller);
         }
-        Some(self.state.source_base(source).1.keywords)
+        self.state.source_base(source).1.keywords
     }
 
     pub(super) fn lifelink_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        if !self.source_keywords(source)?.has(Keyword::Lifelink) {
+        if !self.source_keywords(source).has(Keyword::Lifelink) {
             return None;
         }
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {

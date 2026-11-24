@@ -1797,12 +1797,15 @@ impl Game {
                 focus: source_focus,
             },
             Decision::Retarget {
-                player, may_keep, ..
+                player,
+                object,
+                slot,
+                may_keep,
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::ChooseTarget,
                 actions: self
-                    .retarget_candidates(&suspended.decision)
+                    .retarget_candidates(*object, *slot)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: *player,
@@ -2493,10 +2496,7 @@ impl Game {
                 Action::ChooseTarget { target, .. },
             ) => {
                 let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
-                if !self
-                    .retarget_candidates(&suspended.decision)
-                    .contains(target)
-                {
+                if !self.retarget_candidates(object, slot).contains(target) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }

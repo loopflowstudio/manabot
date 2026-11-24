@@ -10,84 +10,49 @@
 use crate::{
     flow::{decision::Decision, game::Game},
     state::{
-        ability::{effect_target_requirements, TargetRequirement},
-        game_object::{AbilitySource, PlayerId, Target},
+        game_object::{PlayerId, Target},
         stack_object::StackObject,
     },
 };
 
 impl Game {
-    /// The targeting requirement a stack object's target slot was chosen for.
-    pub(crate) fn stack_target_requirement(
-        &self,
-        index: usize,
-        slot: usize,
-    ) -> Option<TargetRequirement> {
-        match &self.state.stack_objects[index] {
-            StackObject::Spell(spell) => {
-                let requirements =
-                    self.state[spell.object].target_requirements_for_mode(spell.mode);
-                requirements
-                    .get(*spell.target_req_indices.get(slot)?)
-                    .cloned()
-            }
-            StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
-                .get(ability.target_req_indices.get(slot).copied().unwrap_or(0))
-                .cloned(),
-            StackObject::TriggeredAbility(triggered) => {
-                let effects = match &triggered.inline_effects {
-                    Some(effects) => effects.as_slice(),
-                    None => super::resolution::stacked_trigger_face(triggered).abilities
-                        [triggered.ability_index]
-                        .effects(),
-                };
-                effect_target_requirements(effects)
-                    .get(*triggered.target_req_indices.get(slot)?)
-                    .cloned()
-            }
-        }
-    }
-
     /// The targets slot `slot` of the stack object could change to: legal for
     /// its requirement from its controller's perspective, not its current
     /// target, not chosen for another slot of the same requirement, and not
     /// its own source when the requirement says "another".
-    pub(crate) fn retarget_candidates(&self, decision: &Decision) -> Vec<Target> {
-        let Decision::Retarget { object, slot, .. } = decision else {
-            return Vec::new();
-        };
-        let Some(index) = self.stack_index_of(*object) else {
-            return Vec::new();
-        };
-        let Some(requirement) = self.stack_target_requirement(index, *slot) else {
+    pub(crate) fn retarget_candidates(&self, object: Target, slot: usize) -> Vec<Target> {
+        let Some(index) = self.stack_index_of(object) else {
             return Vec::new();
         };
         let stacked = &self.state.stack_objects[index];
-        let controller = stacked.controller();
         let targets = stacked.targets();
-        let (indices, x) = match stacked {
-            StackObject::Spell(s) => (&s.target_req_indices, s.x),
-            StackObject::ActivatedAbility(a) => (&a.target_req_indices, a.x),
-            StackObject::TriggeredAbility(t) => (&t.target_req_indices, t.x),
+        let Some(&current) = targets.get(slot) else {
+            return Vec::new();
         };
-        let clause = |slot: usize| indices.get(slot).copied().unwrap_or(0);
-        let current = targets.get(*slot).copied();
-        let source = Some(AbilitySource::new(
-            stacked.source_object(),
-            stacked.source_ref(),
-        ));
-        let self_target = stacked.as_target();
+        let indices = stacked.target_req_indices();
+        let clause = match indices.get(slot) {
+            Some(&clause) => clause,
+            // Single-clause activations store no indices.
+            None if matches!(stacked, StackObject::ActivatedAbility(_)) => 0,
+            None => return Vec::new(),
+        };
+        let requirements = self.stack_target_requirements(stacked);
+        let Some(requirement) = requirements.get(clause) else {
+            return Vec::new();
+        };
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
         let other_targets = targets
             .iter()
             .enumerate()
-            .filter(|(other, _)| other != slot && clause(*other) == clause(*slot))
+            .filter(|(other, _)| {
+                *other != slot && indices.get(*other).copied().unwrap_or(0) == clause
+            })
             .map(|(_, target)| *target);
-        self.legal_clause_targets(&requirement, controller, source)
-            .filter(|target| Some(*target) != current && *target != self_target)
+        self.legal_clause_targets(requirement, stacked.controller(), stacked.effect_source())
+            .filter(|target| *target != current && *target != object)
             .filter(|target| {
-                self.can_add_clause_target(&requirement, x, other_targets.clone(), *target)
+                self.can_add_clause_target(requirement, stacked.x(), other_targets.clone(), *target)
             })
             .collect()
     }
@@ -104,13 +69,13 @@ impl Game {
         let index = self.stack_index_of(object)?;
         let count = self.state.stack_objects[index].targets().len();
         (slot..count)
+            .find(|slot| !self.retarget_candidates(object, *slot).is_empty())
             .map(|slot| Decision::Retarget {
                 player,
                 object,
                 slot,
                 may_keep,
             })
-            .find(|decision| !self.retarget_candidates(decision).is_empty())
     }
 
     /// Change slot `slot` of the stack object to `target`; the newly

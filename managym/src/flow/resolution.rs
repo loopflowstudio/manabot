@@ -20,9 +20,9 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
-            LinkedChooser, LinkedExile, ObjectSelector, PlayerSelector, Scope, TargetRequirement,
-            TargetSpec,
+            effect_target_requirements, Ability, DelayedEvent, DelayedExpiry, DelayedFrequency,
+            Effect, EffectValue, Except, LinkedChooser, LinkedExile, ObjectSelector,
+            PlayerSelector, Scope, TargetRequirement, TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, CopyException, EffectDuration, Modification},
@@ -224,55 +224,51 @@ impl Game {
     }
 
     pub(crate) fn resolve_top_of_stack(&mut self) {
-        let Some(stack_object) = self.state.stack_objects.last().cloned() else {
+        // A resolving spell stays on the stack through suspended decisions
+        // (CR 608.2m). Abilities can move straight into the resolution frame.
+        let stacked = match self.state.stack_objects.last() {
+            None => return,
+            Some(spell @ StackObject::Spell(_)) => spell.clone(),
+            Some(_) => self.pop_stack().unwrap(),
+        };
+        let source = stacked.effect_source();
+        let Some(targets) = self.resolution_targets(&stacked, source) else {
+            if let StackObject::Spell(spell) = stacked {
+                self.move_object(spell.object, ZoneType::Graveyard);
+                self.emit(GameEvent::SpellCountered {
+                    object_id: spell.object,
+                    by: None,
+                });
+            }
             return;
         };
-
-        match stack_object {
-            // The spell's stack object stays on the stack while it resolves
-            // (CR 608.2m — the card moves out as resolution's final step),
-            // so a suspended resolution leaves a consistent stack.
-            StackObject::Spell(spell) => self.resolve_spell_object(spell),
+        match stacked {
+            StackObject::Spell(spell) => self.resolve_spell_object(spell, source, targets),
             StackObject::ActivatedAbility(ability) => {
-                self.pop_stack();
-                self.resolve_activated_ability(ability);
+                self.resolve_activated_ability(ability, source, targets)
             }
-            StackObject::TriggeredAbility(triggered) => {
-                self.pop_stack();
-                self.resolve_triggered_ability(triggered);
+            StackObject::TriggeredAbility(trigger) => {
+                self.resolve_triggered_ability(trigger, targets)
             }
         }
     }
 
-    fn resolve_spell_object(&mut self, spell: SpellOnStack) {
+    fn resolve_spell_object(
+        &mut self,
+        spell: SpellOnStack,
+        source: AbilitySource,
+        targets: Vec<ResolutionTarget>,
+    ) {
         let object = spell.object;
-        let card_ref = &self.state[object];
-        let effects =
-            crate::state::ability::bind_effect_clauses(card_ref.spell_effects_for_mode(spell.mode));
-        let requirements = card_ref.target_requirements_for_mode(spell.mode);
-
-        let source = AbilitySource::optional(Some(object), self.state.live(object));
-        let Some(targets) = self.resolution_targets(
-            &spell.targets,
-            &spell.target_req_indices,
-            &requirements,
-            spell.controller,
-            source,
-        ) else {
-            self.move_object(object, ZoneType::Graveyard);
-            self.emit(GameEvent::SpellCountered {
-                object_id: object,
-                by: None,
-            });
-            return;
-        };
-
+        let effects = crate::state::ability::bind_effect_clauses(
+            self.state[object].spell_effects_for_mode(spell.mode),
+        );
         let frame = EffectFrame {
-            source_identity: source,
+            source_identity: Some(source),
             kicked: spell.kicked,
             trigger_damage: 0,
             x: spell.x,
-            spent: spell.spent.clone(),
+            spent: spell.spent,
             targets,
             completion: FrameCompletion::Spell {
                 object,
@@ -361,40 +357,30 @@ impl Game {
         }
     }
 
-    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
+    fn resolve_activated_ability(
+        &mut self,
+        ability: ActivatedAbilityOnStack,
+        source: AbilitySource,
+        targets: Vec<ResolutionTarget>,
+    ) {
         let effects = ability.effects;
         let program = if ability.program {
             effects.clone()
         } else {
             Vec::new()
         };
-        let requirements = crate::state::ability::effect_target_requirements(&effects);
         // The object an Aura or Equipment was attached to as the ability was
         // activated (last known information once the source has left).
         let attached = ability
             .attached
             .and_then(|object| self.lookup_current_permanent(object).ok())
             .map(Target::Permanent);
-        let source = Some(AbilitySource::new(
-            ability.source_object,
-            Some(ability.source_object),
-        ));
-        let Some(targets) = self.resolution_targets(
-            &ability.targets,
-            &ability.target_req_indices,
-            &requirements,
-            ability.controller,
-            source,
-        ) else {
-            return;
-        };
-
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
         let frame = EffectFrame {
             program,
-            source_identity: source,
+            source_identity: Some(source),
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             trigger_damage: 0,
@@ -411,7 +397,11 @@ impl Game {
         self.run_frame(frame);
     }
 
-    fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
+    fn resolve_triggered_ability(
+        &mut self,
+        triggered: TriggeredAbilityOnStack,
+        targets: Vec<ResolutionTarget>,
+    ) {
         let program = stacked_trigger_program(&triggered)
             .unwrap_or_default()
             .to_vec();
@@ -439,17 +429,6 @@ impl Game {
                 Some(triggered.ability_index),
                 intervening_if.clone(),
             )
-        };
-
-        let requirements = crate::state::ability::effect_target_requirements(&effects);
-        let Some(targets) = self.resolution_targets(
-            &triggered.targets,
-            &triggered.target_req_indices,
-            &requirements,
-            triggered.controller,
-            Some(triggered.source_identity),
-        ) else {
-            return;
         };
 
         let mut frame = EffectFrame {
@@ -499,19 +478,42 @@ impl Game {
         self.run_frame(frame);
     }
 
+    /// Clauses of the spell's chosen mode or the ability's captured program.
+    pub(super) fn stack_target_requirements(
+        &self,
+        stacked: &StackObject,
+    ) -> Vec<TargetRequirement> {
+        match stacked {
+            StackObject::Spell(spell) => {
+                self.state[spell.object].target_requirements_for_mode(spell.mode)
+            }
+            StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects),
+            StackObject::TriggeredAbility(trigger) => {
+                let effects = trigger.inline_effects.as_deref().unwrap_or_else(|| {
+                    stacked_trigger_face(trigger).abilities[trigger.ability_index].effects()
+                });
+                effect_target_requirements(effects)
+            }
+        }
+    }
+
     /// CR 608.2b: check every chosen slot against its own clause once, before
     /// any instruction. Zero chosen optional targets still resolve; a nonempty
     /// all-illegal set suppresses the entire spell or ability, even untargeted
     /// instructions. The retained slots also enter clones and state hashes.
     fn resolution_targets(
         &self,
-        targets: &[Target],
-        indices: &[usize],
-        requirements: &[TargetRequirement],
-        controller: PlayerId,
-        source: Option<AbilitySource>,
+        stacked: &StackObject,
+        source: AbilitySource,
     ) -> Option<Vec<ResolutionTarget>> {
-        let mut slots: Vec<_> = targets
+        if stacked.targets().is_empty() {
+            return Some(Vec::new());
+        }
+        let requirements = self.stack_target_requirements(stacked);
+        let indices = stacked.target_req_indices();
+        let controller = stacked.controller();
+        let mut slots: Vec<_> = stacked
+            .targets()
             .iter()
             .enumerate()
             .map(|(index, target)| {
@@ -530,7 +532,7 @@ impl Game {
                 self.require_shared_creature_type(&mut slots, index);
             }
         }
-        (slots.is_empty() || slots.iter().any(|slot| slot.legal)).then_some(slots)
+        slots.iter().any(|slot| slot.legal).then_some(slots)
     }
 
     /// "That share a creature type" (CR 608.2b): a target stays legal only
@@ -1158,12 +1160,7 @@ impl Game {
                 let spell = frame.context_target?;
                 let index = self.stack_index_of(spell)?;
                 let slots = self.state.stack_objects[index].targets().len();
-                let legal = self.retarget_candidates(&Decision::Retarget {
-                    player: frame.controller,
-                    object: spell,
-                    slot: 0,
-                    may_keep: false,
-                });
+                let legal = self.retarget_candidates(spell, 0);
                 let onto: Vec<Target> = self
                     .select(each, frame)
                     .into_iter()
@@ -2615,16 +2612,15 @@ impl Game {
         target: Target,
         requirement: &TargetRequirement,
         controller: PlayerId,
-        source: Option<AbilitySource>,
+        source: AbilitySource,
     ) -> bool {
         if !self.target_is_legal(target, &requirement.spec, controller)
-            || (requirement.another
-                && source.is_some_and(|source| self.target_is_source(target, source)))
+            || (requirement.another && self.target_is_source(target, source))
         {
             return false;
         }
         if let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = requirement.spec {
-            let (Target::GraveyardCard(card), Some(source)) = (target, source) else {
+            let Target::GraveyardCard(card) = target else {
                 return false;
             };
             let power = source

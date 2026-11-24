@@ -289,7 +289,7 @@ impl Game {
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         if trigger.controller != player
-            || !self.target_fits_clause(target, requirement, player, Some(trigger.source_identity))
+            || !self.target_fits_clause(target, requirement, player, trigger.source_identity)
             || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
         {
             return Err(AgentError("illegal trigger target".into()));
@@ -401,7 +401,7 @@ impl Game {
                 let count = trigger.clause_targets().count();
                 let controller = trigger.controller;
                 let mut actions: Vec<_> = self
-                    .legal_clause_targets(requirement, controller, Some(trigger.source_identity))
+                    .legal_clause_targets(requirement, controller, trigger.source_identity)
                     .filter(|target| {
                         self.can_add_clause_target(
                             requirement,
@@ -479,7 +479,7 @@ impl Game {
                         self.legal_clause_targets(
                             requirement,
                             trigger.controller,
-                            Some(trigger.source_identity),
+                            trigger.source_identity,
                         )
                         .next()
                         .is_some()
@@ -681,7 +681,7 @@ impl Game {
         &'a self,
         requirement: &'a TargetRequirement,
         controller: PlayerId,
-        source: Option<AbilitySource>,
+        source: AbilitySource,
     ) -> impl Iterator<Item = Target> + 'a {
         self.target_candidates(&requirement.spec, controller)
             .into_iter()
@@ -689,22 +689,26 @@ impl Game {
     }
 
     fn target_candidates(&self, target_spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {
+        let graveyard = |owner| {
+            self.state
+                .zones
+                .zone_objects(ZoneType::Graveyard, owner)
+                .iter()
+                .copied()
+                .map(Target::GraveyardCard)
+        };
         let mut candidates: Vec<Target> = match target_spec {
             TargetSpec::GraveyardCardYouOwn { .. }
-            | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
-                .state
-                .zone_cards(ZoneType::Graveyard, controller)
-                .filter_map(|card| self.state.live(self.state.object_of(card)))
-                .map(Target::GraveyardCard)
-                .collect(),
-            TargetSpec::GraveyardCard { .. } | TargetSpec::GraveyardCardOpponentOwns { .. } => {
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
-                    .filter_map(|card| self.state.live(self.state.object_of(card)))
-                    .map(Target::GraveyardCard)
-                    .collect()
+            | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => {
+                graveyard(controller).collect()
             }
+            TargetSpec::GraveyardCardOpponentOwns { .. } => {
+                graveyard(PlayerId(1 - controller.0)).collect()
+            }
+            TargetSpec::GraveyardCard { .. } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(graveyard)
+                .collect(),
             TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }

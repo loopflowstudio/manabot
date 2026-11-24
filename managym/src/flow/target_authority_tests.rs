@@ -1012,7 +1012,7 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     use crate::agent::observation::Observation;
     use crate::state::ability::{Ability, Actor, TriggerCondition};
     use crate::state::stack_object::StackObject;
-    let (mut game, bolt, _, Target::Permanent(ogre), _) = fixture() else {
+    let (mut game, bolt, ogre_spell, Target::Permanent(ogre), land) = fixture() else {
         unreachable!()
     };
     let object = game.state.permanents[ogre].as_ref().unwrap().object;
@@ -1066,9 +1066,16 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     game.choose_trigger_target(PlayerId(0), Target::StackSpell(bolt))
         .unwrap();
     assert!(game.flush_triggers().is_none());
-    let index = game.state.stack_objects.len() - 1;
-    assert!(game.stack_target_requirement(index, 0).is_some());
-    let StackObject::TriggeredAbility(stacked) = &game.state.stack_objects[index] else {
+    let stacked = game.state.stack_objects.last().unwrap();
+    assert_eq!(
+        game.retarget_candidates(stacked.as_target(), 0),
+        [
+            Target::StackSpell(ogre_spell),
+            land,
+            Target::Permanent(game.state.permanent_of(current).unwrap())
+        ],
+    );
+    let StackObject::TriggeredAbility(stacked) = stacked else {
         unreachable!()
     };
     assert_eq!(stacked.source_object(), object);

@@ -622,19 +622,18 @@ impl Game {
             controller: object.controller().0,
             ability: object.ability_index(),
             kicked: object.kicked(),
+            x: object.x(),
             ..ContinuationFrame::default()
         };
-        let clauses: &[usize] = match object {
+        match object {
             StackObject::Spell(spell) => {
                 frame.kind = 1;
                 frame.source = self.object_reference(spell.object, viewer);
                 frame.mode = spell.mode;
-                frame.x = spell.x;
                 frame.granted_keywords = KeywordData::from_keywords(
                     &self.spell_keywords(spell.object, spell.controller),
                 )
                 .flags();
-                &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
@@ -642,13 +641,11 @@ impl Game {
                     frame.program(&ability.effects);
                 }
                 frame.source = self.visible_reference(ability.source_object(), viewer);
-                frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
                     definition: Some(id.0),
                     ..Default::default()
                 });
                 frame.source_transforms = ability.source_transforms;
-                &ability.target_req_indices
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
@@ -667,7 +664,6 @@ impl Game {
                         definition: Some(id.0),
                         ..Default::default()
                     });
-                frame.x = ability.x;
                 frame.source_transforms = ability.source_transforms;
                 frame.source = ability
                     .source_ref()
@@ -675,12 +671,11 @@ impl Game {
                     .unwrap_or_default();
                 frame.remembered = self.remembered_references(&ability.remembered, viewer);
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
-                &ability.target_req_indices
             }
-        };
+        }
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
-        frame.targets = self.clause_targets(object.targets(), clauses, viewer);
+        frame.targets = self.clause_targets(object.targets(), object.target_req_indices(), viewer);
         if let Some(spent) = stack_receipt(object) {
             super::effect_execution::project_receipt(
                 self,
