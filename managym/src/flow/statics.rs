@@ -196,6 +196,13 @@ pub(super) struct StaticPlayPermissions {
     pub graveyard_flashback: bool,
     pub library_spells: Vec<CardPredicate>,
     pub flash_spells: Vec<CardPredicate>,
+    /// Each permanent letting this player play a permanent spell or land of
+    /// each permanent type from their graveyard once per turn (Muldrotha):
+    /// its object and public id.
+    pub graveyard_type_sources: Vec<(ObjectId, crate::state::game_object::PublicId)>,
+    /// Land plays beyond the first this turn (CR 305.2) granted by
+    /// permanents: the seat's own grants plus each "each player" grant.
+    pub extra_land_plays: u32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -203,7 +210,6 @@ pub(super) struct LayerBoard {
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
-    pub additional_land_plays_each_player: u32,
     restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
     reads_mana: bool,
     reads_tapped: bool,
@@ -261,22 +267,24 @@ impl Game {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
-        let mut additional_land_plays_each_player = 0;
+        let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
         for (id, object) in context.objects {
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
             if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
-                let controller = self.state.permanents[id].as_ref().unwrap().controller;
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                let controller = permanent.controller;
                 let permissions = &mut play_permissions[controller.0];
                 for ability in &object.view.static_abilities {
                     match ability {
                         StaticAbility::Restriction(rule) => {
                             restrictions.push((id, controller, rule.clone()))
                         }
-                        StaticAbility::AdditionalLandPlayEachPlayer => {
-                            additional_land_plays_each_player += 1
-                        }
+                        StaticAbility::AdditionalLandPlayEachPlayer => land_plays_each_player += 1,
+                        StaticAbility::PlayGraveyardByPermanentType => permissions
+                            .graveyard_type_sources
+                            .push((permanent.object, permanent.id)),
                         StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
                         StaticAbility::CastFromHandWithoutManaCost => {
                             permissions.free_from_hand = true
@@ -299,11 +307,13 @@ impl Game {
             }
             objects[id.0] = Some(object.view.clone());
         }
+        for permissions in &mut play_permissions {
+            permissions.extra_land_plays += land_plays_each_player;
+        }
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             dynamic_activations,
-            additional_land_plays_each_player,
             restrictions,
             objects,
             play_permissions,
@@ -1121,7 +1131,6 @@ mod cache_tests {
         let board = game.layer_board();
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
             play_permissions: board.play_permissions.clone(),
-            additional_land_plays_each_player: board.additional_land_plays_each_player,
             restrictions: board.restrictions.clone(),
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,

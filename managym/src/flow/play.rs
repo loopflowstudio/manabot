@@ -203,7 +203,7 @@ impl Game {
                 effect.modification == crate::state::effect::Modification::AdditionalLandPlay
             })
             .count() as u32;
-        self.layer_board().additional_land_plays_each_player + granted
+        self.layer_board().play_permissions[player.0].extra_land_plays + granted
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
@@ -242,7 +242,11 @@ impl Game {
                     Cow::Borrowed(&[PlayRoute::Hand])
                 }
             }
-            _ if !land && self.casts_only_from_hand(player) => Cow::Borrowed(&[]),
+            // A card with a land back face keeps its land plays; `permits_spell`
+            // refuses its spells.
+            _ if !land && !self.state[object].modal_back && self.casts_only_from_hand(player) => {
+                Cow::Borrowed(&[])
+            }
             Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
                 let mut routes: Vec<_> = self
                     .live_grants(player, object)
@@ -271,23 +275,20 @@ impl Game {
                 {
                     return routes.into();
                 }
-                for (id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
-                    if !view
-                        .static_abilities
-                        .contains(&StaticAbility::PlayGraveyardByPermanentType)
-                    {
-                        continue;
-                    }
-                    let grantor = self.state.permanents[id].as_ref().unwrap();
-                    let source = grantor.object;
-                    let card = &self.state[object];
-                    let back = crate::cards::content_pack::default_content_pack()
-                        .spell_definition(card, SpellProfile::BackFace);
-                    let other_types = back
-                        .into_iter()
-                        .flat_map(|spell| &spell.types.types)
-                        .filter(|kind| !card.types.types.contains(kind));
-                    for &kind in card.types.types.iter().chain(other_types) {
+                let sources = &self.layer_board().play_permissions[player.0].graveyard_type_sources;
+                if sources.is_empty() {
+                    return routes.into();
+                }
+                let card = &self.state[object];
+                let back = crate::cards::content_pack::default_content_pack()
+                    .spell_definition(card, SpellProfile::BackFace);
+                let other_types: Vec<_> = back
+                    .into_iter()
+                    .flat_map(|spell| &spell.types.types)
+                    .filter(|kind| !card.types.types.contains(kind))
+                    .collect();
+                for &(source, permanent_id) in sources {
+                    for &kind in card.types.types.iter().chain(other_types.iter().copied()) {
                         use crate::state::card::CardType::*;
                         if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
                             continue;
@@ -295,7 +296,7 @@ impl Game {
                         let route = PlayRoute::GraveyardType {
                             source,
                             kind,
-                            permanent_id: grantor.id,
+                            permanent_id,
                         };
                         if !self
                             .state
@@ -331,7 +332,14 @@ impl Game {
         {
             return false;
         }
-        match cast.route.unwrap_or(PlayRoute::Hand) {
+        let route = cast.route.unwrap_or(PlayRoute::Hand);
+        if !matches!(route, PlayRoute::Hand | PlayRoute::FreeFromHand)
+            && self.casts_only_from_hand(player)
+            && !cast.spell(&self.state[object]).types.is_land()
+        {
+            return false;
+        }
+        match route {
             PlayRoute::LibraryTop => self.layer_board().play_permissions[player.0]
                 .library_spells
                 .iter()
@@ -607,13 +615,13 @@ impl Game {
             .state
             .object(object)
             .map_err(|_| AgentError("spell must name a current object".into()))?;
-        if spell.types.is_land() {
-            return Err(AgentError("land cards cannot be cast".into()));
-        }
         let route = self.selected_play_route(player, object, selected)?;
         let cast = self
             .cast_choices(player, object, profile, CastAuthority::Priority(route))
             .ok_or_else(|| AgentError("the card has no such spell".into()))?;
+        if cast.spell(spell).types.is_land() {
+            return Err(AgentError("land cards cannot be cast".into()));
+        }
         if !self.permits_spell(player, object, cast) {
             return Err(AgentError("permission does not allow this spell".into()));
         }
