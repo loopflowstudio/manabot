@@ -544,6 +544,19 @@ Checks, all debug: cards target (917), `managym` lib (360), rules (188), `match_
 
 Witnesses: Niv-Mizzet draws 3 for a Bolt to the opponent, 0 when the Bolt's controller is changed to the opponent (stolen spell), 0 to its controller or a creature, 1 for a sacrificed Fanatical Firebrand (departed source), and 0 for its own combat damage. Goblin Negotiation makes 3 Goblins at X = 5 on a 2/2, 0 at X = 2, and 0 when a later damage instruction to a player follows (the stale-excess control). No catalog card prevents damage to a creature, so "prevented excess" is covered by that later-instruction control rather than by real prevention.
 
+**v29 batch behavior review at `21929d9111`**
+
+The working phase for this batch is satisfied; one text nit (Finding 9) moves with the next slice's damage-trigger unification. All in debug at this head: the five card fixtures, `departed_copy_matches_predicates_as_the_copied_face`, Ramos's text check, Razor Rings and both Last Agni Kai excess controls, the observability module (92 selected), `compatibility_names_and_content_allocations_are_metamorphic`, `search_state_contract`, `canonical_replay_tests` and `match_state_hash_tests`. Python evidence is the slice's run on the rebuilt cp313 extension; this review did not rebuild it.
+
+- Definitions match Oracle text. Goblin Negotiation measures excess against remaining toughness after marked damage, with deathtouch making one damage lethal (CR 120.4a, `excess_for_damage`). Niv-Mizzet triggers once per damage event to an opponent. Zero damage (`commit_damage` returns before emitting) and damage prevented by protection emit no `DamageDealt`, so no zero-card trigger exists (CR 120.8). Lathril's ten Elves exclude itself and may be summoning-sick tokens (CR 302.6 restricts only {T}). Trygon's "that player" is the opponent in two-player play, and its "you may" uses the zero-cost optional payment. Gateway Sneak's two triggers are independent.
+- The per-instruction excess reset leaves both existing readers correct. Razor Rings has one damage instruction. Agni Kai's fight measures its victim, and a fight that does not happen leaves 0.
+- `event_player` and `event_amount` now bind `DamageDealt` to a player. Only `DealsNoncombatDamage` listens to `EventKind::DamageDealt`, so no existing trigger's "that player" changed.
+- `ObjectLki.renamed` compares the layered name against the object's current copiable definition, so a copy or a back face leaves it `None`. No battlefield face-down permanents exist yet (face-down is exile-only), so the doc comment's empty-name case is prospective.
+- Probe (not kept): Niv-Mizzet over a Bolt to the opponent. Both viewers see the same stacked text, and the continuation frame carries `triggering_amount` 3.
+- Payment: Lathril's tap cost uses the existing `tap_cost_candidates` path, and Auto spends no mana for it. No mana payment changed.
+
+9. **Nit, open.** The `TriggeringAmount` fact's native description (`agent/observation_layout.rs:826`, "combat damage dealt or life lost") and the effect text "(damage dealt or life lost)" do not mention noncombat damage, though Niv-Mizzet now binds it. Correct the layout description when `DealsDamage` replaces `DealsNoncombatDamage`. If the description enters a layout digest, record that.
+
 Shape review at `cf15cce2e7` identified two structural seams (`name_triggering_object`'s blanket string rewrite and `DealsNoncombatDamage` splitting damage triggers by variant name). The post-v29 concept review at `d7ef237481` (`scratch/concept-review.html`) folds both repairs directly into the next slice alongside the live-board, name-predicate and turn-departure unifications.
 
 ### Next slice · Damage-trigger unification, triggering-noun threading, live-board counts, name predicates and turn departures
