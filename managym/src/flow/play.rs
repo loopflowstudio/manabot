@@ -236,9 +236,14 @@ impl Game {
         player: PlayerId,
         object: ObjectId,
     ) -> Cow<'static, [PlayRoute]> {
+        let card = &self.state[object];
+        let board = self.layer_board();
+        let permissions = &board.play_permissions[player.0];
+        let own = card.owner == player;
+        let active = self.active_player() == player;
         match self.state.zones.zone_of(object) {
-            Some(ZoneType::Hand) if self.state[object].owner == player => {
-                if self.layer_board().play_permissions[player.0].free_from_hand {
+            Some(ZoneType::Hand) if own => {
+                if permissions.free_from_hand {
                     Cow::Borrowed(&[PlayRoute::Hand, PlayRoute::FreeFromHand])
                 } else {
                     Cow::Borrowed(&[PlayRoute::Hand])
@@ -249,13 +254,10 @@ impl Game {
                     .live_grants(player, object)
                     .map(|grant| PlayRoute::Grant(grant.key))
                     .collect();
-                if zone == ZoneType::Exile
-                    && self.active_player() == player
-                    && self.state[object].owner != player
-                {
+                if zone == ZoneType::Exile && active && !own {
                     if let Some(counters) = self.state.object_counters.get(&object) {
                         routes.extend(
-                            self.layer_board().play_permissions[player.0]
+                            permissions
                                 .exile_counter_plays
                                 .iter()
                                 .filter(|kind| counters.get(**kind) > 0)
@@ -263,16 +265,16 @@ impl Game {
                         );
                     }
                 }
-                if zone != ZoneType::Graveyard || self.state[object].owner != player {
+                if zone != ZoneType::Graveyard || !own {
                     return routes.into();
                 }
-                if self.state[object].types.is_spell() {
-                    let printed = self.state[object].flashback();
+                if card.types.is_spell() {
+                    let printed = card.flashback();
                     if printed.is_some() {
                         routes.push(PlayRoute::PrintedFlashback);
                     }
-                    if self.active_player() == player
-                        && self.layer_board().play_permissions[player.0].graveyard_flashback
+                    if active
+                        && permissions.graveyard_flashback
                         && self
                             .granted_flashback_cost(object)
                             .as_ref()
@@ -281,21 +283,16 @@ impl Game {
                         routes.push(PlayRoute::GrantedFlashback);
                     }
                 }
-                if self.state[object].graveyard_counter_cast().is_some() {
+                if card.graveyard_counter_cast().is_some() {
                     routes.push(PlayRoute::PrintedGraveyard);
                 }
-                if self.active_player() != player
-                    || (!self.state[object].types.is_permanent() && !self.state[object].modal_back)
+                let sources = &permissions.graveyard_type_sources;
+                if !active || sources.is_empty() || (!card.types.is_permanent() && !card.modal_back)
                 {
-                    return routes.into();
-                }
-                let sources = &self.layer_board().play_permissions[player.0].graveyard_type_sources;
-                if sources.is_empty() {
                     return routes.into();
                 }
                 // CR 305.9: a land face (even an artifact land) uses only the
                 // Land permission; other permanent types come from spell faces.
-                let card = &self.state[object];
                 let back = crate::cards::content_pack::default_content_pack()
                     .spell_definition(card, SpellProfile::BackFace);
                 let mut kinds = Vec::new();
