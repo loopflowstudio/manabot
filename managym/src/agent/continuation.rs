@@ -180,17 +180,41 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     }
 }
 
+/// A rules program as a frame shows it: its learning tokens and text, or
+/// nothing for no instructions.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ProgramProjection {
+    pub(crate) tokens: Vec<(u16, i32)>,
+    pub(crate) description: Option<String>,
+}
+
+impl ProgramProjection {
+    pub(crate) fn of(effects: &[crate::state::ability::Effect]) -> Self {
+        if effects.is_empty() {
+            return Self {
+                tokens: Vec::new(),
+                description: None,
+            };
+        }
+        Self {
+            tokens: crate::cards::tokens::rules_tokens(
+                &effects,
+                crate::cards::content_pack::default_content_pack(),
+            )
+            .expect("rules program tokens"),
+            description: Some(super::ability_description::effects_description(effects)),
+        }
+    }
+}
+
 impl ContinuationFrame {
     fn program(&mut self, effects: &[crate::state::ability::Effect]) {
-        if effects.is_empty() {
-            return;
-        }
-        self.program = crate::cards::tokens::rules_tokens(
-            &effects,
-            crate::cards::content_pack::default_content_pack(),
-        )
-        .expect("rules program tokens");
-        self.program_description = Some(super::ability_description::effects_description(effects));
+        let ProgramProjection {
+            tokens,
+            description,
+        } = ProgramProjection::of(effects);
+        self.program = tokens;
+        self.program_description = description;
     }
     fn cost(&mut self, cost: &ManaCost) {
         self.cost = Some(cost.cost);
@@ -513,8 +537,9 @@ impl Game {
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
         };
-        frame.program = trigger.effects.tokens().to_vec();
-        frame.program_description = trigger.effects.description().map(str::to_owned);
+        let program = trigger.effects.projection();
+        frame.program = program.tokens.clone();
+        frame.program_description = program.description.clone();
         frame
     }
 

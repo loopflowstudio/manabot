@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use crate::agent::continuation::ProgramProjection;
+
 use crate::state::binding::ObjectBinding;
 
 use crate::state::{
@@ -122,30 +124,15 @@ pub struct DelayedEffects(Arc<DelayedProgram>);
 #[derive(Debug, PartialEq, Eq)]
 struct DelayedProgram {
     effects: Vec<Effect>,
-    tokens: Vec<(u16, i32)>,
-    description: Option<String>,
+    projection: ProgramProjection,
 }
 
 impl DelayedEffects {
     pub fn new(effects: Vec<Effect>) -> Self {
-        let (tokens, description) = if effects.is_empty() {
-            (Vec::new(), None)
-        } else {
-            (
-                crate::cards::tokens::rules_tokens(
-                    &effects,
-                    crate::cards::content_pack::default_content_pack(),
-                )
-                .expect("rules program tokens"),
-                Some(crate::agent::ability_description::effects_description(
-                    &effects,
-                )),
-            )
-        };
+        let projection = ProgramProjection::of(&effects);
         Self(Arc::new(DelayedProgram {
             effects,
-            tokens,
-            description,
+            projection,
         }))
     }
 
@@ -153,13 +140,8 @@ impl DelayedEffects {
         &self.0.effects
     }
 
-    /// The program's learning tokens; empty for no instructions.
-    pub fn tokens(&self) -> &[(u16, i32)] {
-        &self.0.tokens
-    }
-
-    pub fn description(&self) -> Option<&str> {
-        self.0.description.as_deref()
+    pub(crate) fn projection(&self) -> &ProgramProjection {
+        &self.0.projection
     }
 }
 
