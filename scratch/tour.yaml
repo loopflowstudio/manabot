@@ -1,11 +1,25 @@
-at: fe46e6b3750c6533ef9a890bbf98e19049d8514a
+at: f21f8fe4f57bfac3e3932e20437597209118c620
 first:
   - path: scratch/plan.md
-    why: Paired preparation timings and exactness on TLA batches
-  - path: manabot/policy/README.md
-    why: Which rows supply numeric features
+    why: Exactness, measured costs and revised rollout size estimate
+  - path: managym/README.md
+    why: Live values, seat spans and original object coordinates
+  - path: managym/src/agent/observation_encoder.rs
+    why: Where each live row count becomes known
+  - path: managym/src/python/observation_batch.rs
+    why: Freeze the encoder's live prefixes and offsets
+  - path: managym/src/python/vector_env_bindings.rs
+    why: Return the actual step projection and outcomes together
+  - path: manabot/policy/native_rows.py
+    why: Bind native spans to the checkpoint layout
+  - path: manabot/policy/admission.py
+    why: Which constraints depend on the model
   - path: manabot/policy/prepare.py
-    why: Gather rows, apply readings, restore original slots
+    why: Packed gathers and shape-preserving model inputs
+  - path: manabot/sim/search/local_update.py
+    why: Search consumes immutable v11 frontiers
   - path: tests/model/test_prepare_rows.py
-    why: Dense parity with gaps and masked object values
+    why: Dense parity, checkpoint binding and external rejection
+  - path: scratch/compare_spans.py
+    why: Reproduce the eight paired TLA snapshots
 hide: []
