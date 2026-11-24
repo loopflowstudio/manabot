@@ -359,6 +359,13 @@ fact rows only (`prepare(live_facts=True)`): a `[1,R]` route padded with
 unlinked rows to a power of two of at least 64, so MPS compiles few shapes.
 Captured 64-board calls had at most 1.3% of their fact rows live. CPU and
 CUDA keep padded `[B,F]` fact routes.
+Every packed GRU (catalog programs, fact programs, record reducers) goes
+through `packed_gru` (`torch/_packed_gru.py`). On MPS it projects all packed
+rows once and runs a hand-written backward that carries only the state
+gradient through the reverse step loop, as MLX's `gru_recurrence` does;
+`nn.GRU` over a `PackedSequence` there dispatches about twenty ops per step.
+It reads the module's `nn.GRU` weights and runs in float32 under autocast, as
+`nn.GRU` does on MPS. CPU and CUDA call `nn.GRU`.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
