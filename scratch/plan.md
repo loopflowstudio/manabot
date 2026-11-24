@@ -75,3 +75,7 @@ See `scratch/questions.md` for the format and optimizer choices.
   10.94 s) passed.
 
 All four implementation slices are complete; no slices remain.
+- After syncing `main` (`5d85077748`, MLX learner speedups) in `9cd651b728`,
+  the continuation, portable Adam, MLX backend and update-backend suites
+  passed with the `mlx` extra (67 passed, 9 min 37 s under `-n 4`), and
+  package boundaries passed.
