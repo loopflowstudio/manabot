@@ -143,6 +143,7 @@ Reversible choices taken:
 - `Action::PlayLand.profile` serializes under the key `adventure`, the key `CastSpell` and `SpellOnStack` already use for the profile, so the two play actions carry one wire name. A rename to `profile` everywhere would be one coordinated wire change.
 - The MDFC rules fixtures are invented (`Tidal Errand // Tidal Haven`, `Kelp Hollow // Kelp Warden`). Their lands enter untapped and have no other text, unlike most printed MDFC lands.
 - Muldrotha now offers every permanent type of a land (an artifact land gets both its Artifact and its Land route), following its ruling that any permanent-type permission may be used.
+  - Behavior review (2026-11-24) reverses this. The cited ruling does not exist. CR 305.9 lets a land of another type be played only as a land, and Muldrotha's other permissions are for casting. Slice 5 item 1 restores Land-only routes for land faces (D4).
 - `Condition` and `CounterKind` derive `Deserialize` so the vocabulary walk reads conditions from definition JSON. `CastPermissionData.condition` stays rules text.
 - The Scryfall fixture's Heartwood Crafter and Sanar rows had `"colors": null` (double-faced/prepare layout), which broke `conformance_tests` on this branch. They now hold the front face's colors, written by hand: `refresh_card_fixture.py` probably writes null for these layouts and would need the same fix.
 
