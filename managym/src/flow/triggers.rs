@@ -20,6 +20,7 @@ use crate::{
             SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
             TurnStep,
         },
+        card::CardDefId,
         effect::{EffectDuration, Modification},
         game_object::{AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -32,7 +33,9 @@ use crate::{
 /// placed: a printed ability by index, or a granted one's effects.
 #[derive(Clone, Copy)]
 struct FiredTrigger<'a> {
-    member: TriggerMember,
+    context: Option<Target>,
+    player: Option<PlayerId>,
+    amount: i32,
     once: bool,
     source: &'a TriggerSourceSnapshot,
     ability: TriggerAbility<'a>,
@@ -232,7 +235,14 @@ pub(crate) struct TriggerIndex {
 }
 
 impl Game {
-    /// Whether `target` is the exact permanent whose ability triggered.
+    pub(crate) fn pending_trigger_definition(&self, trigger: &PendingTrigger) -> CardDefId {
+        trigger.source_lki.as_ref().map_or_else(
+            || self.state.source_base(trigger.source_object()).0,
+            |lki| lki.definition_id,
+        )
+    }
+
+    /// The target requirements for this occurrence's chosen effects.
     fn trigger_requirements(
         &self,
         trigger: &PendingTrigger,
@@ -242,12 +252,7 @@ impl Game {
             None => crate::state::ability::with_chosen_modes(
                 self.source_face(
                     trigger.source_object(),
-                    trigger
-                        .source_lki
-                        .as_ref()
-                        .map_or(self.state.source_base(trigger.source_object()).0, |lki| {
-                            lki.definition_id
-                        }),
+                    self.pending_trigger_definition(trigger),
                 )?
                 .abilities
                 .get(trigger.ability_index)?
@@ -510,10 +515,7 @@ impl Game {
         match self
             .source_face(
                 trigger.source_object(),
-                trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                ),
+                self.pending_trigger_definition(trigger),
             )?
             .abilities
             .get(trigger.ability_index)?
@@ -722,11 +724,7 @@ impl Game {
     }
 
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
-        let source_definition_id = trigger
-            .source_lki
-            .as_ref()
-            .map(|lki| lki.definition_id)
-            .unwrap_or(self.state.source_base(trigger.source_object()).0);
+        let source_definition_id = self.pending_trigger_definition(&trigger);
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
@@ -905,20 +903,6 @@ impl Game {
         }
     }
 
-    /// The object from an event that a fired ability's effects may
-    /// reference (e.g. ward counters the spell that targeted its permanent).
-    fn trigger_context_for_event(&self, event: &GameEvent) -> Option<Target> {
-        match event {
-            GameEvent::PermanentTargeted { by, .. } => Some(*by),
-            GameEvent::AbilityTriggered {
-                ability,
-                attacker: Some(_),
-                ..
-            } => Some(Target::StackAbility(*ability)),
-            _ => None,
-        }
-    }
-
     /// Resolve printed and granted trigger matches before committing the event.
     fn firing_battlefield_triggers<'a>(
         &self,
@@ -975,12 +959,13 @@ impl Game {
                     if once && emitted {
                         return;
                     }
+                    let context = self.trigger_context(ability, member, event);
                     if intervening_if.as_ref().is_some_and(|condition| {
                         !self.check_intervening_if(
                             condition,
                             lki.controller,
                             Some(lki.object),
-                            self.member_permanent(member, event),
+                            context,
                         )
                     }) {
                         return;
@@ -988,11 +973,17 @@ impl Game {
                     // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
                     let count =
                         *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
+                    let hit = match member {
+                        TriggerMember::CombatHit(hit) => Some(hit),
+                        _ => None,
+                    };
                     fired.extend(std::iter::repeat_n(
                         FiredTrigger {
                             source,
                             ability: origin,
-                            member,
+                            context,
+                            player: self.event_player(leaf, event, hit),
+                            amount: event_amount(event, hit),
                             once,
                         },
                         count,
@@ -1016,7 +1007,9 @@ impl Game {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
-            member,
+            context,
+            player,
+            amount,
             once,
             source,
             ability,
@@ -1024,21 +1017,9 @@ impl Game {
         {
             let source_lki = &source.lki;
             let controller = source_lki.controller;
-            let hit = match member {
-                TriggerMember::CombatHit(hit) => Some(hit),
-                _ => None,
-            };
             let source_object = source_lki.object;
-            let (ability_index, trigger, granted, program) = match ability {
-                TriggerAbility::Printed(index) => (
-                    index,
-                    &self
-                        .source_face(source_object, source_lki.definition_id)
-                        .expect("source face")
-                        .abilities[index],
-                    None,
-                    false,
-                ),
+            let (ability_index, granted, program) = match ability {
+                TriggerAbility::Printed(index) => (index, None, false),
                 TriggerAbility::Granted(grant) => {
                     let Ability::Triggered {
                         intervening_if,
@@ -1054,26 +1035,9 @@ impl Game {
                         }],
                         None => effects.clone(),
                     };
-                    (0, &grant.ability, Some(inline), grant.program)
+                    (0, Some(inline), grant.program)
                 }
             };
-            // The object whose event triggered the ability: the member
-            // permanent, or the cast spell (CR 603.10a, 608.2h).
-            let context = if matches!(member, TriggerMember::Attacker(_))
-                || trigger.reads_triggering_object()
-            {
-                self.member_permanent(member, event)
-                    .or_else(|| match event {
-                        GameEvent::SpellCast { object_id, .. } => {
-                            Some(Target::StackSpell(*object_id))
-                        }
-                        _ => self.trigger_context_for_event(event),
-                    })
-            } else {
-                self.trigger_context_for_event(event)
-            };
-            let Ability::Triggered { condition, .. } = trigger;
-            let player = self.event_player(condition.event(), event, hit);
             // CR 107.3m: an entering permanent's own trigger sees its spell's
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
@@ -1117,7 +1081,7 @@ impl Game {
             }
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
-                triggering_amount: event_amount(event, hit),
+                triggering_amount: amount,
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1141,18 +1105,6 @@ impl Game {
                 inline_effects: granted,
                 program,
             });
-        }
-    }
-
-    fn member_permanent(&self, member: TriggerMember, event: &GameEvent) -> Option<Target> {
-        match member {
-            TriggerMember::Attacker(id) => Some(Target::Permanent(id)),
-            TriggerMember::CombatHit(hit) => self
-                .state
-                .permanent_of(hit.source)
-                .or_else(|| self.object_lki(hit.source).map(|lki| lki.permanent))
-                .map(Target::Permanent),
-            TriggerMember::Event => self.triggering_permanent(event),
         }
     }
 
@@ -1211,11 +1163,35 @@ impl Game {
         }
     }
 
-    /// The permanent whose event fired a trigger: an entering one, a
-    /// departed one (by the slot it occupied, read from its last known
-    /// information) or a lone attacker.
-    fn triggering_permanent(&self, event: &GameEvent) -> Option<Target> {
+    /// Bind the event object once so the intervening condition and the
+    /// resulting stack ability read the same occurrence (CR 603.4).
+    fn trigger_context(
+        &self,
+        ability: &Ability,
+        member: TriggerMember,
+        event: &GameEvent,
+    ) -> Option<Target> {
+        match member {
+            TriggerMember::Attacker(id) => return Some(Target::Permanent(id)),
+            TriggerMember::CombatHit(hit) if ability.reads_triggering_object() => {
+                return self
+                    .state
+                    .permanent_of(hit.source)
+                    .or_else(|| self.object_lki(hit.source).map(|lki| lki.permanent))
+                    .map(Target::Permanent);
+            }
+            TriggerMember::CombatHit(_) => return None,
+            TriggerMember::Event => {}
+        }
         match event {
+            GameEvent::PermanentTargeted { by, .. } => Some(*by),
+            GameEvent::AbilityTriggered {
+                ability,
+                attacker: Some(_),
+                ..
+            } => Some(Target::StackAbility(*ability)),
+            _ if !ability.reads_triggering_object() => None,
+            GameEvent::SpellCast { object_id, .. } => Some(Target::StackSpell(*object_id)),
             GameEvent::CardMoved {
                 object_id,
                 to: ZoneType::Battlefield,
@@ -1235,21 +1211,6 @@ impl Game {
                 Some(Target::Permanent(attackers[0]))
             }
             _ => None,
-        }
-    }
-
-    /// Whether a stacked trigger asks about the permanent whose event fired
-    /// it, in its effects or its intervening-if clause.
-    pub(crate) fn stacked_trigger_reads_triggering_object(
-        &self,
-        ability: &crate::state::stack_object::TriggeredAbilityOnStack,
-    ) -> bool {
-        match &ability.inline_effects {
-            Some(effects) => effects.iter().any(Effect::reads_triggering_object),
-            None => self
-                .source_face(ability.source_object(), ability.source_definition_id)
-                .and_then(|face| face.abilities.get(ability.ability_index))
-                .is_some_and(Ability::reads_triggering_object),
         }
     }
 
@@ -1556,12 +1517,14 @@ impl Game {
         }
         // "When that mana is spent to cast [a spell], copy that spell": one
         // trigger of the object that made each such unit.
-        let copy_sources: Vec<_> = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) => spell.spent.copy_triggers().flatten().collect(),
-            _ => Vec::new(),
+        let Some(spell) = self.spell_on_stack(object) else {
+            return;
+        };
+        let copy_sources: Vec<_> = spell.spent.copy_triggers().flatten().collect();
+        let replicated = if self.state[object].replicate().is_some() {
+            spell.x
+        } else {
+            0
         };
         for origin in copy_sources {
             self.enqueue_inline_trigger(
@@ -1574,17 +1537,8 @@ impl Game {
         }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
-        let replicated = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) if self.state[object].replicate().is_some() => {
-                usize::from(spell.x)
-            }
-            _ => 0,
-        };
         if replicated > 0 {
-            let copies = vec![Effect::CopyTriggeringObject; replicated];
+            let copies = vec![Effect::CopyTriggeringObject; usize::from(replicated)];
             self.enqueue_inline_trigger(
                 object,
                 source_ref,
@@ -1883,22 +1837,15 @@ impl Game {
             (
                 TriggerCondition::SpellTargetsOnlyThis { predicate },
                 GameEvent::SpellCast {
-                    object_id: object, ..
+                    object_id: object,
+                    targets,
+                    ..
                 },
             ) => {
-                let this = self
-                    .state
-                    .permanent_of(source_object)
-                    .map(Target::Permanent);
                 self.object_matches_predicate(*object, predicate)
-                    && this.is_some()
-                    && self
-                        .find_spell_on_stack_index(*object)
-                        .is_some_and(|index| {
-                            let targets = self.state.stack_objects[index].targets();
-                            !targets.is_empty()
-                                && targets.iter().all(|target| Some(*target) == this)
-                        })
+                    && self.state.permanent_of(source_object).is_some_and(|id| {
+                        !targets.is_empty() && targets.iter().all(|t| *t == Target::Permanent(id))
+                    })
             }
             (
                 TriggerCondition::EntersTheBattlefield { subject },

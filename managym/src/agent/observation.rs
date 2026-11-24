@@ -1794,7 +1794,7 @@ impl Observation {
                             .expect("trigger face"),
                         a.ability_index,
                         a.inline_effects.as_deref(),
-                        &a.chosen_modes,
+                        Some(&a.chosen_modes),
                     ))
                 }
                 _ => None,
@@ -1883,37 +1883,17 @@ impl Observation {
                 stack_object_id: None,
                 card_id: Some(game.state.object(object).ok()?.id.0 as i32),
             }),
-            Target::StackSpell(object_id) => {
-                let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
+            Target::StackSpell(_) | Target::StackAbility(_) => {
+                let index = game.stack_index_of(target)?;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
                     permanent_id: None,
-                    stack_object_id: Some(stack_object_id),
-                    card_id: None,
-                })
-            }
-            Target::StackAbility(id) => {
-                game.find_ability_on_stack_index(id)?;
-                Some(StackTargetData {
-                    kind: StackTargetKindData::StackObject,
-                    player_id: None,
-                    permanent_id: None,
-                    stack_object_id: Some(id.0 as i32),
+                    stack_object_id: Some(game.state.stack_objects[index].id().0 as i32),
                     card_id: None,
                 })
             }
         }
-    }
-
-    fn stack_spell_object_id(game: &Game, object_id: ObjectId) -> Option<PublicId> {
-        game.state
-            .stack_objects
-            .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell.id),
-                _ => None,
-            })
     }
 
     fn zone_from_index(index: usize) -> ZoneType {

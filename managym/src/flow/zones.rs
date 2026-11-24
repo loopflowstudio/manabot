@@ -569,10 +569,16 @@ impl Game {
         mut entry: ZoneEntry,
     ) -> ProposedEvent {
         let from = self.state.zones.zone_of(object_id);
-        let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
-            && self.find_spell_on_stack_index(object_id).is_some_and(|index| {
-                matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
-            }) { ZoneType::Exile } else { to_zone };
+        let to_zone = if from == Some(ZoneType::Stack)
+            && to_zone != ZoneType::Exile
+            && self
+                .spell_on_stack(object_id)
+                .is_some_and(|spell| spell.flashback)
+        {
+            ZoneType::Exile
+        } else {
+            to_zone
+        };
         entry = entry.for_zone(to_zone);
         if to_zone == ZoneType::Battlefield && self.enters_as_saga(object_id, &entry) {
             entry.counters.change(CounterKind::Lore, 1);
@@ -653,7 +659,7 @@ impl Game {
             self.record_object_lki(lki);
         }
         let cast_spell = (old_zone == Some(ZoneType::Stack))
-            .then(|| self.find_spell_on_stack_index(prior_object))
+            .then(|| self.stack_index_of(Target::StackSpell(prior_object)))
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
         if let Some(StackObject::Spell(spell)) = &cast_spell {
@@ -946,13 +952,9 @@ impl Game {
     /// A spell as it is on the stack now, or as it last existed there
     /// (CR 608.2h): countered, resolved, copied or stolen spells alike.
     pub(crate) fn spell_info(&self, object: ObjectId) -> Option<SpellLki> {
-        match self.find_spell_on_stack_index(object) {
-            Some(index) => match &self.state.stack_objects[index] {
-                StackObject::Spell(spell) => Some(self.spell_lki(spell)),
-                _ => None,
-            },
-            None => self.state.spell_lki.get(&object).cloned(),
-        }
+        self.spell_on_stack(object)
+            .map(|spell| self.spell_lki(spell))
+            .or_else(|| self.state.spell_lki.get(&object).cloned())
     }
 
     fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
@@ -961,46 +963,32 @@ impl Game {
             object: spell.object,
             definition_id: object.definition_id,
             controller: spell.controller,
-            mana_value: object.mana_value_cost().map_or(0, |cost| {
-                cost.mana_value
-                    .saturating_add(cost.x.saturating_mul(spell.x))
-            }),
+            mana_value: object.mana_value_with_x(spell.x),
             spent: spell.spent.total(),
             colors: object.colors(),
         }
     }
 
-    pub(crate) fn find_spell_on_stack_index(&self, object_id: ObjectId) -> Option<usize> {
-        self.state.stack_objects.iter().position(
-            |object| matches!(object, StackObject::Spell(spell) if spell.object == object_id),
-        )
-    }
-
-    /// The stack position of the activated or triggered ability `id`.
-    pub(crate) fn find_ability_on_stack_index(&self, id: PublicId) -> Option<usize> {
+    /// Stack positions use the same exact spell or ability target as commands.
+    pub(crate) fn stack_index_of(&self, target: Target) -> Option<usize> {
         self.state
             .stack_objects
             .iter()
-            .position(|object| !matches!(object, StackObject::Spell(_)) && object.id() == id)
+            .position(|object| object.as_target() == target)
     }
 
     /// The card whose ability `id` is on the stack.
     pub(crate) fn stack_ability_source(&self, id: PublicId) -> Option<ObjectId> {
-        let index = self.find_ability_on_stack_index(id)?;
-        match &self.state.stack_objects[index] {
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
-            StackObject::TriggeredAbility(triggered) => Some(triggered.source_object()),
-            StackObject::Spell(_) => None,
-        }
+        let index = self.stack_index_of(Target::StackAbility(id))?;
+        Some(self.state.stack_objects[index].source_object())
     }
 
-    /// The controller of `card` while it is a spell on the stack.
-    pub(crate) fn stack_spell_controller(&self, object_id: ObjectId) -> Option<PlayerId> {
+    pub(crate) fn spell_on_stack(&self, object_id: ObjectId) -> Option<&SpellOnStack> {
         self.state
             .stack_objects
             .iter()
             .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell.controller),
+                StackObject::Spell(spell) if spell.object == object_id => Some(spell),
                 _ => None,
             })
     }

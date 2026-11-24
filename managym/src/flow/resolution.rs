@@ -173,28 +173,25 @@ impl Game {
                 })
                 .sum(),
             EffectValue::SpellManaSpent(of) | EffectValue::SpellManaValue(of) => {
-                let spell = match of.as_ref() {
-                    // The target as chosen, even once it has left the stack.
-                    ObjectSelector::Target(_) => match frame.active_targets().find(|t| t.legal) {
-                        Some(ResolutionTarget {
-                            target: Target::StackSpell(object),
-                            ..
-                        }) => self.spell_info(object),
-                        _ => None,
-                    },
-                    ObjectSelector::Triggering => match frame.context_target {
-                        Some(Target::StackSpell(object)) => self.spell_info(object),
-                        _ => None,
-                    },
-                    _ => self
-                        .select(of, frame)
-                        .first()
-                        .and_then(|object| self.spell_info(*object)),
+                // A chosen or triggering spell keeps its exact identity after a counter.
+                let stack_spell = |target| match target {
+                    Target::StackSpell(object) => Some(object),
+                    _ => None,
                 };
-                spell.map_or(0, |spell| match value {
-                    EffectValue::SpellManaSpent(_) => i32::from(spell.spent),
-                    _ => i32::from(spell.mana_value),
-                })
+                let object = match of.as_ref() {
+                    ObjectSelector::Target(_) => frame
+                        .active_targets()
+                        .next()
+                        .and_then(|t| stack_spell(t.target)),
+                    ObjectSelector::Triggering => frame.context_target.and_then(stack_spell),
+                    _ => self.select(of, frame).first().copied(),
+                };
+                object
+                    .and_then(|object| self.spell_info(object))
+                    .map_or(0, |spell| match value {
+                        EffectValue::SpellManaSpent(_) => i32::from(spell.spent),
+                        _ => i32::from(spell.mana_value),
+                    })
             }
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => {
@@ -387,7 +384,7 @@ impl Game {
     /// Counter an activated or triggered ability: it is removed from the
     /// stack and does nothing (CR 701.6b).
     pub(crate) fn counter_ability(&mut self, id: PublicId, by: Option<ObjectId>) {
-        let Some(index) = self.find_ability_on_stack_index(id) else {
+        let Some(index) = self.stack_index_of(Target::StackAbility(id)) else {
             return;
         };
         let ability = self.state.stack_objects_mut().remove(index);
@@ -408,9 +405,9 @@ impl Game {
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        let Some(_) = self.find_spell_on_stack_index(object) else {
+        if self.spell_on_stack(object).is_none() {
             return;
-        };
+        }
         if self.state[object]
             .statics
             .iter()
@@ -706,8 +703,9 @@ impl Game {
                 self.state.card_of(object).is_some()
                     && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
             }
-            Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
-            Target::StackAbility(id) => self.find_ability_on_stack_index(id).is_some(),
+            Target::StackSpell(_) | Target::StackAbility(_) => {
+                self.stack_index_of(target).is_some()
+            }
             Target::Player(player) => self.state.loss(player.0).is_none(),
         }
     }
@@ -1683,18 +1681,12 @@ impl Game {
                 None
             }
             Effect::CounterSpell { what, exile } => {
-                // Spells only: countering an ability is a different effect.
-                let spells: Vec<_> = self
-                    .select(what, frame)
-                    .into_iter()
-                    .filter(|object_id| self.find_spell_on_stack_index(*object_id).is_some())
-                    .collect();
-                for spell in spells {
-                    let to = if *exile {
-                        ZoneType::Exile
-                    } else {
-                        ZoneType::Graveyard
-                    };
+                let to = if *exile {
+                    ZoneType::Exile
+                } else {
+                    ZoneType::Graveyard
+                };
+                for spell in self.select(what, frame) {
                     self.counter_spell(spell, frame.source(), to);
                 }
                 None
@@ -1854,21 +1846,15 @@ impl Game {
                 None
             }
             Effect::ForPlayer { player, effects } => {
-                // Each player's run ends with a cursor naming the next
-                // resolving player; the last restores the controller. The
-                // cursors live in the queue, so a choice inside one run
-                // suspends and restores with no other frame state.
-                let players = self.selected_players(player, frame);
-                let (&first, rest) = players.split_first()?;
-                frame
-                    .queue
-                    .push_front(Effect::RestoreController(frame.controller));
-                for &next in rest.iter().rev() {
+                // Build the queue backwards. Each player's effects restore the
+                // next controller, including when a choice suspends the frame.
+                for player in self.selected_players(player, frame).into_iter().rev() {
+                    frame
+                        .queue
+                        .push_front(Effect::RestoreController(frame.controller));
                     frame.prepend_effects(effects.iter().cloned());
-                    frame.queue.push_front(Effect::RestoreController(next));
+                    frame.controller = player;
                 }
-                frame.prepend_effects(effects.iter().cloned());
-                frame.controller = first;
                 None
             }
             Effect::RestoreController(player) => {
@@ -2139,11 +2125,7 @@ impl Game {
             Effect::CounterUnlessPays { cost } => {
                 // The spell or ability may already have left the stack (e.g.
                 // it was countered in response) — the effect does nothing.
-                let index = match frame.primary_target()? {
-                    Target::StackSpell(spell) => self.find_spell_on_stack_index(spell)?,
-                    Target::StackAbility(ability) => self.find_ability_on_stack_index(ability)?,
-                    _ => return None,
-                };
+                let index = self.stack_index_of(frame.primary_target()?)?;
                 let spell_controller = self.state.stack_objects[index].controller();
                 let mut payment = PaymentProgress::new(
                     spell_controller,
@@ -2522,10 +2504,7 @@ impl Game {
                     )
                 })
             }),
-            None => self
-                .find_spell_on_stack_index(object)
-                .is_some()
-                .then_some(object),
+            None => self.spell_on_stack(object).is_some().then_some(object),
         }
     }
 
@@ -2635,26 +2614,21 @@ impl Game {
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
-            Target::StackSpell(object_id) => {
-                self.find_spell_on_stack_index(object_id).is_some()
-                    && match spec {
-                        TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
-                        TargetSpec::SpellMatching { predicate } => {
-                            self.object_matches_predicate(object_id, predicate)
-                        }
-                        TargetSpec::SpellOrPermanent { min_mana_value } => {
-                            self.object_mana_value(object_id) >= *min_mana_value
-                        }
-                        TargetSpec::SpellOrAbilityWithSingleTarget => self
-                            .find_spell_on_stack_index(object_id)
-                            .is_some_and(|index| {
-                                self.state.stack_objects[index].targets().len() == 1
-                            }),
-                        _ => false,
+            Target::StackSpell(object) => {
+                self.spell_on_stack(object).is_some_and(|spell| match spec {
+                    TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
+                    TargetSpec::SpellMatching { predicate } => {
+                        self.object_matches_predicate(object, predicate)
                     }
+                    TargetSpec::SpellOrPermanent { min_mana_value } => {
+                        self.state[object].mana_value_with_x(spell.x) >= *min_mana_value
+                    }
+                    TargetSpec::SpellOrAbilityWithSingleTarget => spell.targets.len() == 1,
+                    _ => false,
+                })
             }
             Target::StackAbility(id) => {
-                self.find_ability_on_stack_index(id)
+                self.stack_index_of(Target::StackAbility(id))
                     .is_some_and(|index| match spec {
                         TargetSpec::Ability => true,
                         TargetSpec::SpellOrAbilityWithSingleTarget => {
@@ -2774,17 +2748,8 @@ impl Game {
     /// The object's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
-        let Some(cost) = self.state[object].mana_value_cost() else {
-            return 0;
-        };
-        let x = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) => spell.x,
-            _ => 0,
-        };
-        cost.mana_value.saturating_add(cost.x.saturating_mul(x))
+        let x = self.spell_on_stack(object).map_or(0, |spell| spell.x);
+        self.state[object].mana_value_with_x(x)
     }
 }
 

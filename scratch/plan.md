@@ -478,6 +478,8 @@ Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13
 
 Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5 and 7.
 
+**Compression at the draw/cast slice.** Stack lookups now go through `spell_on_stack` and `stack_index_of(Target)`; X-inclusive mana value is `Object::mana_value_with_x`; one `trigger_context` binds the event object for the intervening-if and the stacked ability; pending trigger text and definitions share `pending_trigger_description`/`pending_trigger_definition`. Finding 7 is fixed there: a modal trigger with zero chosen modes reads "no modes chosen". Debug workspace: 1588 passed; the 15 stale `frozen_*`/inventory cases fail as recorded above, and `compatibility_names_and_content_allocations_are_metamorphic` fails (state hash diverges at step 47 after renaming objects). That test fails identically at `1ca881442e`, before this compression: some state the hash covers now depends on an object's name. Investigate before re-recording evidence. Focused Python: 116 passed, 1 skipped.
+
 **Death batch behavior review at `4581548f6f`**
 
 The working phase for the death batch is satisfied except Finding 7, a text-only defect in a TLA card that the modal-trigger change exposed. These passed at this head, all in debug: the cards target (899), the `managym` lib (359), rules (188), `match_state_hash_tests`, `search_state_contract` and `canonical_replay_tests`. The installed extension predated the compression commit `e4579800a7`. After rebuilding it at this head and replacing it atomically, the five-file focused Python selection passed (116 passed, 1 skipped optional checkpoint).

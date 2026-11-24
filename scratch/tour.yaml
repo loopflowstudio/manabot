@@ -9,7 +9,7 @@ first:
   - path: managym/src/flow/tick.rs
     why: Commit attackers before matching their triggers
   - path: managym/src/flow/triggers.rs
-    why: Bind each qualifying member before applying trigger limits
+    why: Bind each trigger's event object once
   - path: managym/src/flow/layers.rs
     why: Compare characteristics on the partially evaluated battlefield
   - path: managym/src/flow/resolution.rs

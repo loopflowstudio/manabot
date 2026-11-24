@@ -744,6 +744,13 @@ impl Object {
         }
     }
 
+    /// Mana value with the spell's announced X, or zero for X outside the stack.
+    pub fn mana_value_with_x(&self, x: u8) -> u8 {
+        self.mana_value_cost().map_or(0, |cost| {
+            cost.mana_value.saturating_add(cost.x.saturating_mul(x))
+        })
+    }
+
     /// Whether its back face is up (CR 712.8).
     pub fn is_transformed(&self) -> bool {
         self.front.is_some()

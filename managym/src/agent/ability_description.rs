@@ -18,12 +18,31 @@ use crate::state::{
     zone::ZoneType,
 };
 
+impl crate::flow::game::Game {
+    pub(crate) fn pending_trigger_description(
+        &self,
+        trigger: &crate::flow::trigger::PendingTrigger,
+    ) -> Option<String> {
+        let face = self.source_face(
+            trigger.source_object(),
+            self.pending_trigger_definition(trigger),
+        )?;
+        let chosen = trigger.modes_chosen || !trigger.chosen_modes.is_empty();
+        Some(trigger_description(
+            face,
+            trigger.ability_index,
+            trigger.inline_effects.as_deref(),
+            chosen.then_some(trigger.chosen_modes.as_slice()),
+        ))
+    }
+}
+
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,
-    chosen_modes: &[usize],
+    chosen_modes: Option<&[usize]>,
 ) -> String {
     if let Some(effects) = inline {
         return format!(
@@ -43,7 +62,8 @@ pub(crate) fn trigger_description(
         .unwrap_or_default();
     // A chosen modal trigger reads as the modes it will run (CR 700.2).
     let program = match (effects.as_slice(), chosen_modes) {
-        ([Effect::TriggerModes { .. }], [_, ..]) => {
+        ([Effect::TriggerModes { .. }], Some([])) => "no modes chosen".into(),
+        ([Effect::TriggerModes { .. }], Some(chosen_modes)) => {
             let mut chosen = chosen_modes.to_vec();
             chosen.sort_unstable();
             let modes: Vec<_> = chosen.iter().map(|mode| (mode + 1).to_string()).collect();

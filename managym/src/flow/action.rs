@@ -1,9 +1,7 @@
 // action.rs
 // Player action computation and action space construction.
 
-use crate::agent::ability_description::{
-    counter_description, mana_description, trigger_description,
-};
+use crate::agent::ability_description::{counter_description, mana_description};
 use crate::state::ability::LibraryEnd;
 
 use crate::cards::names::NameOption;
@@ -78,19 +76,9 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let face = trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                );
-                let record = self.source_face(trigger.source_object(), face)?;
                 let mut label = format!(
                     "Put on stack next — {}",
-                    trigger_description(
-                        record,
-                        trigger.ability_index,
-                        trigger.inline_effects.as_deref(),
-                        &trigger.chosen_modes,
-                    )
+                    self.pending_trigger_description(trigger)?
                 );
                 if let Some(context) = trigger.context {
                     let reference = self.target_reference(context, *player);

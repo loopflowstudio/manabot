@@ -182,7 +182,12 @@ fn brineborn_cutthroat_grows_only_from_spells_cast_on_an_opponents_turn() {
 fn gnarlback_rhino_draws_when_you_cast_a_spell_targeting_it() {
     use crate::support::{game::force_new_card_in_hand, inspect::hand, play::cast_card};
     use managym::state::{game_object::PlayerId, player::ManaPayment};
-    let mut s = five_color_setup(&["Gnarlback Rhino", "Lightning Bolt", "Gray Ogre"]);
+    let mut s = five_color_setup(&[
+        "Gnarlback Rhino",
+        "Lightning Bolt",
+        "Gray Ogre",
+        "Fancy Footwork",
+    ]);
     s.game_mut().mana_payment = [ManaPayment::Auto; 2];
     let rhino = s.force_permanent_on_battlefield(0, "Gnarlback Rhino");
     let bolt_at = |s: &mut crate::support::game::Scenario, player: usize, target: Target| {
@@ -193,7 +198,12 @@ fn gnarlback_rhino_draws_when_you_cast_a_spell_targeting_it() {
     };
     bolt_at(&mut s, 0, Target::Player(PlayerId(1)));
     assert!(hand(&s, 0).is_empty());
-    bolt_at(&mut s, 0, Target::Permanent(rhino));
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let footwork = force_new_card_in_hand(&mut s, 0, "Fancy Footwork");
+    cast_card(&mut s, footwork);
+    assert!(s.choose_target(Target::Permanent(other)));
+    assert!(s.choose_target(Target::Permanent(rhino)));
+    settle(&mut s);
     assert_eq!(hand(&s, 0).len(), 1);
     let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
     cast_card(&mut s, ogre);

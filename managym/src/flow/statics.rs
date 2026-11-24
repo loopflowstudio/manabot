@@ -477,7 +477,8 @@ impl Game {
             return object.power.unwrap_or(0);
         };
         let controller = self
-            .stack_spell_controller(object_id)
+            .spell_on_stack(object_id)
+            .map(|spell| spell.controller)
             .unwrap_or(object.owner);
         self.cda_power(cda, controller)
     }
@@ -648,10 +649,7 @@ impl Game {
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
         // Mana spent on the spell can give it a keyword (CR 106.6).
-        if let Some(crate::state::stack_object::StackObject::Spell(spell)) = self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
+        if let Some(spell) = self.spell_on_stack(object) {
             keywords = keywords.union(spell.spent.keywords_gained());
         }
         for (_, owner, view) in self.static_sources() {

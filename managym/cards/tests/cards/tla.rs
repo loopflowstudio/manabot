@@ -13593,6 +13593,21 @@ fn zuko_conflicted_takes_each_mode_once_then_switches_sides() {
 /// Bumi chooses up to as many modes as Lesson cards in your graveyard.
 #[test]
 fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
+    let mut s = five_color_setup(&["Bumi, King of Three Trials"]);
+    let bumi = enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    s.pass_priority();
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+        let row = obs.stack_objects.last().expect("Bumi's enter trigger");
+        assert!(row
+            .description
+            .as_deref()
+            .unwrap()
+            .ends_with("no modes chosen"));
+    }
+    settle(&mut s);
+    assert_eq!(counters(&s, bumi), 0);
+
     let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!"]);
     plant_in_graveyard(&mut s, 0, "Yip Yip!");
     let forest = s.force_permanent_on_battlefield(0, "Forest");

@@ -27,7 +27,7 @@ use crate::{
         },
     },
     state::{
-        ability::Effect,
+        ability::{Ability, Effect},
         card::CardDefId,
         game_object::{ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
@@ -298,6 +298,29 @@ impl<'a> Projection<'a> {
         }
     }
 
+    /// The same event object follows an occurrence from placement to the stack.
+    fn trigger_context(
+        &mut self,
+        context: Option<Target>,
+        source: ObjectId,
+        definition: CardDefId,
+        index: usize,
+        inline: Option<&[Effect]>,
+    ) {
+        let Some(target) = context else { return };
+        let reads = match inline {
+            Some(effects) => effects.iter().any(Effect::reads_triggering_object),
+            None => self
+                .game
+                .source_face(source, definition)
+                .and_then(|face| face.abilities.get(index))
+                .is_some_and(Ability::reads_triggering_object),
+        };
+        if reads {
+            self.retained_target(target);
+        }
+    }
+
     fn retained_target(&mut self, target: Target) {
         match target {
             Target::Permanent(id) => {
@@ -306,7 +329,7 @@ impl<'a> Projection<'a> {
                 }
             }
             // A live spell's stack row already carries these facts.
-            Target::StackSpell(object) if self.game.find_spell_on_stack_index(object).is_none() => {
+            Target::StackSpell(object) => {
                 if let Some(spell) = self.game.state.spell_lki.get(&object) {
                     self.spell_lki(spell);
                 }
@@ -1113,11 +1136,8 @@ pub(crate) fn project_receipt(
     out.finish(frame);
 }
 
-/// Project a stack object's retained facts: its committed payment, and for
-/// a trigger that reads its triggering permanent after that permanent has
-/// left, the permanent's last known information ("if it was attacking").
-/// `text` additionally renders summaries; the policy occurrence is
-/// identical either way.
+/// Project the payment and any departed object the trigger reads.
+/// Both text and policy read these same public facts.
 pub(crate) fn project_stack_object(
     game: &Game,
     object: &crate::state::stack_object::StackObject,
@@ -1127,11 +1147,13 @@ pub(crate) fn project_stack_object(
 ) {
     let mut out = Projection::new(game, viewer, text);
     if let crate::state::stack_object::StackObject::TriggeredAbility(ability) = object {
-        if game.stacked_trigger_reads_triggering_object(ability) {
-            if let Some(context) = ability.context {
-                out.retained_target(context);
-            }
-        }
+        out.trigger_context(
+            ability.context,
+            ability.source_object(),
+            ability.source_definition_id,
+            ability.ability_index,
+            ability.inline_effects.as_deref(),
+        );
     }
     if let Some(spent) = super::continuation::stack_receipt(object) {
         out.receipt(spent, Some(object.source_object()));
@@ -1139,7 +1161,7 @@ pub(crate) fn project_stack_object(
     out.finish(frame);
 }
 
-/// Project a pending trigger's departed triggering permanent, as its
+/// Project a pending trigger's departed triggering object, as its
 /// stacked ability will (`project_stack_object`).
 pub(crate) fn project_pending_trigger(
     game: &Game,
@@ -1147,24 +1169,14 @@ pub(crate) fn project_pending_trigger(
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
 ) {
-    let reads = match &trigger.inline_effects {
-        Some(effects) => effects.iter().any(Effect::reads_triggering_object),
-        None => game
-            .source_face(
-                trigger.source_object(),
-                trigger.source_lki.as_ref().map_or_else(
-                    || game.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                ),
-            )
-            .and_then(|face| face.abilities.get(trigger.ability_index))
-            .is_some_and(|ability| ability.reads_triggering_object()),
-    };
-    let Some(context) = trigger.context.filter(|_| reads) else {
-        return;
-    };
     let mut out = Projection::new(game, viewer, false);
-    out.retained_target(context);
+    out.trigger_context(
+        trigger.context,
+        trigger.source_object(),
+        game.pending_trigger_definition(trigger),
+        trigger.ability_index,
+        trigger.inline_effects.as_deref(),
+    );
     out.finish(frame);
 }
 

@@ -165,8 +165,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     let object = game.move_object(object, ZoneType::Graveyard);
     assert_ne!(first, second);
     assert_eq!(
-        game.triggering_permanent(&event),
-        Some(Target::Permanent(first))
+        game.object_lki(original).map(|lki| lki.permanent),
+        Some(first)
     );
     let sources = game.trigger_ability_sources(&event);
     assert!(sources.iter().any(|source| source.lki.object == original));
@@ -174,8 +174,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
     assert_eq!(
-        fork.triggering_permanent(&event),
-        Some(Target::Permanent(first))
+        fork.object_lki(original).map(|lki| lki.permanent),
+        Some(first)
     );
 
     let object = game.move_object(object, ZoneType::Hand);

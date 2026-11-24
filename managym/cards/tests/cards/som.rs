@@ -209,8 +209,8 @@ fn a_countered_x_spell_keeps_its_stack_mana_value_for_its_cast_trigger() {
         agent::observation::Observation,
         state::{
             ability::{
-                Ability, Actor, Aggregate, Effect, EffectValue, ObjectProperty, ObjectSelector,
-                PlayerSelector, TriggerCondition,
+                Ability, Actor, Aggregate, CompareOp, Condition, Effect, EffectValue,
+                ObjectProperty, ObjectSelector, PlayerSelector, TriggerCondition,
             },
             game_object::{PlayerId, Target},
             player::ManaPayment,
@@ -221,19 +221,20 @@ fn a_countered_x_spell_keeps_its_stack_mana_value_for_its_cast_trigger() {
     s.game_mut().mana_payment = [ManaPayment::Auto; 2];
     let watcher = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let watcher = card_of(&s, watcher);
+    let mana_value = EffectValue::Property {
+        of: Box::new(ObjectSelector::Triggering),
+        property: ObjectProperty::ManaValue,
+        aggregate: Aggregate::Sum,
+    };
     inject_ability(
         &mut s,
         watcher,
         Ability::Triggered {
             condition: TriggerCondition::casts(Actor::Opponent, CardPredicate::default()),
-            intervening_if: None,
+            intervening_if: Some(Condition::compare(mana_value.clone(), CompareOp::Eq, 5)),
             effects: vec![Effect::LoseLife {
                 player: PlayerSelector::TriggeringPlayer,
-                amount: EffectValue::Property {
-                    of: Box::new(ObjectSelector::Triggering),
-                    property: ObjectProperty::ManaValue,
-                    aggregate: Aggregate::Sum,
-                },
+                amount: mana_value,
             }],
         },
     );

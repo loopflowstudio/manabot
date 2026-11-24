@@ -531,12 +531,7 @@ impl Game {
             }
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
-                let description = crate::agent::ability_description::trigger_description(
-                    &self.state[trigger.source_object()],
-                    trigger.ability_index,
-                    trigger.inline_effects.as_deref(),
-                    &trigger.chosen_modes,
-                );
+                let description = self.pending_trigger_description(trigger)?;
                 if choosing_mode {
                     format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
                 } else {

@@ -251,8 +251,8 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        if let Some(controller) = self.stack_spell_controller(source) {
-            return Some(self.spell_keywords(source, controller));
+        if let Some(spell) = self.spell_on_stack(source) {
+            return Some(self.spell_keywords(source, spell.controller));
         }
         Some(self.state.source_base(source).1.keywords)
     }

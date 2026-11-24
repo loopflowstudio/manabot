@@ -1263,8 +1263,8 @@ impl Game {
             return self.state.permanents[id].as_ref().map(|p| p.controller);
         }
         if self.state.live(source).is_some() {
-            if let Some(controller) = self.stack_spell_controller(source) {
-                return Some(controller);
+            if let Some(spell) = self.spell_on_stack(source) {
+                return Some(spell.controller);
             }
         }
         self.object_lki(source).map(|lki| lki.controller)
