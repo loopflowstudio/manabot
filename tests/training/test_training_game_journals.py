@@ -365,9 +365,9 @@ def test_executing_replay_requires_active_fresh_step_binding(
     assert result["at_retained_failure"] == (binding == "fresh")
     assert result["matches_binding"] is (True if binding == "fresh" else None)
     assert evidence.games[0].actions == [0]
-    # The operator reads the turn from replay; a bound attempt names it first.
+    # The first two decisions take place at turn zero during opening hands.
     reached = result["reached"]
-    assert isinstance(reached, dict) and reached["turn"] >= 1
+    assert isinstance(reached, dict) and reached["turn"] == 0
     attempts = [
         json.loads(line)["replay_attempt"]
         for line in capsys.readouterr().err.splitlines()
@@ -376,7 +376,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
     assert len(attempts) == (1 if binding == "fresh" else 0)
     if attempts:
         assert attempts[0]["action_index"] == 0
-        assert attempts[0]["position"]["turn"] >= 1
+        assert attempts[0]["position"]["turn"] == 0
 
 
 @pytest.mark.parametrize("seed", [24, 2**64 - 1])
@@ -1036,19 +1036,26 @@ def test_native_statistics_preserve_recorded_choices(tmp_path: Path) -> None:
             vector = RecordedVectorEnv(num_envs=1, seed=24)
             try:
                 vector.reset_all(_players())
-                for _ in range(10):
-                    vector.step([0])
+                for _ in range(32):
+                    if vector.step([0])[0][2]:
+                        break
+                else:
+                    pytest.fail("short statistics game did not finish")
+                vector.reset_all(_players())
+                vector.step([0])
                 assert (vector.statistics()[0] is not None) is enabled
             finally:
                 vector.close()
-        records.append(next(read_records(root / "games")))
-    assert records[0].games == records[1].games
-    assert records[0].identities == records[1].identities
+        records.append(list(read_records(root / "games")))
+    assert len(records[0]) == 2
+    for plain, measured in zip(*records, strict=True):
+        assert plain.games == measured.games
+        assert plain.identities == measured.identities
     from managym.statistics import read_statistics
 
     assert not (tmp_path / "False" / "statistics").exists()
     rows = list(read_statistics(tmp_path / "True" / "statistics"))
-    games = [record.games[0] for record in read_records(tmp_path / "True" / "games")]
+    games = [record.games[0] for record in records[1]]
     assert [(row.seed, row.terminal) for row in rows] == [
         (game.seed, game.end.status == "complete") for game in games
     ]
