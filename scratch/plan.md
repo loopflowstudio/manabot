@@ -410,13 +410,15 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 68 of 81 primary rows with definitions and native
-fixture evidence. The 13 pending primary rows are in the later batches below.
+The FDN ledger has 80 of 81 primary rows with definitions and native
+fixture evidence. Only Mazemind Tome remains pending (plus Bloodthirsty Conqueror's
+deferred CR 104.4b mandatory-loop draw), closed in the final slice below.
 Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
-witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
-witnesses. Daggers identify pending cost candidates whose full ledger
-obligation decides delivery. Keep the established cross-set and integration
-boundaries. Later batch order is provisional.
+witnesses. Hunter, Hatcher, Prowler, Blast, Ruby, Sanguine Indulgence, Ayli,
+Kalastria Highborn, Archmage of Runes, Painful Quandary, Ramos, Lathril,
+Cryptic Caves, Ghalta and Elvish Archdruid are covered cost-primary witnesses.
+Daggers identify remaining pending cost candidates whose full ledger obligation
+decides delivery. Keep the established cross-set and integration boundaries.
 
 ### Implemented slice · Power at attack, combat and resolution
 
@@ -603,27 +605,33 @@ Checks, all debug: cards target (944), `managym` lib (361), rules (190, 2 ignore
 
 Next: the following slice below (Mazemind Tome for 81/81, counter LKI, remaining cost rows, CR 104.4b draw, Findings 3–5 and conformance re-recording). Finding 5 includes the six early primary rows still without fixture pointers (Cat Collector, Exsanguinate, Fumigate, Predator Ooze, Venom Connoisseur, Steel Hellkite).
 
-### Following slice · State triggers, counter costs/LKI queries, remaining cost rows, CR 104.4b draw and closure
+### Following slice · State triggers, counter costs/LKI, untap events, CR 104.4b draw, Findings 3–5 and closure
 
-Delivers the 81st primary FDN row (**81/81**), remaining feasible cost-primary rows citing `event_history`/`context_queries`, CR 104.4b mandatory-loop draw, Findings 3–5 cleanup, and final conformance evidence.
+Delivers the 81st primary FDN row (**81/81**), remaining feasible cost-primary rows citing `event_history`/`context_queries` (15/17 delivered; concrete blockers recorded for the 2 out-of-scope rows), CR 104.4b mandatory-loop draw, Findings 3–5 cleanup, and final conformance evidence. Concept review at `13017dcdf0` (`scratch/concept-review.html`) unified state triggers over `Condition`, replaced naive state-hash loop detection with progress-aware CR 104.4b detection, and surfaced *Fishing Pole*'s three missing primitives.
 
-- **State triggers and counter-adding costs (`state/src/{ability,card,permanent}.rs`, `flow/{payment,triggers}.rs`).** Generalize `check_state_triggers` (`flow/triggers.rs:1436`, CR 603.8) via `state_trigger_holds(condition, permanent)` to handle `TriggerCondition::CountersAtLeast { kind: CounterKind, count: i32 }` beside `NoCounters`. Add `CounterKind::{Page, Soul, Bait}` and `ActivatedAbilityDefinition.add_counters: Option<(CounterKind, u16)>` paid with `EventCause::Cost` before stack placement so putting the 4th page counter on *Mazemind Tome* (`m21`, 81st primary FDN row) fires its exile+gain-4 state trigger on top of Scry/Draw and re-triggers if countered while ≥4 counters remain.
-- **Live/departed counter-count property (`state/src/ability.rs`, `flow/{layers,resolution}.rs`, `agent/effect_execution.rs`).** Add `ObjectProperty::Counters(CounterKind)` (keeping `ObjectProperty: Copy`) so `EffectValue::Property` reads live and departed LKI counters uniformly across `This`, `Triggering`, `Target`, `Paid`, and `Each`, and project departed source LKI in `effect_execution::project_stack_object` when an activated or triggered ability reads departed source counters (zero new v11 stack columns) → *Ravenous Amulet*† (`fdn`).
-- **Remaining cost-primary closure.** Evaluate and author the remaining feasible cost-primary rows citing `event_history`/`context_queries` (*Mentor of the Meek*†, *Immersturm Predator*†, *Fishing Pole*†) and keep concrete blockers recorded in `fdn.jsonl` for out-of-scope mechanics (*Ovika, Enigma Goliath*†'s composite ward cost, *Quilled Greatwurm*†'s graveyard cast + distributed counter removal).
-- **Dedicated CR 104.4b mandatory-loop draw, Findings 3–5, and conformance.** Add `GameOutcome::Draw` and zero-choice cycle detection in `flow/tick.rs` paired with a loop partner for *Bloodthirsty Conqueror*, clean up Findings 3–5 (opening-hand Academy fixtures, single-card test relocation, early ledger fixture pointers), and re-record `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` at the final head.
+- **State triggers and counter-adding costs (`state/src/{ability,card,permanent}.rs`, `flow/{mana,payment,triggers}.rs`).**
+  Add `TriggerCondition::State(Condition)` (reusing the existing `Condition::SourceCountersAtLeast { kind, count }`; keep legacy `TriggerCondition::NoCounters { kind }` intact for pinned-pilot *Dark Depths* in `csp.rs`). Add a dedicated `EventKinds::STATE_TRIGGER = Self(1 << 31)` bit in `TriggerIndex` (`flow/triggers.rs`, zero `EventKind`/hash change, O(0) when no state-trigger permanent is on the board) instead of hijacking `EventKind::CountersPut`. In `check_state_triggers`, evaluate `State(c)` through `condition_holds(c, source.lki.controller, None, Some(source.lki.object), None)` and check `pending_triggers`, `trigger_placement`, and `stack_objects` for CR 603.8 `waiting`. Add `CounterKind::{Page, Soul, Bait}` and `ActivatedAbilityDefinition.add_counters: Option<(CounterKind, u16)>` paid with `EventCause::Cost` before stack placement (mirroring `remove_counters` in payment, mana side-effects, and descriptions). Author *Mazemind Tome* (`m21`, 81/81 primary FDN) with directed tests for CR 603.8 stack ordering over Scry/Draw, re-triggering if countered while ≥4 page counters remain, and 0 life gained if exiled in response.
+- **Live/departed counter-count property and departed source LKI projection (`state/src/ability.rs`, `flow/{layers,resolution}.rs`, `agent/effect_execution.rs`).**
+  Add `ObjectProperty::Counters(CounterKind)` (`Copy`) evaluated in `live_property`, `departed_property`, and `layers.rs::property`. Add `ContextRead::SourceLki` (matching `EffectValue::Property { of: This, property: Counters(_) | Toughness | ManaValue | Colors, .. }`) beside `SourcePower`, call `out.retained_object(source)` in `effect_execution::project_stack_object` when a stacked activated or triggered ability reads departed source LKI, and emit a plain-language counter summary line in `Projection::lki` (zero new v11 stack columns). Author *Ravenous Amulet*† (`fdn`: `{1}, {T}, Sacrifice a creature: Draw a card and put a soul counter on this artifact. Activate only as a sorcery.` / `{4}, {T}, Sacrifice this artifact: Each opponent loses life equal to the number of soul counters on this artifact.`) with directed two-viewer stack-LKI and resolution tests.
+- **Untap transitions, grantor tap cost, counter-removal results, and remaining cost-primary closure (`flow/{event,payment,play,resolution,triggers,zones}.rs`, `state/src/{ability,card}.rs`).**
+  - Author *Mentor of the Meek*† (`isd`, existing `EntersTheBattlefield` + `max_power: Some(2)` + `OptionalPayment`; test Layer 7 anthem interaction) and *Immersturm Predator*† (`khm`, existing `BecomesTapped` + `TargetRequirement::up_to(1, GraveyardCard)` + sacrifice/indestructible/tap; test already-tapped no-trigger and 0-target vs fizzled-1-target CR 608.2b).
+  - Route all three untap sites (`untap_permanent`, `untap_all_permanents`, `untap_during_other_untap_steps` in `flow/zones.rs`) through one transition-checking `untap_permanent` that returns whether the permanent actually transitioned from tapped to untapped (skipping already-untapped and stun-counter-replaced untaps) and emits `GameEvent::PermanentUntapped { permanent }`; add `TriggerCondition::BecomesUntapped { subject }` (with CR 502.3 / 603.3a queuing untap-step triggers for upkeep).
+  - Add `ActivatedAbilityDefinition.tap_grantor: bool` (mirroring `exile_grantor`; CR 302.6 ignores summoning sickness on the grantor) and `Effect::RemoveCounter { from: ObjectSelector, kind: CounterKind, count: u16, if_removed: Vec<Effect> }` checking `change_counters`'s committed `bool` without polluting `frame.moved`. Author *Fishing Pole*† (`fdn`) and `token.fish` (1/1 blue Fish) with directed tests for grantor tap, untap-step trigger, stun-counter negative control, and 0-bait no-Fish control.
+  - Record the concrete blocker in `fdn.jsonl` for *Ovika, Enigma Goliath*† (composite ward cost `{3}, Pay 3 life`; its cast-mana-value token trigger is already expressible) and keep *Quilled Greatwurm*†'s recorded blocker (`play_permissions` + distributed counter removal).
+- **CR 104.4b mandatory-loop draw (`flow/{game,tick}.rs`, `agent/env.rs`, `academy/ui/src/lib/recording.ts`).**
+  Add `GameOutcome::Draw { mandatory_loop: bool }` under `#[serde(untagged)]` (zero hash change for any non-draw game; `winner_index()` already returns `None`; report `draw_reason: "mandatory_loop"` in `env.rs`). Because *Bloodthirsty Conqueror* + life-gain drain + *Herald of Eternal Dawn* changes life totals, turn history, and events on every iteration (so exact `GameState` hashes never repeat), detect mandatory loops in `tick_priority()` by tracking consecutive pass-only / zero-choice trigger-signature streaks and declaring `GameOutcome::Draw { mandatory_loop: true }` when a trigger cycle repeats (e.g. 64 consecutive resolutions) with no unprotected player's positive life total decreasing toward `<= 0` (plus a high absolute cap like `10_000`), resetting on any non-pass action or step change. Test *Bloodthirsty Conqueror* + *Herald of Eternal Dawn* + a constructed life-gain-drain witness (respecting the `foundation_composition` parallel boundary instead of authoring *Marauding Blight-Priest* here), plus a finite high-life drain control (e.g. 200 life, no Herald) that still wins, and remove *Bloodthirsty Conqueror*'s `pending` note in `fdn.jsonl`. Fix `academy/ui/src/lib/recording.ts::orientBoard` (called from `replay.ts::recordedFrame`) so a draw (`winner === null`) keeps `won: false` for both seats instead of flipping `!observation.won` to `true`.
+- **Findings 3–5 and final conformance evidence.**
+  - **Finding 3:** update the 6 Academy fixtures (`test_semantic_boundary.py` ×2, `test_combat_preview.py` ×1, `test_incinerating_blast.py` ×3) to keep opening hands via native offers before advancing/injecting state.
+  - **Finding 4:** move single-card non-FDN fixtures out of `managym/cards/tests/cards/fdn.rs` into their first-printing test modules (`dmu.rs` Bite Down, `thb.rs` Nessian Hornbeetle, `dtk.rs` Surrak, `gtc.rs` Aurelia, `woe.rs` Ruby's mana test) and update `fdn.jsonl` fixture pointers.
+  - **Finding 5:** populate the missing `fixture` pointers for the 6 early primary rows in `fdn.jsonl` (Cat Collector, Exsanguinate, Fumigate, Predator Ooze, Venom Connoisseur, Steel Hellkite).
+  - Re-record `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` at the final head (`cargo run --release --manifest-path managym/Cargo.toml --bin semantic_conformance -- record --root <staged copy>`) and run the full Rust, Python, pinned-pilot, and Academy checks.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
 ## Remaining shared work
 
-- Two serialized duplications wait for one deliberate token-rename step
-  (each changes card serialization and learning tokens, so each needs a
-  `token_renames.rs` entry and a pinned-pilot check):
-  `Effect::MillCards` carries both `target: Option<TargetSpec>` and
-  `player: Option<PlayerSelector>`, which `PlayerSelector::Target` already
-  covers; `StaticAbility::CharacteristicPower` and `CharacteristicPt` differ
-  only in whether the CDA also sets toughness (`Operation::Cda.sets_toughness`).
-  Do it in the closing slice or leave both recorded as known debt.
+- **Pinned-pilot serialized compatibility (resolved — keep intact):**
+  `Effect::MillCards` (`target: Option<TargetSpec>` + `player: Option<PlayerSelector>`, used in 9 TLA cards) and `StaticAbility::CharacteristicPower` beside `CharacteristicPt` (used in 3 TLA cards) already share unified runtime readers (`mill_objects`, `pt_cda`, `object_pt`, `Operation::Cda.sets_toughness`). Collapsing either serialized shape would alter those 12 existing TLA cards' learning-token streams and break `tests/model/test_pinned_pilot.py` (`token_renames.rs` only maps 1-to-1 renamed tokens, not structural arity changes). Keep both legacy serialized shapes intact alongside legacy `PutsCounters`, `DealsCombatDamage`, `TriggeringHadCounters`, and `NoCounters`.
 - Replace `TargetSpec::GraveyardCardYouOwnWithinSourcePower` when the shared
   target clause can express its complete bound, including announcement,
   retarget and resolution reads. The special case still sits in
