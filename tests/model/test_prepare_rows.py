@@ -18,6 +18,7 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -187,6 +188,49 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
             prepared.events.validity, trimmed["events_valid"].astype(bool)
         )
     assert prepared.binding == spec.binding
+
+
+def test_padded_numeric_features_match_dense_readings_at_each_slot() -> None:
+    space, original = _observations(11, False)
+    obs = {key: rows.copy() for key, rows in original.items()}
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+
+    # External object rows can carry numeric data even in a masked slot.
+    for key in ("opponent_cards", "agent_permanents", "stack"):
+        assert obs[key + "_valid"][1, -1] == 0
+        obs[key][1, -1, column(key, "power")] = -0.3
+
+    # Relation padding is ignored. Include an isolated live row after a gap.
+    relations = obs["relations"]
+    relations.fill(0)
+    relations[:, -2:, column("relations", "mana_generic")] = 3
+    relations[:2, -1, column("relations", "valid")] = 1
+    relations[:2, -1, column("relations", "frame")] = 2
+    relations[:2, -1, column("relations", "parent")] = 1
+    relations[1, -1, column("relations", "frame_kind")] = 7
+
+    prepared = agent.prepare(obs)
+    for seat, key in enumerate(("agent_cards", "opponent_cards")):
+        numeric = read_numeric(obs[key], agent.readings[key])
+        expected = np.concatenate(
+            (numeric, obs["card_turn_state"][:, seat, :, None]), -1
+        )
+        np.testing.assert_array_equal(getattr(prepared, key), expected)
+    for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
+        np.testing.assert_array_equal(
+            prepared.permanents[:, seat], read_numeric(obs[key], agent.readings[key])
+        )
+    np.testing.assert_array_equal(
+        prepared.stack, read_numeric(obs["stack"], agent.readings["stack"])
+    )
+    live = relations[..., column("relations", "valid")] == 1
+    expected_relations = np.where(live[..., None], relations, 0)
+    for name in ("frame", "parent"):
+        expected_relations[1, -1, column("relations", name)] = 0
+    np.testing.assert_array_equal(
+        prepared.relation_features,
+        read_numeric(expected_relations, agent.readings["relations"]),
+    )
 
 
 def test_belief_rows_extend_all_flat_object_coordinates() -> None:

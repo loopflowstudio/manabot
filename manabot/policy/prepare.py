@@ -71,6 +71,7 @@ from manabot.policy.readings import (
     DURATION_FLAGS,
     PROGRAM_KINDS,
     RANK_SCALE,
+    ColumnReading,
     Reading,
     Readings,
     duration_flags,
@@ -591,6 +592,22 @@ def object_ownership(cards: int, permanents: int) -> np.ndarray:
     return np.repeat([True, False] * 3, [1, 1, cards, cards, permanents, permanents])
 
 
+def padded_rows(values: Array, selected: Array) -> Array:
+    """Restore gathered rows to their original coordinates, zero elsewhere."""
+    out = np.zeros((*selected.shape, *values.shape[1:]), dtype=values.dtype)
+    out[selected] = values
+    return out
+
+
+def read_object_numeric(values: Array, readings: Sequence[ColumnReading]) -> Array:
+    """Skip zero rows, which every object reading maps to zero. An external
+    observation can carry numeric data even in a masked object slot."""
+    present = values.any(axis=-1)
+    if present.all():
+        return read_numeric(values, readings)
+    return padded_rows(read_numeric(values[present], readings), present)
+
+
 def prepare(
     obs: ObservationBuffers,
     tables: Tables,
@@ -647,7 +664,7 @@ def prepare(
     objects = validity.shape[1]
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
-    numeric = read_numeric(permanents, layout.readings["agent_permanents"])
+    numeric = read_object_numeric(permanents, layout.readings["agent_permanents"])
     knowledge = obs["known_hand"]
     decklists = obs["decklists"]
     # Deprecated v9/v10 carry no positional rows. Current input must supply
@@ -671,23 +688,21 @@ def prepare(
 
     relations = obs["relations"]
     relation_valid = relations[..., RELATION_VALID_INDEX]
-    clean = np.where(relation_valid[..., None] == 1, relations, 0)
-    features = clean.copy()
-    pending = np.isin(clean[..., _RELATION_FRAME_KIND], (7, 8, 10))
-    features[..., _RELATION_FRAME_IDS] = np.where(
-        pending[..., None], 0, clean[..., _RELATION_FRAME_IDS]
+    live = relation_valid == 1
+    features = relations[live]
+    pending = np.isin(features[:, _RELATION_FRAME_KIND], (7, 8, 10))
+    features[pending, _RELATION_FRAME_IDS] = 0
+    relation_features = padded_rows(
+        read_numeric(features, layout.readings["relations"]), live
     )
-    relation_features = read_numeric(features, layout.readings["relations"])
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
     for link_column in _RELATION_OBJECT_COLUMNS:
-        indexes = clean[..., link_column].astype(np.int64)
+        indexes = np.where(live, relations[..., link_column], 0).astype(np.int64)
         relation_objects.append((base + (indexes - 1).clip(min=0)).reshape(-1))
         relation_masks.append((indexes > 0).astype(f32))
-    frame_ids = np.where(
-        relation_valid == 1, relations[..., _RELATION_FRAME], 1
-    ).astype(np.int64)
+    frame_ids = np.where(live, relations[..., _RELATION_FRAME], 1).astype(np.int64)
     frame_base = np.arange(batch)[:, None] * relation_count
     frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
 
@@ -712,7 +727,7 @@ def prepare(
         for seat in SEATS
     ]
     cards = [
-        read_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
+        read_object_numeric(obs[f"{seat}_cards"], layout.readings[f"{seat}_cards"])
         for seat in SEATS
     ]
     if "player_turn_state" in obs:
@@ -766,7 +781,7 @@ def prepare(
         deck_rows=tables.rows(decklists[..., _DECK_DEFINITION]),
         deck_counts=(decklists[..., _DECK_MAIN:] / f32(60)).astype(f32),
         permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-        stack=read_numeric(stack, layout.readings["stack"])
+        stack=read_object_numeric(stack, layout.readings["stack"])
         if stack is not None
         else None,
         stack_rows=tables.rows(stack[..., STACK_DEFINITION_INDEX])
@@ -881,12 +896,6 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     # its matrix shapes and gradient reduction order must remain unchanged.
     live = facts[valid]
 
-    def padded(values: Array) -> Array:
-        shape = (*valid.shape, *values.shape[1:])
-        result = np.zeros(shape, dtype=values.dtype)
-        result[valid] = values
-        return result
-
     kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
     ident, detail = (
         record_word(live, FACT_ID_INDEX),
@@ -935,8 +944,8 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         )
         token_rows[program] = tables.tokens(token_kind[program], detail[program])
         sources = tables.rows(live[..., FACT_SOURCE_INDEX])
-        id_mask = padded(named.astype(np.float32))
-        detail_mask = padded(named_detail.astype(np.float32))
+        id_mask = padded_rows(named.astype(np.float32), valid)
+        detail_mask = padded_rows(named_detail.astype(np.float32), valid)
     else:
         # Torch linear chooses a different accumulation path for strided inputs.
         columns = np.ascontiguousarray(columns[..., :-1])
@@ -946,19 +955,19 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         # Hashed records embed every row, padding included.
         id_mask = np.ones(valid.shape, np.float32)
         detail_mask = np.ones(valid.shape, np.float32)
-    links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
+    links = padded_rows(live[..., FACT_OBJECT_INDEX].astype(np.int64), valid)
     base = np.arange(batch)[:, None] * objects
-    all_programs = padded(program)
+    all_programs = padded_rows(program, valid)
     return FactRoutes(
-        kinds=padded(kinds),
-        columns=padded(columns),
-        id_rows=padded(id_rows),
+        kinds=padded_rows(kinds, valid),
+        columns=padded_rows(columns, valid),
+        id_rows=padded_rows(id_rows, valid),
         id_mask=id_mask,
-        detail_rows=padded(detail_rows),
+        detail_rows=padded_rows(detail_rows, valid),
         detail_mask=detail_mask,
-        token_rows=padded(token_rows),
+        token_rows=padded_rows(token_rows, valid),
         token_mask=all_programs.astype(np.float32),
-        source_rows=padded(sources),
+        source_rows=padded_rows(sources, valid),
         targets=(base + (links - 1).clip(min=0)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
         programs=_fact_programs(facts, all_programs, tables.order_lengths),

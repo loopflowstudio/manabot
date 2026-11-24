@@ -175,6 +175,10 @@ checkpoints or experiment evidence.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
+For dense observation dictionaries, `historical_mean` includes masked
+object slots. Preserve their supplied numeric features when skipping zero
+padding. Relation features use the relation validity column.
+
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic
 terms with their own logical denominators and clip/step once. Collection keeps

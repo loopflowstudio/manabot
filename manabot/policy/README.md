@@ -52,10 +52,12 @@ forward reads the result; no forward reads an observation dictionary.
   model derives them from the kinds `managym.observation_layout()` declares; a
   loaded one takes them from its checkpoint's `input_readings`, or
   `legacy_readings(space)` when the checkpoint predates the record. `prepare`
-  applies each numeric reading once, so a backend never scales a column, and
-  admission keys include the readings, so two models that differ in one
-  reading never share a prepared batch. A column whose kind has no reading
-  raises when the layout is built; joins and ids never reach a projection. A
+  skips all-zero card, permanent and stack rows when applying numeric readings.
+  It reads relation features at valid slots and restores the original row
+  coordinates for every backend. The host applies the readings once. Admission
+  keys include them, so two models that differ in one reading never share a
+  prepared batch. A column whose kind has no reading raises when the layout
+  is built; joins and ids never reach a projection. A
   reading may write more than one input (`duration`: four flags), so
   projection widths come from `Layout` (`numeric_width`, `fact_width`)
   ([how the network reads a column](../../docs/observation-and-model.md#how-the-network-reads-a-column)).
