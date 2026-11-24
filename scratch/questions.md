@@ -44,3 +44,5 @@ Batch 5e follows Scryfall's earliest non-digital printing for each set file (Opt
 Mode labels now come from `effects_description` when no idiomatic label exists. Some generated text is rough ("Draw 1 cards", Bushwhack's empty first clause, Crawling Barrens' "This object"); improving the shared description templates is left for a text pass.
 
 Use the verified Batch 5e checkout for compression. Compare the rebuilt extension's full definition JSON and catalog token table against a62143faef to check the shared pump constructor.
+
+Audit the remaining 57 rows in three passes. Put the 28 triggered creatures first so they can share entry, death and attack fixtures. Keep the 24 activation, characteristic, combat and choice rows together for the follow-up, and the five replacement rows together for the event audit.
