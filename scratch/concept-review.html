@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Departed Names, Damage Attribution, All-Zone CDAs &amp; Move Results</title>
+<title>MTG-418 Concept Review · Unified Damage Triggers, Triggering Nouns, Void/Disappear &amp; Scaled Live-Board Queries</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -86,7 +86,6 @@
     border-radius: 0 8px 8px 0;
     margin: 1rem 0;
   }
-  .callout.info { border-inline-start-color: var(--prop-fg); }
   ol.questions { padding-left: 1.35rem; }
   ol.questions li { margin: .9rem 0; }
   .choice { margin-top: .25rem; }
@@ -96,140 +95,130 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Post-Draw/Cast Concept Review · HEAD 68c767217e</div>
-  <h1>Do MTG-418’s LKI identity, damage events, zone-move results, and CDAs line up?</h1>
+  <div class="eyebrow">Managym · MTG-418 · Post-v29 Concept Review · HEAD d7ef237481</div>
+  <h1>Do MTG-418’s damage triggers, ability descriptions, turn departures, and live-board/move queries line up?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, permanent/spell LKI, damage &amp; zone-move
-    result queries, name/predicate/CDA evaluators, and canonical state hashing
-    (<code>state/src/{game_object,stack_object,predicate,card,ability}.rs</code>,
-    <code>src/state/hash.rs</code>,
-    <code>src/flow/{damage,decision,event,identity,layers,resolution,statics,triggers,turn,zones}.rs</code>,
-    <code>src/agent/{ability_description,continuation,effect_execution,observation}.rs</code>,
-    and <code>src/conformance.rs</code>) — reviewed as a whole against base <code>88ce96bd6b</code> after the
-    Draw/Cast/Spell-LKI slice landed (<code>d061f9a14a</code>..<code>68c767217e</code>, 54/81 primary FDN rows, EOE
-    <em>Unravel</em>, hash v28) and widened across the remaining 27 primary FDN rows, 10 history/query-gated
-    cost-primary candidates, and the two remaining cross-set witnesses (<em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>).
+    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, damage-trigger, contextual-query,
+    predicate, CDA, and ability-description layers
+    (<code>state/src/{ability,card,game_object,predicate}.rs</code>,
+    <code>src/flow/{damage,decision,event,layers,play,resolution,statics,triggers,turn,zones}.rs</code>,
+    <code>src/agent/ability_description.rs</code>, and <code>src/cards/deck_admission.rs</code>) — reviewed as a whole
+    against base <code>88ce96bd6b</code> after the v29 departed-name &amp; damage slice landed
+    (<code>2279c515b2</code>..<code>d7ef237481</code>, 58/81 primary FDN rows) and widened across the remaining
+    23 primary FDN rows, 9 pending history/query-gated cost-primary rows, and the 2 remaining cross-set witnesses
+    (<em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>).
   </p>
   <p class="small">
-    The Draw/Cast slice cleanly closed all four spell/multi-player mismatches from the prior review: <code>SpellLki</code> +
-    <code>Game::spell_info</code> replaced <code>ResolutionTarget.spell</code>, <code>ContextRead::TriggeringObject</code>
-    replaced <code>asks_triggering_spell</code> with departed-spell projection, <code>ForPlayer(EachPlayer)</code> runs in
-    APNAP order via <code>RestoreController</code>, and Finding 7 (zero-mode modal trigger text) is closed. Stepping back
-    at <code>68c767217e</code> exposes an active concept bug in <code>ObjectLki</code>’s name storage (causing
-    <code>compatibility_names_and_content_allocations_are_metamorphic</code> to fail and hiding a departed-<code>Clone</code>
-    printing bug) alongside four structural seams right ahead of the remaining 27 primary rows.
+    The v29 slice cleanly closed the prior review’s departed-name LKI mismatch (<code>ObjectLki.renamed</code> +
+    shared <code>lki_face_printing</code>/<code>lki_mana_printing</code> + CR 201.2a guard restored
+    <code>compatibility_names_and_content_allocations_are_metamorphic</code>), fixed stolen-spell attribution in
+    <code>source_controller</code>, and reset <code>frame.excess_damage</code> unconditionally. Stepping back across the
+    whole branch exposes <strong>five concrete mismatches</strong> — two introduced in v29 itself
+    (<code>DealsNoncombatDamage</code> and <code>name_triggering_object</code>) and three hiding in the upcoming
+    live-board, Void/Disappear, and move-result slices.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 68c767217e</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at d7ef237481</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code> at <code>68c767217e</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code> at <code>d7ef237481</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Turn history, spell LKI &amp; multi-player execution</strong><br><span class="small">CR 101.4, 400.7, 608.2h: closed per-seat turn counters, single <code>SpellLki</code> authority, APNAP <code>ForPlayer</code></span></td>
+        <td><strong>Turn history, spell LKI, departed-name LKI &amp; multi-player execution</strong><br><span class="small">CR 101.4, 201.2a, 400.7, 608.2h, 712.8e</span></td>
         <td>
           <code>PlayerTurnHistory</code> owns all 13 per-seat counters and v11 cols 8–14;
-          <code>GameState::spell_lki</code> + <code>Game::spell_info</code> own live &amp; departed spells;
-          <code>ContextRead::TriggeringObject</code> binds permanent/spell triggers uniformly;
-          <code>Effect::ForPlayer</code> + <code>RestoreController</code> handle multi-player loops across suspensions.
+          <code>ObjectLki.renamed</code> + <code>lki_face_printing</code>/<code>lki_mana_printing</code> keep
+          compatibility names out of canonical hash v29 and read copied/transformed faces;
+          <code>SpellLki</code> + <code>spell_info</code> + <code>source_controller</code> cover live/departed/stolen spells;
+          <code>ForPlayer</code> + <code>RestoreController</code> run APNAP/<code>TargetController</code> cleanly.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Closed cleanly in <code>d061f9a14a</code>..<code>4502508574</code> (hash v28).</td>
+        <td>Closed cleanly through hash v29 (<code>2279c515b2</code>).</td>
       </tr>
       <tr>
-        <td><strong>Card identity vs. layered names (live, departed, face-down &amp; copied)</strong><br><span class="small">CR 201.2a, 707.2, 712.8e: printed name belongs to immutable <code>ContentPack</code>; only runtime overrides (<em>Honest Work</em>, face-down) are mutable state; nameless objects never share a name</span></td>
+        <td><strong>Damage triggers &amp; damage event binding</strong><br><span class="small">CR 120.2–120.4, 510.2: one damage event filtered by kind (any/combat/noncombat), source (permanent or spell), and recipient (player or any)</span></td>
         <td>
-          <code>ObjectLki</code> (<code>game_object.rs:307</code>) unconditionally copies <code>characteristics.name</code>
-          into <code>pub name: String</code> and hashes it in <code>CanonicalMatchState</code> (<code>hash.rs:187</code>),
-          even though <code>hash.rs:331</code> promises hashes never observe compatibility names.
-          <code>lki_matches_predicate</code> (<code>statics.rs:540</code>) reads <code>source_base</code> instead of
-          <code>lki.copiable</code> (diverging from <code>departed_property</code> at <code>resolution.rs:92</code>).
-          <code>matches_permanent_facts</code> (<code>layers.rs:1523</code>) tests <code>source_name == Some(facts.name)</code>,
-          matching two nameless face-down permanents (<code>Some("") == Some("")</code>).
-          <code>CardPredicate</code> lacks fixed <code>named</code> and simultaneous target-namesake selection.
+          <code>TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }</code>
+          (<code>ability.rs:261</code>, brand new on this branch) encodes <code>combat == false</code> in the
+          <strong>variant name</strong>, uses <code>Actor</code> instead of <code>TriggerSubject</code>, and only
+          matches <code>DamageTarget::Player</code>.
+          <code>TriggerCondition::DealsCombatDamage</code> watches only <code>CombatDamageToPlayers</code>.
+          <code>event_amount</code> (<code>triggers.rs:162</code>) hardcodes <code>combat: false</code> +
+          <code>Player</code> for <code>DamageDealt</code>; <code>trigger_context</code> (<code>triggers.rs:1197</code>)
+          never binds <code>DamageDealt.source</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Biggest mismatch — active conformance failure + silent departed-Clone bug + hot-path allocation.</strong>
-          Breaks <code>compatibility_names_and_content_allocations_are_metamorphic</code> at step 47, gives departed
-          <code>Clone</code>s their original MV/supertypes in LKI predicates, violates CR 201.2a on face-down namesakes,
-          and blocks <em>Hare Apparent</em> and <em>Maelstrom Pulse</em>.
+          <strong>Biggest mismatch — one rules concept split into incompatible variants, actor shapes, and events.</strong>
+          Violates “parameters are fields, not variant names”, blocks <em>Quilled Greatwurm</em>’s combat-damage trigger
+          (any recipient), and leaves <code>DamageDealt</code> unable to bind its source or non-player amount.
         </td>
       </tr>
       <tr>
-        <td><strong>Damage attribution, noncombat triggers &amp; excess damage</strong><br><span class="small">CR 120.2–120.4: every damage event carries <code>combat</code>, exact source controller (including spells), and amount; excess resets per instruction</span></td>
+        <td><strong>Triggering-object pronoun in ability text</strong><br><span class="small"><code>ObjectSelector::Triggering</code> names “that spell / card / source / permanent” according to its enclosing trigger</span></td>
         <td>
-          <code>GameEvent::DamageDealt</code> (<code>event.rs:73</code>) drops <code>combat: bool</code>.
-          <code>Game::source_controller</code> (<code>damage.rs:260</code>) skips <code>spell_info</code> and falls back
-          to <code>provenance.owner</code> (unlike <code>source_keywords</code> right above it).
-          <code>event_amount</code> (<code>triggers.rs:160</code>) returns <code>0</code> and <code>event_player</code>
-          (<code>triggers.rs:1223</code>) returns <code>None</code> for <code>DamageDealt</code>.
-          <code>TriggerCondition</code> only has permanent-only <code>DealsCombatDamage</code>.
-          <code>EventBinding::Damage</code> (<code>decision.rs:1515</code>) retains stale <code>frame.excess_damage</code>
-          when damage is 0 or prevented.
+          <code>selector_description</code> (<code>ability_description.rs:766</code>) hardcodes
+          <code>"that permanent"</code>, then <code>trigger_description</code> (line 81) and
+          <code>GrantTriggered</code> (line 1360) run a post-hoc
+          <code>program.replace("that permanent", ...)</code> over the entire rendered string.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Split authority between combat-player hits and general damage.</strong>
-          Blocks <em>Niv-Mizzet, Visionary</em>, misattributes stolen-spell damage/lifelink to the card’s owner, and leaks
-          stale excess damage into <em>Goblin Negotiation</em> under prevention.
+          <strong>String-rewriting hack corrupts unrelated phrases.</strong> Any cast or graveyard trigger whose body
+          also refers to a target/chosen permanent or nests a <code>GrantTriggered</code> has its unrelated
+          <code>"that permanent"</code> rewritten to <code>"that spell"</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Zone-move results &amp; actual destination checks</strong><br><span class="small">CR 701.13c, 608.2c: simultaneous multi-player mill writes one result set; “put into a graveyard this way” distinguishes graveyard from exile replacement</span></td>
+        <td><strong>Void &amp; Disappear turn-departure / warp queries</strong><br><span class="small">EOE Void: any player’s nonland departure OR any player’s warped spell; TMT Disappear: your permanent departure</span></td>
         <td>
-          <code>Effect::MillCards</code> (<code>resolution.rs:1138</code>) accepts only one player (<code>target</code> or
-          <code>frame.controller</code>) and clears <code>frame.this_way</code> per call, so <code>ForPlayer(EachPlayer)</code>
-          clobbers the first player’s milled cards.
-          <code>EffectValue::Objects</code> (<code>resolution.rs:142</code>) checks no destination zone, so a creature
-          exiled by replacement still counts as “put into a graveyard this way”.
-          Meanwhile <code>Condition::TargetCardExiled</code> hardcodes exile-only checks.
+          <code>PlayerTurnHistory</code> already records, hashes, and encodes <code>permanents_left</code>,
+          <code>nonland_permanents_left</code>, and <code>warped_this_turn</code> (v11 cols 12–14), but no
+          <code>Condition</code> reads them and no <code>Game</code> commit helper writes <code>warped_this_turn</code>.
+          The prior plan’s parameterless <code>Condition::WarpedThisTurn</code> left whose warp counts ambiguous.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Two-player mill breaks batch identity; replacement effects corrupt destination counts.</strong>
-          Directly blocks <em>Dread Summons</em> under exile replacements and leaves move-result queries fragmented across
-          <code>Moved</code>, <code>CardsThisWayMatch</code>, and <code>TargetCardExiled</code>.
+          <strong>Missing reader + ambiguous actor scope + missing commit hook.</strong> Checking only
+          <code>controller</code> for <code>WarpedThisTurn</code> would silently break Void when an opponent warps a
+          spell; casting-permissions needs one <code>record_warped_cast</code> hook.
         </td>
       </tr>
       <tr>
-        <td><strong>All-zone characteristic-defining abilities (<code>*/*</code> &amp; <code>*/N</code>)</strong><br><span class="small">CR 604.3: one CDA definition drives Layer 7a and off-battlefield power &amp; toughness across any player’s graveyard</span></td>
+        <td><strong>Multiplied single-event quantities &amp; fixed-name predicates</strong><br><span class="small">CR 119.9 (“gain 2 life for each Gate” is ONE gain event); CR 201.5c (“named Hare Apparent” survives source departure/rename)</span></td>
         <td>
-          <code>PowerCda</code> (<code>card.rs:324</code>) only sets power (no <code>*/*</code>) and counts only
-          <em>your</em> graveyard (no <code>who: Actor</code>).
-          Evaluator logic is duplicated between <code>layers.rs::cda</code> (line 886) and
-          <code>statics.rs::cda_power</code> (line 618), with no off-battlefield toughness reader.
-          No deterministic reveal-until-land-then-mill effect exists for <em>Consuming Aberration</em>.
+          <code>EffectValue</code> has <code>Half</code> but no linear scaling (<code>Scaled</code>), forcing either
+          two separate <code>GainLife</code> instructions (breaking <em>Cat Collector</em> / <em>Exemplar of Light</em>
+          gain counts!) or a card-specific value variant.
+          <code>CardPredicate</code> has only source-relative <code>namesake</code> (which returns 0 once the entering
+          source leaves, violating CR 201.5c for <em>Hare Apparent</em>).
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>One rules concept duplicated in two evaluators and capped at power-only.</strong>
-          Blocks <em>Crusader of Odric</em> (<code>*/*</code>) and <em>Consuming Aberration</em> (<code>*/*</code> over
-          opponents’ graveyards + reveal-until-land).
+          <strong>Missing <code>EffectValue::Scaled</code> threatens CR 119.9 single-event fidelity; <code>namesake</code> fails CR 201.5c.</strong>
+          Blocks faithful authoring of <em>Archway Angel</em> and <em>Hare Apparent</em>.
         </td>
       </tr>
       <tr>
-        <td><strong>Turn-departure conditions &amp; counter-threshold state triggers</strong><br><span class="small">Void / Disappear read already-recorded turn departures; CR 603.8 state triggers cover both 0 and ≥N counters</span></td>
+        <td><strong>All-zone <code>*/*</code> CDAs, move-result zone checks &amp; state triggers</strong><br><span class="small">CR 604.3, 603.8, 701.13c, 201.2a: shared P/T CDA, multi-player mill + actual destination check, target+namesake destroy, ≥N counter state trigger</span></td>
         <td>
-          <code>PlayerTurnHistory</code> already records <code>permanents_left</code>, <code>nonland_permanents_left</code>,
-          and <code>warped_this_turn</code> (hashed &amp; encoded in v11 cols 12–14), but <em>no</em> <code>Condition</code>
-          reads them yet.
-          <code>check_state_triggers</code> (<code>triggers.rs:1429</code>) hardcodes <code>NoCounters</code> and ignores
-          <code>&gt;= N</code> counter state triggers.
+          <code>PowerCda</code> is power-only and controller-only, duplicated across <code>layers.rs</code> and
+          <code>statics.rs</code>; <code>Effect::MillCards</code> is single-player and <code>EffectValue::Objects</code>
+          has no <code>in_zone</code> filter; no <code>MillUntil</code> or <code>TargetAndSameName</code> exists;
+          <code>check_state_triggers</code> hardcodes <code>NoCounters</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>State already tracked, reader missing; state-trigger loop hardcoded to zero.</strong>
-          Leaves cross-set witnesses <em>Plasma Bolt</em> (void) and <em>Michelangelo, Game Master</em> (disappear) plus
-          <em>Mazemind Tome</em> (4+ page counters) unexpressed despite existing infrastructure.
+          <strong>Carried cleanly into Slices 2 and 3 below</strong> (<em>Crusader of Odric</em>, <em>Consuming Aberration</em>,
+          <em>Dread Summons</em>, <em>Cemetery Recruitment</em>, <em>Maelstrom Pulse</em>, <em>Mazemind Tome</em>).
         </td>
       </tr>
     </tbody>
@@ -237,68 +226,81 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch: Printed Compatibility Names vs. Rules-State Names in <code>ObjectLki</code></h2>
+  <h2>2. Biggest Mismatch: Split Damage Triggers (<code>DealsNoncombatDamage</code> vs. <code>DealsCombatDamage</code>)</h2>
   <div class="callout">
-    <strong>The core problem:</strong> In <code>managym</code>, a card’s printed name is an immutable catalog label owned
-    by <code>CardDefId</code> (never hashed in live <code>CanonicalCard</code> at <code>hash.rs:260</code>), whereas a
-    runtime name change (<code>SetCharacteristics { named }</code> or face-down <code>""</code>) is mutable rules state.
-    Storing <code>ObjectLki.name: String</code> unconditionally blurred the two: it broke metamorphic name-independence,
-    allocated a heap <code>String</code> on every trigger snapshot, and masked the fact that
-    <code>lki_matches_predicate</code> wasn’t reading <code>lki.copiable</code> at all.
+    <strong>The core problem:</strong> <code>GameEvent::DamageDealt</code> already carries <code>source</code>,
+    <code>target: Player | Permanent</code>, <code>amount</code>, and <code>combat: bool</code> for every committed
+    damage event. Yet v29 added a brand-new, narrow variant
+    <code>TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }</code> alongside permanent-only
+    <code>DealsCombatDamage { subject, to, per }</code>. Because <code>DealsNoncombatDamage</code> has zero pinned-pilot
+    history, unifying it now into one parameterized <code>TriggerCondition::DealsDamage</code> costs zero token renames
+    and removes the split before more damage cards land.
   </div>
 
   <h3>Concrete interaction walkthrough (normal path, failure, and recovery)</h3>
   <p>
-    <strong>Scenario A (Metamorphic conformance + departed <code>Clone</code>):</strong> A <code>Clone</code> enters as a
-    copy of a <code>Basic Plains</code> (or <em>Honest Work</em> renames a creature to <code>"Citizen"</code>), then dies
-    in step 47. Meanwhile, <code>verify_metamorphic</code> renames every <code>Object.name</code> to
-    <code>"compatibility-name-{i}"</code> and compares state hashes across every command and fork.<br>
-    <strong>Scenario B (Face-down <em>Maelstrom Pulse</em>):</strong> Two face-down 2/2 creatures (nameless, CR 708.2a)
-    and two <code>Gray Ogre</code>s are on the battlefield. Seat 0 casts <em>Maelstrom Pulse</em> targeting one face-down
-    creature, then in a forked branch targets a <code>Gray Ogre</code>.
+    <strong>Scenario A (<em>Niv-Mizzet, Visionary</em> + stolen spell + departed permanent):</strong> Seat 0 controls
+    <em>Niv-Mizzet, Visionary</em>, casts Seat 1’s exiled <em>Lightning Bolt</em> at Seat 1 (3 noncombat damage), then
+    sacrifices <em>Fanatical Firebrand</em> to ping Seat 1 (1 noncombat damage from a departed permanent), then attacks
+    with <em>Niv-Mizzet</em> (5 combat damage).<br>
+    <strong>Scenario B (<em>Quilled Greatwurm</em> combat damage to a blocker):</strong> Seat 0 controls
+    <em>Quilled Greatwurm</em> and attacks with a 3/3 <em>Hill Giant</em>; Seat 1 blocks with a 2/2 <em>Gray Ogre</em>.
+    <em>Hill Giant</em> deals 3 combat damage to a <strong>creature</strong> (not a player) and must get 3 +1/+1 counters
+    from the single damage trigger.
   </p>
   <div class="grid">
     <div class="panel existing-box">
-      <h3>Before <span class="badge existing">Existing at 68c767217e</span></h3>
-      <ol>
-        <li><strong>Metamorphic failure at step 47:</strong> First permanent leaves the battlefield;
-          <code>snapshot_current_permanent</code> writes <code>name: characteristics.name.clone()</code>
-          (<code>"compatibility-name-14"</code> vs. <code>"Gray Ogre"</code>) directly into <code>ObjectLki</code>,
-          which <code>hash.rs:187</code> serializes raw — hashes diverge immediately.</li>
-        <li><strong>Departed <code>Clone</code> bug:</strong> <code>lki_matches_predicate</code> (<code>statics.rs:540</code>)
-          calls <code>self.state.source_base(lki.object)</code>, ignoring <code>lki.copiable</code>. A departed
-          <code>Clone</code> of a <code>Savannah Lions</code> (MV 1) or <code>Basic Plains</code> (Basic, MV 0) is tested
-          against <code>Clone</code>’s printing (MV 4, non-basic)!</li>
-        <li><strong>CR 201.2a violation:</strong> <code>matches_permanent_facts</code> (<code>layers.rs:1523</code>) checks
-          <code>source_name == Some(facts.name)</code>. Two nameless face-down permanents have <code>"" == ""</code> and
-          falsely match as namesakes.</li>
-        <li><strong><em>Maelstrom Pulse</em> blocked:</strong> No single selector names “target nonland permanent plus all
-          other permanents sharing its non-empty layered name” in one simultaneous <code>EventBinding::Destroyed</code> batch.</li>
-      </ol>
+      <h3>Before <span class="badge existing">Existing at d7ef237481</span></h3>
+      <pre>enum TriggerCondition {
+  // Watches CombatDamageToPlayers (players only!)
+  DealsCombatDamage {
+    subject: TriggerSubject,
+    to: Actor,
+    per: Per,
+  },
+  // Brand new in v29: noncombat + player only,
+  // wrong actor shape (Actor, not TriggerSubject)
+  DealsNoncombatDamage {
+    source: Actor,
+    to: Actor,
+  },
+}
+
+// triggers.rs:162 — artificially gated!
+(DamageDealt { target: Player(_), amount,
+               combat: false, .. }, None) =&gt; *amount</pre>
+      <p class="small">
+        Scenario A passes only by special-casing noncombat player damage; Scenario B cannot even be expressed
+        (<code>Quilled Greatwurm</code>’s ledger blocker explicitly cites this split), and <code>trigger_context</code>
+        never binds <code>DamageDealt.source</code>.
+      </p>
     </div>
     <div class="panel proposed-box">
-      <h3>After <span class="badge proposed">Proposed · Hash v29</span></h3>
-      <ol>
-        <li><strong>One rules-only field on <code>ObjectLki</code>:</strong> Replace <code>pub name: String</code> with
-          <code>#[serde(skip_serializing_if = "Option::is_none")] pub renamed: Option&lt;String&gt;</code>, set
-          <strong>only</strong> when <code>characteristics.name != definition.name</code> (i.e., <em>Honest Work</em>’s
-          <code>"Citizen"</code> or face-down <code>""</code>). Unmodified printed &amp; copied cards store
-          <code>None</code> — zero compatibility-name leakage into <code>deterministic_hash</code> and zero
-          <code>String</code> clone on every trigger snapshot.</li>
-        <li><strong>One departed-printing helper:</strong> Extract <code>Game::lki_face_printing(lki)</code>
-          (<code>copiable.printed</code> else <code>source_base</code> → name &amp; supertypes) and
-          <code>Game::lki_mana_printing(lki)</code> (<code>copiable.front</code> else <code>lki_face_printing</code> →
-          mana value, CR 712.8e). Both <code>lki_matches_predicate</code> and <code>departed_property</code> share them;
-          departed effective name is <code>lki.renamed.as_deref().unwrap_or(&amp;face.name)</code>.</li>
-        <li><strong>CR 201.2a enforced once:</strong> <code>same_name(a, b) = !a.is_empty() &amp;&amp; a == b</code> in
-          <code>matches_permanent_facts</code>, shared by <code>namesake</code> and new <code>CardPredicate.named</code>
-          (with <code>ReadSet</code> marking <code>NAME</code>).</li>
-        <li><strong>Simultaneous <em>Maelstrom Pulse</em>:</strong> <code>ObjectSelector::TargetAndSameName(TargetSpec)</code>
-          declares the target requirement once, requires a legal primary target (CR 608.2b), and resolves to
-          <code>[target]</code> plus every other permanent with <code>same_name(&amp;target_name, &amp;other_name)</code> in
-          one simultaneous <code>EventBinding::Destroyed</code> batch — destroying only the targeted face-down creature in
-          Branch 1 and both <code>Gray Ogre</code>s in Branch 2.</li>
-      </ol>
+      <h3>After <span class="badge proposed">Proposed · Next Slice</span></h3>
+      <pre>enum DamageKind { Any, Combat, Noncombat }
+enum DamageRecipientFilter { Player(Actor), Any }
+
+enum TriggerCondition {
+  // Legacy/batch combat-to-player (kept for pinned pilots)
+  DealsCombatDamage { subject, to, per },
+  // Replaces branch-only DealsNoncombatDamage:
+  DealsDamage {
+    kind: DamageKind,
+    source: TriggerSubject,
+    to: DamageRecipientFilter,
+  },
+}
+
+// triggers.rs — binds EVERY DamageDealt uniformly:
+(DamageDealt { amount, .. }, None) =&gt; *amount as i32
+// trigger_context binds DamageDealt.source (live/LKI/spell)</pre>
+      <p class="small">
+        One <code>subject_matches_damage_source</code> helper checks <code>source_controller</code> plus live, LKI, or
+        recorded predicate matching (empty predicate = any source, permanent or spell). Both Scenario A
+        (<code>Noncombat, you_control(default), Player(Opponent)</code>) and Scenario B
+        (<code>Combat, you_control(creature), Any</code>) flow through the same matcher, amount binding, and
+        <code>ObjectSelector::Triggering</code> context.
+      </p>
     </div>
   </div>
 
@@ -313,40 +315,29 @@
     </thead>
     <tbody>
       <tr>
-        <td><strong>Renamed card (<em>Honest Work</em>) in metamorphic test</strong></td>
-        <td>If <code>renamed</code> were omitted from the hash altogether, two games differing in a departed permanent’s
-          layered name would collide.</td>
-        <td><code>SetCharacteristics { named: "Citizen" }</code> sets <code>characteristics.name = "Citizen"</code> while
-          <code>definition.name</code> is <code>"compatibility-name-k"</code> (or <code>"Gray Ogre"</code>); both store
-          <code>renamed: Some("Citizen")</code> and hash identically!</td>
+        <td><strong>Stolen spell / departed permanent in <code>DealsDamage</code></strong></td>
+        <td><code>subject_matches_permanent</code> rejects spells (no <code>PermanentId</code>) and departed permanents.</td>
+        <td><code>subject_matches_damage_source</code> reads <code>source_controller(src)</code> (live permanent → LKI → live spell → <code>spell_lki</code> → owner) and treats empty <code>CardPredicate::default()</code> as matching any source, else checks permanent/LKI/recorded predicate.</td>
       </tr>
       <tr>
-        <td><strong>Transformed permanent dying</strong></td>
-        <td>Back face has a different name/supertypes than front face, while CR 712.8e says mana value is the front face’s.</td>
-        <td><code>lki_face_printing</code> reads <code>copiable.printed</code> (back face name &amp; supertypes);
-          <code>lki_mana_printing</code> reads <code>copiable.front</code> (front face mana value).</td>
+        <td><strong>Cast trigger with nested <code>GrantTriggered</code> or target permanent</strong></td>
+        <td><code>name_triggering_object</code>’s blanket <code>.replace("that permanent", "that spell")</code> corrupts unrelated permanent wording.</td>
+        <td>Threading <code>triggering_noun</code> into <code>selector_description</code> rewrites <em>only</em> <code>ObjectSelector::Triggering</code> and resets the noun inside each nested <code>GrantTriggered</code>.</td>
       </tr>
       <tr>
-        <td><strong>Stolen spell + <em>Niv-Mizzet, Visionary</em> + lifelink</strong></td>
-        <td>Seat 0 casts Seat 1’s exiled <em>Lightning Bolt</em> targeting Seat 1. Current <code>source_controller</code>
-          skips <code>spell_info</code> and returns Seat 1 (owner).</td>
-        <td><code>source_controller</code> checks permanent → <code>object_lki</code> → <code>spell_info</code> → owner,
-          returning Seat 0; Seat 0’s <em>Niv-Mizzet</em> draws 3 via <code>triggering_amount</code> (v11 slot 16).</td>
+        <td><strong>Opponent warps a spell (EOE Void)</strong></td>
+        <td>A parameterless <code>Condition::WarpedThisTurn</code> checking only <code>history[controller.0]</code> returns <code>false</code> when seat 1 warped.</td>
+        <td><code>Condition::WarpedThisTurn { who: Actor }</code> checks any seat matching <code>who.includes(controller, seat)</code>; Void uses <code>Actor::AnyPlayer</code> for both <code>PermanentLeftThisTurn</code> and <code>WarpedThisTurn</code>.</td>
       </tr>
       <tr>
-        <td><strong><em>Dread Summons</em> under exile replacement (<em>Rest in Peace</em>)</strong></td>
-        <td>Milled creatures are moved to exile; <code>frame.this_way</code> records all moved cards per CR 701.13c, so an
-          unfiltered count would still create Zombies.</td>
-        <td><code>Effect::MillCards</code> with <code>player: Some(EachPlayer)</code> commits one <code>ThisWay</code> batch;
-          <code>EffectValue::Objects { of: CardsThisWay, predicate: Some(creature), in_zone: Some(Graveyard) }</code> counts
-          only creatures that actually reached a graveyard.</td>
+        <td><strong><em>Archway Angel</em> + <em>Cat Collector</em> / <em>Exemplar of Light</em></strong></td>
+        <td>Authoring “gain 2 life for each Gate” as two <code>GainLife</code> instructions emits two <code>LifeChanged</code> events, giving <em>Exemplar</em> two counters instead of one (violating CR 119.9).</td>
+        <td><code>EffectValue::Scaled { factor: 2, value: each_you_control(Gate).count() }</code> evaluates <code>2 * gates</code> into one <code>GainLife</code> instruction and one <code>LifeChanged</code> event.</td>
       </tr>
       <tr>
-        <td><strong><em>Goblin Negotiation</em> with prevented or 0 damage</strong></td>
-        <td><code>commit_damage</code> returns <code>excess_damage: None</code>; current <code>EventBinding::Damage</code>
-          skips updating <code>frame.excess_damage</code>.</td>
-        <td><code>EventBinding::Damage</code> unconditionally sets <code>frame.excess_damage = excess.unwrap_or(0)</code>,
-          producing 0 Goblins while preserving CR 120.4a excess calculation against indestructible creatures.</td>
+        <td><strong><em>Hare Apparent</em> killed or renamed before ETB resolves (CR 201.5c)</strong></td>
+        <td><code>CardPredicate { namesake: true }</code> reads <code>source_permanent_id(frame)</code>, returning <code>None</code> (0 Rabbits) after <em>Lightning Bolt</em> or counting Citizens after <em>Honest Work</em>.</td>
+        <td><code>CardPredicate.named: Some("Hare Apparent")</code> tests CR 201.2a non-empty equality against each other controlled creature’s effective layered name, independent of the entering source’s fate.</td>
       </tr>
     </tbody>
   </table>
@@ -355,46 +346,47 @@
 <section>
   <h2>3. Architectural Plan to Close All 81 Primary FDN Rows <span class="badge proposed">Written into scratch/plan.md</span></h2>
   <p>
-    With 54 of 81 primary FDN rows + EOE <em>Unravel</em> landed, the remaining <strong>27 primary FDN rows</strong>,
+    With 58 of 81 primary FDN rows landed on hash v29, the remaining <strong>23 primary FDN rows</strong>,
     <strong>2 cross-set witnesses</strong> (<em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>), and feasible
-    cost-primary candidates factor cleanly into <strong>four cohesive slices</strong> (starting with the active metamorphic
-    fix + Damage batch on hash v29):
+    cost-primary candidates close cleanly in <strong>three slices</strong> (pulling live-board <em>Ghalta</em> into the
+    next slice beside <em>Brass’s Bounty</em> in <code>rix.rs</code>):
   </p>
   <pre>
-Next slice · Departed-name LKI repair &amp; damage recipients, amounts and results (Hash v29 · 54 → 58/81 + cost)
-  1. ObjectLki.renamed: Option&lt;String&gt; (replace ObjectLki.name) + shared lki_face_printing / lki_mana_printing
-     in statics.rs &amp; resolution.rs + CR 201.2a same_name guard in matches_permanent_facts
-     → restores compatibility_names_and_content_allocations_are_metamorphic
-  2. GameEvent::DamageDealt.combat + Game::source_controller spell_info fix
-     + TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor } wired to triggering_amount (v11 slot 16)
-     + unconditional frame.excess_damage = excess.unwrap_or(0) in EventBinding::Damage
-  Cards: Goblin Negotiation, Niv-Mizzet, Visionary, Gateway Sneak, Trygon Predator;
-         Lathril, Blade of the Elves† (if multi-tap Elf cost is straightforward); record Quilled Greatwurm† blocker.
+Next slice · Damage-trigger cleanup, triggering-noun threading, live-board counts, name predicates &amp; turn departures
+             (10 primary → 68/81 + 3 cost + 2 cross-set = 15 cards; zero new match-state hash fields)
+  1. Replace branch-only DealsNoncombatDamage with DealsDamage { kind: DamageKind, source: TriggerSubject,
+     to: DamageRecipientFilter } on DamageDealt; generalize event_amount &amp; trigger_context for DamageDealt;
+     keep DealsCombatDamage for pinned pilots &amp; Per::Batch; update Quilled Greatwurm’s ledger blocker.
+  2. Delete name_triggering_object string rewrite; thread triggering_noun into selector_description for Triggering.
+  3. Add CardPredicate.named: Option&lt;String&gt; (CR 201.2a across live/departed/off-battlefield + ReadSet NAME).
+  4. Add EffectValue::Scaled { factor: i32, value: Box&lt;EffectValue&gt; } (CR 119.9 single gain event for Archway Angel).
+  5. Add Condition::PermanentLeftThisTurn { who: Actor, nonland: bool } + Condition::WarpedThisTurn { who: Actor }
+     reading existing PlayerTurnHistory cols 12–14 + Game::record_warped_cast(player) commit boundary.
+  Cards: Hare Apparent (fdn, token.rabbit), Brass's Bounty (rix), Krenko, Mob Boss (m13), Dwynen's Elite (ori),
+         Inspiring Call (dtk), Ingenious Leonin (fdn), Leonin Vanguard (m19), Volley Veteran (m19),
+         Archway Angel (rna), Dragonmaster Outcast (wwk);
+         Elvish Archdruid† (m10), Cryptic Caves† (m20), Ghalta, Primal Hunger† (rix);
+         cross-set witnesses Plasma Bolt (eoe, void) and Michelangelo, Game Master (tmt, disappear).
 
-Slice 2 · Live-board counts, name predicates &amp; turn departures (58 → 68/81 + 2 cost + 2 cross-set = 14 cards)
-  1. CardPredicate.named: Option&lt;String&gt; (CR 201.2a + ReadSet NAME)
-  2. Condition::PermanentLeftThisTurn { who: Actor, nonland: bool } + Condition::WarpedThisTurn
-     (reading existing PlayerTurnHistory cols 12–14 — zero new state or hash fields)
-  Cards: Hare Apparent, Brass's Bounty, Krenko, Mob Boss, Dwynen's Elite, Inspiring Call, Ingenious Leonin,
-         Leonin Vanguard, Volley Veteran, Archway Angel, Dragonmaster Outcast;
-         Elvish Archdruid†, Cryptic Caves†; Plasma Bolt (EOE, void), Michelangelo, Game Master (TMT, disappear).
-
-Slice 3 · Graveyard thresholds, all-zone */* CDAs &amp; move results (68 → 80/81 + 1 cost = 13 cards)
+Slice 2 · Graveyard thresholds, all-zone */* CDAs &amp; move results (12 primary → 80/81)
   1. PowerCda::GraveyardMatchingBy { who: Actor, predicate } + StaticAbility::CharacteristicPt(PowerCda)
-     (shared evaluator across layers.rs &amp; off-battlefield statics.rs, including off-battlefield toughness)
-  2. Effect::MillUntil { player: PlayerSelector, predicate } (deterministic reveal + single ThisWay batch)
+     (shared evaluator across layers.rs &amp; off-battlefield statics.rs, including off-battlefield toughness).
+  2. Effect::MillUntil { player: PlayerSelector, predicate } (deterministic reveal + single ThisWay batch).
   3. Effect::MillCards optional player: Option&lt;PlayerSelector&gt; + EffectValue::Objects.in_zone: Option&lt;ZoneType&gt;
-  4. ObjectSelector::TargetAndSameName(TargetSpec) (simultaneous target + CR 201.2a namesake destruction)
+     (unifying Dread Summons under exile replacement, Cemetery Recruitment, and Scavenging Ooze).
+  4. ObjectSelector::TargetAndSameName(TargetSpec) (simultaneous target + CR 201.2a namesake destruction).
   Cards: Kiora, the Rising Tide, Crypt Feaster, Revenge of the Rats, Consuming Aberration, Enigma Drake,
          Crusader of Odric, Stroke of Midnight, Scavenging Ooze, Cemetery Recruitment, Dread Summons,
-         Maelstrom Pulse, Feed the Swarm; Ghalta, Primal Hunger†.
+         Maelstrom Pulse, Feed the Swarm.
 
-Slice 4 · State triggers, remaining cost rows, CR 104.4b draw &amp; closure (80 → 81/81 + cleanup + conformance)
-  1. check_state_triggers (CR 603.8) generalized for TriggerCondition::CountersAtLeast { kind, count } + CounterKind::Page
-     → Mazemind Tome (81/81 primary FDN rows complete)
-  2. Remaining feasible cost-primary rows (Ravenous Amulet, Mentor of the Meek, Immersturm Predator, Fishing Pole,
-     Ballyrush Banneret, Arcane Epiphany, Gate Colossus) + concrete blockers for out-of-scope costs (Ovika, Greatwurm)
-  3. Dedicated CR 104.4b mandatory-loop draw slice + Findings 3–5 cleanup + final conformance evidence re-record.
+Slice 3 · State triggers, remaining cost rows, CR 104.4b draw &amp; closure (1 primary → 81/81 + cleanup + conformance)
+  1. Generalize check_state_triggers (CR 603.8) for TriggerCondition::CountersAtLeast { kind, count } + CounterKind::Page
+     → Mazemind Tome (81/81 primary FDN rows complete).
+  2. Author remaining feasible cost-primary rows (Ravenous Amulet†, Mentor of the Meek†, Immersturm Predator†,
+     Fishing Pole†, Ballyrush Banneret†, Arcane Epiphany†, Gate Colossus†); record concrete blockers for out-of-scope
+     mechanics (Ovika’s composite ward cost, Quilled Greatwurm’s graveyard cast + distributed counter removal).
+  3. Dedicated CR 104.4b mandatory-loop draw slice (GameOutcome::Draw + tick.rs cycle detection with loop partner)
+     + Findings 3–5 cleanup + final re-recording of evidence-opening-v1.json.
   </pre>
 </section>
 
@@ -406,58 +398,56 @@ Slice 4 · State triggers, remaining cost rows, CR 104.4b draw &amp; closure (80
   </p>
   <ol class="questions">
     <li>
-      <strong>How should <code>compatibility_names_and_content_allocations_are_metamorphic</code> be fixed for <code>ObjectLki</code>?</strong>
+      <strong>How should <code>TriggerCondition::DealsNoncombatDamage</code> be reconciled with <code>DealsCombatDamage</code>?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Replace <code>ObjectLki.name: String</code> with
-        <code>#[serde(skip_serializing_if = "Option::is_none")] pub renamed: Option&lt;String&gt;</code> populated only
-        when <code>characteristics.name != definition.name</code>, and derive unmodified departed names from shared
-        <code>lki_face_printing</code>. Preserves the metamorphic hash guarantee, fixes the departed-<code>Clone</code>
-        printing bug, and removes a per-snapshot <code>String</code> allocation.
+        <span class="selected">1a (Selected):</span> Replace the branch-only <code>DealsNoncombatDamage</code> with
+        <code>TriggerCondition::DealsDamage { kind: DamageKind, source: TriggerSubject, to: DamageRecipientFilter }</code>
+        on <code>EventKind::DamageDealt</code>, while keeping <code>DealsCombatDamage</code> for pinned pilots and
+        <code>Per::Batch</code> combat-player hits. Zero token renames, fixes the shape-review defect immediately, and
+        unblocks permanent-recipient damage triggers (<em>Quilled Greatwurm</em>).
       </div>
       <div class="choice">
-        1b: Keep <code>ObjectLki.name: String</code> and teach <code>rename_compatibility_cards</code> in the test to also
-        rewrite <code>ObjectLki</code>. (Passed over: violates <code>hash.rs:331</code>’s stated contract and leaves
-        compatibility names leaking into every production match-state hash.)
-      </div>
-    </li>
-    <li>
-      <strong>How should <em>Maelstrom Pulse</em> express “target nonland permanent and all other permanents with the same name as that permanent”?</strong>
-      <div class="choice">
-        <span class="selected">2a (Selected):</span> Add <code>ObjectSelector::TargetAndSameName(TargetSpec)</code> so one
-        <code>Effect::Destroy</code> declares the target requirement, enforces CR 608.2b target legality, destroys the whole
-        set in one simultaneous <code>EventBinding::Destroyed</code> batch, and destroys only the target itself when
-        targeting a nameless face-down permanent (CR 201.2a).
-      </div>
-      <div class="choice">
-        2b: Add a <code>same_name_as_target: bool</code> flag onto <code>CardPredicate</code>. (Passed over: leaks
-        resolution-target state into <code>CardPredicate</code> and breaks CR 201.2a on nameless targets unless special-cased.)
+        1b: Keep <code>DealsNoncombatDamage { source: Actor, to: Actor }</code> as-is and add a third variant when
+        permanent-recipient damage triggers are needed. (Passed over: cements a split variant/actor model that violates
+        “parameters are fields, not variant names”.)
       </div>
     </li>
     <li>
-      <strong>How should <em>Dread Summons</em> verify that milled creatures actually entered a graveyard under exile replacements?</strong>
+      <strong>How should <em>Archway Angel</em>’s “gain 2 life for each Gate you control” scale a counted quantity?</strong>
       <div class="choice">
-        <span class="selected">3a (Selected):</span> Add <code>#[serde(default, skip_serializing_if = "Option::is_none")] in_zone: Option&lt;ZoneType&gt;</code>
-        to <code>EffectValue::Objects</code> alongside <code>Effect::MillCards.player: Option&lt;PlayerSelector&gt;</code>.
-        Preserves CR 701.13c public-zone tracking in <code>frame.this_way</code> while letting any instruction-result count
-        check actual destination zone without card-specific conditions.
+        <span class="selected">2a (Selected):</span> Add <code>EffectValue::Scaled { factor: i32, value: Box&lt;EffectValue&gt; }</code>
+        so the doubled amount flows into a single <code>Effect::GainLife</code> and commits one <code>LifeChanged</code>
+        event (CR 119.9), matching <code>EffectValue::Half</code> symmetrically.
       </div>
       <div class="choice">
-        3b: Drop exiled cards from <code>frame.this_way</code> inside <code>EventBinding::ThisWay</code>. (Passed over:
-        breaks CR 701.13c effects that find milled cards in exile, and couples <code>EventBinding::ThisWay</code> to
-        graveyard-only callers.)
+        2b: Emit two <code>Effect::GainLife</code> instructions in sequence. (Passed over: produces two life-gain events,
+        corrupting <em>Cat Collector</em>, <em>Vanguard Seraph</em>, and <em>Exemplar of Light</em>.)
       </div>
     </li>
     <li>
-      <strong>How should <em>Trygon Predator</em> target “artifact or enchantment that player controls”?</strong>
+      <strong>Should <code>Condition::WarpedThisTurn</code> take <code>who: Actor</code> symmetrically with <code>PermanentLeftThisTurn</code>?</strong>
       <div class="choice">
-        <span class="selected">4a (Selected):</span> Use existing <code>TargetSpec::PermanentOpponentControls</code>,
-        matching <code>managym</code>’s explicit two-player boundary (same as <code>OpponentLostLifeThisTurnAtLeast</code>
-        and <code>PlayerSelector::EachOpponent</code>): in a 2-player game, combat damage can only be dealt to an opponent.
+        <span class="selected">3a (Selected):</span> Yes — <code>Condition::WarpedThisTurn { who: Actor }</code> plus
+        <code>Game::record_warped_cast(player)</code> so EOE Void uses <code>Actor::AnyPlayer</code> for both halves
+        (matching the official rule that an opponent’s warped spell turns on Void) while any future “you warped” card
+        reuses the same condition.
       </div>
       <div class="choice">
-        4b: Plumb <code>triggering_player: Option&lt;PlayerId&gt;</code> through <code>target_meets_requirement</code> and
-        add a new <code>TargetSpec::PermanentControlledBy(PlayerSelector)</code> variant. (Passed over: adds cross-cutting
-        target-authority plumbing with zero observable difference in 2-player games.)
+        3b: Keep parameterless <code>Condition::WarpedThisTurn</code> hardcoding any-player or controller-only. (Passed
+        over: hides whose warp is checked and breaks symmetry with <code>PermanentLeftThisTurn { who, nonland }</code>.)
+      </div>
+    </li>
+    <li>
+      <strong>How should <em>Hare Apparent</em>’s “A deck can have any number of cards named Hare Apparent” be handled?</strong>
+      <div class="choice">
+        <span class="selected">4a (Selected):</span> Author <em>Hare Apparent</em> now with <code>CardPredicate.named</code>;
+        since <code>development-v1</code> (<code>deck_admission.rs:225</code>) intentionally enforces no 4-copy tournament
+        limit, any count is already admitted, and the ledger preserves its <code>game_procedure</code> note for future
+        tournament legality rules.
+      </div>
+      <div class="choice">
+        4b: Introduce a tournament 4-copy validator inside MTG-418 just to exempt <em>Hare Apparent</em>. (Passed over:
+        out-of-scope game-procedure work that contradicts <code>development_construction_is_not_tournament_legality</code>.)
       </div>
     </li>
   </ol>
