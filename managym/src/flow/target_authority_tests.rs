@@ -967,10 +967,9 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     );
 }
 
-/// The identity cut preserves the historical departed-source base predicate,
-/// even if the same physical card later enters as a different copy.
+/// A departure trigger matches the face the source had when it left play.
 #[test]
-fn retained_departure_predicate_uses_base_after_copy_reentry() {
+fn retained_departure_predicate_uses_departing_copy_after_reentry() {
     use crate::flow::triggers::TriggerSourceSnapshot;
     use crate::state::card::{CardType, StaticAbility};
     let (mut game, bolt, _, Target::Permanent(ogre), Target::Permanent(land)) = fixture() else {
@@ -981,9 +980,15 @@ fn retained_departure_predicate_uses_base_after_copy_reentry() {
     game.state[grantor]
         .statics
         .push(StaticAbility::TriggersAdditionalTime(CardPredicate {
-            card_type: Some(CardType::Creature),
+            card_type: Some(CardType::Land),
             ..Default::default()
         }));
+    let printed = TriggerSourceSnapshot {
+        controller: PlayerId(0),
+        lki: game.snapshot_current_permanent(object).unwrap(),
+    };
+    assert_eq!(game.additional_trigger_times(&printed), 0);
+
     let template = game.state[grantor].clone();
     game.state[object].become_copy_of(&template, &[]);
     let source = TriggerSourceSnapshot {
