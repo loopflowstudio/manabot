@@ -208,10 +208,11 @@ A `SnapshotBank` stores decisions that self-play can revisit. Use both learning
 seats, complete-game closure and a self-play behavior policy. Snapshot collection
 and adaptive matchup sampling each own the episode schedule.
 
-Save this recipe as `snapshot_recipe.py`. It runs the single-process Python
-vector. Snapshot collection requires `workers=1`. A recipe may also supply its
-own buffered `SnapshotVector` instance or a factory taking
-`(observation_space, match, num_envs, seed)`.
+Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` enables
+deferred reset across native workers (`1 <= workers <= streams`). With one worker
+you may also supply a buffered `SnapshotVector` or a factory accepting
+`(observation_space, match, num_envs, seed)`. The deprecated
+`InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
 
 ```python
 from typing import Literal
@@ -221,13 +222,13 @@ from pydantic import Field
 
 from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import CLOCKS, self_play
-from manabot.training.rollout.snapshot_vector import InMemorySnapshotVector
 from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
 
 
 class SnapshotRecipeConfig(BaselineConfig):
     updates: int = Field(default=8, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
+    workers: int = Field(default=2, ge=1)
     replay_fraction: float = Field(default=0.5, ge=0, le=1)
     fresh_floor: float = Field(default=0.25, ge=0, le=1)
     group_size: int = Field(default=4, ge=1)
@@ -245,9 +246,11 @@ def train(config: SnapshotRecipeConfig) -> None:
         fresh_weight=0.0 if config.plr_perp else 1.0,
         capture=CapturePolicy(every_n_decisions=8, max_captures_per_batch=16),
     )
-    inputs = settings(config).model_copy(update={"snapshot": snapshot})
+    inputs = settings(config).model_copy(
+        update={"snapshot": snapshot, "workers": config.workers}
+    )
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(inputs, run, updates=config.updates, snapshot_vector=InMemorySnapshotVector.factory)
+        self_play(inputs, run, updates=config.updates)
 ```
 
 ```bash
@@ -282,11 +285,22 @@ Each span indexes its viewer in `next_obs`. Real terminals alone set `dones`.
 Credit and the batch inspector follow these spans. `batch.trajectory_rows()`
 also handles strided rows in rectangular batches.
 
-To replay an existing root directly, construct a `SnapshotRecipe.from_inputs`
-from its retained `GameInputs`, digest and chooser. Open a collector with
-`snapshot_vector=vector` and pass `snapshot_starts=[SnapshotBranch(snapshot_id,
-recipe, horizon=3)]` to `collect`. Starts are consumed in slot order. A
-`None` entry or the end of the sequence starts a fresh game.
+For a direct start, use `SnapshotRecipe.from_replay_json(raw, chooser)` with a
+`managym-snapshot-v1` export. It preserves semantic Commands and interventions.
+A retained positional prefix also supports
+`SnapshotRecipe.from_inputs(game, digest, chooser)`.
+
+Open the collector with `snapshots=True` (a bank or custom vector implies it)
+and call `collect(..., snapshot_starts=[SnapshotBranch(id, recipe, horizon=3)])`.
+Slots consume starts in order. A `None` entry or an exhausted sequence starts
+a fresh game. Siblings with the same cold snapshot ID share one replay per
+allocation. A bank keeps that handle across allocations.
+
+Branches restore exactly by default. To shuffle siblings with common random
+numbers, pass the same `RestoreOptions.shuffle_libraries(seed=...)` to each
+branch's `restore_options`. A direct start may force its first action. If that
+action ends the game, the branch closes with zero sampled decisions. Grouped
+schedules require the policy to choose the opening action.
 
 ### RLOO baselines, stratified filtering and `PLR⊥`
 
@@ -355,7 +369,9 @@ collects no per-action values. Use a custom scorer there to override
 `action_value_spread`. Built-in `wdl_entropy` requires a categorical WDL
 critic. Self-play checks these settings at startup and scores the batch before
 the optimizer or EMA advances. Exiting the plan releases uncommitted captures.
-Close the bank before its vector to release cached handles.
+Native `GameSnapshot` handles are detached from their vector, so bank and
+vector close order does not matter; custom `SnapshotVector` implementations
+with vector-owned handles still require closing the bank before the vector.
 
 ### Requirements, accounting and recovery
 
@@ -369,13 +385,30 @@ ending once. `groups_completed`, `groups_discarded` and
 `failed_branches` report group and retry outcomes.
 
 Each successful update commits its scores, allocation counters and RNG together.
-A stale or reused receipt is rejected. Etude saves the generation and cold
-recipes in `Counts.snapshot_bank` alongside the learner under
-`out/state/save-*/state.json`. Resume restores them with an empty hot cache
-and new fresh-game and policy sampling seeds. Supply runtime predicates and
-scorers again. The Python vector replays the committed prefix and verifies the
-root digest on both hot and cold installs. When a slot returns to fresh play,
-it resumes the parked game and its recording. [Recovery](training.md#recovery)
+A stale or reused receipt is rejected. Live captures store detached native
+`GameSnapshot` handles in `SnapshotBank` and fan them out across all producer
+workers without replaying the prefix; with `decision_memory`, siblings restored
+at the same boundary share their immutable pre-fork `MemoryStore` chunks while
+diverging independently afterwards.
+
+Etude saves the generation and cold recipes in `Counts.snapshot_bank` alongside
+the learner under `out/state/save-*/state.json`. New captures store
+`managym-snapshot-v1` (`replay_json`) as cold authority (preserving
+interventions when `fresh_only=False`), while earlier exact recipes retain
+their schema and `root_id`s. Resume restores them with an empty hot cache and
+new fresh-game and policy sampling seeds; supply runtime predicates and scorers
+again. On a cold miss, `SnapshotBank` reconstructs each distinct root once,
+verifies its digest and chooser, and promotes the `GameSnapshot` into the hot
+cache for all siblings and later draws.
+
+Deferred reset (`auto_reset=False`) leaves finished and failed slots idle until
+the next allocation round, avoiding unused replacement games. Fresh slots keep
+their own seed sequence and recording; overwriting an untouched fresh root with
+a branch rewinds its fresh seed without writing an interrupted record or
+partial statistics. When a branch fails, its `GameAttempt` and `RecordedVectorEnv`
+failure record materialize branch `interventions` lazily so
+`manabot.training.state.game_errors` and `managym.replay` reproduce the failure
+cold after hot handles are closed. [Recovery](training.md#recovery)
 
 ## Write your own loop
 
