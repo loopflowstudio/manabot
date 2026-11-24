@@ -74,7 +74,64 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         leyline_axe(),
         sire_of_seven_deaths(),
         twinflame_tyrant(),
+        fleeting_flight(),
+        grappling_kraken(),
     ]
+}
+
+fn fleeting_flight() -> CardDefinition {
+    let text_box = "Put a +1/+1 counter on target creature. It gains flying until end of turn. Prevent all combat damage that would be dealt to it this turn.";
+    let target = || ObjectSelector::Target(TargetSpec::Creature);
+    CardDefinition {
+        key: "fdn.fleeting_flight",
+        scryfall_id: "55139100-9342-41fd-b10a-8e9932e605d4",
+        printed: PrintedCharacteristics {
+            name: "Fleeting Flight".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::put_counters(target(), CounterKind::PlusOnePlusOne, 1),
+                Effect::until_end_of_turn(
+                    target(),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                ),
+                Effect::until_end_of_turn(target(), Modification::PreventCombatDamage),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn grappling_kraken() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, tap target creature an opponent controls and put a stun counter on it. (If a permanent with a stun counter would become untapped, remove one from it instead.)";
+    let target = || ObjectSelector::Target(TargetSpec::CreatureOpponentControls);
+    CardDefinition {
+        key: "fdn.grappling_kraken",
+        scryfall_id: "d1f5cab3-3fc0-448d-8252-cd55abf5b596",
+        printed: PrintedCharacteristics {
+            name: "Grappling Kraken".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Kraken".into()],
+            power: Some(5),
+            toughness: Some(6),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![
+                    Effect::tap(target()),
+                    Effect::put_counters(target(), CounterKind::Stun, 1),
+                ],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn twinflame_tyrant() -> CardDefinition {

@@ -14,7 +14,8 @@ use crate::{
     flow::{event::GameEvent, game::Game},
     state::card::StaticAbility,
     state::{
-        card::ReplacementEffect,
+        card::{CardDefId, ReplacementEffect},
+        effect::Modification,
         game_object::{ObjectId, ObjectLki, PermanentId, PlayerId},
         permanent::{CounterKind, Counters},
         zone::ZoneType,
@@ -274,10 +275,19 @@ pub(crate) struct ReplacementId {
     pub(crate) static_ability: bool,
 }
 
+/// One replacement the affected player may apply. A printed replacement's
+/// identity is its source object and definition index; a resolved
+/// continuous effect's (`Fleeting Flight`'s shield) is the object it
+/// protects and the effect's timestamp, so two shields, or a shield and the
+/// creature's own printed replacement, stay distinct.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ReplacementCandidate {
     identity: ReplacementId,
     pub(crate) effect: ReplacementEffect,
+    /// The spell or ability that created a resolved effect, kept after it
+    /// left (last-known information); absent for a printed replacement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_definition: Option<CardDefId>,
 }
 
 impl ReplacementCandidate {
@@ -287,9 +297,8 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
-            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
-                "Prevent all combat damage".into()
-            }
+            ReplacementEffect::PreventCombatDamageToOrFromSelf
+            | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
                 transform: DamageTransform::Prevent(amount),
                 ..
@@ -1085,6 +1094,7 @@ impl Game {
                                     static_ability: false,
                                 },
                                 effect: effect.clone(),
+                                source_definition: None,
                             });
                         }
                     }
@@ -1162,7 +1172,29 @@ impl Game {
                                     static_ability: false,
                                 },
                                 effect: effect.clone(),
+                                source_definition: None,
                             });
+                        }
+                    }
+                }
+                // A resolved shield on the damaged permanent ("prevent all
+                // combat damage that would be dealt to it this turn") is an
+                // effect record, not one of its abilities, so losing all
+                // abilities leaves it in place (CR 615.1).
+                if let (true, ProposedDamageTarget::Object(object)) = (*combat, *target) {
+                    if let Ok(id) = self.lookup_current_permanent(object) {
+                        for effect in self.effects_on(id) {
+                            if effect.modification == Modification::PreventCombatDamage {
+                                out.push(ReplacementCandidate {
+                                    identity: ReplacementId {
+                                        source: object,
+                                        definition_index: effect.timestamp.0 as usize,
+                                        static_ability: true,
+                                    },
+                                    effect: ReplacementEffect::PreventCombatDamage,
+                                    source_definition: effect.source,
+                                });
+                            }
                         }
                     }
                 }
@@ -1215,6 +1247,7 @@ impl Game {
                                 static_ability: false,
                             },
                             effect,
+                            source_definition: None,
                         })
                     })
                     .collect();
@@ -1247,6 +1280,7 @@ impl Game {
                                     static_ability: true,
                                 },
                                 effect: ReplacementEffect::EntersTapped,
+                                source_definition: None,
                             });
                         }
                     }
@@ -1333,6 +1367,7 @@ impl Game {
                                 static_ability: false,
                             },
                             effect: effect.clone(),
+                            source_definition: None,
                         });
                     }
                 }
@@ -1360,7 +1395,8 @@ impl Game {
         match (&mut pending.event, &candidate.effect) {
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventCombatDamageToOrFromSelf,
+                ReplacementEffect::PreventCombatDamageToOrFromSelf
+                | ReplacementEffect::PreventCombatDamage,
             ) => *amount = 0,
             (
                 ProposedEvent::CreateTokens { count, .. },

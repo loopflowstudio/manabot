@@ -1292,6 +1292,10 @@ pub(super) fn continuous_description(
             "If {} would leave the battlefield{until}, exile it instead",
             subject.to_lowercase()
         ),
+        Modification::PreventCombatDamage => format!(
+            "Prevent all combat damage that would be dealt to {}{until}",
+            subject.to_lowercase()
+        ),
         Modification::ExileIfWouldDie => {
             format!(
                 "If {} would die{until}, exile it instead",

@@ -22,6 +22,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         cityscape_leveler(),
         giant_cindermaw(),
         goblin_firebomb(),
+        obliterating_bolt(),
     ]
 }
 
@@ -222,6 +223,34 @@ fn deadly_riposte() -> CardDefinition {
                     }),
                 ),
                 Effect::gain_life(2),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn obliterating_bolt() -> CardDefinition {
+    let text_box = "Obliterating Bolt deals 4 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.";
+    let target = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                ..Default::default()
+            },
+        })
+    };
+    CardDefinition {
+        key: "bro.obliterating_bolt",
+        scryfall_id: "7f886411-8216-4fb7-9172-a408c39043ee",
+        printed: PrintedCharacteristics {
+            name: "Obliterating Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::deal_damage(4, target()),
+                Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
             ],
             text_box: text_box.into(),
             ..Default::default()

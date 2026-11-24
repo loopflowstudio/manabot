@@ -344,6 +344,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::ExileIfWouldDie",
             Seen::Permanent(permanent::EXILE_IF_DIES_THIS_TURN),
         ),
+        Modification::PreventCombatDamage => (
+            "Modification::PreventCombatDamage",
+            Seen::Via("its shared-effect row (modification id); OrderReplacement focuses the protected permanent"),
+        ),
         Modification::ExileIfWouldLeave => (
             "Modification::ExileIfWouldLeave",
             Seen::Via("its shared-effect row (modification id)"),
@@ -449,6 +453,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
             Keyword::Hexproof,
         ]))),
         permanent(Modification::ExileIfWouldDie),
+        permanent(Modification::PreventCombatDamage),
         permanent(Modification::ExileIfWouldLeave),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
@@ -465,7 +470,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 38;
+const MODIFICATION_VARIANTS: usize = 39;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {

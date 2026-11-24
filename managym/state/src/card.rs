@@ -491,6 +491,10 @@ pub enum DamageTransform {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
     PreventCombatDamageToOrFromSelf,
+    /// Combat damage that would be dealt to the protected permanent is
+    /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
+    /// record offers it; no definition prints it.
+    PreventCombatDamage,
     ModifyDamage {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         creature_source: bool,

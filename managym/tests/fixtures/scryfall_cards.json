@@ -9452,5 +9452,67 @@
     "colors": [
       "U"
     ]
+  },
+  "Grappling Kraken": {
+    "name": "Grappling Kraken",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Kraken",
+    "power": "5",
+    "toughness": "6",
+    "keywords": [
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, tap target creature an opponent controls and put a stun counter on it. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Scorching Dragonfire": {
+    "name": "Scorching Dragonfire",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Elspeth's Smite": {
+    "name": "Elspeth's Smite",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Elspeth's Smite deals 3 damage to target attacking or blocking creature. If that creature would die this turn, exile it instead.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Obliterating Bolt": {
+    "name": "Obliterating Bolt",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Obliterating Bolt deals 4 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Fleeting Flight": {
+    "name": "Fleeting Flight",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put a +1/+1 counter on target creature. It gains flying until end of turn. Prevent all combat damage that would be dealt to it this turn.",
+    "colors": [
+      "W"
+    ]
   }
 }

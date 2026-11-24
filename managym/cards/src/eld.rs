@@ -26,6 +26,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         the_great_henge(),
         thrill_of_possibility(),
         wildborn_preserver(),
+        scorching_dragonfire(),
     ]
 }
 
@@ -302,6 +303,34 @@ fn syr_alin_the_lions_claw() -> CardDefinition {
                     Modification::pump(1, 1),
                 )],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn scorching_dragonfire() -> CardDefinition {
+    let text_box = "Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.";
+    let target = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                ..Default::default()
+            },
+        })
+    };
+    CardDefinition {
+        key: "eld.scorching_dragonfire",
+        scryfall_id: "3b74a806-ed74-458e-8903-d3d084e9f507",
+        printed: PrintedCharacteristics {
+            name: "Scorching Dragonfire".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(3, target()),
+                Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

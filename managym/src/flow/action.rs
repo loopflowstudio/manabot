@@ -186,12 +186,15 @@ impl Game {
                     }
                     Decision::OrderReplacement { candidates, .. } => {
                         let candidate = candidates.get(*mode)?;
-                        let object_id = candidate.source();
-                        Some(format!(
-                            "{}: {}",
-                            self.state[object_id].name,
-                            candidate.description()
-                        ))
+                        let name = match candidate.source_definition {
+                            Some(definition) => default_content_pack()
+                                .definition(definition)?
+                                .printed
+                                .name
+                                .clone(),
+                            None => self.state[candidate.source()].name.clone(),
+                        };
+                        Some(format!("{name}: {}", candidate.description()))
                     }
                     Decision::NameCard { names, scope, .. } => match scope.option(*mode)? {
                         NameOption::Group(group) => Some(format!(

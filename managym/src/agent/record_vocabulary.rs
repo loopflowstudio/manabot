@@ -182,6 +182,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
         ("DamageTransform", &["Prevent"][..]),
+        // Offered only by a resolved shield record, never printed.
+        ("ReplacementEffect", &["PreventCombatDamage"][..]),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
             "EventBinding",

@@ -580,7 +580,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 38] = [
+pub const MODIFICATION_NAMES: [&str; 39] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -619,6 +619,7 @@ pub const MODIFICATION_NAMES: [&str; 38] = [
     "HasAbilitiesOfSource",
     "Saddled",
     "SetName",
+    "PreventCombatDamage",
 ];
 
 impl ContinuousEffectData {
@@ -718,6 +719,7 @@ impl ContinuousEffectData {
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::PreventCombatDamage => "PreventCombatDamage",
             Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));

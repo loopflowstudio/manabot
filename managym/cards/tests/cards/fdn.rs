@@ -1951,3 +1951,229 @@ fn foundations_5f_spinner_of_souls_without_a_creature() {
     assert_ne!(s.action_space().kind, ActionSpaceKind::Modal);
     assert!(s.game().state.pending_triggers.is_empty());
 }
+
+/// Player 0 attacks with a Gray Ogre (beside Twinflame Tyrant when
+/// `tyrant`); player 1's `blocker` carries `shields` Fleeting Flights cast
+/// by player 0 and blocks it. Stops at the first decision after blocks.
+fn fleeting_flight_block(
+    blocker: &str,
+    shields: usize,
+    tyrant: bool,
+) -> (
+    crate::support::game::Scenario,
+    managym::state::game_object::PermanentId,
+    managym::state::game_object::PermanentId,
+) {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        play::{attack_with, cast, settle},
+    };
+    use managym::{flow::turn::StepKind, state::game_object::Target};
+    let mut s = five_color_setup(&[
+        "Fleeting Flight",
+        "Twinflame Tyrant",
+        "Gray Ogre",
+        "Fog Bank",
+        "Lightning Bolt",
+    ]);
+    if tyrant {
+        s.force_permanent_on_battlefield(0, "Twinflame Tyrant");
+    }
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    let blocker = s.force_permanent_on_battlefield(1, blocker);
+    for _ in 0..shields {
+        s.set_player_mana_pool(0, "W");
+        cast(&mut s, "Fleeting Flight");
+        assert!(s.choose_target(Target::Permanent(blocker)));
+        settle(&mut s);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    (s, attacker, blocker)
+}
+
+/// "Put a +1/+1 counter on target creature. It gains flying until end of
+/// turn. Prevent all combat damage that would be dealt to it this turn." The
+/// shield is a resolved record on that creature, offered beside Twinflame
+/// Tyrant's doubling in either order and named for the spell that made it.
+/// The shielded creature still deals combat damage.
+#[test]
+fn foundations_5g_fleeting_flight() {
+    use crate::support::{
+        inspect::{card_of, counters_of, keywords, offer_labels, permanent, zone_of},
+        play::{command, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+    let (mut s, attacker, blocker) = fleeting_flight_block("Gray Ogre", 1, true);
+    assert_eq!(counters_of(&s, blocker, CounterKind::PlusOnePlusOne), 1);
+    assert!(keywords(&s, blocker).has(managym::state::card::Keyword::Flying));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let mut labels = offer_labels(&s);
+    labels.sort();
+    assert_eq!(
+        labels,
+        [
+            "Fleeting Flight: Prevent all combat damage",
+            "Twinflame Tyrant: Double the damage",
+        ]
+    );
+    let attacker_card = card_of(&s, attacker);
+    for mode in 0..2 {
+        let mut branch = s.clone();
+        let mut replay = command(
+            &mut branch,
+            |action| matches!(action, Action::ChooseMode { mode: choice, .. } if *choice == mode),
+        );
+        for game in [&mut branch, &mut replay] {
+            game.advance_to_active_step(0, StepKind::EndOfCombat);
+            assert_eq!(permanent(game, blocker).damage, 0, "mode {mode}");
+            assert_eq!(
+                zone_of(game, attacker_card),
+                Some(ZoneType::Graveyard),
+                "the shielded 3/3 still deals its damage"
+            );
+        }
+    }
+}
+
+/// Two shields and Fog Bank's own prevention are three distinct
+/// replacements: all are offered with Twinflame Tyrant's doubling, and after
+/// the doubling all three prevention choices remain.
+#[test]
+fn foundations_5g_fleeting_flight_shields_do_not_collide() {
+    use crate::support::{
+        inspect::{offer_labels, permanent},
+        play::{choose_mode, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
+    let (mut s, _, fog) = fleeting_flight_block("Fog Bank", 2, true);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let labels = offer_labels(&s);
+    let mut sorted = labels.clone();
+    sorted.sort();
+    assert_eq!(
+        sorted,
+        [
+            "Fleeting Flight: Prevent all combat damage",
+            "Fleeting Flight: Prevent all combat damage",
+            "Fog Bank: Prevent all combat damage",
+            "Twinflame Tyrant: Double the damage",
+        ]
+    );
+    let double = labels
+        .iter()
+        .position(|label| label.starts_with("Twinflame Tyrant"))
+        .unwrap();
+    choose_mode(&mut s, double);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let mut rest = offer_labels(&s);
+    rest.sort();
+    assert_eq!(
+        rest,
+        [
+            "Fleeting Flight: Prevent all combat damage",
+            "Fleeting Flight: Prevent all combat damage",
+            "Fog Bank: Prevent all combat damage",
+        ]
+    );
+    choose_mode(&mut s, 0);
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    assert_eq!(permanent(&s, fog).damage, 0);
+}
+
+/// The shield prevents only combat damage, survives losing all abilities
+/// (it is an effect, not an ability) and ends in the cleanup step.
+#[test]
+fn foundations_5g_fleeting_flight_controls() {
+    use crate::support::{
+        game::{move_to_hand, until_end_of_turn},
+        inspect::{card_of, counters_of, keywords, permanent, zone_of},
+        play::{cast_card, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{
+            effect::Modification, game_object::Target, permanent::CounterKind, zone::ZoneType,
+        },
+    };
+
+    // Noncombat damage is dealt: Lightning Bolt kills the shielded 3/3.
+    let (mut s, _, blocker) = fleeting_flight_block("Gray Ogre", 1, false);
+    let card = card_of(&s, blocker);
+    let bolt = move_to_hand(&mut s, "Lightning Bolt");
+    s.set_player_mana_pool(0, "R");
+    cast_card(&mut s, bolt);
+    assert!(s.choose_target(Target::Permanent(blocker)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+
+    // Losing all abilities leaves the shield in place.
+    let (mut s, _, blocker) = fleeting_flight_block("Gray Ogre", 1, false);
+    until_end_of_turn(&mut s, blocker, Modification::LoseAllAbilities);
+    assert!(!keywords(&s, blocker).has(managym::state::card::Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    assert_eq!(permanent(&s, blocker).damage, 0);
+
+    // The shield and flying end at cleanup; the counter stays.
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!s
+        .game()
+        .effects_on(blocker)
+        .any(|effect| effect.modification == Modification::PreventCombatDamage));
+    assert!(!keywords(&s, blocker).has(managym::state::card::Keyword::Flying));
+    assert_eq!(counters_of(&s, blocker, CounterKind::PlusOnePlusOne), 1);
+}
+
+/// "Landfall — Whenever a land you control enters, tap target creature an
+/// opponent controls and put a stun counter on it." The stun counter
+/// replaces its next untap, in the untap step or by an effect.
+#[test]
+fn foundations_5g_grappling_kraken() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::{counters_of, offered_targets, tapped},
+        play::{cast, play_land, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        flow::turn::StepKind,
+        state::{game_object::Target, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Grappling Kraken", "Gray Ogre", "Involuntary Employment"]);
+    let kraken = s.force_permanent_on_battlefield(0, "Grappling Kraken");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    play_land(&mut s, "Forest");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(ogre)));
+    assert!(!offers.contains(&Target::Permanent(kraken)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(tapped(&s, ogre));
+    assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 1);
+
+    // An effect's untap removes the stun counter instead.
+    let mut effect = s.clone();
+    effect.set_player_mana_pool(0, "3R");
+    cast(&mut effect, "Involuntary Employment");
+    assert!(effect.choose_target(Target::Permanent(ogre)));
+    settle(&mut effect);
+    assert!(tapped(&effect, ogre));
+    assert_eq!(counters_of(&effect, ogre, CounterKind::Stun), 0);
+
+    // So does the untap step; the next one untaps it.
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(tapped(&s, ogre));
+    assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 0);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!tapped(&s, ogre));
+}

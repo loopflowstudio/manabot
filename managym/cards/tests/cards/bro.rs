@@ -214,3 +214,10 @@ fn foundations_5e_deadly_riposte() {
     assert!(s.game().state.permanents[untapped].is_some());
     assert_eq!(s.life(0), 22);
 }
+
+/// "Obliterating Bolt deals 4 damage to target creature or planeswalker. If
+/// that creature or planeswalker would die this turn, exile it instead."
+#[test]
+fn foundations_5g_obliterating_bolt() {
+    crate::assert_damage_exiles_creature_or_planeswalker("Obliterating Bolt", 4);
+}

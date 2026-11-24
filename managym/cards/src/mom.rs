@@ -1,13 +1,15 @@
 //! March of the Machine.
 
 use managym_state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    effect::Modification,
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![wary_thespian()]
+    vec![wary_thespian(), elspeths_smite()]
 }
 
 fn wary_thespian() -> CardDefinition {
@@ -31,6 +33,34 @@ fn wary_thespian() -> CardDefinition {
                     intervening_if: None,
                     effects: vec![Effect::Surveil { count: 1 }],
                 },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elspeths_smite() -> CardDefinition {
+    let text_box = "Elspeth's Smite deals 3 damage to target attacking or blocking creature. If that creature would die this turn, exile it instead.";
+    let target = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                in_combat: true,
+                ..CardPredicate::creature()
+            },
+        })
+    };
+    CardDefinition {
+        key: "mom.elspeths_smite",
+        scryfall_id: "f03a480f-de67-4611-9db7-c0c3d020f597",
+        printed: PrintedCharacteristics {
+            name: "Elspeth's Smite".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(3, target()),
+                Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
             ],
             text_box: text_box.into(),
             ..Default::default()

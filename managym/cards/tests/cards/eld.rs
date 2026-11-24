@@ -278,3 +278,10 @@ fn foundations_5e_bake_into_a_pie() {
 fn foundations_5f_syr_alin_the_lions_claw() {
     crate::attack_pumps_the_team("Syr Alin, the Lion's Claw", (4, 4), false);
 }
+
+/// "Scorching Dragonfire deals 3 damage to target creature or planeswalker.
+/// If that creature or planeswalker would die this turn, exile it instead."
+#[test]
+fn foundations_5g_scorching_dragonfire() {
+    crate::assert_damage_exiles_creature_or_planeswalker("Scorching Dragonfire", 3);
+}

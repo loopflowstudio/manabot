@@ -889,3 +889,77 @@ fn assert_revealed_discard(spell: &str, eligible: &[&str]) {
         }
     }
 }
+
+/// `name` deals `damage` to target creature or planeswalker, and that
+/// permanent is exiled if it would die this turn (CR 614.1a): from lethal
+/// damage, from a planeswalker's zero loyalty, and from a later sacrifice. A
+/// survivor's replacement ends in the cleanup step (CR 514.2).
+fn assert_damage_exiles_creature_or_planeswalker(name: &str, damage: i32) {
+    use managym::{
+        flow::turn::StepKind,
+        state::{game_object::Target, permanent::CounterKind, zone::ZoneType},
+    };
+    use support::{
+        game::{five_color_setup, move_card, set_counters},
+        inspect::{card_of, permanent_of, zone_of},
+        play::{cast, settle},
+    };
+    let setup = || five_color_setup(&[name, "Gray Ogre", "Wall of Stone", "Blasphemous Edict"]);
+    let strike = |s: &mut support::game::Scenario, victim| {
+        s.set_player_mana_pool(0, "1R");
+        cast(s, name);
+        assert!(s.choose_target(Target::Permanent(victim)));
+        settle(s);
+    };
+
+    // Lethal damage: state-based actions exile the Ogre.
+    let mut s = setup();
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    strike(&mut s, ogre);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile), "{name}: creature");
+
+    // A planeswalker left with no loyalty is exiled.
+    let mut s = setup();
+    let walker = s.force_permanent_on_battlefield(1, "Wall of Stone");
+    make_planeswalker(&mut s, walker);
+    set_counters(&mut s, walker, CounterKind::Loyalty, damage);
+    let card = card_of(&s, walker);
+    strike(&mut s, walker);
+    assert_eq!(
+        zone_of(&s, card),
+        Some(ZoneType::Exile),
+        "{name}: planeswalker"
+    );
+
+    // A survivor sacrificed later this turn is exiled.
+    let mut s = setup();
+    let wall = s.force_permanent_on_battlefield(1, "Wall of Stone");
+    let card = card_of(&s, wall);
+    strike(&mut s, wall);
+    assert_eq!(support::inspect::permanent(&s, wall).damage, damage);
+    assert!(s.game().exiled_if_it_would_die(wall));
+    s.set_player_mana_pool(0, "3BB");
+    cast(&mut s, "Blasphemous Edict");
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, card),
+        Some(ZoneType::Exile),
+        "{name}: sacrifice"
+    );
+
+    // The replacement ends in the cleanup step.
+    let mut s = setup();
+    let wall = s.force_permanent_on_battlefield(1, "Wall of Stone");
+    let card = card_of(&s, wall);
+    strike(&mut s, wall);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    let wall = permanent_of(&s, card).unwrap();
+    assert!(!s.game().exiled_if_it_would_die(wall));
+    let card = move_card(&mut s, card, ZoneType::Graveyard);
+    assert_eq!(
+        zone_of(&s, card),
+        Some(ZoneType::Graveyard),
+        "{name}: expired"
+    );
+}

@@ -106,6 +106,10 @@ pub enum Modification<N = i32> {
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
+    /// Prevention: combat damage that would be dealt to it is prevented
+    /// (CR 615.1a). It is a record, not an ability, so losing all abilities
+    /// leaves it in place; damage the permanent deals is unaffected.
+    PreventCombatDamage,
     /// Replacement: if it would leave the battlefield, exile it instead of
     /// putting it anywhere else (unearth, CR 702.84a).
     ExileIfWouldLeave,
@@ -207,6 +211,7 @@ impl<N> Modification<N> {
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
+            Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
@@ -274,6 +279,7 @@ impl Modification {
             | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)
             | Self::ExileIfWouldDie
+            | Self::PreventCombatDamage
             | Self::ExileIfWouldLeave
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
