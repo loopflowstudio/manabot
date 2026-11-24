@@ -638,20 +638,29 @@ def _replay_game_inputs(
             agreement.at_retained_failure = retained_index == index
             pool = getattr(env, search.method)(*search.arguments)
             if search.method == "rollout_pool" and search.buffers:
-                buffers = {
-                    key: np.zeros(spec.shape, dtype=spec.dtype)
-                    for key, spec in search.buffers.items()
-                }
-                pool.set_buffers(
-                    buffers, search.capacity, layout=_search_layout(search.buffers)
-                )
-                pool.encode_active()
-                for index, operation in enumerate(search.operations):
-                    agreement.at_retained_failure = retained_index == index
-                    if operation == "finish_random":
-                        pool.finish_random()
-                    else:
-                        pool.step_active(operation)
+                layout = _search_layout(search.buffers)
+                if layout.csr_fields:
+                    pool.set_observation_layout(layout)
+                    pool.encode_active_batch()
+                    for index, operation in enumerate(search.operations):
+                        agreement.at_retained_failure = retained_index == index
+                        if operation == "finish_random":
+                            pool.finish_random()
+                        else:
+                            pool.step_active_batch(operation)
+                else:
+                    buffers = {
+                        key: np.zeros(spec.shape, dtype=spec.dtype)
+                        for key, spec in search.buffers.items()
+                    }
+                    pool.set_buffers(buffers, search.capacity, layout=layout)
+                    pool.encode_active()
+                    for index, operation in enumerate(search.operations):
+                        agreement.at_retained_failure = retained_index == index
+                        if operation == "finish_random":
+                            pool.finish_random()
+                        else:
+                            pool.step_active(operation)
     except _FrameMismatch as error:
         result: dict[str, object] = {
             "status": "binding_mismatch",

@@ -81,10 +81,9 @@ def fact_rows(
     values = facts.detach().cpu().numpy()
     if not torch.is_grad_enabled():
         values = values[:, (values[..., FACT_VALID_INDEX] == 1).any(0)]
-    return cast(
-        FactRoutes[torch.Tensor],
-        _device(_facts(values, _tables(catalog, readings), objects.shape[1]), objects),
-    )
+    valid = values[..., FACT_VALID_INDEX] == 1
+    routes = _facts(values[valid], valid, _tables(catalog, readings), objects.shape[1])
+    return cast(FactRoutes[torch.Tensor], _device(routes, objects))
 
 
 def effect_rows(

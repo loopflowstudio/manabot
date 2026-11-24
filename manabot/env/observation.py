@@ -44,10 +44,11 @@ from managym.enums import (  # noqa: F401
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
+type PolicyObservation = ObservationBuffers | managym.ObservationBatch
 
 # Release that removes `ObservationSpace.encode`, `space.encoder` and
 # `ObservationEncoder`.
-REMOVAL_RELEASE = "0.4.0"
+REMOVAL_RELEASE = "0.3.0"
 
 # Input v11 with public history and decision memory: every array a v11
 # reader can meet. Legacy v9/v10 rows are `observation_layout(legacy=True)`.
@@ -231,7 +232,10 @@ class ObservationSpace(gym.spaces.Space):
         )
 
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
-        """Zeroed buffers for this space, with `leading_dims` before each shape."""
+        """Zeroed dense buffers for this space, with `leading_dims` before each shape.
+
+        Dense transport helper; removed in 0.3.0 with dense `set_buffers` / `encode_observation_into`.
+        """
         return self.layout.allocate(*leading_dims)
 
     @property
@@ -289,9 +293,19 @@ class ObservationSpace(gym.spaces.Space):
 def allocate_vector_buffers(
     obs_space: ObservationSpace, n: int
 ) -> dict[str, np.ndarray]:
-    """Allocate observation and step-result arrays for n native vector streams."""
+    """Allocate dense observation and step-result arrays for n native vector streams.
+
+    Dense transport helper; removed in 0.3.0 (use `step_buffers` with `set_observation_layout`).
+    """
     return {
         **obs_space.allocate(n),
+        **step_buffers(n),
+    }
+
+
+def step_buffers(n: int) -> dict[str, np.ndarray]:
+    """Per-stream outcomes written by both native observation transports."""
+    return {
         "rewards": np.zeros(n, dtype=np.float64),
         "terminated": np.zeros(n, dtype=np.uint8),
         "truncated": np.zeros(n, dtype=np.uint8),
@@ -301,7 +315,9 @@ def allocate_vector_buffers(
 def encode_observation(
     space: ObservationSpace, obs: managym.Observation
 ) -> dict[str, np.ndarray]:
-    """Fresh buffers for `obs` in `space`, written by the native encoder.
+    """Fresh dense buffers for `obs` in `space`, written by the native encoder.
+
+    Dense dict transport helper; removed in 0.3.0 (use `managym.encode_observation_batch`).
 
     Any observation encodes: live, restored with ``Observation.from_json`` or
     a viewer projection. Raises ``managym.ObservationCapacity`` when it does

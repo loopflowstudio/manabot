@@ -39,10 +39,11 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
-Every observation batch is prepared once, on the host, before any forward:
-`agent.prepare(obs)` checks shapes, references, programs and the legal-action
-mask of the NumPy buffers, does every integer lookup and returns a `Prepared`
-batch, the same one every [backend](../manabot/backends/README.md) reads. The
+Before a forward, `agent.prepare(obs)` admits the input on the host and
+builds the integer lookups in a `Prepared` batch shared by every backend.
+For a dense mapping it checks shapes, references, programs and legal-action
+masks. For a native v11 batch it reads the exact spans and checks the
+model layout and vocabulary. The
 forward reads only a prepared batch on its device, raises `TypeError` for an
 observation dictionary and does no validation or lookups of its own
 ([observation admission](../manabot/model/agent.md#observation-admission)).
@@ -216,15 +217,19 @@ refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
 
 ### Bucketed padding
 
-Each buffer arrives padded to its declared capacity, but a real batch uses
-little of it. Across 300 captured collection batches the median batch needed 59
+A dense observation mapping reserves the declared capacity of every table.
+A v11 `managym.ObservationBatch` carries each table's typed live rows with int32
+offsets. Its native record fields keep integer joins and full signed words exact
+through vocabulary lookup. Both transports use the same logical object and
+action coordinates and saved numeric readings. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding is the default for CUDA training. The host measures the last
-occupied or referenced row on each variable axis, including actions, objects
-and effect spans. It rounds each extent up to a power of two, with a minimum
+Bucketed padding is the default for CUDA training. For a native batch the
+host takes per-axis counts from the offsets. For an external mapping it
+measures the last occupied or referenced row on each variable axis, including
+actions, objects and effect spans. It rounds each extent up to a power of two, with a minimum
 of 8 rows and a maximum of the declared capacity. Admission validates these
 prefixes in the original object coordinates. Raw buffers keep those coordinates
 throughout collection and learning. Preparation translates the integer gathers
@@ -232,9 +237,11 @@ into the trimmed object table. Models with belief rows or
 `historical_mean` value aggregation keep the full object table. Logits retain
 the original action slots.
 
-Torch and MLX collection borrow the original group or a contiguous slice
-while preparing it. Both sample once in the original row order and keep the
-measured extents on the host. The learner checks the
+Torch and MLX prepare v11 decisions from the live spans of each selected
+stream. A masked step can leave several native batches represented in the
+same group. Both backends sample once in original group order, even when
+preparation splits it across execution chunks. The rollout retains the
+collection extents and shares immutable decision-memory prefixes. The learner checks the
 current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.
@@ -554,7 +561,7 @@ definition/reference after the source leaves. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
-compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+compatibility aliases, warn, and are removed in 0.3.0. Frozen viewer JSON
 keeps its existing fields and bytes; those wire records are normalized on read.
 Historical captures whose object identity is missing or ambiguous are refused.
 Academy's retained `base_power`/`base_toughness` fields still mean effective
@@ -574,7 +581,7 @@ Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
 stack spell was also a card row, permanent rows (38 columns) had no
 characteristics and stack abilities had no row. Selecting v9 or v10 warns
 (`DeprecationWarning`). They are removed once a v11 player is at least as
-strong as the strongest v9 one, and not before 0.4.0. Their rows are rebuilt from
+strong as the strongest v9 one, and not before 0.3.0. Their rows are rebuilt from
 the same observation by `agent/legacy_input.rs` and
 `manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
 byte; the model reads them through the same `ActorCritic`, without a stack

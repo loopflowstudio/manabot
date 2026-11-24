@@ -244,7 +244,7 @@ def bind_cold_start(
 
 
 class InMemorySnapshotVector:
-    """Deprecated native one-worker factory, removed in 0.4.0."""
+    """Deprecated native one-worker factory, removed in 0.3.0."""
 
     @staticmethod
     def factory(
@@ -258,7 +258,7 @@ class InMemorySnapshotVector:
         from manabot.training.rollout.producers import open_native_streams
 
         warnings.warn(
-            "InMemorySnapshotVector is deprecated and will be removed in 0.4.0; "
+            "InMemorySnapshotVector is deprecated and will be removed in 0.3.0; "
             "use open_collector(..., snapshots=True)",
             DeprecationWarning,
             stacklevel=2,

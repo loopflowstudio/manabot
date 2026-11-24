@@ -736,11 +736,11 @@ input version cannot hold (`managym.input_v10_state(obs)` and
 Discard the arrays after a failure.
 
 `Env.encode_observation` and `Env.encode_observation_into` are deprecated
-aliases that warn and are removed in 0.4.0. Replace the first with
+aliases that warn and are removed in 0.3.0. Replace the first with
 `encode_observation(space, obs)` and the second with
 `managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
 `space.encoder` (now the space itself) and `ObservationEncoder` (now
-`ObservationSpace`) warn and are removed in 0.4.0 too.
+`ObservationSpace`) warn and are removed in 0.3.0 too.
 
 ### Reading arrays by name
 
@@ -1388,7 +1388,7 @@ The engine has no world label. `managym.world_identity()`
 digest; checkpoints, recordings and evaluation records written before the
 label was removed still carry one, which nothing compares
 ([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
-removed in 0.4.0. Which checkpoints load is
+removed in 0.3.0. Which checkpoints load is
 [compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
 which measurements line up is
 [evaluation](evaluation.md#comparing-measurements-across-revisions).

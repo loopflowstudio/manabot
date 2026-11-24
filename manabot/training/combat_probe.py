@@ -74,11 +74,10 @@ def combat_rows(
     two = np.flatnonzero(np.diff(packed.offsets) == 2)
     first = packed.offsets[two]
     second = first + 1
-    actions = packed.fields["actions"]
+    left = packed.action_columns(first, (kind, declared))
+    right = packed.action_columns(second, (kind, declared))
     rows = two[
-        (actions[first, kind] > 0)
-        & (actions[second, kind] > 0)
-        & ((actions[first, declared] > 0) != (actions[second, declared] > 0))
+        (left[:, 0] > 0) & (right[:, 0] > 0) & ((left[:, 1] > 0) != (right[:, 1] > 0))
     ]
     if len(rows) <= limit:
         return rows

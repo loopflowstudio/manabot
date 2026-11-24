@@ -66,7 +66,7 @@ def packing_mask(
     mask: NDArray[np.generic], logs: NDArray[np.generic]
 ) -> NDArray[np.bool_]:
     """Validate legal support and padding before the host drops padding rows."""
-    valid = np.array(legal_mask(mx.array(mask)))
+    valid = mask if mask.dtype == np.bool_ else np.array(legal_mask(mx.array(mask)))
     if valid.ndim != 2 or logs.shape != valid.shape:
         raise ValueError("packed actions require matching [B,A] distributions")
     if np.any(~np.isneginf(logs[~valid])):
@@ -103,7 +103,7 @@ def check_packed(
         )
     for start in range(0, len(packed.offsets) - 1, 32):
         indexes = np.arange(start, min(start + 32, len(packed.offsets) - 1))
-        rows = packed.unpack(indexes)
+        rows = packed.behavior(indexes)
         try:
             check_behavior(
                 mx.array(rows.log_probabilities),

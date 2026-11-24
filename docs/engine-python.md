@@ -316,7 +316,7 @@ exported by `GameSnapshot.to_replay_json()`) also open directly through
 `managym academy replay`, executing any recorded boundary interventions natively.
 `FailureEvidence` and `read_failure` are the
 former names of `GameRecord` and `read_record`; they warn and are removed in
-0.4.0.
+0.3.0.
 
 ### Keep a durable journal
 
