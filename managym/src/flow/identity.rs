@@ -82,20 +82,15 @@ impl Game {
     /// manifest entry mints a fresh alias, so incarnation zero identifies it
     /// without disclosing the physical card's previous zone changes (CR 708.2).
     pub(crate) fn observed_identity(&self, object: ObjectId) -> Option<ObservedIdentity> {
-        let (entity, hides_card) = if let Ok(id) = self.lookup_current_permanent(object) {
+        let (entity, manifested) = if let Ok(id) = self.lookup_current_permanent(object) {
             let permanent = self.state.permanents[id].as_ref()?;
-            (
-                permanent.id,
-                permanent.manifested || self.state[object].is_face_down(),
-            )
+            (permanent.id, permanent.manifested)
         } else if let Some(lki) = self.object_lki(object) {
-            (
-                lki.presentation_id,
-                lki.battlefield.manifested || lki.battlefield.face_down,
-            )
+            (lki.presentation_id, lki.battlefield.manifested)
         } else {
             (self.state.objects.provenance(object)?.0, false)
         };
+        let hides_card = manifested || self.observed_face_down(object);
         Some(ObservedIdentity {
             reference: ObjectEventRef {
                 entity,
