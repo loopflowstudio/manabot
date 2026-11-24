@@ -220,7 +220,9 @@ def verdict(directory: Path, layout: str, arm: Arm, digest: str) -> tuple[str, s
         and proof["requested_bucketed_shapes"] is proof["bucketed_shapes"]
         and proof["threads"] == THREADS
         and proof["step_checked"]
-        and proof["minibatch_indices"] == list(range(8))
+        and [row["index"] for row in proof["minibatches"]]
+        == proof["minibatch_indices"]
+        == list(range(8))
         and len(set(proof["collection_indices"])) == 8
         and finite(proof)
         and attempt_record["status"] == ("exit 1" if failures else "completed")
@@ -397,6 +399,8 @@ class Rates:
 def rates(steps: list[dict[str, Any]], wall: float, arm: Arm) -> Rates:
     if [s["update"] for s in steps] != [1, 2, 3, 4] or not finite(steps):
         raise ValueError("live measurement needs four finite updates")
+    if not math.isfinite(wall) or wall <= 0:
+        raise ValueError("live measurement needs positive finite wall seconds")
     count = 0
     for step in steps:
         if (

@@ -37,11 +37,12 @@ def test_only_finite_half_precision_tolerance_misses_can_be_timed(
         "failures": ["learner loss"],
         "minibatches": [
             {
-                "index": 0,
+                "index": index,
                 "loss_relative": 0.02,
                 "loss_torch": 0.01,
                 "loss_backend": 0.0102,
             }
+            for index in range(8)
         ],
     }
     write(tmp_path / "parity-attempt.json", {"status": "exit 1"})
@@ -50,6 +51,13 @@ def test_only_finite_half_precision_tolerance_misses_can_be_timed(
     assert gate == "approximate" and "2.00%" in detail
     assert verdict(tmp_path, "bucketed", arm, "same")[0] == "rejected"
     assert verdict(tmp_path, "padded", arm, "other")[0] == "rejected"
+    proof_file = tmp_path / "parity.json"
+    proof_file.write_text(
+        json.dumps({"torch": evidence | {"gradient_cosine": float("nan")}})
+    )
+    assert verdict(tmp_path, "padded", arm, "same")[0] == "rejected"
+    write(proof_file, {"torch": evidence | {"minibatches": []}})
+    assert verdict(tmp_path, "padded", arm, "same")[0] == "rejected"
     evidence.update(precision="float32", observed_forward_dtype="float32")
     write(tmp_path / "parity.json", {"torch": evidence})
     assert verdict(tmp_path, "padded", ARMS[1], "same")[0] == "rejected"
@@ -89,6 +97,8 @@ def test_warmup_counts_only_toward_whole_invocation_wall_rate() -> None:
     assert result.active_range == (0.75, 2)
     with pytest.raises(ValueError, match="four finite updates"):
         rates(rows[:-1], 200, ARMS[0])
+    with pytest.raises(ValueError, match="wall seconds"):
+        rates(rows, float("nan"), ARMS[0])
 
 
 def test_report_refuses_live_evidence_from_another_layout_or_run(
