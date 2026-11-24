@@ -1,0 +1,19 @@
+at: 7ce9093dabc0b884cc9a823082a8d4b3ffe9ecd9
+first:
+  - path: docs/engine-python.md
+    why: Working example of mixed snapshot and fresh loads
+  - path: managym/src/agent/vector_env.rs
+    why: Native steps park terminals and retain outcomes
+  - path: managym/src/agent/vector_env/slots.rs
+    why: Fresh seeds and setups commit together
+  - path: managym/src/python/vector_env_bindings.rs
+    why: Admit all shards before publishing any replacement
+  - path: managym/recording.py
+    why: Settle terminal evidence and bind admitted replay roots
+  - path: manabot/training/rollout/producers.py
+    why: Map sparse global requests to shard slots
+  - path: manabot/env/vector_env.py
+    why: Gym returns terminal outcomes with fresh observations
+  - path: tests/env/test_vector_snapshot_slots.py
+    why: Seed progression, rollback and retry across shards
+hide: []
