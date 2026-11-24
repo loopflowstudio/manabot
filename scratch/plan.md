@@ -137,9 +137,13 @@ Behavior review at `786a6bf3` passed all seven copy, token and text checks. A se
 
 At `5f44d41d`, `Observation::unseen_counts` includes an uninspectable manifested printing in its owner's unseen counts. The extended DSK regression passed. The opponent sees identical unseen counts and encoded v11 decklist rows across the two roots. In both live and restored positions, the controller can inspect the exact printing and sees one fewer unseen copy of it.
 
-The observation code enumerates hidden battlefield cards separately from the unseen pool in `flow/selection_sampling.rs`. When extending possible-world sampling, check whether these paths can share the rule for which battlefield cards a viewer can inspect. Use the paired roots to check sampled worlds independently. Recorded replay, Academy and full-suite validation remain open.
+### Next slice · Sample the printing under a public permanent
 
-### Next slice · Turning a manifested creature face up
+Use the existing Ogre/Forest roots before adding turn-up. The paired observation regression passed again at `77014472`. Search can receive equal decklist tensors and still benefit from the private root if determinization leaves the actual manifested printing fixed. In `flow/selection_sampling.rs`, the unseen pool currently enumerates hands, libraries and foretold cards. A manifested permanent has a public location and target identity but its backing printing can be unknown.
+
+Construct the smallest feasible pool with just the two unknown printings and two possible assignments. Exercise both possible-world sampling entry points with controlled seeds from both roots. Compare assignments by public slot and printing across roots, exercise both assignments, and check deck multiplicity, public Plains, Bolt target and incarnation. For the inspecting controller, pin the known printing. Restore each original snapshot and verify its actual printing and library card after sampling. Derive eligible hidden battlefield slots from the same native inspection rule used by observation. Rebind hidden backing while preserving the public permanent and private selection constraints. Simply adding its ObjectId to a list of movable hidden-zone objects would allow the sampler to move the target itself. Keep this work out of the encoder and avoid caching a second knowledge record on the permanent. Recorded replay, Academy and full-suite validation remain open.
+
+### Following slice · Turning a manifested creature face up
 
 At controller priority, fork a manifested transforming creature with a counter and enough mana to pay its front-face mana cost. Take the turn-up Command, verify the spend once, retain the battlefield identity and counter, and expose the front face to both viewers. Reject the spent Command. Copy the revealed creature and compare it with the existing pre-reveal copy fixture. Check that a noncreature printing and an unpayable creature supply no turn-up offer. Reuse the existing payment decisions and public alias when revealing the printing.
 

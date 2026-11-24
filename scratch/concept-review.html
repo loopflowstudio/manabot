@@ -2,9 +2,16 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Battlefield identity · MTG-420</title>
 <style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review at 5a3d8b68</small>
+<main><small>MTG-420 · engine review at 77014472</small>
 <h1>Do the engine’s battlefield records match what a policy can act on?</h1>
 <p>A policy can target a permanent by its public identity. Resolution may need its physical cards, a waiting trigger may need its last copiable form, and the acting viewer may know only a face-down 2/2. The branch separates these questions for meld and departed copies. Manifest Dread puts all three in the same position.</p>
+<section><h2>Biggest mismatch · what can search resample?</h2>
+<table><thead><tr><th>Opponent at priority<th>Ogre under the 2/2<th>Forest under the 2/2
+<tbody><tr><th>Before the count fix, unseen Forest / Ogre<td>16 / 3<td>15 / 4
+<tr><th>Current observation · yes<td colspan="2">Identical unseen counts and v11 decklist rows. The controller sees one fewer unseen copy of the inspected printing. The paired DSK regression passed in this review.
+<tr><th>Sampler inventory · no<td colspan="2"><code>selection_sampling::unseen_objects</code> enumerates hand, library and foretold cards. The battlefield target is public, but its printing belongs in the opponent’s uncertainty too.</table>
+<p><b>Proposed.</b> Fork both roots at the same opponent decision. For a deal with just two possible hidden assignments, the same seed should give the same assignment from either root. Across selected seeds both assignments must occur. Preserve the public target, the graveyard Plains and the deck inventory in each deal. The inspecting controller keeps the actual printing. Restoring either exact snapshot recovers its original card.</p>
+<p>Moving an entire object into a hidden-zone shuffle would also move a public target. Sample the backing under that target using the engine’s inspection rule. Check this before adding the turn-up action, which would let a search continuation act on the sampled printing.</p></section>
 <h2>Existing · restore either library order</h2>
 <table><thead><tr><th>Decision or continuation<th>Battlefield<th>Library, next draw first<th>Clues
 <tbody><tr><td>Snapshot before owner answers<td>Ragnarok<td>Unrelated card<td>0
@@ -54,7 +61,7 @@
 <p><b>Fit · Yes.</b> The cast fixture restores the pending native choice for each Command and rejects reuse after resolution. One remaining library card enters directly. An empty library produces no permanent. These forks deliberately have different public graveyards. The paired roots above isolate disclosure by keeping Plains in both graveyards.</p>
 <h2>Existing · copy the 2/2 twice</h2>
 <p><b>Yes.</b> Clone Legion copies manifested Aang. Aang goes to the graveyard. A second Clone Legion copies the remaining token. Both tokens are face-up, nameless 2/2s. Neither carries a back face. <code>CopiableValues.definition_id</code> can be absent. The DSK fixtures exercise both seats’ encoded permanent rows. The semantic text fixture separately exercises Lightning Bolt from both seats. Each can target the original by its battlefield alias. Only the controller can inspect its printing in this position.</p>
-<section><h2>Biggest mismatch · can a waiting target follow a reveal?</h2>
+<section><h2>Following slice · can a waiting target follow a reveal?</h2>
 <p><b>Existing · No.</b> In <code>flow/identity.rs</code>, <code>observed_object_id</code> selects a battlefield ID while <code>Permanent.manifested</code> is true. Otherwise it selects the object’s provenance ID. The same flag also controls who can see the printing. Simply clearing it to reveal Aang would switch the public object reference during the life of a single target. This is a source-level counterexample to that implementation. Turn-up is still unimplemented.</p>
 <p><b>Proposed.</b> Keep the public reference chosen on manifest entry until departure. Change the visible face and inspection rights when the cost commits. The engine owns that transition. Text, tensors, Command focus and recorded references consume the same projection. This preserves ordinary cards’ identifiers and adds no process-wide alias table to search forks.</p></section>
 <h2>Proposed · fork with a Bolt on the stack</h2>
@@ -64,4 +71,4 @@
 <tr><td>Resubmit the spent Command<td>Stale rejection<td>No additional payment or reveal event.
 <tr><td>Restore the snapshot<td>Original alias and hidden face return. Passing priority remains legal.<td>Restore the original mana and stack. The other branch retains its revealed creature.</table>
 <p>A copy made before reveal stays anonymous. A copy made after reveal follows the ordinary transforming-token rule. Neither an anonymous copy nor a manifested noncreature offers this payment. A real zone change still retires the old target. Portable replay, viewer-safe determinization and the engine budget remain open checks.</p>
-<h2>Review questions</h2><ol><li>Which identity should a reveal preserve? <b>1a · The existing battlefield reference (selected).</b> 1b · Publish a new reference and link the two in history.</li><li>Where should the next fixture fork? <b>2a · At controller priority with a target already on the stack (selected).</b> 2b · On an empty stack.</li></ol></main></html>
+<h2>Review questions</h2><ol><li>What should an opponent’s sampled world preserve? <b>1a · Public target and viewer knowledge (selected).</b> 1b · The exact private backing as well.</li><li>Which fork should lead implementation? <b>2a · The two equivalent opponent roots (selected).</b> 2b · The controller’s turn-up payment with Bolt pending.</li></ol></main></html>
