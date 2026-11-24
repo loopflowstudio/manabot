@@ -1,10 +1,9 @@
 //! Tests for cards filed in `src/isd.rs`, in card order.
 
-use crate::support::game::move_card;
 use crate::support::{
-    game::{five_color_setup, five_color_unfunded_setup},
+    game::{five_color_setup, five_color_unfunded_setup, move_card},
     inspect::{can_cast, owned_card, permanent_of, tapped},
-    play::{cast_card, cast_owned, resolve_top, settle, spend_colorless},
+    play::{cast_card, cast_owned, resolve_top, settle},
 };
 use managym::agent::action::ActionSpaceKind;
 use managym::state::zone::ZoneType;
@@ -35,10 +34,9 @@ fn blasphemous_act_costs_one_less_per_creature_on_the_battlefield() {
 
 #[test]
 fn diregraf_ghoul_enters_tapped() {
-    let mut s = five_color_setup(&["Diregraf Ghoul", "Gray Ogre"]);
-    for (name, enters_tapped) in [("Diregraf Ghoul", true), ("Gray Ogre", false)] {
+    let mut s = five_color_setup(&["Diregraf Ghoul", "Typhoid Rats"]);
+    for (name, enters_tapped) in [("Diregraf Ghoul", true), ("Typhoid Rats", false)] {
         let spell = cast_owned(&mut s, name);
-        spend_colorless(&mut s);
         resolve_top(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
         let creature = permanent_of(&s, spell).expect("creature spell resolved");

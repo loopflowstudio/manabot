@@ -1,9 +1,9 @@
-at: dbc21ccf3fd6b9d06e6b3cee7f63d2a68f0458a5
+at: f81c0ca258140f047b5cc24298705b44dd428015
 first:
   - path: managym/cards/src/isd.rs
     why: Diregraf Ghoul supplies its own tapped-entry replacement
   - path: managym/cards/tests/cards/isd.rs
-    why: Compare both creatures when priority returns
+    why: Compare same-cost creatures when priority returns
   - path: managym/tests/fixtures/scryfall_cards.json
     why: Check printed characteristics against Innistrad number 97
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
