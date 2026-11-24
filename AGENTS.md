@@ -371,19 +371,19 @@ change already touches it; do not rewrite a module only for style. Rust in
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
   restoring weights. Older runs supply their model settings from the initial raw policy.
-- New observation state reaches the policy input, LLM text and learning
-  tokens in the same change. `ObservationSpace` pairs the config with its
-  native `ObservationLayout`. Pass `space.layout` to scalar, batch and vector
-  encoding and derive buffers from it. Validate the full buffer contract
-  before encoding, including exact keys and companion shapes. The layout
-  supplies the input version, optional blocks and capacities. The sole encoder
-  lives in `managym/src/agent/`. Read columns and row kinds by native name
-  (`column("facts", "value")` in `manabot.env.observation`). Give new columns
-  or rows a directed native test on a constructed position.
-  `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
-  warning aliases removed in 0.3.0; frozen experiment files keep them.
-  `managym/cards/tests/cards/observability.rs` names each `Observation` field's
-  tensor columns or fact kind and fails to compile when a field is unlisted.
+- Model and name rules state and observation fields directly after the
+  Comprehensive Rules, not derived consequence flags; new state reaches policy
+  input, LLM text and learning tokens together. To extend an integer-serialized
+  enum, append its discriminant for wire JSON, tag out-of-order values for the
+  next minor release (`0.3.0`), and map them into append-only named policy
+  columns (keeping any legacy coarse column set) for stored checkpoints. Pass
+  `ObservationSpace.layout` to encoding and derive buffers from it, validate
+  keys and companion shapes before encoding, read columns by native name
+  (`column("facts", "value")`), test new columns on a constructed position, and
+  keep the sole encoder in `managym/src/agent/`. `ObservationSpace.encode`,
+  `space.encoder` and `ObservationEncoder` are 0.3.0 warning aliases (kept for
+  frozen experiments); `managym/cards/tests/cards/observability.rs` enforces
+  every `Observation` field's tensor or fact mapping.
 - Decklist disclosure (open by default, or closed) lives on native
   `GameSetup.decklists` and the resolved `GameState.disclosure`, written by
   `MatchConfig.decklists` and Academy `GameConfig.decklists`. Observations, search and possible worlds read it
