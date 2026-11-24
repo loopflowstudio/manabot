@@ -8154,5 +8154,17 @@
     "colors": [
       "G"
     ]
+  },
+  "Gandalf, Goblins' Bane": {
+    "name": "Gandalf, Goblins' Bane",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Creature — Avatar Wizard",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever you cast a noncreature spell, Gandalf gets +1/+1 until end of turn and deals 1 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
   }
 }

@@ -872,3 +872,234 @@ fn glamdring_discounts_by_equipped_power_and_gleam_returns_every_milled_spell() 
         "on an Adventure"
     );
 }
+
+/// Whether `viewer`'s observation shows the card behind `object`, and with
+/// which face-down and foretold marks.
+fn shown_to(
+    s: &crate::support::game::Scenario,
+    viewer: usize,
+    object: managym::state::game_object::ObjectId,
+) -> Option<(bool, bool)> {
+    let id = s.game().state[object].id.0 as i32;
+    let observation = Observation::for_player(s.game(), PlayerId(viewer));
+    observation
+        .agent_cards
+        .iter()
+        .chain(&observation.opponent_cards)
+        .find(|card| card.id == id)
+        .map(|card| {
+            (
+                card.face_down,
+                card.cast_permissions.iter().any(|grant| grant.foretold),
+            )
+        })
+}
+
+/// Flameshape exiles the top two cards face down. Without a Wizard nobody,
+/// its caster included, may look at or play them: they stay unseen, and
+/// determinization resamples them. Gandalf shows them to his controller
+/// alone and lets them be played; they hide again when the last Wizard
+/// leaves and return with the next. Each noncreature spell grows Gandalf
+/// and pings the opponent.
+#[test]
+fn flameshape_cards_are_hidden_and_locked_without_a_wizard() {
+    use crate::support::{
+        game::{move_card, move_from_library, pin_top},
+        inspect::{can_cast, has_action, now, permanent_named, zone_of},
+        play::{cast_card, cast_profile, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        possible_worlds::HiddenHandConstraints,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&[
+        "Gandalf, Goblins' Bane",
+        "Lightning Strike",
+        "High Fae Trickster",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let gandalf = move_from_library(&mut s, 0, "Gandalf, Goblins' Bane", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Lightning Strike", "Mountain"]);
+    cast_profile(&mut s, gandalf, SpellProfile::Adventure);
+    settle(&mut s);
+    let (strike, mountain) = (now(&s, top[0]), now(&s, top[1]));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, mountain), Some(ZoneType::Exile));
+    let playable = |s: &mut crate::support::game::Scenario| {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let (strike, mountain) = (now(s, strike), now(s, mountain));
+        (
+            can_cast(s, strike),
+            has_action(
+                s,
+                |a| matches!(a, Action::PlayLand { object, .. } if *object == mountain),
+            ),
+        )
+    };
+
+    // No Wizard: hidden from both players, unseen in both views, locked.
+    for viewer in [0, 1] {
+        assert_eq!(shown_to(&s, viewer, strike), None);
+        assert_eq!(shown_to(&s, viewer, mountain), None);
+    }
+    let library = s.game().state.zones.size(ZoneType::Library, PlayerId(0)) as u32;
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    let unseen: u32 = owner.agent.unseen_counts.as_ref().unwrap().values().sum();
+    assert_eq!(unseen, library + 2);
+    let constraints = HiddenHandConstraints::for_viewer(s.game(), PlayerId(1));
+    assert_eq!((constraints.foretold, constraints.face_down_exile), (0, 2));
+    assert_eq!(playable(&mut s), (false, false));
+
+    // Determinizing for the caster resamples the hidden slots.
+    let mut resampled = false;
+    for seed in 0..32 {
+        let mut game = s.game().clone();
+        game.determinize(PlayerId(0), seed).unwrap();
+        let exile = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Exile, PlayerId(0))
+            .to_vec();
+        assert_eq!(exile.len(), 3);
+        let granted: Vec<_> = game
+            .state
+            .cast_permissions
+            .grants
+            .iter()
+            .filter(|grant| grant.face_down)
+            .map(|grant| grant.object)
+            .collect();
+        assert_eq!(granted.len(), 2);
+        assert_ne!(granted[0], granted[1]);
+        assert!(granted.iter().all(|object| exile.contains(object)));
+        resampled |= !granted.contains(&strike) || !granted.contains(&mountain);
+    }
+    assert!(resampled);
+
+    // Gandalf, a Wizard, shows them to his controller and lets them be played.
+    cast_card(&mut s, gandalf);
+    settle(&mut s);
+    assert_eq!(shown_to(&s, 0, strike), Some((true, false)));
+    assert_eq!(shown_to(&s, 0, mountain), Some((true, false)));
+    assert_eq!(shown_to(&s, 1, strike), None);
+    assert_eq!(playable(&mut s), (true, true));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    s.assert_life(1, 16);
+    let wizard = permanent_named(&s, "Gandalf, Goblins' Bane");
+    let object = s.game().state.permanents[wizard].as_ref().unwrap().object;
+    assert_eq!(s.game().characteristics(wizard).power, 3);
+
+    // The last Wizard leaves: hidden and locked; the next restores both.
+    move_card(&mut s, object, ZoneType::Graveyard);
+    assert_eq!(shown_to(&s, 0, mountain), None);
+    assert_eq!(playable(&mut s).1, false);
+    s.force_permanent_on_battlefield(0, "High Fae Trickster");
+    assert_eq!(shown_to(&s, 0, mountain), Some((true, false)));
+    assert!(playable(&mut s).1);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand { object, .. } if *object == mountain),
+    );
+    assert_eq!(zone_of(&s, now(&s, mountain)), Some(ZoneType::Battlefield));
+}
+
+/// A foretold card and Flameshape's face-down cards share their owner's
+/// exile. Determinizing for either player and materializing the opponent's
+/// possible worlds refill both kinds of slot at once: every card stays in
+/// one zone, the foretold slot holds a foretell card, and each grant names
+/// its own exiled card.
+#[test]
+fn flameshape_and_foretold_slots_stay_disjoint_when_resampled() {
+    use crate::support::{
+        game::{move_from_library, pin_top},
+        inspect::now,
+        play::{cast_profile, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::game::Game,
+        possible_worlds::PossibleWorldSpace,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Gandalf, Goblins' Bane", "Sozin's Comet"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let comet = move_from_library(&mut s, 0, "Sozin's Comet", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
+    );
+    let gandalf = move_from_library(&mut s, 0, "Gandalf, Goblins' Bane", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Sozin's Comet", "Island"]);
+    cast_profile(&mut s, gandalf, SpellProfile::Adventure);
+    settle(&mut s);
+    let original = [now(&s, comet), now(&s, top[0]), now(&s, top[1])];
+
+    let check = |game: &Game| {
+        let zones = [
+            ZoneType::Library,
+            ZoneType::Hand,
+            ZoneType::Battlefield,
+            ZoneType::Graveyard,
+            ZoneType::Stack,
+            ZoneType::Exile,
+            ZoneType::Command,
+        ];
+        let mut seen = std::collections::BTreeMap::new();
+        for player in [PlayerId(0), PlayerId(1)] {
+            for zone in zones {
+                for &object in game.state.zones.zone_objects(zone, player).iter() {
+                    assert_eq!(game.state.zones.zone_of(object), Some(zone));
+                    *seen.entry(object.slot()).or_insert(0) += 1;
+                }
+            }
+        }
+        assert!(seen.values().all(|count| *count == 1), "one zone per card");
+        let exile = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Exile, PlayerId(0))
+            .to_vec();
+        assert_eq!(exile.len(), 4);
+        let grants = &game.state.cast_permissions.grants;
+        let hidden: Vec<_> = grants
+            .iter()
+            .filter(|grant| grant.foretold || grant.face_down)
+            .collect();
+        assert_eq!(hidden.len(), 3);
+        let mut objects: Vec<_> = hidden.iter().map(|grant| grant.object).collect();
+        objects.sort_unstable();
+        objects.dedup();
+        assert_eq!(objects.len(), 3, "each hidden grant names its own card");
+        for grant in hidden {
+            assert!(exile.contains(&grant.object));
+            if grant.foretold {
+                assert!(game.state[grant.object].foretell().is_some());
+            }
+        }
+        exile
+    };
+    check(s.game());
+
+    let mut moved = [false, false];
+    for seed in 0..48 {
+        for viewer in [0, 1] {
+            let mut game = s.game().clone();
+            game.determinize(PlayerId(viewer), seed).unwrap();
+            let exile = check(&game);
+            moved[viewer] |= original.iter().any(|object| !exile.contains(object));
+        }
+    }
+    assert_eq!(moved, [true, true]);
+
+    let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
+    assert_eq!(space.projection().face_down_exile, 2);
+    for world in space.worlds().iter().take(8) {
+        for seed in 0..4 {
+            check(&space.materialize(s.game(), world, seed).unwrap());
+        }
+    }
+}

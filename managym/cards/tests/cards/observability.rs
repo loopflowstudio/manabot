@@ -943,8 +943,14 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::OpponentsCastOnlyFromHand,
         Effect::ExileTopCardsToPlay {
-            count: 3,
-            until: PlayWindow::ThroughYourNextTurn,
+            count: 2,
+            until: PlayWindow::WhileExiled,
+            face_down: true,
+            condition: Some(Condition::ControlsAtLeast {
+                distinct_names: false,
+                count: 1,
+                predicate: CardPredicate::subtype("Wizard"),
+            }),
         },
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,

@@ -1,7 +1,7 @@
 //! The Hobbit cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, PlayWindow,
         PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         TurnStep,
     },
@@ -33,6 +33,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         smaug_the_great_calamity(),
         bilbo_thief_in_the_night(),
         glamdring_foe_hammer(),
+        gandalf_goblins_bane(),
     ]
 }
 
@@ -738,6 +739,63 @@ fn my_precious() -> CardDefinition {
                     what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 }],
                 ..Default::default()
+            }],
+            inset: Some(InsetSpell::Adventure(inset.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gandalf_goblins_bane() -> CardDefinition {
+    let text = "Whenever you cast a noncreature spell, Gandalf gets +1/+1 until end of turn and deals 1 damage to each opponent.";
+    let adventure_text = "Look at the top two cards of your library and exile them face down. For as long as they remain exiled, you may play them if you control a Wizard. (Then exile this card. You may cast the creature later from exile.)";
+    let inset = PrintedCharacteristics {
+        name: "Flameshape".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Adventure".into()],
+        spell_effects: vec![Effect::ExileTopCardsToPlay {
+            count: 2,
+            until: PlayWindow::WhileExiled,
+            face_down: true,
+            condition: Some(Condition::ControlsAtLeast {
+                distinct_names: false,
+                count: 1,
+                predicate: CardPredicate::subtype("Wizard"),
+            }),
+        }],
+        text_box: adventure_text.into(),
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "hob.gandalf_goblins_bane",
+        scryfall_id: "9b0d29a1-7da9-4fb3-8536-8ff8d8acae0b",
+        printed: PrintedCharacteristics {
+            name: "Gandalf, Goblins' Bane".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(3),
+            text_box: text.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                ),
+                intervening_if: None,
+                effects: vec![
+                    Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
+                    Effect::DealDamageToPlayer {
+                        player: PlayerSelector::EachOpponent,
+                        amount: EffectValue::Fixed(1),
+                    },
+                ],
             }],
             inset: Some(InsetSpell::Adventure(inset.into())),
             ..Default::default()
