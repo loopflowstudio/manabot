@@ -333,7 +333,7 @@ pub struct PaymentProgress {
     pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
-    /// The once-each-turn option (exact source, ability index) paying
+    /// The once-each-turn option `(exact source, printed face, ability index)` paying
     /// spends ("Do this only once each turn").
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -1070,64 +1070,66 @@ impl Game {
                     )?,
                 };
                 let source_object = ability.source_object;
+                let counter_cost = |kind, delta| ProposedEvent::CounterChange {
+                    provenance: CounterProvenance::new(EventCause::Cost),
+                    target: source_object,
+                    kind,
+                    delta,
+                    by: Some(player),
+                };
                 for component in &payment.owed {
-                    if let CostComponent::RemoveCounters(kind, count) = *component {
-                        let available = self
-                            .state
-                            .permanent_of(source_object)
-                            .and_then(|id| self.state.permanents[id].as_ref())
-                            .map_or(0, |permanent| permanent.counter_count(kind));
-                        if available < i32::from(count) {
-                            return Err(AgentError("cannot pay counter cost".into()));
+                    match *component {
+                        CostComponent::RemoveCounters(kind, count) => {
+                            let available = self
+                                .state
+                                .permanent_of(source_object)
+                                .and_then(|id| self.state.permanents[id].as_ref())
+                                .map_or(0, |permanent| permanent.counter_count(kind));
+                            if available < i32::from(count) {
+                                return Err(AgentError("cannot pay counter cost".into()));
+                            }
+                            source_costs.push(counter_cost(kind, -i32::from(count)));
                         }
-                        source_costs.push(ProposedEvent::CounterChange {
-                            provenance: CounterProvenance::new(EventCause::Cost),
-                            target: source_object,
-                            kind,
-                            delta: -i32::from(count),
-                            by: Some(player),
-                        });
-                        continue;
-                    }
-                    if let CostComponent::TapGrantor(object) = *component {
-                        let grantor = self
-                            .state
-                            .permanent_of(object)
-                            .ok_or_else(|| AgentError("the grantor has left".into()))?;
-                        if !self.tap_permanent(grantor, false) {
-                            return Err(AgentError("cannot tap the grantor".into()));
+                        CostComponent::AddCounters(kind, count) => {
+                            source_costs.push(counter_cost(kind, i32::from(count)));
                         }
-                        continue;
+                        CostComponent::TapGrantor(object) => {
+                            let grantor = self
+                                .state
+                                .permanent_of(object)
+                                .ok_or_else(|| AgentError("the grantor has left".into()))?;
+                            if !self.tap_permanent(grantor, false) {
+                                return Err(AgentError("cannot tap the grantor".into()));
+                            }
+                        }
+                        CostComponent::Source(how) => {
+                            payment
+                                .receipt
+                                .contribute(source_object, how, Toward::Printed);
+                            let to = match how {
+                                How::Tapped | How::Sacrificed => continue,
+                                How::Discarded => ZoneType::Graveyard,
+                                How::Exiled => ZoneType::Exile,
+                                How::Returned => ZoneType::Hand,
+                            };
+                            source_costs.push(self.zone_move_proposal(
+                                source_object,
+                                to,
+                                Default::default(),
+                            ));
+                        }
+                        CostComponent::ExileGrantor(object) => {
+                            payment
+                                .receipt
+                                .contribute(object, How::Exiled, Toward::Printed);
+                            source_costs.push(self.zone_move_proposal(
+                                object,
+                                ZoneType::Exile,
+                                Default::default(),
+                            ));
+                        }
+                        _ => {}
                     }
-                    if let CostComponent::AddCounters(kind, count) = *component {
-                        source_costs.push(ProposedEvent::CounterChange {
-                            provenance: CounterProvenance::new(EventCause::Cost),
-                            target: source_object,
-                            kind,
-                            delta: i32::from(count),
-                            by: Some(player),
-                        });
-                        continue;
-                    }
-                    let (source_object, how) = match *component {
-                        CostComponent::Source(how) => (source_object, how),
-                        CostComponent::ExileGrantor(object) => (object, How::Exiled),
-                        _ => continue,
-                    };
-                    payment
-                        .receipt
-                        .contribute(source_object, how, Toward::Printed);
-                    let to = match how {
-                        How::Tapped | How::Sacrificed => continue,
-                        How::Discarded => ZoneType::Graveyard,
-                        How::Exiled => ZoneType::Exile,
-                        How::Returned => ZoneType::Hand,
-                    };
-                    source_costs.push(self.zone_move_proposal(
-                        source_object,
-                        to,
-                        Default::default(),
-                    ));
                 }
                 Some((ability, *source))
             }

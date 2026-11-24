@@ -45,22 +45,20 @@ impl Game {
 
     /// Excess after replacement, measured against the pre-commit creature.
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
-    pub(crate) fn excess_for_damage(
+    fn excess_for_damage(
         &self,
-        source: Option<ObjectId>,
         permanent_id: PermanentId,
+        view: &crate::flow::statics::Characteristics,
         amount: i32,
+        deathtouch: bool,
     ) -> i32 {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return 0;
         };
-        let characteristics = self.characteristics(permanent_id);
-        if !characteristics.is_creature() {
+        if !view.is_creature() {
             return 0;
         }
-        let remaining = (characteristics.toughness - permanent.damage).max(0);
-        let deathtouch =
-            source.is_some_and(|object| self.source_keywords(object).has(Keyword::Deathtouch));
+        let remaining = (view.toughness - permanent.damage).max(0);
         let lethal = if deathtouch {
             remaining.min(1)
         } else {
@@ -153,14 +151,19 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return result;
                 };
-                result.excess_damage = Some(self.excess_for_damage(source, permanent_id, amount));
+                // CR 120.3: a permanent with several of these types receives
+                // every applicable result, but this remains one damage event.
+                let view = self.layer_view(permanent_id);
+                result.excess_damage = Some(self.excess_for_damage(
+                    permanent_id,
+                    &view,
+                    amount,
+                    source_has_deathtouch,
+                ));
                 let event_target = self.object_event_ref(object_ref);
                 if let Some(source) = source {
                     self.state.turn.damage_pairs.record(source, object_ref);
                 }
-                // CR 120.3: a permanent with several of these types receives
-                // every applicable result, but this remains one damage event.
-                let view = self.characteristics(permanent_id);
                 if view.is_creature() {
                     self.state
                         .mark_damage(permanent_id, amount, source_has_deathtouch);
@@ -207,11 +210,11 @@ impl Game {
         }
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
-                self.battlefield_permanents(owner).into_iter().any(|id| {
-                    self.characteristics(id)
-                        .static_abilities
-                        .contains(&StaticAbility::PlayersCantGainLife)
-                })
+                self.layer_views(self.iter_battlefield_permanents(owner))
+                    .any(|(_, view)| {
+                        view.static_abilities
+                            .contains(&StaticAbility::PlayersCantGainLife)
+                    })
             })
         {
             return 0;
@@ -245,7 +248,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.characteristics(permanent_id).keywords;
+            return self.layer_view(permanent_id).keywords;
         }
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;
@@ -270,14 +273,13 @@ impl Game {
                 self.permanent_is_battlefield_creature(id),
             ));
         }
-        if self.state.live(source).is_some() {
-            if let Some(spell) = self.spell_on_stack(source) {
-                return Some((spell.controller, self.state[source].types.is_creature()));
-            }
-        }
-        if let Some(spell) = self.state.spell_lki.get(&source) {
+        if let Some(controller) = self
+            .spell_on_stack(source)
+            .map(|spell| spell.controller)
+            .or_else(|| self.state.spell_lki.get(&source).map(|spell| spell.controller))
+        {
             return Some((
-                spell.controller,
+                controller,
                 self.state.source_base(source).1.types.is_creature(),
             ));
         }

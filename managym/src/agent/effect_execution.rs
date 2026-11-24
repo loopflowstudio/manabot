@@ -314,15 +314,14 @@ impl<'a> Projection<'a> {
         inline: Option<&[Effect]>,
     ) {
         let Some(target) = context else { return };
-        let reads = match inline {
-            Some(effects) => effects.iter().any(Effect::reads_triggering_object),
-            None => self
-                .game
-                .source_face(source, definition)
-                .and_then(|face| face.abilities.get(index))
-                .is_some_and(Ability::reads_triggering_object),
-        };
-        if reads {
+        if self.game.trigger_reads(
+            source,
+            definition,
+            index,
+            inline,
+            Effect::reads_triggering_object,
+            Ability::reads_triggering_object,
+        ) {
             self.retained_target(target);
         }
     }
@@ -1142,6 +1141,47 @@ pub(crate) fn project_receipt(
     out.finish(frame);
 }
 
+impl Game {
+    pub(super) fn trigger_reads(
+        &self,
+        source: ObjectId,
+        definition: CardDefId,
+        index: usize,
+        inline: Option<&[Effect]>,
+        effect_reads: fn(&Effect) -> bool,
+        ability_reads: fn(&Ability) -> bool,
+    ) -> bool {
+        match inline {
+            Some(effects) => effects.iter().any(effect_reads),
+            None => self
+                .source_face(source, definition)
+                .and_then(|face| face.abilities.get(index))
+                .is_some_and(ability_reads),
+        }
+    }
+
+    pub(super) fn stack_object_reads(
+        &self,
+        object: &crate::state::stack_object::StackObject,
+        effect_reads: fn(&Effect) -> bool,
+        ability_reads: fn(&Ability) -> bool,
+    ) -> bool {
+        use crate::state::stack_object::StackObject;
+        match object {
+            StackObject::ActivatedAbility(ability) => ability.effects.iter().any(effect_reads),
+            StackObject::TriggeredAbility(ability) => self.trigger_reads(
+                ability.source_object(),
+                ability.source_definition_id,
+                ability.ability_index,
+                ability.inline_effects.as_deref(),
+                effect_reads,
+                ability_reads,
+            ),
+            StackObject::Spell(_) => false,
+        }
+    }
+}
+
 /// Project the payment and any departed object the trigger reads.
 /// Both text and policy read these same public facts.
 pub(crate) fn project_stack_object(
@@ -1155,19 +1195,7 @@ pub(crate) fn project_stack_object(
     let mut out = Projection::new(game, viewer, text);
     // "The number of soul counters on this artifact" after it was sacrificed
     // to pay the cost: the source's last known information (CR 608.2h).
-    let reads_source_lki = |program: &[Effect]| program.iter().any(Effect::reads_source_lki);
-    let source_lki = match object {
-        StackObject::ActivatedAbility(ability) => reads_source_lki(&ability.effects),
-        StackObject::TriggeredAbility(ability) => match &ability.inline_effects {
-            Some(program) => reads_source_lki(program),
-            None => game
-                .source_face(ability.source_object(), ability.source_definition_id)
-                .and_then(|face| face.abilities.get(ability.ability_index))
-                .is_some_and(crate::state::ability::Ability::reads_source_lki),
-        },
-        StackObject::Spell(_) => false,
-    };
-    if source_lki {
+    if game.stack_object_reads(object, Effect::reads_source_lki, Ability::reads_source_lki) {
         out.retained_object(object.source_object());
     }
     if let StackObject::TriggeredAbility(ability) = object {

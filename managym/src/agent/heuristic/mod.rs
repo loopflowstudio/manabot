@@ -47,9 +47,9 @@
 //! These are estimates, not exact combat search. Mana counts untapped lands,
 //! ignoring colors and other sources. Creature identity reads the effective
 //! permanent types. Modal bodies are opaque to spell ratings.
-//! Combat assignments use the observation's attacker/blocker events and current
-//! permanent IDs, remembered for the turn. No hidden hand or library order is
-//! consulted.
+//! Combat assignments read live attacking flags plus the observation's
+//! blocker events and current permanent IDs, remembered for the turn. No
+//! hidden hand or library order is consulted.
 mod knowledge;
 use crate::agent::{
     action::{ActionSpaceKind as Space, ActionType as Action, AgentError},
@@ -274,7 +274,7 @@ impl Heuristic {
     /// No blocker was declared for this attacker this combat (CR 509.1h);
     /// it stays blocked if its blocker later leaves.
     fn unblocked(&self, attacker: i32) -> bool {
-        self.blocks.get(&attacker).is_none_or(BTreeSet::is_empty)
+        !self.blocks.contains_key(&attacker)
     }
     fn priority(&self, b: &Board<'_>) -> Option<usize> {
         if let Some(land) = b.first(Action::PriorityPlayLand) {
@@ -456,32 +456,34 @@ impl Heuristic {
             .filter(|p| b.own(p) && self.unblocked(p.id))
             .map(|p| p.power)
             .sum();
-        let none = BTreeSet::new();
         let mut gains = vec![];
         for a in attackers {
             let id = &a.id;
-            let bs = self.blocks.get(id).unwrap_or(&none);
-            if bs.is_empty() {
-                if b.own(a) && power + s.pump.0 >= b.raw.opponent.life {
-                    gains.push((3, a.power, *id));
+            match self.blocks.get(id) {
+                None => {
+                    if b.own(a) && power + s.pump.0 >= b.raw.opponent.life {
+                        gains.push((3, a.power, *id));
+                    }
                 }
-            } else if bs.len() == 1 {
-                let Some(blocker) = b.permanents.get(bs.first().unwrap()) else {
-                    continue;
-                };
-                let (ours, theirs) = if b.own(a) {
-                    (a, *blocker)
-                } else {
-                    (*blocker, a)
-                };
-                if !b.own(ours) {
-                    continue;
+                Some(bs) if bs.len() == 1 => {
+                    let Some(blocker) = b.permanents.get(bs.first().unwrap()) else {
+                        continue;
+                    };
+                    let (ours, theirs) = if b.own(a) {
+                        (a, *blocker)
+                    } else {
+                        (*blocker, a)
+                    };
+                    if !b.own(ours) {
+                        continue;
+                    }
+                    let before = fight_value(ours, theirs, (0, 0));
+                    let after = fight_value(ours, theirs, s.pump);
+                    if after > before {
+                        gains.push((after - before, ours.power, ours.id));
+                    }
                 }
-                let before = fight_value(ours, theirs, (0, 0));
-                let after = fight_value(ours, theirs, s.pump);
-                if after > before {
-                    gains.push((after - before, ours.power, ours.id));
-                }
+                Some(_) => {}
             }
         }
         gains.sort_by(|a, b| b.cmp(a));

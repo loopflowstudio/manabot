@@ -69,7 +69,7 @@ pub trait ExactIds {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
 }
 
-pub(crate) struct Exact<'a, T: ?Sized>(pub(crate) &'a T);
+pub struct Exact<'a, T: ?Sized>(pub &'a T);
 
 impl<T: ExactIds + ?Sized> serde::Serialize for Exact<'_, T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -145,6 +145,12 @@ impl AbilitySource {
         Self {
             object: reference.unwrap_or(object),
             captured: reference.is_some(),
+        }
+    }
+    pub fn exact(object: ObjectId) -> Self {
+        Self {
+            object,
+            captured: true,
         }
     }
     pub fn object(self) -> ObjectId {

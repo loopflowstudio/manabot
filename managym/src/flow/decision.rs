@@ -672,7 +672,7 @@ pub enum Decision {
         /// is cast without paying its mana cost.
         #[serde(skip_serializing_if = "std::ops::Not::not", default)]
         paid: bool,
-        /// The once-each-turn option (exact source, ability index) casting
+        /// The once-each-turn option `(exact source, printed face, ability index)` casting
         /// spends ("Do this only once each turn"); declining keeps it.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(serialize_with = "crate::state::game_object::exact")]

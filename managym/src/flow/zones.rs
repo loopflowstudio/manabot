@@ -25,14 +25,8 @@ use crate::{
     },
 };
 
-/// The rules facts a zone-change successor can read. Entry replacements
+/// CR 400.7d: a permanent can read how its spell was cast. Entry replacements
 /// belong to `ZoneEntry`, separately from facts about the departing object.
-#[derive(Clone, Debug, Default)]
-struct CarryOver {
-    /// CR 400.7d: a permanent can read how its spell was cast.
-    cast: Option<CastFacts>,
-}
-
 #[derive(Clone, Debug, Default)]
 struct CastFacts {
     x: u8,
@@ -244,12 +238,11 @@ impl Game {
     pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
         let other = PlayerId(1 - active.0);
         for permanent_id in self.battlefield_permanents(other) {
-            let untaps = self
-                .characteristics(permanent_id)
+            if self
+                .layer_view(permanent_id)
                 .static_abilities
-                .iter()
-                .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
-            if untaps {
+                .contains(&StaticAbility::UntapsDuringOtherUntapSteps)
+            {
                 self.untap_permanent(permanent_id);
             }
         }
@@ -679,24 +672,20 @@ impl Game {
             self.state.permanents[lki.permanent] = None;
             self.record_object_lki(lki);
         }
-        let cast_spell = (old_zone == Some(ZoneType::Stack))
+        let cast = match (old_zone == Some(ZoneType::Stack))
             .then(|| self.stack_index_of(Target::StackSpell(prior_object)))
             .flatten()
-            .map(|index| self.state.stack_objects_mut().remove(index));
-        if let Some(StackObject::Spell(spell)) = &cast_spell {
-            let lki = self.spell_lki(spell);
-            self.state.spell_lki_mut().insert(spell.object, lki);
-        }
-        let carry = CarryOver {
-            cast: match cast_spell {
-                Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
-                    Some(CastFacts {
-                        x: spell.x,
-                        spent: spell.spent,
-                    })
-                }
-                _ => None,
-            },
+            .map(|index| self.state.stack_objects_mut().remove(index))
+        {
+            Some(StackObject::Spell(spell)) => {
+                let lki = self.spell_lki(&spell);
+                self.state.spell_lki_mut().insert(spell.object, lki);
+                (to_zone == ZoneType::Battlefield).then_some(CastFacts {
+                    x: spell.x,
+                    spent: spell.spent,
+                })
+            }
+            _ => None,
         };
 
         let object_id = self
@@ -724,7 +713,7 @@ impl Game {
             self.state.turn.graveyard_from_battlefield.push(object_id);
         }
 
-        if to_zone == ZoneType::Battlefield {
+        let entered_permanent = (to_zone == ZoneType::Battlefield).then(|| {
             if entry.transformed {
                 self.show_back_face(object_id);
             }
@@ -736,8 +725,8 @@ impl Game {
             );
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
-            permanent.was_cast = carry.cast.is_some();
-            if let Some(cast) = carry.cast {
+            permanent.was_cast = cast.is_some();
+            if let Some(cast) = cast {
                 permanent.cast_x = cast.x;
                 permanent.cast_spent = cast.spent;
             }
@@ -748,7 +737,8 @@ impl Game {
                 self.state.turn.history[holder.0].land_entered = true;
             }
             self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
-        }
+            permanent_id
+        });
 
         if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
             // The permanent's controller gains or loses its mana abilities,
@@ -765,22 +755,20 @@ impl Game {
             face_down: entry.face_down,
         };
         self.emit(event);
-        if to_zone == ZoneType::Battlefield {
-            if let Some(permanent) = self.state.permanent_of(object_id) {
-                let counters = self.state.permanents[permanent]
-                    .as_ref()
-                    .expect("entered")
-                    .counters
-                    .clone();
-                for (kind, count) in counters.iter() {
-                    self.emit(GameEvent::CountersPut {
-                        permanent,
-                        kind,
-                        count,
-                        total: count,
-                        by: holder,
-                    });
-                }
+        if let Some(permanent) = entered_permanent {
+            let counters = self.state.permanents[permanent]
+                .as_ref()
+                .expect("entered")
+                .counters
+                .clone();
+            for (kind, count) in counters.iter() {
+                self.emit(GameEvent::CountersPut {
+                    permanent,
+                    kind,
+                    count,
+                    total: count,
+                    by: holder,
+                });
             }
         }
         if old_zone == Some(ZoneType::Battlefield) {

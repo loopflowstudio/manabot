@@ -438,9 +438,6 @@ impl Game {
         }
         total
     }
-    pub(crate) fn effective_pt(&self, id: PermanentId) -> (i32, i32) {
-        self.layer_view(id).pt()
-    }
     pub(super) fn layer_state_condition(
         &self,
         condition: &Condition,
@@ -470,7 +467,7 @@ impl Game {
     /// means the owner (CR 109.5), including owned outside-game copies.
     pub fn object_pt(&self, object_id: ObjectId) -> (i32, i32) {
         if let Some(permanent) = self.state.permanent_of(object_id) {
-            return self.characteristics(permanent).pt();
+            return self.layer_view(permanent).pt();
         }
         // An outside-game card is allocated but in no zone.
         let object = self
@@ -724,21 +721,34 @@ impl Game {
         let Some(permanent) = self.state.permanents[target].as_ref() else {
             return false;
         };
-        let predicate = match scope {
-            StaticScope::This => return source == target,
-            StaticScope::Attached => return self.attached_permanent(source) == Some(target),
-            StaticScope::SpellsYouControl(_) => return false,
-            StaticScope::YouControl(p) if permanent.controller == controller => p,
-            StaticScope::OtherYouControl(p)
-                if permanent.controller == controller && source != target =>
-            {
-                p
-            }
-            StaticScope::All(p) => p,
-            StaticScope::Other(p) if source != target => p,
-            _ => return false,
-        };
-        self.permanent_matches_with_source(target, predicate, Some(source))
+        super::layers::matches_static_scope(
+            scope,
+            source,
+            controller,
+            self.attached_permanent(source),
+            target,
+            permanent.controller,
+            |predicate| self.permanent_matches_with_source(target, predicate, Some(source)),
+        )
+    }
+
+    /// Read a permanent while it remains on the battlefield, or from its last
+    /// known information after departure (CR 608.2h).
+    pub(crate) fn with_permanent_or_lki<T>(
+        &self,
+        id: PermanentId,
+        live: impl FnOnce(&crate::state::permanent::Permanent) -> T,
+        departed: impl FnOnce(&crate::state::game_object::ObjectLki) -> T,
+    ) -> Option<T> {
+        match self.state.permanents[id].as_ref() {
+            Some(permanent) => Some(live(permanent)),
+            None => self.departed_permanent_lki(id).map(departed),
+        }
+    }
+
+    /// The permanent's current controller, or its last known controller after departure.
+    pub(crate) fn last_known_controller(&self, id: PermanentId) -> Option<PlayerId> {
+        self.with_permanent_or_lki(id, |p| p.controller, |lki| lki.controller)
     }
 
     /// Whether the permanent is attacking or blocking (CR 506.4).
@@ -874,11 +884,8 @@ impl Game {
         source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
-        let source_permanent = || {
-            source
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .and_then(|id| self.state.permanents[id].as_ref())
-        };
+        let source_id = || source.and_then(|source| self.lookup_current_permanent(source).ok());
+        let source_permanent = || source_id().and_then(|id| self.state.permanents[id].as_ref());
         match condition {
             Condition::Compare { left, op, right } => {
                 let context;
@@ -916,8 +923,9 @@ impl Game {
                 predicate,
                 distinct_names,
             } => {
-                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                let source_view = source.map(|id| self.layer_view(id));
+                let source_view = source_id()
+                    .filter(|_| predicate.reads_source())
+                    .map(|id| self.layer_view(id));
                 let source_name = source_view.as_ref().map(|view| view.name.as_str());
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
@@ -927,13 +935,18 @@ impl Game {
                 })
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
-                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.iter_battlefield_permanents(player))
-                    .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
-                    .take(*count)
-                    .count()
+                let source_view = source_id()
+                    .filter(|_| predicate.reads_source())
+                    .map(|id| self.layer_view(id));
+                let source_name = source_view.as_ref().map(|view| view.name.as_str());
+                self.layer_views(
+                    [PlayerId(0), PlayerId(1)]
+                        .into_iter()
+                        .flat_map(|player| self.iter_battlefield_permanents(player)),
+                )
+                .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name))
+                .take(*count)
+                .count()
                     == *count
             }
             Condition::ControlsUnownedAtLeast { count } => {
@@ -998,36 +1011,28 @@ impl Game {
             Condition::SourceCountersAtLeast { kind, count } => {
                 source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
             }
-            Condition::SourceMatches(predicate) => source
-                .and_then(|r| self.lookup_current_permanent(r).ok())
-                .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
+            Condition::SourceMatches(predicate) => {
+                source_id().is_some_and(|id| self.permanent_matches_predicate(id, predicate))
+            }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
-            Condition::SourceSaddled => source
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .is_some_and(|id| {
-                    self.permanent_has_modification(
-                        id,
-                        &crate::state::effect::Modification::Saddled,
-                    )
-                }),
-            Condition::TriggeringHadCounters => match triggering {
-                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
-                    Some(permanent) => permanent.has_counters(),
-                    None => self
-                        .departed_permanent_lki(id)
-                        .is_some_and(|lki| !lki.counters.is_empty()),
-                },
-                _ => false,
-            },
-            Condition::TriggeringMatches(predicate) => match triggering {
-                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
-                    Some(_) => self.permanent_matches_predicate(id, predicate),
-                    None => self
-                        .departed_permanent_lki(id)
-                        .is_some_and(|lki| self.lki_matches_predicate(lki, predicate)),
-                },
-                _ => false,
-            },
+            Condition::SourceSaddled => source_id().is_some_and(|id| {
+                self.permanent_has_modification(
+                    id,
+                    &crate::state::effect::Modification::Saddled,
+                )
+            }),
+            Condition::TriggeringHadCounters => matches!(triggering, Some(Target::Permanent(id))
+                if self.with_permanent_or_lki(
+                    id,
+                    |permanent| permanent.has_counters(),
+                    |lki| !lki.counters.is_empty(),
+                ).unwrap_or(false)),
+            Condition::TriggeringMatches(predicate) => matches!(triggering, Some(Target::Permanent(id))
+                if self.with_permanent_or_lki(
+                    id,
+                    |_| self.permanent_matches_predicate(id, predicate),
+                    |lki| self.lki_matches_predicate(lki, predicate),
+                ).unwrap_or(false)),
             Condition::Moved => frame.is_some_and(|frame| !frame.moved.is_empty()),
             Condition::TargetControlledByYou => {
                 let Some(Target::Permanent(permanent_id)) =
@@ -1035,13 +1040,7 @@ impl Game {
                 else {
                     return false;
                 };
-                let last_controller = match self.state.permanents[permanent_id].as_ref() {
-                    Some(permanent) => Some(permanent.controller),
-                    None => self
-                        .departed_permanent_lki(permanent_id)
-                        .map(|lki| lki.controller),
-                };
-                last_controller == Some(controller)
+                self.last_known_controller(permanent_id) == Some(controller)
             }
             Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
                 frame
@@ -1072,12 +1071,12 @@ impl Game {
                     return false;
                 };
                 // A departed target answers from its last known information.
-                match self.state.permanents[permanent_id].as_ref() {
-                    Some(permanent) => permanent.dealt_damage_this_turn,
-                    None => self
-                        .departed_permanent_lki(permanent_id)
-                        .is_some_and(|lki| lki.dealt_damage_this_turn),
-                }
+                self.with_permanent_or_lki(
+                    permanent_id,
+                    |permanent| permanent.dealt_damage_this_turn,
+                    |lki| lki.dealt_damage_this_turn,
+                )
+                .unwrap_or(false)
             }
         }
     }

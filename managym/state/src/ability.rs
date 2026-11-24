@@ -609,32 +609,6 @@ impl Condition {
         }
     }
 
-    /// Whether answering reads a player's mana pools, so a static ability
-    /// with this condition follows the `mana_pools` revision.
-    pub fn reads_mana_pools(&self) -> bool {
-        match self {
-            Condition::Compare { left, right, .. } => {
-                left.reads_mana_pools() || right.reads_mana_pools()
-            }
-            Condition::UnspentManaAtLeast { .. } => true,
-            Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
-                conditions.iter().any(Condition::reads_mana_pools)
-            }
-            Condition::Not(condition) => condition.reads_mana_pools(),
-            _ => false,
-        }
-    }
-
-    /// Whether answering reads a player's life total, so a static ability
-    /// with this condition follows the `life` revision.
-    pub fn reads_life(&self) -> bool {
-        match self {
-            Condition::LifeAtLeast { .. } => true,
-            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_life),
-            _ => false,
-        }
-    }
-
     /// Whether answering needs a resolving spell or ability, so the
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
@@ -955,7 +929,7 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
-    /// Amount dealt by the combat hit that triggered this ability.
+    /// Amount from the event that triggered this ability (damage dealt or life lost).
     TriggeringAmount,
     /// Total life actually lost to this scope's latest LoseLife instruction.
     LifeLostThisWay,
@@ -2175,7 +2149,7 @@ impl Effect {
                 .is_some_and(TargetSpec::reads_source_power),
         };
         if (read == ContextRead::SourcePower && target_reads_power)
-            || self.selectors().into_iter().any(|s| s.reads(read))
+            || self.find_selector(|s| s.reads(read).then_some(())).is_some()
         {
             return true;
         }
@@ -2280,47 +2254,49 @@ impl Effect {
         }
     }
 
-    /// The selectors a verb acts through, in field order; empty for every
-    /// other effect.
-    pub fn selectors(&self) -> Vec<&ObjectSelector> {
+    /// Walk the selectors a verb acts through, in field order, without allocating.
+    fn find_selector<'a, T>(
+        &'a self,
+        mut f: impl FnMut(&'a ObjectSelector) -> Option<T>,
+    ) -> Option<T> {
         match self {
-            Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
-            Effect::SelectCards { from, .. } => vec![from],
-            Effect::PutCounters { on, .. } => vec![on],
-            Effect::PutCountersFrom { from, on } => vec![from, on],
-            Effect::ApplyContinuous { affected: what, .. }
-            | Effect::Sacrifice { what, .. }
-            | Effect::Move { what, .. }
-            | Effect::Tap { what }
-            | Effect::Untap { what }
-            | Effect::Destroy { what }
-            | Effect::Airbend { what }
-            | Effect::GainControl { what, .. }
-            | Effect::ControlPlayer { what, .. }
-            | Effect::DealDamage { what, .. }
-            | Effect::CounterSpell { what, .. }
-            | Effect::CounterAbility { what }
-            | Effect::AttachSourceTo { what }
-            | Effect::Earthbend { what, .. }
-            | Effect::Discard { what, .. }
-            | Effect::Reveal { what } => vec![what],
-            Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
-                vec![from]
+            Effect::CreateDelayedTrigger { remember, .. } => remember.iter().find_map(f),
+            Effect::PutCountersFrom { from, on } => f(from).or_else(|| f(on)),
+            Effect::DealDamage { what, by, .. } => f(what).or_else(|| by.as_ref().and_then(f)),
+            Effect::SelectCards { from: selector, .. }
+            | Effect::PutCounters { on: selector, .. }
+            | Effect::CreateTokenCopy { of: selector, .. }
+            | Effect::CopyTriggeringSpellForEach { each: selector }
+            | Effect::ApplyContinuous {
+                affected: selector, ..
             }
-            _ => Vec::new(),
+            | Effect::Sacrifice { what: selector, .. }
+            | Effect::Move { what: selector, .. }
+            | Effect::Tap { what: selector }
+            | Effect::Untap { what: selector }
+            | Effect::Destroy { what: selector }
+            | Effect::Airbend { what: selector }
+            | Effect::GainControl { what: selector, .. }
+            | Effect::ControlPlayer { what: selector, .. }
+            | Effect::CounterSpell { what: selector, .. }
+            | Effect::CounterAbility { what: selector }
+            | Effect::AttachSourceTo { what: selector }
+            | Effect::Earthbend { what: selector, .. }
+            | Effect::Discard { what: selector, .. }
+            | Effect::Reveal { what: selector }
+            | Effect::RemoveCounters { from: selector, .. }
+            | Effect::RemoveAllCounters { from: selector } => f(selector),
+            _ => None,
         }
     }
 
     /// The choice a `Chosen` selector asks of the resolving player, if the
     /// verb has one; only `Sacrifice` may let them decline.
     pub fn chosen(&self) -> Option<(&CardPredicate, Option<Except>, bool)> {
-        let (predicate, except) =
-            self.selectors()
-                .into_iter()
-                .find_map(|selector| match selector {
-                    ObjectSelector::Chosen { predicate, except } => Some((predicate, *except)),
-                    _ => None,
-                })?;
+        let (predicate, except) = self.find_selector(|selector| match selector {
+            ObjectSelector::Chosen { predicate, except } => Some((predicate, *except)),
+            _ => None,
+        })?;
         let optional = matches!(self, Effect::Sacrifice { optional: true, .. });
         Some((predicate, except, optional))
     }
@@ -2392,11 +2368,7 @@ impl Effect {
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
-        if let Some(spec) = self
-            .selectors()
-            .into_iter()
-            .find_map(ObjectSelector::target_spec)
-        {
+        if let Some(spec) = self.find_selector(ObjectSelector::target_spec) {
             return Some(spec);
         }
         match self {
@@ -2426,23 +2398,20 @@ impl Effect {
             }
             | Effect::If {
                 then, otherwise, ..
+            }
+            | Effect::SelectCards {
+                effects: then,
+                if_declined: otherwise,
+                ..
             } => then
                 .iter()
                 .chain(otherwise.iter())
-                .find_map(|effect| effect.target_spec()),
-            Effect::SelectCards {
-                effects,
-                if_declined,
-                ..
-            } => effects
-                .iter()
-                .chain(if_declined)
                 .find_map(Effect::target_spec),
             Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
-                then.iter().find_map(|effect| effect.target_spec())
+                then.iter().find_map(Effect::target_spec)
             }
-            Effect::CreateTokenCopy { of, .. } => of.target_spec(),
-            Effect::PutCounters { .. }
+            Effect::CreateTokenCopy { .. }
+            | Effect::PutCounters { .. }
             | Effect::PutCountersFrom { .. }
             | Effect::Sacrifice { .. }
             | Effect::Move { .. }
@@ -2834,10 +2803,6 @@ impl EffectValue {
             _ => false,
         }
     }
-    pub fn reads_mana_pools(&self) -> bool {
-        // Spent mana is read from a payment receipt, independently of either live pool.
-        matches!(self, Self::Half(inner) | Self::Scaled { value: inner, .. } if inner.reads_mana_pools())
-    }
     pub fn is_resolution_only(&self) -> bool {
         match self {
             Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.is_resolution_only(),
@@ -2987,20 +2952,6 @@ pub struct GrantClock {
 }
 
 impl TriggerCondition {
-    /// The event this condition listens for, inside its limit and zone
-    /// wrappers.
-    pub fn event(&self) -> &TriggerCondition {
-        match self {
-            Self::WasCast { condition }
-            | Self::OnceEachTurn { condition }
-            | Self::FromZone { condition, .. }
-            | Self::InGraveyard { condition }
-            | Self::ActiveIf { condition, .. }
-            | Self::WhileSourceAttacking { condition } => condition.event(),
-            _ => self,
-        }
-    }
-
     pub fn once_each_turn(&self) -> bool {
         match self {
             Self::OnceEachTurn { .. } => true,

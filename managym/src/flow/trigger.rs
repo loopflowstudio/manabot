@@ -154,11 +154,49 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl PendingTrigger {
+    pub fn new(
+        id: TriggerId,
+        controller: PlayerId,
+        source_identity: crate::state::game_object::AbilitySource,
+        source_lki: Option<ObjectLki>,
+        ability_index: usize,
+    ) -> Self {
+        Self {
+            program: false,
+            triggering_amount: 0,
+            remembered: Vec::new(),
+            source_identity,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
+            source_lki,
+            ability_index,
+            controller,
+            id,
+            ordering_class: TriggerOrderingClass::Ordinary,
+            context: None,
+            player: None,
+            x: 0,
+            spent: Default::default(),
+            attacker: None,
+            chosen_modes: Vec::new(),
+            modes_chosen: false,
+            inline_effects: None,
+        }
+    }
+
     pub fn source_object(&self) -> ObjectId {
         self.source_identity.object()
     }
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.reference()
+    }
+    pub fn current_clause_targets(&self) -> impl Iterator<Item = Target> + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
     }
 }
 
@@ -173,12 +211,6 @@ impl DelayedTrigger {
 
 // The pending record historically separated its two source projections with
 // target progress. Preserve that field order in v16's streamed state bytes.
-struct ExactReference(Option<ObjectId>);
-impl serde::Serialize for ExactReference {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        crate::state::game_object::exact(&self.0, serializer)
-    }
-}
 impl serde::Serialize for PendingTrigger {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
@@ -193,10 +225,8 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("targets", &self.targets)?;
         map.serialize_entry("target_req_indices", &self.target_req_indices)?;
         map.serialize_entry("requirement_index", &self.requirement_index)?;
-        map.serialize_entry(
-            "source_ref",
-            &ExactReference(self.source_identity.reference()),
-        )?;
+        let source_ref = self.source_identity.reference();
+        map.serialize_entry("source_ref", &crate::state::game_object::Exact(&source_ref))?;
         map.serialize_entry("source_lki", &self.source_lki)?;
         map.serialize_entry("ability_index", &self.ability_index)?;
         map.serialize_entry("controller", &self.controller)?;

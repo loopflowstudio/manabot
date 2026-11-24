@@ -1825,9 +1825,7 @@ impl Game {
                             && (!ability.tap_source || can_tap)
                             && self.check_activation_terms(player, ability).is_ok()
                             && !source.activation_used(*index, ability)
-                            && ability.remove_counters.is_none_or(|(kind, count)| {
-                                source.counter_count(kind) >= i32::from(count)
-                            })
+                            && source.can_pay_counters(ability)
                     })
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
@@ -1898,9 +1896,6 @@ impl Game {
         if self.paying().is_some() {
             return Some(model);
         }
-        if let Some(reservation) = self.payment_reservation(operation) {
-            model.reserve(reservation);
-        }
         if let Operation::Activation {
             source,
             ability_index,
@@ -1908,6 +1903,15 @@ impl Game {
         } = operation
         {
             let ability = self.activation_ability(*source, *ability_index)?;
+            // Hold the source's own tap/leave cost while considering activation;
+            // once announced, `owed_reservation` reads its cost.
+            if let ActivationSource::Permanent(permanent) = source {
+                model.reserve(SourceReservation::owed(
+                    *permanent,
+                    ability.tap_source,
+                    ability.source_leaves(),
+                ));
+            }
             if ability.has_grantor_cost() {
                 model.reserve(SourceReservation::owed(
                     self.state.permanent_of(ability.granted_by?.grantor)?,
@@ -1918,26 +1922,6 @@ impl Game {
             model.life = model.life.checked_sub(ability.life_cost)?;
         }
         Some(model)
-    }
-
-    /// The hold an activation only being considered at priority would place
-    /// on its own source; once announced, `owed_reservation` reads its cost.
-    fn payment_reservation(&self, operation: &Operation) -> Option<SourceReservation> {
-        match operation {
-            Operation::Activation {
-                source: ActivationSource::Permanent(permanent),
-                ability_index,
-                ..
-            } => {
-                let ability = &self.characteristics(*permanent).activated_abilities[*ability_index];
-                Some(SourceReservation::owed(
-                    *permanent,
-                    ability.tap_source,
-                    ability.source_leaves(),
-                ))
-            }
-            _ => None,
-        }
     }
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {

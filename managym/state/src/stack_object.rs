@@ -122,9 +122,9 @@ pub struct TriggeredAbilityOnStack {
     pub source_definition_id: CardDefId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
-    pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,11 +218,27 @@ impl StackObject {
         }
     }
 
+    pub fn x(&self) -> u8 {
+        match self {
+            StackObject::Spell(spell) => spell.x,
+            StackObject::ActivatedAbility(ability) => ability.x,
+            StackObject::TriggeredAbility(triggered) => triggered.x,
+        }
+    }
+
     pub fn targets(&self) -> &[Target] {
         match self {
             StackObject::Spell(spell) => &spell.targets,
             StackObject::ActivatedAbility(ability) => &ability.targets,
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
+        }
+    }
+
+    pub fn targets_mut(&mut self) -> &mut [Target] {
+        match self {
+            StackObject::Spell(spell) => &mut spell.targets,
+            StackObject::ActivatedAbility(ability) => &mut ability.targets,
+            StackObject::TriggeredAbility(triggered) => &mut triggered.targets,
         }
     }
 }

@@ -45,6 +45,22 @@ pub struct VisibleReference {
     pub player: Option<usize>,
 }
 
+impl VisibleReference {
+    pub(crate) fn definition(definition: Option<u32>) -> Self {
+        Self {
+            definition,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn player(player: usize) -> Self {
+        Self {
+            player: Some(player),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
@@ -331,33 +347,26 @@ impl Game {
 
     pub(crate) fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
         match target {
-            Target::Player(player) => VisibleReference {
-                player: Some(player.0),
-                ..VisibleReference::default()
-            },
+            Target::Player(player) => VisibleReference::player(player.0),
             // A departed permanent keeps its public definition (CR 603.10a).
             Target::Permanent(id) => match self.permanent_object(id) {
                 Some(object) => self.visible_reference(object, viewer),
-                None => VisibleReference {
-                    definition: self
-                        .departed_permanent_lki(id)
+                None => VisibleReference::definition(
+                    self.departed_permanent_lki(id)
                         .map(|lki| lki.definition_id.0),
-                    ..VisibleReference::default()
-                },
+                ),
             },
             // A departed spell keeps its public definition (CR 608.2h).
             Target::StackSpell(object_id) => {
                 if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
                     self.object_reference(object_id, viewer)
                 } else {
-                    VisibleReference {
-                        definition: self
-                            .state
+                    VisibleReference::definition(
+                        self.state
                             .spell_lki
                             .get(&object_id)
                             .map(|spell| spell.definition_id.0),
-                        ..VisibleReference::default()
-                    }
+                    )
                 }
             }
             Target::StackAbility(id) => self

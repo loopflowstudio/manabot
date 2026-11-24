@@ -158,7 +158,7 @@ fn encoded_to_dict<'py>(
         put(
             "player_turn_state",
             &encoded.player_turn_state,
-            &[2, config.player_turn_state_len() / 2],
+            &[2, config.turn_state_dim()],
         )?;
         put(
             "card_turn_state",

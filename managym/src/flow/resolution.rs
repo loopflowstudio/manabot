@@ -59,12 +59,13 @@ impl Game {
     /// existed (CR 608.2h). A spell's power and toughness are not read.
     fn target_property(&self, target: Option<Target>, property: ObjectProperty) -> i32 {
         match target {
-            Some(Target::Permanent(id)) if self.permanent_object(id).is_some() => {
-                self.live_property(id, property)
-            }
             Some(Target::Permanent(id)) => self
-                .departed_permanent_lki(id)
-                .map_or(0, |lki| self.departed_property(lki, property)),
+                .with_permanent_or_lki(
+                    id,
+                    |_| self.live_property(id, property),
+                    |lki| self.departed_property(lki, property),
+                )
+                .unwrap_or(0),
             Some(Target::StackSpell(object)) => {
                 self.spell_info(object).map_or(0, |spell| match property {
                     ObjectProperty::ManaValue => i32::from(spell.mana_value),
@@ -221,8 +222,7 @@ impl Game {
                 .and_then(|source| self.permanent_power_or_lki(source))
                 .unwrap_or(0),
             EffectValue::AttackingMatching { predicate } => self
-                .battlefield_permanents(frame.controller)
-                .into_iter()
+                .iter_battlefield_permanents(controller)
                 .filter(|id| {
                     self.state.permanents[*id]
                         .as_ref()
@@ -236,10 +236,9 @@ impl Game {
             }
             EffectValue::Fixed(value) => *value,
             EffectValue::CreaturesWithCounters => self
-                .battlefield_permanents(controller)
-                .into_iter()
-                .filter(|id| {
-                    self.permanent_is_battlefield_creature(*id)
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(id, view)| {
+                    view.is_creature()
                         && self.state.permanents[*id]
                             .as_ref()
                             .is_some_and(|p| p.counter_count(CounterKind::PlusOnePlusOne) > 0)
@@ -259,13 +258,12 @@ impl Game {
                 self.greatest_shared_creature_type(controller) as i32
             }
             EffectValue::GreatestPowerYouControl { predicate } => self
-                .battlefield_permanents(controller)
-                .into_iter()
-                .filter(|id| {
-                    self.permanent_is_battlefield_creature(*id)
-                        && self.permanent_matches_predicate(*id, predicate)
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(id, view)| {
+                    view.is_creature()
+                        && super::layers::matches_view(self, *id, predicate, view, None)
                 })
-                .map(|id| self.effective_pt(id).0)
+                .map(|(_, view)| view.power)
                 .max()
                 .unwrap_or(0)
                 .max(0),
@@ -277,8 +275,7 @@ impl Game {
                 self.state.turn.spells_cast[controller.0].len() as i32
             }
             EffectValue::OwnedPermanentsOpponentsControl => self
-                .battlefield_permanents(PlayerId(1 - controller.0))
-                .into_iter()
+                .iter_battlefield_permanents(PlayerId(1 - controller.0))
                 .filter(|id| {
                     self.state.permanents[*id]
                         .as_ref()
@@ -680,12 +677,12 @@ impl Game {
     /// else as it last existed on the battlefield (CR 608.2h).
     fn last_known_creature_types(&self, target: Target) -> Vec<String> {
         match target {
-            Target::Permanent(id) if self.permanent_object(id).is_some() => {
-                self.characteristics(id).creature_types.clone()
-            }
             Target::Permanent(id) => self
-                .departed_permanent_lki(id)
-                .map(|lki| lki.creature_types())
+                .with_permanent_or_lki(
+                    id,
+                    |_| self.layer_view(id).creature_types.clone(),
+                    |lki| lki.creature_types(),
+                )
                 .unwrap_or_default(),
             _ => Vec::new(),
         }
@@ -751,14 +748,9 @@ impl Game {
             },
             PlayerSelector::Owner => Vec::new(),
             PlayerSelector::TargetController => match frame.primary_target() {
-                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
-                    Some(permanent) => vec![permanent.controller],
-                    None => self
-                        .departed_permanent_lki(id)
-                        .map(|lki| lki.controller)
-                        .into_iter()
-                        .collect(),
-                },
+                Some(Target::Permanent(id)) => {
+                    self.last_known_controller(id).into_iter().collect()
+                }
                 // A countered, uncounterable, copied or stolen spell alike.
                 Some(Target::StackSpell(object)) => self
                     .spell_info(object)
@@ -1303,16 +1295,10 @@ impl Game {
                 let spell = frame.context_target?;
                 let index = self.stack_index_of(spell)?;
                 let slots = self.state.stack_objects[index].targets().len();
-                let legal = self.retarget_candidates(&Decision::Retarget {
-                    player: frame.controller,
-                    object: spell,
-                    slot: 0,
-                    may_keep: false,
-                });
+                let legal = self.retarget_candidates_for(spell, 0);
                 let onto: Vec<Target> = self
-                    .select(each, frame)
+                    .selected_permanents(each, frame)
                     .into_iter()
-                    .filter_map(|object| self.lookup_current_permanent(object).ok())
                     .map(Target::Permanent)
                     .filter(|target| legal.contains(target))
                     .collect();
@@ -2207,6 +2193,9 @@ impl Game {
                 let Target::Permanent(victim) = victim_slot.target else {
                     return None;
                 };
+                let Some(target) = self.permanent_object(victim) else {
+                    return None;
+                };
                 let mut events = Vec::new();
                 for attacker in attackers.iter().filter(|slot| slot.legal) {
                     let Target::Permanent(attacker_id) = attacker.target else {
@@ -2214,21 +2203,16 @@ impl Game {
                     };
                     // Eligibility was fixed at entry; damage still requires
                     // the original battlefield objects (CR 400.7).
-                    if self.permanent_object(victim).is_none() {
-                        break;
-                    }
                     let Some(attacker_ref) = self.permanent_object(attacker_id) else {
                         continue;
                     };
-                    let power = self.characteristics(attacker_id).power;
-                    if let Some(target) = self.permanent_object(victim) {
-                        events.push(ProposedEvent::Damage {
-                            source: Some(attacker_ref),
-                            target: ProposedDamageTarget::Object(target),
-                            amount: power,
-                            combat: false,
-                        });
-                    }
+                    let power = self.layer_view(attacker_id).power;
+                    events.push(ProposedEvent::Damage {
+                        source: Some(attacker_ref),
+                        target: ProposedDamageTarget::Object(target),
+                        amount: power,
+                        combat: false,
+                    });
                 }
                 frame.batch = Some(self.event_batch(EventBinding::None, events));
                 None
@@ -2396,14 +2380,14 @@ impl Game {
                     return Vec::new();
                 };
                 let named = CardPredicate {
-                    named: Some(self.characteristics(target).name.clone()),
+                    named: Some(self.layer_view(target).name.clone()),
                     ..Default::default()
                 };
                 std::iter::once(target)
                     .chain(
                         [PlayerId(0), PlayerId(1)]
                             .into_iter()
-                            .flat_map(|player| self.battlefield_permanents(player))
+                            .flat_map(|player| self.iter_battlefield_permanents(player))
                             .filter(|id| *id != target)
                             .filter(|id| self.permanent_matches_predicate(*id, &named)),
                     )
@@ -2474,20 +2458,12 @@ impl Game {
                 max_mana_value,
                 exact_mana_value,
             } => {
-                let players: Vec<PlayerId> = match of {
-                    Scope::YouControl => vec![frame.controller],
-                    Scope::OpponentsControl => vec![PlayerId(1 - frame.controller.0)],
-                    Scope::DamagedBySourceInCombat => frame
-                        .source()
-                        .into_iter()
-                        .flat_map(|source| self.state.turn.damage_pairs.combat_players(source))
-                        .collect(),
-                    Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
-                    Scope::TargetPlayerControls => match self.present_primary_target(frame) {
-                        Some(Target::Player(player)) => vec![player],
-                        _ => Vec::new(),
-                    },
-                };
+                let players = self.scope_players(
+                    of,
+                    frame.controller,
+                    frame.source(),
+                    self.present_primary_target(frame),
+                );
                 let excepted = self.excepted_permanent(*except, frame);
                 let source = self.source_permanent_id(frame);
                 let exact = exact_mana_value
@@ -2498,7 +2474,7 @@ impl Game {
                     .map(|value| self.effect_value(value, frame));
                 players
                     .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
+                    .flat_map(|player| self.iter_battlefield_permanents(player))
                     .filter(|id| Some(*id) != excepted)
                     .filter(|id| self.permanent_matches_with_source(*id, predicate, source))
                     .filter(|id| {
@@ -2509,6 +2485,28 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id))
                     .collect()
             }
+        }
+    }
+
+    pub(crate) fn scope_players(
+        &self,
+        scope: &Scope,
+        controller: PlayerId,
+        source: Option<ObjectId>,
+        target: Option<Target>,
+    ) -> Vec<PlayerId> {
+        match scope {
+            Scope::YouControl => vec![controller],
+            Scope::OpponentsControl => vec![PlayerId(1 - controller.0)],
+            Scope::DamagedBySourceInCombat => source
+                .into_iter()
+                .flat_map(|source| self.state.turn.damage_pairs.combat_players(source))
+                .collect(),
+            Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
+            Scope::TargetPlayerControls => match target {
+                Some(Target::Player(player)) => vec![player],
+                _ => Vec::new(),
+            },
         }
     }
 
@@ -2564,10 +2562,9 @@ impl Game {
                     })
             }
             ObjectSelector::Triggering => match frame.context_target {
-                Some(Target::Permanent(id)) => present(id).or_else(|| {
-                    self.departed_permanent_lki(id)
-                        .map(|lki| lki.counters.clone())
-                }),
+                Some(Target::Permanent(id)) => {
+                    self.with_permanent_or_lki(id, |p| p.counters.clone(), |lki| lki.counters.clone())
+                }
                 _ => None,
             },
             other => self

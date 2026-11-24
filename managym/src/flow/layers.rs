@@ -207,7 +207,11 @@ impl ReadSet {
                 self.selector(of);
             }
             EffectValue::DistinctManaValues { of } => self.selector(of),
-            _ => self.mana |= value.reads_mana_pools(),
+            EffectValue::LifeTotal(_)
+            | EffectValue::LifeAboveStarting(_)
+            | EffectValue::LifeGainedThisTurn(_)
+            | EffectValue::LifeLostThisTurn(_) => self.life = true,
+            _ => {}
         }
     }
 
@@ -238,10 +242,9 @@ impl ReadSet {
             }
             Condition::Not(condition) => self.condition(condition),
             Condition::SourceTapped => self.tapped = true,
-            _ => {
-                self.mana |= condition.reads_mana_pools();
-                self.life |= condition.reads_life();
-            }
+            Condition::UnspentManaAtLeast { .. } => self.mana = true,
+            Condition::LifeAtLeast { .. } => self.life = true,
+            _ => {}
         }
     }
 }
@@ -1119,21 +1122,15 @@ impl<'a> Context<'a> {
         }
     }
     fn scope(&self, scope: &StaticScope, source: PermanentId, target: PermanentId) -> bool {
-        let predicate = match scope {
-            StaticScope::This => return source == target,
-            StaticScope::Attached => return self.game.attached_permanent(source) == Some(target),
-            StaticScope::SpellsYouControl(_) => return false,
-            StaticScope::OtherYouControl(p)
-                if source != target && self.controller(source) == self.controller(target) =>
-            {
-                p
-            }
-            StaticScope::YouControl(p) if self.controller(source) == self.controller(target) => p,
-            StaticScope::Other(p) if source != target => p,
-            StaticScope::All(p) => p,
-            _ => return false,
-        };
-        self.matches(target, predicate, Some(source))
+        matches_static_scope(
+            scope,
+            source,
+            self.controller(source),
+            self.game.attached_permanent(source),
+            target,
+            self.controller(target),
+            |predicate| self.matches(target, predicate, Some(source)),
+        )
     }
     fn matches(
         &self,
@@ -1480,6 +1477,32 @@ fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbil
         1 => Some(tap_for_mana(Effect::add_mana(outputs.remove(0)))),
         _ => Some(tap_for_mana(Effect::mana_choice(outputs))),
     }
+}
+
+pub(super) fn matches_static_scope(
+    scope: &StaticScope,
+    source: PermanentId,
+    source_controller: PlayerId,
+    attached: Option<PermanentId>,
+    target: PermanentId,
+    target_controller: PlayerId,
+    matches: impl FnOnce(&CardPredicate) -> bool,
+) -> bool {
+    let predicate = match scope {
+        StaticScope::This => return source == target,
+        StaticScope::Attached => return attached == Some(target),
+        StaticScope::SpellsYouControl(_) => return false,
+        StaticScope::OtherYouControl(p)
+            if source != target && source_controller == target_controller =>
+        {
+            p
+        }
+        StaticScope::YouControl(p) if source_controller == target_controller => p,
+        StaticScope::Other(p) if source != target => p,
+        StaticScope::All(p) => p,
+        _ => return false,
+    };
+    matches(predicate)
 }
 
 /// What a battlefield predicate reads of one permanent: its layered view,

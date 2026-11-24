@@ -864,20 +864,10 @@ impl Game {
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
-        let controllers = match scope {
-            crate::state::ability::Scope::YouControl => vec![player],
-            crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
-            crate::state::ability::Scope::DamagedBySourceInCombat => self
-                .state
-                .turn
-                .damage_pairs
-                .combat_players(*object)
-                .collect(),
-            _ => vec![PlayerId(0), PlayerId(1)],
-        };
+        let controllers = self.scope_players(&scope, player, Some(*object), None);
         let candidates: Vec<PermanentId> = controllers
             .into_iter()
-            .flat_map(|controller| self.battlefield_permanents(controller))
+            .flat_map(|controller| self.iter_battlefield_permanents(controller))
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .collect();
         let object = *object;

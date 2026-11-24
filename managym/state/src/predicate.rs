@@ -24,8 +24,8 @@ use super::mana::Color;
 )]
 #[serde(default)]
 pub struct CardPredicate {
-    /// Shares the asking source permanent's layered name. Requires a source
-    /// (currently ControlsAtLeast); card-only matching cannot answer it.
+    /// Shares the asking source permanent's layered name. Requires a source;
+    /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
     /// "named [name]": the object's name as it is (or last was) equals this
@@ -200,6 +200,14 @@ impl CardPredicate {
         )
     }
 
+    /// Whether an object named `name` satisfies `named` (CR 201.2); an empty
+    /// name names nothing (CR 201.2a).
+    pub fn accepts_name(&self, name: &str) -> bool {
+        self.named
+            .as_deref()
+            .is_none_or(|named| !named.is_empty() && named == name)
+    }
+
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
     pub fn matches_printing(
@@ -210,28 +218,7 @@ impl CardPredicate {
         power: i32,
         added_types: &[CardType],
     ) -> bool {
-        self.matches_with_types(object, kind, mana_value, power, &|ty| {
-            object.types.types.contains(&ty) || added_types.contains(&ty)
-        })
-    }
-
-    /// Whether an object named `name` satisfies `named` (CR 201.2); an empty
-    /// name names nothing (CR 201.2a).
-    pub fn accepts_name(&self, name: &str) -> bool {
-        self.named
-            .as_deref()
-            .is_none_or(|named| !named.is_empty() && named == name)
-    }
-
-    /// Match with the card types in effect at the event boundary.
-    pub fn matches_with_types(
-        &self,
-        object: &PrintedCharacteristics,
-        kind: ObjectKind,
-        mana_value: u8,
-        power: i32,
-        has_type: &impl Fn(CardType) -> bool,
-    ) -> bool {
+        let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
         if self.namesake
             || self.with_counter
             || self.attacking
@@ -271,7 +258,7 @@ impl CardPredicate {
         }
         if !self.any_of.is_empty()
             && !self.any_of.iter().any(|alternative| {
-                alternative.matches_with_types(object, kind, mana_value, power, has_type)
+                alternative.matches_printing(object, kind, mana_value, power, added_types)
             })
         {
             return false;

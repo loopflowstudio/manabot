@@ -266,7 +266,7 @@ pub struct TurnState {
         serialize_with = "crate::state::game_object::exact"
     )]
     pub attacks_this_turn: Vec<(ObjectId, u32)>,
-    /// Once-each-turn uses by exact source object and ability index: a
+    /// Once-each-turn uses by `(exact source, printed face, ability index)`: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -276,8 +276,7 @@ pub struct TurnState {
     /// Times each triggered ability `(exact source, printed face, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
-    pub ability_resolutions_this_turn:
-        BTreeMap<(ObjectId, crate::state::card::CardDefId, usize), u32>,
+    pub ability_resolutions_this_turn: BTreeMap<OnceEachTurnKey, u32>,
     /// Extra turns still to be taken (CR 500.7), the most recently created
     /// last: it is taken first.
     #[serde(skip_serializing_if = "Vec::is_empty")]

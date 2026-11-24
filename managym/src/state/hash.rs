@@ -190,7 +190,7 @@ struct CanonicalMatchState<'a> {
     object_to_permanent: &'a ObjectVec<Option<PermanentId>>,
     object_incarnations: Vec<u32>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
-    object_lki: Vec<(ObjectId, ObjectLki)>,
+    object_lki: Vec<(ObjectId, &'a ObjectLki)>,
     /// Omitted when empty: no spell has left the stack.
     #[serde(
         serialize_with = "crate::state::game_object::exact",
@@ -213,16 +213,12 @@ struct CanonicalMatchState<'a> {
     exile_links: &'a [crate::flow::trigger::ExileLink],
     effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
-    #[serde(skip_serializing_if = "no_cast_permissions")]
+    #[serde(skip_serializing_if = "crate::flow::cast_permission::CastPermissions::is_empty")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
-}
-
-fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -> bool {
-    value.is_empty()
 }
 
 impl<'a> CanonicalMatchState<'a> {
@@ -279,7 +275,7 @@ impl<'a> CanonicalMatchState<'a> {
             .collect();
         let object_lki = object_lki
             .iter()
-            .map(|(&object_ref, lki)| (object_ref, lki.clone()))
+            .map(|(&object_ref, lki)| (object_ref, lki))
             .collect();
         let mut rng = rng.clone();
         let mut rng_probe = [0_u64; 8];

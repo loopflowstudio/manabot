@@ -254,10 +254,15 @@ impl ObservationEncoderConfig {
         super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
     }
 
-    /// Two seat rows of v10 player turn state; empty for v9.
+    /// Columns in one seat's v10/v11 player turn state row.
+    pub fn turn_state_dim(&self) -> usize {
+        super::observation_layout::turn_state_columns(self.layout).len()
+    }
+
+    /// Two seat rows of v10/v11 player turn state; empty for v9.
     pub fn player_turn_state_len(&self) -> usize {
         if self.turn_state {
-            2 * super::observation_layout::turn_state_columns(self.layout).len()
+            2 * self.turn_state_dim()
         } else {
             0
         }
@@ -1778,13 +1783,16 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             push(object, FactKind::UsedAbility, *index as i32, 1);
         }
     }
+    let frame_controller = |frame: &super::continuation::ContinuationFrame| {
+        if frame.controller == obs.agent.player_index as usize {
+            obs.agent.id
+        } else {
+            obs.opponent.id
+        }
+    };
     for (index, frame) in obs.continuation.iter().enumerate() {
+        let controller = frame_controller(frame);
         if layout == InputLayout::OneToken && frame.triggering_amount > 0 {
-            let controller = if frame.controller == obs.agent.player_index as usize {
-                obs.agent.id
-            } else {
-                obs.opponent.id
-            };
             push(
                 controller,
                 FactKind::TriggeringAmount,
@@ -1794,13 +1802,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
         if frame.source_transforms > 0 {
             push(
-                frame.source.object.unwrap_or(
-                    if frame.controller == obs.agent.player_index as usize {
-                        obs.agent.id
-                    } else {
-                        obs.opponent.id
-                    },
-                ),
+                frame.source.object.unwrap_or(controller),
                 FactKind::Transforms,
                 (index + 1) as i32,
                 frame.source_transforms as i64,
@@ -1808,14 +1810,11 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
+        let controller = frame_controller(frame);
         for program in [&frame.program, &frame.effect_execution] {
             for (ordinal, &(kind, value)) in program.iter().enumerate() {
                 out.push(Fact {
-                    object: if frame.controller == obs.agent.player_index as usize {
-                        obs.agent.id
-                    } else {
-                        obs.opponent.id
-                    },
+                    object: controller,
                     kind: FactKind::ContinuationProgram,
                     id: (index + 1) as i32,
                     detail: value,
@@ -1826,11 +1825,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
         if let Some(attackers) = &frame.attackers {
             out.push(Fact {
-                object: if frame.controller == obs.agent.player_index as usize {
-                    obs.agent.id
-                } else {
-                    obs.opponent.id
-                },
+                object: controller,
                 kind: FactKind::CombatRestriction,
                 id: (index + 1) as i32,
                 detail: name_value(attackers),

@@ -1669,19 +1669,27 @@ impl Observation {
                 .id
                 .0 as i32,
             is_token: !game.state[permanent.object].is_card(),
-            characteristics: CharacteristicsData {
-                name: characteristics.name.clone(),
-                power: characteristics.power,
-                toughness: characteristics.toughness,
-                is_legendary: characteristics.is_legendary,
-                is_ally: characteristics.has_subtype("Ally"),
-                is_lesson: characteristics.has_subtype("Lesson"),
-                ward_cost: ward_value(characteristics.ward.as_ref()),
-                ward_life: ward_life(characteristics.ward.as_ref()),
-                ward_program: ward_program(characteristics.ward.as_ref()),
-                card_types: CardTypeData::from_types(&characteristics.types),
-                keywords: KeywordData::from_keywords(&characteristics.keywords),
-                ..Self::printed_characteristics_data(game, permanent.object)
+            characteristics: {
+                let object = &game.state[permanent.object];
+                CharacteristicsData {
+                    name: characteristics.name.clone(),
+                    text_box: object.text_box.clone(),
+                    power: characteristics.power,
+                    toughness: characteristics.toughness,
+                    is_legendary: characteristics.is_legendary,
+                    is_ally: characteristics.has_subtype("Ally"),
+                    is_lesson: characteristics.has_subtype("Lesson"),
+                    ward_cost: ward_value(characteristics.ward.as_ref()),
+                    ward_life: ward_life(characteristics.ward.as_ref()),
+                    ward_program: ward_program(characteristics.ward.as_ref()),
+                    kicker_cost: object
+                        .optional_cost()
+                        .map(|cost| i32::from(cost.mana_value))
+                        .unwrap_or(0),
+                    card_types: CardTypeData::from_types(&characteristics.types),
+                    keywords: KeywordData::from_keywords(&characteristics.keywords),
+                    mana_cost: object.mana_cost.clone().unwrap_or_default(),
+                }
             },
         };
 
@@ -1762,24 +1770,14 @@ impl Observation {
     }
 
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
-        let reads_power = |program: &[Effect]| program.iter().any(Effect::reads_source_power);
-        let source_power = match stack_object {
-            StackObject::ActivatedAbility(a) => {
-                reads_power(&a.effects).then_some(a.source_object())
-            }
-            StackObject::TriggeredAbility(a) => {
-                let reads = match &a.inline_effects {
-                    Some(program) => reads_power(program),
-                    None => game
-                        .source_face(a.source_object(), a.source_definition_id)
-                        .and_then(|face| face.abilities.get(a.ability_index))
-                        .is_some_and(crate::state::ability::Ability::reads_source_power),
-                };
-                reads.then_some(a.source_object())
-            }
-            StackObject::Spell(_) => None,
-        }
-        .and_then(|object| game.permanent_power_or_lki(object));
+        let source_power = game
+            .stack_object_reads(
+                stack_object,
+                Effect::reads_source_power,
+                crate::state::ability::Ability::reads_source_power,
+            )
+            .then_some(stack_object.source_object())
+            .and_then(|object| game.permanent_power_or_lki(object));
         let paid_amount = match stack_object {
             StackObject::ActivatedAbility(a) => a
                 .effects

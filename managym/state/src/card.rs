@@ -588,6 +588,30 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
     ) && effect.target_spec().is_none()
 }
 
+/// A single fixed immediate mana output (CR 605.1a).
+fn fixed_mana_output(effect: &Effect) -> Option<&Mana> {
+    match effect {
+        Effect::AddMana {
+            mana,
+            amount: EffectValue::Fixed(1),
+            until_end_of_combat: false,
+        } => Some(mana),
+        _ => None,
+    }
+}
+
+/// Whether `effect` has concrete fixed mana outputs (`mana_choices` is `Some`).
+fn is_static_mana_output(effect: &Effect) -> bool {
+    fixed_mana_output(effect).is_some()
+        || matches!(
+            effect,
+            Effect::Modal { modes }
+                if modes
+                    .iter()
+                    .all(|effects| matches!(effects.as_slice(), [e] if fixed_mana_output(e).is_some()))
+        )
+}
+
 /// A leading effect that adds mana now (CR 605.1a): fixed or counted mana, X
 /// mana of one color, a branch between two such outputs, or a choice among
 /// fixed outputs.
@@ -603,16 +627,7 @@ fn is_mana_output(effect: &Effect) -> bool {
         } => [then, otherwise]
             .iter()
             .all(|branch| matches!(branch.as_slice(), [effect @ Effect::AddMana { .. }] if is_mana_output(effect))),
-        Effect::Modal { modes } => modes.iter().all(|effects| {
-            matches!(
-                effects.as_slice(),
-                [Effect::AddMana {
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: false,
-                    ..
-                }]
-            )
-        }),
+        Effect::Modal { .. } => is_static_mana_output(effect),
         _ => false,
     }
 }
@@ -646,7 +661,12 @@ impl ActivatedAbilityDefinition {
     /// control", a conditional branch, X mana of one color). Characteristics
     /// finalize it to concrete [`Self::mana_choices`] when they are read.
     pub fn has_dynamic_mana_output(&self) -> bool {
-        self.is_mana_ability() && self.mana_choices().is_none()
+        let Some((effect, suffix)) = self.effects.split_first() else {
+            return false;
+        };
+        suffix.iter().all(is_mana_suffix_effect)
+            && is_mana_output(effect)
+            && !is_static_mana_output(effect)
     }
 
     /// The concrete outputs of a mana ability: a leading effect adding one of
@@ -658,20 +678,14 @@ impl ActivatedAbilityDefinition {
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
         }
+        if let Some(mana) = fixed_mana_output(effect) {
+            return Some(vec![mana.clone()]);
+        }
         match effect {
-            Effect::AddMana {
-                mana,
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: false,
-            } => Some(vec![mana.clone()]),
             Effect::Modal { modes } => modes
                 .iter()
                 .map(|effects| match effects.as_slice() {
-                    [Effect::AddMana {
-                        mana,
-                        amount: EffectValue::Fixed(1),
-                        until_end_of_combat: false,
-                    }] => Some(mana.clone()),
+                    [effect] => fixed_mana_output(effect).cloned(),
                     _ => None,
                 })
                 .collect(),
@@ -713,7 +727,7 @@ impl ActivatedAbilityDefinition {
     }
 
     /// Whether paying the cost removes the source permanent from the
-    /// battlefield (sacrificed or exiled).
+    /// battlefield (sacrificed, exiled, or returned to hand).
     pub fn source_leaves(&self) -> bool {
         self.sacrifice_source || self.exile_source || self.return_source
     }
@@ -731,7 +745,7 @@ impl ActivatedAbilityDefinition {
             || self.tap_cost.is_some()
             || self.tap_power().is_some()
             || self.station
-            || self.tap_grantor
+            || self.has_grantor_cost()
             || self.effects.len() > 1
     }
 
@@ -754,13 +768,6 @@ impl ActivatedAbilityDefinition {
             return Vec::new();
         }
         effect_target_requirements(&self.effects)
-    }
-
-    /// The activation cannot proceed without choosing a target.
-    pub fn requires_target(&self) -> bool {
-        self.target_requirements()
-            .iter()
-            .any(|requirement| requirement.min > 0)
     }
 
     /// The clause of each of the first `count` chosen targets; empty for a

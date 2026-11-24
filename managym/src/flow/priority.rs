@@ -43,13 +43,6 @@ impl PriorityState {
         self.sba_done = false;
     }
 
-    pub fn reset(&mut self) {
-        self.pass_count = 0;
-        self.consecutive_passes = 0;
-        self.sba_done = false;
-        self.clear_loop_watch();
-    }
-
     pub fn clear_loop_watch(&mut self) {
         self.loop_watch = None;
         self.resolution_owed = false;
