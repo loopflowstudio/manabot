@@ -167,6 +167,7 @@ fn valakut_the_molten_pinnacle() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 // The entering Mountain and at least five others.
                 intervening_if: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
                     count: 6,
                     predicate: CardPredicate::subtype("Mountain"),
                 }),

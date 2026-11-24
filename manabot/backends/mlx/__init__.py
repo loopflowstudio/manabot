@@ -19,7 +19,19 @@ except ImportError as error:  # pragma: no cover - depends on the platform
         "(uv sync --extra mlx, Apple Silicon only)"
     ) from error
 
-_FILES = frozenset({"arrays", "checkpoint", "learner", "policy", "rl", "rollout"})
+_FILES = frozenset(
+    {
+        "arrays",
+        "checkpoint",
+        "collection",
+        "learner",
+        "policy",
+        "rl",
+        "rollout",
+        "runtime",
+        "state",
+    }
+)
 
 
 def __getattr__(name: str) -> ModuleType:

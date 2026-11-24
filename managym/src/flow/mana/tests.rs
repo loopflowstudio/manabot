@@ -84,6 +84,7 @@ fn announced_payment_reserves_life_across_nested_callers() {
         350,
         true,
     );
+    game.keep_opening_hands();
     let source = game
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();

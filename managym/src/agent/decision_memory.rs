@@ -1107,6 +1107,7 @@ mod tests {
             })
             .collect();
         let mut game = Game::new(players, 111, true);
+        game.keep_opening_hands();
         game.decision_memory_enabled = true;
         let land = game
             .state

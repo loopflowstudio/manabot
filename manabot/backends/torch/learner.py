@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.learning import Precision
+    from manabot.training.updates.health import StepSample
 
 # -- Update step ---------------------------------------------------------------
 
@@ -40,10 +41,9 @@ class StepRecorder(Protocol):
     `track(section)` times "Backward and gradient clipping" and "Optimizer
     step"; each ends at a finite check that already waits for the device.
     `rejecting()` wraps the whole step, so it sees every `NumericalError`.
-    When `sampling()` is true for a step, `before_clip` reads the gradients
-    before clipping rescales them in place and `record_gradients` reads them
-    after; `record_step` follows every completed step, with the pre-step
-    parameters only on a sampled step (empty otherwise).
+    On a sampled step the learner reports clipped gradient measurements before
+    Adam, then parameter displacement after its finite check. Every completed
+    step calls `record_step`, including those without a sample.
     """
 
     def track(self, section: str) -> AbstractContextManager[object]: ...
@@ -52,13 +52,9 @@ class StepRecorder(Protocol):
 
     def sampling(self) -> bool: ...
 
-    def before_clip(self, model: nn.Module) -> None: ...
+    def record_sample(self, sample: "StepSample") -> None: ...
 
-    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None: ...
-
-    def record_step(
-        self, parameters: list[nn.Parameter], before: list[Tensor]
-    ) -> None: ...
+    def record_step(self) -> None: ...
 
 
 def check_objective(loss: Tensor) -> None:
@@ -80,13 +76,10 @@ class _Unrecorded:
     def sampling(self) -> bool:
         return False
 
-    def before_clip(self, model: nn.Module) -> None:
+    def record_sample(self, sample: "StepSample") -> None:
         pass
 
-    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None:
-        pass
-
-    def record_step(self, parameters: list[nn.Parameter], before: list[Tensor]) -> None:
+    def record_step(self) -> None:
         pass
 
 
@@ -116,11 +109,9 @@ def gradient_step(
         with recorder.track("Backward and gradient clipping"):
             if not accumulated:
                 loss.backward()
-            sampled = recorder.sampling()
             if not any(p.grad is not None for p in parameters):
                 raise NumericalError("missing_all_gradients", {"loss": loss})
-            if sampled:
-                recorder.before_clip(model)
+            critic_norms = critic_gradient_norms(model) if recorder.sampling() else None
             try:
                 # error_if_nonfinite reads the norm on the host: the device wait
                 # that ends the backward timer.
@@ -136,10 +127,14 @@ def gradient_step(
                         if p.grad is not None
                     },
                 ) from error
-            if sampled:
-                recorder.record_gradients(model, norm)
+            if critic_norms is not None:
+                recorder.record_sample(gradient_health(model, norm, critic_norms))
         with recorder.track("Optimizer step"):
-            before = [p.detach().clone() for p in parameters] if sampled else []
+            before = (
+                [p.detach().clone() for p in parameters]
+                if critic_norms is not None
+                else []
+            )
             optimizer.step()
             # One flat read: per-tensor checks cost two launches per parameter tensor.
             if not torch.isfinite(
@@ -149,7 +144,9 @@ def gradient_step(
                     "nonfinite_parameters_after_step",
                     {f"parameter/{name}": p for name, p in model.named_parameters()},
                 )
-            recorder.record_step(parameters, before)
+            if before:
+                recorder.record_sample(parameter_health(parameters, before))
+            recorder.record_step()
     return norm
 
 
@@ -358,16 +355,12 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
 
 def gradient_health(
     model: nn.Module, norm_before: Tensor, critic_norms: tuple[float, float | None]
-) -> dict[str, float | int]:
+) -> "StepSample":
     """A sampled clipped step's gradients, without changing them."""
-    health: dict[str, float | int] = {}
-    if critic_norms is None:
-        raise RuntimeError("record_gradients requires before_clip first")
     critic_norm, token_norm = critic_norms
     parameters = list(model.parameters())
     grads = [p.grad for p in parameters if p.grad is not None]
-    health.update(
-        sampled_steps=1,
+    health: StepSample = dict(
         gradient_norm_before=float(norm_before),
         gradient_norm_after=_norm(grads),
         gradient_norm_critic_readout=critic_norm,
@@ -386,9 +379,8 @@ def gradient_health(
 
 def parameter_health(
     parameters: list[nn.Parameter], before: list[Tensor]
-) -> dict[str, float]:
+) -> "StepSample":
     """Parameter displacement of a sampled step, with established float64 arithmetic."""
-    health: dict[str, float] = {}
     delta = (
         torch.stack(
             [
@@ -406,8 +398,7 @@ def parameter_health(
         .sum()
         .sqrt()
     )
-    health["parameter_delta_l2"] = float(delta)
-    health["parameter_relative_delta"] = (
-        float(delta / scale) if scale > 0 else float(delta)
-    )
-    return health
+    return {
+        "parameter_delta_l2": float(delta),
+        "parameter_relative_delta": float(delta / scale) if scale > 0 else float(delta),
+    }

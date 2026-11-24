@@ -85,8 +85,8 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeHidden();
   await expect(page.getByTestId('deck-browser')).toBeHidden();
   await expect(page.getByTestId('game-board')).toBeVisible();
-  // This tiny retained game ends at its first decision.
-  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
+  // This tiny game records both keeps and one ordinary decision.
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 7');
   const step = page.getByRole('button', { name: 'Next', exact: true });
   await expect(step).toBeInViewport();
   await expect(step).toBeEnabled();

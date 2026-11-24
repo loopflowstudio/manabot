@@ -365,6 +365,21 @@ def bucket_sizes(
     return None if needs is None else sizes_of(needs, space, objects=objects)
 
 
+def trim_to_needs(
+    obs: ObservationBuffers,
+    space: ObservationSpace,
+    needs: np.ndarray | None,
+    *,
+    objects: bool,
+) -> tuple[ObservationBuffers, np.ndarray | None]:
+    """Reuse recorded needs when available and keep them with the prepared rows."""
+    if needs is None:
+        needs = row_needs(obs, space)
+    if needs is not None:
+        obs = trim_observation(obs, sizes_of(needs, space, objects=objects))
+    return obs, needs
+
+
 def object_columns(buckets: BucketSizes) -> list[slice]:
     """Full-coordinate object slices kept by `buckets`, in object order."""
     return [slice(0, 2)] + [

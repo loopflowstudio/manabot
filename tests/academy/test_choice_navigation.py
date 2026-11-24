@@ -30,7 +30,7 @@ class NavigationFixture(BaseModel):
 
 FIXTURE = (
     Path(__file__).parents[2]
-    / "managym/academy/fixtures/choice-navigation-w17-smart-payment.json"
+    / "managym/academy/fixtures/choice-navigation-opening-v1.json"
 )
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
@@ -95,14 +95,23 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     position = POSITIONS["LEARN"]
+    prefix = [
+        *position.prefix,
+        PrefixStep(offer_id=5, label="Take Accumulate Wisdom"),
+        PrefixStep(offer_id=0, label="Cast Accumulate Wisdom"),
+        PrefixStep(offer_id=4, label="Pay the cost"),
+        PrefixStep(offer_id=0, label="Put Dragonfly Swarm into your hand"),
+    ]
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": position.config})
             initial = settled_message(socket)
             frame = initial["frame"]
-            for ordinal, step in enumerate(position.prefix):
-                if step.label.endswith(" next on the bottom"):
-                    break
+            for ordinal, step in enumerate(prefix):
+                assert any(
+                    offer["id"] == step.offer_id and offer["label"] == step.label
+                    for offer in frame["offers"]
+                )
                 socket.send_json(
                     {
                         "type": "command",

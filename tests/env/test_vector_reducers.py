@@ -99,10 +99,10 @@ def test_unrecorded_vector_questions_follow_resets_and_active_mask() -> None:
     vector.close()
     assert sorted(vector.rows()[0]) == sorted(
         [
-            (1, 0, "interrupted", 2),
-            (0, 0, "interrupted", 1),
-            (0, 0, "interrupted", 1),
-            (1, 1, "interrupted", 2),
+            (1, 0, "interrupted", 0),
+            (0, 0, "interrupted", 0),
+            (0, 0, "interrupted", 0),
+            (1, 1, "interrupted", 0),
         ]
     )
 

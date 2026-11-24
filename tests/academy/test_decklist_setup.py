@@ -79,19 +79,21 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     assert "villain_source" not in public["config"]
     assert public["config"]["hero_deck"] == {}
     assert public["config"]["villain_sideboard"] == {}
-    offer = bot_contract.frame.find_verb("pass_priority")
+    offer = next(
+        offer for offer in bot_contract.frame.offers if offer["label"] == "Keep hand"
+    )
     original = bot.search_witness_json()
     fork = bot.clone_env()
     SemanticDecisionContract.from_env(fork).apply(
-        fork, offer["id"], command_id="import-pass"
+        fork, offer["id"], command_id="import-keep"
     )
     assert bot.search_witness_json() == original
-    bot_contract.apply(bot, offer["id"], command_id="import-pass")
+    bot_contract.apply(bot, offer["id"], command_id="import-keep")
     assert bot.search_witness_json() == fork.search_witness_json()
     with pytest.raises(SemanticContractError, match="stale"):
         bot_contract.apply(bot, offer["id"], command_id="import-stale")
     SemanticDecisionContract.from_env(rebuilt).apply(
-        rebuilt, offer["id"], command_id="import-pass"
+        rebuilt, offer["id"], command_id="import-keep"
     )
     assert rebuilt.search_witness_json() == bot.search_witness_json()
 

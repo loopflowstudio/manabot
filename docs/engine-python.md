@@ -47,6 +47,26 @@ print("chooser:", game.current_agent_index())
 print("game over:", terminated or truncated)
 ```
 
+Reset starts before turn one. Each seat can keep or mulligan. After both seats
+declare, those taking a mulligan redraw and privately choose cards for the
+bottom of their library, deepest first. After both keep, each can put eligible
+cards from their opening hand onto the battlefield in any order. Finishing
+passes that opportunity to the next seat. A snapshot taken between bottom
+selections restores the chooser, the remaining offers and each viewer’s
+knowledge of the cards already placed.
+
+Both players’ observations expose public player counters through
+`player.counters`, keyed by kind (for example, `"poison"`). Ten poison
+counters cause a loss at the next state-based check unless the player is
+protected. Both indexed and semantic steps report the losing seat’s reason under
+`p0_loss_reason` or `p1_loss_reason`. When several causes apply to a seat,
+the reported reason is the first applicable one in the order `deck_empty`,
+`life_total`, `poison`. A simultaneous loss by both seats is a draw.
+A resolving Demonic Pact loss reports `instructed_loss`. Maze's End sets
+`winner_index` directly when its controller has ten differently named Gates
+after searching. Herald of Eternal Dawn prevents its controller’s loss and
+an opponent’s explicit win. Play continues when either instruction is prevented.
+
 Run `uv run --no-project --python .venv/bin/python play.py`. It starts a game
 from two bundled decks and executes the first legal action, then prints the
 next chooser and whether the game ended. Both seats' choices belong to the

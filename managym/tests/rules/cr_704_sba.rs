@@ -146,7 +146,7 @@ fn cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority() {
 
     s.assert_game_over();
     s.assert_winner(1);
-    assert!(s.game().state.players[0].drew_when_empty);
+    assert!(s.game().state.loss(0).unwrap().deck_empty);
     assert!(s.game().state.pending_events.is_empty());
 }
 
@@ -163,13 +163,17 @@ fn cr_704_3_simultaneous_terminal_conditions_are_a_draw() {
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().state.players[0].life = 0;
     s.game_mut().state.players[1].life = 0;
+    s.game_mut().state.players[0].drew_when_empty = true;
+    crate::support::inspect::assert_choice_contract(&s);
 
     s.pass_priority();
 
     s.assert_game_over();
     assert_eq!(s.game().winner_index(), None);
-    assert!(!s.game().state.players[0].alive);
-    assert!(!s.game().state.players[1].alive);
+    let causes = s.game().state.loss(0).unwrap();
+    assert!(causes.life_total && causes.deck_empty);
+    assert_eq!(causes.reason(), Some("deck_empty"));
+    assert!(s.game().state.loss(1).unwrap().life_total);
     assert_eq!(s.action_space().kind, ActionSpaceKind::GameOver);
 }
 

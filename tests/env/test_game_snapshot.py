@@ -5,10 +5,13 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Literal
+from unittest.mock import Mock
 
 from blake3 import blake3
 import pytest
 
+from manabot.sim import sim
+from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.decision import Command, DecisionFrame
 from managym.recording import (
@@ -18,7 +21,10 @@ from managym.recording import (
     records_from_source,
 )
 from managym.replay import replay_failure_inputs, walk
-from tests.fixtures.recorded_commands import record_until_object_candidate
+from tests.fixtures.recorded_commands import (
+    preferred_action,
+    record_until_object_candidate,
+)
 
 
 def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
@@ -116,7 +122,8 @@ def test_snapshot_metadata_and_terminal_boundary() -> None:
     env = managym.Env(seed=42)
     with pytest.raises(managym.AgentError, match="before reset"):
         env.snapshot()
-    obs, _ = env.reset(setup())
+    seat = reset_to_first_main(env, setup())
+    obs = env.observation_for_player(seat)
     opening = env.snapshot()
     meta = opening.metadata()
     assert meta.turn == 1
@@ -346,7 +353,8 @@ def test_restore_rejects_illegal_or_rebound_actions_without_changing_the_source(
             )
         )
     assert position.restore().search_witness_json() == source.search_witness_json()
-    obs, _ = source.reset(setup("open"))
+    seat = reset_to_first_main(source, setup("open"))
+    obs = source.observation_for_player(seat)
     land = next(
         i
         for i, a in enumerate(obs.action_space.actions)
@@ -404,7 +412,7 @@ def test_banked_branch_round_trips_through_replay_and_academy(
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "academy")
     shuffle_seed = 77665544332211
     source = managym.Env(seed=42, decision_memory_include_own=True)
-    source.reset(setup())
+    reset_to_first_main(source, setup())
     source.step(0)
     bank = source.snapshot()
     assert bank.metadata().action_count >= 2
@@ -437,7 +445,10 @@ def test_banked_branch_round_trips_through_replay_and_academy(
     raw = branch.snapshot().to_replay_json()
     path = tmp_path / "branch.json"
     path.write_text(raw)
-    assert json.loads(raw)["interventions"][-1]["at_action"] == 3
+    # Both seats kept their opening hands before the three play decisions.
+    expected_actions = [0, 0, 0, 0, 0]
+    committed = len(expected_actions)
+    assert json.loads(raw)["interventions"][-1]["at_action"] == committed
     before = position_evidence(branch)
     assert before["frame"] == frame
     with pytest.raises(managym.AgentError) as rejected:
@@ -474,13 +485,13 @@ print(json.dumps([before, position_evidence(env)]))
     (record,) = records
     assert record.context == {}
     replay = walk(record)
-    assert [decision.chosen for decision in replay] == [0, 0, 0]
+    assert [decision.chosen for decision in replay] == expected_actions
     assert replay.stop is not None and replay.stop.status == "interrupted"
     assert position_evidence(replay.env) == before
 
     imported = import_game(json.loads(raw))
-    assert (imported["stop"], imported["count"]) == ("interrupted", 3)
-    for ordinal in range(3):
+    assert (imported["stop"], imported["count"]) == ("interrupted", committed)
+    for ordinal in range(committed):
         shown = inspect_watch(imported["id"], ordinal, imported["token"])
         assert shown["observation"]["opponent"]["hand"] == []
         revealed = inspect_watch(
@@ -493,14 +504,14 @@ print(json.dumps([before, position_evidence(env)]))
             assert str(shuffle_seed) not in json.dumps(view)
             assert "987654321123" not in json.dumps(view)
 
-    record.games[0].committed = 3
+    record.games[0].committed = committed
     record.games[0].actions.append(999)
     record.games[0].frame = frame
     record.execution_outcome = "failed"
     record.error_class = type(rejected.value).__name__
     record.error = str(rejected.value)
     (result,) = replay_failure_inputs(record)
-    assert result["action_index"] == 3
+    assert result["action_index"] == committed
     assert result["status"] == "failed"
     assert (
         result["at_retained_failure"]
@@ -601,13 +612,14 @@ def test_watch_publishes_the_determinized_offers(
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
     env = managym.Env(seed=42)
-    original = env.reset(setup("open"))[0]
+    seat = reset_to_first_main(env, setup("open"))
+    original = env.observation_for_player(seat)
     branch = env.snapshot().restore(managym.RestoreOptions.determinize(1, 35))
     offers = branch.observation_for_player(0).action_space.actions
     assert len(offers) != len(original.action_space.actions)
     branch.step(len(offers) - 1)
     imported = import_game(json.loads(branch.snapshot().to_replay_json()))
-    shown = inspect_watch(imported["id"], 0, imported["token"])
+    shown = inspect_watch(imported["id"], imported["count"] - 1, imported["token"])
     assert len(shown["decision"]["frame"]["offers"]) == len(offers)
     assert shown["decision"]["offer"]["label"] == "Pass priority"
 
@@ -629,3 +641,92 @@ def test_standalone_snapshot_replay_and_unterminated_journal_row(
     journal.write_text(json.dumps(saved))
     with pytest.warns(RuntimeWarning, match="Incomplete final game record"):
         assert records_from_source(journal) == []
+
+
+def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
+    env = managym.Env(seed=23)
+    decks = [
+        managym.PlayerConfig("Pact", {"Swamp": 20, "Demonic Pact": 8}),
+        managym.PlayerConfig("Opponent", {"Plains": 28}),
+    ]
+    obs, _ = env.reset(managym.GameSetup(decks, mana_payment=("auto", "auto")))
+    for _ in range(100):
+        actions = obs.action_space.actions
+        if len(actions) == 4 and all(
+            action.action_type == managym.ActionEnum.CHOOSE_MODE for action in actions
+        ):
+            break
+        choice = preferred_action(
+            actions,
+            managym.ActionEnum.PRIORITY_PLAY_LAND,
+            managym.ActionEnum.PRIORITY_CAST_SPELL,
+            managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+        )
+        obs = env.step(choice)[0]
+    else:
+        pytest.fail("Pact never offered its four upkeep modes")
+
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    command = Command("pact-loss", frame.revision, frame.offers[3]["id"]).to_json()
+    before = env.search_witness_json()
+    position = env.snapshot()
+    reopened = managym.GameSnapshot.from_replay_json(position.to_replay_json())
+    successors = []
+    for snapshot in (position, reopened):
+        for semantic in (False, True):
+            branch = snapshot.restore()
+            assert branch.search_witness_json() == before
+            if semantic:
+                _, _, reward, terminated, truncated, info = branch.step_semantic_command(command)
+            else:
+                _, reward, terminated, truncated, info = branch.step(3)
+            assert (reward, terminated, truncated) == (-1.0, True, False)
+            assert sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
+            assert info["winner_index"] == 1
+            assert info["winner_name"] == "Opponent"
+            assert info["p0_loss_reason"] == "instructed_loss"
+            successors.append(branch.search_witness_json())
+    assert all(successor == successors[0] for successor in successors)
+    assert env.search_witness_json() == before
+
+
+def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
+    records = []
+    deck = {"Plains": 20, "Herald of Eternal Dawn": 4}
+    player = sim.DefaultPlayer("first action")
+    for losses, protected, expected in (
+        ((1,), False, sim.GameOutcome.HERO_WIN),
+        ((0,), False, sim.GameOutcome.VILLAIN_WIN),
+        ((0, 1), False, sim.GameOutcome.DRAW),
+        ((0,), True, sim.GameOutcome.TIMEOUT),
+    ):
+        native = managym.Env(seed=23)
+        reset_to_first_main(native, managym.GameSetup([
+            managym.PlayerConfig(str(seat), deck) for seat in (0, 1)
+        ]))
+        if protected:
+            native.scenario_force_battlefield(0, "Herald of Eternal Dawn")
+        for seat in losses:
+            native.scenario_set_life(seat, 0)
+        obs = native.scenario_refresh()
+        env = Mock(spec=sim.Env)
+        env.last_raw_obs = obs
+        env.reset.return_value = (obs, {})
+        env.step.side_effect = native.step
+        record = sim._simulate_game(env, player, player, 1)
+        assert record.steps == 1
+        assert record.outcome == expected
+        assert native.is_game_over() == (not protected)
+        records.append(record)
+
+    summary = sim.simulation_summary(records)
+    assert summary["total_games"] == 4
+    assert summary["draws"] == summary["timeouts"] == 1
+    assert summary["hero_wins"] == summary["villain_wins"] == 1
+    assert summary["hero_win_rate"] == summary["villain_win_rate"] == 0.25
+
+
+@pytest.mark.parametrize("info", [{}, {"winner_index": 2, "winner_name": "draw"}])
+def test_simulation_rejects_unknown_terminal_result(info: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="native winner or draw"):
+        sim.determine_outcome(True, info)

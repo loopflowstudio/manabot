@@ -233,6 +233,9 @@ def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> 
     [(obs, _)] = vector.reset_all(players)
     scalar = managym.Env(seed=42)
     scalar.reset(players)
+    for _ in range(2):
+        scalar.step(0)
+        [(obs, *_)] = vector.step([0])
     action = next(
         index
         for index, choice in enumerate(obs.action_space.actions)

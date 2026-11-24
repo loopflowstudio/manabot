@@ -21,20 +21,9 @@ from manabot.training.updates.backend import UpdateBackend
 HEALTH_INTERVAL = 25
 
 
-class NumericalHealth(TypedDict, total=False):
-    legal_logit_gap_max: float
-    legal_probability_min: float
-    legal_underflow_count: int
-    nonfinite_count: int
-    forced_rows: int
-    zero_advantage_rows: int
-    actor_rows: int
-    critic_rows: int
-    empty_actor_batch: int
-    optimizer_steps: int
-    skipped_steps: int
-    rejected_steps: int
-    sampled_steps: int
+class StepSample(TypedDict, total=False):
+    """Measurements supplied by a learner as they become available during a step."""
+
     gradient_norm_before: float
     gradient_norm_after: float
     # Pre-clip norm over critic-only parameters (value_head, value_readout).
@@ -50,6 +39,22 @@ class NumericalHealth(TypedDict, total=False):
     frozen_parameter_tensors: int
     parameter_delta_l2: float
     parameter_relative_delta: float
+
+
+class NumericalHealth(StepSample, total=False):
+    legal_logit_gap_max: float
+    legal_probability_min: float
+    legal_underflow_count: int
+    nonfinite_count: int
+    forced_rows: int
+    zero_advantage_rows: int
+    actor_rows: int
+    critic_rows: int
+    empty_actor_batch: int
+    optimizer_steps: int
+    skipped_steps: int
+    rejected_steps: int
+    sampled_steps: int
     clip_fraction: float
 
 
@@ -100,8 +105,6 @@ class OptimizerHealth:
     so timing adds no synchronization.
     """
 
-    _critic_norms: tuple[float, float | None] | None
-
     def __init__(
         self,
         health: NumericalHealth,
@@ -110,13 +113,11 @@ class OptimizerHealth:
         *,
         backend: UpdateBackend,
     ) -> None:
-        self._measurements = backend.learner
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective
         self._refusal: type[Exception] = backend.rl.NumericalError
         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
         self.profiler = profiler or Profiler(enabled=False)
-        self._critic_norms = None
 
     def track(self, section: str) -> AbstractContextManager[object]:
         return self.profiler.track(section)
@@ -139,21 +140,12 @@ class OptimizerHealth:
         """Whether the coming step is this iteration's detailed sample."""
         return self.measure and not self.health["sampled_steps"]
 
-    def before_clip(self, model: Any) -> None:
-        self._critic_norms = self._measurements.critic_gradient_norms(model)
+    def record_sample(self, sample: StepSample) -> None:
+        self.health.update(sample)
+        self.health["sampled_steps"] = 1
 
-    def record_gradients(self, model: Any, norm_before: Any) -> None:
-        if self._critic_norms is None:
-            raise RuntimeError("record_gradients requires before_clip first")
-        self.health.update(
-            self._measurements.gradient_health(model, norm_before, self._critic_norms)
-        )
-        self._critic_norms = None
-
-    def record_step(self, parameters: list[Any], before: list[Any]) -> None:
+    def record_step(self) -> None:
         self.health["optimizer_steps"] += 1
-        if before:
-            self.health.update(self._measurements.parameter_health(parameters, before))
 
 
 @contextmanager

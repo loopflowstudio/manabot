@@ -17,6 +17,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.verify.text_observation import keep_opening_index
 import managym
 
 HERO_SEAT = 0
@@ -564,6 +565,9 @@ def build_scenario_env(
     )
     _, _ = env.reset(seed=seed)
     raw = env.last_raw_obs
+    while raw.turn.turn_number == 0:
+        env.step(keep_opening_index(raw))
+        raw = env.last_raw_obs
     if int(raw.action_space.action_space_type) != SPACE_PRIORITY:
         raise RuntimeError(
             f"scenario {scenario.name}: first decision is not priority "

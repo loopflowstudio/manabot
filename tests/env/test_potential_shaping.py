@@ -74,7 +74,7 @@ class TestVectorEnvPotential:
             cards[env_index, slot, env_ref._land_index] = 1.0
         if is_creature:
             cards[env_index, slot, env_ref._creature_index] = 1.0
-        cards[env_index, slot, -1] = 1.0  # validity
+        cards[env_index, slot, env_ref._valid_index] = 1.0
 
     def test_potential_sign_conventions(self):
         config = RewardConfig(

@@ -20,6 +20,7 @@ from manabot.sim.registration import (
     PlayerRegistration,
     require_open_decklists,
 )
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
@@ -176,13 +177,14 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
         if viewer == 1:
             decks.reverse()
         env = managym.Env(seed=3)
-        env.reset(
+        raw, _ = env.reset(
             Match(
                 MatchConfig(
                     hero_deck=decks[0], villain_deck=decks[1], decklists=disclosure
                 )
             ).to_rust()
         )
+        keep_opening_hands(env, raw)
         return env
 
     # Open control: the substitution is visible everywhere it could leak.

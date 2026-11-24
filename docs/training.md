@@ -173,9 +173,9 @@ loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
 inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
-on CPU. A separate [MLX backend](../manabot/backends/mlx.md) of the policy and
-the damped update reads the same policy files for measurement on Apple
-Silicon; no recipe runs on it. This support makes no speed or strength claim.
+on CPU. On Apple Silicon, the baseline, local and Elemental recipes accept
+`backend="mlx"` for tracked scalar damped self-play. They read and write the
+same portable policies and can resume an [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery).
 
 ### Saved regimes
 
@@ -320,40 +320,47 @@ def self_play(
     updates: int,
     kind: str | None = None,
     recipe: str | None = None,
+    backend: SelfPlayBackend | None = None,
 ) -> Path:
     """Train to the target; log report labels only when the recipe supplies them."""
+    backend = backend or default_backend()
+    state = require_continuation(backend)
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
-    with device_settings(settings):
-        learner, ema = create(settings, seed=run.seed)
-        # No EMA object exists for recipes that do not average their policy.
-        objects: dict[str, object] = {
-            "learner": learner.agent,
-            "optimizer": learner.optimizer,
-        }
-        if ema is not None:
-            objects["ema"] = ema
-        counts = run.resume(**objects, extra=Counts())
+    with device_settings(settings, backend=backend):
+        learner, ema = create(settings, seed=run.seed, backend=backend)
+        counts = run.resume(extra=Counts())
+        saved_model = counts.model
+        if saved_model is None and counts.updates > 0:
+            initial = run.out / "policies/00000000-raw.safetensors"
+            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
+        model = resume_model(saved_model, settings.model)
+        readings = resume_readings(counts, learner.agent.readings, learner.agent.observation_space)
+        export = state.restore(run, learner, ema, counts)
+        counts.model = model
+        counts.readings = readings
+        if export is not None:
+            run.save(export=export)
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         # Repair an unrecorded milestone without rewriting its immutable bytes.
         if counts.updates == 0 or is_checkpoint(settings, counts.updates):
-            publish(settings, run, learner, ema, counts)
-        with self_play_games(settings, run, counts) as collector:
+            publish(settings, run, learner, ema, counts, backend=backend)
+        with self_play_games(settings, run, counts, backend=backend) as collector:
             if counts.updates == 0:
                 log_corpus_setup(
                     run,
                     collector,
                     behavior=settings.behavior,
                     curriculum=settings.matchup_curriculum,
-                    parent=parent_checkpoint(settings.pretrained)
+                    parent=parent_checkpoint(settings.pretrained, backend)
                     if settings.pretrained is not None
                     else None,
                     updates=0,
                     **clocks(counts),
                 )
             for update in run.steps("updates", to=updates):
-                row = step(settings, learner, ema, collector, counts, rng, out=run.out)
+                row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
@@ -362,8 +369,8 @@ def self_play(
                 log_corpus_outcomes(run, collector, **clocks(counts))
                 run.save()
                 if is_checkpoint(settings, update):
-                    publish(settings, run, learner, ema, counts)
-        return publish(settings, run, learner, ema, counts)
+                    publish(settings, run, learner, ema, counts, backend=backend)
+        return publish(settings, run, learner, ema, counts, backend=backend)
 ```
 
 Report labels are optional: without them or Etude declaration labels, the
@@ -402,9 +409,12 @@ The pieces that are manabot's:
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
 | `publish(settings, run, learner, ema, counts)` | Writes raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.safetensors`, `-ema.safetensors`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
-The loop takes Etude's `TrainingRun` (`etude.train.tracking`); there is no
-untracked path through it. The updates and pieces it calls need no run
-([training loops](training-loop.md)), and
+For a single fresh collect/update iteration, pass the same settings, a configured
+backend, a seed and a new output directory to `fresh_iteration`. It returns the
+live policies, the metric row, counts and the selected portable checkpoint.
+The tracked loop also registers its state with Etude for continuation.
+See the [MLX example](../manabot/backends/mlx.md#what-the-backend-covers).
+For a smaller tracked example,
 [`loops/minimal.py`](training-loop.md#a-complete-self-play-loop) is a whole
 resumable loop in about ninety lines to copy from.
 
@@ -643,9 +653,11 @@ that record compound fields remain readable.
 freezes a checkpoint's raw or EMA policy and collects a declared population
 with unique seeds and whole-game development/held-out splits; no weights
 change. It returns at once when `out` binds the same policy, population, match,
-reference and step cap; a different request refuses. Scalar and
-categorical values are supported; belief-input policies are not. The protocol
-is in
+reference and step cap; a different request refuses. Each backend draws offers
+from its game-local action seed. The journal records the drawn offer's
+probability, policy entropy in nats and KL(policy || reference) over legal offers.
+Scalar and categorical values are supported; belief-input policies are not.
+The protocol is in
 [ataraxos-omitted-controls](../experiments/reports/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 
@@ -1048,7 +1060,7 @@ precision they ran with, and a checkpoint keeps what its run recorded.
 | --- | --- |
 | `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
-| `bf16` | `torch.autocast(device, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
+| `bf16` | Torch uses autocast and MLX temporarily casts the policy weights for collection, bootstrap and learner forwards. Forward outputs, behavior log-probabilities, targets, losses, master weights and Adam state stay float32. |
 
 Managed checkpoint evaluation uses CUDA when available, otherwise CPU, in
 float32; standalone evaluation and search use CPU. TF32 requires CUDA;
@@ -1093,7 +1105,8 @@ triggering minibatch for optimizer failures) and `state.pt` (learner, Adam,
 EMA, gradients and RNGs, up to 512 MiB). These may contain invalid state; they
 never become admitted policies or recovery snapshots and cannot replay the
 whole iteration. The last valid checkpoint is unchanged. Collection and
-learning timers settle in `finally`.
+learning timers settle in `finally`. MLX writes `tensors.safetensors` and
+`state.safetensors` under the same evidence and state tensor byte limits.
 
 ### Validation
 
@@ -1112,8 +1125,10 @@ is `experiments/data/etu126/cuda-admission-20261008.json` in the artifact store.
 
 There is one recovery contract: a run carries on from the last state it saved,
 and Etude does the saving, the carrying and the calling again. The loop
-registers its learner, Adam, EMA and counts with `run.resume` and calls
-`run.save()` every update; it has no state file or resume branch of its own.
+calls `run.save()` every update. Torch registers its learner, Adam, EMA and counts
+with Etude. MLX registers counts and exports its arrays into the same staged save
+through a callback. Resume uses the backend that wrote the run.
+[Tracked MLX training](../manabot/backends/mlx.md#tracked-training-and-recovery)
 
 | The run | What carries it on |
 | --- | --- |

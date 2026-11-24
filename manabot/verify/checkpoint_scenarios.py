@@ -19,10 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.policy.protocol import PolicyLoader
 from manabot.sim.frames import build_viewer_frame, decision_row
 from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
-from manabot.training.state.backend import TrainingBackend
 from manabot.verify.scenario_validation import (
     scenario_identity,
     scenario_outcome,
@@ -61,7 +61,7 @@ def score_checkpoint(
     scenario_name: str,
     checkpoint: Path,
     *,
-    backend: TrainingBackend,
+    backend: PolicyLoader,
     seed: int = 2,
     max_steps: int = 1000,
 ) -> tuple[ScenarioScore, dict[str, Any] | None]:
