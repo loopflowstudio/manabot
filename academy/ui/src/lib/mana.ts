@@ -8,7 +8,12 @@ export function manaText(amounts: number[]): string {
 }
 
 export function pooledManaText(pool: PooledManaView): string {
-  return `${manaText(pool.mana)}${pool.restriction ? ` only for ${pool.restriction}` : ''}${pool.effect ? ` that puts ${pool.effect}` : ''}, normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
+  return `${manaText(pool.mana)}${pool.restriction ? ` ${spendPhrase(pool.restriction)}` : ''}${pool.effect ? ` that puts ${pool.effect}` : ''}, normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
+}
+
+/** "only for Lesson spells", but "for anything but spells from hand": an exclusion needs no "only". */
+export function spendPhrase(spending: string): string {
+  return spending.startsWith('anything but ') ? `for ${spending}` : `only for ${spending}`;
 }
 
 /** What restricted mana may be spent on: "Lesson spells", "abilities of Shrine sources". */

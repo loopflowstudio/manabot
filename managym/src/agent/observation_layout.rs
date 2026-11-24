@@ -458,6 +458,9 @@ columns! { stack {
     34: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     35: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     36: VALID => ("valid", ValueLayout::FLAG),
+    37: EFFECTIVE_MANA_VALUE => ("effective_mana_value", ValueLayout::COUNT_TENTHS),
+    38: FROM_PREPARED => ("from_prepared", ValueLayout::FLAG),
+    39: FLASHBACK => ("flashback", ValueLayout::FLAG),
 } }
 
 columns! { action {
@@ -489,6 +492,11 @@ columns! { action {
     // `mode` keeps its index, and these name it as the stack row does.
     23: HAS_X => ("has_x", ValueLayout::FLAG),
     24: X => ("x", ValueLayout::COUNT_TENTHS),
+    25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
+    26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
+    27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
+    28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
+    29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -753,6 +761,7 @@ columns! { relation {
     46: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
+    49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
 } }
 
 #[derive(Clone, Debug)]
@@ -1058,7 +1067,10 @@ pub fn observation_layout(
     let mut relations = ArrayLayout::features(
         &["relation"],
         &[Some(super::continuation::RELATION_ROWS)],
-        relation::COLUMNS,
+        match layout_kind {
+            InputLayout::Legacy => &relation::COLUMNS[..super::legacy_input::RELATION_DIM],
+            InputLayout::OneToken => relation::COLUMNS,
+        },
     );
     relations.row_kinds = BTreeMap::from([
         (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
@@ -1193,14 +1205,18 @@ mod tests {
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 25 } else { 22 },
+                    if one_token { 30 } else { 22 },
                 ),
                 (
                     "events",
                     config.event_dim(),
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", relation::WIDTH, 49),
+                (
+                    "relations",
+                    config.relation_dim(),
+                    if one_token { 50 } else { 49 },
+                ),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1214,7 +1230,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 37);
+                assert_eq!(stack::WIDTH, 40);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }
@@ -1230,7 +1246,7 @@ mod tests {
             }
             assert_eq!(
                 config.relations_len(),
-                super::super::continuation::RELATION_ROWS * relation::WIDTH
+                super::super::continuation::RELATION_ROWS * config.relation_dim()
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");

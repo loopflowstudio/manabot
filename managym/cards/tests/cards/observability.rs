@@ -390,6 +390,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
                 "its shared-effect row on the permanent's kept row; the action tensor omits it",
             ),
         ),
+        Modification::AdditionalLandPlay => (
+            "Modification::AdditionalLandPlay",
+            Seen::Via("shared player effect and an additional legal land play"),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -457,6 +461,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::ExileIfWouldLeave),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
+        (true, Modification::AdditionalLandPlay),
         (true, Modification::NextCreatureCastFlash),
         (true, Modification::SkipsCombatPhasesNextTurn),
         (true, Modification::LifeTotalCantChange),
@@ -469,8 +474,6 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::HasAbilitiesOfSource),
     ]
 }
-
-const MODIFICATION_VARIANTS: usize = 39;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -497,6 +500,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Matching { .. } => "ObjectSelector::Matching",
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::TargetPlayersZone { .. } => "ObjectSelector::TargetPlayersZone",
         ObjectSelector::You => "ObjectSelector::You",
@@ -505,7 +509,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 17] {
+fn selector_witnesses() -> [ObjectSelector; 18] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -519,6 +523,10 @@ fn selector_witnesses() -> [ObjectSelector; 17] {
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
+        ObjectSelector::Matching {
+            of: Box::new(ObjectSelector::CardsThisWay),
+            predicate: CardPredicate::creature(),
+        },
         ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::TargetPlayersZone {
             spec: Box::new(TargetSpec::Opponent),
@@ -731,6 +739,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::PutCounters { .. } => "Effect::PutCounters",
         Effect::PutCountersFrom { .. } => "Effect::PutCountersFrom",
         Effect::Move { .. } => "Effect::Move",
+        Effect::Prepare { .. } => "Effect::Prepare",
+        Effect::Unprepare { .. } => "Effect::Unprepare",
         Effect::Tap { .. } => "Effect::Tap",
         Effect::Untap { .. } => "Effect::Untap",
         Effect::RemoveAllCounters { .. } => "Effect::RemoveAllCounters",
@@ -751,13 +761,16 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::AddMana { .. } => "Effect::AddMana",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::Airbend { .. } => "Effect::Airbend",
+        Effect::GrantGraveyardCastThisTurn { .. } => "Effect::GrantGraveyardCastThisTurn",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
         Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
+        Effect::ExileEachLibraryTopCastFree => "Effect::ExileEachLibraryTopCastFree",
         Effect::Cascade => "Effect::Cascade",
         Effect::CumulativeUpkeep { .. } => "Effect::CumulativeUpkeep",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::CastFromGraveyard { .. } => "Effect::CastFromGraveyard",
         Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
@@ -790,7 +803,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 88;
+const EFFECT_VARIANTS: usize = 93;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -825,6 +838,12 @@ fn effect_witnesses() -> Vec<Effect> {
         ),
         Effect::tap(ObjectSelector::Attached),
         Effect::untap(ObjectSelector::This),
+        Effect::Prepare {
+            what: ObjectSelector::This,
+        },
+        Effect::Unprepare {
+            what: ObjectSelector::Attached,
+        },
         Effect::RemoveAllCounters {
             from: ObjectSelector::Attached,
         },
@@ -897,6 +916,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Scry { count: 1 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
+            max_mana_value: None,
             to_battlefield: true,
             random_order: true,
             reveal: false,
@@ -932,10 +952,22 @@ fn effect_witnesses() -> Vec<Effect> {
                 max_mana_value: None,
             },
         },
+        Effect::GrantGraveyardCastThisTurn {
+            flashback: false,
+            target: TargetSpec::GraveyardCardYouOwn {
+                predicate: creature(),
+            },
+        },
         Effect::OpponentsCastOnlyFromHand,
         Effect::ExileTopCardsToPlay {
-            count: 3,
-            until: PlayWindow::ThroughYourNextTurn,
+            count: 2,
+            until: PlayWindow::WhileExiled,
+            face_down: true,
+            condition: Some(Condition::ControlsAtLeast {
+                distinct_names: false,
+                count: 1,
+                predicate: CardPredicate::subtype("Wizard"),
+            }),
         },
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,
@@ -956,9 +988,14 @@ fn effect_witnesses() -> Vec<Effect> {
                 },
             },
         },
+        Effect::ExileEachLibraryTopCastFree,
         Effect::Cascade,
         Effect::CumulativeUpkeep {
             each: ManaCost::parse("{1}"),
+        },
+        Effect::CastFromGraveyard {
+            predicate: CardPredicate::default(),
+            exile_instants_and_sorceries: true,
         },
         Effect::CastFromHandFree {
             predicate: CardPredicate {
@@ -1086,6 +1123,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
+        TriggerCondition::Prepared { .. } => "TriggerCondition::Prepared",
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
@@ -1140,7 +1178,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         },
         TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::any(CardPredicate::creature()),
-            to: Actor::You,
+            to: Some(Actor::You),
             per: Per::Batch,
         },
         TriggerCondition::Sacrificed {
@@ -1173,6 +1211,12 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),
+        },
+        TriggerCondition::Prepared {
+            condition: Box::new(TriggerCondition::casts(
+                Actor::You,
+                CardPredicate::default(),
+            )),
         },
         TriggerCondition::InGraveyard {
             condition: Box::new(TriggerCondition::Draws {
@@ -1222,6 +1266,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
+        Condition::CastThisTurn(_) => "Condition::CastThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
         Condition::OpponentLostLifeThisTurnAtLeast { .. } => {
             "Condition::OpponentLostLifeThisTurnAtLeast"
@@ -1229,9 +1274,12 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::OpponentHasMoreCardsInHand => "Condition::OpponentHasMoreCardsInHand",
+        Condition::OpponentControlsMoreCreatures => "Condition::OpponentControlsMoreCreatures",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceMatches(_) => "Condition::SourceMatches",
+        Condition::SourceUnprepared => "Condition::SourceUnprepared",
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::SourceSaddled => "Condition::SourceSaddled",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
@@ -1269,17 +1317,24 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
+        Condition::CastThisTurn(CardPredicate {
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Default::default()
+        }),
         Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
+        Condition::OpponentControlsMoreCreatures,
+        Condition::OpponentHasMoreCardsInHand,
         Condition::TargetDealtDamageThisTurn,
         Condition::SourceCountersAtLeast {
             kind: CounterKind::Quest,
             count: 4,
         },
+        Condition::SourceUnprepared,
         Condition::SourceTapped,
         Condition::SourceSaddled,
         Condition::SourceMatches(CardPredicate::subtype("Scout")),
@@ -1329,6 +1384,12 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "Beorn the Fierce",
             "hob",
             "beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types",
+        ),
+        StaticAbility::CastFromHandWithoutManaCost => witnessed(
+            "StaticAbility::CastFromHandWithoutManaCost", Seen::Actions("paid and free hand casts have distinct prices"), "Omniscience", "fdn", "omniscience_offers_paid_and_free_casts_with_optional_costs",
+        ),
+        StaticAbility::CastSpellsAsThoughFlash(_) => witnessed(
+            "StaticAbility::CastSpellsAsThoughFlash", Seen::Actions("instant timing still requires permission for the zone"), "High Fae Trickster", "fdn", "high_fae_trickster_changes_timing_after_zone_permission",
         ),
         StaticAbility::GraveyardSpellsHaveFlashback => witnessed(
             "StaticAbility::GraveyardSpellsHaveFlashback",
@@ -1414,6 +1475,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "fut",
             "rites_of_flourishing_draws_for_each_player_and_grants_a_land_play",
         ),
+        StaticAbility::AdditionalLandPlay => witnessed(
+            "StaticAbility::AdditionalLandPlay",
+            Seen::Actions("a second land play is offered to its controller only"),
+            "Loot, Exuberant Explorer",
+            "fdn",
+            "loot_grants_its_controller_a_land_play_and_finds_a_creature_within_its_lands",
+        ),
         StaticAbility::ActivatedAbilitiesCostLess { .. } => witnessed(
             "StaticAbility::ActivatedAbilitiesCostLess",
             Seen::Actions("the activation becomes affordable at the reduced cost"),
@@ -1463,6 +1531,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "rockalanche_earthbends_by_forests_you_control_and_flashes_back",
         ),
+        StaticAbility::CastFromGraveyardRemovingCounters(_) => witnessed(
+            "StaticAbility::CastFromGraveyardRemovingCounters",
+            Seen::Actions("the graveyard card is offered as a cast on its own play route"),
+            "Quilled Greatwurm",
+            "fdn",
+            "quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters",
+        ),
         StaticAbility::Foretell(_) => witnessed(
             "StaticAbility::Foretell",
             Seen::Actions("foretelling is offered from hand; then the foretold permission columns"),
@@ -1505,6 +1580,17 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it",
         ),
+        StaticAbility::PlayGraveyardByPermanentType => witnessed(
+            "StaticAbility::PlayGraveyardByPermanentType", Seen::Actions("each remaining permanent type offers a graveyard play"), "Muldrotha, the Gravetide","fdn","muldrotha_and_zul_offer_independent_casts",
+        ),
+        StaticAbility::PlayUnownedExiledWithCounter(_) => witnessed(
+            "StaticAbility::PlayUnownedExiledWithCounter",
+            Seen::Actions("stash-marked exiled cards are offered as plays on its controller's turn"),
+            "Tinybones, Bauble Burglar",
+            "fdn",
+            "tinybones_stashes_discards_and_plays_them_on_its_turn",
+        ),
+        StaticAbility::SpendAnyManaToCast(_) => witnessed("StaticAbility::SpendAnyManaToCast", Seen::Actions("creature spells can spend any mana"), "Vizier of the Menagerie", "tdm", "vizier_filters_twinmaw_profiles_and_mana"),
         StaticAbility::CastFromLibraryTop(_) => witnessed(
             "StaticAbility::CastFromLibraryTop",
             Seen::Actions("the library's top card is offered as a cast"),
@@ -1548,6 +1634,10 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "Flopsie, Bumi's Buddy",
             "tla",
             "flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker",
+        ),
+        StaticAbility::SpellsFromOutsideHandCostLess(_) => witnessed(
+            "StaticAbility::SpellsFromOutsideHandCostLess", Seen::Actions("casts a five-mana Adventure with four mana"),
+            "Bilbo, Thief in the Night", "hob", "bilbo_graveyard_adventure_replacement_owns_the_exile_permission",
         ),
         StaticAbility::SpellsCostLessMana(_) => witnessed(
             "StaticAbility::SpellsCostLessMana",
@@ -1639,6 +1729,7 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "tla",
             "deadly_precision_sacrifices_artifact_before_destroying_a_different_creature",
         ),
+        AdditionalCost::FlashSurcharge(_) => witnessed("AdditionalCost::FlashSurcharge", Seen::Actions("timing-dependent total casting cost"), "Harbinger of the Tides","fdn","harbinger_requires_its_surcharge_only_for_its_own_flash_permission"),
         AdditionalCost::Kicker(_) => witnessed(
             "AdditionalCost::Kicker",
             Seen::Card(card::KICKER_COST),
@@ -1747,6 +1838,8 @@ fn static_witnesses() -> Vec<StaticAbility> {
                 toughness: managym::state::card::LayerValue::Fixed(2),
             }],
         }),
+        StaticAbility::CastFromHandWithoutManaCost,
+        StaticAbility::CastSpellsAsThoughFlash(CardPredicate::default()),
         StaticAbility::GraveyardSpellsHaveFlashback,
         StaticAbility::GrantsAnyColorManaAbility(creature()),
         StaticAbility::CantBeBlockedIf(Condition::YourTurn),
@@ -1758,7 +1851,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             first_on_own_turn: false,
             predicate: CardPredicate::default(),
             condition: Condition::Always,
-            generic: 1,
+            generic: EffectValue::Fixed(1),
         }),
         StaticAbility::CostsLessPerPermanent(creature()),
         StaticAbility::CostsLessPerPermanentOnBattlefield(creature()),
@@ -1767,9 +1860,11 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CostsLessByGreatestPower(creature()),
         StaticAbility::FlashIf(Condition::YourTurn),
         StaticAbility::Flashback(ManaCost::parse("{2}")),
+        StaticAbility::CastFromGraveyardRemovingCounters(6),
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::AdditionalLandPlay,
         StaticAbility::CantLoseAndOpponentsCantWin,
         StaticAbility::LegendRuleDoesntApply,
         StaticAbility::ActivatedAbilitiesCostLess {
@@ -1789,7 +1884,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
+        StaticAbility::PlayGraveyardByPermanentType,
+        StaticAbility::PlayUnownedExiledWithCounter(CounterKind::Stash),
         StaticAbility::CastFromLibraryTop(creature()),
+        StaticAbility::SpendAnyManaToCast(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
         StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
             named: "Witness".into(),
@@ -1816,6 +1914,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             predicate: CardPredicate::default(),
             cost: AdditionalCost::Delve,
         },
+        StaticAbility::SpellsFromOutsideHandCostLess(1),
         StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -1860,6 +1959,7 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
             or_mana: None,
         })),
         AdditionalCost::Kicker(ManaCost::parse("{4}")),
+        AdditionalCost::FlashSurcharge(ManaCost::parse("{2}")),
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
         AdditionalCost::Replicate(ManaCost::parse("{R}")),
@@ -2192,14 +2292,14 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         expected.push(format!("TriggerSubject::{subject:?}"));
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject,
-            to: Actor::AnyPlayer,
+            to: Some(Actor::AnyPlayer),
             per: Per::Object,
         });
     }
     for per in [Per::Object, Per::Batch] {
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::This,
-            to: Actor::AnyPlayer,
+            to: Some(Actor::AnyPlayer),
             per,
         });
         expected.push(format!("Per::{per:?}"));
@@ -2337,15 +2437,17 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
 #[test]
 fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     let witnesses = modification_witnesses();
-    assert_eq!(witnesses.len(), MODIFICATION_VARIANTS);
+    let variants = managym::agent::observation::MODIFICATION_NAMES;
+    assert_eq!(witnesses.len(), variants.len());
     let names: BTreeSet<_> = witnesses
         .iter()
         .map(|(_, modification)| modification_seen(modification).0)
         .collect();
-    assert_eq!(
-        names.len(),
-        MODIFICATION_VARIANTS,
-        "one witness per variant"
+    assert!(
+        variants
+            .iter()
+            .all(|name| names.contains(format!("Modification::{name}").as_str())),
+        "one witness per observed modification"
     );
     for (on_player, modification) in witnesses {
         let affected = if on_player {
@@ -2688,6 +2790,28 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
     assert_eq!(left.known_hand, right.known_hand);
     assert_eq!(left.known_library, right.known_library);
     assert_eq!(left.semantic_cards, right.semantic_cards);
+}
+
+#[test]
+fn adventure_learning_tokens_encode_damage_without_printed_identity() {
+    let pack = default_content_pack();
+    let mut card = card_definition("Smaug, the Great Calamity");
+    let original = definition_tokens(&card, pack).unwrap();
+    let printed = std::sync::Arc::make_mut(&mut card.printed);
+    let Some(managym::state::card::InsetSpell::Adventure(spell)) = printed.inset.as_mut() else {
+        panic!("Smaug has an Adventure")
+    };
+    let spell = std::sync::Arc::make_mut(spell);
+    spell.name = "Different name".into();
+    spell.text_box = "Different wording".into();
+    assert_eq!(original, definition_tokens(&card, pack).unwrap());
+    let printed = std::sync::Arc::make_mut(&mut card.printed);
+    let Some(managym::state::card::InsetSpell::Adventure(spell)) = printed.inset.as_mut() else {
+        panic!("Smaug has an Adventure")
+    };
+    let spell = std::sync::Arc::make_mut(spell);
+    spell.spell_effects[0] = Effect::deal_damage(4, ObjectSelector::Target(TargetSpec::Creature));
+    assert_ne!(original, definition_tokens(&card, pack).unwrap());
 }
 
 #[test]
@@ -3194,6 +3318,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
         pooled_mana_classes => [Rows("pooled mana classes below")],
+        spent_graveyard_types => [FactOccurrence(FactKind::EffectProgram)],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         known_library => [Rows("known_library")],
@@ -3258,10 +3383,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             column(Permanent, permanent::IS_TOKEN),
             column(Stack, stack::IS_COPY),
         ],
-        face_down => [column(Card, card::PERMISSION_FORETOLD)],
-        cast_permission => [Rows("cast permission below")],
+        face_down => [column(Card, card::PERMISSION_FORETOLD), FactOccurrence(FactKind::EffectProgram)],
+        cast_permissions => [Rows("cast permission below"), FactOccurrence(FactKind::EffectProgram)],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
         from_battlefield_this_turn => [column(CardTurnState, 0)],
+        counters => [FactOccurrence(FactKind::Counter)],
     }));
     fields.extend(encoding!(CastPermissionData {
         player_id => [Columns(Card, card::PERMISSION, 2)],
@@ -3273,6 +3399,13 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         flash => [column(Card, card::PERMISSION_FLASH)],
         any_mana => [column(Card, card::PERMISSION_ANY_MANA)],
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
+        flashback => [FactOccurrence(FactKind::EffectProgram)],
+        follows_source_controller => [FactOccurrence(FactKind::EffectProgram)],
+        on_adventure => [FactOccurrence(FactKind::EffectProgram)],
+        prepared => [FactOccurrence(FactKind::EffectProgram)],
+        face_down => [FactOccurrence(FactKind::EffectProgram)],
+        play_lands => [FactOccurrence(FactKind::EffectProgram)],
+        condition => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));
@@ -3424,12 +3557,18 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         chosen_mode => [column(Stack, stack::MODE), column(Relation, relation::MODE)],
         ability_index => [column(Stack, stack::ABILITY), column(Relation, relation::ABILITY)],
         targets => [Rows("relations")],
-        x => [Columns(Stack, stack::HAS_X, 2), column(Relation, relation::X)],
+        x => [
+            Columns(Stack, stack::HAS_X, 2),
+            column(Stack, stack::EFFECTIVE_MANA_VALUE),
+            column(Relation, relation::X),
+        ],
         granted_keywords => [
             Columns(Stack, stack::FLYING, KEYWORD_COUNT),
             Columns(Relation, relation::FLYING, KEYWORD_COUNT),
         ],
         kicked => [column(Stack, stack::KICKED), column(Relation, relation::KICKED)],
+        from_prepared => [column(Stack, stack::FROM_PREPARED)],
+        flashback => [column(Stack, stack::FLASHBACK)],
         spell => [Identity, Rows("SpellData below")],
     }));
     fields.extend(encoding!(SpellData {
@@ -3466,6 +3605,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         mode => [column(Relation, relation::MODE)],
         ability => [column(Relation, relation::ABILITY)],
         kicked => [column(Relation, relation::KICKED)],
+        spell_profile => [column(Relation, relation::SPELL_PROFILE)],
         active_clause => [column(Relation, relation::ACTIVE_CLAUSE)],
         targets => [column(Relation, relation::KIND), column(Relation, relation::ORDINAL)],
         context => [column(Relation, relation::KIND)],
@@ -3514,6 +3654,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
+        spell_profile => [column(Action, action::SPELL_PROFILE)],
+        route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
+        quota_type => [column(Action, action::QUOTA_TYPE)],
+        play_route => [column(Action, action::PLAY_ROUTE)],
         announces_x => [column(Action, action::HAS_X)],
     }));
     fields.extend(encoding!(EventData {
@@ -4736,7 +4880,7 @@ fn airbend_permission_reaches_both_viewers_tensors() {
         .iter()
         .find(|c| c.id == id)
         .expect("the exiled Ogre is public");
-    let permission = listed.cast_permission.as_ref().expect("a permission");
+    let permission = listed.cast_permissions.first().expect("a permission");
     assert_eq!(permission.player_id, airbender.opponent.id);
     assert_eq!(permission.cost.as_ref().map(|c| c.mana_value), Some(2));
     assert!(airbender.to_json().contains("\"cast_permission\""));
@@ -5366,25 +5510,30 @@ fn announced_x_reaches_the_stack_row() {
     let front = cast(&mut s, "United Front");
     choose_mode(&mut s, 3);
     let id = object_id(&s, front);
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    let (slot, spell) = observation
-        .stack_objects
-        .iter()
-        .enumerate()
-        .find(|(_, object)| {
-            object
-                .spell
-                .as_ref()
-                .is_some_and(|spell| spell.object_id == id)
-        })
-        .unwrap();
-    assert!(spell.spell.as_ref().unwrap().has_announced_x);
-    assert_eq!(spell.x, 3);
-    assert!(listed_card_row(&observation, id).is_none());
-    let encoded = encoded_default(&observation);
-    let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];
-    assert_eq!(&row[stack::HAS_X..stack::HAS_X + 2], &[1.0, 0.3]);
-    assert_eq!(row[stack::SPELL], 1.0);
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let observation = Observation::for_player(s.game(), viewer);
+        let (slot, spell) = observation
+            .stack_objects
+            .iter()
+            .enumerate()
+            .find(|(_, object)| {
+                object
+                    .spell
+                    .as_ref()
+                    .is_some_and(|spell| spell.object_id == id)
+            })
+            .unwrap();
+        assert!(spell.spell.as_ref().unwrap().has_announced_x);
+        assert_eq!(spell.x, 3);
+        assert!(listed_card_row(&observation, id).is_none());
+        let encoded = encoded_default(&observation);
+        let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];
+        assert_eq!(&row[stack::HAS_X..stack::HAS_X + 2], &[1.0, 0.3]);
+        assert_eq!(row[stack::SPELL], 1.0);
+        assert_eq!(spell.effective_mana_value(), Some(5));
+        assert_eq!(row[stack::MANA_VALUE], 0.2);
+        assert_eq!(row[stack::EFFECTIVE_MANA_VALUE], 0.5);
+    }
 }
 
 // --- Viewer safety -------------------------------------------------------
@@ -5600,6 +5749,7 @@ fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
 #[test]
 fn library_order_and_any_target_are_distinct_learning_rules() {
     let effect = |random_order| Effect::LookAndSelect {
+        max_mana_value: None,
         random_order,
         to_battlefield: false,
         reveal: false,

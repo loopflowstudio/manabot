@@ -22,6 +22,7 @@
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
+  import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { region } from './region';
@@ -41,7 +42,7 @@
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -570,11 +571,14 @@
 
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
-  const cards = $derived(new Map([boardProjection.agent, boardProjection.opponent]
-    .flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).map(card => [card.id, card])));
+  const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
+
+  const castTerms = $derived(permissionTerms(shownCard,
+    id => permanents.get(id)?.name ?? `permanent #${id}`,
+    id => id === boardProjection.agent.id ? you.name : opponent.name));
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
@@ -589,6 +593,12 @@
     point(card ? board.hand.find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
+  /** A tray card inspects as itself: its rules text, counters and permissions. */
+  function previewTray(item: TrayItem, element: HTMLElement | null): void {
+    if (!item.card) { previewName(element ? item.name : null, element); return; }
+    point(element ? [item.placed] : null);
+    show(element ? { name: item.card.name, text: item.card.text_box ?? null, permanent: null, card: item.card.id } : null, element);
+  }
   function previewName(name: string | null, element: HTMLElement | null): void {
     show(name ? { name, text: textOf(name), permanent: null, card: null } : null, element);
   }
@@ -599,7 +609,7 @@
   /** Rules text for a name in the log, from any card of that name this viewer can see. */
   function textOf(name: string): string | null {
     const players = [boardProjection.agent, boardProjection.opponent];
-    const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).find(candidate => candidate.name === name);
+    const card = inspectableCards(players).find(candidate => candidate.name === name);
     const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
     return card?.text_box ?? permanent?.text_box ?? null;
   }
@@ -805,7 +815,7 @@
               <div class="tray-card">
                 <BoardCard name={item.name} width={104} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
-                  onpreview={element => previewName(element ? item.name : null, element)} />
+                  onpreview={element => previewTray(item, element)} />
                 <span class="type-caption">{item.placed.offer.label}</span>
               </div>
             {:else}
@@ -924,7 +934,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrolling region must be reachable by keyboard) -->
   <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
     {#if docked}
-      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard}
+      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms}
         blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
       <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
@@ -934,7 +944,7 @@
 
 {#if inspectMode === 'float' && hovered}
   <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
-    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard}
+    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms}
       blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}

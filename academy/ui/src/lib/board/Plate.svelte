@@ -3,7 +3,7 @@
    * A player's plate: who they are, life, zones and floating mana. The plate
    * is the player as a target, so offers on the player outline it.
    */
-  import { floatingTotal, manaText, pooledManaText, spendingText } from '$lib/mana';
+  import { floatingTotal, manaText, pooledManaText, spendPhrase, spendingText } from '$lib/mana';
   import { poolSymbols } from './payment';
   import Pips from './Pips.svelte';
   import type { CardState, PlayerState } from '$lib/types';
@@ -38,7 +38,7 @@
   // Mana that is not plain (restricted, with an effect when spent, or lasting
   // only to end of combat) says so beside the pips; each is part of the total.
   const special = $derived([
-    ...(player.restricted_mana ?? []).map(part => `${manaText(part.mana)} only for ${spendingText(part)}`),
+    ...(player.restricted_mana ?? []).map(part => `${manaText(part.mana)} ${spendPhrase(spendingText(part))}`),
     ...(player.pooled_mana_classes ?? []).map(pooledManaText),
   ]);
   const counters = $derived(Object.entries(player.counters ?? {}).map(([kind, count]) => `${count} ${kind}`).join(', '));

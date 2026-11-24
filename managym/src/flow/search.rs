@@ -122,9 +122,11 @@ impl Game {
     /// - viewer-known library positions reserve distinct definition witnesses;
     ///   only the remaining order is shuffled, for both players.
     ///
-    /// - the opponent's face-down foretold slots are filled from the same
-    ///   unseen pool's first foretell-bearing cards, as possible-world
-    ///   materialization fills them.
+    /// - face-down exile slots hidden from `perspective` (the opponent's
+    ///   foretold cards, either player's unviewable Flameshape cards) are
+    ///   refilled from their owner's unseen pool, foretold slots by its
+    ///   first foretell-bearing cards, as possible-world materialization
+    ///   fills them.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) -> Result<(), AgentError> {
@@ -183,15 +185,12 @@ impl Game {
                 let reserved = self
                     .reserve_library_facts(opponent, perspective, &mut residual, commitments)
                     .expect("known hand and library have distinct witnesses");
-                residual.extend(
-                    self.foretold_cards(opponent)
-                        .map(|card| self.state.object_of(card)),
-                );
+                residual.extend(self.hidden_face_down_exile(opponent, perspective));
                 residual.sort_unstable_by_key(|object| object.slot());
                 residual.shuffle(&mut rng);
                 assert!(
-                    self.fill_foretold_slots(opponent, &mut residual),
-                    "foretold cards are in their own pool"
+                    self.refill_hidden_exile_slots(opponent, perspective, &mut residual),
+                    "face-down cards are in their own pool"
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);

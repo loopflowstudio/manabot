@@ -13,7 +13,7 @@
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import Thumb from './Thumb.svelte';
-  import { stackName, type PlacedOffer, type StackItem, type BoardView } from './view';
+  import { stackName, stackProvenance, type PlacedOffer, type StackItem, type BoardView } from './view';
 
   interface Props {
     view: BoardView;
@@ -140,17 +140,21 @@
     {:else}
       <ol>
         {#each view.stack as item, index (item.entry.id)}
+          {@const provenance = stackProvenance(item.entry)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
-                <span class="truncate entry-name">{stackName(item.entry)}</span>
+                <span class="entry-title">
+                  <span class="truncate entry-name">{stackName(item.entry)}</span>
+                  {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
+                </span>
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>
@@ -340,6 +344,8 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; }
   .entry-name { font-family: var(--font-serif); font-weight: 600; }
+  .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+  .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }

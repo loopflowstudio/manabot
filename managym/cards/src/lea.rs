@@ -205,7 +205,7 @@ fn island() -> CardDefinition {
     }
 }
 
-fn lightning_bolt() -> CardDefinition {
+pub(super) fn lightning_bolt() -> CardDefinition {
     let text_box = "Lightning Bolt deals 3 damage to any target.";
 
     CardDefinition {

@@ -321,6 +321,15 @@ class LegacyCastPermissionView(ProtocolModel):
     any_mana: bool = Field(default=False, exclude_if=lambda value: not value)
     waterbend: bool = Field(default=False, exclude_if=lambda value: not value)
     foretold: bool = Field(default=False, exclude_if=lambda value: not value)
+    flashback: bool = Field(default=False, exclude_if=lambda value: not value)
+    follows_source_controller: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    on_adventure: bool = Field(default=False, exclude_if=lambda value: not value)
+    prepared: bool = Field(default=False, exclude_if=lambda value: not value)
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    play_lands: bool = Field(default=False, exclude_if=lambda value: not value)
+    condition: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class LegacyRestrictedManaView(ProtocolModel):
@@ -355,10 +364,16 @@ class LegacyCardView(ProtocolModel):
     mana_value: Int32
     types: LegacyCardTypesView
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    cast_permissions: list[LegacyCastPermissionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     cast_permission: LegacyCastPermissionView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
 
 class ContinuousEffectView(ProtocolModel):
@@ -485,6 +500,9 @@ class LegacyPlayerView(ProtocolModel):
     restricted_mana: list[LegacyRestrictedManaView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    spent_graveyard_types: list[tuple[UInt32, str]] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     hand_only_until: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -578,6 +596,10 @@ class StackEntryView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    # A spell cast from a prepared copy; its stack copies are not.
+    from_prepared: bool = Field(default=False, exclude_if=lambda value: not value)
+    # A spell cast with flashback, exiled as it leaves the stack.
+    flashback: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class PlayerControlView(ProtocolModel):

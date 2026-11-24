@@ -152,7 +152,7 @@ fn fynn_the_fangbearer() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: managym_state::ability::TriggerSubject::you_control(CardPredicate { deathtouch: true, ..CardPredicate::creature() }),
-                    to: Actor::Opponent,
+                    to: Some(Actor::Opponent),
                     per: managym_state::ability::Per::Object,
                 },
                 effects: vec![Effect::GivePlayerCounters {
@@ -215,7 +215,7 @@ fn goldvein_pick() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::Attached,
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 intervening_if: None,

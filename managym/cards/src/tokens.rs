@@ -26,6 +26,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         clue(),
         dragon(),
         elf_warrior(),
+        elf(),
         food(),
         goblin(),
         human(),
@@ -36,6 +37,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         plain_spirit(),
         powerstone(),
         soldier(),
+        white_soldier(),
         spirit(),
         treasure(),
         knight_3_3_w(),
@@ -51,6 +53,14 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         beast_4_4_g(),
         villain(),
         zeppelin(),
+        zombie(),
+        cadet(),
+        fractal(),
+        heartwood(),
+        blue_red_elemental(),
+        inkling(),
+        red_white_spirit(),
+        rat(),
     ]
 }
 
@@ -167,6 +177,26 @@ fn bear() -> TokenDefinition {
         "token.bear",
         "ca3dae7d-3880-4c0a-acfb-8fd227cf9fab",
         creature(base, 4, 4, [Color::Green]),
+    )
+}
+
+/// Redcap Gutter-Dweller's Rats (first token printing, WOE).
+fn rat() -> TokenDefinition {
+    let base = face(
+        "Rat",
+        [CardType::Creature],
+        &["Rat"],
+        "This token can't block.",
+    );
+    token(
+        "token.rat",
+        "1e0205f2-25c1-403b-b408-56e3f2d63b4d",
+        PrintedCharacteristics {
+            statics: vec![StaticAbility::BlockRestriction(
+                BlockRestriction::CantBlock(CardPredicate::default()),
+            )],
+            ..creature(base, 1, 1, [Color::Black])
+        },
     )
 }
 
@@ -598,5 +628,123 @@ fn villain() -> TokenDefinition {
             keywords: Keywords::of(&[Keyword::Menace]),
             ..creature(base, 2, 1, [Color::Black])
         },
+    )
+}
+fn inkling() -> TokenDefinition {
+    token(
+        "token.inkling",
+        "bab52920-9d67-4cd4-9015-6e645ff9764f",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(
+                face("Inkling", [CardType::Creature], &["Inkling"], "Flying"),
+                1,
+                1,
+                [Color::White, Color::Black],
+            )
+        },
+    )
+}
+
+fn zombie() -> TokenDefinition {
+    let base = face("Zombie", [CardType::Creature], &["Zombie"], "");
+    token(
+        "token.zombie",
+        "e29a360b-11fd-42ba-82ba-de8f7e136c20",
+        creature(base, 2, 2, [Color::Black]),
+    )
+}
+
+fn white_soldier() -> TokenDefinition {
+    let base = face("Soldier", [CardType::Creature], &["Soldier"], "");
+    token(
+        "token.white_soldier",
+        "7ddd5153-2d16-4a4e-b9bc-f20313d322da",
+        creature(base, 2, 2, [Color::White]),
+    )
+}
+
+fn elf() -> TokenDefinition {
+    let base = face("Elf", [CardType::Creature], &["Elf"], "");
+    token(
+        "token.elf",
+        "761c7c31-c6c5-44e2-a845-f590542b6eda",
+        creature(base, 1, 1, [Color::Green]),
+    )
+}
+
+fn cadet() -> TokenDefinition {
+    token(
+        "token.cadet",
+        "8f4534d8-2783-484f-8ebf-a47b1cc4c6df",
+        creature(
+            face("Cadet", [CardType::Creature], &["Wizard", "Soldier"], ""),
+            2,
+            2,
+            [],
+        ),
+    )
+}
+
+fn heartwood() -> TokenDefinition {
+    token(
+        "token.heartwood",
+        "eb4bf635-04d7-4994-9f70-4ff573a767e7",
+        PrintedCharacteristics {
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
+                ..Default::default()
+            }],
+            color_override: Some(Colors::from_iter([Color::Red, Color::Green])),
+            ..face(
+                "Heartwood",
+                [CardType::Artifact],
+                &["Heartwood"],
+                "{T}: Add {R} or {G}.",
+            )
+        },
+    )
+}
+
+fn blue_red_elemental() -> TokenDefinition {
+    token(
+        "token.blue_red_elemental",
+        "57b98846-85e3-47c7-a903-29953d0b0e8a",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(
+                face("Elemental", [CardType::Creature], &["Elemental"], "Flying"),
+                3,
+                3,
+                [Color::Blue, Color::Red],
+            )
+        },
+    )
+}
+
+fn red_white_spirit() -> TokenDefinition {
+    token(
+        "token.red_white_spirit",
+        "877f7ddb-ed70-41a0-b845-d9bf8ac65f9b",
+        creature(
+            face("Spirit", [CardType::Creature], &["Spirit"], ""),
+            2,
+            2,
+            [Color::Red, Color::White],
+        ),
+    )
+}
+
+fn fractal() -> TokenDefinition {
+    token(
+        "token.fractal",
+        "910f48ab-b04e-4874-b31d-a86a7bc5af14",
+        creature(
+            face("Fractal", [CardType::Creature], &["Fractal"], ""),
+            0,
+            0,
+            [Color::Green, Color::Blue],
+        ),
     )
 }

@@ -21,7 +21,7 @@ use crate::state::{
     ability::{Ability, PaymentCost},
     card::{
         CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
-        TokenDefinition,
+        SpellProfile, TokenDefinition,
     },
     game_object::{Object, PlayerId, PublicId},
 };
@@ -67,15 +67,22 @@ impl ContentPack {
     /// Built once with the catalog; decisions and search forks share the allocation.
     pub fn name_candidates(&self) -> Arc<NameVocabulary> {
         Arc::clone(self.names.get_or_init(|| {
+            let mut names = BTreeMap::new();
+            for (id, card) in self.definition_entries() {
+                if card.is_token || (card.key.is_empty() && self.front_face(id).is_none()) {
+                    continue;
+                }
+                names.insert(card.name.clone(), Some(id));
+                if let Some(inset) = &card.inset {
+                    names
+                        .entry(inset.characteristics().name.clone())
+                        .or_insert(None);
+                }
+            }
             NameVocabulary::new(
-                self.definition_entries()
-                    .filter(|(id, card)| {
-                        !card.is_token && (!card.key.is_empty() || self.front_face(*id).is_some())
-                    })
-                    .map(|(definition, card)| NameCandidate {
-                        name: card.name.clone(),
-                        definition: Some(definition),
-                    })
+                names
+                    .into_iter()
+                    .map(|(name, definition)| NameCandidate { name, definition })
                     .collect(),
             )
         }))
@@ -125,10 +132,15 @@ impl ContentPack {
 /// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        let fixture = fixtures::crossroads_of_destiny();
+        let fixtures = [
+            fixtures::crossroads_of_destiny(),
+            fixtures::tidal_errand(),
+            fixtures::kelp_hollow(),
+            fixtures::thornwood_arbor(),
+        ];
         let mut rows = managym_cards::catalog()
             .iter()
-            .chain([&fixture])
+            .chain(&fixtures)
             .map(Row::Card)
             .chain(managym_cards::token_catalog().iter().map(Row::Token))
             .collect::<Vec<_>>();
@@ -235,9 +247,47 @@ impl ContentPack {
 
     /// The back face's row of the double-faced card whose front is `front`.
     pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<PrintedCharacteristics>)> {
+        let (id, printed) = self.back_face_row(front)?;
+        Some((id, Arc::clone(printed)))
+    }
+
+    fn back_face_row(&self, front: CardDefId) -> Option<(CardDefId, &Arc<PrintedCharacteristics>)> {
         self.definition(front)?.back_face.as_ref()?;
         let back = CardDefId(front.0 + 1);
-        Some((back, Arc::clone(&self.definitions[back.0 as usize].printed)))
+        Some((back, &self.definition(back)?.printed))
+    }
+
+    /// Both modes of a double-faced card use their registered face rows.
+    pub fn spell_definition<'a>(
+        &'a self,
+        object: &'a Object,
+        profile: SpellProfile,
+    ) -> Option<&'a Arc<PrintedCharacteristics>> {
+        if profile == SpellProfile::BackFace && object.modal_back {
+            return self.back_face_row(object.definition_id).map(|(_, row)| row);
+        }
+        object.front_or_inset(profile)
+    }
+
+    /// The printed spell a departed card was cast as, from the base it
+    /// retains (`definition`, `printing`): its inset Adventure or Omen, or
+    /// its back face. The base already is that spell when it is the back
+    /// face itself or a spell copy's own printing.
+    pub fn recorded_spell<'a>(
+        &'a self,
+        definition: CardDefId,
+        printing: &'a PrintedCharacteristics,
+        profile: SpellProfile,
+    ) -> &'a PrintedCharacteristics {
+        match profile {
+            SpellProfile::Front => printing,
+            SpellProfile::Adventure | SpellProfile::Omen => printing
+                .inset_definition(profile)
+                .map_or(printing, |spell| &**spell),
+            SpellProfile::BackFace => self
+                .back_face_row(definition)
+                .map_or(printing, |(_, back)| &**back),
+        }
     }
 
     /// The front face whose back face is `back`; `None` for any other row.

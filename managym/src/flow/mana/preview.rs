@@ -5,6 +5,7 @@ use crate::agent::ability_description::cost_description;
 use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
 use crate::flow::payment::CostComponent;
+use crate::flow::play::CastAuthority;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -165,18 +166,45 @@ impl Game {
             Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
             _ => None,
         };
+        // A resolving instruction's offer (CR 608.2g) or a priority play;
+        // front-face resolution offers are card selections.
+        let offered_cast = match (action, self.state.suspended_decision.as_ref()) {
+            (
+                Action::CastSpell { object, .. } | Action::SelectCard { object, .. },
+                Some(suspended),
+            ) if let Some(authority) = suspended.decision.cast_authority() => {
+                self.cast_choices(player, *object, action.spell_profile(), authority)
+            }
+            (
+                Action::CastSpell {
+                    object,
+                    route,
+                    profile,
+                    ..
+                },
+                _,
+            ) => self.cast_choices(
+                player,
+                *object,
+                *profile,
+                CastAuthority::Priority(
+                    self.selected_play_route(player, *object, *profile, *route)?,
+                ),
+            ),
+            _ => None,
+        };
         let cost = match action {
-            Action::CastSpell { object, .. } => {
-                let card = &self.state[*object];
-                if self.cast_needs_x_announcement(player, *object, CastChoices::default()) {
+            Action::CastSpell { object, .. } | Action::SelectCard { object, .. }
+                if let Some(cast) = offered_cast =>
+            {
+                let card = cast.spell(&self.state[*object]);
+                if self.cast_needs_x_announcement(*object, cast) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose X or replicate count before previewing payment.",
                     ));
                 }
-                let Some(cast) =
-                    self.fixed_cast_cost_choices(player, *object, CastChoices::default())
-                else {
+                let Some(cast) = self.fixed_cast_cost_choices(player, *object, cast) else {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the optional or alternative cost before previewing payment.",
@@ -205,7 +233,7 @@ impl Game {
                     chosen_req_indices,
                     ..
                 }) => {
-                    let card = &self.state[*object];
+                    let card = cast.spell(&self.state[*object]);
                     let owed = self.spell_owed(player, *object, *cast);
                     if will_owe_a_choice(&owed) {
                         return Ok(PaymentPreview::needs_additional_cost());

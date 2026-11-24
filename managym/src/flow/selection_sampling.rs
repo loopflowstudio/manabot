@@ -59,11 +59,13 @@ struct InspectionSlot {
     definition: Option<CardDefId>,
 }
 
-/// One name allocation to face-down slots and its ordered physical-copy count.
-/// Retained selections condition this measure by feasibility, not by the number
-/// of ways a player could have chosen the private subset.
+/// One name allocation to the hidden face-down slots, foretold (`counts`) and
+/// otherwise (`face_down`), with its ordered physical-copy count. Retained
+/// selections condition this measure by feasibility, not by the number of
+/// ways a player could have chosen the private subset.
 struct ForetoldAllocation {
     counts: BTreeMap<String, u32>,
+    face_down: BTreeMap<String, u32>,
     ways: u128,
 }
 
@@ -136,12 +138,7 @@ fn unseen_objects(
         .flat_map(|zone| game.state.zones.zone_objects(*zone, owner).iter().copied())
         .filter(|object| !pinned_library.contains(object))
         .collect();
-    if !game.shares_information(viewer, owner) {
-        objects.extend(
-            game.foretold_cards(owner)
-                .map(|card| game.state.object_of(card)),
-        );
-    }
+    objects.extend(game.hidden_face_down_exile(owner, viewer));
     objects
 }
 
@@ -361,8 +358,8 @@ impl Game {
         pinned
     }
 
-    /// `owner`'s cards that `viewer` cannot see: the library, and for an
-    /// opponent also the hand and face-down foretold exile. For an opponent
+    /// `owner`'s cards that `viewer` cannot see: the library, face-down
+    /// exile hidden from `viewer`, and for an opponent also the hand. For an opponent
     /// this is exactly the possible-world pool, including any publicly known
     /// hand cards. Pinned library cards are excluded; they never move.
     pub fn unseen_objects(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
@@ -550,21 +547,26 @@ impl Game {
                 }
             })
             .expect("draw is within the compatible measure");
-        let mut counts = allocation.counts;
+        // Foretold picks lead, then the other face-down picks, so the slot
+        // refill takes exactly this allocation from the front of the pool.
         let mut chosen = Vec::new();
-        pool.retain(|object| {
-            let Some(count) = counts.get_mut(&self.state[*object].name) else {
-                return true;
-            };
-            if *count == 0 {
-                return true;
-            }
-            *count -= 1;
-            chosen.push(*object);
-            false
-        });
-        debug_assert!(counts.values().all(|count| *count == 0));
-        chosen.shuffle(rng);
+        for mut counts in [allocation.counts, allocation.face_down] {
+            let mut picked = Vec::new();
+            pool.retain(|object| {
+                let Some(count) = counts.get_mut(&self.state[*object].name) else {
+                    return true;
+                };
+                if *count == 0 {
+                    return true;
+                }
+                *count -= 1;
+                picked.push(*object);
+                false
+            });
+            debug_assert!(counts.values().all(|count| *count == 0));
+            picked.shuffle(rng);
+            chosen.append(&mut picked);
+        }
         chosen.append(pool);
         *pool = chosen;
         true
@@ -606,15 +608,50 @@ impl Game {
                 )
             })
             .collect();
-        let count = self.foretold_cards(owner).count() as u32;
+        let (foretold, face_down) = self.hidden_face_down_counts(owner, commitments.viewer);
+        let mut foretold_fills = Vec::new();
+        enumerate_foretold(
+            &bearers,
+            foretold,
+            1,
+            &mut BTreeMap::new(),
+            &mut foretold_fills,
+        );
         let mut allocations = Vec::new();
-        enumerate_foretold(&bearers, count, 1, &mut BTreeMap::new(), &mut allocations);
-        let orders: u128 = (1..=count).map(u128::from).product();
+        for fill in foretold_fills {
+            let rest: Vec<_> = pool
+                .iter()
+                .map(|(name, objects)| {
+                    let taken = hand.get(name).copied().unwrap_or(0)
+                        + fill.counts.get(name).copied().unwrap_or(0);
+                    (name.clone(), objects.len() as u32 - taken)
+                })
+                .collect();
+            let mut face_down_fills = Vec::new();
+            enumerate_foretold(
+                &rest,
+                face_down,
+                fill.ways,
+                &mut BTreeMap::new(),
+                &mut face_down_fills,
+            );
+            allocations.extend(face_down_fills.into_iter().map(|other| ForetoldAllocation {
+                counts: fill.counts.clone(),
+                face_down: other.counts,
+                ways: other.ways,
+            }));
+        }
+        let orders: u128 = (1..=foretold)
+            .chain(1..=face_down)
+            .map(u128::from)
+            .product();
         allocations.retain_mut(|allocation| {
             let mut slots = Vec::new();
             for (name, objects) in &pool {
                 let in_hand = hand.get(name).copied().unwrap_or(0) as usize;
-                let foretold = allocation.counts.get(name).copied().unwrap_or(0) as usize;
+                let exiled = (allocation.counts.get(name).copied().unwrap_or(0)
+                    + allocation.face_down.get(name).copied().unwrap_or(0))
+                    as usize;
                 let pinned_hand = objects
                     .iter()
                     .filter(|object| {
@@ -622,7 +659,7 @@ impl Game {
                             && commitments.pins(**object)
                     })
                     .count();
-                for index in pinned_hand..objects.len() - foretold {
+                for index in pinned_hand..objects.len() - exiled {
                     slots.push((
                         if index < in_hand {
                             ZoneType::Hand
@@ -948,6 +985,7 @@ fn enumerate_foretold(
         if remaining == 0 {
             out.push(ForetoldAllocation {
                 counts: counts.clone(),
+                face_down: BTreeMap::new(),
                 ways,
             });
         }

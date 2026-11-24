@@ -15,10 +15,10 @@ from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
-from manabot.managym.experience_projection import decision_surface_view
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -39,7 +39,11 @@ import managym
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
-from managym.experience_projection import serialize_observation
+from managym.experience_projection import (
+    decision_surface_view,
+    describe_actions,
+    serialize_observation,
+)
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -283,7 +287,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
 
     owner = capture_text_decision(env)
     assert "foretold, face down" in owner.text
-    assert "may be played from exile by You: cast for {2}{R}, only after turn" in (
+    assert "may be cast from exile by You: cast for {2}{R}, only after turn" in (
         owner.text
     )
     space = ObservationSpace(ObservationConfig())
@@ -305,6 +309,39 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     encoded = encode_observation(space, observation)
     for key in ("agent_cards", "opponent_cards"):
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
+
+
+def test_flameshape_cards_show_face_down_with_their_condition() -> None:
+    """With a Wizard in play, Flameshape's caster sees the exiled cards as face
+    down (not foretold) with the grant's condition; the opponent sees neither."""
+    env = priority_root(
+        ("Gandalf, Goblins' Bane",),
+        ("Gandalf, Goblins' Bane", "Mountain", "Mountain"),
+    )
+    decision = capture_text_decision(env)
+    flameshape = next(a for a in decision.actions if "Flameshape" in a.description)
+    submit_response(env, decision, flameshape.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "face down in exile" in decision.text:
+            break
+        pass_priority = next(a for a in decision.actions if "Pass" in a.description)
+        submit_response(env, decision, pass_priority.reference)
+    face_down = [
+        line
+        for line in decision.text.splitlines()
+        if "; face down in exile (hidden from players who cannot look at it)" in line
+    ]
+    assert len(face_down) == 2
+    assert all("only if you control a Wizard" in line for line in face_down)
+    assert "foretold" not in decision.text
+
+    pass_priority = next(a for a in decision.actions if "Pass" in a.description)
+    submit_response(env, decision, pass_priority.reference)
+    opponent = capture_text_decision(env)
+    observation = _viewer_observation(opponent)
+    assert observation.agent.player_index != _viewer_observation(decision).agent.player_index
+    assert "face down" not in opponent.text
 
 
 @pytest.mark.parametrize(
@@ -462,6 +499,33 @@ def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
     return stack.split("\n", 1)[0], continuation.splitlines()
 
 
+def test_a_prepared_spell_is_told_apart_from_its_copy() -> None:
+    """Codie copies a spell cast from a prepared copy. The text and Academy's
+    stack entries name the prepared original; the copy is not one."""
+    env = priority_root(
+        ("Konstrari Improviser",),
+        ("Forest",) * 3 + ("Mountain",) * 3 + ("Codie, Ravenous Codex",),
+    )
+    _choose(env, "Cast C1 (Konstrari Improviser)")
+    _choose(env, "Tap for mana P1 (Forest)")
+    _choose(env, "Tap for mana P2 (Forest)")
+    _choose(env, "Pass priority")
+    _choose(env, "Pass priority")
+    _choose(env, "Cast C1 (Soul Tether)")
+    _choose(env, "Tap for mana P3 (Forest)")
+    _choose(env, "Tap for mana P4 (Mountain)")
+    _choose(env, "Tap for mana P5 (Mountain)")
+    _choose(env, "Pass priority")
+    _choose(env, "Pass priority")
+    text = capture_text_decision(env).text
+    stack = text.split("Stack (native order, top to bottom):\n", 1)[1].split("\n\n")[0]
+    tethers = [line for line in stack.splitlines() if "(Soul Tether)" in line]
+    assert len(tethers) == 2
+    assert ["cast from a prepared copy" in line for line in tethers] == [False, True]
+    entries = decision_surface_view(env, 0)["stack_objects"]
+    assert [entry.get("from_prepared", False) for entry in entries] == [False, True]
+
+
 def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
     """`kicked` records bargain too; the text says which cost was taken."""
     env = priority_root(("Archon's Glory",), ("Gray Ogre", "Prophetic Prism", "Plains"))
@@ -552,6 +616,154 @@ def test_foretell_is_an_ability_offer_naming_the_card() -> None:
     assert [a.description for a in decision.actions] == ["Pass priority"]
 
 
+@pytest.mark.parametrize("with_muldrotha", [False, True])
+def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
+    with_muldrotha: bool,
+) -> None:
+    env = priority_root(
+        ("Lightning Bolt",),
+        ("Mountain", "Swamp", "Swamp", "Hungry Ghoul", "Zul Ashur, Lich Lord")
+        + (("Muldrotha, the Gravetide",) if with_muldrotha else ()),
+    )
+    _choose(env, "Cast ")
+    _choose(env, "Hungry Ghoul")
+    for _ in range(2):
+        _choose(env, "Pass priority")
+    _choose(env, "Zul Ashur")
+    _choose(env, "Hungry Ghoul")
+    for _ in range(2):
+        _choose(env, "Pass priority")
+
+    decision = capture_text_decision(env)
+    casts = [a for a in decision.actions if a.description.startswith("Cast ")]
+    if with_muldrotha:
+        assert len(casts) == 2
+        [muldrotha] = [a for a in casts if "Creature for this turn" in a.description]
+        [cast] = [a for a in casts if "using Zul Ashur" in a.description]
+        branch = env.clone_env()
+        submit_response(branch, capture_text_decision(branch), muldrotha.reference)
+        assert "Creature graveyard play this turn" in capture_text_decision(branch).text
+        for viewer in (0, 1):
+            board = decision_surface_view(branch, viewer)
+            seat = "agent" if viewer == env.current_agent_index() else "opponent"
+            [(_, kind)] = board[seat]["spent_graveyard_types"]
+            assert kind == "Creature"
+    else:
+        [cast] = casts
+    assert "Hungry Ghoul" in cast.description
+    alias = cast.description.split()[1]
+    assert "may be cast from graveyard by You: cast for {1}{B}, this turn only" in (
+        _card_line(decision.text, alias)
+    )
+    observation = _viewer_observation(decision)
+    space = ObservationSpace(ObservationConfig())
+    encoded = encode_observation(space, observation)
+    if with_muldrotha:
+        projected = [
+            a
+            for a in describe_actions(observation)
+            if a["type"] == "PRIORITY_CAST_SPELL"
+        ]
+        assert len(projected) == 2
+        for action in projected:
+            label = action["description"]
+            quota = encoded["actions"][action["index"], column("actions", "quota_type")]
+            assert (quota > 0) == ("using Muldrotha" in label)
+            assert "using Muldrotha" in label or "using Zul Ashur" in label
+    rows = encoded["agent_cards"]
+    row = next(
+        i for i, card in enumerate(observation.agent_cards) if card.cast_permissions
+    )
+    assert rows[row, CARD_PERMISSION_INDEX] == 1
+    assert rows[row, column("agent_cards", "permission_this_turn")] == 1
+    for viewer in (0, 1):
+        board = decision_surface_view(env, viewer)
+        seat = "agent" if viewer == env.current_agent_index() else "opponent"
+        [ghoul] = [c for c in board[seat]["graveyard"] if c["name"] == "Hungry Ghoul"]
+        assert ghoul["cast_permission"]["cost"] == "{1}{B}"
+        assert ghoul["cast_permission"]["this_turn"]
+    # Exercise both wire orders through text and Academy's capture reader.
+    for free_first in (False, True):
+        payload = json.loads(decision.capture_json)
+        state = payload["observation"]["viewer_state"]
+        card = next(card for card in state["agent_cards"] if "cast_permission" in card)
+        paid = card.pop("cast_permission")
+        free = paid | {"cost": {"cost": [0] * 6, "mana_value": 0}}
+        card["cast_permissions"] = [free, paid] if free_first else [paid, free]
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert "cast for {1}{B}" in line and "cast for {0}" in line
+        restored = managym.Observation.from_json(json.dumps(state))
+        ghoul = next(
+            c
+            for c in serialize_observation(restored)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert {grant["cost"] for grant in ghoul["cast_permissions"]} == {
+            "{1}{B}",
+            "{0}",
+        }
+        # A public source sustains one specific cost. Swapping those sources
+        # must exchange their terms even when every legal action stays fixed.
+        sources = state["agent_permanents"][:2]
+        first_permanent = 3 + 2 * space.config.max_cards_per_player
+        source_terms = []
+        for order in (sources, sources[::-1]):
+            for grant, permanent in zip(card["cast_permissions"], order, strict=True):
+                grant["source_permanent_id"] = permanent["id"]
+            bound = managym.Observation.from_json(json.dumps(state))
+            buffers = encode_observation(space, bound)
+            facts = buffers["facts"]
+            owners = facts[:, column("facts", "object")]
+            source_terms.append(
+                [facts[owners == first_permanent + i, 1:] for i in range(2)]
+            )
+
+        # Changing only entitlement changes the linked terms for policy and people.
+        first = card["cast_permissions"][0]
+        first["follows_source_controller"] = True
+        following = managym.Observation.from_json(json.dumps(state))
+        following_card = next(c for c in following.agent_cards if c.id == card["id"])
+        assert following_card.cast_permissions[0].follows_source_controller
+        assert not np.array_equal(encode_observation(space, following)["facts"], facts)
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert (
+            "permission follows the controller of" in line
+            and "while they control" in line
+        )
+        board_card = next(
+            c
+            for c in serialize_observation(following)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert board_card["cast_permissions"][0]["follows_source_controller"]
+        del first["follows_source_controller"]
+
+        first["flashback"] = True
+        flashed = managym.Observation.from_json(json.dumps(state))
+        assert not np.array_equal(encode_observation(space, flashed)["facts"], facts)
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert "with flashback" in line
+        board_card = next(
+            c
+            for c in serialize_observation(flashed)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert board_card["cast_permissions"][0]["flashback"]
+        del first["flashback"]
+
+        # A reader using the original card columns still sees the first grant.
+        card["cast_permission"] = card.pop("cast_permissions")[0]
+        single = managym.Observation.from_json(json.dumps(state))
+        np.testing.assert_array_equal(
+            encode_observation(space, single)["agent_cards"], buffers["agent_cards"]
+        )
+        original, swapped = source_terms
+        assert len(original[0]) and not np.array_equal(original[0], original[1])
+        np.testing.assert_array_equal(original[0], swapped[1])
+        np.testing.assert_array_equal(original[1], swapped[0])
+    submit_response(env, decision, cast.reference)
+
+
 def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
     env = priority_root(("Sozin's Comet",), ("Mountain",) * 6)
     _foretell(env)
@@ -571,7 +783,11 @@ def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
         raise AssertionError("the owner's next main phase was not reached")
     cast = next(a for a in decision.actions if a.description.startswith("Cast "))
     alias = cast.description.removeprefix("Cast ").split(" ", 1)[0]
-    assert cast.description == f"Cast {alias} (Sozin's Comet)"
+    # A lone route still names its permission and price.
+    assert cast.description == (
+        f"Cast {alias} (Sozin's Comet). Native description: "
+        "Cast Sozin's Comet using foretell for {2}{R}"
+    )
     line = _card_line(decision.text, alias)
     assert "; zone exile; " in line and "; foretold, face down" in line
 
@@ -579,7 +795,10 @@ def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
 def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
     env = priority_root((), ("Hakoda, Selfless Commander",) + ("Plains",) * 4)
     decision = capture_text_decision(env)
-    assert decision.actions[0].description == "Cast C1 (Hakoda, Selfless Commander)"
+    assert decision.actions[0].description == (
+        "Cast C1 (Hakoda, Selfless Commander). "
+        "Native description: Cast Hakoda, Selfless Commander from library"
+    )
     assert "; zone library; " in _card_line(decision.text, "C1")
     submit_response(env, decision, decision.actions[0].reference)
     stack = capture_text_decision(env).text.split(
@@ -691,15 +910,18 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "ward_cost": "ward mana value",
         "kicker_cost": "kicker mana value",
         "face_down": "face down",
-        "cast_permission": "may be played from exile by",
+        "cast_permissions": "all visible play permissions",
+        "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
+        "counters": "stash counters",
     },
     managym.StackObject: {
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",
         "owner_id": "Spell: owner",
         "is_copy": "copy",
+        "effective_mana_value": "mana value including announced X",
         "announced_x": "X = (zero when the announced value is zero)",
         "stack_object_id": "S<n>",
         "kind": "spell/activated ability/triggered ability",
@@ -713,6 +935,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "x": "X =",
         "granted_keywords": "granted keywords",
         "kicked": "kicked",
+        "from_prepared": "cast from a prepared copy",
+        "flashback": "cast with flashback",
         "card": "Spell: owner, copy, power/toughness, cost, types, keywords and Rules",
     },
     managym.PlayerTurnHistory: {
@@ -749,6 +973,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
         "pooled_mana_classes": "Of the mana above",
+        "spent_graveyard_types": "graveyard play this turn",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
     },
@@ -908,14 +1133,33 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
             "combat": False,
             "program": [],
         },
+        {
+            "mana": [0, 0, 0, 0, 0, 1],
+            "restriction": "anything but spells from hand",
+            "combat": False,
+            "program": [],
+        },
     ]
     text = render_decision(_redigest(payload)).text
     assert "Of the mana above: R 2; expires at end of combat." in text
+    assert (
+        "Of the mana above: C 1; for anything but spells from hand; expires at step end."
+        in text
+    )
     assert (
         "Of the mana above: G 1; only for creature spells; puts a +1/+1 counter on a "
         "non-Human creature spell it casts; expires at step end."
     ) in text
     assert "Combat mana:" not in text
+
+
+def test_counters_on_a_card_off_the_battlefield_reach_text() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    payload = json.loads(capture_text_decision(env).capture_json)
+    cards = payload["observation"]["viewer_state"]["agent_cards"]
+    cards[0]["counters"] = {"stash": 1}
+    text = render_decision(_redigest(payload)).text
+    assert "; stash counters 1;" in text
 
 
 def test_player_poison_count_reaches_text_and_academy() -> None:

@@ -7,9 +7,10 @@ use crate::{
         game::{Game, Revisions},
         layers::{matches_view, Context, SourceSeed},
         triggers::TriggerIndex,
+        turn::RecordedCast,
     },
     state::{
-        ability::{Condition, PaymentCost},
+        ability::{Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             StaticAbility, StaticScope,
@@ -187,11 +188,34 @@ impl Drop for BoardScan<'_> {
     }
 }
 
+/// Permissions granted by this player's active permanents. Priority checks these
+/// for each candidate card and face during the same immutable board scan.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct StaticPlayPermissions {
+    pub look_at_top: bool,
+    pub free_from_hand: bool,
+    pub opponents_hand_only: bool,
+    pub graveyard_flashback: bool,
+    pub library_spells: Vec<CardPredicate>,
+    pub flash_spells: Vec<CardPredicate>,
+    /// Each permanent letting this player play a permanent spell or land of
+    /// each permanent type from their graveyard once per turn (Muldrotha):
+    /// its object and public id.
+    pub graveyard_type_sources: Vec<(ObjectId, crate::state::game_object::PublicId)>,
+    /// Counter kinds marking exiled cards this player doesn't own that they
+    /// may play during their turn, spending mana of any type (Tinybones).
+    pub exile_counter_plays: Vec<CounterKind>,
+    /// Land plays beyond the first this turn (CR 305.2) granted by
+    /// permanents: the seat's own grants plus each "each player" grant.
+    pub extra_land_plays: u32,
+}
+
 #[derive(Debug, PartialEq)]
-struct LayerBoard {
+pub(super) struct LayerBoard {
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
-    library_top_visibility: [bool; 2],
+    pub play_permissions: [StaticPlayPermissions; 2],
+    restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
     reads_mana: bool,
     reads_tapped: bool,
     reads_life: bool,
@@ -250,34 +274,73 @@ impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
-        let mut library_top_visibility = [false; 2];
+        let mut restrictions = Vec::new();
+        let mut land_plays_each_player = 0;
+        let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
         for (id, object) in context.objects {
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
-            if !self.is_phased_out(id)
-                && object
-                    .view
-                    .static_abilities
-                    .contains(&StaticAbility::LookAtLibraryTop)
-            {
-                let controller = self.state.permanents[id].as_ref().unwrap().controller;
-                library_top_visibility[controller.0] = true;
+            if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                let controller = permanent.controller;
+                let permissions = &mut play_permissions[controller.0];
+                for ability in &object.view.static_abilities {
+                    match ability {
+                        StaticAbility::Restriction(rule) => {
+                            restrictions.push((id, controller, rule.clone()))
+                        }
+                        StaticAbility::AdditionalLandPlayEachPlayer => land_plays_each_player += 1,
+                        StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
+                        StaticAbility::PlayUnownedExiledWithCounter(kind) => {
+                            if !permissions.exile_counter_plays.contains(kind) {
+                                permissions.exile_counter_plays.push(*kind)
+                            }
+                        }
+                        StaticAbility::PlayGraveyardByPermanentType => permissions
+                            .graveyard_type_sources
+                            .push((permanent.object, permanent.id)),
+                        StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
+                        StaticAbility::CastFromHandWithoutManaCost => {
+                            permissions.free_from_hand = true
+                        }
+                        StaticAbility::OpponentsCastOnlyFromHand => {
+                            permissions.opponents_hand_only = true
+                        }
+                        StaticAbility::GraveyardSpellsHaveFlashback => {
+                            permissions.graveyard_flashback = true
+                        }
+                        StaticAbility::CastFromLibraryTop(predicate) => {
+                            permissions.library_spells.push(predicate.clone())
+                        }
+                        StaticAbility::CastSpellsAsThoughFlash(predicate) => {
+                            permissions.flash_spells.push(predicate.clone())
+                        }
+                        _ => {}
+                    }
+                }
             }
             objects[id.0] = Some(object.view.clone());
+        }
+        for permissions in &mut play_permissions {
+            permissions.extra_land_plays += land_plays_each_player;
         }
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             reads_life: context.reads_life,
             dynamic_activations,
+            restrictions,
             objects,
-            library_top_visibility,
+            play_permissions,
         }
     }
 
     /// Both seats share the same layered board and its invalidation rules.
     pub(crate) fn visible_library_tops(&self) -> [bool; 2] {
-        self.layer_board().library_top_visibility
+        self.layer_board()
+            .play_permissions
+            .each_ref()
+            .map(|p| p.look_at_top)
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
@@ -297,7 +360,7 @@ impl Game {
             game: std::marker::PhantomData,
         }
     }
-    fn layer_board(&self) -> Arc<LayerBoard> {
+    pub(super) fn layer_board(&self) -> Arc<LayerBoard> {
         let revisions = self.state.revisions();
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
@@ -557,6 +620,32 @@ impl Game {
         )
     }
 
+    /// A cast this turn asks what was cast: while the spell is on the stack
+    /// its appearance answers; once it departs, the profile it was cast as
+    /// selects the printed spell from the card's retained base, never the
+    /// front face the card shows again (an Adventure that resolved).
+    pub(crate) fn recorded_cast_matches_predicate(
+        &self,
+        cast: RecordedCast,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if cast.profile.is_front() || self.state.live(cast.object).is_some() {
+            return self.recorded_object_matches_predicate(cast.object, predicate);
+        }
+        let (definition, printing) = self.state.source_base(cast.object);
+        let (_, _, kind) = self
+            .state
+            .objects
+            .provenance(cast.object)
+            .expect("recorded provenance");
+        let spell = crate::cards::content_pack::default_content_pack().recorded_spell(
+            definition,
+            printing,
+            cast.profile,
+        );
+        predicate.matches_printed_spell(spell, kind)
+    }
+
     /// Entry replacements inspect allocated tokens before placement. This is
     /// distinct from rules predicates on current zone appearances.
     pub(crate) fn entry_matches_predicate(
@@ -582,6 +671,12 @@ impl Game {
         predicate.matches_object_with_power(row, power)
     }
 
+    fn creature_count(&self, controller: PlayerId) -> usize {
+        self.layer_views(self.iter_battlefield_permanents(controller))
+            .filter(|(_, view)| view.is_creature())
+            .count()
+    }
+
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
@@ -590,10 +685,7 @@ impl Game {
                 .filter_map(|(id, _)| self.state.permanents[id].as_ref())
                 .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
                 .sum(),
-            PowerCda::CreaturesYouControl => self
-                .layer_views(self.iter_battlefield_permanents(controller))
-                .filter(|(_, view)| view.is_creature())
-                .count() as i32,
+            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
             PowerCda::GraveyardMatching(predicate) => {
                 self.count_graveyard_matching(controller, predicate) as i32
             }
@@ -694,20 +786,38 @@ impl Game {
             .filter(|&creature| self.layer_view(creature).is_creature())
     }
 
+    /// The power of the creature `source` is attached to, at least 0; 0 when
+    /// it is attached to no creature (`EffectValue::AttachedCreaturePower`).
+    pub(crate) fn attached_creature_power(&self, source: PermanentId) -> i32 {
+        self.attached_creature(source)
+            .map_or(0, |creature| self.layer_view(creature).power.max(0))
+    }
+
+    /// `value` as a static ability of `source` reads it: values relative to
+    /// that permanent, else as its controller's quantity.
+    pub(crate) fn static_value(
+        &self,
+        value: &EffectValue,
+        source: PermanentId,
+        controller: PlayerId,
+    ) -> i32 {
+        match value {
+            EffectValue::AttachedCreaturePower => self.attached_creature_power(source),
+            value => self.controller_value(value, controller),
+        }
+    }
+
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
-        self.static_sources().any(|(source, controller, view)| {
-            view.static_abilities.iter().any(|ability| {
-                let StaticAbility::Restriction(restriction) = ability else {
-                    return false;
-                };
-                restriction.kind == kind
-                    && restriction
-                        .unless
-                        .as_ref()
-                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
-                    && self.static_scope_applies(&restriction.scope, source, controller, target)
+        self.layer_board()
+            .restrictions
+            .iter()
+            .any(|(source, controller, rule)| {
+                rule.kind == kind
+                    && rule.unless.as_ref().is_none_or(|condition| {
+                        !self.check_static_condition(condition, *controller)
+                    })
+                    && self.static_scope_applies(&rule.scope, *source, *controller, target)
             })
-        })
     }
 
     /// "attacks each combat if able" (CR 508.1d): the declaration offers it
@@ -727,15 +837,23 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
-        let granted_flash = self
-            .exile_grant(player, object)
-            .is_some_and(|grant| grant.flash);
-        let object = &self.state[object];
-        granted_flash
-            || object.is_instant_speed()
-            || (object.types.is_creature() && self.has_next_creature_cast_flash(player))
-            || object
+    pub(crate) fn has_instant_timing(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: crate::flow::game::CastChoices,
+    ) -> bool {
+        let granted_flash = cast.grant(self, object).is_some_and(|grant| grant.flash);
+        let spell = cast.spell(&self.state[object]);
+        cast.flash_surcharge
+            || granted_flash
+            || spell.is_instant_speed()
+            || self.layer_board().play_permissions[player.0]
+                .flash_spells
+                .iter()
+                .any(|predicate| cast.matches_spell(self, object, predicate))
+            || (spell.types.is_creature() && self.has_next_creature_cast_flash(player))
+            || spell
                 .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
@@ -833,6 +951,9 @@ impl Game {
                     view.name.clone()
                 })
             }
+            Condition::OpponentControlsMoreCreatures => {
+                self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
+            }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 [PlayerId(0), PlayerId(1)]
@@ -854,6 +975,12 @@ impl Game {
                     .count()
                     == *count
             }
+            Condition::OpponentHasMoreCardsInHand => {
+                self.state
+                    .zones
+                    .size(ZoneType::Hand, PlayerId(1 - controller.0))
+                    > self.state.zones.size(ZoneType::Hand, controller)
+            }
             Condition::CardsInHandAtLeast { count } => {
                 self.state.zones.size(ZoneType::Hand, controller) >= *count
             }
@@ -862,6 +989,9 @@ impl Game {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
+            Condition::CastThisTurn(predicate) => self.state.turn.spells_cast[controller.0]
+                .iter()
+                .any(|&cast| self.recorded_cast_matches_predicate(cast, predicate)),
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
@@ -887,6 +1017,9 @@ impl Game {
             Condition::SourceMatches(predicate) => source
                 .and_then(|r| self.lookup_current_permanent(r).ok())
                 .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
+            Condition::SourceUnprepared => {
+                source_permanent().is_some_and(|p| self.prepared_copy(p.object).is_none())
+            }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::SourceSaddled => source
                 .and_then(|source| self.lookup_current_permanent(source).ok())
@@ -1041,7 +1174,8 @@ mod cache_tests {
     fn with_stale_board(game: &Game) {
         let board = game.layer_board();
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
-            library_top_visibility: board.library_top_visibility,
+            play_permissions: board.play_permissions.clone(),
+            restrictions: board.restrictions.clone(),
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,

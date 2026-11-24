@@ -56,7 +56,7 @@ pub enum SpendPredicate {
 impl SpendPredicate {
     pub fn matches(&self, context: &SpendingContext) -> bool {
         match (self, context) {
-            (Self::CastSubtype(name), SpendingContext::Cast(spell)) => {
+            (Self::CastSubtype(name), SpendingContext::Cast { spell, .. }) => {
                 spell.0.subtypes.iter().any(|subtype| subtype == name)
             }
             (Self::ActivateSubtype(name), SpendingContext::Activate { source, .. }) => {
@@ -78,6 +78,9 @@ pub enum ManaRestriction {
     /// Spend on anything but casting a nonartifact spell (Powerstone),
     /// resolving costs included.
     ExceptNonartifactSpells,
+    /// Spend on anything but casting a spell from its caster's hand
+    /// (Heartwood Crafter), resolving costs included.
+    ExceptSpellsFromHand,
 }
 
 impl ManaRestriction {
@@ -111,7 +114,14 @@ impl ManaRestriction {
             Self::Only(predicates) => predicates.iter().any(|p| p.matches(context)),
             Self::ExceptNonartifactSpells => !matches!(
                 context,
-                SpendingContext::Cast(spell) if !spell.0.types.is_artifact()
+                SpendingContext::Cast { spell, .. } if !spell.0.types.is_artifact()
+            ),
+            Self::ExceptSpellsFromHand => !matches!(
+                context,
+                SpendingContext::Cast {
+                    from: ZoneType::Hand,
+                    ..
+                }
             ),
         }
     }
@@ -136,17 +146,19 @@ impl ManaRestriction {
     fn predicates(&self) -> impl Iterator<Item = &SpendPredicate> {
         match self {
             Self::Only(predicates) => Some(predicates),
-            Self::ExceptNonartifactSpells => None,
+            Self::ExceptNonartifactSpells | Self::ExceptSpellsFromHand => None,
         }
         .into_iter()
         .flatten()
     }
 
     /// "Lesson or Shrine spells", "Ally spells or abilities of Ally sources",
-    /// "anything but nonartifact spells".
+    /// "anything but nonartifact spells", "anything but spells from hand".
     pub fn describe(&self) -> String {
-        if *self == Self::ExceptNonartifactSpells {
-            return "anything but nonartifact spells".into();
+        match self {
+            Self::ExceptNonartifactSpells => return "anything but nonartifact spells".into(),
+            Self::ExceptSpellsFromHand => return "anything but spells from hand".into(),
+            Self::Only(_) => {}
         }
         let mut parts = Vec::new();
         let spells = self.spell_subtypes().collect::<Vec<_>>();
@@ -186,7 +198,7 @@ pub enum SpendEffect {
 impl SpendEffect {
     /// Whether spending this mana in `context` has its effect.
     pub fn applies(&self, context: &SpendingContext) -> bool {
-        let SpendingContext::Cast(spell) = context else {
+        let SpendingContext::Cast { spell, .. } = context else {
             return false;
         };
         let spell = &*spell.0;
@@ -198,13 +210,9 @@ impl SpendEffect {
             Self::SpellGainsKeyword {
                 spell: predicate, ..
             }
-            | Self::CopySpell { spell: predicate } => predicate.matches_printing(
-                spell,
-                ObjectKind::Card,
-                spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-                spell.power.unwrap_or(0),
-                &[],
-            ),
+            | Self::CopySpell { spell: predicate } => {
+                predicate.matches_printed_spell(spell, ObjectKind::Card)
+            }
         }
     }
 }
@@ -277,9 +285,8 @@ impl ManaClass {
         }
         match (&self.restriction, &self.effect) {
             (Some(ManaRestriction::Only(purposes)), _) => SpendOrder::Specific(purposes.len()),
-            (Some(ManaRestriction::ExceptNonartifactSpells), _) | (None, Some(_)) => {
-                SpendOrder::Specific(usize::MAX)
-            }
+            // Exclusions and spend effects come after every narrower class.
+            (Some(_), _) | (None, Some(_)) => SpendOrder::Specific(usize::MAX),
             (None, None) => SpendOrder::Ordinary,
         }
     }
@@ -383,7 +390,12 @@ impl serde::Serialize for SpellSnapshot {
 pub enum SpendingContext {
     #[default]
     Resolving,
-    Cast(SpellSnapshot),
+    /// Casting `spell` from the zone it is cast from (CR 601.2a: before
+    /// it moves to the stack).
+    Cast {
+        spell: SpellSnapshot,
+        from: ZoneType,
+    },
     Activate {
         zone: ZoneType,
         source: Arc<SpendingObject>,
@@ -391,16 +403,19 @@ pub enum SpendingContext {
 }
 
 impl SpendingContext {
-    /// Casting a spell with these subtypes and card types.
+    /// Casting a spell with these subtypes and card types from hand.
     pub fn cast<'a>(
         subtypes: impl IntoIterator<Item = &'a str>,
         types: impl IntoIterator<Item = CardType>,
     ) -> Self {
-        Self::Cast(SpellSnapshot(Arc::new(PrintedCharacteristics {
-            subtypes: subtypes.into_iter().map(String::from).collect(),
-            types: crate::card::CardTypes::new(types),
-            ..Default::default()
-        })))
+        Self::Cast {
+            spell: SpellSnapshot(Arc::new(PrintedCharacteristics {
+                subtypes: subtypes.into_iter().map(String::from).collect(),
+                types: crate::card::CardTypes::new(types),
+                ..Default::default()
+            })),
+            from: ZoneType::Hand,
+        }
     }
 
     /// Activating an ability of a battlefield source with these subtypes.
@@ -435,6 +450,11 @@ pub struct ManaCost {
 }
 
 impl ManaCost {
+    /// Mana value on the stack, counting each printed {X} at its announced value.
+    pub fn mana_value_at(&self, x: u8) -> u8 {
+        self.mana_value.saturating_add(self.x.saturating_mul(x))
+    }
+
     pub fn parse(text: &str) -> Self {
         let mut out = ManaCost::default();
         let mut chars = text.chars().peekable();
@@ -611,6 +631,15 @@ impl ManaCost {
         out.x = 0;
         out.update_mana_value();
         out
+    }
+
+    /// Preserve the spending restriction and X while allowing any mana type for every pip.
+    pub fn pay_with_any_mana(self) -> Self {
+        Self {
+            purpose: self.purpose,
+            x: self.x,
+            ..Self::default().with_generic(self.mana_value)
+        }
     }
 
     /// The generic component of the cost.

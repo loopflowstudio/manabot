@@ -1717,9 +1717,7 @@ fn nested_iteration_defers_state_based_actions_until_root_completion() {
     );
 }
 
-/// Apply one ordinary bound Command, checking replay and stale rejection at
-/// each choice boundary rather than calling a decision helper.
-fn checked_command(game: &mut Game, action: Action) {
+fn bound_command(game: &Game, action: Action) -> Command {
     let index = game
         .action_space()
         .unwrap()
@@ -1728,13 +1726,17 @@ fn checked_command(game: &mut Game, action: Action) {
         .position(|candidate| *candidate == action)
         .expect("action must be a legal offer");
     let frame = game.semantic_decision_frame().unwrap();
-    let command = Command {
+    Command {
         command_id: format!("choice-{}", frame.revision),
         expected_revision: frame.revision,
         offer_id: frame.offers[index].id.0,
         answers: vec![],
         object_preconditions: vec![],
-    };
+    }
+}
+
+fn checked_command(game: &mut Game, action: Action) {
+    let command = bound_command(game, action);
     let mut replay = game.clone();
     game.execute_semantic_command(&command).unwrap();
     replay.execute_semantic_command(&command).unwrap();
@@ -2689,6 +2691,7 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
             player,
             vec![
                 Effect::LookAndSelect {
+                    max_mana_value: None,
                     look: EffectValue::Fixed(4),
                     predicate: CardPredicate::default(),
                     min_select: 0,
@@ -3529,7 +3532,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
 fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     use crate::{
         flow::{
-            cast_permission::ExileCastGrant,
+            cast_permission::PlayGrant,
             decision::{Decision, EffectFrame},
         },
         possible_worlds::{MaterializeMode, PossibleWorldSpace},
@@ -3586,13 +3589,10 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
     let (bolts, ogres) = (current(&bolts), current(&ogres));
     for object_id in &ogres {
         let object = root.state.live(*object_id).unwrap();
-        root.state
-            .cast_permissions
-            .exile_grants
-            .push(ExileCastGrant {
-                foretold: true,
-                ..ExileCastGrant::new(object, player)
-            });
+        root.state.cast_permissions.grants.push(PlayGrant {
+            foretold: true,
+            ..PlayGrant::new(object, player)
+        });
     }
     // The constructed root starts with unknown library positions. The
     // visible setup moves above would otherwise disclose all three Bolts.
@@ -3649,7 +3649,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             }
             checked_command(&mut branch, Action::Decline { player });
             assert_eq!(branch.state.zones.size(ZoneType::Hand, player), 2);
-            assert_eq!(branch.foretold_cards(player).count(), 2);
+            assert_eq!(branch.hidden_face_down_counts(player, viewer), (2, 0));
             assert!(branch
                 .state
                 .zones
@@ -3785,6 +3785,7 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
         Effect::Scry { count: 3 },
         Effect::Surveil { count: 3 },
         Effect::LookAndSelect {
+            max_mana_value: None,
             random_order: false,
             reveal: false,
             to_battlefield: false,
@@ -3897,6 +3898,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation_encoder::{
         encode, ObservationEncodeError, ObservationEncoderConfig,
     };
+    use crate::agent::{legacy_input, observation_layout::relation};
     use crate::flow::decision::{
         Decision, EffectFrame, FrameCompletion, ResolutionTarget, SuspendedResolution,
         TargetIteration,
@@ -4015,13 +4017,14 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 .iter()
                 .filter(|row| row[11] == 1.0)
                 .count();
-            let relations = input
+            let relations: Vec<_> = input
                 .relations
-                .as_chunks::<49>()
+                .as_chunks::<{ relation::WIDTH }>()
                 .0
                 .iter()
-                .filter(|row| row[31] == 1.0)
-                .count();
+                .take_while(|row| row[relation::VALID] == 1.0)
+                .flat_map(|row| row[..legacy_input::RELATION_DIM].iter().copied())
+                .collect();
             assert!(matches!(
                 encode(
                     &obs,
@@ -4033,8 +4036,10 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 Err(ObservationEncodeError::Capacity { field: "facts", .. })
             ));
             let capture = game.capture_decision(player, 0).unwrap();
-            evidence.push(serde_json::json!({"case":case,"choice":choice,"capture":capture,
-                "facts": &input.facts[..used * 12], "relations": &input.relations[..relations * 49]}));
+            evidence.push(
+                serde_json::json!({"case":case,"choice":choice,"capture":capture,
+                "facts": &input.facts[..used * 12], "relations": relations}),
+            );
             assert_eq!(
                 game.clone().capture_decision(player, 0).unwrap().digest,
                 capture.digest
@@ -4092,6 +4097,7 @@ fn hidden_knowledge_private_selection_does_not_disclose_departing_position() {
         root.run_frame(EffectFrame::new(
             player,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 random_order: false,
                 reveal: false,
                 to_battlefield: false,
@@ -4311,6 +4317,7 @@ fn hidden_knowledge_public_prefix_survives_a_pending_inspection() {
             owner,
             vec![if reveal {
                 Effect::LookAndSelect {
+                    max_mana_value: None,
                     look: 3.into(),
                     min_select: 1,
                     max_select: 2,
@@ -4390,6 +4397,7 @@ fn hidden_knowledge_forced_single_bottom_is_remembered() {
         game.run_frame(EffectFrame::new(
             owner,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 look: 1.into(),
                 min_select: 0,
                 max_select: 1,
@@ -4523,8 +4531,14 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         panic!("expected a spell copy");
     };
     spell(&mut game, "Time Stop");
-    game.exile_top_cards_to_play(player, 1, crate::state::ability::PlayWindow::ThisTurn);
-    let playable = game.state.cast_permissions.exile_grants[0].object;
+    game.exile_top_cards_to_play(
+        player,
+        1,
+        crate::state::ability::PlayWindow::ThisTurn,
+        false,
+        None,
+    );
+    let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     assert_eq!(
@@ -4540,7 +4554,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         .pending
         .iter()
         .any(|line| line.contains("turn is ending")));
-    assert!(game.exile_grant_on(playable).is_some());
+    assert!(game.play_grants_on(playable).next().is_some());
     let copy_in_exile = game.state.zones.successor(copy).unwrap();
     assert_eq!(
         game.state.zones.zone_of(copy_in_exile),
@@ -4563,7 +4577,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         assert!(fork.state.permanents[second].is_none());
         assert_eq!(fork.state.zones.zone_of(copy_in_exile), None);
         assert!(
-            fork.exile_grant_on(playable).is_none(),
+            fork.play_grants_on(playable).next().is_none(),
             "this-turn play permission expires before cleanup priority"
         );
         assert_eq!(fork.state.stack_objects.len(), 1);
@@ -4583,6 +4597,7 @@ fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules
         game.run_frame(EffectFrame::new(
             owner,
             vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 look: 12.into(),
                 min_select: 0,
                 max_select: 1,
@@ -4789,4 +4804,668 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     checked_command(&mut game, Action::Decline { player: owner });
     game.shuffle_unseen_libraries(12);
     assert_eq!(game.library_top_objects(owner, 1), [object]);
+}
+
+fn fixture_card(game: &Game, owner: PlayerId, name: &str) -> ObjectId {
+    game.state
+        .latest_objects()
+        .find_map(|(id, card)| (card.owner == owner && card.name == name).then_some(id))
+        .expect(name)
+}
+
+fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
+    use crate::state::mana::Mana;
+
+    let deck = BTreeMap::from([
+        ("Blossom-Blessed Angel".into(), 4),
+        ("Emergency Phytomedic".into(), 4),
+        ("Counterspell".into(), 4),
+        ("Lightning Bolt".into(), 1),
+        ("Plains".into(), 27),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        419,
+        true,
+    );
+    game.keep_opening_hands();
+    let player = game.active_player();
+    let opponent = PlayerId(1 - player.0);
+    game.state.turn.current_phase = 1;
+    game.state.turn.current_step = 0;
+    game.state.priority.holder = player;
+    game.state.players[player.0].mana_pool = Mana::parse("WW").into();
+    game.state.players[opponent.0].mana_pool = Mana::parse("UU").into();
+    game.scenario_force_card_in_hand(opponent, "Counterspell")
+        .unwrap();
+    let sources = ["Blossom-Blessed Angel", "Emergency Phytomedic"].map(|name| {
+        let object = fixture_card(&game, player, name);
+        game.move_object(object, ZoneType::Battlefield)
+    });
+    let id = game.state.id_gen.next_id();
+    let unrelated = game.create_spell_copy(sources[0], id, player);
+    let unrelated = game.move_object(unrelated, ZoneType::Exile);
+    game.finish_action_step();
+    assert_eq!(game.state.zones.zone_of(unrelated), None);
+    let copies = sources.map(|source| {
+        let copy = game.prepared_copy(source).unwrap();
+        assert_eq!(game.preparation_source(copy), Some(source));
+        assert_eq!(game.state[copy].name, "Seed Suture");
+        for viewer in [player, opponent] {
+            let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+            let row = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|row| row.id == game.state[copy].id.0 as i32)
+                .unwrap();
+            assert_eq!(
+                row.cast_permissions[0].source_permanent_id,
+                Some(
+                    game.state.permanents[game.lookup_current_permanent(source).unwrap()]
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .0 as i32
+                )
+            );
+        }
+        copy
+    });
+    (game, sources, copies)
+}
+
+fn cast_offer(game: &Game, object: ObjectId) -> Option<Action> {
+    game.action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(
+            |action| matches!(action, Action::CastSpell {object: offered,..} if *offered == object),
+        )
+        .cloned()
+}
+
+#[test]
+fn prepared_seed_sutures_survive_priority_and_counter_independently() {
+    let (game, sources, copies) = prepared_seed_sutures();
+    let player = game.active_player();
+    let observation = crate::agent::observation::Observation::for_player(&game, player);
+    let config = crate::agent::observation_encoder::ObservationEncoderConfig::default();
+    let encoded = crate::agent::observation_encoder::encode(&observation, &config).unwrap();
+    let joins = [0, 1].map(|i| {
+        let copy = copies[i];
+        let source = sources[i];
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(
+                |action| matches!(action, Action::CastSpell { object, .. } if *object == copy),
+            )
+            .unwrap();
+        let offer = &observation.action_space.actions[index];
+        assert_eq!(
+            offer.focus,
+            [game.state[copy].id.0 as i32, game.state[source].id.0 as i32]
+        );
+        assert!(offer
+            .description
+            .as_ref()
+            .unwrap()
+            .contains(&game.state[source].name));
+        let start = index * config.max_focus_objects;
+        [encoded.action_focus[start], encoded.action_focus[start + 1]]
+    });
+    assert!(joins.iter().flatten().all(|row| *row >= 0));
+    assert_ne!(joins[0][0], joins[1][0]);
+    assert_ne!(joins[0][1], joins[1][1]);
+    for (chosen, other) in [(copies[0], copies[1]), (copies[1], copies[0])] {
+        let mut fork = game.clone();
+        checked_command(&mut fork, cast_offer(&game, chosen).unwrap());
+        let target = Action::ChooseTarget {
+            player,
+            target: Target::Permanent(game.lookup_current_permanent(sources[0]).unwrap()),
+        };
+        checked_command(&mut fork, target.clone());
+        let counter = fork.action_space().unwrap().actions.iter().find(|a| matches!(a,Action::CastSpell {object,..} if fork.state[*object].name == "Counterspell")).cloned().unwrap();
+        checked_command(&mut fork, counter);
+        assert!(fork.state.stack_objects.is_empty());
+        assert!(fork.state.events.iter().any(|event| matches!(event, GameEvent::SpellCountered { object_id,.. } if object_id.slot()==chosen.slot())));
+        assert!(cast_offer(&fork, chosen).is_none());
+        let life = fork.state.players[player.0].life;
+        let surviving_offer = cast_offer(&fork, other).expect("other Seed Suture remains castable");
+        checked_command(&mut fork, surviving_offer);
+        checked_command(&mut fork, target);
+        assert_eq!(fork.state.players[player.0].life, life + 1);
+        let permanent = fork.lookup_current_permanent(sources[0]).unwrap();
+        assert_eq!(
+            fork.state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .counter_count(CounterKind::PlusOnePlusOne),
+            1
+        );
+    }
+}
+
+#[test]
+fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
+    use crate::state::{ability::LinkedGrant, mana::Mana};
+
+    let (mut game, sources, copies) = prepared_seed_sutures();
+    let owner = game.active_player();
+    let caster = PlayerId(1 - owner.0);
+    let angel = game.lookup_current_permanent(sources[0]).unwrap();
+    let stale = bound_command(&game, cast_offer(&game, copies[0]).unwrap());
+
+    // Azula's fixed-player permission on a Counterspell shares the Angel as source.
+    let fixed_spell = game
+        .state
+        .latest_objects()
+        .find(|(_, o)| o.owner == owner && o.name == "Counterspell")
+        .unwrap()
+        .0;
+    game.exile_linked(
+        fixed_spell,
+        owner,
+        Some(sources[0]),
+        LinkedGrant::FlashAnyMana,
+    );
+    let fixed_spell = game.state.now(fixed_spell);
+    assert!(game.live_grants(owner, fixed_spell).next().is_some());
+    for viewer in [owner, caster] {
+        let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+        for (object, follows) in [(copies[0], true), (fixed_spell, false)] {
+            let row = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|row| row.id == game.state[object].id.0 as i32)
+                .unwrap();
+            let grant = &row.cast_permissions[0];
+            assert_eq!(grant.follows_source_controller, follows);
+            assert_eq!(grant.player_id, game.state.players[owner.0].id.0 as i32);
+            assert_eq!(
+                grant.source_permanent_id,
+                Some(game.state.permanents[angel].as_ref().unwrap().id.0 as i32)
+            );
+        }
+    }
+    game.change_control(angel, caster);
+    game.finish_action_step();
+    assert!(cast_offer(&game, copies[0]).is_none());
+    assert!(cast_offer(&game, copies[1]).is_some());
+    assert!(game.live_grants(owner, fixed_spell).next().is_none());
+
+    game.state.turn.active_player = caster;
+    game.state.priority.holder = caster;
+    game.state.players[caster.0].mana_pool = Mana::parse("W").into();
+    game.state.players[owner.0].mana_pool = Mana::parse("UU").into();
+    game.scenario_force_card_in_hand(owner, "Counterspell")
+        .unwrap();
+    game.finish_action_step();
+    assert!(game.state.stack_objects.is_empty());
+    assert!(game.live_grants(caster, fixed_spell).next().is_none());
+    assert!(cast_offer(&game, copies[1]).is_none());
+    assert_eq!(game.state[copies[0]].owner, owner);
+    for viewer in [owner, caster] {
+        let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+        let fixed = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .find(|row| row.id == game.state[fixed_spell].id.0 as i32)
+            .unwrap();
+        assert!(fixed.cast_permissions.is_empty());
+        for (copy, entitled) in copies.into_iter().zip([caster, owner]) {
+            let row = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|row| row.id == game.state[copy].id.0 as i32)
+                .unwrap();
+            assert_eq!(row.owner_id, game.state.players[owner.0].id.0 as i32);
+            assert_eq!(
+                row.cast_permissions[0].player_id,
+                game.state.players[entitled.0].id.0 as i32
+            );
+        }
+    }
+    let before = game.state.deterministic_hash();
+    assert!(matches!(
+        game.execute_semantic_command(&stale),
+        Err(crate::decision::SemanticError::StaleRevision { .. })
+    ));
+    assert_eq!(game.state.deterministic_hash(), before);
+    let cast = bound_command(&game, cast_offer(&game, copies[0]).unwrap());
+    game.execute_semantic_command(&cast).unwrap();
+    let target = bound_command(
+        &game,
+        Action::ChooseTarget {
+            player: caster,
+            target: Target::Permanent(game.lookup_current_permanent(sources[0]).unwrap()),
+        },
+    );
+    game.execute_semantic_command(&target).unwrap();
+    let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
+        panic!("opponent can respond to Seed Suture")
+    };
+    assert_eq!(spell.controller, caster);
+    assert_eq!(spell.object.slot(), copies[0].slot());
+    assert_eq!(spell.spent.mana().len(), 1);
+    assert_eq!(
+        spell.spent.mana()[0].color,
+        crate::state::mana::Color::White as u8
+    );
+    assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
+}
+
+#[test]
+fn returning_prepared_angel_rejects_departed_object_at_current_revision() {
+    let (mut game, sources, copies) = prepared_seed_sutures();
+    let player = game.active_player();
+    game.scenario_force_card_in_hand(player, "Lightning Bolt")
+        .unwrap();
+    game.state.players[player.0].mana_pool = crate::state::mana::Mana::parse("WR").into();
+    game.finish_action_step();
+    let address = |game: &Game, object| {
+        game.semantic_decision_frame()
+            .unwrap()
+            .object_candidates
+            .into_iter()
+            .find(|candidate| {
+                game.semantic_object_candidates.borrow().get(candidate) == Some(&object)
+            })
+            .unwrap()
+    };
+    let departed = address(&game, sources[0]);
+    let exiled = game.move_object(sources[0], ZoneType::Exile);
+    let returned = game.move_object(exiled, ZoneType::Battlefield);
+    game.finish_action_step();
+    assert_ne!(sources[0], returned);
+    assert!(cast_offer(&game, copies[0]).is_none());
+    let fresh = game
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, game.active_player())
+        .iter()
+        .copied()
+        .find(|copy| game.preparation_source(*copy) == Some(returned))
+        .unwrap();
+    let mut cast = bound_command(&game, cast_offer(&game, fresh).unwrap());
+    cast.object_preconditions = vec![address(&game, returned)];
+    let stale = Command {
+        object_preconditions: vec![departed],
+        ..cast.clone()
+    };
+    let before = game.state.deterministic_hash();
+    assert!(matches!(
+        game.execute_semantic_command(&stale),
+        Err(crate::decision::SemanticError::StaleObject)
+    ));
+    assert_eq!(game.state.deterministic_hash(), before);
+    game.execute_semantic_command(&cast).unwrap();
+    let target = bound_command(
+        &game,
+        Action::ChooseTarget {
+            player: game.active_player(),
+            target: Target::Permanent(game.lookup_current_permanent(returned).unwrap()),
+        },
+    );
+    game.execute_semantic_command(&target).unwrap();
+    assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
+}
+
+fn preparation_position(names: &[&str]) -> Game {
+    let mut deck = BTreeMap::from([("Plains".into(), 24)]);
+    deck.extend(names.iter().map(|name| ((*name).to_owned(), 1)));
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        419,
+        false,
+    );
+    game.keep_opening_hands();
+    game.state.turn.current_phase = 1;
+    game.state.turn.current_step = 0;
+    game.state.priority.holder = game.active_player();
+    game
+}
+
+#[test]
+fn preparation_resolution_waypoint_preserves_existing_link_after_payment() {
+    use crate::state::mana::Mana;
+    let mut root = preparation_position(&["Skycoach Waypoint", "Blossom-Blessed Angel"]);
+    let player = root.active_player();
+    let waypoint = root
+        .scenario_force_battlefield(player, "Skycoach Waypoint", true)
+        .unwrap();
+    let angel = root
+        .scenario_force_battlefield(player, "Blossom-Blessed Angel", true)
+        .unwrap();
+    let source = root.permanent_object(angel).unwrap();
+    root.state.players[player.0].mana_pool = Mana::parse("CCC").into();
+    root.publish_action_space(root.priority_action_space(player));
+    checked_command(
+        &mut root,
+        Action::ActivateAbility {
+            player,
+            permanent: waypoint,
+            ability_index: 0,
+        },
+    );
+    checked_command(
+        &mut root,
+        Action::ChooseTarget {
+            player,
+            target: Target::Permanent(angel),
+        },
+    );
+    assert_eq!(root.state.stack_objects.len(), 1);
+    assert!(root.state.permanents[waypoint].as_ref().unwrap().tapped);
+    assert_eq!(root.pooled_mana(player).total(), 0);
+    assert_eq!(root.prepared_copy(source), None);
+    let mut fork = root.clone();
+    use crate::flow::card_capture::{snapshots, CaptureMode, CardCapture};
+    fork.card_capture = Some(CardCapture::new(
+        &fork,
+        snapshots(&fork),
+        CaptureMode::Cards,
+    ));
+    fork.prepare_inset(source);
+    assert_eq!(fork.card_capture.as_ref().unwrap().moves.len(), 1);
+    let grants = fork.state.cast_permissions.grants.clone();
+    let exile = fork
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, player)
+        .to_vec();
+    fork.resolve_top_of_stack();
+    assert_eq!(fork.card_capture.as_ref().unwrap().moves.len(), 1);
+    assert_eq!(fork.state.cast_permissions.grants, grants);
+    assert_eq!(
+        fork.state
+            .zones
+            .zone_objects(ZoneType::Exile, player)
+            .to_vec(),
+        exile
+    );
+    root.resolve_top_of_stack();
+    assert_eq!(root.state.cast_permissions.grants.len(), 1);
+    assert_eq!(
+        root.preparation_source(root.prepared_copy(source).unwrap()),
+        Some(source)
+    );
+}
+
+#[test]
+fn preparation_resolution_coursework_unprepares_only_the_attached_creature() {
+    let mut game = preparation_position(&[
+        "Blossom-Blessed Angel",
+        "Emergency Phytomedic",
+        "Infinite Coursework",
+    ]);
+    let player = game.active_player();
+    let [angel, medic] = ["Blossom-Blessed Angel", "Emergency Phytomedic"].map(|name| {
+        let object = fixture_card(&game, player, name);
+        game.move_object(object, ZoneType::Battlefield)
+    });
+    let copies = [angel, medic].map(|source| game.prepared_copy(source).unwrap());
+    let permanent = game.lookup_current_permanent(angel).unwrap();
+    let aura = fixture_card(&game, player, "Infinite Coursework");
+    game.push_spell_to_stack(
+        aura,
+        player,
+        vec![Target::Permanent(permanent)],
+        vec![0],
+        Default::default(),
+    );
+    game.resolve_top_of_stack();
+    assert_eq!(game.prepared_copy(angel), Some(copies[0]));
+    game.collect_waiting_triggers();
+    game.flush_triggers();
+    assert_eq!(game.state.stack_objects.len(), 1);
+    game.resolve_top_of_stack();
+    assert!(game.characteristics(permanent).abilities_lost);
+    assert_eq!(game.prepared_copy(angel), None);
+    assert_eq!(game.state.zones.zone_of(copies[0]), None);
+    assert_eq!(game.prepared_copy(medic), Some(copies[1]));
+    game.untap_all_permanents(player);
+    assert!(game.state.permanents[permanent].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn preparation_resolution_upkeep_checks_each_sources_live_link_twice() {
+    for name in [
+        "Paradox Shaper",
+        "Stingerquill Voxmancer",
+        "Woodwork Prodigy",
+    ] {
+        let mut game = preparation_position(&[name]);
+        let player = game.active_player();
+        let permanent = game.scenario_force_battlefield(player, name, true).unwrap();
+        let source = game.permanent_object(permanent).unwrap();
+        game.emit(GameEvent::StepStarted {
+            step: StepKind::Upkeep,
+        });
+        game.collect_waiting_triggers();
+        assert_eq!(game.state.pending_triggers.len(), 1, "{name}");
+        game.flush_triggers();
+        let mut prepared = game.clone();
+        prepared.prepare_inset(source);
+        let grants = prepared.state.cast_permissions.grants.clone();
+        prepared.resolve_top_of_stack();
+        assert_eq!(prepared.state.cast_permissions.grants, grants);
+        // Idempotent preparation alone would also preserve the grant. The
+        // rules count a resolution only on the branch passing the second check.
+        let ability = (source.slot(), 0);
+        assert!(!prepared
+            .state
+            .turn
+            .ability_resolutions_this_turn
+            .contains_key(&ability));
+        game.resolve_top_of_stack();
+        assert_eq!(
+            game.state.turn.ability_resolutions_this_turn.get(&ability),
+            Some(&1)
+        );
+        assert_eq!(
+            game.preparation_source(game.prepared_copy(source).unwrap()),
+            Some(source)
+        );
+        game.emit(GameEvent::StepStarted {
+            step: StepKind::Upkeep,
+        });
+        game.collect_waiting_triggers();
+        assert!(game.state.pending_triggers.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn preparation_resolution_triggered_sources_create_their_printed_spells() {
+    for (name, spell) in [
+        ("Encouraging Aviator", "Jump"),
+        ("Emeritus of Abundance", "Regrowth"),
+        ("Abigale, Poet Laureate", "Heroic Stanza"),
+        ("Emeritus of Conflict", "Lightning Bolt"),
+        ("Scathing Shadelock", "Venomous Words"),
+        ("Tam, Observant Sequencer", "Deep Sight"),
+    ] {
+        let mut game = preparation_position(&[name, "Gray Ogre", "Counterspell", "Lightning Bolt"]);
+        let player = game.active_player();
+        let permanent = game.scenario_force_battlefield(player, name, true).unwrap();
+        let source = game.permanent_object(permanent).unwrap();
+        match name {
+            "Encouraging Aviator" | "Emeritus of Abundance" => {
+                if name == "Emeritus of Abundance" {
+                    for _ in 0..8 {
+                        game.scenario_force_battlefield(player, "Plains", true)
+                            .unwrap();
+                    }
+                }
+                game.emit(GameEvent::AttackersDeclared {
+                    player,
+                    attackers: vec![permanent],
+                });
+            }
+            "Scathing Shadelock" => game.emit(GameEvent::StepStarted {
+                step: StepKind::Main,
+            }),
+            "Tam, Observant Sequencer" => {
+                let land = fixture_card(&game, player, "Plains");
+                game.move_object(land, ZoneType::Battlefield);
+            }
+            _ => {
+                let casts: &[&str] = if name == "Emeritus of Conflict" {
+                    &["Lightning Bolt", "Counterspell", "Gray Ogre"]
+                } else {
+                    &["Gray Ogre"]
+                };
+                for card in casts {
+                    let object = fixture_card(&game, player, card);
+                    game.cast_spell(player, object, vec![], vec![], Default::default())
+                        .unwrap();
+                    game.collect_waiting_triggers();
+                }
+            }
+        }
+        game.collect_waiting_triggers();
+        assert_eq!(game.state.pending_triggers.len(), 1, "{name}");
+        game.flush_triggers();
+        game.resolve_top_of_stack();
+        let copy = game.prepared_copy(source).expect(name);
+        assert_eq!(game.state[copy].name, spell);
+    }
+}
+
+#[test]
+fn preparation_resolution_tomekeeper_modes_target_a_creature_before_resolution() {
+    let mut root = preparation_position(&["Biblioplex Tomekeeper", "Blossom-Blessed Angel"]);
+    let player = root.active_player();
+    let angel = root
+        .scenario_force_battlefield(player, "Blossom-Blessed Angel", true)
+        .unwrap();
+    let source = root.permanent_object(angel).unwrap();
+    let tome = fixture_card(&root, player, "Biblioplex Tomekeeper");
+    root.move_object(tome, ZoneType::Battlefield);
+    root.collect_waiting_triggers();
+    let modes = root.flush_triggers().unwrap();
+    assert_eq!(modes.actions.len(), 3);
+    for mode in [0, 1] {
+        let mut game = root.clone();
+        if mode == 1 {
+            game.prepare_inset(source);
+        }
+        game.choose_trigger_mode(player, mode).unwrap();
+        assert!(game.flush_triggers().is_some());
+        game.choose_trigger_target(player, Target::Permanent(angel))
+            .unwrap();
+        game.flush_triggers();
+        assert_eq!(game.state.stack_objects.len(), 1);
+        game.resolve_top_of_stack();
+        assert_eq!(game.prepared_copy(source).is_some(), mode == 0);
+    }
+}
+
+#[test]
+fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
+    use crate::flow::card_capture::{snapshots, CaptureMode, CardCapture};
+    let mut root = preparation_position(&["Emeritus of Truce", "Savannah Lions"]);
+    let player = root.active_player();
+    let opponent = PlayerId(1 - player.0);
+    let lions = root
+        .scenario_force_battlefield(opponent, "Savannah Lions", true)
+        .unwrap();
+    let card = fixture_card(&root, player, "Emeritus of Truce");
+    let source = root.move_object(card, ZoneType::Battlefield);
+    root.collect_waiting_triggers();
+    assert_eq!(root.flush_triggers().unwrap().actions.len(), 2);
+    for recipient in [player, opponent] {
+        let mut pending = root.clone();
+        pending
+            .choose_trigger_target(player, Target::Player(recipient))
+            .unwrap();
+        pending.flush_triggers();
+        for blink in [false, true] {
+            let mut game = pending.clone();
+            if blink {
+                let exile = game.move_object(source, ZoneType::Exile);
+                let returned = game.move_object(exile, ZoneType::Battlefield);
+                game.collect_waiting_triggers();
+                game.flush_triggers().unwrap();
+                game.choose_trigger_target(player, Target::Player(opponent))
+                    .unwrap();
+                game.flush_triggers();
+                assert_eq!(game.state.stack_objects.len(), 2);
+                game.resolve_top_of_stack();
+                assert!(game.prepared_copy(returned).is_some());
+                // Leave a qualifying but unprepared new appearance on one fork.
+                // Idempotent prepare would otherwise hide a stale source lookup.
+                if recipient == opponent {
+                    game.unprepare_inset(returned);
+                }
+            }
+            let grants = game.state.cast_permissions.grants.clone();
+            game.card_capture = Some(CardCapture::new(
+                &game,
+                snapshots(&game),
+                CaptureMode::Cards,
+            ));
+            let mut restored = game.rollback_snapshot();
+            game.resolve_top_of_stack();
+            restored.resolve_top_of_stack();
+            assert!(game.state.stack_objects.is_empty());
+            assert!(restored.state.stack_objects.is_empty());
+            let moves = &game.card_capture.as_ref().unwrap().moves;
+            let recipients: Vec<_> = moves
+                .iter()
+                .filter(|m| {
+                    m.object.name == "Inkling" && m.object.zone == Some(ZoneType::Battlefield)
+                })
+                .map(|m| m.controller)
+                .collect();
+            assert_eq!(recipients, [recipient.0]);
+            assert_eq!(
+                game.state.cast_permissions.grants,
+                restored.state.cast_permissions.grants
+            );
+            assert_eq!(moves, &restored.card_capture.as_ref().unwrap().moves);
+            if blink {
+                assert_eq!(game.state.cast_permissions.grants, grants);
+            } else if recipient == player {
+                assert_eq!(game.prepared_copy(source), None);
+            } else {
+                let copy = game.prepared_copy(source).unwrap();
+                let object = game.permanent_object(lions).unwrap();
+                game.state.players[player.0].mana_pool =
+                    crate::state::mana::Mana::parse("W").into();
+                game.publish_action_space(game.priority_action_space(player));
+                let cast = cast_offer(&game, copy).unwrap();
+                checked_command(&mut game, cast);
+                checked_command(
+                    &mut game,
+                    Action::ChooseTarget {
+                        player,
+                        target: Target::Permanent(lions),
+                    },
+                );
+                let life = game.state.players[opponent.0].life;
+                game.resolve_top_of_stack();
+                assert_eq!(
+                    game.state
+                        .zones
+                        .zone_of(game.state.zones.successor(object).unwrap()),
+                    Some(ZoneType::Exile)
+                );
+                assert_eq!(game.state.players[opponent.0].life, life + 2);
+            }
+        }
+    }
 }

@@ -652,20 +652,20 @@ Capacities are configuration; widths are the layout.
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `agent_player`, `opponent_player` | 1 × 74 | Player state and public game disclosure |
+| `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
-| `agent_permanents`, `opponent_permanents` | 40 × 51 | Permanents with their characteristics |
-| `stack`, `stack_valid` | 32 × 37 (`max_stack_objects`), 32 | Spells and abilities, top first |
+| `agent_permanents`, `opponent_permanents` | 40 × 53 | Permanents with their characteristics |
+| `stack`, `stack_valid` | 32 × 40 (`max_stack_objects`), 32 | Spells and abilities, top first |
 | `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
-| `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
+| `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
 | `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 25 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 30 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
-Policy inputs v9 and v10 keep 22 action columns. In v11, column 22
+Policy inputs v9 and v10 keep 22 action columns and 49 relation columns. In v11, column 22
 (`pays_directly`, zero-based) marks taps that directly pay a cost through
 convoke, improvise or waterbend.
 When such a tap could pay more than one thing, the next choice's `mode`
@@ -698,6 +698,20 @@ print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]
 `mode` keeps its stored value on these rows. Both columns are appended, so a
 checkpoint trained before them does not read them. Inputs v9 and v10 have
 neither; their X offers differ only in `mode`.
+
+When several permissions apply to one play, its action row gives the selected
+base mana value (`has_route_cost`, `route_mana_value`) and the permanent
+type it spends (`quota_type`, zero for none). `play_route` names the
+permission itself (`play_route_code`: 1 hand, 2 free from hand, 3 library
+top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type,
+8 exile counter, 9 the card's own graveyard permission such as Quilled
+Greatwurm's; zero for an ordinary hand play), so two routes with the
+same cost, such as Tinybones's stash and an exact grant, stay distinct. A
+resolution cast is authorized by its resolving instruction and names no
+route, even when the card also holds a priority permission. The
+column is appended; a checkpoint trained before it does not read it. A
+type-limited offer focuses the card first and the permanent granting the
+allowance second.
 
 The game-level `decklists_closed` flag is inverted in the `decklists_open`
 column (73) of each player row: 1
@@ -862,8 +876,10 @@ kind 11 under the id `Ward`, in the tokens the card's definition uses
 (`PaymentCost::Life`, then the amount). The LLM text says "ward: pay 7 life".
 
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
-enters with an additional +1/+1 counter") counts in its player's ordinary
-or restricted mana aggregate, according to its restriction, and is stated as
+enters with an additional +1/+1 counter"), and mana with a restriction the
+player columns do not name ("can't be spent to cast spells from your hand"),
+counts in its player's ordinary or restricted mana aggregate, according to
+its restriction, and is stated as
 an effect program on that player: fact kind 11
 under the id `PooledMana`, one program per class, in the tokens the producing
 card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
@@ -1394,7 +1410,7 @@ it does not make hidden cards observable.
 
 | Layer | Holds | Representation | Must not carry |
 | --- | --- | --- | --- |
-| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
+| Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, hand minima, exact library positions, game-level disclosure | Object rows, library facts and the 64 × 50 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source and memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
 | Recent events | Chronological public events, explicitly bounded | At most 32 rows of arrival, damage, life, cast, resolved and countered; optional and off by default | Anything needed to know the current rules state. Effect creation is not an event kind, and an activation adds no row |
 | Decision memory | Whole-game viewer-safe decision records; optional own public signals | Unreleased: four decision tables and transformer/GRU summaries for board attention | Unavailable information, or a substitute for current native rules facts |
