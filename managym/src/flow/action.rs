@@ -18,7 +18,7 @@ use crate::{
     state::{
         ability::Effect,
         card::{ActivationZone, CastOption},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId},
+        game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::{Color, Mana, ManaCost},
         payment::Toward,
         player::ManaFloats,
@@ -447,11 +447,7 @@ impl Game {
 
     /// " — event: Gray Ogre (object 7)": what a trigger's event is about,
     /// as `viewer` sees it, for its placement offer and its stack entry.
-    pub(crate) fn trigger_event_label(
-        &self,
-        context: crate::state::game_object::Target,
-        viewer: PlayerId,
-    ) -> Option<String> {
+    pub(crate) fn trigger_event_label(&self, context: Target, viewer: PlayerId) -> Option<String> {
         let reference = self.target_reference(context, viewer);
         if let Some(seat) = reference.player {
             return Some(format!(" — event: Seat {}", seat + 1));

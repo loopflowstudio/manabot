@@ -1030,18 +1030,17 @@ pub(crate) fn receipt_matters(
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the receipt of a stack spell or ability, or of the payment in
-/// progress, onto the frame of `source`.
+/// Project the receipt of a stack spell or ability onto the frame of `source`.
 pub(crate) fn project_receipt(
     game: &Game,
     spent: &PaymentReceipt,
-    source: Option<ObjectId>,
+    source: ObjectId,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent, source);
+    out.receipt(spent, Some(source));
     out.finish(frame);
 }
 

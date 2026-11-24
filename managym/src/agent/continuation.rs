@@ -677,7 +677,7 @@ impl Game {
             super::effect_execution::project_receipt(
                 self,
                 spent,
-                Some(object.source_object()),
+                object.source_object(),
                 viewer,
                 &mut frame,
                 false,
@@ -865,7 +865,7 @@ impl Game {
                 super::effect_execution::project_receipt(
                     self,
                     spent,
-                    Some(object.source_object()),
+                    object.source_object(),
                     viewer,
                     frame,
                     true,

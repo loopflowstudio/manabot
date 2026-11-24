@@ -18,10 +18,10 @@ use crate::state::{
     zone::ZoneType,
 };
 
-/// Inline delayed payloads take precedence: their ability index is not a card slot.
 /// A triggered ability's text with its X filled in. A trigger announces no
 /// X (CR 107.3): an entering permanent's own trigger reads its spell's X
 /// (CR 107.3m), and any other reads its event's amount ("that many").
+/// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
