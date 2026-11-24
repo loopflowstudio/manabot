@@ -1,4 +1,4 @@
-at: 9da47a7a552a8c663e6478699c03b0ac17d634c9
+at: 59ffdede782f77b276b66071a12c878145d358ad
 first:
   - path: managym/src/flow/combat.rs
     why: Distinguish creatures already attacking when declaration begins
@@ -7,5 +7,5 @@ first:
   - path: managym/cards/src/fdn.rs
     why: Linden counts attackers and Chart reads turn history
   - path: managym/cards/tests/cards/fdn.rs
-    why: Follow the partial declaration through both card outcomes
+    why: Compare declining and declaring the second attacker after restore
 hide: []

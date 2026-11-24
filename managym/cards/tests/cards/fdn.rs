@@ -1358,31 +1358,29 @@ fn linden_and_chart_read_the_completed_attack_declaration() {
     assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
     let partial = s.game().clone();
     let offer = s.action_space().clone();
-    for finish in [false, true] {
-        *s.game_mut() = partial.clone();
-        assert_eq!(s.action_space(), &offer);
-        let chosen = &s.game().state.combat.as_ref().unwrap().attackers;
-        assert_eq!(chosen.len(), 1);
-        assert_eq!(
-            crate::support::inspect::permanent(&s, chosen[0]).tapped,
-            chosen[0] == lions
-        );
-        assert_raid(&s, None);
-        if finish {
-            s.declare_attack();
-        } else {
-            s.decline_attack();
-        }
-        let expected = if finish { 2 } else { 1 };
-        s.advance_until(
-            |s| {
-                s.action_space().kind == ActionSpaceKind::Priority
-                    && s.game().state.stack_objects.len() == expected
-            },
-            "Linden triggers".into(),
-        );
-        assert_raid(&s, Some(0));
-    }
+    assert_raid(&s, None);
+    s.decline_attack();
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_raid(&s, Some(0));
+
+    *s.game_mut() = partial;
+    assert_eq!(s.action_space(), &offer);
+    let chosen = &s.game().state.combat.as_ref().unwrap().attackers;
+    assert_eq!(chosen.len(), 1);
+    assert_eq!(
+        crate::support::inspect::permanent(&s, chosen[0]).tapped,
+        chosen[0] == lions
+    );
+    assert_raid(&s, None);
+    s.declare_attack();
+    s.advance_until(
+        |s| {
+            s.action_space().kind == ActionSpaceKind::Priority
+                && s.game().state.stack_objects.len() == 2
+        },
+        "two Linden triggers".into(),
+    );
+    assert_raid(&s, Some(0));
     let before = s.game().state.players[0].life;
     let target = s.game().state.stack_objects[0].id();
     counter_ability(&mut s, target);
