@@ -230,3 +230,115 @@ fn two_generations_copy_only_the_manifested_face() {
         }
     }
 }
+
+#[test]
+fn both_samplers_deal_the_hidden_manifest_under_a_pending_bolt() {
+    use crate::support::play::cast_card;
+    use managym::{
+        flow::game::Game,
+        possible_worlds::{HiddenHandConstraints, PossibleWorldSpace},
+        state::{game_object::Target, stack_object::StackObject},
+    };
+
+    let controller = PlayerId(0);
+    let opponent = PlayerId(1);
+    let outcomes = [("Forest", "Gray Ogre"), ("Gray Ogre", "Forest")].map(|(hidden, other)| {
+        let mut s = five_color_setup(&["Gray Ogre", "Lightning Bolt"]);
+        s.force_card_in_hand(0, "Lightning Bolt");
+        s.force_card_in_hand(1, "Lightning Bolt");
+        let cards = pin_top(&mut s, &[hidden, "Plains", other]);
+        let library = s
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, controller)
+            .to_vec();
+        for object in library {
+            if !cards.contains(&object) {
+                s.game_mut()
+                    .state
+                    .place_object(object, controller, ZoneType::Exile);
+            }
+        }
+        let object = s.game_mut().manifest(cards[0], controller);
+        let plains = s.game_mut().move_object(cards[1], ZoneType::Graveyard);
+        let permanent = s.game().lookup_current_permanent(object).unwrap();
+        let bolt = s
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, controller)[0];
+        cast_card(&mut s, bolt);
+        assert!(s.choose_target(Target::Permanent(permanent)));
+        if s.action_space().player == Some(controller) {
+            s.pass_priority();
+        }
+        assert_eq!(s.action_space().player, Some(opponent));
+        let snapshot = s.snapshot();
+        let assignment = |game: &Game| {
+            assert_eq!(game.permanent_object(permanent), Some(object));
+            assert_eq!(game.state.zones.zone_of(plains), Some(ZoneType::Graveyard));
+            assert_eq!(game.state[plains].name, "Plains");
+            let Some(StackObject::Spell(bolt)) = game.state.stack_objects.last() else {
+                panic!("pending Bolt")
+            };
+            assert_eq!(bolt.targets, [Target::Permanent(permanent)]);
+            let library = game.state.zones.zone_objects(ZoneType::Library, controller);
+            assert_eq!(library.len(), 1);
+            let (printing, row) = game.state[object].retained_base();
+            let other = &game.state[library[0]];
+            assert_eq!(
+                game.state.cards[game.state.card_of(object).unwrap()].definition,
+                printing
+            );
+            assert_eq!(
+                game.state.cards[game.state.card_of(library[0]).unwrap()].definition,
+                other.definition_id
+            );
+            assert_eq!(
+                Observation::for_player(game, controller).agent_permanents[0].registry_key,
+                printing.0 as i32
+            );
+            let mut pair = [row.name.as_str(), other.name.as_str()];
+            pair.sort();
+            assert_eq!(pair, ["Forest", "Gray Ogre"]);
+            row.name.clone()
+        };
+        let constraints = HiddenHandConstraints::for_viewer(s.game(), opponent);
+        let space = PossibleWorldSpace::for_viewer(s.game(), opponent);
+        assert_eq!(space.worlds().len(), 1);
+        let mut results = [Vec::new(), Vec::new()];
+        for seed in 0..8 {
+            let mut direct = s.game().clone();
+            direct.determinize(opponent, seed).unwrap();
+            results[0].push(assignment(&direct));
+            let counted = constraints
+                .materialize_hand(s.game(), &Default::default(), seed)
+                .unwrap();
+            let indexed = space
+                .materialize(s.game(), &space.worlds()[0], seed)
+                .unwrap();
+            assert_eq!(assignment(&indexed), assignment(&counted));
+            results[1].push(assignment(&counted));
+        }
+        for sequence in &results {
+            assert!(sequence.iter().any(|name| name == hidden));
+            assert!(sequence.iter().any(|name| name == other));
+        }
+        let mut known = s.game().clone();
+        known.determinize(controller, 2).unwrap();
+        assert_eq!(assignment(&known), hidden);
+        assert_eq!(
+            assignment(
+                snapshot
+                    .restore(Default::default())
+                    .unwrap()
+                    .benchmark_game_mut()
+            ),
+            hidden
+        );
+        assert_eq!(assignment(s.game()), hidden);
+        results
+    });
+    assert_eq!(outcomes[0], outcomes[1]);
+}

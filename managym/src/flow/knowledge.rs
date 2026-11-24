@@ -146,7 +146,8 @@ impl Game {
                 .iter()
                 .enumerate()
                 .filter(|(_, object)| {
-                    self.state[**object].definition_id == definition && !commitments.pins(**object)
+                    self.state[**object].retained_base().0 == definition
+                        && !commitments.pins(**object)
                 })
                 .min_by_key(|(_, object)| object.slot())
                 .map(|(index, _)| index)?;

@@ -390,7 +390,9 @@ pub struct HiddenHandConstraints {
 fn name_counts(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
     for object in objects {
-        *counts.entry(game.state[object].name.clone()).or_insert(0) += 1;
+        *counts
+            .entry(game.state[object].retained_base().1.name.clone())
+            .or_insert(0) += 1;
     }
     counts
 }
@@ -410,8 +412,8 @@ impl HiddenHandConstraints {
         let unseen = commitments.unseen_objects(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|object| game.state[**object].foretell().is_some())
-            .map(|object| game.state[*object].name.clone())
+            .filter(|object| game.state[**object].retained_base().1.foretell().is_some())
+            .map(|object| game.state[*object].retained_base().1.name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let foretold = if game.shares_information(viewer, opponent) {
@@ -556,13 +558,13 @@ impl HiddenHandConstraints {
             // Group the opponent's unseen ObjectIds by name, sorted ascending so
             // the lowest ObjectIds of each name go to the hand deterministically.
             let mut pool = commitments.unseen_objects(&branch, opponent);
-            let reserved = branch
+            let mut reserved = branch
                 .reserve_library_facts(opponent, self.viewer, &mut pool, &commitments)
                 .ok_or(MaterializeError::InconsistentWorld)?;
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for object in pool {
                 by_name
-                    .entry(branch.state[object].name.clone())
+                    .entry(branch.state[object].retained_base().1.name.clone())
                     .or_default()
                     .push(object);
             }
@@ -595,6 +597,15 @@ impl HiddenHandConstraints {
                     &mut rng,
                 )
             {
+                return Err(MaterializeError::InconsistentWorld);
+            }
+            if !branch.fill_manifest_slots(
+                opponent,
+                self.viewer,
+                &mut new_library,
+                &mut new_hand,
+                &mut reserved,
+            ) {
                 return Err(MaterializeError::InconsistentWorld);
             }
             if !branch.fill_foretold_slots(opponent, &mut new_library) {

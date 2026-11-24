@@ -20,3 +20,4 @@
 - Use a mandatory private selection for the top two. Resolve a sole library card directly, as there is only one legal outcome.
 - Use Clone Legion on its caster for both generations. With the original removed between casts it copies exactly one creature each time. Ember Island Production changes the copied power and toughness.
 - Keep the public reference selected at manifest entry through reveal. Use a pending Lightning Bolt to expose a broken join at the first turn-up fixture.
+- Use a pending Bolt cast by the manifest controller, with another Bolt in the opponent’s hand, to give the sampling viewer a genuine priority decision.

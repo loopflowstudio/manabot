@@ -31,7 +31,7 @@ use crate::{
 
 /// What a sampled world must honor for one viewer, read from the root once.
 pub(crate) struct HiddenCommitments {
-    viewer: PlayerId,
+    pub(super) viewer: PlayerId,
     /// Exact objects no sampler may exchange for a same-definition copy:
     /// prospective public entrants, captures this viewer knows and library
     /// cards it inspects. Sorted and deduplicated.
@@ -142,6 +142,7 @@ fn unseen_objects(
                 .map(|card| game.state.object_of(card)),
         );
     }
+    objects.extend(game.hidden_manifests(owner, viewer));
     objects
 }
 
@@ -198,6 +199,87 @@ impl GameState {
 }
 
 impl Game {
+    pub(super) fn hidden_manifests(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+    ) -> impl Iterator<Item = ObjectId> + '_ {
+        (0..self.state.players.len()).flat_map(move |seat| {
+            self.iter_battlefield_including_phased_out(PlayerId(seat))
+                .filter_map(move |id| {
+                    let permanent = self.state.permanents[id].as_ref()?;
+                    let object = permanent.object;
+                    (permanent.manifested
+                        && self.state[object].owner == owner
+                        && self
+                            .observed_permanent_definition(viewer, permanent)
+                            .is_none())
+                    .then_some(object)
+                })
+        })
+    }
+
+    /// Consume one residual printing per hidden battlefield slot. Foretell gets
+    /// its first eligible cards from the shuffled deal. The other slots have
+    /// no printing restriction. Only the backing changes underneath a target.
+    pub(crate) fn fill_manifest_slots(
+        &mut self,
+        owner: PlayerId,
+        viewer: PlayerId,
+        pool: &mut Vec<ObjectId>,
+        hand: &mut [ObjectId],
+        reserved: &mut [(usize, ObjectId)],
+    ) -> bool {
+        let slots: Vec<_> = self.hidden_manifests(owner, viewer).collect();
+        if slots.is_empty() {
+            return true;
+        }
+        let mut foretold = self.foretold_cards(owner).count();
+        let mut chosen = Vec::new();
+        pool.retain(|object| {
+            if foretold > 0 && self.state[*object].retained_base().1.foretell().is_some() {
+                foretold -= 1;
+                true
+            } else if chosen.len() < slots.len() {
+                chosen.push(*object);
+                false
+            } else {
+                true
+            }
+        });
+        if chosen.len() != slots.len() || foretold != 0 {
+            return false;
+        }
+
+        // Complete the permutation: displaced printings go into the vacated
+        // hidden slots. Every reference in the pending deal follows its printing.
+        let displaced = slots.iter().filter(|slot| !chosen.contains(slot)).copied();
+        let vacated = chosen.iter().filter(|slot| !slots.contains(slot)).copied();
+        let mapping: BTreeMap<_, _> = displaced.zip(vacated).collect();
+        let assignments: Vec<_> = chosen
+            .iter()
+            .zip(&slots)
+            .chain(mapping.iter())
+            .filter(|(from, to)| from != to)
+            .map(|(from, to)| {
+                let (id, row) = self.state[*from].retained_definition();
+                (*to, id, row.clone())
+            })
+            .collect();
+        for (to, id, row) in assignments {
+            let card = self.state.card_of(to).expect("sampled physical card");
+            self.state.cards.assign_printing(card, id);
+            self.state.objects[to.slot()].assign_hidden_printing(id, row);
+        }
+        rebind(
+            pool.iter_mut()
+                .chain(hand)
+                .chain(reserved.iter_mut().map(|(_, o)| o)),
+            &mapping,
+        );
+        true
+    }
+
     /// Capture current membership once. Re-capturing Remembered preserves its
     /// original knowledge, while Moved starts from the new incarnation/zone.
     pub(crate) fn capture_bindings(
@@ -362,9 +444,9 @@ impl Game {
     }
 
     /// `owner`'s cards that `viewer` cannot see: the library, and for an
-    /// opponent also the hand and face-down foretold exile. For an opponent
+    /// opponent also the hand and hidden foretold and manifested printings. For an opponent
     /// this is exactly the possible-world pool, including any publicly known
-    /// hand cards. Pinned library cards are excluded; they never move.
+    /// hand cards. Pinned library cards stay in place. Read retained printings for face-down objects.
     pub fn unseen_objects(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
         unseen_objects(self, owner, viewer, &self.pinned_objects(viewer))
     }
@@ -553,7 +635,7 @@ impl Game {
         let mut counts = allocation.counts;
         let mut chosen = Vec::new();
         pool.retain(|object| {
-            let Some(count) = counts.get_mut(&self.state[*object].name) else {
+            let Some(count) = counts.get_mut(&self.state[*object].retained_base().1.name) else {
                 return true;
             };
             if *count == 0 {
@@ -586,7 +668,7 @@ impl Game {
         };
         let inspections = self.inspection_slots(commitments.viewer);
         for object in unseen {
-            pool.entry(self.state[object].name.clone())
+            pool.entry(self.state[object].retained_base().1.name.clone())
                 .or_default()
                 .push(object);
         }
@@ -598,7 +680,13 @@ impl Game {
         }
         let bearers: Vec<_> = pool
             .iter()
-            .filter(|(_, objects)| self.state[objects[0]].foretell().is_some())
+            .filter(|(_, objects)| {
+                self.state[objects[0]]
+                    .retained_base()
+                    .1
+                    .foretell()
+                    .is_some()
+            })
             .map(|(name, objects)| {
                 (
                     name.clone(),

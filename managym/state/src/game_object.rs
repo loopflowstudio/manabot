@@ -249,6 +249,11 @@ impl CardVec {
         Self(cards.into())
     }
 
+    /// A private world's physical roster follows its assigned printings.
+    pub fn assign_printing(&mut self, card: CardId, definition: CardDefId) {
+        Arc::make_mut(&mut self.0)[card.index()].definition = definition;
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -644,7 +649,16 @@ impl Object {
         (id, &**row)
     }
 
-    fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
+    /// Assign a printing in a sampled world while preserving its current appearance.
+    pub fn assign_hidden_printing(&mut self, id: CardDefId, row: Arc<PrintedCharacteristics>) {
+        if let Some(printed) = &mut self.printed {
+            *printed = (id, row);
+        } else {
+            self.show(id, row);
+        }
+    }
+
+    pub fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
         self.printed
             .as_ref()
             .or(self.front.as_ref())

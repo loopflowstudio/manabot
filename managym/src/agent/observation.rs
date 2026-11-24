@@ -1139,11 +1139,10 @@ impl Observation {
     /// Counts by printing across the owner's cards still hidden from this viewer.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
         let unseen = game.unseen_objects(player, viewer);
-        let mut counts = Self::definition_counts(
-            unseen
-                .iter()
-                .map(|object| game.state[*object].definition_id.0),
-        );
+        let mut counts = Self::definition_counts(unseen.iter().map(|object| {
+            let (printing, _) = game.state[*object].retained_base();
+            printing.0
+        }));
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
                 if let Some(count) = counts.get_mut(&definition.0) {
@@ -1168,22 +1167,6 @@ impl Observation {
                 *count = count.saturating_sub(1);
                 if *count == 0 {
                     counts.remove(&definition.0);
-                }
-            }
-        }
-        // Battlefield zones follow control, while decklist counts follow ownership.
-        for seat in 0..game.state.players.len() {
-            for id in game.iter_battlefield_including_phased_out(PlayerId(seat)) {
-                let permanent = game.state.permanents[id].as_ref().unwrap();
-                let object = &game.state[permanent.object];
-                if permanent.manifested
-                    && object.owner == player
-                    && game
-                        .observed_permanent_definition(viewer, permanent)
-                        .is_none()
-                {
-                    let (printing, _) = object.retained_base();
-                    *counts.entry(printing.0).or_default() += 1;
                 }
             }
         }

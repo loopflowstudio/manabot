@@ -180,15 +180,34 @@ impl Game {
                 self.shuffle_known_library(opponent, perspective, commitments, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                let reserved = self
+                let mut reserved = self
                     .reserve_library_facts(opponent, perspective, &mut residual, commitments)
                     .expect("known hand and library have distinct witnesses");
                 residual.extend(
                     self.foretold_cards(opponent)
                         .map(|card| self.state.object_of(card)),
                 );
-                residual.sort_unstable_by_key(|object| object.slot());
+                if self
+                    .hidden_manifests(opponent, perspective)
+                    .next()
+                    .is_some()
+                {
+                    // A previous private deal can assign different printings to
+                    // the same slots. Equal pools must start the shuffle alike.
+                    residual.sort_unstable_by_key(|object| {
+                        (self.state[*object].retained_base().0, object.slot())
+                    });
+                } else {
+                    residual.sort_unstable_by_key(|object| object.slot());
+                }
                 residual.shuffle(&mut rng);
+                assert!(self.fill_manifest_slots(
+                    opponent,
+                    perspective,
+                    &mut residual,
+                    &mut known,
+                    &mut reserved
+                ));
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
                     "foretold cards are in their own pool"
@@ -299,6 +318,7 @@ impl Game {
                         .contains(*object, ZoneType::Library, player)
             })
             .collect();
+        pool.extend(self.hidden_manifests(player, commitments.viewer));
         pool.sort_unstable_by_key(|object| object.slot());
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
@@ -317,7 +337,7 @@ impl Game {
             }
         });
         for object in pool {
-            if let Some(count) = counts.get_mut(&self.state[object].definition_id) {
+            if let Some(count) = counts.get_mut(&self.state[object].retained_base().0) {
                 if *count > 0 {
                     known.push(object);
                     *count -= 1;

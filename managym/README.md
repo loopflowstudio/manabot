@@ -728,6 +728,12 @@ provenance is canonical state, independent of viewer-safe reference projection. 
 never draw order. Prospective battlefield entrants are public during replacement
 choices and remain pinned in both samplers.
 
+At opponent priority, hidden-world sampling deals uninspectable manifested
+printings from the same pool as hidden hand and library cards. A pending spell
+keeps its battlefield target and that target’s exact appearance across deals.
+The controller can still inspect the printing in the sampled world. Restoring
+the original snapshot restores the actual printing.
+
 `Effect::Move.library_end` states top/bottom placement without a shuffle; its
 placement commits before linked returns can pause. `put_in_library` authors that
 operation, and `ShuffleLibrary` can follow after all child work. Ordinary `move_to`
