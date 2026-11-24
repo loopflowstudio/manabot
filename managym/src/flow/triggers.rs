@@ -142,11 +142,24 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
-        TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
+        TriggerCondition::GainsLife { .. } | TriggerCondition::LosesLife { .. } => {
+            EventKinds::of(EventKind::LifeChanged)
+        }
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
         TriggerCondition::NthCounter { .. }
         | TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::PutsCountersOn { .. }
         | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
+    }
+}
+
+/// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
+/// the damage of its own combat hit, or the life a player actually lost.
+fn event_amount(event: &GameEvent, hit: Option<CombatPlayerHit>) -> i32 {
+    match (event, hit) {
+        (_, Some(hit)) => hit.amount,
+        (GameEvent::LifeChanged { old, new, .. }, None) if new < old => old - new,
+        _ => 0,
     }
 }
 
@@ -728,7 +741,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
-            triggering_damage: trigger.triggering_damage,
+            triggering_amount: trigger.triggering_amount,
             program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
@@ -1076,6 +1089,7 @@ impl Game {
                 GameEvent::CombatDamageToPlayers { .. } => hit.map(|hit| hit.recipient),
                 GameEvent::SpellCast { caster, .. } => Some(*caster),
                 GameEvent::CardDrawn { player, .. } => Some(*player),
+                GameEvent::LifeChanged { player, .. } => Some(*player),
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
                     object_id: object,
@@ -1130,7 +1144,7 @@ impl Game {
             }
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
-                triggering_damage: hit.map_or(0, |hit| hit.amount),
+                triggering_amount: event_amount(event, hit),
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1433,7 +1447,7 @@ impl Game {
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
-            triggering_damage: 0,
+            triggering_amount: 0,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -1500,7 +1514,7 @@ impl Game {
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
-                triggering_damage: 0,
+                triggering_amount: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1638,7 +1652,7 @@ impl Game {
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
-                triggering_damage: 0,
+                triggering_amount: 0,
                 program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -2053,6 +2067,25 @@ impl Game {
                     && self.permanent_matches_predicate(*permanent, on)
             }
             (
+                TriggerCondition::PutsCountersOn { who, kind, subject },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    by,
+                    ..
+                },
+            ) => {
+                put == kind
+                    && who.includes(source_controller, *by)
+                    && self.state.permanents[*permanent].is_some()
+                    && self.subject_matches_permanent(
+                        subject,
+                        source_object,
+                        source_controller,
+                        *permanent,
+                    )
+            }
+            (
                 TriggerCondition::Casts {
                     who,
                     predicate,
@@ -2085,6 +2118,9 @@ impl Game {
                 *gain_ordinal > 0
                     && who.includes(source_controller, *player)
                     && nth.is_none_or(|n| n == *gain_ordinal)
+            }
+            (TriggerCondition::LosesLife { who }, GameEvent::LifeChanged { player, old, new, .. }) => {
+                new < old && who.includes(source_controller, *player)
             }
             (
                 TriggerCondition::Draws { who, nth },

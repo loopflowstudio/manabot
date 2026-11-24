@@ -133,6 +133,12 @@ fn condition_description(condition: &TriggerCondition) -> String {
             counter_description(*kind),
             predicate_description(on, "permanent")
         ),
+        TriggerCondition::PutsCountersOn { who, kind, subject } => format!(
+            "Whenever {} one or more {} counters on {}",
+            actor_does(*who, "put", "puts"),
+            counter_description(*kind),
+            subject_description(subject)
+        ),
         TriggerCondition::Casts {
             who,
             predicate,
@@ -153,6 +159,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             ordinal(*n),
             predicate_description(predicate, "spell")
         ),
+        TriggerCondition::LosesLife { who } => format!("Whenever {} life", actor_does(*who, "lose", "loses")),
         TriggerCondition::GainsLife { who, nth } => format!("Whenever {} life{}", actor_does(*who,"gain","gains"), nth.map_or_else(String::new, |n| format!(" for the {} time each turn",ordinal(n)))),
         TriggerCondition::Draws { who, nth: None } => {
             format!("Whenever {} a card", actor_does(*who, "draw", "draws"))
@@ -865,7 +872,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
-        EffectValue::TriggeringDamage => "the combat damage dealt to that player".into(),
+        EffectValue::TriggeringAmount => "the amount of the triggering event (damage dealt or life lost)".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::LifeTotal(who) => format!("life total of {}", player_description(who)),
         EffectValue::LifeGainedThisTurn(who) => {

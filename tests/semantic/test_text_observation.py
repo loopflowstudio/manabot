@@ -1952,12 +1952,12 @@ def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
     for _ in range(32):
         decision = capture_text_decision(env)
         capture = DecisionInput.model_validate_json(decision.capture_json)
-        if any(frame.triggering_damage for frame in capture.frames):
-            assert "triggering combat damage 1" in decision.text
+        if any(frame.triggering_amount for frame in capture.frames):
+            assert "triggering amount 1" in decision.text
             for viewer in (0, 1):
                 pending = json.loads(env.decision_context_json(viewer))["pending"]
                 assert (
-                    "Drake Hatcher triggered on 1 combat damage to a player." in pending
+                    "Drake Hatcher triggered on an event amount of 1." in pending
                 )
             return
         assert capture.observation.decision is not None

@@ -486,7 +486,7 @@ mod card_history_tests {
             let [trigger] = game.state.pending_triggers.as_slice() else {
                 panic!("one Hatcher trigger")
             };
-            assert_eq!(trigger.triggering_damage, amount);
+            assert_eq!(trigger.triggering_amount, amount);
             assert_eq!(trigger.player, Some(PlayerId(1 - actor.0)));
             game.state.permanents[source]
                 .as_mut()

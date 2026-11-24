@@ -236,7 +236,7 @@ fn drake_hatcher() -> CardDefinition {
                     effects: vec![Effect::put_counters(
                         ObjectSelector::This,
                         CounterKind::Incubation,
-                        EffectValue::TriggeringDamage,
+                        EffectValue::TriggeringAmount,
                     )],
                 },
             ],

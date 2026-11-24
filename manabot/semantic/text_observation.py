@@ -802,8 +802,8 @@ class _Renderer:
             details.append(
                 f"source transform count at activation/trigger {relation.source_transforms}"
             )
-        if relation.triggering_damage:
-            details.append(f"triggering combat damage {relation.triggering_damage}")
+        if relation.triggering_amount:
+            details.append(f"triggering amount {relation.triggering_amount}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"

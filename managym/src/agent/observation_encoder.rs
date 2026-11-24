@@ -66,7 +66,7 @@ pub enum FactKind {
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
     AbilityResolution = 15,
-    TriggeringDamage = 16,
+    TriggeringAmount = 16,
 }
 
 impl FactKind {
@@ -85,7 +85,7 @@ impl FactKind {
         FactKind::KeywordCounterTimestamp,
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
-        FactKind::TriggeringDamage,
+        FactKind::TriggeringAmount,
     ];
 }
 
@@ -1927,7 +1927,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
-        if layout == InputLayout::OneToken && frame.triggering_damage > 0 {
+        if layout == InputLayout::OneToken && frame.triggering_amount > 0 {
             let controller = if frame.controller == obs.agent.player_index as usize {
                 obs.agent.id
             } else {
@@ -1935,9 +1935,9 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             };
             push(
                 controller,
-                FactKind::TriggeringDamage,
+                FactKind::TriggeringAmount,
                 (index + 1) as i32,
-                frame.triggering_damage as f32,
+                frame.triggering_amount as f32,
             );
         }
         if frame.source_transforms > 0 {

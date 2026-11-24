@@ -274,8 +274,9 @@ carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
-For a per-creature combat damage trigger, `EffectValue::TriggeringDamage`
-reads the amount dealt by the hit that fired it. Both players can inspect
+For a per-creature combat damage trigger or a life-loss trigger,
+`EffectValue::TriggeringAmount` reads the amount of the event that fired it:
+the damage dealt by that hit, or the life actually lost. Both players can inspect
 that amount on the stacked ability. Drake Hatcher puts that many incubation
 counters on its source even if its power has since changed. Its activation
 spends three incubation counters during payment. Countering the ability

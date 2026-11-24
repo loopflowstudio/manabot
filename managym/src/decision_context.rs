@@ -311,7 +311,7 @@ impl Game {
             };
             return Some(view);
         }
-        for frame in frames.iter().filter(|frame| frame.triggering_damage > 0) {
+        for frame in frames.iter().filter(|frame| frame.triggering_amount > 0) {
             let name = frame
                 .source
                 .definition
@@ -321,8 +321,8 @@ impl Game {
                 })
                 .map_or("This ability", |card| card.name.as_str());
             view.pending.push(format!(
-                "{name} triggered on {} combat damage to a player.",
-                frame.triggering_damage
+                "{name} triggered on an event amount of {}.",
+                frame.triggering_amount
             ));
         }
         if actor != viewer {

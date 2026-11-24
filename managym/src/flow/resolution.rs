@@ -193,7 +193,7 @@ impl Game {
             EffectValue::TargetToughness => {
                 self.target_property(frame.primary_target(), ObjectProperty::Toughness)
             }
-            EffectValue::TriggeringDamage => frame.triggering_damage,
+            EffectValue::TriggeringAmount => frame.triggering_amount,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::LifeLostThisWay => frame.life_lost,
             EffectValue::PowerTappedToPay => frame
@@ -545,7 +545,7 @@ impl Game {
         let frame = EffectFrame {
             program,
             remembered: triggered.remembered,
-            triggering_damage: triggered.triggering_damage,
+            triggering_amount: triggered.triggering_amount,
             source_identity: crate::state::game_object::AbilitySource::optional(
                 Some(source_object),
                 triggered.source_identity.reference(),

@@ -1311,7 +1311,7 @@ class ContinuationFrame:
     waterbend: bool
     can_decline: bool
     mana_outputs: list[ManaOutput]
-    triggering_damage: int
+    triggering_amount: int
     resolutions_this_turn: int
     x: int
     granted_keywords: list[bool]

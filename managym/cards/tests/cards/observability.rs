@@ -1129,6 +1129,8 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
         TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
         TriggerCondition::GainsLife { .. } => "TriggerCondition::GainsLife",
+        TriggerCondition::LosesLife { .. } => "TriggerCondition::LosesLife",
+        TriggerCondition::PutsCountersOn { .. } => "TriggerCondition::PutsCountersOn",
         TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
@@ -1152,6 +1154,14 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::GainsLife {
             who: Actor::You,
             nth: Some(1),
+        },
+        TriggerCondition::LosesLife {
+            who: Actor::Opponent,
+        },
+        TriggerCondition::PutsCountersOn {
+            who: Actor::You,
+            kind: CounterKind::PlusOnePlusOne,
+            subject: TriggerSubject::This,
         },
         TriggerCondition::Draws {
             who: Actor::AnyPlayer,
@@ -3136,7 +3146,7 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
-        FactKind::TriggeringDamage => "ContinuationFrame.triggering_damage",
+        FactKind::TriggeringAmount => "ContinuationFrame.triggering_amount",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Copy => "PermanentData.copy",
@@ -3521,7 +3531,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         waterbend => [column(Relation, relation::WATERBEND)],
         can_decline => [column(Relation, relation::CAN_DECLINE)],
         mana_outputs => [column(Relation, relation::MODE), Columns(Relation, relation::MANA_WHITE, 6), column(Relation, relation::RESTRICTED)],
-        triggering_damage => [Fact(FactKind::TriggeringDamage)],
+        triggering_amount => [Fact(FactKind::TriggeringAmount)],
         resolutions_this_turn => [column(Relation, relation::RESOLUTIONS_THIS_TURN)],
         x => [column(Relation, relation::X)],
         granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
@@ -6098,7 +6108,7 @@ fn felling_blow_catalog_tokens_describe_both_instructions() {
 fn drake_hatcher_catalog_tokens_bind_damage_and_price_the_drake() {
     let tokens = tokens_of(&card_definition("Drake Hatcher"));
     for variant in [
-        "EffectValue::TriggeringDamage",
+        "EffectValue::TriggeringAmount",
         "Effect::PutCounters",
         "Effect::CreateToken",
     ] {

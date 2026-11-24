@@ -164,6 +164,15 @@ pub enum TriggerCondition {
         kind: CounterKind,
         on: CardPredicate,
     },
+    /// "Whenever [who] puts one or more [kind] counters on [subject]": once
+    /// per permanent per placement, whichever objects the subject watches
+    /// (`This` for "on this creature"). Entry counters (CR 122.6) count. The
+    /// trigger's X is how many were put.
+    PutsCountersOn {
+        who: Actor,
+        kind: CounterKind,
+        subject: TriggerSubject,
+    },
     /// "Whenever [who] casts a [predicate] spell" (CR 601.2i); with `nth`,
     /// only the spell that is the Nth its caster cast this turn ("whenever
     /// you cast your second spell each turn"). The caster is "that player".
@@ -182,6 +191,14 @@ pub enum TriggerCondition {
     GainsLife {
         who: Actor,
         nth: Option<u32>,
+    },
+    /// "Whenever [who] loses life" (CR 119.3): once per committed decrease
+    /// of a life total, damage included; prevented or replaced loss that
+    /// leaves the total unchanged is no event. The life actually lost is the
+    /// trigger's amount (`EffectValue::TriggeringAmount`, "that much") and
+    /// the loser is "that player".
+    LosesLife {
+        who: Actor,
     },
     /// "At the beginning of [whose] [step]": `whose` is asked of the active
     /// player, who is "that player".
@@ -750,7 +767,7 @@ pub enum EffectValue {
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
     /// Amount dealt by the combat hit that triggered this ability.
-    TriggeringDamage,
+    TriggeringAmount,
     /// Total life actually lost to this scope's latest LoseLife instruction.
     LifeLostThisWay,
     /// The source permanent's current power ("where X is this creature's
@@ -2510,7 +2527,7 @@ impl EffectValue {
             Self::SpellManaSpent(_)
             | Self::SpellManaValue(_)
             | Self::X
-            | Self::TriggeringDamage
+            | Self::TriggeringAmount
             | Self::ExcessDamage
             | Self::LifeLostThisWay
             | Self::ManaSpentToCast

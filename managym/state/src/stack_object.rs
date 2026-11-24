@@ -93,7 +93,7 @@ pub struct TriggeredAbilityOnStack {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
-    pub triggering_damage: i32,
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,

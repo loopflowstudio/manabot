@@ -917,12 +917,12 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
                     .facts
                     .chunks_exact(fact::WIDTH)
                     .find(|row| {
-                        row[fact::KIND] == FactKind::TriggeringDamage as u8 as f32
+                        row[fact::KIND] == FactKind::TriggeringAmount as u8 as f32
                             && row[fact::ID_LOW] == (index + 1) as f32
                     })
                     .unwrap();
-                assert_eq!(row[fact::VALUE], frame.triggering_damage as f32);
-                hits.push((source, frame.triggering_damage));
+                assert_eq!(row[fact::VALUE], frame.triggering_amount as f32);
+                hits.push((source, frame.triggering_amount));
             }
             let mut expected = [(first, 1), (second, 3)].map(|(id, amount)| {
                 let permanent = s.game().state.permanents[id].as_ref().unwrap();
@@ -2448,7 +2448,7 @@ fn power_batch_wrapped_hits_keep_the_creature_and_damage_of_each_hit() {
             effects: vec![Effect::put_counters(
                 ObjectSelector::Triggering,
                 CounterKind::PlusOnePlusOne,
-                EffectValue::TriggeringDamage,
+                EffectValue::TriggeringAmount,
             )],
         })),
     );
