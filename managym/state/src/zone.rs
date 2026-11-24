@@ -140,7 +140,7 @@ pub struct ZoneManager {
     /// a slot holds (CR 400.7); the record serializes only the zones, and the
     /// state hash records the generations beside them.
     #[serde(rename = "card_zones")]
-    slots: Box<SlotTable>,
+    slots: SlotTable,
     /// The second physical card of each melded battlefield appearance.
     #[serde(
         skip_serializing_if = "Vec::is_empty",

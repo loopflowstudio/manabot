@@ -11,7 +11,7 @@ mod support;
 use managym::{agent::env::GameSnapshot, state::game_object::ObjectId};
 use support::game::{deck, Scenario};
 
-// Constructed card positions use the benchmark fixture access enabled by this crate.
+// Constructed card positions use the `fixtures` access this crate enables.
 impl Scenario {
     /// Capture this constructed decision for exact native forks.
     pub fn snapshot(&self) -> GameSnapshot {
@@ -23,13 +23,13 @@ impl Scenario {
                 .to_vec(),
         )
         .unwrap();
-        *env.benchmark_game_mut() = self.game().clone();
+        *env.fixture_game_mut() = self.game().clone();
         env.snapshot().unwrap()
     }
 
     fn restore(&mut self, snapshot: &GameSnapshot) {
         let mut env = snapshot.restore(Default::default()).unwrap();
-        *self.game_mut() = env.benchmark_game_mut().clone();
+        *self.game_mut() = env.fixture_game_mut().clone();
     }
 }
 

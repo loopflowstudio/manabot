@@ -1106,9 +1106,9 @@ fn retained_departure_spell_delayed_and_child_reflexive_keep_one_source() {
         event: DelayedTriggerEvent::Upkeep,
         controller: PlayerId(1),
         source_identity: source,
-        effects: vec![Effect::GainLife {
+        effects: crate::flow::trigger::DelayedEffects::new(vec![Effect::GainLife {
             amount: EffectValue::Fixed(3),
-        }],
+        }]),
         frequency: DelayedFrequency::Once,
         expiry: DelayedExpiry::Never,
     };

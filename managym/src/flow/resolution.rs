@@ -15,7 +15,7 @@ use crate::{
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
-        trigger::{DelayedTrigger, DelayedTriggerEvent},
+        trigger::{DelayedEffects, DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -2002,13 +2002,14 @@ impl Game {
                         }
                     }
                 }
+                let program = DelayedEffects::new(effects);
                 for event in events {
                     self.add_delayed_trigger(DelayedTrigger {
                         remembered: remembered.clone(),
                         event,
                         controller: frame.controller,
                         source_identity: frame.source_identity?,
-                        effects: effects.clone(),
+                        effects: program.clone(),
                         frequency: *frequency,
                         expiry: *expiry,
                     });
@@ -2214,7 +2215,7 @@ impl Game {
                             watched,
                             Some(watched),
                         ),
-                        effects: vec![Effect::Move {
+                        effects: DelayedEffects::new(vec![Effect::Move {
                             library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
@@ -2223,7 +2224,7 @@ impl Game {
                             under: Some(PlayerSelector::Owner),
                             with_counter: None,
                             linked: None,
-                        }],
+                        }]),
                         frequency: DelayedFrequency::Once,
                         expiry: DelayedExpiry::Never,
                     });

@@ -513,7 +513,8 @@ impl Game {
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
         };
-        frame.program(&trigger.effects);
+        frame.program = trigger.effects.tokens().to_vec();
+        frame.program_description = trigger.effects.description().map(str::to_owned);
         frame
     }
 

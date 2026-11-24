@@ -2,6 +2,8 @@
 //! Collection owns arrivals; placement owns a detached batch until every
 //! controller has placed its abilities (CR 603.3b, 2026-09-25 rules snapshot).
 
+use std::sync::Arc;
+
 use crate::state::binding::ObjectBinding;
 
 use crate::state::{
@@ -105,9 +107,66 @@ pub struct DelayedTrigger {
     pub controller: PlayerId,
     #[serde(flatten)]
     pub source_identity: AbilitySource,
-    pub effects: Vec<Effect>,
+    pub effects: DelayedEffects,
     pub frequency: DelayedFrequency,
     pub expiry: DelayedExpiry,
+}
+
+/// A delayed trigger's instructions, fixed when it is created, with their
+/// learning tokens and text: every observation of the waiting trigger shows
+/// that program, so it is projected once rather than per observation. Forks
+/// share it. Serializes as the instruction list alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DelayedEffects(Arc<DelayedProgram>);
+
+#[derive(Debug, PartialEq, Eq)]
+struct DelayedProgram {
+    effects: Vec<Effect>,
+    tokens: Vec<(u16, i32)>,
+    description: Option<String>,
+}
+
+impl DelayedEffects {
+    pub fn new(effects: Vec<Effect>) -> Self {
+        let (tokens, description) = if effects.is_empty() {
+            (Vec::new(), None)
+        } else {
+            (
+                crate::cards::tokens::rules_tokens(
+                    &effects,
+                    crate::cards::content_pack::default_content_pack(),
+                )
+                .expect("rules program tokens"),
+                Some(crate::agent::ability_description::effects_description(
+                    &effects,
+                )),
+            )
+        };
+        Self(Arc::new(DelayedProgram {
+            effects,
+            tokens,
+            description,
+        }))
+    }
+
+    pub fn effects(&self) -> &[Effect] {
+        &self.0.effects
+    }
+
+    /// The program's learning tokens; empty for no instructions.
+    pub fn tokens(&self) -> &[(u16, i32)] {
+        &self.0.tokens
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        self.0.description.as_deref()
+    }
+}
+
+impl serde::Serialize for DelayedEffects {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.effects.serialize(serializer)
+    }
 }
 
 /// Event matching only; frequency and expiry belong to the waiting watcher.

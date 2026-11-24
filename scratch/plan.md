@@ -121,19 +121,32 @@ Paired on the M4 Max against merge-base `5d85077748` built with this branch's be
   - **`bench_steps` throughput FAILED:** `22,650.8/s` (`5.250 s`) vs `25,092.0/s` (`4.724 s`) — **~11% slower per step**, below the `22,811.0/s` (-10%) budget floor.
   - Note: earlier re-entry steps (`da4168fe90`, `310340aa5e`) skipped because Codex→Claude failover dropped the steer and `bench_states` work counters matched `main`. Do **not** skip measurement or waive with `engine_budget.py record`.
 
-## Next · Recover TLA `bench_steps` (~11%) and `bench_search` (+6.5%) regressions
+## bench_steps recovery (engine-measure, 2026-11-24)
 
-Profile `bench_steps` (and `bench_search`) directly against merge-base `main` (CPU hotspots, `samply`/sampling, and per-step allocation counts — not just `bench_states` work counters) and fix the real per-step hot-path costs while keeping all digests identical:
+Instructions retired (`/usr/bin/time -l`, stable to 0.1% under any load) against merge-base `5d85077748`, both built as CI builds them (`cargo build --release --locked --manifest-path managym/Cargo.toml --example bench_steps`). Every row keeps steps digest `17942664948341206392` and 118,255 steps.
 
-1. **Unbox `ZoneManager.slots: SlotTable` (`managym/state/src/zone.rs:143`).** Commit `6ad847fba1` boxed the always-hot `SlotTable` (hit on every `zone_of`, `is_latest`, `object_of`, `state[id]`) to offset 24 inline bytes for `melded_cards: Vec<(ObjectId, CardId)>` (empty in 100% of TLA games), adding a double pointer chase on every checked lookup plus a heap allocation on every `GameState::clone()`. Put `slots: SlotTable` back inline; box the cold `melded_cards` (`Option<Box<Vec<...>>>`) instead if needed for the 4096B `GameState` ceiling.
-2. **Profile `bench_steps` CPU hotspots and per-step allocations vs `main` and cut the top contributors.** Inspect especially:
-   - `ObjectLki` / `BattlefieldFacts` allocating `Arc` + `subtypes`/`supertypes` `Vec<String>` + `name: String` on every permanent departure (avoid per-departure `String`/`Vec` clones on ordinary departures).
-   - `Permanent.spell_entry: Option<Arc<SpellEntry>>` allocating an `Arc` on every ordinary cast permanent spell (keep plain `was_cast`/`x` zero-alloc or share a static entry when payment is empty).
-   - `ObjectLkiLog.indexes: Box<DepartureIndexes>` and `GameState.trigger_placement: Option<Box<TriggerPlacement>>` heap churn.
-   - Any other hot functions in `layers.rs`, `triggers.rs`, `zones.rs`, `mana.rs`, or `sba.rs` ranked by the `bench_steps` profile.
-3. **Verify** paired `bench_steps` and `bench_search` speedups against merge-base `main` with identical digests (do not waive via `engine_budget.py record`).
+| build | instructions | vs base |
+|---|---|---|
+| base `5d85077748` | 41.84B | — |
+| HEAD `56c888c733` as CI built it | 46.1B | +10.2% |
+| `fixtures` feature + unboxed `slots` | 45.59B | +9.0% |
+| + lazy mana value / combat status in `CharacteristicView` | 45.30B | +8.3% |
+| + `DelayedEffects` (projected once) | 44.37B | +6.0% |
+| + reserved permanent rows | 44.01B | +5.2% |
 
-After `engine-optimization` clears the regression, run `pr-publish`, then `demo` and `deliver` (`gate`). Gate owns:
+- **Root cause of the CI failure:** `bf9f4d73e8` gave `managym-cards` a dev-dependency on `managym` with `features = ["benchmark"]`. Cargo unifies that into every workspace build, so CI's candidate `bench_steps` ran with the counting allocator (two atomics per allocation, ~50M allocations) and layer timers while the reference did not. Cycles showed it more than instructions (15.1–15.5B → 13.7–14.1B on a loaded host). Fix: a `fixtures` feature (`benchmark = ["fixtures"]`) gates `Env::fixture_game_mut` (renamed from `benchmark_game_mut`); the cards crate asks for `fixtures`. `scripts/engine_budget.py` now refuses output carrying `layer_metrics`/`payment_metrics` (`test_benchmark_feature_build_fails_by_name`).
+- `ZoneManager.slots` unboxed; `GameState` still fits 4096 B with `melded_cards` inline. No instruction change; it removes a pointer chase and a clone allocation.
+- `CharacteristicView` (Batch 1) computed `object_mana_value` and `permanent_in_combat` for every predicate match; `DerivedStatus` computes them only when the predicate reads them.
+- `delayed_trigger_frame` (Batch 1, `d9df421465`) tokenized and described every waiting delayed trigger's effects on every observation. `DelayedTrigger.effects` is now `DelayedEffects`: one `Arc` of the fixed instructions with their tokens and text, serialized as the instruction list alone (state hash unchanged), shared by forks.
+- Allocations: base 47.76M / 10.54 GB, branch 49.76M / 10.75 GB (+4.2% / +2.0%), so the rest is compute, not allocation.
+- Bisect by segment against each segment's own main parent (clean `-p managym` builds): the meld commit `6ad847fba1` +1.59B (partly recovered by `29d7adc98d`, −0.88B) and Batch 1 commits 28–30 +1.72B (`CharacteristicView`, `BattlefieldFacts` snapshots, delayed programs). Commits after `4c10520b67` net ≈ 0.
+- What remains (+5.2%) is diffuse in the profile (`sample`, 5×10 s per side): observation `player_data`/`unseen_objects` (hidden-manifest scan), departure `BattlefieldFacts` snapshots (`Vec<String>`, `Colors` BTreeSet clones), `layer_board` +~1%. Each is under 1.5% and pays for new rules (face-down, meld, departure facts). No single change is worth an invariant bend.
+- `bench_search` (seeds 1–3): digests equal; instructions 974.1B → 1017.3B (+4.4%); cycles 253.9B vs 249.2B.
+- `Effect` 760→784 bytes, `StaticAbility` 936→968, `CardPredicate` 224→232, `ObjectLki` 160→192 (size probe, not kept).
+- Checks: debug nextest `--profile ci` lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests` 565/566 (known base `historical_captures…`), cards 907/907; `content_pack_clone_allocations` + `bench_footprint` with `--features benchmark`; `cargo check --all-targets --features benchmark` and `--features python`; `tests/infra/test_engine_budget.py` 20 passed; `cargo fmt --check`, ruff clean.
+- Speed verdict belongs to CI's same-runner Engine Budget; no wall-time claim from this host.
+
+Next: run `pr-publish`, then `demo` and `deliver` (`gate`). Gate owns:
 
 - CI's same-runner Engine Budget for the final speed verdict.
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).

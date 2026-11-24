@@ -392,7 +392,7 @@ fn build(recipe: &Recipe) -> Env {
         }
         for name in &seat.graveyard {
             env.scenario_force_card_in_hand(i, name).unwrap();
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let card = *game
                 .state
                 .zones
@@ -405,12 +405,12 @@ fn build(recipe: &Recipe) -> Env {
                 .move_object(&state.objects, card, PlayerId(i), ZoneType::Graveyard);
         }
         for token in &seat.tokens {
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let id = game.create_token(token, PlayerId(i), false).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
         for _ in 0..seat.manifests {
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let top = *game
                 .state
                 .zones
@@ -423,7 +423,7 @@ fn build(recipe: &Recipe) -> Env {
         }
     }
     if recipe.state == "attachments" {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         for i in 0..2 {
             let creatures: Vec<_> = game
                 .state
@@ -472,7 +472,7 @@ fn build(recipe: &Recipe) -> Env {
         }
     }
     if recipe.state == "names" {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let id = game
             .state
             .permanents
@@ -490,13 +490,13 @@ fn build(recipe: &Recipe) -> Env {
             .change_counters(CounterKind::Lore, 1);
     }
     if recipe.state == "herald-statics" {
-        env.benchmark_game_mut().state.players[0].life = 0;
+        env.fixture_game_mut().state.players[0].life = 0;
     }
     env.scenario_refresh().unwrap();
     env
 }
 fn actions(env: &mut Env) -> Vec<Action> {
-    env.benchmark_game_mut()
+    env.fixture_game_mut()
         .current_action_space
         .as_ref()
         .unwrap()
@@ -555,7 +555,7 @@ fn float_everything(root: &Env) -> Env {
     for _ in 0..256 {
         let index = if env.action_space_kind() == Some(ActionSpaceKind::Priority) {
             let offered = actions(&mut env);
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let source = offered.iter().position(|a| match a {
                 Action::TapForMana { .. } => true,
                 Action::ActivateAbility {
@@ -607,7 +607,7 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
                 .position(|a| matches!(a, Action::PassPriority { .. }))
         };
         env.step(index? as i64).unwrap();
-        if env.is_game_over() || env.benchmark_game_mut().state.turn.turn_number > 1 {
+        if env.is_game_over() || env.fixture_game_mut().state.turn.turn_number > 1 {
             return None;
         }
     }
@@ -631,14 +631,14 @@ fn damage(root: &Env) -> Option<Env> {
     if env.action_space_kind() != Some(ActionSpaceKind::Priority) {
         return None;
     }
-    if env.benchmark_game_mut().state.priority.consecutive_passes == 0 {
+    if env.fixture_game_mut().state.priority.consecutive_passes == 0 {
         let index = first_action(&mut env, "damage").unwrap();
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
         }
     }
-    (env.benchmark_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
+    (env.fixture_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
         .then_some(env)
 }
 
@@ -648,7 +648,7 @@ fn reach(root: &Env, label: &str) -> Env {
     use managym::flow::decision::Decision;
     let mut env = root.fork().unwrap();
     for _ in 0..256 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let decision = game.state.suspended_decision.as_ref().map(|p| &p.decision);
         let reached = match label {
             "name" => matches!(decision, Some(Decision::NameCard { .. })),
@@ -683,7 +683,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     if recipe.state == "triggers" {
         let mut entered = root.fork().unwrap();
         entered
-            .benchmark_game_mut()
+            .fixture_game_mut()
             .create_token("token.ally", PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
@@ -837,12 +837,12 @@ fn run(
             // Cold characteristics attribution: a conservative state write
             // invalidates the cloned caches, without changing any value.
             if layer == "characteristics" {
-                let _ = &mut *env.benchmark_game_mut().state;
+                let _ = &mut *env.fixture_game_mut().state;
             }
             // Cold payment attribution: preparation already answered these
             // questions, and the fork carries their cached answers.
             if layer == "actions" {
-                benchmark_payments::clear_cache(env.benchmark_game_mut());
+                benchmark_payments::clear_cache(env.fixture_game_mut());
             }
             benchmark_layers::reset();
             benchmark_payments::reset();
@@ -852,13 +852,13 @@ fn run(
             let start = Instant::now();
             let output = match layer {
                 "actions" => Output::Actions {
-                    actions: benchmark_layers::actions(env.benchmark_game_mut(), PlayerId(actor)),
+                    actions: benchmark_layers::actions(env.fixture_game_mut(), PlayerId(actor)),
                 },
                 "characteristics" => Output::Views {
-                    views: benchmark_layers::characteristics(env.benchmark_game_mut()),
+                    views: benchmark_layers::characteristics(env.fixture_game_mut()),
                 },
                 "triggers" => {
-                    let game = env.benchmark_game_mut();
+                    let game = env.fixture_game_mut();
                     // Feed one controlled entry event to the ordinary indexed
                     // matcher. On the trigger recipe every Ascension sees it.
                     let source = game

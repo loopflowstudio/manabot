@@ -9,5 +9,5 @@ description = "Card set definitions for the managym engine, one module per print
 managym-state = { path = "../state" }
 
 [dev-dependencies]
-managym = { path = "..", features = ["benchmark"] }
+managym = { path = "..", features = ["fixtures"] }
 serde_json = "1"

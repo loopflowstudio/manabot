@@ -525,7 +525,7 @@ fn restored_meld_orders(
     (0..2).map(move |first| {
         let mut env = snapshot.restore(Default::default()).unwrap();
         assert_eq!(
-            env.benchmark_game_mut()
+            env.fixture_game_mut()
                 .semantic_decision_frame()
                 .unwrap()
                 .offers,
@@ -570,7 +570,7 @@ fn ragnarok_departure_waits_for_its_owner_before_creating_the_clue() {
     assert_eq!(s.action_space().player, Some(owner));
     for (first, mut env, cmd) in restored_meld_orders(&s) {
         use managym::search_state::witness;
-        let fork = env.benchmark_game_mut();
+        let fork = env.fixture_game_mut();
         *s.game_mut() = fork.clone();
         let before = witness(s.game());
         fork.execute_semantic_command(&cmd).unwrap();
@@ -608,7 +608,7 @@ fn ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent() {
     resolve_top(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(1)));
     for (first, mut env, cmd) in restored_meld_orders(&s) {
-        *s.game_mut() = env.benchmark_game_mut().clone();
+        *s.game_mut() = env.fixture_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
         let exile = |s: &Scenario| {
             s.game()
@@ -662,7 +662,7 @@ fn ragnarok_airbend_orders_both_cast_grants_before_the_lesson_draw() {
     resolve_top(&mut s);
     assert_eq!(s.action_space().player, Some(caster));
     for (first, mut env, cmd) in restored_meld_orders(&s) {
-        *s.game_mut() = env.benchmark_game_mut().clone();
+        *s.game_mut() = env.fixture_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
         assert_eq!(hand(&s), before);
         assert!(s.game().state.cast_permissions.exile_grants.is_empty());
@@ -755,7 +755,7 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
     resolve_top(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     for (first, mut env, cmd) in restored_meld_orders(&s) {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.permanent_object(permanent), Some(object));
         let mut expected = game
             .state
@@ -763,7 +763,7 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
             .zone_objects(ZoneType::Graveyard, PlayerId(0))
             .to_vec();
         let (_, obs, ..) = env.step_semantic_command(&cmd).unwrap();
-        *s.game_mut() = env.benchmark_game_mut().clone();
+        *s.game_mut() = env.fixture_game_mut().clone();
         let state = &s.game().state;
         // The graveyard stores its top card last.
         for index in [1 - first, first] {
@@ -1040,7 +1040,7 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
     );
     assert_eq!(s.action_space().player, Some(owner));
     for (first, mut env, cmd) in restored_meld_orders(&s) {
-        *s.game_mut() = env.benchmark_game_mut().clone();
+        *s.game_mut() = env.fixture_game_mut().clone();
         assert_eq!(s.game().permanent_object(permanent), Some(object));
         assert!(s.game().state.cast_permissions.exile_grants.is_empty());
         s.game_mut().execute_semantic_command(&cmd).unwrap();

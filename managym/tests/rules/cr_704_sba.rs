@@ -317,7 +317,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         },
         controller: PlayerId(0),
         source_identity: managym::state::game_object::AbilitySource::new(object, Some(old_ref)),
-        effects: vec![Effect::Move {
+        effects: managym::flow::trigger::DelayedEffects::new(vec![Effect::Move {
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
@@ -326,7 +326,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             under: Some(PlayerSelector::Owner),
             with_counter: None,
             linked: None,
-        }],
+        }]),
         frequency: managym::state::ability::DelayedFrequency::Once,
         expiry: managym::state::ability::DelayedExpiry::Never,
     });

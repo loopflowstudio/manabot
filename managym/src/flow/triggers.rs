@@ -1335,7 +1335,7 @@ impl Game {
         let pending = self.enqueue_inline_trigger(
             trigger.source_identity,
             trigger.controller,
-            trigger.effects.clone(),
+            trigger.effects.effects().to_vec(),
             context,
         );
         pending.remembered = trigger.remembered.clone();

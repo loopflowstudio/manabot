@@ -42,7 +42,7 @@ fn manifest_projections_match(disclosure: DecklistDisclosure) {
         assert_eq!(s.action_space().player, Some(PlayerId(1)));
 
         let mut fork = s.snapshot().restore(Default::default()).unwrap();
-        for game in [s.game(), &*fork.benchmark_game_mut()] {
+        for game in [s.game(), &*fork.fixture_game_mut()] {
             assert_eq!(game.state[permanent].retained_base().1.name, hidden);
             assert_eq!(game.state.zones.zone_of(cards[2]), Some(ZoneType::Library));
             let controller = Observation::for_player(game, PlayerId(0));
@@ -109,7 +109,7 @@ fn manifest_dread_restores_both_private_commands() {
     let snapshot = s.snapshot();
     for (i, offer) in frame.offers.iter().enumerate() {
         let mut env = snapshot.restore(Default::default()).unwrap();
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.semantic_decision_frame().unwrap().offers, frame.offers);
         let printing = game.state[cards[i]].definition_id;
         let cmd = Command {
@@ -340,7 +340,7 @@ fn both_samplers_deal_the_hidden_manifest_under_a_pending_bolt() {
                 snapshot
                     .restore(Default::default())
                     .unwrap()
-                    .benchmark_game_mut()
+                    .fixture_game_mut()
             ),
             hidden
         );
@@ -471,7 +471,7 @@ fn manifested_cecil_reveals_in_place_between_two_ember_island_copies() {
         );
     }
     let mut fork = snapshot.restore(Default::default()).unwrap();
-    let game = fork.benchmark_game_mut();
+    let game = fork.fixture_game_mut();
     let pass = game
         .action_space()
         .unwrap()

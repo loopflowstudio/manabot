@@ -1288,7 +1288,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
     let viewer = PlayerId(0);
     let mut root = completed_private_capture(player);
     for trigger in &mut root.state.delayed_triggers {
-        trigger.effects = vec![Effect::SelectCards {
+        trigger.effects = crate::flow::trigger::DelayedEffects::new(vec![Effect::SelectCards {
             from: ObjectSelector::Remembered,
             predicate: CardPredicate::default(),
             min: 1,
@@ -1301,7 +1301,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                 },
                 Effect::exile(ObjectSelector::Selected),
             ],
-        }];
+        }]);
     }
     root.emit(GameEvent::StepStarted {
         step: StepKind::End,

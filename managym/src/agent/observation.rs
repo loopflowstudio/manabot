@@ -1481,7 +1481,13 @@ impl Observation {
     }
 
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
-        let ids = [agent_player, PlayerId((agent_player.0 + 1) % 2)]
+        let sides = [agent_player, PlayerId((agent_player.0 + 1) % 2)];
+        // Rows are large; size each side's list once for its battlefield.
+        let [agent_rows, opponent_rows] =
+            sides.map(|player| game.state.zones.size(ZoneType::Battlefield, player));
+        self.agent_permanents.reserve(agent_rows);
+        self.opponent_permanents.reserve(opponent_rows);
+        let ids = sides
             .into_iter()
             .flat_map(|player| game.iter_battlefield_including_phased_out(player));
         for (perm_id, characteristics) in game.characteristics_many(ids) {

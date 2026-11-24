@@ -11,7 +11,10 @@ use crate::{
             LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
-        game_object::{Object, ObjectKind, ObjectLki, PermanentId, PlayerId, PublicId},
+        game_object::{
+            BattlefieldFacts, Object, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId,
+            PublicId,
+        },
         mana::{Colors, Mana, SpendingContext, SpendingObject},
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
@@ -1270,12 +1273,15 @@ pub(super) fn matches_view(
         name: &view.name,
         keywords: view.keywords,
         power: view.power,
-        mana_value: game.object_mana_value(permanent.object),
         is_legendary: view.is_legendary,
         token: object.kind() == ObjectKind::Token,
         attacking: permanent.attacking,
         tapped: permanent.tapped,
-        in_combat: game.permanent_in_combat(id),
+        derived: DerivedStatus::Live {
+            game,
+            id,
+            object: permanent.object,
+        },
         counters: &permanent.counters,
     }
     .matches(p, source_name)
@@ -1292,13 +1298,39 @@ struct CharacteristicView<'a> {
     name: &'a str,
     keywords: Keywords,
     power: i32,
-    mana_value: u8,
     is_legendary: bool,
     token: bool,
     attacking: bool,
     tapped: bool,
-    in_combat: bool,
+    derived: DerivedStatus<'a>,
     counters: &'a Counters,
+}
+
+/// Mana value and combat status, which few predicates read: a live
+/// permanent computes them only when asked, a departure recorded them.
+enum DerivedStatus<'a> {
+    Live {
+        game: &'a Game,
+        id: PermanentId,
+        object: ObjectId,
+    },
+    Departed(&'a BattlefieldFacts),
+}
+
+impl DerivedStatus<'_> {
+    fn mana_value(&self) -> u8 {
+        match self {
+            Self::Live { game, object, .. } => game.object_mana_value(*object),
+            Self::Departed(facts) => facts.mana_value,
+        }
+    }
+
+    fn in_combat(&self) -> bool {
+        match self {
+            Self::Live { game, id, .. } => game.permanent_in_combat(*id),
+            Self::Departed(facts) => facts.in_combat,
+        }
+    }
 }
 
 /// A departed object's predicate match against its last battlefield
@@ -1315,12 +1347,11 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
         name: &facts.name,
         keywords: lki.keywords,
         power: lki.power,
-        mana_value: facts.mana_value,
         is_legendary: facts.is_legendary,
         token: facts.token,
         attacking: facts.attacking,
         tapped: facts.tapped,
-        in_combat: facts.in_combat,
+        derived: DerivedStatus::Departed(facts),
         counters: &lki.counters,
     }
     .matches(p, None)
@@ -1339,7 +1370,7 @@ impl CharacteristicView<'_> {
             && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
             && (!p.flying || self.keywords.has(Keyword::Flying))
             && (!p.no_counters || self.counters.is_empty())
-            && (!p.in_combat || self.in_combat)
+            && (!p.in_combat || self.derived.in_combat())
             && (!p.with_counter || self.counters.get(CounterKind::PlusOnePlusOne) > 0)
             && (!p.attacking || self.attacking)
             && (!p.tapped || self.tapped)
@@ -1375,7 +1406,10 @@ impl CharacteristicView<'_> {
             && p.not_subtypes.iter().all(|s| !self.has_subtype(s))
             && p.min_power.is_none_or(|min| self.power >= min)
             && p.max_power.is_none_or(|max| self.power <= max)
-            && p.min_mana_value.is_none_or(|min| self.mana_value >= min)
-            && p.max_mana_value.is_none_or(|max| self.mana_value <= max)
+            && (p.min_mana_value.is_none() && p.max_mana_value.is_none() || {
+                let mana_value = self.derived.mana_value();
+                p.min_mana_value.is_none_or(|min| mana_value >= min)
+                    && p.max_mana_value.is_none_or(|max| mana_value <= max)
+            })
     }
 }
