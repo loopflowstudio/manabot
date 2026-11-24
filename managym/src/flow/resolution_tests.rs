@@ -5282,7 +5282,7 @@ fn a_pending_manifest_entry_stays_hidden_while_replacements_are_ordered() {
         assert!(game.pinned_objects(player).contains(&entering));
         assert!(!game.pinned_objects(viewer).contains(&entering));
         (
-            serde_json::to_value(&opponent.opponent_cards).unwrap(),
+            opponent.to_json(),
             serde_json::to_value(&opponent.opponent.unseen_counts).unwrap(),
             game.unseen_objects(player, viewer).len(),
         )
