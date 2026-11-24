@@ -1143,7 +1143,6 @@ def self_play(
             def export(folder: Path) -> None:
                 export_continuation(
                     folder,
-                    backend_name=backend.name,
                     state=state,
                     learner=learner,
                     ema=ema,

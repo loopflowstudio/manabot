@@ -361,7 +361,7 @@ def self_play(
 
             def export(folder: Path) -> None:
                 export_continuation(
-                    folder, backend_name=backend.name, state=state, learner=learner,
+                    folder, state=state, learner=learner,
                     ema=ema, counts=counts, settings=settings, collector=collector, rng=rng,
                 )
 
@@ -1149,7 +1149,7 @@ API. Every backend writes the same four files into `out/state/save-NNNNNNNN/`:
   `behavior="random"`, minibatch RNG and Python/NumPy RNGs;
 - `learner.safetensors` — canonical float32 raw weights, optional EMA weights,
   Adam `step` and moments, and a single integrity manifest (`schema="canonical-v1"`,
-  `backend`, `precision`, `has_ema`, per-parameter `param_steps`, observation
+  `precision`, `has_ema`, per-parameter `param_steps`, observation
   config, lookup-buffer digests, and SHA-256 digests binding `Counts`,
   `continuation.json` and `sampling.safetensors`);
 - `sampling.safetensors` — backend sampling RNG arrays keyed by `sampling_domain`

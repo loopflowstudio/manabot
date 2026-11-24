@@ -153,7 +153,7 @@ API, whichever backend runs it:
 | --- | --- |
 | `state.json` | Etude clocks, seed, commit, file inventory and `Counts` (updates, transitions, optimizer steps, saved model settings, input readings and snapshot-bank state) |
 | `continuation.json` | Framework-free `HostContinuation` (schema 2): global-slot stream roots and committed action prefixes, `learned_game_rows`, opponent RNG, minibatch RNG and Python/NumPy RNGs |
-| `learner.safetensors` | Canonical float32 `raw/<canonical>`, optional `ema/<canonical>`, `adam/step`, `adam/exp_avg/<canonical>` and `adam/exp_avg_sq/<canonical>` for stepped parameters, plus the `schema="canonical-v1"` manifest (`backend`, `precision`, `has_ema`, per-parameter `param_steps`, observation config, lookup-buffer digests, `counts_sha256`, `continuation_sha256`, `sampling_sha256`, `sampling_domain`) |
+| `learner.safetensors` | Canonical float32 `raw/<canonical>`, optional `ema/<canonical>`, `adam/step`, `adam/exp_avg/<canonical>` and `adam/exp_avg_sq/<canonical>` for stepped parameters, plus the `schema="canonical-v1"` manifest (`precision`, `has_ema`, per-parameter `param_steps`, observation config, lookup-buffer digests, `counts_sha256`, `continuation_sha256`, `sampling_sha256`, `sampling_domain`) |
 | `sampling.safetensors` | Backend sampling RNG arrays keyed by `sampling_domain` (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) |
 
 Any backend that supports the saved model and precision can continue a save.

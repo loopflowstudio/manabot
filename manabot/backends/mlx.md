@@ -119,7 +119,7 @@ out/state/save-00000001/
   RNGs;
 - `learner.safetensors` (`schema="canonical-v1"`): canonical float32 raw and
   optional EMA weights, Adam `step` and moments, per-parameter `param_steps`,
-  `backend`, `precision`, `has_ema`, observation config, lookup-buffer digests,
+  `precision`, `has_ema`, observation config, lookup-buffer digests,
   and SHA-256 digests binding `Counts`, `continuation.json` and
   `sampling.safetensors`;
 - `sampling.safetensors`: backend sampling RNG arrays (`rng.collector`,

@@ -73,10 +73,12 @@ def write_host(folder: Path, host: HostContinuation) -> str:
     return host_sha256(payload)
 
 
-def read_host(folder: Path) -> bytes | None:
+def read_host(folder: Path) -> bytes:
     """Read the exact host bytes for digest verification before decoding."""
     path = folder / HOST_FILE
-    return path.read_bytes() if path.is_file() else None
+    if not path.is_file():
+        raise ValueError(f"missing {HOST_FILE}")
+    return path.read_bytes()
 
 
 def capture_host(collector: Collector, rng: np.random.Generator) -> HostContinuation:
@@ -122,14 +124,12 @@ def continuation_header(
     settings: SelfPlay,
     *,
     counts_digest: str,
-    backend_name: str,
     has_ema: bool,
     host_digest: str,
     sampling_path: Path,
 ) -> dict[str, str]:
     return {
         "schema": "canonical-v1",
-        "backend": backend_name,
         "precision": settings.precision,
         "has_ema": json.dumps(has_ema),
         "observation": canonical_json(
@@ -144,7 +144,6 @@ def continuation_header(
 def export_continuation(
     folder: Path,
     *,
-    backend_name: str,
     state: Continuation,
     learner: SelfPlayLearner,
     ema: BackendPolicy | None,
@@ -171,7 +170,6 @@ def export_continuation(
         continuation_header(
             settings,
             counts_digest=canonical_sha256(counts.model_dump(mode="json")),
-            backend_name=backend_name,
             has_ema=ema is not None,
             host_digest=host_digest,
             sampling_path=sampling,
@@ -241,8 +239,6 @@ def restore_continuation(
         raise ValueError(f"state.json: expected files {expected_files}, got {files}")
     arrays, header = read_tensors(folder / LEARNER_FILE)
     host_bytes = read_host(folder)
-    if host_bytes is None:
-        raise ValueError(f"missing {HOST_FILE}")
     sampling_path = folder / SAMPLING_FILE
     if not sampling_path.is_file():
         raise ValueError(f"missing {SAMPLING_FILE}")
@@ -252,7 +248,6 @@ def restore_continuation(
     expected_header = continuation_header(
         settings,
         counts_digest=counts_digest,
-        backend_name=domain.split(":")[0],
         has_ema=ema is not None,
         host_digest=host_sha256(host_bytes),
         sampling_path=sampling_path,

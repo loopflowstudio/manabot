@@ -150,7 +150,7 @@ def exercise_continuation(root: Path) -> None:
 
     moment = next(name for name in arrays if name.startswith("adam/exp_avg/"))
     for invalid, header, match in (
-        (arrays, {**metadata, "backend": "torch"}, "backend"),
+        (arrays, {**metadata, "precision": "float16"}, "precision"),
         (arrays, {**metadata, "schema": "0"}, "schema"),
         ({k: v for k, v in arrays.items() if k != "adam/step"}, metadata, "adam/step"),
         ({**arrays, "adam/step": mx.array([1])}, metadata, "shape or dtype"),
