@@ -125,17 +125,15 @@ fn ruby_daring_tracker() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Haste]),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::ActiveIf {
-                    active_if: Condition::Compare {
-                        left: Box::new(
-                            ObjectSelector::each_you_control(CardPredicate {
-                                min_power: Some(4),
-                                ..CardPredicate::creature()
-                            })
-                            .count(),
-                        ),
-                        op: CompareOp::Ge,
-                        right: Box::new(1.into()),
-                    },
+                    active_if: Condition::compare(
+                        ObjectSelector::each_you_control(CardPredicate {
+                            min_power: Some(4),
+                            ..CardPredicate::creature()
+                        })
+                        .count(),
+                        CompareOp::Ge,
+                        1,
+                    ),
                     condition: Box::new(TriggerCondition::attacks(
                         TriggerSubject::This,
                         Per::Object,

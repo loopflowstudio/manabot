@@ -35,6 +35,24 @@ impl Ability {
             Ability::Triggered { effects, .. } => effects,
         }
     }
+
+    pub fn reads_source_power(&self) -> bool {
+        self.reads(ContextRead::SourcePower)
+    }
+
+    pub fn reads_triggering_permanent(&self) -> bool {
+        self.reads(ContextRead::TriggeringPermanent)
+    }
+
+    fn reads(&self, read: ContextRead) -> bool {
+        let Self::Triggered {
+            effects,
+            intervening_if,
+            ..
+        } = self;
+        effects.iter().any(|effect| effect.reads(read))
+            || intervening_if.as_ref().is_some_and(|c| c.reads(read))
+    }
 }
 
 /// The event that causes a triggered ability to trigger (CR 603.1).
@@ -49,8 +67,8 @@ pub enum TriggerCondition {
     Sacrificed {
         subject: TriggerSubject,
     },
-    /// Wrap the whole condition, including ActiveIf. The limit is recorded
-    /// when the event fires, once per exact source incarnation and turn.
+    /// Trigger at most once per exact source incarnation (or grant clock) each
+    /// turn, regardless of wrapper order or trigger doublers.
     OnceEachTurn {
         condition: Box<TriggerCondition>,
     },
@@ -400,11 +418,16 @@ enum ContextRead {
 }
 
 impl Condition {
-    pub fn reads_source_power(&self) -> bool {
-        self.reads(ContextRead::SourcePower)
-    }
-    pub fn reads_triggering_permanent(&self) -> bool {
-        self.reads(ContextRead::TriggeringPermanent)
+    pub fn compare(
+        left: impl Into<EffectValue>,
+        op: CompareOp,
+        right: impl Into<EffectValue>,
+    ) -> Self {
+        Self::Compare {
+            left: Box::new(left.into()),
+            op,
+            right: Box::new(right.into()),
+        }
     }
 
     fn reads(&self, read: ContextRead) -> bool {
@@ -2586,6 +2609,7 @@ impl TriggerCondition {
             Self::OnceEachTurn { .. } => true,
             Self::WasCast { condition }
             | Self::FromZone { condition, .. }
+            | Self::InGraveyard { condition }
             | Self::ActiveIf { condition, .. }
             | Self::WhileSourceAttacking { condition } => condition.once_each_turn(),
             _ => false,

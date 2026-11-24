@@ -944,13 +944,9 @@ impl Game {
                     intervening_if,
                     ..
                 } = ability;
-                let Some((leaf, once)) = self.match_trigger_wrappers(
-                    condition,
-                    event,
-                    lki.object,
-                    lki.controller,
-                    false,
-                ) else {
+                let Some((leaf, once)) =
+                    self.match_trigger_wrappers(condition, event, lki.object, lki.controller)
+                else {
                     continue;
                 };
                 if once {
@@ -970,7 +966,7 @@ impl Game {
                         continue;
                     }
                 }
-                let mut copies = None;
+                let mut copies = once.then_some(1);
                 let mut emitted = false;
                 self.collect_occurrences(leaf, event, source, |member| {
                     if once && emitted {
@@ -986,14 +982,9 @@ impl Game {
                     }) {
                         return;
                     }
-                    // CR 603.2d doubles each occurrence. A once-per-turn limit caps the entire ability.
-                    let count = *copies.get_or_insert_with(|| {
-                        if once {
-                            1
-                        } else {
-                            1 + self.additional_trigger_times(source)
-                        }
-                    });
+                    // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
+                    let count =
+                        *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
                     fired.extend(std::iter::repeat_n(
                         FiredTrigger {
                             source,
@@ -1036,8 +1027,16 @@ impl Game {
                 _ => None,
             };
             let source_object = source_lki.object;
-            let (ability_index, granted, program) = match ability {
-                TriggerAbility::Printed(index) => (index, None, false),
+            let (ability_index, trigger, granted, program) = match ability {
+                TriggerAbility::Printed(index) => (
+                    index,
+                    &self
+                        .source_face(source_object, source_lki.definition_id)
+                        .expect("source face")
+                        .abilities[index],
+                    None,
+                    false,
+                ),
                 TriggerAbility::Granted(grant) => {
                     let Ability::Triggered {
                         intervening_if,
@@ -1045,7 +1044,7 @@ impl Game {
                         ..
                     } = &grant.ability;
                     // A granted trigger retains its CR 603.4 resolution check with its program.
-                    let effects = match intervening_if {
+                    let inline = match intervening_if {
                         Some(condition) => vec![Effect::If {
                             condition: condition.clone(),
                             then: effects.clone(),
@@ -1053,27 +1052,11 @@ impl Game {
                         }],
                         None => effects.clone(),
                     };
-                    (0, Some(effects), grant.program)
+                    (0, &grant.ability, Some(inline), grant.program)
                 }
-            };
-            let Ability::Triggered {
-                effects,
-                intervening_if,
-                ..
-            } = match ability {
-                TriggerAbility::Printed(index) => {
-                    &self
-                        .source_face(source_object, source_lki.definition_id)
-                        .expect("source face")
-                        .abilities[index]
-                }
-                TriggerAbility::Granted(grant) => &grant.ability,
             };
             let context = if matches!(member, TriggerMember::Attacker(_))
-                || effects.iter().any(Effect::reads_triggering_permanent)
-                || intervening_if
-                    .as_ref()
-                    .is_some_and(Condition::reads_triggering_permanent)
+                || trigger.reads_triggering_permanent()
             {
                 self.member_permanent(member, event)
                     .or_else(|| self.trigger_context_for_event(event))
@@ -1082,8 +1065,10 @@ impl Game {
                 GameEvent::SpellCast {
                     object_id: object, ..
                 },
-            ) = (effects.iter().any(Effect::asks_triggering_spell), event)
-            {
+            ) = (
+                trigger.effects().iter().any(Effect::asks_triggering_spell),
+                event,
+            ) {
                 Some(Target::StackSpell(*object))
             } else {
                 self.trigger_context_for_event(event)
@@ -1629,7 +1614,7 @@ impl Game {
                         continue;
                     };
                     let Some((leaf, once)) =
-                        self.match_trigger_wrappers(condition, event, object, owner, false)
+                        self.match_trigger_wrappers(condition, event, object, owner)
                     else {
                         continue;
                     };
@@ -1816,46 +1801,48 @@ impl Game {
         sources
     }
 
-    /// Test wrappers at event time, retaining the leaf's cardinality and bindings.
+    /// Peel and test wrappers at event time, retaining the leaf's cardinality and bindings.
     fn match_trigger_wrappers<'a>(
         &self,
-        condition: &'a TriggerCondition,
+        mut condition: &'a TriggerCondition,
         event: &GameEvent,
         object: ObjectId,
         controller: PlayerId,
-        once: bool,
     ) -> Option<(&'a TriggerCondition, bool)> {
+        let mut once = false;
         let permanent = || {
             self.state
                 .permanent_of(object)
                 .and_then(|id| self.state.permanents[id].as_ref())
         };
-        let (inner, enabled) = match condition {
-            TriggerCondition::WasCast { condition } => {
-                (condition, permanent().is_some_and(|p| p.was_cast))
+        loop {
+            let (inner, enabled) = match condition {
+                TriggerCondition::WasCast { condition } => {
+                    (condition, permanent().is_some_and(|p| p.was_cast))
+                }
+                TriggerCondition::FromZone { zone, condition } => {
+                    (condition, self.event_origin(event) == Some(*zone))
+                }
+                TriggerCondition::WhileSourceAttacking { condition } => {
+                    (condition, permanent().is_some_and(|p| p.attacking))
+                }
+                TriggerCondition::ActiveIf {
+                    active_if,
+                    condition,
+                } => (
+                    condition,
+                    self.check_intervening_if(active_if, controller, Some(object), None),
+                ),
+                TriggerCondition::OnceEachTurn { condition } => {
+                    once = true;
+                    (condition, true)
+                }
+                leaf => return Some((leaf, once)),
+            };
+            if !enabled {
+                return None;
             }
-            TriggerCondition::FromZone { zone, condition } => {
-                (condition, self.event_origin(event) == Some(*zone))
-            }
-            TriggerCondition::WhileSourceAttacking { condition } => {
-                (condition, permanent().is_some_and(|p| p.attacking))
-            }
-            TriggerCondition::ActiveIf {
-                active_if,
-                condition,
-            } => (
-                condition,
-                self.check_intervening_if(active_if, controller, Some(object), None),
-            ),
-            TriggerCondition::OnceEachTurn { condition } => {
-                return self.match_trigger_wrappers(condition, event, object, controller, true)
-            }
-            leaf => return Some((leaf, once)),
-        };
-        if enabled {
-            self.match_trigger_wrappers(inner, event, object, controller, once)
-        } else {
-            None
+            condition = inner;
         }
     }
 

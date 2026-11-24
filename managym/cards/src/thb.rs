@@ -27,17 +27,15 @@ fn nessian_hornbeetle() -> CardDefinition {
             toughness: Some(2),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
-                intervening_if: Some(Condition::Compare {
-                    left: Box::new(
-                        ObjectSelector::each_other_you_control(CardPredicate {
-                            min_power: Some(4),
-                            ..CardPredicate::creature()
-                        })
-                        .count(),
-                    ),
-                    op: CompareOp::Ge,
-                    right: Box::new(1.into()),
-                }),
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_other_you_control(CardPredicate {
+                        min_power: Some(4),
+                        ..CardPredicate::creature()
+                    })
+                    .count(),
+                    CompareOp::Ge,
+                    1,
+                )),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::This,
                     CounterKind::PlusOnePlusOne,

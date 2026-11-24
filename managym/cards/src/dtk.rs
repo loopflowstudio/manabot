@@ -111,14 +111,12 @@ fn surrak_the_hunt_caller() -> CardDefinition {
             toughness: Some(4),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
-                intervening_if: Some(Condition::Compare {
-                    left: Box::new(
-                        ObjectSelector::each_you_control(CardPredicate::creature())
-                            .property(ObjectProperty::Power, Aggregate::Sum),
-                    ),
-                    op: CompareOp::Ge,
-                    right: Box::new(8.into()),
-                }),
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_you_control(CardPredicate::creature())
+                        .property(ObjectProperty::Power, Aggregate::Sum),
+                    CompareOp::Ge,
+                    8,
+                )),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::Target(TargetSpec::CreatureYouControl),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),

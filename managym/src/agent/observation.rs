@@ -1739,18 +1739,7 @@ impl Observation {
                     None => game
                         .source_face(a.source_object(), a.source_definition_id)
                         .and_then(|face| face.abilities.get(a.ability_index))
-                        .is_some_and(
-                            |crate::state::ability::Ability::Triggered {
-                                 effects,
-                                 intervening_if,
-                                 ..
-                             }| {
-                                reads_power(effects)
-                                    || intervening_if.as_ref().is_some_and(
-                                        crate::state::ability::Condition::reads_source_power,
-                                    )
-                            },
-                        ),
+                        .is_some_and(crate::state::ability::Ability::reads_source_power),
                 };
                 reads.then_some(a.source_object())
             }

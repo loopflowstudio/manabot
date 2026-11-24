@@ -1245,17 +1245,15 @@ mod cache_tests {
             [affected],
             Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
                 scope: StaticScope::This,
-                condition: Some(Condition::Compare {
-                    left: Box::new(
-                        ObjectSelector::each_you_control(CardPredicate {
-                            tapped: true,
-                            ..CardPredicate::creature()
-                        })
-                        .property(ObjectProperty::Power, Aggregate::Sum),
-                    ),
-                    op: CompareOp::Ge,
-                    right: Box::new(2.into()),
-                }),
+                condition: Some(Condition::compare(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        tapped: true,
+                        ..CardPredicate::creature()
+                    })
+                    .property(ObjectProperty::Power, Aggregate::Sum),
+                    CompareOp::Ge,
+                    2,
+                )),
                 characteristic_defining: false,
                 modifications: vec![Modification::ModifyPt {
                     power: LayerValue::Fixed(1),

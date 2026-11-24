@@ -1979,11 +1979,11 @@ fn attack_batch_spell_payment_comparison_survives_countering() {
         let counter = force_new_card_in_hand(&mut s, 1, "Counterspell");
         let target = || Box::new(ObjectSelector::Target(TargetSpec::Spell));
         s.game_mut().state[counter].spell_effects.push(Effect::If {
-            condition: Condition::Compare {
-                left: Box::new(EffectValue::SpellManaSpent(target())),
-                op: CompareOp::Lt,
-                right: Box::new(EffectValue::SpellManaValue(target())),
-            },
+            condition: Condition::compare(
+                EffectValue::SpellManaSpent(target()),
+                CompareOp::Lt,
+                EffectValue::SpellManaValue(target()),
+            ),
             then: vec![Effect::gain_life(1)],
             otherwise: Vec::new(),
         });
@@ -2100,11 +2100,11 @@ fn power_batch_hornbeetle_excludes_itself_and_rechecks_other_power() {
 
 #[test]
 fn power_batch_surrak_sums_signed_power_and_rechecks_after_targeting() {
-    use crate::support::game::{set_counters, until_end_of_turn};
-    use managym::{
-        agent::action::Action,
-        state::{effect::Modification, game_object::Target, permanent::CounterKind},
+    use crate::support::{
+        game::{set_counters, until_end_of_turn},
+        inspect::offered_targets,
     };
+    use managym::state::{effect::Modification, game_object::Target, permanent::CounterKind};
     let name = "Surrak, the Hunt Caller";
     let mut s = five_color_setup(&[name, "Hill Giant", "Gray Ogre"]);
     let surrak = s.force_permanent_on_battlefield(0, name);
@@ -2124,20 +2124,11 @@ fn power_batch_surrak_sums_signed_power_and_rechecks_after_targeting() {
     *s.game_mut() = root;
     set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 1);
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    let offered: Vec<_> = s
-        .action_space()
-        .actions
-        .iter()
-        .filter_map(|a| match a {
-            Action::ChooseTarget {
-                target: Target::Permanent(id),
-                ..
-            } => Some(*id),
-            _ => None,
-        })
-        .collect();
+    let offered = offered_targets(&s);
     assert_eq!(offered.len(), 3);
-    assert!([surrak, giant, ogre].iter().all(|id| offered.contains(id)));
+    assert!([surrak, giant, ogre]
+        .iter()
+        .all(|&id| offered.contains(&Target::Permanent(id))));
     s.choose_target_named("Gray Ogre");
     let pending = s.game().clone();
     for meets in [false, true] {
@@ -2208,8 +2199,20 @@ fn power_batch_ashroot_and_partners_read_live_or_departed_source() {
         assert!(!s.choose_target(Target::Permanent(source)));
         assert_eq!(s.action_space().actions.len(), 2);
         let frame = s.game().semantic_decision_frame().unwrap();
-        let index = s.action_space().actions.iter().position(|action| matches!(action,
-            managym::agent::action::Action::ChooseTarget {target:Target::Permanent(id),..} if *id==ogre)).unwrap();
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| {
+                matches!(
+                    action,
+                    managym::agent::action::Action::ChooseTarget {
+                        target: Target::Permanent(id),
+                        ..
+                    } if *id == ogre
+                )
+            })
+            .unwrap();
         let offer = &frame.offers[index];
         let mut branch = s.clone();
         let card = card_of(&branch, ogre);
@@ -2493,11 +2496,11 @@ fn power_batch_printed_intervening_condition_publishes_pending_power() {
     let card = card_of(&s, ogre);
     s.game_mut().state[card].abilities = vec![Ability::Triggered {
         condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
-        intervening_if: Some(Condition::Compare {
-            left: Box::new(ObjectSelector::This.property(ObjectProperty::Power, Aggregate::Sum)),
-            op: CompareOp::Ge,
-            right: Box::new(3.into()),
-        }),
+        intervening_if: Some(Condition::compare(
+            ObjectSelector::This.property(ObjectProperty::Power, Aggregate::Sum),
+            CompareOp::Ge,
+            3,
+        )),
         effects: vec![Effect::gain_life(1)],
     }];
     clear_summoning_sickness(&mut s, ogre);
