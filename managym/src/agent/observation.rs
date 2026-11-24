@@ -1707,8 +1707,7 @@ impl Observation {
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
-                        game.source_face(a.source_object(), a.source_definition_id)
-                            .expect("trigger face"),
+                        &a.source_face,
                         a.ability_index,
                         a.inline_effects.as_deref(),
                     ))

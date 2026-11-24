@@ -756,10 +756,15 @@ impl Game {
             .as_ref()
             .map(|lki| lki.definition_id)
             .unwrap_or(self.state.source_base(trigger.source_object()).0);
+        let source_face = self
+            .source_face(trigger.source_object(), source_definition_id)
+            .expect("placing trigger has a source face")
+            .clone();
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            source_face,
             trigger_damage: trigger.trigger_damage,
             program: trigger.program,
             remembered: trigger.remembered,

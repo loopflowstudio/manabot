@@ -90,6 +90,9 @@ fn serialize_activation_source<S: serde::Serializer>(
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    /// Immutable characteristics at placement, shared across copies and forks.
+    #[serde(skip)]
+    pub source_face: std::sync::Arc<super::card::PrintedCharacteristics>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub trigger_damage: i32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

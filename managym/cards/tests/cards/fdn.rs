@@ -926,3 +926,83 @@ fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
     s.pass_priority();
     assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
 }
+
+#[test]
+fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
+    use crate::support::{
+        inspect::zone_of,
+        play::{cast, command, resolve_top},
+    };
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        state::{game_object::Target, player::ManaPayment},
+    };
+
+    let mut s = five_color_setup(&["Clone", "Gray Ogre", "Electroduplicate"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    cast(&mut s, "Electroduplicate");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let token = *s
+        .battlefield_permanents_named(0, "Gray Ogre")
+        .iter()
+        .find(|id| **id != ogre)
+        .unwrap();
+    cast(&mut s, "Clone");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(token)));
+    settle(&mut s);
+    let clone = *s
+        .battlefield_permanents_named(0, "Gray Ogre")
+        .iter()
+        .find(|id| **id != ogre && **id != token)
+        .unwrap();
+    let clone = card_of(&s, clone);
+    let token = card_of(&s, token);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    let orders = s.action_space().actions.clone();
+    assert_eq!(orders.len(), 2);
+    let root = s.snapshot();
+    let mut first_order = Vec::new();
+    for order in orders {
+        s.restore(&root);
+        command(&mut s, |action| action == &order);
+        let hand = move_card(&mut s, clone, ZoneType::Hand);
+        let sources: Vec<_> = s
+            .game()
+            .state
+            .stack_objects
+            .iter()
+            .map(|a| a.source_object())
+            .collect();
+        assert_eq!(sources.len(), 2);
+        assert!(sources.contains(&token) && sources.contains(&clone));
+        if first_order.is_empty() {
+            first_order = sources.clone();
+        } else {
+            assert!(first_order.iter().rev().eq(&sources));
+        }
+        for source in sources.iter().rev() {
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let view = Observation::for_player(s.game(), viewer);
+                assert_eq!(view.stack_objects.len(), s.game().state.stack_objects.len());
+                for entry in view.stack_objects {
+                    let text = entry.description.unwrap();
+                    assert!(
+                        text.contains("Gray Ogre") && text.to_lowercase().contains("sacrifice"),
+                        "{text}"
+                    );
+                }
+            }
+            assert_eq!(
+                s.game().state.stack_objects.last().unwrap().source_object(),
+                *source
+            );
+            resolve_top(&mut s);
+            assert_eq!(zone_of(&s, hand), Some(ZoneType::Hand));
+        }
+        assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), [ogre]);
+    }
+}

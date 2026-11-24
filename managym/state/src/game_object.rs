@@ -802,7 +802,11 @@ impl Object {
 
     /// Snapshot the current copiable face without copying its ability programs.
     pub fn copiable_definition(&self) -> Arc<PrintedCharacteristics> {
-        Arc::clone(&self.definition)
+        Arc::clone(self.copiable_face())
+    }
+
+    pub fn copiable_face(&self) -> &Arc<PrintedCharacteristics> {
+        &self.definition
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {

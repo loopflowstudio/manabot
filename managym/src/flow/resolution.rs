@@ -314,14 +314,26 @@ impl Game {
         &self,
         object: ObjectId,
         face: CardDefId,
-    ) -> Option<&PrintedCharacteristics> {
-        let (definition, current) = self.state.source_base(object);
-        if definition == face {
-            Some(current)
+    ) -> Option<&std::sync::Arc<PrintedCharacteristics>> {
+        if let Ok(current) = self.state.object(object) {
+            if current.definition_id == face {
+                return Some(current.copiable_face());
+            }
+        } else if let Some(values) = self
+            .object_lki(object)
+            .and_then(|lki| lki.copiable.as_ref())
+        {
+            if values.definition_id == Some(face) {
+                return Some(&values.definition.printed);
+            }
+        }
+        let (base, printed) = self.state.objects.get(object.slot())?.retained_definition();
+        if base == face {
+            Some(printed)
         } else {
             default_content_pack()
                 .definition(face)
-                .map(|row| &*row.printed)
+                .map(|row| &row.printed)
         }
     }
 
@@ -393,18 +405,11 @@ impl Game {
         let (effects, ability) = if let Some(effects) = triggered.inline_effects {
             (effects, None)
         } else {
-            let Some(ability) = self
-                .source_face(source_object, triggered.source_definition_id)
-                .and_then(|face| face.abilities.get(triggered.ability_index))
-                .cloned()
-            else {
-                return;
-            };
             let Ability::Triggered {
                 intervening_if,
                 effects,
                 ..
-            } = ability;
+            } = triggered.source_face.abilities[triggered.ability_index].clone();
             // CR 603.4: an intervening "if" that no longer holds removes the
             // ability from the stack doing nothing.
             if intervening_if.as_ref().is_some_and(|condition| {

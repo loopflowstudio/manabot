@@ -46,16 +46,7 @@ impl Game {
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
                     Some(effects) => effects.as_slice(),
-                    None => {
-                        let object = triggered
-                            .source_lki
-                            .as_ref()
-                            .map_or(triggered.source_object(), |lki| lki.object);
-                        self.source_face(object, triggered.source_definition_id)?
-                            .abilities
-                            .get(triggered.ability_index)?
-                            .effects()
-                    }
+                    None => triggered.source_face.abilities[triggered.ability_index].effects(),
                 };
                 effect_target_requirements(effects)
                     .get(*triggered.target_req_indices.get(slot)?)
