@@ -63,16 +63,18 @@ def test_vector_games_and_masked_history_equal_offline_analysis(tmp_path: Path) 
     vector.reset_all_into_buffers(players())
     completed = [0, 0]
     for _ in range(1000):
-        before = vector.current_game_generations()
         vector.step_into_buffers(
             [0, 0],
             [n < 2 for n in completed],
             annotations=[{"extra": {"update": 42}}, None],
         )
-        after = vector.current_game_generations()
-        completed = [
-            n + int(a != b) for n, a, b in zip(completed, before, after, strict=True)
-        ]
+        reloads = []
+        for slot, chooser in enumerate(vector.current_agent_indices()):
+            if completed[slot] < 2 and chooser == -1:
+                completed[slot] += 1
+                if completed[slot] < 2:
+                    reloads.append(managym.SlotLoad.fresh(slot))
+        vector.load_slots_into_buffers(reloads)
         if min(completed) == 2:
             break
     assert completed == [2, 2]
@@ -196,7 +198,7 @@ def test_root_reassignment_ends_old_reducer_before_starting_new_game() -> None:
     vector = RecordedVectorEnv(num_envs=2, seed=7, reducers=[History()])
     buffers(vector, 2)
     vector.reset_all_into_buffers(players())
-    vector.reassign_roots_into_buffers([players(), None])
+    vector.load_slots_into_buffers([managym.SlotLoad.fresh(0, players())])
     vector.step_into_buffers([0, 0])
     vector.close()
     assert sorted(row[0] for row in vector.rows()[0]) == [0, 1, 1]

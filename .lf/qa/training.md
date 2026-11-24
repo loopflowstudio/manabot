@@ -174,12 +174,20 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   30 s each on CPU), plus `--config '{"workers": 1}'` / `4` and
   `{"horizon": null, "record_games": 1, "statistics": true}`. Read
   `snapshot/starts`, `horizon_cuts`, `terminals` and `failed_branches` per
-  update; branches start at update 3. Recorded games must equal
-  `coordinates/games` with contiguous seeds and none for a branch-only update.
-  Returning user: run `main`'s version of the same doc recipe (it passes
-  `InMemorySnapshotVector.factory`) on a base worktree, copy its home, then
-  `--resume` here; compare `extra/snapshot_bank` in each save's `state.json`
-  (legacy entries byte-equal by `snapshot_id`, new ones carry `replay_json`).
+  update. With four streams the first group starts at update 3. Pair terminal
+  game records and statistics by `(stream, seed, winner)` and check that the
+  count matches `coordinates/games`. Walk the records to verify their final
+  digests and check that branch interventions do not appear in the fresh
+  game file. A saved opening replaced by a branch can reuse its seed.
+  For returning users, copy a pre-change Etude home and resume the same
+  recipe to a later update. Compare saved recipes by `snapshot_id` and
+  confirm that the prior policy file is byte-identical.
+  For MLX, use the `mlx` extra and pass `"backend":"mlx"` to the recipe.
+  Inspect `continuation.json` beside `training.safetensors` in the current
+  save. Its stream roots record which seed each slot will play after
+  resuming. A zero-action `capture closed` row can name the saved opening
+  of an interrupted attempt. Compare terminal rows to the completed-game
+  counter.
   To journal a branch, poll the `vector-N.jsonl` evidence line and SIGKILL
   when a game's seed is older than the newest fresh seed (a branch keeps its
   root's seed). `--attempt` counts receipt lines; a change line raises
@@ -253,11 +261,17 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   "statistics": true}`, `read_records(Path(out / "games"))` (a `Path`, not a
   string) must hold only fresh games: a continuation's 15-action prefix
   replay is a defect, as is an empty `reset` record repeating a fresh seed
-  (16 complete plus one zero-action in-flight game per stream after 4
-  updates). `points(...)` returns `Points` with `.x`/`.y` arrays. `workers`
-  is not a recipe config key: check the startup refusals (`workers=2`,
-  `wdl_entropy` on a scalar critic, `action_value_spread`) with a `.runs/`
-  copy of the recipe that `model_copy`s `SelfPlay`/`SnapshotConfig` fields.
+  (a four-stream Torch run through five updates retained 20 terminal
+  recordings and 20 terminal statistics rows). `points(...)` returns
+  `Points` with `.x`/`.y` arrays. Set `workers` on the documented recipe.
+  Check startup refusals for `wdl_entropy` on a scalar critic or the default
+  scorer for `action_value_spread` with a `.runs/` copy that changes
+  `SnapshotConfig`. For a rejected cross-shard load, use
+  `ShardedVectorEnv(2, 42, workers=2)` inside a detailed `CaptureScope`.
+  After one legal step, request a fresh load on slot 0 and a fresh load
+  with an empty setup on slot 1. Reopen both `vector-*.jsonl` files before
+  retrying. Both should be ready with their committed prefixes, and the
+  replacement should still use seeds 44 and 45.
 - Decision memory in self-play (`ModelConfig.decision_memory`): the smallest
   real run is `tests/training/test_memory_self_play.py`'s `settings()`: Gray
   Ogre decks, the four `max_decision_*` capacities, and

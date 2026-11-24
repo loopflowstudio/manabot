@@ -1,4 +1,4 @@
-"""Time four-worker buffered steps and hash the contiguous arrays between calls."""
+"""Time four-worker buffered steps and slot refills, hashing each batch's outcomes."""
 
 import argparse
 from contextlib import closing
@@ -45,6 +45,15 @@ def main() -> None:
         env.set_buffers(buffers, layout=space.layout)
         env.reset_all_into_buffers(setup)
         for _ in range(batches):
+            done = np.flatnonzero(
+                (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
+            )
+            if done.size:
+                start = perf_counter()
+                env.load_slots_into_buffers(
+                    [managym.SlotLoad.fresh(int(s)) for s in done]
+                )
+                seconds += perf_counter() - start
             actions = [
                 int(rng.choice(np.flatnonzero(mask)))
                 for mask in buffers["actions_valid"]

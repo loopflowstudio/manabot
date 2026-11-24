@@ -111,8 +111,8 @@ source.match_config().decklists                     # 'closed'
 A fixed match and an `elemental-uniform` match take it from
 `MatchConfig.decklists`; a deck source takes it from `UniformDecks.decklists`
 (`"open"` by default). In a closed run the policy's `decklists` rows for the
-opponent are zero in every game, including games started by auto-reset and
-games regathered after a [game failure](../docs/training.md#game-failures), and
+opponent are zero in every game, including reloaded games and games regathered
+after a [game failure](../docs/training.md#game-failures), and
 the retained record of each game says closed. What the opponent shows during
 play still arrives: a revealed card appears in `known_hand` while it stays in
 that hand.
@@ -132,9 +132,10 @@ its legs.
 
 A sampled source can also use `decklists="mixed"`: each game draws open or
 closed with equal probability from its reset seed, separately from deck and
-shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
-attempts and replays record the resolved setting. Both seats see the public
-`decklists_closed` observation flag, stated in the text observation. Its inverse
+shuffle RNG. Explicit slot reloads and recovery reproduce that draw; retained
+matchups, attempts and replays record the resolved setting. Both seats see the
+public `decklists_closed` observation flag, stated in the text observation. Its
+inverse
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
 A checkpoint trained before that column does not read it.
 
