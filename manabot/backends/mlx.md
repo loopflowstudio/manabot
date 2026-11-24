@@ -178,6 +178,23 @@ autograd never traces the per-step slices, whose whole-input zero cotangents
 would make the backward quadratic in the number of steps. Collection samples once per group across execution chunks.
 Portable exports contain the policy’s float32 parameters and lookup buffers.
 
+### Profile captured learner minibatches
+
+Replay the learner arrays and initial policy from a Torch capture on the Apple GPU.
+The first minibatch warms the path. Each subsequent batch contributes one sample
+to the reported medians.
+
+```sh
+uv run --extra mlx python -m scripts.profile_mlx_learner capture --bucketed --precision bfloat16 --out profile.json
+```
+
+Omit `--bucketed` for padded shapes. Precision defaults to float32. The output
+records admission and host preparation, full loss and gradients, and clipping
+plus Adam. Two controls replay the same loss at the same weights. The first
+reuses the catalog table. The second also reuses the attention and MLP outputs,
+passing gradients through to the object inputs. Differences between controls
+estimate the cost of the skipped work. Only the full gradient advances Adam.
+
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).
 
