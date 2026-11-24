@@ -21,6 +21,7 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{bargain_cost, Help, Operation},
+        proposed_event::{EntryFace, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
     state::{
@@ -695,13 +696,9 @@ impl Game {
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
             object,
             ZoneType::Battlefield,
-            crate::flow::proposed_event::ZoneEntry {
+            ZoneEntry {
                 controller,
-                face: if profile == SpellProfile::BackFace {
-                    crate::flow::proposed_event::EntryFace::ModalBack
-                } else {
-                    crate::flow::proposed_event::EntryFace::Front
-                },
+                face: EntryFace::played_as(profile),
                 library_top_departure: self.is_library_top(object),
                 ..Default::default()
             },

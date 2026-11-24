@@ -939,9 +939,7 @@ impl Game {
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
         match entry.profile {
-            crate::state::card::SpellProfile::BackFace => {
-                assert!(self.show_modal_back(object_id), "offered back face")
-            }
+            crate::state::card::SpellProfile::BackFace => self.show_modal_back(object_id),
             profile => self.state[object_id].show_inset(profile),
         }
         if let Some(player) = entry.adventure_player {
@@ -995,9 +993,7 @@ impl Game {
             }
             match entry.face {
                 EntryFace::Front => {}
-                EntryFace::ModalBack => {
-                    assert!(self.show_modal_back(object_id), "offered back face")
-                }
+                EntryFace::ModalBack => self.show_modal_back(object_id),
                 EntryFace::Transformed => {
                     self.turn_over(object_id, FormTransition::Transform);
                 }
@@ -1087,16 +1083,16 @@ impl Game {
         self.emit(GameEvent::Bent { player, kind });
     }
 
-    fn show_modal_back(&mut self, object: ObjectId) -> bool {
+    /// Turn a modal double-faced card's back face up (CR 712.11). Callers
+    /// reach this only for a back face that was offered, so it must exist.
+    fn show_modal_back(&mut self, object: ObjectId) {
         let front = &self.state[object];
-        if !front.modal_back {
-            return false;
-        }
-        let Some((back, row)) = default_content_pack().back_face_row(front.definition_id) else {
-            return false;
-        };
+        let (back, row) = front
+            .modal_back
+            .then(|| default_content_pack().back_face_row(front.definition_id))
+            .flatten()
+            .expect("offered back face");
         self.state[object].show_modal_back(back, row.printed.clone());
-        true
     }
 
     /// Transform a double-faced permanent (CR 701.27a): it turns over and

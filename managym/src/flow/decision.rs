@@ -1485,11 +1485,7 @@ impl Game {
                                     ZoneType::Battlefield,
                                     ZoneEntry {
                                         attached_to: attach_to,
-                                        face: if profile == SpellProfile::BackFace {
-                                            EntryFace::ModalBack
-                                        } else {
-                                            EntryFace::Front
-                                        },
+                                        face: EntryFace::played_as(profile),
                                         ..ZoneEntry::from_spell(frame.controller, spell)
                                     },
                                 )

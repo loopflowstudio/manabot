@@ -9,7 +9,10 @@
 use std::sync::Arc;
 
 use super::decision::Decision;
-use crate::state::{ability::Actor, card::DamageTransform};
+use crate::state::{
+    ability::Actor,
+    card::{DamageTransform, SpellProfile},
+};
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
@@ -32,9 +35,9 @@ pub(crate) struct ZoneEntry {
     pub adventure_player: Option<PlayerId>,
     #[serde(
         rename = "cast_adventure",
-        skip_serializing_if = "crate::state::card::SpellProfile::is_front"
+        skip_serializing_if = "SpellProfile::is_front"
     )]
-    pub profile: crate::state::card::SpellProfile,
+    pub profile: SpellProfile,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
     /// Battlefield: enters tapped.
@@ -92,6 +95,18 @@ pub(crate) enum EntryFace {
     /// A modal double-faced card played or cast as its back face enters
     /// with that face up (CR 712.11). It never transforms.
     ModalBack,
+}
+
+impl EntryFace {
+    /// The face a permanent spell or land shows when it resolves or is played
+    /// as `profile`: only a modal back face differs from the front.
+    pub(crate) fn played_as(profile: SpellProfile) -> Self {
+        if profile == SpellProfile::BackFace {
+            Self::ModalBack
+        } else {
+            Self::Front
+        }
+    }
 }
 
 /// Recorded bytes keep the historical `transformed` key; `modal_back`
