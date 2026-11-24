@@ -40,11 +40,42 @@ the full action width.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token
-  offsets and inference column compaction. Object joins and ownership follow
-  the batch's trimmed object axes. A backend's graph then holds only
-  gathers, scatters and arithmetic. `Prepared` is generic over its array type:
-  `prepare` returns NumPy arrays and a backend moves them to its device
-  (torch's `on_device`). Optional groups are `None` when unused: a fact
+  offsets and attention/fact compaction. Object joins and ownership follow
+  the batch's trimmed object axes (read from `obs.buckets` on
+  `BucketedObservation` or `ObservationSpans`, with no separate `bucketed`
+  flag). A backend's graph then holds only gathers, scatters and arithmetic.
+  `Prepared` is generic over its array type: `prepare` returns NumPy arrays and
+  a backend moves them to its device (torch's `on_device`).
+
+  Backends translate their device and purpose (`inference=True` vs learning)
+  into two explicit layout parameters on `prepare(obs, tables, *, attention="padded", facts="padded", ...)`:
+
+  ```python
+  from manabot.policy.prepare import prepare
+
+  # Admitted batch `obs` and checkpoint `tables`; pad used object columns to a power of two.
+  batch = prepare(obs, tables, attention="bucketed_columns", facts="padded")
+  batch.attention_columns  # sorted column indices of power-of-two length (>= 8), or None if dense
+  ```
+
+  - `attention: AttentionLayout`: `"padded"` (default, full object table),
+    `"used_columns"` (only object columns valid in at least one row; Torch CPU
+    and MLX inference), `"bucketed_columns"` (used object columns padded with
+    empty columns via `buckets.bucket` to the next power of two, at least
+    `MIN_BUCKET = 8`, collapsing to `None` when empty, when width ≤ 8, or when
+    the bucket reaches the object width; Torch MPS inference),
+    `"packed_groups"` (row groups sorted by live count in `packed_attention`,
+    falling back to used columns; bucketed MLX learners), or `"live_tokens"`
+    (jagged `live_index` / `live_offsets`; Torch CUDA live-token attention).
+  - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (only fact
+    columns valid in at least one row; unbucketed CPU and MLX inference), or
+    `"live_rows"` (live fact rows only; bucketed MLX learners).
+
+  Unknown `attention` or `facts` values raise `ValueError`. Both
+  `ObservationSpans` and dense buffers share `select_attention_columns` and
+  produce identical column selections
+  ([inference column compaction](../../docs/observation-and-model.md#inference-column-compaction)).
+  Optional groups are `None` when unused: a fact
   table's `programs` holds its indexes together, and each `Packed` schedule
   owns the original sequence lengths. The batch records the
   model and observation configuration it was prepared for, and a forward

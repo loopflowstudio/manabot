@@ -14,8 +14,9 @@ logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [
 `Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
 returns logits, -1e8 off the legal actions, and each row's value.
 `inference=True` lays the batch out as simulation and managed inference do (on CPU it
-drops object and fact columns no row uses); the default is the learning
-layout, whose outputs differ from it by float summation order. Every
+drops object and fact columns no row uses; on Torch MPS it keeps used object
+columns padded with empty columns to a power of two for attention); the default
+is the learning layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
 MLX lines differ only in the name passed to `resolve`
 ([mlx.md](mlx.md)).
@@ -389,15 +390,28 @@ or `load_checkpoint(...)`, not checkpoint fields. Every lookup a batch needs
 is measured on the host, so the device forward reads nothing back.
 
 `prepare(obs, inference=True)` prepares inference rows with the complete
-catalog program schedule, and on CPU drops the fact and object columns no
-row in the batch uses. Simulation and search prepare this way. Column
-compaction changes floating-point summation order, so learner rows use the
-default `inference=False`: they retain those columns and select only referenced
-catalog programs unless bucketed shapes require the full schedule. The argument
-chooses preparation purpose independently of autograd mode; `no_grad` does not
-change a default learner batch into an inference batch. Torch rollout `rows`
-and `minibatches` always prepare learner rows; `next_observation` always
-prepares inference rows for bootstrapping.
+catalog program schedule and selects the device's inference layout
+([inference column compaction](../../docs/observation-and-model.md#inference-column-compaction)):
+
+- **CPU:** drops unused object columns (`attention="used_columns"`) and, unless
+  `bucketed_shapes=True`, unused fact columns (`facts="used_columns"`).
+- **MPS:** keeps every object column used by the batch and pads with empty
+  columns to the next power of two (at least 8, collapsing to the full object
+  table when that reaches capacity, `attention="bucketed_columns"`), bounding
+  distinct Metal attention shapes while leaving fact columns padded.
+- **CUDA:** keeps padded object and fact columns.
+
+When `attention_on` is false, object column compaction is skipped; when
+`live_tokens=True` and `attention_on` is true, packed live-token attention takes
+precedence over column compaction. Simulation, search and rollout bootstrapping
+prepare with `inference=True`. Column compaction changes floating-point
+summation order, so learner rows use the default `inference=False`: they retain
+padded object and fact columns (unless `live_tokens=True`) and select only
+referenced catalog programs unless bucketed shapes require the full schedule.
+The argument chooses preparation purpose independently of autograd mode;
+`no_grad` does not change a default learner batch into an inference batch.
+Torch rollout `rows` and `minibatches` always prepare learner rows;
+`next_observation` always prepares inference rows for bootstrapping.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather

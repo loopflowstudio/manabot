@@ -354,6 +354,58 @@ shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster 
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/reports/live_token_attention.md)).
 
+### Inference column compaction
+
+Off CUDA, `live_tokens=True` is unavailable, yet real rollout batches still
+leave most object slots empty in every row. Calling
+`policy.prepare(obs, inference=True)` selects device-appropriate column
+compaction automatically without changing the public policy API:
+
+```python
+from manabot.backends.torch.checkpoint import load_checkpoint
+
+policy, space = load_checkpoint("policy.safetensors")
+policy = policy.to("mps")
+batch = policy.prepare(obs, inference=True)  # power-of-two attention_columns on MPS
+logits, values = policy.evaluate(batch)      # original action coordinates, logits [B,A], values [B]
+```
+
+Each Torch device maps `inference=True` to its host-preparation layout in
+`manabot.policy.prepare.prepare`:
+
+| Device (`inference=True`) | Object attention layout | Fact layout |
+| --- | --- | --- |
+| CPU | `"used_columns"`: exact columns valid in at least one row | `"used_columns"` (or `"padded"` when `bucketed_shapes=True`) |
+| MPS | `"bucketed_columns"`: used columns padded with empty columns to the next power of two (minimum 8) | `"padded"` |
+| CUDA | `"padded"` (or `"live_tokens"` when `live_tokens=True`) | `"padded"` |
+
+On MPS, exact per-batch column counts change shape from step to step and trigger
+Metal graph recompiles. Padding the used object columns with empty (all-zero
+validity) columns via `manabot.policy.buckets.bucket` (`MIN_BUCKET = 8`) bounds
+the attention width to a small set of powers of two (at most `{8, 16, 32, 64,
+128, N}` on a 234-slot board) and collapses `attention_columns` to `None` (no
+gather or scatter) whenever the batch is empty, the table width is at most 8, or
+the bucket reaches the table width. Every added padding column has zero validity
+in every row, so it is masked in softmax keys, zeroed after attention, and
+scattered back to its original object slot as zero before action scoring and
+value pooling.
+
+Column compaction composes with `bucketed_shapes=True` (further shrinking or
+collapsing the trimmed object table when fewer columns are used),
+`historical_mean`, `value_token` (which appends one token after column
+gathering, preserving the small shape count), `attention_readout` and dense
+`belief` rows. When `attention_on` is false, no object columns are selected;
+when `live_tokens=True` and `attention_on` is true, live-token packing takes
+precedence.
+
+Because dropping or reordering empty columns changes floating-point summation
+order, learner batches (`inference=False`) keep padded columns on Torch (unless
+`live_tokens=True`). Rollout collection, evaluation, search and rollout
+bootstrapping (`next_observation`) use `inference=True`. Like bucketed padding
+and live-token attention, column compaction changes no `ModelConfig` field,
+checkpoint or policy input; float32 logits and values match the padded forward
+up to floating-point summation order.
+
 ## Running a checkpoint on a later revision
 
 A checkpoint keeps loading as cards are added, Rust types are renamed and
