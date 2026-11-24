@@ -36,7 +36,7 @@ from typing import Any, Literal, Protocol, TypedDict
 
 import numpy as np
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
@@ -649,7 +649,7 @@ class Collector:
     # The calling loop owns enablement and resets this timer. Only the
     # collecting thread records host intervals; workers never share it.
     profiler: Profiler
-    # ShardedVectorEnv, CapturedVector or a diagnostic root's Python vector.
+    # ShardedVectorEnv, RecordedVectorEnv or a diagnostic root's Python vector.
     _env: Any
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
@@ -2052,7 +2052,7 @@ def _stream_at_floor(
 @contextmanager
 def _native_step_split(collector: Collector) -> Iterator[None]:
     """Split the running step phase by the engine's clock; Python envs have none."""
-    if not isinstance(collector._env, (BufferedStreams, CapturedVector)):
+    if not isinstance(collector._env, (BufferedStreams, RecordedVectorEnv)):
         yield
         return
     stepped, encoded = collector._env.buffered_call_timings()

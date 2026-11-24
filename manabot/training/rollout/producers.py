@@ -19,7 +19,7 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
     CapturedSnapshot,
     InstalledSlot,
@@ -37,7 +37,7 @@ Array = NDArray[np.generic]
 class StreamShard:
     start: int
     stop: int
-    native: CapturedVector
+    native: RecordedVectorEnv
 
     @property
     def rows(self) -> slice:
@@ -182,7 +182,7 @@ class BufferedStreams:
         for shard in self._shards:
             shard.native.set_training_decks(decks, digest, sampling)
 
-    def _read_rows[T](self, read: Callable[[CapturedVector], list[T]]) -> list[T]:
+    def _read_rows[T](self, read: Callable[[RecordedVectorEnv], list[T]]) -> list[T]:
         self._check()
         return [row for shard in self._shards for row in read(shard.native)]
 
@@ -314,7 +314,7 @@ class BufferedStreams:
     def _read_slots[T](
         self,
         mask: Sequence[bool],
-        read: Callable[[CapturedVector, Sequence[bool]], list[T | None]],
+        read: Callable[[RecordedVectorEnv, Sequence[bool]], list[T | None]],
     ) -> list[T | None]:
         self._rows(len(mask))
         selected = [shard for shard in self._shards if any(mask[shard.rows])]
@@ -473,7 +473,7 @@ class ShardedVectorEnv(BufferedStreams):
         for index in range(workers):
             start = index * num_envs // workers
             stop = (index + 1) * num_envs // workers
-            native = CapturedVector(
+            native = RecordedVectorEnv(
                 num_envs=stop - start,
                 seed=min(seed + start, 2**64 - 1),
                 seed_stride=num_envs,
@@ -530,7 +530,7 @@ def open_native_streams(
     decision_memory_include_own: bool,
     games_path: Path | None = None,
     record_fraction: float = 1.0,
-) -> BufferedStreams | CapturedVector:
+) -> BufferedStreams | RecordedVectorEnv:
     """Select the collector transport while keeping fresh recording on its native slots."""
     if workers != 1:
         return ShardedVectorEnv(
@@ -543,7 +543,7 @@ def open_native_streams(
             games_path=games_path,
             record_fraction=record_fraction,
         )
-    native = CapturedVector(
+    native = RecordedVectorEnv(
         num_envs=num_envs,
         seed=seed,
         auto_reset=auto_reset,

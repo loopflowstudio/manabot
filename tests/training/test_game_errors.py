@@ -50,7 +50,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.updates.ppo import update_iteration
 import managym
-from managym.recording import CapturedVector, read_record
+from managym.recording import RecordedVectorEnv, read_record
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
@@ -940,7 +940,7 @@ def test_replay_resource_limit_on_a_restored_memory_boundary() -> None:
     source.reset(match.to_rust())
     for _ in range(4):
         source.step(0)
-    vector = CapturedVector(num_envs=1, decision_memory=True, auto_reset=False)
+    vector = RecordedVectorEnv(num_envs=1, decision_memory=True, auto_reset=False)
     vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
     vector.reset_all_into_buffers(match.to_rust())
     vector.load_slots_into_buffers(

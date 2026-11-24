@@ -809,7 +809,7 @@ Read-only native transport metadata must also be exposed through
 collectors use these wrappers rather than raw native vectors.
 Runtime-checkable vector extension protocols list their concrete capability
 methods. Python 3.12+ protocol checks use static lookup and miss the ordinary
-native reads delegated by `CapturedVector.__getattr__`.
+native reads delegated by `RecordedVectorEnv.__getattr__`.
 CLI subcommands import their execution runtime at the command boundary when
 needed to keep migration/help available without the training SDK.
 

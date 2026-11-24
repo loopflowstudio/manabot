@@ -368,7 +368,7 @@ arguments or an unknown name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch a player policy to random play.
 `"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through CapturedVector and Torch. Retained failure evidence keeps its original
+through RecordedVectorEnv and Torch. Retained failure evidence keeps its original
 policy name; replaying a passive-policy receipt requires its original source.
 
 ### Built-in heuristic
@@ -444,11 +444,11 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups, deferred reset and partial stepping | Native `VectorEnv` buffer methods |
-| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
 | Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
 
 Scalar native `Env.step` returns the terminal state and leaves resetting to the
-caller. Native `VectorEnv` and `CapturedVector` auto-reset finished slots by
+caller. Native `VectorEnv` and `RecordedVectorEnv` auto-reset finished slots by
 default (`auto_reset=True`): reward and `terminated` / `truncated` describe the
 completed game, while the returned observation describes the replacement game.
 Pass `auto_reset=False` to defer terminal resets instead—finished slots report
@@ -466,21 +466,21 @@ explicit seed, including the current one, so equal seeds reproduce deals.
 `reset()` without a seed continues native seed succession. Its
 `current_agent_indices()` names each slot's chooser.
 
-`CapturedVector` delegates only native reads (seeds, generations, choosers,
+`RecordedVectorEnv` delegates only native reads (seeds, generations, choosers,
 frames, setups, diagnostics). Readable `reset_all` / `step` and other native
 mutators raise `AttributeError`; use its `reset_*_into_buffers` and
 `step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
 new prefix whenever the native game generation changes, so a same-seed reset
 or a replacement at the saturated maximum seed never extends the old game.
 
-Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+Native buffered stepping and `RecordedVectorEnv.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;
 the Python buffer bindings clear their rewards and done flags to zero/false.
 Apply the same mask when collecting transitions. The Torch wrapper's `step`
 advances every slot and does not accept an active mask.
 
 Strict batch errors can occur after other slots have advanced. Do not retry
-the same batch assuming nothing changed. `CapturedVector` retains private
+the same batch assuming nothing changed. `RecordedVectorEnv` retains private
 pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
 individual game failures for replacement. Buffer-integrity failures remain
 fatal, and capacity recovery requires its separate opt-in. See
@@ -547,7 +547,7 @@ origin and stale checks still apply independently of these snapshot fields.
 Both methods synchronously read authoritative hand zones, with one native call
 for the whole batch, without stepping, resetting, consuming randomness or
 building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
-game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+game or retained snapshot. `RecordedVectorEnv` and Torch `VectorEnv` expose the same
 method and CPU records. Ordinary reset/step calls do not collect snapshots.
 
 Read before stepping to capture the current hands; copy reused observation
@@ -629,7 +629,7 @@ NumPy array at the selected version's shapes, dtypes and capacities. No reward
 or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
 
-`CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
+`RecordedVectorEnv` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
 method and CPU identity records. The Torch wrapper supplies its own layout.
 Pass `layout=consumer_space.layout` for a consumer with different capacities.
 Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.

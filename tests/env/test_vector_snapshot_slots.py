@@ -19,7 +19,12 @@ from manabot.training.rollout.snapshot_vector import SlotInstall, replay_snapsho
 from manabot.training.rollout.snapshots import root_id
 import managym
 from managym.decision import Command
-from managym.recording import CapturedVector, ScalarCapture, read_record, read_records
+from managym.recording import (
+    RecordedVectorEnv,
+    ScalarCapture,
+    read_record,
+    read_records,
+)
 from managym.replay import replay_failure_inputs
 from managym.statistics import read_statistics
 from tests.env.test_game_snapshot import setup
@@ -354,7 +359,7 @@ def test_return_to_fresh_restores_the_sampled_roster_and_seed(captured: bool) ->
         MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     roster = elemental_roster(match)
-    vector = (CapturedVector if captured else managym.VectorEnv)(
+    vector = (RecordedVectorEnv if captured else managym.VectorEnv)(
         num_envs=1, seed=42, auto_reset=False
     )
     vector.set_uniform_roster(roster)
@@ -373,7 +378,7 @@ def test_return_to_fresh_restores_the_sampled_roster_and_seed(captured: bool) ->
     [seats] = vector.current_player_configs()
     decks = [roster[i].decklist for i in (a, b)]
     assert [seat.decklist for seat in seats] == decks
-    if isinstance(vector, CapturedVector):
+    if isinstance(vector, RecordedVectorEnv):
         assert [seat.decklist for seat in vector.game_inputs(0).players] == decks
         vector.close()
 
@@ -384,7 +389,7 @@ def test_captured_deferred_terminals_write_fresh_games_once(
 ) -> None:
     games = tmp_path / "games.jsonl"
     stats = tmp_path / "stats.jsonl"
-    vector = CapturedVector(
+    vector = RecordedVectorEnv(
         num_envs=3,
         seed=2**64 - 1,
         auto_reset=False,
@@ -456,7 +461,7 @@ def test_branch_record_reproduces_commands_interventions_and_failed_suffix(
     root = source.snapshot()
     scalar.close()
     cursor = tmp_path / "journal.jsonl"
-    vector = CapturedVector(
+    vector = RecordedVectorEnv(
         num_envs=1,
         auto_reset=False,
         journal_path=cursor if journal else None,
@@ -517,10 +522,18 @@ def test_sharded_producers_support_arbitrary_worker_counts() -> None:
         assert [c.slot for c in captured] == [5, 0]
         installed = vector.install_slots(
             [
-                SlotInstall(7, root_id(captured[1].recipe), captured[1].recipe, captured[1].hot_handle),
+                SlotInstall(
+                    7,
+                    root_id(captured[1].recipe),
+                    captured[1].recipe,
+                    captured[1].hot_handle,
+                ),
                 SlotInstall(2, -1, None),
             ]
         )
         assert [r.slot for r in installed] == [7, 2]
         assert installed[0].root_digest == captured[1].root_digest
-        assert vector.current_game_seeds()[7] == 42 and vector.current_game_seeds()[2] == 52
+        assert (
+            vector.current_game_seeds()[7] == 42
+            and vector.current_game_seeds()[2] == 52
+        )

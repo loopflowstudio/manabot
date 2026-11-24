@@ -398,7 +398,7 @@ Deferred reset (`auto_reset=False`) leaves finished and failed slots idle until
 the next allocation round, avoiding unused replacement games. Fresh slots keep
 their own seed sequence and recording; overwriting an untouched fresh root with
 a branch rewinds its fresh seed without writing an interrupted record or
-partial statistics. When a branch fails, its `GameAttempt` and `CapturedVector`
+partial statistics. When a branch fails, its `GameAttempt` and `RecordedVectorEnv`
 failure record materialize branch `interventions` lazily so
 `manabot.training.state.game_errors` and `managym.replay` reproduce the failure
 cold after hot handles are closed. [Recovery](training.md#recovery)

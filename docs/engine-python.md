@@ -88,7 +88,7 @@ print(performance.from_statistics(read_statistics(Path("statistics"))))
 print(performance.excluded_games)
 ```
 
-The same `statistics_path` option works on `CapturedVector`. Use one file per
+The same `statistics_path` option works on `RecordedVectorEnv`. Use one file per
 producer. Rows carry the card digest and the capture's `context` labels at the
 game's end, so a table can be split by run, update or cell; they use mode 0600, flush at each game boundary
 and fsync at close. The reader accepts a file or directory and ignores a torn
@@ -209,7 +209,7 @@ statistics; add `statistics_path` to collect those independently.
 `extra` for anything else JSON can hold. Academy shows the first three and
 marks an absent one "not retained"; it never recomputes them.
 
-For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`
+For native batches, `managym.recording.RecordedVectorEnv` owns its `VectorEnv`
 and takes the same options. Construct it with `num_envs` and `seed`, use
 `reset_all(players)` and `step(actions)` or the buffered methods, and pass
 `annotations=` with one entry (or `None`) per stream. Use `stream_offset` for
@@ -466,7 +466,7 @@ shows the top seat’s hand count. Branch seeds stay on the server.
 ### Batched snapshots and deferred reset
 
 Use `auto_reset=False` when the next occupant of a finished slot may be a
-restored branch. Both `VectorEnv` and `CapturedVector` accept a mix of fresh
+restored branch. Both `VectorEnv` and `RecordedVectorEnv` accept a mix of fresh
 starts and snapshots in one call.
 
 ```python
@@ -530,7 +530,7 @@ Game recordings, statistics and exposure count fresh games. Replacing a played
 fresh game retains its evidence. Replacing an untouched opening with a branch
 discards that opening. A recorded fresh terminal includes its winner and final
 digest even if the slot stays parked. For branch evidence,
-`CapturedVector.game_inputs(slot)` joins the original commitments and
+`RecordedVectorEnv.game_inputs(slot)` joins the original commitments and
 interventions to the attempted suffix on demand. Failure capture and durable
 journaling use the same replay inputs.
 
@@ -611,13 +611,13 @@ when the attack was good" belongs in a reducer of your own, since the engine
 has no opinion on good.
 
 The same reducers run during scalar or vector play. Pass `reducers=[...]` to
-`ScalarCapture` or `CapturedVector`, and call `capture.rows()` for tables from
+`ScalarCapture` or `RecordedVectorEnv`, and call `capture.rows()` for tables from
 completed or closed games:
 
 ```python
-from managym.recording import CapturedVector
+from managym.recording import RecordedVectorEnv
 
-capture = CapturedVector(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
+capture = RecordedVectorEnv(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
 # Reset and step through the capture, using ordinary or buffered vector calls.
 # No games_path is needed: these questions cover every game, not a saved sample.
 capture.close()

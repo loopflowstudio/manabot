@@ -10,7 +10,7 @@ import torch
 
 from manabot import managym
 from manabot.env.env import Env
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
@@ -129,7 +129,7 @@ def test_hand_snapshots_reject_invalid_requests_without_advancing() -> None:
 @pytest.mark.parametrize("captured", [False, True])
 def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> None:
     vector = (
-        CapturedVector(num_envs=2, seed=42)
+        RecordedVectorEnv(num_envs=2, seed=42)
         if captured
         else managym.VectorEnv(2, seed=42)
     )
@@ -168,7 +168,7 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         assert replaced[0].seed == 44
         assert _identity(replaced[1]) == _identity(reassigned[1])
     finally:
-        if isinstance(vector, CapturedVector):
+        if isinstance(vector, RecordedVectorEnv):
             vector.close()
 
 

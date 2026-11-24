@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import (
@@ -167,7 +167,7 @@ def run_vector_games(
     for controller in (hero, villain):
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
-    env = CapturedVector(
+    env = RecordedVectorEnv(
         num_envs=num_streams,
         seed=seed,
         skip_trivial=True,

@@ -1,6 +1,6 @@
 """Private native replay evidence and optional durable pending-call recording.
 
-ScalarCapture and CapturedVector retain exact roots and chosen inputs. Callers
+ScalarCapture and RecordedVectorEnv retain exact roots and chosen inputs. Callers
 supply destinations and context; no training run or phase is discovered here.
 Journals publish intent before native reads, then acknowledge observed returns.
 """
@@ -1178,7 +1178,7 @@ class ScalarCapture(_Capture):
             return result
 
 
-# Native vector reads CapturedVector delegates; everything else it owns or rejects.
+# Native vector reads RecordedVectorEnv delegates; everything else it owns or rejects.
 _VECTOR_READS = frozenset(
     {
         "buffered_call_timings",
@@ -1243,7 +1243,7 @@ class _ExposureSummary(BaseModel):
 type BranchRoot = tuple[managym.GameSnapshot, managym.RestoreOptions]
 
 
-class CapturedVector(_Capture):
+class RecordedVectorEnv(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
     On batch failure every active row retains its pre-call prefix. Native batch
@@ -1320,7 +1320,7 @@ class CapturedVector(_Capture):
         if name in _VECTOR_READS:
             return getattr(self.__dict__["native"], name)
         raise AttributeError(
-            f"CapturedVector does not expose {name}; use its read methods or "
+            f"RecordedVectorEnv does not expose {name}; use its read methods or "
             "reset_*_into_buffers / step_*_into_buffers calls so replay "
             "evidence stays aligned with the games"
         )
@@ -2286,3 +2286,15 @@ def read_failure(path: Path) -> GameRecord:
         stacklevel=2,
     )
     return read_record(path)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "CapturedVector":
+        warnings.warn(
+            "managym.recording.CapturedVector is deprecated; "
+            "use RecordedVectorEnv; removal in 0.4.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return RecordedVectorEnv
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
