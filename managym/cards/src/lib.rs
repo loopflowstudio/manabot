@@ -99,6 +99,7 @@ mod war;
 mod woe;
 mod wth;
 mod zen;
+mod znr;
 
 use std::sync::OnceLock;
 
@@ -214,4 +215,5 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     woe::cards,
     wth::cards,
     zen::cards,
+    znr::cards,
 ];

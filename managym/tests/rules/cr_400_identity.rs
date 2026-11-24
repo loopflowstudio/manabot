@@ -617,6 +617,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         if let StackObject::Spell(spell) = stack {
             if spell.object == original {
                 spell.x = 7;
+                spell.kicked = true;
             }
         }
     }
@@ -664,6 +665,16 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         s.game().state.object(token_appearance).unwrap().kind(),
         ObjectKind::Token
     );
+    let token = s.game().lookup_current_permanent(token_appearance).unwrap();
+    let copied = s.game().state.permanents[token]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .as_deref()
+        .unwrap();
+    assert!(copied.kicked);
+    assert_eq!(copied.x, 7);
+    assert!(copied.payment.is_none());
     assert_eq!(s.game().state.card_of(token_appearance), None);
     assert_eq!(s.game().state.cards.len(), roster_size);
 
@@ -679,9 +690,9 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         .lookup_current_permanent(permanent_appearance)
         .unwrap();
     let entered = s.game().state.permanents[permanent].as_ref().unwrap();
-    assert!(entered.was_cast);
-    assert_eq!(entered.cast_x, 7);
-    assert_eq!(entered.cast_spent, spent);
+    let spell = entered.spell_entry.as_deref().unwrap();
+    assert_eq!(spell.x, 7);
+    assert_eq!(spell.payment.as_ref(), Some(&spent));
 
     let dead = s
         .game_mut()
@@ -689,9 +700,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
     let returned = s.game_mut().move_object(dead, ZoneType::Battlefield);
     let returned = s.game().lookup_current_permanent(returned).unwrap();
     let returned = s.game().state.permanents[returned].as_ref().unwrap();
-    assert!(!returned.was_cast);
-    assert_eq!(returned.cast_x, 0);
-    assert!(returned.cast_spent.is_empty());
+    assert!(returned.spell_entry.is_none());
 }
 
 #[test]

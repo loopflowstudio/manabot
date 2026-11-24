@@ -17,7 +17,7 @@ use crate::{
     state::{
         card::ReplacementEffect,
         game_object::{ObjectId, ObjectLki, PermanentId, PlayerId},
-        permanent::{CounterKind, Counters},
+        permanent::{CounterKind, Counters, SpellEntry},
         zone::ZoneType,
     },
 };
@@ -29,9 +29,11 @@ pub(crate) struct ZoneEntry {
     pub tapped: bool,
     /// Battlefield: enters with these counters.
     pub counters: Counters,
-    /// Battlefield: the announced X of the resolving spell becoming this
-    /// permanent.
-    pub x: u8,
+    /// A resolving permanent spell supplies its choices and payment. The
+    /// stack and suspended frame already serialize these, except the entry's
+    /// historical X projection.
+    #[serde(rename = "x", serialize_with = "entry_x")]
+    pub spell: Option<std::sync::Arc<SpellEntry>>,
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
@@ -54,6 +56,13 @@ pub(crate) struct ZoneEntry {
     /// The instruction removes the publicly identified top position.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub library_top_departure: bool,
+}
+
+fn entry_x<S: serde::Serializer>(
+    spell: &Option<std::sync::Arc<SpellEntry>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u8(spell.as_ref().map_or(0, |entry| entry.x))
 }
 
 impl ZoneEntry {
@@ -1152,13 +1161,10 @@ impl Game {
                             | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
                             ReplacementEffect::EntersWithCounters { if_cast, .. }
                                 if !if_cast
-                                    || (self.state.entry_object(*object_id).is_card()
-                                        && self
-                                            .find_spell_on_stack_index(*object_id)
-                                            .is_some_and(|i| {
-                                                self.state.stack_objects[i].controller()
-                                                    == entering_controller
-                                            })) =>
+                                    || entry
+                                        .spell
+                                        .as_ref()
+                                        .is_some_and(|spell| spell.payment.is_some()) =>
                             {
                                 effect.clone()
                             }
@@ -1409,7 +1415,10 @@ impl Game {
                 ProposedEvent::ZoneMove { entry, .. },
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
-                entry.counters.change(*kind, i32::from(entry.x));
+                entry.counters.change(
+                    *kind,
+                    entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),
+                );
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },

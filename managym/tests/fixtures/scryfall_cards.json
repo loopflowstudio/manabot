@@ -7206,5 +7206,36 @@
     ],
     "oracle_text": "Equipped creature gets +1/+1 and has \"{15}, Exile The Dominion Bracelet: You control target opponent during their next turn. This ability costs {X} less to activate, where X is this creature's power. Activate only as a sorcery.\" (You see all cards that player could see and make all decisions for them.)\nEquip {1}",
     "colors": []
+  },
+  "Nullpriest of Oblivion": {
+    "name": "Nullpriest of Oblivion",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Menace",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {3}{B} (You may pay an additional {3}{B} as you cast this spell.)\nLifelink\nMenace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, if it was kicked, return target creature card from your graveyard to the battlefield.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Sun-Blessed Healer": {
+    "name": "Sun-Blessed Healer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "W"
+    ]
   }
 }

@@ -669,6 +669,7 @@ impl Game {
             target_req_indices: trigger.target_req_indices,
             context: trigger.context,
             player: trigger.player,
+            kicked: trigger.kicked,
             x: trigger.x,
             spent: trigger.spent,
             inline_effects: trigger.inline_effects,
@@ -1066,10 +1067,12 @@ impl Game {
             // CR 107.3m: an entering permanent's own trigger sees its spell's
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
-            let (x, spent) = match event {
-                GameEvent::CountersPut { count, .. } => {
-                    (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
-                }
+            let (kicked, x, spent) = match event {
+                GameEvent::CountersPut { count, .. } => (
+                    false,
+                    u8::try_from(*count).unwrap_or(u8::MAX),
+                    Default::default(),
+                ),
                 GameEvent::CardMoved {
                     object_id: object,
                     to: ZoneType::Battlefield,
@@ -1078,8 +1081,13 @@ impl Game {
                     .state
                     .permanent_of(*object)
                     .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(Default::default(), |permanent| {
-                        (permanent.cast_x, permanent.cast_spent.clone())
+                    .and_then(|permanent| permanent.spell_entry.as_deref())
+                    .map_or(Default::default(), |entry| {
+                        (
+                            entry.kicked,
+                            entry.x,
+                            entry.payment.clone().unwrap_or_default(),
+                        )
                     }),
                 _ => Default::default(),
             };
@@ -1111,6 +1119,7 @@ impl Game {
                 ordering_class: TriggerOrderingClass::Ordinary,
                 context,
                 player,
+                kicked,
                 x,
                 spent,
                 chosen_modes: Vec::new(),
@@ -1343,6 +1352,7 @@ impl Game {
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
+            kicked: false,
             trigger_damage: 0,
             program: false,
             remembered: Vec::new(),
@@ -1410,6 +1420,7 @@ impl Game {
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                kicked: false,
                 trigger_damage: 0,
                 program: false,
                 remembered: Vec::new(),
@@ -1530,6 +1541,7 @@ impl Game {
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                kicked: false,
                 trigger_damage: 0,
                 program: false,
                 remembered: Vec::new(),
@@ -1716,7 +1728,8 @@ impl Game {
                 self.state
                     .permanent_of(source_object)
                     .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|source| source.was_cast)
+                    .and_then(|source| source.spell_entry.as_deref())
+                    .is_some_and(|entry| entry.payment.is_some())
                     && self.trigger_condition_fires(
                         condition,
                         source_object,

@@ -714,8 +714,8 @@ impl<'a> Projection<'a> {
             let counters: Vec<_> = entry.counters.iter().collect();
             self.field("entry counters", &counters);
         }
-        if entry.x != 0 {
-            self.field("entry X", &entry.x);
+        if let Some(spell) = entry.spell.as_ref().filter(|spell| spell.x != 0) {
+            self.field("entry X", &spell.x);
         }
         if let Some(controller) = entry.controller {
             self.field("entry controller", &controller);

@@ -142,7 +142,7 @@ pub struct EffectFrame {
     /// this turn, counting this resolution. Zero for spells and activated
     /// abilities.
     pub resolutions_this_turn: u32,
-    /// Whether the resolving spell was kicked.
+    /// Kicker choice of the resolving spell or the spell that became the trigger source.
     pub kicked: bool,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub trigger_damage: i32,
@@ -1415,22 +1415,27 @@ impl Game {
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
                             let (to, entry) = if self.state[object].types.is_permanent() {
+                                let payment =
+                                    self.state[object].is_card().then(|| frame.spent.clone());
+                                let mut counters = crate::state::permanent::Counters::default();
+                                if let Some(receipt) = &payment {
+                                    counters.change(
+                                        crate::state::permanent::CounterKind::PlusOnePlusOne,
+                                        i32::from(receipt.entry_counters()),
+                                    );
+                                }
                                 (
                                     ZoneType::Battlefield,
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
-                                        x: frame.x,
-                                        // Spend effects that applied to
-                                        // this spell as it was cast.
-                                        counters: {
-                                            let mut counters =
-                                                crate::state::permanent::Counters::default();
-                                            counters.change(
-                                                crate::state::permanent::CounterKind::PlusOnePlusOne,
-                                                i32::from(frame.spent.entry_counters()),
-                                            );
-                                            counters
-                                        },
+                                        spell: Some(std::sync::Arc::new(
+                                            crate::state::permanent::SpellEntry {
+                                                kicked: frame.kicked,
+                                                x: frame.x,
+                                                payment,
+                                            },
+                                        )),
+                                        counters,
                                         ..Default::default()
                                     },
                                 )

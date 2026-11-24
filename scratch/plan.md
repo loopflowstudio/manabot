@@ -19,12 +19,9 @@ The Task brief's design constraint: “Explore one-card transform, two-card meld
 
 ## Model to build (concept review)
 
-Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-review.html`. Batch 1 settled departure LKI matching (`CharacteristicView` over `ObjectLki.battlefield`), split exile-link lifetimes (`UntilSourceLeaves` vs `WithSource` pruned in `release_resolved_forms`), explicit target optionality and counted returns. Five model items remain across Batches 2–4:
+Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-review.html`. Batch 1 settled departure LKI matching (`CharacteristicView` over `ObjectLki.battlefield`), split exile-link lifetimes (`UntilSourceLeaves` vs `WithSource` pruned in `release_resolved_forms`), explicit target optionality and counted returns. Model items across Batches 2–4:
 
-1. **Unified cast provenance on `Permanent`, ETB triggers and cast-entry replacements (Batch 2 foundation — biggest mismatch).**
-   - Replace `was_cast` / `cast_x` / `cast_spent` on `Permanent` (`permanent.rs`) with `cast: Option<CastReceipt>` carrying `{ kicked, x, spent }` (`None` for tokens, blinks and reanimations).
-   - Thread `kicked` onto `PendingTrigger` and `TriggeredAbilityOnStack`, and pass `triggered.kicked` into the CR 603.4 intervening-if recheck in `resolve_triggered_ability` so killing a kicked Sun-Blessed Healer or Nullpriest of Oblivion in response does not fizzle its own ETB trigger.
-   - Allow `Condition::Kicked` (and `WasCast`) to evaluate in ETB intervening-if clauses (`statics.rs`, `triggers.rs`), and route Batch 1's `ReplacementEffect::EntersWithCounters.if_cast` (`proposed_event.rs:1153`) through one shared cast-provenance check (preserving Familiar's serialized token shape or declaring the change).
+1. **Choices and payment of the entering spell (Batch 2A).** See the corrected model and checks below. A copy of a permanent spell keeps kicker and X.
 
 2. **Unified clause target legality and zone-filtered selection (Batch 2 foundation).**
    - Extend `requirement.another` (`triggers.rs:250`) to exclude both a live source (`Target::Permanent`) and a departed source's graveyard/exile arrival (`departure_arrivals(source)` → `Target::GraveyardCard`), preventing **Fiendish Panda** from targeting its own card in the graveyard.
@@ -44,20 +41,17 @@ Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-
    - Replace the overloaded `Object.printed` / `Object.front` / `Permanent.manifested` / `ZoneManager.melded_cards` split with an explicit battlefield form recording physical backing card(s), orientation and face-down state, separate from immutable `CopiableValues`. Gate `transform_permanent` (`zones.rs:978`) on backing form (fixing the CR 712.9 counterexample where a non-DFC Clone copying Cecil currently transforms) and expose one `is_face_down()` authority (replacing the 3 repeated `permanent.manifested && definition_id == ANONYMOUS` checks in `identity.rs:52`, `action.rs:454`, `selection_sampling.rs:212`).
    - Keep `move_object` / `complete_immediate_batch` strictly for non-choice moves (draws, stack counter, setup) and migrate battlefield-capable resolution moves (starting with `cast_permission::exile_linked` for `Decision::ExileLinked` at `decision.rs:2905`, which currently panics at `proposed_event.rs:971` if Azula exiles Ragnarok) onto `EffectFrame.batch`.
 
-*Choices made for review (reversible):* (1a) `Option<CastReceipt>` on `Permanent` + `kicked` on `PendingTrigger` / `TriggeredAbilityOnStack` so CR 603.4 recheck survives source removal; (2a) `ObjectSelector::ZoneMatching` reusing `Effect::Move` over bespoke mass-reanimation effects; (3a) `Modification::SetName` + `StaticContinuous` lowering over extending `SetCharacteristics`; (4a) general `freeze_delayed_effect` helper and `SourceCountersMinus` over the single-field `matches!`.
+*Choices made for review (reversible):* (1a) capture the entering spell at trigger time for the CR 603.4 recheck; (2a) `ObjectSelector::ZoneMatching` reusing `Effect::Move` over bespoke mass-reanimation effects; (3a) `Modification::SetName` + `StaticContinuous` lowering over extending `SetCharacteristics`; (4a) general `freeze_delayed_effect` helper and `SourceCountersMinus` over the single-field `matches!`.
 
 ## Batch 2 decomposition (graveyard choices, costs, simultaneous movement)
 
 I mapped this against `e1806481`. The cohort's rules duplicate three facts, and each needs one owner.
 
-**A. How a permanent was cast.** It has three representations today:
-- `Permanent.{was_cast, cast_x, cast_spent}` is written at `zones.rs:880` from `cast_spell`.
-- `EntersWithCounters.if_cast` asks the stack again (`proposed_event.rs:1153`, via `find_spell_on_stack_index` plus a controller check).
-- `kicked` lives only on `EffectFrame`, so `Condition::Kicked` is `is_resolution_only` and `check_intervening_if` passes `frame: None`. An ETB "if it was kicked" therefore can't be written.
-- *Owner:* `CastReceipt { kicked, x, spent }` (state crate), recorded once as `Permanent.cast: Option<CastReceipt>`. One `entering_cast_receipt(object, controller)` serves both entry construction and `if_cast`. `PendingTrigger` and `TriggeredAbilityOnStack` gain `kicked` next to their existing `x`/`spent`. Those two stay general "the ability's X and payment" fields because reflexive triggers (`resolution.rs:1729`) and activated payments also fill them.
-- `Condition::Kicked` stops being resolution-only. With a frame it reads `frame.kicked`. At fire time it reads the entering source's `cast`. The resolution recheck in `resolve_triggered_ability` runs against the frame built from `triggered.kicked`, so removing the source in response doesn't change the answer.
-- `TriggerCondition::WasCast` reads `cast.is_some()`.
-- Serialization: `Permanent.cast` and `kicked` skip when absent or false, which keeps existing snapshots and hashes for uncast or unkicked objects.
+**A. Choices and payment of the spell that entered.** CR 707.10 copies kicker and X on the stack. A copy of a permanent spell may enter kicked without having been cast. A blink or a battlefield copy has neither the original's choices nor payment. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
+
+- Carry one `SpellEntry { kicked, x, payment: Option<PaymentReceipt> }` from the resolving frame through the proposed move into the permanent. A cast for zero has an empty receipt, a spell copy has no payment, and an ordinary zone entry has no spell record. The proposal and permanent hold an optional shared pointer. An inline record measured 184 bytes per permanent; the shared record keeps the row at its 168-byte ceiling.
+- The same entry answers X counters and Familiar's cast condition before commitment. Its own ETB captures kicker, X and spent mana. Resolution rechecks the condition from the trigger's captured choices even if the source left.
+- Preserve the historical serialized permanent fields for existing games. The old `was_cast` field was always serialized, including false. A copied spell counting as cast was a rules error.
 
 **B. Whether a target fits its clause, given its source.** Four sites hold copies today:
 - `fits_trigger_clause` (`triggers.rs:244`) checks `another` against the live source only, plus distinctness, mana budget and source bound.
@@ -75,18 +69,17 @@ I mapped this against `e1806481`. The cohort's rules duplicate three facts, and 
 
 ### Delete — do not maintain (deepest owner first, consumers moved in the same cut)
 
-1. `Permanent.was_cast`, `cast_x`, `cast_spent`, and their writes at `zones.rs:880–882`. Consumers move to `Permanent.cast`: `triggers.rs:1082` (the ETB frame's x/spent, which now also gives kicked) and `triggers.rs:1719` (`WasCast`).
-2. The stack re-lookup inside `EntersWithCounters.if_cast` (`proposed_event.rs:1153–1160`). It moves to `entering_cast_receipt`.
-3. `Condition::Kicked` in `is_resolution_only`. The `debug_assert` stays for the remaining resolution-only conditions.
+1. Removed `Permanent.was_cast`, `cast_x` and `cast_spent` as state fields. Their serialized names remain in the digest projection.
+2. Removed the separate stack lookup from `EntersWithCounters.if_cast`. Both this replacement and `TriggerCondition::WasCast` read the presence of payment on the spell entry.
+3. Moved `Condition::Kicked` out of the resolution-only group so the entering source can answer it when the trigger fires.
 4. The inline `another` checks at `triggers.rs:250`, `triggers.rs:501` and `retarget.rs:109`, and the separate `within_source_bound` calls at `triggers.rs:265` and `retarget.rs:114`. All move into `target_fits_clause`.
 5. No old path is deleted for C. Nothing bespoke exists to replace; the new selector is the only implementation.
 
 ### Implement slices (one shared mechanism per loop pass)
 
-1. **A, cast receipts.** Build the type, the permanent field, entry construction, `if_cast`, trigger `kicked`, and `Kicked` in intervening-if. Cards: Sun-Blessed Healer and Nullpriest of Oblivion, each in its first-printing set file (read the printing from Scryfall; Nullpriest predates FDN).
-   - Directed cases: cast kicked, then unkicked, then blinked (receipt `None`, no trigger). In the kicked case, kill the source in response to the ETB; the trigger still resolves. Familiar's cast/blink cases still pass.
-   - Fork at the kicker choice and at the target Command, and reject the stale Command.
-2. **B, clause legality.** Build `target_fits_clause` and `ClauseSource`, then move the four sites onto it. Cards: Fiendish Panda; Driver of the Dead (`avr.rs`, existing), whose remaining restrictions get exercised.
+1. **A, spell entries — built.** Sun-Blessed Healer (FDN) and Nullpriest of Oblivion (ZNR) use the same kicked intervening-if and graveyard move. The two set tests fork the kicker and target Commands, reject stale submissions, spend Cleric-only mana, remove the source with Lightning Bolt, and blink it in a sibling branch. The chooser sees the captured kicker during placement and both viewers see it after removal.
+   - Eleven debug checks passed across the card, rules, source-tap and conformance binaries, including Familiar's cast-only replacement, Toph's spend receipt and the spell copy's X, kicker and absent payment. Both FDN ledger rows name their directed checks.
+2. **B, clause legality — next.** Build `target_fits_clause` and `ClauseSource`, then move the four sites onto it. Cards: Fiendish Panda; Driver of the Dead (`avr.rs`, existing), whose remaining restrictions get exercised.
    - Panda's death trigger never offers its own graveyard card, and its power bound reads LKI after the +1/+1 counters.
    - A retargeted or resolution-time target outside Panda's bound is illegal.
    - The existing Jailer, Wolfbat and TLA within-power cases still pass.
@@ -101,7 +94,7 @@ I mapped this against `e1806481`. The cohort's rules duplicate three facts, and 
 ### Review criterion (`coverage-decomposition-review`)
 
 Healer, Nullpriest, Panda, Driver, Raise the Past, Rise of the Dark Realms, Immolator, Ordeal and Cane each compose from the shared mechanisms, with no card-specific engine branch and no duplicate state:
-- one `CastReceipt` owner;
+- one `SpellEntry` owner for the choices and payment of an entering spell;
 - one `target_fits_clause` behind placement, mode availability, retarget and resolution;
 - one zone selector feeding `Effect::Move`.
 
@@ -121,7 +114,7 @@ This concerns growing the card file, not runtime speed.
    - Gate: Jailer's learning program gained an explicit `TargetClause`. If `tests/model/test_pinned_pilot.py` fails, declare it with `scripts/pinned_pilot.py record --reason` (the extension was not rebuilt here). Full debug nextest, clippy and Engine Budget are still to run.
    - Not covered: Malice or Call paired with a blink in response (the Call case covers simultaneous deaths). Add it in the Batch 1 review if a fixture is cheap; otherwise carry it to Batch 2's integrated cases.
 2. **Graveyard choices, costs and simultaneous movement.**
-   - *Foundation:* Land items 1–2 as decomposed above (A cast receipts, B clause legality, C zone selection). Item 3 waits for a second consumer.
+   - *Foundation:* A is built. B (clause legality) and C (zone selection) remain. Item 3 waits for a second consumer.
    - *Cards & fixtures:* Use one two-graveyard setup for Raise the Past, Rise of the Dark Realms, Driver of the Dead (remaining target restrictions), Fiendish Panda (including self-exclusion in graveyard), Heartfire Immolator, Sun-Blessed Healer (including removal in response to kicked ETB), Nullpriest of Oblivion, Feldon's Cane (`atq.rs`) and Ordeal of Nylea. Abyssal Harvester is blocked (see below).
 3. **Effective characteristics and grants.**
    - *Foundation:* Land item 4 (`Modification::SetName`, `StaticContinuous` lowering for transformation Auras, mana-cache invalidation for static ability removal/grant in `zones.rs:934`, `record_vocabulary.rs` scan, and decoupled observed `name` / `creature_types_set` in `observation.rs:1572`).
@@ -138,7 +131,7 @@ Row identity comes from the [FDN ledger](../.lf/wave/coverage/research/standard-
 | Fake Your Own Death, Undying Malice, Celestial Armor | Track which creature received a grant and when it ends. Move the Equipment after its entry trigger resolves. The protection follows its original recipient. When Fake Your Own Death is cast on a stolen creature, its owner gets the tapped card and the trigger's controller gets the Treasure. A dying token still produces Treasure. Malice returns the card tapped with its counter. |
 | Angelic Destiny, Ordeal of Nylea | Follow the enchanted creature through death (including simultaneous Aura + creature departure reading `ObjectLki.attached_to`) and the Aura through its own departure. Only the eligible Aura appearance is recovered. Resolve Ordeal's attack, counter threshold, sacrifice and optional library selection through its actual triggers. |
 | Raise the Past, Rise of the Dark Realms, Driver, Fiendish Panda, Heartfire Immolator | Put qualifying and excluded cards in both graveyards. Check simultaneous entry, ownership, resulting control and ETB triggers. Driver and Panda choose legal graveyard targets when their triggers are placed, including Panda's last power and its exclusions. Pump Immolator, sacrifice it as the cost and return it before resolution. Its damage uses its departed power. |
-| Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane | Read the actual kicked `CastReceipt` in the ETB intervening-if (CR 603.4). An ordinary blink supplies `None` and does not trigger. Each has its own graveyard target restrictions. Check competing restricted spends on the kicked cards. Cane exiles itself as the cost before shuffling. |
+| Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane | Read the actual kicker choice in the ETB intervening-if (CR 603.4). An ordinary blink supplies `None` and does not trigger. Each has its own graveyard target restrictions. Check competing restricted spends on the kicked cards. Cane exiles itself as the cost before shuffling. |
 | Characteristics subset | Kellan and Librarian: incarnation-bound upgrades. Sanctuary and Barrens: persistent versus temporary animation. Dropkick Bomber: flying and a damage trigger granted to one exact recipient. Witness Protection, Eaten by Piranhas and Moon: layered form changes across a copy and through death LKI. |
 
 Pair Malice or Valkyrie's Call with simultaneous deaths and a blink in response. Keep simultaneous reanimation and sacrificed-source power in the integrated cases.

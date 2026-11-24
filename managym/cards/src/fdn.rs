@@ -21,6 +21,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        sun_blessed_healer(),
         kykar_zephyr_awakener(),
         infernal_vessel(),
         nine_lives_familiar(),
@@ -556,6 +557,43 @@ fn kykar_zephyr_awakener() -> CardDefinition {
                         vec![Effect::create_tokens("token.flying_spirit", 1)],
                     ],
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sun_blessed_healer() -> CardDefinition {
+    let text_box = "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.";
+    CardDefinition {
+        key: "fdn.sun_blessed_healer",
+        scryfall_id: "323d029e-9a88-4188-b3a4-38ef32cffc9f",
+        printed: PrintedCharacteristics {
+            name: "Sun-Blessed Healer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{1}{W}"))],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::Kicked),
+                effects: vec![Effect::return_to_battlefield(
+                    ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            max_mana_value: Some(2),
+                            ..CardPredicate::permanent()
+                        },
+                    }),
+                    false,
+                )],
             }],
             text_box: text_box.into(),
             ..Default::default()

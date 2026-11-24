@@ -889,7 +889,10 @@ impl Game {
                 .and_then(|object| self.find_spell_on_stack_index(object))
                 .is_some_and(|index| matches!(&self.state.stack_objects[index],
                     crate::state::stack_object::StackObject::Spell(spell) if self.was_cast_from_graveyard(spell))),
-            Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
+            Condition::Kicked => frame.map_or_else(
+                || source_permanent().and_then(|p| p.spell_entry.as_deref()).is_some_and(|entry| entry.kicked),
+                |frame| frame.kicked,
+            ),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))
                 .is_some_and(|target| {

@@ -8607,7 +8607,7 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
             (s.game().state[p.object].kind() == ObjectKind::Token).then_some(p)
         })
         .unwrap();
-    assert!(!token.was_cast);
+    assert!(token.spell_entry.is_none());
     let definition = &s.game().state[token.object];
     assert!(definition.supertypes.is_empty());
     assert!(definition.keywords.has(Keyword::Flying));

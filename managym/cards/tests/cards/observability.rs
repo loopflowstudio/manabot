@@ -135,7 +135,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     let Permanent {
         manifested: _,
 
@@ -152,9 +152,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
         timestamp: _,
         counters: _,
         attacking: _,
-        was_cast: _,
-        cast_x: _,
-        cast_spent: _,
+        spell_entry: _,
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
@@ -192,16 +190,8 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
         ),
         ("attacking", Seen::Permanent(permanent::ATTACKING)),
         (
-            "was_cast",
-            Seen::Transient("read only by entering-the-battlefield triggers as it enters"),
-        ),
-        (
-            "cast_x",
-            Seen::Transient("copied into its own entering trigger's X as it fires"),
-        ),
-        (
-            "cast_spent",
-            Seen::Transient("copied into its own entering trigger's mana spent as it fires"),
+            "spell_entry",
+            Seen::Transient("its own entering trigger captures the spell's choices and payment"),
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),

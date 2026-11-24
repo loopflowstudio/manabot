@@ -434,27 +434,19 @@ impl Game {
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
         // Inline (delayed or chosen-mode) effects have no printed ability.
-        let (effects, ability) = if let Some(effects) = triggered.inline_effects {
-            (effects, None)
+        let (effects, ability, intervening_if) = if let Some(effects) = triggered.inline_effects {
+            (effects, None, None)
         } else {
             let Ability::Triggered {
                 intervening_if,
                 effects,
                 ..
             } = &stacked_trigger_face(&triggered).abilities[triggered.ability_index];
-            // CR 603.4: an intervening "if" that no longer holds removes the
-            // ability from the stack doing nothing.
-            if intervening_if.as_ref().is_some_and(|condition| {
-                !self.check_intervening_if(
-                    condition,
-                    source_controller,
-                    triggered.source_ref(),
-                    triggered.context,
-                )
-            }) {
-                return;
-            }
-            (effects.clone(), Some(triggered.ability_index))
+            (
+                effects.clone(),
+                Some(triggered.ability_index),
+                intervening_if.clone(),
+            )
         };
 
         let requirements = crate::state::ability::effect_target_requirements(&effects);
@@ -466,6 +458,39 @@ impl Game {
         ) else {
             return;
         };
+
+        let mut frame = EffectFrame {
+            program,
+            remembered: triggered.remembered,
+            source_identity: crate::state::game_object::AbilitySource::optional(
+                Some(source_object),
+                triggered.source_identity.reference(),
+            ),
+            inherited_from: triggered
+                .source_lki
+                .as_ref()
+                .and_then(|lki| lki.inherited_from),
+            source_transforms: triggered.source_transforms,
+            kicked: triggered.kicked,
+            trigger_damage: triggered.trigger_damage,
+            x: triggered.x,
+            spent: triggered.spent,
+            targets,
+            context_target: triggered.context,
+            triggering_player: triggered.player,
+            ability,
+            ..EffectFrame::new(
+                triggered.controller,
+                crate::state::ability::bind_effect_clauses(effects),
+            )
+        };
+        // CR 603.4: recheck before counting a resolution. The frame keeps
+        // the spell's kicker choice even if its permanent has since left.
+        if intervening_if.as_ref().is_some_and(|condition| {
+            !self.check_condition(condition, source_controller, Some(&frame))
+        }) {
+            return;
+        }
 
         // Track per-turn resolutions for "the Nth time this ability has
         // resolved this turn" gating.
@@ -479,33 +504,8 @@ impl Game {
             .entry(key)
             .or_insert(0);
         *count += 1;
-        let resolutions_this_turn = *count;
+        frame.resolutions_this_turn = *count;
 
-        let frame = EffectFrame {
-            program,
-            remembered: triggered.remembered,
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(source_object),
-                triggered.source_identity.reference(),
-            ),
-            inherited_from: triggered
-                .source_lki
-                .as_ref()
-                .and_then(|lki| lki.inherited_from),
-            source_transforms: triggered.source_transforms,
-            resolutions_this_turn,
-            trigger_damage: triggered.trigger_damage,
-            x: triggered.x,
-            spent: triggered.spent.clone(),
-            targets,
-            context_target: triggered.context,
-            triggering_player: triggered.player,
-            ability,
-            ..EffectFrame::new(
-                triggered.controller,
-                crate::state::ability::bind_effect_clauses(effects),
-            )
-        };
         self.run_frame(frame);
     }
 
@@ -1726,6 +1726,7 @@ impl Game {
                     frame.context_target,
                 );
                 trigger.remembered = frame.remembered.clone();
+                trigger.kicked = frame.kicked;
                 trigger.x = frame.x;
                 trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;

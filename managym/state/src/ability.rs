@@ -266,7 +266,7 @@ pub enum Condition {
     /// creature or a land entered the battlefield under your control this
     /// turn").
     AnyOf(Vec<Condition>),
-    /// Resolution only: the resolving spell was kicked (CR 702.33).
+    /// The spell or the spell that became this permanent was kicked (CR 702.33).
     Kicked,
     /// The resolving spell was cast from a graveyard. A spell copy was never cast.
     CastFromGraveyard,
@@ -345,7 +345,8 @@ impl Condition {
     /// `Effect::If` and intervening-if clauses.
     pub fn reads_source(&self) -> bool {
         match self {
-            Condition::OwnsMeldPair { .. }
+            Condition::Kicked
+            | Condition::OwnsMeldPair { .. }
             | Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -372,8 +373,7 @@ impl Condition {
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
         match self {
-            Condition::Kicked
-            | Condition::CastFromGraveyard
+            Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
             | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
@@ -383,7 +383,8 @@ impl Condition {
             | Condition::Moved
             | Condition::TargetControlledByYou => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
-            Condition::OwnsMeldPair { .. }
+            Condition::Kicked
+            | Condition::OwnsMeldPair { .. }
             | Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
             | Condition::SourceSaddled

@@ -119,6 +119,8 @@ pub struct TriggeredAbilityOnStack {
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kicked: bool,
     /// The ability's X (`PendingTrigger::x`).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
@@ -194,6 +196,15 @@ impl StackObject {
     /// integer registry key with the same value.
     pub fn source_card_registry_key(&self) -> PublicId {
         PublicId(self.source_definition_id().0)
+    }
+
+    /// The spell's kicker choice, including the choice carried by its ETB trigger.
+    pub fn kicked(&self) -> bool {
+        match self {
+            Self::Spell(spell) => spell.kicked,
+            Self::TriggeredAbility(trigger) => trigger.kicked,
+            Self::ActivatedAbility(_) => false,
+        }
     }
 
     pub fn ability_index(&self) -> Option<usize> {

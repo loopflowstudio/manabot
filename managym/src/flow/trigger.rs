@@ -71,6 +71,8 @@ pub struct PendingTrigger {
     /// The player the triggering event names ("they": the caster of the
     /// triggering spell), separate from its context object.
     pub player: Option<PlayerId>,
+    /// Kicker choice carried by the triggering source's spell.
+    pub kicked: bool,
     /// The ability's X: for an entering permanent's own trigger, the X of
     /// the spell that became it (CR 107.3m); otherwise 0.
     pub x: u8,
@@ -215,6 +217,9 @@ impl serde::Serialize for PendingTrigger {
         }
         if self.trigger_damage != 0 {
             map.serialize_entry("trigger_damage", &self.trigger_damage)?;
+        }
+        if self.kicked {
+            map.serialize_entry("kicked", &true)?;
         }
         if self.x != 0 {
             map.serialize_entry("x", &self.x)?;

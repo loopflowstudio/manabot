@@ -570,6 +570,7 @@ impl Game {
                         crate::flow::trigger::TriggerOrderingClass::AbilityTriggered => 2,
                     },
                     ability: Some(trigger.ability_index),
+                    kicked: trigger.kicked,
                     x: trigger.x,
                     trigger_damage: trigger.trigger_damage,
                     source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
@@ -620,6 +621,7 @@ impl Game {
         let mut frame = ContinuationFrame {
             controller: object.controller().0,
             ability: object.ability_index(),
+            kicked: object.kicked(),
             ..ContinuationFrame::default()
         };
         let clauses: &[usize] = match object {
@@ -627,7 +629,6 @@ impl Game {
                 frame.kind = 1;
                 frame.source = self.object_reference(spell.object, viewer);
                 frame.mode = spell.mode;
-                frame.kicked = spell.kicked;
                 frame.x = spell.x;
                 frame.granted_keywords = KeywordData::from_keywords(
                     &self.spell_keywords(spell.object, spell.controller),

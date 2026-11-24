@@ -153,6 +153,40 @@ impl serde::Serialize for Counters {
     }
 }
 
+/// Casting choices retained by the permanent a spell becomes (CR 400.7d).
+/// A spell copy keeps kicker and X but paid nothing. A cast for zero has
+/// an empty payment receipt.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpellEntry {
+    pub kicked: bool,
+    pub x: u8,
+    pub payment: Option<crate::payment::PaymentReceipt>,
+}
+
+// Keep the field names and order used by recorded game digests.
+fn serialize_spell_entry<S: serde::Serializer>(
+    spell: &Option<std::sync::Arc<SpellEntry>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(None)?;
+    map.serialize_entry(
+        "was_cast",
+        &spell.as_ref().is_some_and(|entry| entry.payment.is_some()),
+    )?;
+    let Some(entry) = spell else { return map.end() };
+    if entry.x != 0 {
+        map.serialize_entry("cast_x", &entry.x)?;
+    }
+    if let Some(payment) = entry.payment.as_ref().filter(|paid| !paid.is_empty()) {
+        map.serialize_entry("cast_spent", payment)?;
+    }
+    if entry.kicked {
+        map.serialize_entry("kicked", &true)?;
+    }
+    map.end()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
@@ -189,16 +223,9 @@ pub struct Permanent {
     /// continuous-effect records.
     pub timestamp: PublicId,
     pub attacking: bool,
-    /// True only for this incarnation entering as a resolving cast spell.
-    pub was_cast: bool,
-    /// The X announced for that spell (CR 107.3m), read by its own
-    /// entering-the-battlefield triggers; 0 otherwise.
-    #[serde(skip_serializing_if = "crate::is_zero")]
-    pub cast_x: u8,
-    /// The mana spent to cast that spell (CR 601.2h), read by its own
-    /// entering-the-battlefield triggers; empty otherwise.
-    #[serde(skip_serializing_if = "crate::payment::PaymentReceipt::is_empty")]
-    pub cast_spent: crate::payment::PaymentReceipt,
+    /// Present only when a spell resolved into this permanent. Forks share it.
+    #[serde(flatten, serialize_with = "serialize_spell_entry")]
+    pub spell_entry: Option<std::sync::Arc<SpellEntry>>,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -256,9 +283,7 @@ impl Permanent {
             counters: Counters::default(),
             keyword_counter_timestamps: Default::default(),
             attacking: false,
-            was_cast: false,
-            cast_x: 0,
-            cast_spent: Default::default(),
+            spell_entry: Default::default(),
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),

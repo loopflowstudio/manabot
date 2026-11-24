@@ -73,6 +73,7 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
 
 fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        kicked: false,
         trigger_damage: 0,
         program: false,
         remembered: Vec::new(),

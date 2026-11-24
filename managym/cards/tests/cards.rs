@@ -193,3 +193,124 @@ mod woe;
 mod wth;
 #[path = "cards/zen.rs"]
 mod zen;
+#[path = "cards/znr.rs"]
+mod znr;
+
+/// Both Clerics share a graveyard and a competing restricted spend. Only
+/// their second legal target and their kicker price differ.
+fn check_kicked_return(name: &str, mana: &str, second_target: &str, excluded: &str) {
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        state::{
+            game_object::{PlayerId, Target},
+            mana::{Color, Mana, ManaRestriction},
+            zone::ZoneType,
+        },
+    };
+    use support::{
+        game::{five_color_unfunded_setup, move_card, move_from_library},
+        inspect::{offered_targets, permanent_of, top_spell, zone_of},
+        play::{
+            cast, cast_card, command, pass_until, resolve_top, settle, spend_colorless, spend_named,
+        },
+    };
+
+    let mut s = five_color_unfunded_setup(&[
+        name,
+        "Llanowar Elves",
+        "Sol Ring",
+        "Gray Ogre",
+        "Lightning Bolt",
+    ]);
+    let elves = move_from_library(&mut s, 0, "Llanowar Elves", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, second_target, ZoneType::Graveyard);
+    for excluded in ["Forest", "Lightning Bolt", excluded] {
+        move_from_library(&mut s, 0, excluded, ZoneType::Graveyard);
+    }
+    move_from_library(&mut s, 1, "Llanowar Elves", ZoneType::Graveyard);
+    let bolt = move_from_library(&mut s, 1, "Lightning Bolt", ZoneType::Hand);
+    s.set_player_mana_pool(1, "R");
+    s.set_player_mana_pool(0, mana);
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana::restricted_to(ManaRestriction::spell(["Cleric"]), [0, 0, 0, 0, 1, 0]),
+        None,
+    );
+
+    let card = cast(&mut s, name);
+    let kicker = s.snapshot();
+    command(&mut s, |a| matches!(a, Action::Decline { .. }));
+    spend_colorless(&mut s);
+    assert_eq!(top_spell(&s).spent.total(), 2);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(s.game().state.stack_objects.is_empty());
+
+    s.restore(&kicker);
+    command(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    spend_named(&mut s, |label| label.contains("{G}"));
+    spend_colorless(&mut s);
+    let spent = top_spell(&s).spent.clone();
+    assert_eq!(spent.total(), Mana::parse(mana).total());
+    assert_eq!(spent.amounts()[Color::Green as usize], 1);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let targets = offered_targets(&s);
+    assert_eq!(targets.len(), 2);
+    let source = permanent_of(&s, card).unwrap();
+    let entry = s.game().state.permanents[source]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .as_deref()
+        .unwrap();
+    assert!(entry.kicked);
+    assert_eq!(entry.payment.as_ref(), Some(&spent));
+    let chooser = Observation::for_player(s.game(), PlayerId(0));
+    assert!(chooser.continuation.iter().any(|frame| frame.kicked));
+    let targeting = s.snapshot();
+    for (chosen, stays) in [(elves, other), (other, elves)] {
+        s.restore(&targeting);
+        let target = Target::GraveyardCard(chosen);
+        assert!(targets.contains(&target));
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseTarget { target: t, .. } if *t == target),
+        );
+        s.pass_priority();
+        cast_card(&mut s, bolt);
+        assert!(s.choose_target(Target::Permanent(source)));
+        resolve_top(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&s, chosen), Some(ZoneType::Graveyard));
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            assert_eq!(obs.stack_objects.len(), 1);
+            assert!(obs.stack_objects[0].kicked);
+            assert!(obs.continuation[0].kicked);
+        }
+        settle(&mut s);
+        assert_eq!(zone_of(&s, chosen), Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, stays), Some(ZoneType::Graveyard));
+    }
+
+    // Blink the kicked incarnation while its original trigger waits.
+    s.restore(&targeting);
+    command(
+        &mut s,
+        |a| matches!(a, Action::ChooseTarget {target: Target::GraveyardCard(id), ..} if *id == elves),
+    );
+    let exile = move_card(&mut s, card, ZoneType::Exile);
+    let returned = move_card(&mut s, exile, ZoneType::Battlefield);
+    let id = permanent_of(&s, returned).unwrap();
+    assert!(s.game().state.permanents[id]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .is_none());
+    assert!(s.game().state.pending_triggers.is_empty());
+    settle(&mut s);
+    assert_eq!(zone_of(&s, elves), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, other), Some(ZoneType::Graveyard));
+}

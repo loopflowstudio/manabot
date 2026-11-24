@@ -1742,7 +1742,7 @@ impl Observation {
                 }
                 _ => None,
             },
-            kicked: matches!(stack_object, StackObject::Spell(spell) if spell.kicked),
+            kicked: stack_object.kicked(),
             spell: match stack_object {
                 StackObject::Spell(spell) => Some(Self::spell_data(game, spell)),
                 _ => None,

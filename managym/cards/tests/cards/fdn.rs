@@ -1695,3 +1695,8 @@ fn departure_granted_returns_follow_owner_controller_and_one_incarnation() {
     stack_departures(&mut s);
     assert!(s.game().state.stack_objects.is_empty());
 }
+
+#[test]
+fn kicked_healer_returns_only_cheap_nonland_permanents() {
+    super::check_kicked_return("Sun-Blessed Healer", "2WW", "Sol Ring", "Gray Ogre");
+}

@@ -1103,6 +1103,17 @@ kind `Token`, and neither it nor the copy has a `CardId`. A definition's
 `is_token` says only that its catalog row is a token definition's; an object's
 kind is the authority for what it is.
 
+Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
+nonland permanent card with mana value two or less in your graveyard. Nullpriest
+of Oblivion uses the same trigger to return a creature card of any mana value.
+The trigger remembers kicker if the Cleric dies in response. Exiling and
+returning the Cleric gives it a fresh entry, so it offers no second target.
+
+A copy of a kicked permanent spell enters with the original kicker choice and
+X. Only the cast spell has a payment receipt, including when its cost was zero.
+A battlefield copy takes its characteristics from the permanent and starts with
+its own entry choices. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
+
 Token creation replacements finish before the allocator assigns the token's
 viewer id, owner and kind. Spell copies use `Object::spell_copy`. The zone
 allocator supplies each copy's `ObjectId`.

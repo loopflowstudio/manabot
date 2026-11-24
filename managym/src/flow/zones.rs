@@ -816,10 +816,11 @@ impl Game {
             lki.copiable = default_content_pack().retain_copiable_values(object);
             self.record_object_lki(lki);
         }
-        let cast_spell = (old_zone == Some(ZoneType::Stack))
-            .then(|| self.find_spell_on_stack_index(object_id))
-            .flatten()
-            .map(|index| self.state.stack_objects_mut().remove(index));
+        if old_zone == Some(ZoneType::Stack) {
+            if let Some(index) = self.find_spell_on_stack_index(object_id) {
+                self.state.stack_objects_mut().remove(index);
+            }
+        }
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
@@ -875,12 +876,7 @@ impl Game {
             permanent.manifested = entry.manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
-            // CR 400.7d: the permanent remembers how its spell was cast.
-            if let Some(StackObject::Spell(cast)) = cast_spell {
-                permanent.was_cast = true;
-                permanent.cast_x = cast.x;
-                permanent.cast_spent = cast.spent;
-            }
+            permanent.spell_entry = entry.spell;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             event_controller = permanent.controller;

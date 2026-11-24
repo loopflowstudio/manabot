@@ -119,6 +119,7 @@ fn stack(
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
             source_face: Some(game.state[source_object].copiable_definition()),
+            kicked: false,
             trigger_damage: 0,
             program: false,
             remembered: Vec::new(),
@@ -698,6 +699,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
         source_face: Some(game.state[source_object].copiable_definition()),
+        kicked: false,
         trigger_damage: 0,
         program: false,
         remembered: Vec::new(),
