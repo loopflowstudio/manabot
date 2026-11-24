@@ -281,8 +281,13 @@ def exercise_continuation(root: Path) -> None:
         {k: v for k, v in arrays.items() if not k.startswith("rng.")},
         historical | {"schema": "1"},
     )
-    with pytest.raises(
-        ValueError, match="incompatible MLX snapshot schema with host continuation"
+    with (
+        patch.object(
+            state, "read_host", side_effect=AssertionError("legacy host read")
+        ),
+        pytest.raises(
+            ValueError, match="incompatible MLX snapshot schema with host continuation"
+        ),
     ):
         attempt(2)
     host_file.unlink()
