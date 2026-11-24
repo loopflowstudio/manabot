@@ -102,3 +102,63 @@ fn dragonlords_servant_reduces_only_dragon_spells() {
     cast_card(&mut s, giant);
     assert_eq!(top_spell(&s).spent.total(), 4);
 }
+
+#[test]
+fn impact_tremors_triggers_for_each_goblin() {
+    use crate::support::{
+        inspect::card_of,
+        play::{cast_owned, pass_until, resolve_top, spend_colorless},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::{
+        mana::{Color, Colors},
+        stack_object::StackObject,
+    };
+    use std::collections::HashSet;
+
+    for count in [2, 4] {
+        let mut s = five_color_setup(&["Impact Tremors", "Dragon Fodder", "Doubling Season"]);
+        let tremors = s.force_permanent_on_battlefield(0, "Impact Tremors");
+        s.set_player_mana_pool(0, "1R");
+        if count == 4 {
+            s.force_permanent_on_battlefield(0, "Doubling Season");
+        }
+        cast_owned(&mut s, "Dragon Fodder");
+        spend_colorless(&mut s);
+        resolve_top(&mut s);
+        pass_until(&mut s, ActionSpaceKind::Priority);
+        let goblins = s.battlefield_permanents_named(0, "Goblin");
+        assert_eq!(goblins.len(), count);
+        assert_eq!(goblins.iter().collect::<HashSet<_>>().len(), count);
+        for goblin in goblins {
+            let face = s.game().characteristics(goblin);
+            assert_eq!(face.pt(), (1, 1));
+            assert_eq!(face.colors, Colors::from_iter([Color::Red]));
+            assert_eq!(face.creature_types, ["Goblin"]);
+        }
+        s.assert_life(1, 20);
+        assert_eq!(s.game().state.stack_objects.len(), count);
+        let stack = s.game().state.stack_objects.clone();
+        assert!(stack
+            .iter()
+            .all(|item| matches!(item, StackObject::TriggeredAbility(_))
+                && item.source_object() == card_of(&s, tremors)));
+        let mut fork = s.clone();
+        resolve_top(&mut fork);
+        fork.assert_life(1, 19);
+        assert_eq!(fork.game().state.stack_objects.len(), count - 1);
+        s.assert_life(1, 20);
+        assert_eq!(s.game().state.stack_objects.len(), count);
+        assert_eq!(s.game().state.stack_objects, stack);
+        resolve_top(&mut s);
+        s.assert_life(1, 19);
+        assert_eq!(
+            s.game().state.stack_objects,
+            fork.game().state.stack_objects
+        );
+        for branch in [&mut s, &mut fork] {
+            settle(branch);
+            branch.assert_life(1, 20 - count as i32);
+        }
+    }
+}

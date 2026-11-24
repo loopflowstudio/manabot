@@ -1,4 +1,28 @@
 {
+  "Dragon Fodder": {
+    "name": "Dragon Fodder",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create two 1/1 red Goblin creature tokens.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Impact Tremors": {
+    "name": "Impact Tremors",
+    "mana_cost": "{1}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control enters, this enchantment deals 1 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
   "Diregraf Ghoul": {
     "name": "Diregraf Ghoul",
     "mana_cost": "{B}",

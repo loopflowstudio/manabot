@@ -1,6 +1,9 @@
 //! Dragons of Tarkir.
 use managym_state::{
-    ability::{Condition, Effect, ObjectSelector, Scope, TargetSpec},
+    ability::{
+        Ability, Actor, Condition, Effect, ObjectSelector, PlayerSelector, Scope, TargetSpec,
+        TriggerSubject,
+    },
     card::{
         CardDefinition, CardType, CardTypes, PrintedCharacteristics, SpellCostReduction,
         StaticAbility,
@@ -10,7 +13,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![clone_legion(), dragonlords_servant(), rending_volley()]
+    vec![
+        clone_legion(),
+        dragonlords_servant(),
+        impact_tremors(),
+        rending_volley(),
+    ]
 }
 
 fn clone_legion() -> CardDefinition {
@@ -81,6 +89,25 @@ fn dragonlords_servant() -> CardDefinition {
                 generic: 1,
             })],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn impact_tremors() -> CardDefinition {
+    CardDefinition {
+        key: "dtk.impact_tremors",
+        scryfall_id: "56fb4035-197b-4d28-9bf7-bb62c304067e",
+        printed: PrintedCharacteristics {
+            name: "Impact Tremors".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::matching(Actor::You, CardPredicate::creature(), false),
+                vec![Effect::DealDamageToPlayer { player: PlayerSelector::EachOpponent, amount: 1.into() }],
+            )],
+            text_box: "Whenever a creature you control enters, this enchantment deals 1 damage to each opponent.".into(),
             ..Default::default()
         },
         ..Default::default()

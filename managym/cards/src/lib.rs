@@ -15,6 +15,7 @@
 mod aer;
 mod afr;
 mod akh;
+mod ala;
 mod atq;
 mod bfz;
 mod blb;
@@ -128,6 +129,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
     akh::cards,
+    ala::cards,
     atq::cards,
     blb::cards,
     bfz::cards,

@@ -27,6 +27,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dragon(),
         elf_warrior(),
         food(),
+        goblin(),
         human(),
         human_soldier(),
         komas_coil(),
@@ -82,6 +83,19 @@ fn creature(
         color_override: Some(Colors::from_iter(colors)),
         ..definition
     }
+}
+
+fn goblin() -> TokenDefinition {
+    token(
+        "token.goblin_1_1_r",
+        "fbd728ed-d5dc-44b3-9159-6c86cab3be0c",
+        creature(
+            face("Goblin", [CardType::Creature], &["Goblin"], ""),
+            1,
+            1,
+            [Color::Red],
+        ),
+    )
 }
 
 fn cat() -> TokenDefinition {

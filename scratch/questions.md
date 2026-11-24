@@ -26,3 +26,5 @@ The controller fixture changes the Bolt’s controller after targets are chosen.
 
 Authority uses an opponent-scoped entry ability so Zhao keeps its existing serialized predicate. The fixture changes the resolving spell's controller and places Authority on either seat to cross ownership and control in both creature cases.
 Use Typhoid Rats as the untapped control. Both Innistrad creatures cost {B}, so the fixture needs no generic mana choice.
+
+Use the first printed red 1/1 Goblin token face (Unglued) and file the cross-set fixture with Impact Tremors, whose triggers supply the response windows.
