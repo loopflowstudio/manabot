@@ -345,6 +345,7 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
         bucketed=True,
         binding=actual.binding,
         value_token=agent.value_token is not None,
+        select_programs=True,
     )
     expected = replace(expected, bucket_needs=measured.needs)
     np.testing.assert_equal(asdict(actual), asdict(expected))
