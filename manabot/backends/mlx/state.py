@@ -28,8 +28,9 @@ from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.continuation import (
     HOST_FILE,
+    HostContinuation,
     StagedContinuation,
-    host_exists,
+    host_sha256,
     read_host,
 )
 
@@ -98,30 +99,29 @@ def restore(
             raise ValueError("incompatible MLX saved counts or input contract")
         arrays, saved = mx.load(path, return_metadata=True)
         header = metadata() | {"schema": "1"}
+        payload = read_host(found.path)
         if saved.get("schema") == "2":
-
-            def verify_sampling(host_sha256: str) -> None:
-                header.update(schema="2", continuation_sha256=host_sha256)
-                for key in ("rng.collector", "rng.mlx"):
-                    value = arrays.pop(key, None)
-                    if value is None or value.shape != (2,) or value.dtype != mx.uint32:
-                        raise ValueError(
-                            f"incompatible MLX snapshot RNG shape or dtype for {key}"
-                        )
-                    sampling[key] = value
-                header["rng_sha256"] = sampling_digest(sampling)
-                verify_header(saved, header)
-
-            host_file = read_host(found.path, verify=verify_sampling)
-            if host_file is None:
+            if payload is None:
                 raise ValueError(f"missing MLX {HOST_FILE}")
-            host = host_file.host
-        else:
-            if host_exists(found.path):
-                raise ValueError(
-                    "incompatible MLX snapshot schema with host continuation"
-                )
-            verify_header(saved, header)
+            for key in ("rng.collector", "rng.mlx"):
+                value = arrays.pop(key, None)
+                if value is None or value.shape != (2,) or value.dtype != mx.uint32:
+                    raise ValueError(
+                        f"incompatible MLX snapshot RNG shape or dtype for {key}"
+                    )
+                sampling[key] = value
+            header |= {
+                "schema": "2",
+                "continuation_sha256": host_sha256(payload),
+                "rng_sha256": sampling_digest(sampling),
+            }
+        elif (found.path / HOST_FILE).exists():
+            raise ValueError("incompatible MLX snapshot schema with host continuation")
+        # The header binds the host bytes, so a damaged file fails here by name
+        # rather than as a JSON decoding error.
+        verify_header(saved, header)
+        if payload is not None:
+            host = HostContinuation.model_validate_json(payload)
         expected = training_arrays(learner, ema)
         # Adam creates its two moments lazily on the first accepted step.
         if counts.optimizer_updates:

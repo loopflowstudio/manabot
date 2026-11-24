@@ -45,36 +45,21 @@ class HostContinuation(BaseModel):
         return self
 
 
-@dataclass(frozen=True)
-class HostFile:
-    host: HostContinuation
-    sha256: str
-
-
-def host_exists(folder: Path) -> bool:
-    """Legacy containers exclude any entry at the host file's path."""
-    return (folder / HOST_FILE).exists()
+def host_sha256(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
 
 
 def write_host(folder: Path, host: HostContinuation) -> str:
     """Stage the host state and return the digest of the exact bytes written."""
     payload = host.model_dump_json().encode()
     (folder / HOST_FILE).write_bytes(payload)
-    return hashlib.sha256(payload).hexdigest()
+    return host_sha256(payload)
 
 
-def read_host(
-    folder: Path, *, verify: Callable[[str], None] | None = None
-) -> HostFile | None:
-    """Return the saved host state, checking any container binding before decoding."""
+def read_host(folder: Path) -> bytes | None:
+    """The staged host bytes. The backend binds their digest before decoding them."""
     path = folder / HOST_FILE
-    if not path.is_file():
-        return None
-    payload = path.read_bytes()
-    sha256 = hashlib.sha256(payload).hexdigest()
-    if verify is not None:
-        verify(sha256)
-    return HostFile(HostContinuation.model_validate_json(payload), sha256)
+    return path.read_bytes() if path.is_file() else None
 
 
 def capture_host(collector: Collector, rng: np.random.Generator) -> HostContinuation:
