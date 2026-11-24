@@ -62,9 +62,11 @@ from manabot.policy.buckets import (
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
+    AttentionLayout,
     CatalogPrograms,
     CompactAttention,
     EventRows,
+    FactLayout,
     PackedAttention,
     Prepared,
     Tables,
@@ -716,21 +718,34 @@ class MLXActorCritic(nn.Module):
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
+        # Learner compaction requires inert object padding.
+        compact_learner = (
+            not inference and self.bucketed_shapes and self.object_trimming()
+        )
+        attention: AttentionLayout = "padded"
+        if self.live_tokens and self.config.attention_on:
+            attention = "live_tokens"
+        elif inference:
+            attention = "used_columns"
+        elif compact_learner:
+            attention = "packed_groups"
+        facts: FactLayout = "padded"
+        if inference and not self.bucketed_shapes:
+            facts = "used_columns"
+        elif compact_learner:
+            facts = "live_rows"
         return prepare(
             obs,
             self._static.tables,
-            inference=inference,
+            attention=attention,
+            facts=facts,
             select_programs=not inference,
-            # Compact rows change padding values, which only inert padding allows.
-            compact_learner=self.bucketed_shapes and self.object_trimming(),
-            bucketed=self.bucketed_shapes,
             binding=self._binding(),
             memory_summaries=self.config.decision_memory_summaries
             if self.config.decision_memory != "none"
             else 0,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
-            live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.config.value_aggregation == "value_token",
         )
 

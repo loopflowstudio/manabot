@@ -302,3 +302,16 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   `--resume` rewrites it in the four-file layout, and a copy then continues
   on MLX. Editing a seed in `continuation.json` must refuse naming that file
   and leave `out/` byte-identical (Etude marks the attempt `failed`).
+- Torch MPS inference layout (`attention="bucketed_columns"`): run
+  `uv run etude train manabot/recipes/local.py --config '{"device":"mps"}' --until updates=2`,
+  then load the policy and its `ObservationSpace` with
+  `resolve("torch").load_policy`, build a wide `ActorCritic` (for example
+  `hidden_dim=384`, 8 heads) and play scalar `Env(Match(selected_match()), space,
+  Reward(RewardConfig()))` games by CPU argmax, keeping each encoded decision.
+  Stack them into 64- and 256-row dense dicts and compare CPU `prepare(rows,
+  inference=True)`, MPS `prepare(rows, inference=True)` and the same MPS batch
+  with `dataclasses.replace(batch, attention_columns=None)`. Choose moves with
+  the trained policy and use the same wide model weights in each forward
+  comparison. Compare legal logits and values within float32 tolerance and
+  check that masked logits retain the illegal-action sentinel. Measure latency
+  with alternating, warmed collection calls on a quiet machine.

@@ -55,7 +55,15 @@ from manabot.policy.buckets import (
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
-from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
+from manabot.policy.prepare import (
+    AttentionLayout,
+    BeliefRows,
+    FactLayout,
+    Layout,
+    Prepared,
+    Tables,
+    prepare,
+)
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 from manabot.policy.spans import (
@@ -527,7 +535,8 @@ class ActorCritic(nn.Module):
 
         `inference` selects compaction and catalog coverage independently of
         autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
-        MPS routes only live fact rows; CPU and CUDA keep padded fact routes.
+        MPS uses bucketed object columns for inference and bucketed live fact
+        routes for both inference and learning.
         """
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
             rows = observation_spans(
@@ -559,20 +568,33 @@ class ActorCritic(nn.Module):
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         device = self.device_type
+        # Learners and CUDA inference keep padded attention; power-of-two
+        # column counts on MPS bound the distinct Metal attention graphs.
+        attention: AttentionLayout = "padded"
+        if self.config.attention_on:
+            if self.live_tokens:
+                attention = "live_tokens"
+            elif inference and device == "cpu":
+                attention = "used_columns"
+            elif inference and device == "mps":
+                attention = "bucketed_columns"
+        facts: FactLayout = "padded"
+        if device == "mps":
+            facts = "bucketed_live_rows"
+        elif inference and device == "cpu" and not self.bucketed_shapes:
+            facts = "used_columns"
         full_catalog = inference or (self.bucketed_shapes and device == "cuda")
         return prepare(
             obs,
             tables,
-            inference=inference and device == "cpu",
-            bucketed=self.bucketed_shapes,
-            live_tokens=self.live_tokens and self.config.attention_on,
+            attention=attention,
+            facts=facts,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
             binding=self._binding(),
             select_programs=not full_catalog,
-            live_facts=device == "mps",
         )
 
     def _evaluate_outputs(

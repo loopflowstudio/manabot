@@ -111,9 +111,9 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
-- Base new training and learnability trials on the current TLA frontier setup
-  (`experiments/tla_frontier.py`) rather than falling back to Elemental; TLA
-  does not have larger or longer games.
+- Base training, learnability and performance trials on
+  `experiments/tla_frontier.py` (including its model sizes) rather than
+  Elemental; TLA does not have larger or longer games.
 - Etude report curves average runs within a job. For a per-seed readout,
   select that seed's fixed checkpoint seatings in its own panel and declare
   `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
