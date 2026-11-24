@@ -18,6 +18,17 @@ use crate::state::{
     zone::ZoneType,
 };
 
+pub(crate) fn pending_trigger_description(
+    game: &crate::flow::game::Game,
+    trigger: &crate::flow::trigger::PendingTrigger,
+) -> Option<String> {
+    Some(trigger_description(
+        game.pending_trigger_face(trigger)?,
+        trigger.ability_index,
+        trigger.inline_effects.as_deref(),
+    ))
+}
+
 pub(super) fn stacked_trigger_description(
     trigger: &crate::state::stack_object::TriggeredAbilityOnStack,
 ) -> String {
@@ -29,7 +40,7 @@ pub(super) fn stacked_trigger_description(
 }
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
-pub(crate) fn trigger_description(
+fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,

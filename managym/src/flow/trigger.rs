@@ -152,6 +152,15 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl PendingTrigger {
+    /// Targets already committed to the requirement being filled.
+    pub(super) fn clause_targets(&self) -> impl Iterator<Item = Target> + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
+    }
+
     pub fn source_object(&self) -> ObjectId {
         self.source_identity.object()
     }

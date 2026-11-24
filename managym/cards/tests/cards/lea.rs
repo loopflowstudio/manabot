@@ -307,22 +307,26 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert!(s.choose_target(Target::Permanent(villager)));
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     assert_eq!(current_object(&s, clone).name, "Wolf Cove Villager");
-    // Pin the prospective copy and replacement continuation in the canonical
-    // state. Definition ids depend on the name-ordered catalog.
-    assert_eq!(
-        s.game().state.deterministic_hash().to_string(),
-        "v19:eeb431c8f45d6d159c3463ef2334bd99e13c43508b02e153063e73f19e6f7203"
-    );
     let pending = Observation::for_player(s.game(), PlayerId(0));
-    let fork = s.game().clone();
+    let mut fork = s.game().clone();
     assert_eq!(
         pending.to_json(),
         Observation::for_player(&fork, PlayerId(0)).to_json()
     );
-    assert_eq!(
-        s.game().state.deterministic_hash(),
-        fork.state.deterministic_hash()
-    );
+    // Both the prospective copy and the unanswered replacement belong to
+    // the canonical state. Vary each independently within the same catalog.
+    let hash = s.game().state.deterministic_hash();
+    assert_eq!(fork.state.deterministic_hash(), hash);
+    let entering = now(&s, clone);
+    let copy = fork.state[entering].copy.take().expect("prospective copy");
+    assert_ne!(fork.state.deterministic_hash(), hash);
+    fork.state[entering].copy = Some(copy);
+    assert_eq!(fork.state.deterministic_hash(), hash);
+    fork.state
+        .suspended_decision
+        .take()
+        .expect("pending replacement");
+    assert_ne!(fork.state.deterministic_hash(), hash);
 
     crate::support::play::command(&mut s, |action| {
         matches!(action, Action::ChooseMode { mode: 0, .. })

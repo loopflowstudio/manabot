@@ -2,7 +2,7 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, mana_description, trigger_description,
+    counter_description, mana_description, pending_trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -78,18 +78,9 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let face = trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                );
-                let record = self.source_face(trigger.source_object(), face)?;
                 let mut label = format!(
                     "Put on stack next — {}",
-                    trigger_description(
-                        record,
-                        trigger.ability_index,
-                        trigger.inline_effects.as_deref()
-                    )
+                    pending_trigger_description(self, trigger)?
                 );
                 if let Some(context) = trigger.context {
                     let reference = self.target_reference(context, *player);
@@ -157,7 +148,9 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
                 let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                let modes = self.unchosen_trigger_modes(trigger)?;
+                let Effect::TriggerModes { modes, .. } = self.pending_mode_rule(trigger)? else {
+                    return None;
+                };
                 Some(crate::agent::ability_description::effects_description(
                     modes.get(*mode)?,
                 ))

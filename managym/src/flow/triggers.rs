@@ -18,9 +18,9 @@ use crate::{
     state::{
         ability::{
             Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
-            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
-        card::CardType,
+        card::{CardDefId, CardType, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
@@ -209,28 +209,30 @@ pub(crate) struct TriggerIndex {
 }
 
 impl Game {
-    /// Whether `target` is the exact permanent whose ability triggered.
-    fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
-        matches!(target, Target::Permanent(id)
-            if trigger.source_ref().is_some() && self.permanent_object(id) == trigger.source_ref())
+    /// A waiting trigger keeps the definition of the appearance that fired it.
+    pub(crate) fn pending_trigger_definition(&self, trigger: &PendingTrigger) -> CardDefId {
+        trigger.source_lki.as_ref().map_or_else(
+            || self.state.source_base(trigger.source_object()).0,
+            |lki| lki.definition_id,
+        )
     }
 
-    fn trigger_requirements(
+    pub(crate) fn pending_trigger_face(
         &self,
         trigger: &PendingTrigger,
-    ) -> Option<Vec<crate::state::ability::TargetRequirement>> {
+    ) -> Option<&PrintedCharacteristics> {
+        self.source_face(
+            trigger.source_object(),
+            self.pending_trigger_definition(trigger),
+        )
+        .map(Arc::as_ref)
+    }
+
+    fn trigger_requirements(&self, trigger: &PendingTrigger) -> Option<Vec<TargetRequirement>> {
         let effects = match &trigger.inline_effects {
             Some(effects) => effects.as_slice(),
             None => self
-                .source_face(
-                    trigger.source_object(),
-                    trigger
-                        .source_lki
-                        .as_ref()
-                        .map_or(self.state.source_base(trigger.source_object()).0, |lki| {
-                            lki.definition_id
-                        }),
-                )?
+                .pending_trigger_face(trigger)?
                 .abilities
                 .get(trigger.ability_index)?
                 .effects(),
@@ -238,43 +240,39 @@ impl Game {
         Some(crate::state::ability::effect_target_requirements(effects))
     }
 
-    /// "Another target" excludes the exact source object.
-    fn excluded_source(
+    /// Apply this occurrence's source and clause limits to a legal target.
+    fn fits_trigger_clause(
         &self,
         trigger: &PendingTrigger,
-        requirement: &crate::state::ability::TargetRequirement,
-    ) -> Option<PermanentId> {
-        if !requirement.another {
-            return None;
-        }
-        let source = trigger.source_ref()?;
-        self.lookup_current_permanent(source).ok()
-    }
-
-    /// Clause-wide mana-value budget; paid X belongs to this occurrence,
-    /// independent of its source's current state or later mana production.
-    fn within_trigger_mana_budget(
-        &self,
-        trigger: &PendingTrigger,
-        requirement: &crate::state::ability::TargetRequirement,
+        requirement: &TargetRequirement,
         target: Target,
     ) -> bool {
-        self.within_target_mana_budget(
-            requirement,
-            trigger.x,
-            trigger
-                .targets
-                .iter()
-                .zip(&trigger.target_req_indices)
-                .filter(|(_, index)| **index == trigger.requirement_index)
-                .map(|(target, _)| *target),
-            target,
-        )
+        if requirement.another
+            && trigger
+                .source_ref()
+                .and_then(|object| self.lookup_current_permanent(object).ok())
+                .is_some_and(|id| target == Target::Permanent(id))
+        {
+            return false;
+        }
+        !trigger.clause_targets().any(|previous| previous == target)
+            && self.within_target_mana_budget(
+                requirement,
+                trigger.x,
+                trigger.clause_targets(),
+                target,
+            )
+            && self.within_source_bound(
+                target,
+                &requirement.spec,
+                trigger.source_object(),
+                trigger.source_ref(),
+            )
     }
 
     pub(crate) fn within_target_mana_budget(
         &self,
-        requirement: &crate::state::ability::TargetRequirement,
+        requirement: &TargetRequirement,
         x: u8,
         chosen: impl Iterator<Item = Target>,
         target: Target,
@@ -315,25 +313,9 @@ impl Game {
         let requirement = requirements
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
-        let duplicate = trigger
-            .targets
-            .iter()
-            .zip(&trigger.target_req_indices)
-            .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
-            || duplicate
-            || !self.within_trigger_mana_budget(trigger, requirement, target)
-            || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
-            || !self.within_source_bound(
-                target,
-                &requirement.spec,
-                trigger.source_object(),
-                trigger.source_ref(),
-            )
-            || self
-                .excluded_source(trigger, requirement)
-                .is_some_and(|id| target == Target::Permanent(id))
+            || !self.fits_trigger_clause(trigger, requirement, target)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -345,13 +327,7 @@ impl Game {
             .expect("validated trigger");
         trigger.targets.push(target);
         trigger.target_req_indices.push(trigger.requirement_index);
-        if trigger
-            .target_req_indices
-            .iter()
-            .filter(|index| **index == trigger.requirement_index)
-            .count()
-            >= requirement.max
-        {
+        if trigger.clause_targets().count() >= requirement.max {
             trigger.requirement_index += 1;
         }
         Ok(())
@@ -369,7 +345,7 @@ impl Game {
                 placing: None,
             }));
         }
-        loop {
+        'placement: loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();
             if placement.placing.is_none() {
                 while placement.group < 4 {
@@ -409,15 +385,20 @@ impl Game {
             };
             // CR 700.2b: a modal trigger's mode is chosen first; with no
             // mode that has legal targets it is removed (CR 700.2a).
-            if let Some(modes) = self.unchosen_trigger_modes(&trigger) {
-                let legal = self.legal_trigger_modes(&trigger, &modes);
-                let up_to = matches!(
-                    self.trigger_mode_rule(&trigger),
-                    Some(Effect::TriggerModes { up_to: Some(_), .. })
-                );
-                if up_to && (legal.is_empty() || self.trigger_modes_left(&trigger) == 0) {
-                    // "Choose up to": the chosen modes, in printed order.
-                    trigger.inline_effects = Some(self.chosen_mode_effects(&trigger, &modes));
+            if let Some(Effect::TriggerModes {
+                modes,
+                up_to,
+                unchosen,
+            }) = self.pending_mode_rule(&trigger)
+            {
+                let legal = self.legal_trigger_modes(&trigger, modes, *unchosen);
+                let optional = up_to.is_some();
+                if up_to.as_ref().is_some_and(|limit| {
+                    let limit = usize::try_from(self.controller_value(limit, trigger.controller))
+                        .unwrap_or(0);
+                    legal.is_empty() || trigger.chosen_modes.len() >= limit
+                }) {
+                    trigger.inline_effects = Some(Self::chosen_mode_effects(&trigger, modes));
                 } else if legal.is_empty() {
                     continue;
                 } else {
@@ -432,7 +413,7 @@ impl Game {
                                 player: controller,
                                 mode,
                             })
-                            .chain(up_to.then_some(Action::Decline { player: controller }))
+                            .chain(optional.then_some(Action::Decline { player: controller }))
                             .collect(),
                         focus: Vec::new(),
                     });
@@ -441,56 +422,25 @@ impl Game {
             let Some(requirements) = self.trigger_requirements(&trigger) else {
                 continue;
             };
-            let mut impossible = false;
             while let Some(requirement) = requirements.get(trigger.requirement_index) {
-                let count = trigger
-                    .target_req_indices
-                    .iter()
-                    .filter(|index| **index == trigger.requirement_index)
-                    .count();
-                let source = self.excluded_source(&trigger, requirement);
-                let legal: Vec<_> = self
-                    .legal_targets_for_spec(&requirement.spec, trigger.controller)
-                    .into_iter()
-                    .filter(|target| {
-                        self.within_trigger_mana_budget(&trigger, requirement, *target)
-                    })
-                    .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
-                    .filter(|target| {
-                        self.within_source_bound(
-                            *target,
-                            &requirement.spec,
-                            trigger.source_object(),
-                            trigger.source_ref(),
-                        )
-                    })
-                    .filter(|target| {
-                        !(requirement.another && self.is_trigger_source(&trigger, *target))
-                    })
-                    .filter(|target| {
-                        !trigger.targets.iter().zip(&trigger.target_req_indices).any(
-                            |(chosen, index)| {
-                                *index == trigger.requirement_index && chosen == target
-                            },
-                        )
-                    })
-                    .collect();
-                if legal.is_empty() {
-                    if count < requirement.min {
-                        impossible = true;
-                        break;
-                    }
-                    trigger.requirement_index += 1;
-                    continue;
-                }
+                let count = trigger.clause_targets().count();
                 let controller = trigger.controller;
-                let mut actions: Vec<_> = legal
+                let mut actions: Vec<_> = self
+                    .legal_targets_for_spec(&requirement.spec, controller)
                     .into_iter()
+                    .filter(|target| self.fits_trigger_clause(&trigger, requirement, *target))
                     .map(|target| Action::ChooseTarget {
                         player: controller,
                         target,
                     })
                     .collect();
+                if actions.is_empty() {
+                    if count < requirement.min {
+                        continue 'placement;
+                    }
+                    trigger.requirement_index += 1;
+                    continue;
+                }
                 if count >= requirement.min && requirement.max > requirement.min {
                     actions.push(Action::Decline { player: controller });
                 }
@@ -502,36 +452,17 @@ impl Game {
                     focus: Vec::new(),
                 });
             }
-            if !impossible {
-                self.place_triggered_ability_on_stack(trigger);
-            }
+            self.place_triggered_ability_on_stack(trigger);
         }
     }
 
-    /// The modes of a placing trigger whose modes are not yet chosen.
-    pub(crate) fn unchosen_trigger_modes(
-        &self,
-        trigger: &PendingTrigger,
-    ) -> Option<Vec<Vec<Effect>>> {
+    /// The printed modal rule applies until the chosen effects have been bound.
+    pub(crate) fn pending_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         if trigger.inline_effects.is_some() {
             return None;
         }
-        match self.trigger_mode_rule(trigger)? {
-            Effect::TriggerModes { modes, .. } => Some(modes.clone()),
-            _ => None,
-        }
-    }
-
-    /// The placing trigger's `Effect::TriggerModes`, its only effect.
-    fn trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         match self
-            .source_face(
-                trigger.source_object(),
-                trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                ),
-            )?
+            .pending_trigger_face(trigger)?
             .abilities
             .get(trigger.ability_index)?
             .effects()
@@ -541,50 +472,24 @@ impl Game {
         }
     }
 
-    /// How many modes the placing trigger may still choose: one, or "up to"
-    /// its value less those chosen.
-    fn trigger_modes_left(&self, trigger: &PendingTrigger) -> usize {
-        match self.trigger_mode_rule(trigger) {
-            Some(Effect::TriggerModes {
-                up_to: Some(value), ..
-            }) => usize::try_from(self.controller_value(value, trigger.controller))
-                .unwrap_or(0)
-                .saturating_sub(trigger.chosen_modes.len()),
-            _ => 1,
-        }
-    }
-
     /// Modes the placing trigger may choose next: every required target has
     /// a legal candidate, it is not chosen already, and an "unchosen" rule's
     /// source has not chosen it before.
-    fn legal_trigger_modes(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<usize> {
-        let unchosen = matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { unchosen: true, .. })
-        );
-        let chosen_before = match trigger
-            .source_ref()
-            .map(|source| self.lookup_current_permanent(source))
-        {
-            Some(Ok(id)) if unchosen => self.chosen_modes(id),
-            _ => Vec::new(),
-        };
-        self.targetable_trigger_modes(trigger, modes)
-            .into_iter()
-            .filter(|mode| !trigger.chosen_modes.contains(mode) && !chosen_before.contains(mode))
-            .collect()
-    }
-
-    /// Modes whose every required target has a legal candidate.
-    fn targetable_trigger_modes(
+    fn legal_trigger_modes(
         &self,
         trigger: &PendingTrigger,
         modes: &[Vec<Effect>],
+        unchosen: bool,
     ) -> Vec<usize> {
         let source = trigger
             .source_ref()
-            .and_then(|source| self.lookup_current_permanent(source).ok());
+            .and_then(|object| self.lookup_current_permanent(object).ok());
+        let chosen_before = source
+            .filter(|_| unchosen)
+            .map(|id| self.chosen_modes(id))
+            .unwrap_or_default();
         (0..modes.len())
+            .filter(|mode| !trigger.chosen_modes.contains(mode) && !chosen_before.contains(mode))
             .filter(|mode| {
                 crate::state::ability::effect_target_requirements(&modes[*mode])
                     .iter()
@@ -613,80 +518,58 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        let Some(Effect::TriggerModes {
+            modes,
+            up_to,
+            unchosen,
+        }) = self.pending_mode_rule(trigger)
+        else {
+            return Err(AgentError("no pending trigger mode".into()));
+        };
         if trigger.controller != player
-            || !self.legal_trigger_modes(trigger, &modes).contains(&mode)
+            || !self
+                .legal_trigger_modes(trigger, modes, *unchosen)
+                .contains(&mode)
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
-        let rule = self.trigger_mode_rule(trigger).cloned();
-        let source = trigger
-            .source_ref()
-            .and_then(|source| self.lookup_current_permanent(source).ok());
-        let trigger = self
+        let effects = up_to.is_none().then(|| modes[mode].clone());
+        let source = trigger.source_ref().filter(|_| *unchosen);
+        let placing = self
             .state
             .trigger_placement
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger");
-        match rule {
-            Some(Effect::TriggerModes { up_to: Some(_), .. }) => trigger.chosen_modes.push(mode),
-            Some(Effect::TriggerModes { unchosen, .. }) => {
-                trigger.inline_effects = Some(modes[mode].clone());
-                if let (true, Some(source)) = (unchosen, source) {
-                    let affected = self.affected_permanent(source);
-                    let controller = player;
-                    let object = self.state.permanents[source].as_ref().map(|p| p.object);
-                    self.apply_continuous(
-                        object,
-                        controller,
-                        affected,
-                        Modification::ModeChosen {
-                            mode: u8::try_from(mode).unwrap_or(u8::MAX),
-                        },
-                        EffectDuration::Indefinite,
-                    );
-                }
+        if let Some(effects) = effects {
+            placing.inline_effects = Some(effects);
+            if let Some(permanent) =
+                source.and_then(|object| self.lookup_current_permanent(object).ok())
+            {
+                self.apply_continuous(
+                    source,
+                    player,
+                    self.affected_permanent(permanent),
+                    Modification::ModeChosen {
+                        mode: u8::try_from(mode).unwrap_or(u8::MAX),
+                    },
+                    EffectDuration::Indefinite,
+                );
             }
-            _ => {}
+        } else {
+            placing.chosen_modes.push(mode);
         }
         Ok(())
     }
 
     /// The effects of the placing trigger's chosen modes, in printed order.
-    fn chosen_mode_effects(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
-        let mut chosen = trigger.chosen_modes.clone();
-        chosen.sort_unstable();
-        chosen
-            .into_iter()
-            .flat_map(|mode| modes[mode].iter().cloned())
+    fn chosen_mode_effects(trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
+        modes
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| trigger.chosen_modes.contains(index))
+            .flat_map(|(_, effects)| effects.iter().cloned())
             .collect()
-    }
-
-    /// Stop choosing an "up to" trigger's modes.
-    fn stop_choosing_trigger_modes(&mut self, player: PlayerId) -> Result<(), AgentError> {
-        let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        if trigger.controller != player {
-            return Err(AgentError("not the trigger's controller".into()));
-        }
-        let effects = self.chosen_mode_effects(trigger, &modes);
-        self.state
-            .trigger_placement
-            .as_mut()
-            .and_then(|p| p.placing.as_mut())
-            .expect("validated trigger")
-            .inline_effects = Some(effects);
-        Ok(())
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
@@ -696,12 +579,23 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        if matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { up_to: Some(_), .. })
-        ) && trigger.inline_effects.is_none()
+        if let Some(Effect::TriggerModes {
+            up_to: Some(_),
+            modes,
+            ..
+        }) = self.pending_mode_rule(trigger)
         {
-            return self.stop_choosing_trigger_modes(player);
+            if trigger.controller != player {
+                return Err(AgentError("not the trigger's controller".into()));
+            }
+            let effects = Self::chosen_mode_effects(trigger, modes);
+            self.state
+                .trigger_placement
+                .as_mut()
+                .and_then(|p| p.placing.as_mut())
+                .expect("validated trigger")
+                .inline_effects = Some(effects);
+            return Ok(());
         }
         let requirements = self
             .trigger_requirements(trigger)
@@ -709,11 +603,7 @@ impl Game {
         let requirement = requirements
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
-        let count = trigger
-            .target_req_indices
-            .iter()
-            .filter(|index| **index == trigger.requirement_index)
-            .count();
+        let count = trigger.clause_targets().count();
         if trigger.controller != player
             || count < requirement.min
             || requirement.max == requirement.min
@@ -752,11 +642,7 @@ impl Game {
     }
 
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
-        let source_definition_id = trigger
-            .source_lki
-            .as_ref()
-            .map(|lki| lki.definition_id)
-            .unwrap_or(self.state.source_base(trigger.source_object()).0);
+        let source_definition_id = self.pending_trigger_definition(&trigger);
         let source_face = self
             .source_face(trigger.source_object(), source_definition_id)
             .expect("placing trigger has a source face");
@@ -784,7 +670,7 @@ impl Game {
             context: trigger.context,
             player: trigger.player,
             x: trigger.x,
-            spent: trigger.spent.clone(),
+            spent: trigger.spent,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {

@@ -1048,10 +1048,10 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     let current = game.move_object(graveyard, ZoneType::Battlefield);
     let template = game.state[bolt].clone();
     game.state[current].become_copy_of(&template, &[]);
-    assert_eq!(game.unchosen_trigger_modes(&pending).unwrap().len(), 1);
-    assert!(game.trigger_requirements(&pending).is_some());
+
+    let trigger_id = pending.id;
     game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
-        remaining: vec![pending.clone()],
+        remaining: vec![pending],
         active: PlayerId(0),
         group: 0,
         placing: None,
@@ -1059,17 +1059,24 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     let label = game
         .action_description(&crate::agent::action::Action::ChooseTrigger {
             player: PlayerId(0),
-            trigger_id: pending.id,
+            trigger_id,
         })
         .unwrap();
     assert!(label.contains("Gray Ogre"));
-    game.state.trigger_placement = None;
-
-    // Placement retains the effects of the selected mode and its exact target.
-    pending.inline_effects = Some(game.unchosen_trigger_modes(&pending).unwrap().remove(0));
-    pending.targets = vec![Target::StackSpell(bolt)];
-    pending.target_req_indices = vec![0];
-    game.place_triggered_ability_on_stack(pending);
+    game.choose_trigger(PlayerId(0), trigger_id).unwrap();
+    game.current_action_space = game.flush_triggers();
+    let context = game.decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "trigger_mode");
+    assert!(context.instruction.contains("Gray Ogre"));
+    assert_eq!(game.action_space().unwrap().actions.len(), 1);
+    game.choose_trigger_mode(PlayerId(0), 0).unwrap();
+    game.current_action_space = game.flush_triggers();
+    let context = game.decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "trigger_targets");
+    assert!(context.instruction.contains("Gray Ogre"));
+    game.choose_trigger_target(PlayerId(0), Target::StackSpell(bolt))
+        .unwrap();
+    assert!(game.flush_triggers().is_none());
     let index = game.state.stack_objects.len() - 1;
     assert!(game.stack_target_requirement(index, 0).is_some());
     let StackObject::TriggeredAbility(stacked) = &game.state.stack_objects[index] else {

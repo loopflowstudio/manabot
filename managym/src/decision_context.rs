@@ -509,7 +509,7 @@ impl Game {
             let choosing_mode = placement
                 .placing
                 .as_ref()
-                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+                .is_some_and(|trigger| self.pending_mode_rule(trigger).is_some());
             view.stage = if choosing_mode {
                 "trigger_mode"
             } else if placement.placing.is_some() {
@@ -519,11 +519,8 @@ impl Game {
             }
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
-                let description = crate::agent::ability_description::trigger_description(
-                    &self.state[trigger.source_object()],
-                    trigger.ability_index,
-                    trigger.inline_effects.as_deref(),
-                );
+                let description =
+                    crate::agent::ability_description::pending_trigger_description(self, trigger)?;
                 if choosing_mode {
                     format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
                 } else {

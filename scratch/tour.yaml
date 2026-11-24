@@ -1,25 +1,31 @@
-at: d52156c9726f577689a7196f8a3f47f3436b2037
+at: 16c6fd0db86f35539c61bbf03a4cd7592da04ad3
 first:
   - path: docs/engine.md
-    why: Follow Clone and its ability through departure.
+    why: Follow a copy and its trigger through departure.
   - path: scratch/plan.md
-    why: Find the interaction witnesses and remaining lifetime rows.
-  - path: managym/state/src/stack_object.rs
-    why: Bind a stacked trigger to its original characteristics.
-  - path: managym/src/flow/triggers.rs
-    why: Capture the face as each trigger reaches the stack.
-  - path: managym/src/flow/resolution.rs
-    why: Resolve the captured ability and project its program.
+    why: Locate card batches and outstanding interaction checks.
+  - path: managym/state/src/game_object.rs
+    why: Distinguish an appearance’s copiable values from its printing.
   - path: managym/state/src/effect.rs
-    why: Define exactly what a copy can inherit.
-  - path: managym/cards/src/lci.rs
-    why: Follow Self-Reflection from hand and graveyard.
-  - path: managym/cards/src/ncc.rs
-    why: Exclude Replication itself from its upkeep targets.
-  - path: managym/cards/src/fin.rs
-    why: See Relm’s targeting and the Crystal’s scheduled sacrifice.
+    why: Define the exceptions a copy can inherit.
+  - path: managym/src/cards/content_pack.rs
+    why: Retain only forms the catalog cannot reconstruct.
+  - path: managym/state/src/stack_object.rs
+    why: Bind a stacked trigger to its original face.
+  - path: managym/src/flow/triggers.rs
+    why: Place the original ability and validate its targets.
+  - path: managym/src/flow/resolution.rs
+    why: Resolve retained triggers and copy exact appearances.
+  - path: managym/src/flow/zones.rs
+    why: Track physical cards through battlefield form changes.
+  - path: managym/src/flow/target_authority_tests.rs
+    why: Choose a departed source’s mode and exact target.
+  - path: managym/cards/tests/cards/lea.rs
+    why: Check suspended copies and departed forms across forks.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Restore both orders and inspect the copied triggers.
+    why: Replay both orders of the copied triggers.
+  - path: managym/cards/tests/cards/fin.rs
+    why: Compare transform, meld and token departures.
   - path: managym/cards/tests/cards/dsk.rs
     why: Compare hidden printings and their public copies.
   - path: tests/academy/test_manifest_recovery.py
