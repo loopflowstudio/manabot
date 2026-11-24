@@ -111,6 +111,7 @@ mod vis;
 mod war;
 mod woe;
 mod wth;
+mod wwk;
 mod xln;
 mod zen;
 mod znr;
@@ -242,6 +243,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     war::cards,
     woe::cards,
     wth::cards,
+    wwk::cards,
     xln::cards,
     zen::cards,
     znr::cards,

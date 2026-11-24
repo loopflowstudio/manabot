@@ -1,7 +1,7 @@
 //! Dominaria United.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, ObjectSelector, PaymentCost, Scope, TriggerCondition,
+        Ability, Actor, Effect, ObjectSelector, PaymentCost, Scope, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
@@ -15,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        pilfer(),
         balmor_battlemage_captain(),
         magnigoth_sentry(),
         resolute_reinforcements(),
@@ -122,4 +123,8 @@ fn balmor_battlemage_captain() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn pilfer() -> CardDefinition {
+    CardDefinition {key:"dmu.pilfer",scryfall_id:"6d872c10-4126-4130-a74a-1331ed418ca8",printed:PrintedCharacteristics {spell_effects:vec![Effect::RevealHandDiscardChosen {target:TargetSpec::Opponent,predicate:CardPredicate {not_card_types:vec![CardType::Land],..Default::default()}}],name:"Pilfer".into(),types:CardTypes::new([CardType::Sorcery]),mana_cost:Some(ManaCost::parse("{1}{B}")),text_box:"Target opponent reveals their hand. You choose a nonland card from it. That player discards that card.".into(),..Default::default()},..Default::default()}
 }

@@ -1,14 +1,17 @@
 //! Dominaria.
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
+        StaticAbility, StaticContinuous, StaticScope,
+    },
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![tatyova_benthic_druid(), run_amok()]
+    vec![lyra_dawnbringer(), tatyova_benthic_druid(), run_amok()]
 }
 
 fn run_amok() -> CardDefinition {
@@ -70,4 +73,8 @@ fn tatyova_benthic_druid() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn lyra_dawnbringer() -> CardDefinition {
+    CardDefinition {key:"dom.lyra_dawnbringer",scryfall_id:"93be6799-7b9d-44d4-84dc-2961692b5a85",printed:PrintedCharacteristics {statics:vec![StaticAbility::Continuous(StaticContinuous {scope:StaticScope::OtherYouControl(CardPredicate::subtype("Angel")),condition:None,characteristic_defining:false,modifications:vec![Modification::ModifyPt {power:LayerValue::Fixed(1),toughness:LayerValue::Fixed(1)},Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink]))]})],name:"Lyra Dawnbringer".into(),types:CardTypes::new([CardType::Creature]),supertypes:vec!["Legendary".into()],subtypes:vec!["Angel".into()],mana_cost:Some(ManaCost::parse("{3}{W}{W}")),power:Some(5),toughness:Some(5),keywords:Keywords::of(&[Keyword::Flying,Keyword::Lifelink,Keyword::FirstStrike]),text_box:"Flying\nFirst strike (This creature deals combat damage before creatures without first strike.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nOther Angels you control get +1/+1 and have lifelink.".into(),..Default::default()},..Default::default()}
 }

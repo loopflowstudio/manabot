@@ -7981,5 +7981,154 @@
     "keywords": [],
     "oracle_text": "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.",
     "colors": []
+  },
+  "Swiftfoot Boots": {
+    "name": "Swiftfoot Boots",
+    "mana_cost": "{2}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has hexproof and haste. (It can't be the target of spells or abilities your opponents control. It can attack and {T} no matter when it came under your control.)\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Basilisk Collar": {
+    "name": "Basilisk Collar",
+    "mana_cost": "{1}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has deathtouch and lifelink. (Any amount of damage it deals to a creature is enough to destroy it. Damage dealt by this creature also causes you to gain that much life.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Fireshrieker": {
+    "name": "Fireshrieker",
+    "mana_cost": "{3}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has double strike. (It deals both first-strike and regular combat damage.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Twinblade Blessing": {
+    "name": "Twinblade Blessing",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature has double strike. (It deals both first-strike and regular combat damage.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Unflinching Courage": {
+    "name": "Unflinching Courage",
+    "mana_cost": "{1}{G}{W}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +2/+2 and has trample and lifelink. (Damage dealt by the creature also causes its controller to gain that much life.)",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Untamed Hunger": {
+    "name": "Untamed Hunger",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +2/+1 and has menace. (It can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Pilfer": {
+    "name": "Pilfer",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent reveals their hand. You choose a nonland card from it. That player discards that card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Duress": {
+    "name": "Duress",
+    "mana_cost": "{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent reveals their hand. You choose a noncreature, nonland card from it. That player discards that card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Empyrean Eagle": {
+    "name": "Empyrean Eagle",
+    "mana_cost": "{1}{W}{U}",
+    "type_line": "Creature — Bird Spirit",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nOther creatures you control with flying get +1/+1.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Lyra Dawnbringer": {
+    "name": "Lyra Dawnbringer",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Legendary Creature — Angel",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Lifelink",
+      "First strike"
+    ],
+    "oracle_text": "Flying\nFirst strike (This creature deals combat damage before creatures without first strike.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nOther Angels you control get +1/+1 and have lifelink.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Aggressive Mammoth": {
+    "name": "Aggressive Mammoth",
+    "mana_cost": "{3}{G}{G}{G}",
+    "type_line": "Creature — Elephant",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nOther creatures you control have trample.",
+    "colors": [
+      "G"
+    ]
   }
 }

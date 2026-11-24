@@ -50,3 +50,31 @@ fn foundations_permanent_tatyova_benthic_druid() {
     s.assert_life(0, 21);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
 }
+
+#[test]
+fn foundations_grant_lyra_dawnbringer() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::{card_of, keywords};
+    use managym::state::card::Keyword;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Lyra Dawnbringer", "Serra Angel", "Gray Ogre"]);
+    let ally = s.force_permanent_on_battlefield(0, "Serra Angel");
+    let enemy = s.force_permanent_on_battlefield(1, "Serra Angel");
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let base = s.game().characteristics(ally).pt();
+    let source = s.force_permanent_on_battlefield(0, "Lyra Dawnbringer");
+    assert_eq!(
+        s.game().characteristics(ally).pt(),
+        (base.0 + 1, base.1 + 1)
+    );
+    assert_eq!(s.game().characteristics(source).power, 5);
+    assert_eq!(s.game().characteristics(other).pt(), (2, 2));
+    assert!(keywords(&s, ally).has(Keyword::Lifelink));
+    assert!(!keywords(&s, enemy).has(Keyword::Lifelink));
+    assert_eq!(keywords(&s, other).has(Keyword::Lifelink), false);
+    assert_eq!(s.game().characteristics(enemy).pt(), base);
+    let card = card_of(&s, source);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    assert_eq!(s.game().characteristics(ally).pt(), base);
+    assert!(!keywords(&s, ally).has(Keyword::Lifelink));
+}

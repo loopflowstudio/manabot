@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        twinblade_blessing(),
         elvish_regrower(),
         clinquant_skymage(),
         seekers_folly(),
@@ -777,6 +778,36 @@ fn elvish_regrower() -> CardDefinition {
                     },
                 ))],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn twinblade_blessing() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature has double strike. (It deals both first-strike and regular combat damage.)";
+    CardDefinition {
+        key: "fdn.twinblade_blessing",
+        scryfall_id: "ecf01cbe-9fcb-4f35-bc6b-2280620b06ff",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                    Keyword::DoubleStrike,
+                ]))],
+            })],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            name: "Twinblade Blessing".into(),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            keywords: Keywords::of(&[Keyword::Flash]),
             text_box: text_box.into(),
             ..Default::default()
         },

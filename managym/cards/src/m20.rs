@@ -6,15 +6,16 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        LayerValue, PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
     },
-    effect::EffectDuration,
+    effect::{EffectDuration, Modification},
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        empyrean_eagle(),
         rapacious_dragon(),
         agent_of_treachery(),
         brought_back(),
@@ -136,6 +137,37 @@ fn rapacious_dragon() -> CardDefinition {
                 vec![Effect::create_tokens("token.treasure", 2)],
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn empyrean_eagle() -> CardDefinition {
+    CardDefinition {
+        key: "m20.empyrean_eagle",
+        scryfall_id: "ac555709-c7cc-4c64-8a6f-8fe2bc149fcd",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::OtherYouControl(CardPredicate {
+                    flying: true,
+                    ..CardPredicate::creature()
+                }),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            })],
+            name: "Empyrean Eagle".into(),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Spirit".into()],
+            mana_cost: Some(ManaCost::parse("{1}{W}{U}")),
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            text_box: "Flying\nOther creatures you control with flying get +1/+1.".into(),
             ..Default::default()
         },
         ..Default::default()

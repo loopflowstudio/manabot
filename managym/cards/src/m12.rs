@@ -5,14 +5,17 @@ use managym_state::{
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        swiftfoot_boots(),
         sundial_of_the_infinite(),
         visions_of_beyond(),
         warstorm_surge(),
@@ -90,6 +93,40 @@ fn warstorm_surge() -> CardDefinition {
                     by: Some(ObjectSelector::Triggering),
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn swiftfoot_boots() -> CardDefinition {
+    let text_box = "Equipped creature has hexproof and haste. (It can't be the target of spells or abilities your opponents control. It can attack and {T} no matter when it came under your control.)\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "m12.swiftfoot_boots",
+        scryfall_id: "8b82753b-284c-44ba-9d48-d28913f02a5f",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                    Keyword::Hexproof,
+                    Keyword::Haste,
+                ]))],
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            name: "Swiftfoot Boots".into(),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            mana_cost: Some(ManaCost::parse("{2}")),
             text_box: text_box.into(),
             ..Default::default()
         },

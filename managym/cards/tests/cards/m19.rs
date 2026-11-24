@@ -84,3 +84,25 @@ fn foundations_permanent_meteor_golem() {
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
 }
+
+#[test]
+fn foundations_grant_aggressive_mammoth() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::{card_of, keywords};
+    use managym::state::card::Keyword;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Aggressive Mammoth", "Gray Ogre", "Hill Giant"]);
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let base = s.game().characteristics(ally).pt();
+    let source = s.force_permanent_on_battlefield(0, "Aggressive Mammoth");
+    assert!(keywords(&s, ally).has(Keyword::Trample));
+    assert!(!keywords(&s, enemy).has(Keyword::Trample));
+    assert_eq!(keywords(&s, other).has(Keyword::Trample), true);
+    assert_eq!(s.game().characteristics(enemy).pt(), base);
+    let card = card_of(&s, source);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    assert_eq!(s.game().characteristics(ally).pt(), base);
+    assert!(!keywords(&s, ally).has(Keyword::Trample));
+}

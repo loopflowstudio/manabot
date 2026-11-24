@@ -1,13 +1,16 @@
 //! Oath of the Gatewatch.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    ability::{Effect, ObjectSelector, Scope, TargetRequirement, TargetSpec},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
+        StaticAbility, StaticContinuous, StaticScope,
+    },
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![make_a_stand(), tajuru_pathwarden()]
+    vec![untamed_hunger(), make_a_stand(), tajuru_pathwarden()]
 }
 
 fn tajuru_pathwarden() -> CardDefinition {
@@ -49,6 +52,39 @@ fn make_a_stand() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                 ),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn untamed_hunger() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature gets +2/+1 and has menace. (It can't be blocked except by two or more creatures.)";
+    CardDefinition {
+        key: "ogw.untamed_hunger",
+        scryfall_id: "595deb86-b6cf-4e4f-a6cf-f5ff128b720d",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(2),
+                        toughness: LayerValue::Fixed(1),
+                    },
+                ],
+            })],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            name: "Untamed Hunger".into(),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
             text_box: text_box.into(),
             ..Default::default()
         },

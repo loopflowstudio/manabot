@@ -1,16 +1,18 @@
 //! Dragon's Maze.
 use managym_state::{
-    ability::{Condition, Effect, EffectValue, ObjectSelector},
+    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        ReplacementEffect,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticContinuous,
+        StaticScope,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![CardDefinition {
+    vec![unflinching_courage(),CardDefinition {
         key: "dgm.mazes_end",
         scryfall_id: "401f7042-24fd-42a0-ae7c-e6b7de1aa446",
         printed: PrintedCharacteristics {
@@ -51,4 +53,37 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         },
         ..Default::default()
     }]
+}
+
+fn unflinching_courage() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature gets +2/+2 and has trample and lifelink. (Damage dealt by the creature also causes its controller to gain that much life.)";
+    CardDefinition {
+        key: "dgm.unflinching_courage",
+        scryfall_id: "35952c24-d728-4ec6-b0d1-b8183a18554a",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample, Keyword::Lifelink])),
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(2),
+                        toughness: LayerValue::Fixed(2),
+                    },
+                ],
+            })],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            name: "Unflinching Courage".into(),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            mana_cost: Some(ManaCost::parse("{1}{G}{W}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

@@ -202,6 +202,8 @@ mod war;
 mod woe;
 #[path = "cards/wth.rs"]
 mod wth;
+#[path = "cards/wwk.rs"]
+mod wwk;
 #[path = "cards/xln.rs"]
 mod xln;
 #[path = "cards/zen.rs"]

@@ -146,3 +146,26 @@ fn token_producer_rapacious_dragon() {
     enter_and_settle(&mut s, "Rapacious Dragon");
     assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 2);
 }
+
+#[test]
+fn foundations_grant_empyrean_eagle() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::card_of;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Empyrean Eagle", "Wind Drake", "Gray Ogre"]);
+    let ally = s.force_permanent_on_battlefield(0, "Wind Drake");
+    let enemy = s.force_permanent_on_battlefield(1, "Wind Drake");
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let base = s.game().characteristics(ally).pt();
+    let source = s.force_permanent_on_battlefield(0, "Empyrean Eagle");
+    assert_eq!(
+        s.game().characteristics(ally).pt(),
+        (base.0 + 1, base.1 + 1)
+    );
+    assert_eq!(s.game().characteristics(source).power, 2);
+    assert_eq!(s.game().characteristics(other).pt(), (2, 2));
+    assert_eq!(s.game().characteristics(enemy).pt(), base);
+    let card = card_of(&s, source);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    assert_eq!(s.game().characteristics(ally).pt(), base);
+}

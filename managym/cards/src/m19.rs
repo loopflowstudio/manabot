@@ -3,7 +3,7 @@ use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -11,6 +11,7 @@ use managym_state::{
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        aggressive_mammoth(),
         meteor_golem(),
         gigantosaurus(),
         lathliss_dragon_queen(),
@@ -127,4 +128,8 @@ fn meteor_golem() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn aggressive_mammoth() -> CardDefinition {
+    CardDefinition {key:"m19.aggressive_mammoth",scryfall_id:"323f3c76-5e79-43e6-ae78-f555810edbc3",printed:PrintedCharacteristics {statics:vec![StaticAbility::Continuous(StaticContinuous {scope:StaticScope::OtherYouControl(CardPredicate::creature()),condition:None,characteristic_defining:false,modifications:vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))]})],name:"Aggressive Mammoth".into(),types:CardTypes::new([CardType::Creature]),subtypes:vec!["Elephant".into()],mana_cost:Some(ManaCost::parse("{3}{G}{G}{G}")),power:Some(8),toughness:Some(8),keywords:Keywords::of(&[Keyword::Trample]),text_box:"Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nOther creatures you control have trample.".into(),..Default::default()},..Default::default()}
 }
