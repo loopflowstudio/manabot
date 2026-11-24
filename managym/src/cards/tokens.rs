@@ -240,6 +240,11 @@ fn definition_programs_of(
 // ---------------------------------------------------------------------------
 // The serializer.
 
+/// Fields whose strings name a card or face (a back face, a meld partner, the
+/// meld pair and its result). They are written as definition references, so a
+/// printed name never reaches the policy as text.
+const CARD_NAME_FIELDS: [&str; 4] = ["back_face", "partner", "fronts", "result"];
+
 /// Writes tokens in their final `(kind, value)` form; no second pass converts
 /// them, and names are hashed in place without temporary strings.
 pub(crate) struct TokenWriter<'p> {
@@ -417,7 +422,9 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
         let reference = match self.field {
             Some("token_name") => Some(self.pack.token_id(value)),
-            Some("back_face") => Some(self.pack.definition_id(value)),
+            Some(field) if CARD_NAME_FIELDS.contains(&field) => {
+                Some(self.pack.definition_id(value))
+            }
             _ => None,
         };
         if let Some(row) = reference {
@@ -559,9 +566,15 @@ impl<'a, 'p> Compound<'a, 'p> {
     }
 
     fn element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), ContentError> {
-        let field = self.writer.field.take();
+        // A fixed array of card names (a meld pair's `fronts`) keeps its field.
+        let field = self
+            .writer
+            .field
+            .take_if(|field| !CARD_NAME_FIELDS.contains(field));
         value.serialize(&mut *self.writer)?;
-        self.writer.field = field;
+        if field.is_some() {
+            self.writer.field = field;
+        }
         Ok(())
     }
 
@@ -751,9 +764,33 @@ mod tests {
                 catalog.token_kind[source as usize],
                 TokenKind::DefinitionRef as u16
             );
-            // A created token, or a double-faced card's back face.
-            let row = CardDefId(row as u32);
-            assert!(pack.definition(row).unwrap().is_token || pack.front_face(row).is_some());
+            // A created token, a double-faced card's back face, or a named
+            // card or face (a meld pair and its result name one another).
+            assert!(pack.definition(CardDefId(row as u32)).is_some());
         }
+    }
+
+    #[test]
+    fn card_names_in_programs_are_definition_references_never_text() {
+        let pack = default_content_pack();
+        let catalog = catalog_tokens(pack).unwrap();
+        let text: std::collections::HashSet<i32> = catalog
+            .token_kind
+            .iter()
+            .zip(&catalog.token_value)
+            .filter(|(kind, _)| **kind == TokenKind::Text as u16)
+            .map(|(_, value)| *value)
+            .collect();
+        for definition in pack.definitions() {
+            let name = &definition.printed.name;
+            // Single-word names such as "Ally" are also printed subtypes.
+            if name.contains(' ') {
+                assert!(!text.contains(&name_value(name)), "{name}");
+            }
+        }
+        let ragnarok = pack.definition_id("Ragnarok, Divine Deliverance").unwrap();
+        assert!(catalog
+            .definition_ref_target_rows
+            .contains(&(ragnarok.0 as i32)));
     }
 }
