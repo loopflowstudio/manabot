@@ -81,6 +81,9 @@ export interface TrayItem {
   placed: PlacedOffer;
   /** The card the offer names, when the frame lets this viewer see it. */
   name: string | null;
+  /** That card's projection, for inspecting its rules text, counters and
+   *  play permissions; null for a sideboard candidate. */
+  card: CardState | null;
 }
 
 export interface BoardView {
@@ -159,16 +162,23 @@ function askedObjects(placed: PlacedOffer[], frame: ExperienceFrame): Set<number
   return asked;
 }
 
-function knownName(frame: ExperienceFrame, id: number | null): string | null {
-  if (id === null) return null;
-  for (const player of [frame.projection.agent, frame.projection.opponent]) {
-    const cards = [...player.graveyard, ...player.exile, ...(player.inspected ?? [])];
-    const card = cards.find(candidate => candidate.id === id);
-    if (card) return card.name;
-    const candidate = player.sideboard?.find(entry => entry.candidate_id === id);
-    if (candidate) return candidate.name;
-  }
-  return null;
+/** Every card this viewer can see off the battlefield, by zone, then the
+ *  cards it may inspect elsewhere (a library top it may play, a controlled
+ *  opponent's hand). */
+export function inspectableCards(players: PlayerState[]): CardState[] {
+  return players.flatMap(player => [
+    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...(player.inspected ?? []),
+  ]);
+}
+
+function trayItem(frame: ExperienceFrame, placed: PlacedOffer): TrayItem {
+  const id = placed.anchor.kind === 'tray' ? placed.anchor.id : null;
+  if (id === null) return { placed, name: null, card: null };
+  const players = [frame.projection.agent, frame.projection.opponent];
+  const card = inspectableCards(players).find(candidate => candidate.id === id) ?? null;
+  if (card) return { placed, name: card.name, card };
+  const candidate = players.flatMap(player => player.sideboard ?? []).find(entry => entry.candidate_id === id);
+  return { placed, name: candidate?.name ?? null, card: null };
 }
 
 // ———————————————————————————————————————— Board rows
@@ -342,8 +352,7 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   const buttons = list.filter(placed => placed.anchor.kind === 'button');
   buttons.forEach(placed => placedAt.add(placed));
   // Anything anchored to something not drawn falls back to the tray.
-  const tray = list.filter(placed => !placedAt.has(placed))
-    .map(placed => ({ placed, name: knownName(frame, placed.anchor.kind === 'tray' ? placed.anchor.id : null) }));
+  const tray = list.filter(placed => !placedAt.has(placed)).map(placed => trayItem(frame, placed));
 
   return {
     you,

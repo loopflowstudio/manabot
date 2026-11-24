@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import type { ExperienceFrame } from '$lib/types';
 import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { shortName } from '$lib/opponent-name';
+import { counterTerms, permissionTerms } from './inspect';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
+const PRIMARY_VERBS_TEST = new Set(['pass_priority', 'pay']);
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
@@ -124,6 +126,30 @@ describe('where decisions land', () => {
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const { agent, opponent } = frame.projection;
+    const base = { registry_key: 0, power: 0, toughness: 0, mana_value: 1, types: agent.hand[0]?.types ?? ({} as never) };
+    const stashed = { ...base, id: 9001, name: 'Lightning Bolt', zone: 'EXILE', owner_id: opponent.id, text_box: 'Deal 3.',
+      counters: { stash: 1 }, cast_permission: { player_id: agent.id, cost: '{R}', own_turn_only: true, any_mana: true } };
+    const flameshaped = { ...base, id: 9002, name: 'Mountain', zone: 'EXILE', owner_id: agent.id, face_down: true,
+      cast_permission: { player_id: agent.id, face_down: true, condition: 'you control a Wizard' } };
+    const controlled = { ...base, id: 9003, name: 'Island', zone: 'HAND', owner_id: opponent.id };
+    opponent.exile = [...opponent.exile, stashed];
+    agent.exile = [...agent.exile, flameshaped];
+    opponent.inspected = [controlled];
+    const offer = frame.offers.find(candidate => !PRIMARY_VERBS_TEST.has(candidate.verb))!;
+    frame.offers = [9001, 9002, 9003].map((id, index) => ({ ...offer, id: index + 1, subjects: [], focus: [id], label: `Play ${id}` }));
+    const view = boardView(frame, PLAYERS);
+    expect(view.tray.map(item => [item.name, item.card?.id])).toEqual([
+      ['Lightning Bolt', 9001], ['Mountain', 9002], ['Island', 9003]]);
+    const player = (id: number) => id === agent.id ? 'You' : 'Heuristic';
+    expect(counterTerms(view.tray[0].card?.counters)).toEqual(['1 stash counter']);
+    expect(permissionTerms(view.tray[0].card, () => 'source', player)[0]).toContain('spending mana of any type');
+    expect(permissionTerms(view.tray[1].card, () => 'source', player)[0]).toContain('only if you control a Wizard');
+    expect(view.tray[2].card?.owner_id).toBe(opponent.id);
   });
 
   it('asks about one blocker: blocks on attackers, not blocking as a button', () => {

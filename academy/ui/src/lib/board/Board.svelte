@@ -42,7 +42,7 @@
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -570,8 +570,7 @@
 
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
-  const cards = $derived(new Map([boardProjection.agent, boardProjection.opponent]
-    .flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).map(card => [card.id, card])));
+  const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
@@ -593,6 +592,12 @@
     point(card ? board.hand.find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
+  /** A tray card inspects as itself: its rules text, counters and permissions. */
+  function previewTray(item: TrayItem, element: HTMLElement | null): void {
+    if (!item.card) { previewName(element ? item.name : null, element); return; }
+    point(element ? [item.placed] : null);
+    show(element ? { name: item.card.name, text: item.card.text_box ?? null, permanent: null, card: item.card.id } : null, element);
+  }
   function previewName(name: string | null, element: HTMLElement | null): void {
     show(name ? { name, text: textOf(name), permanent: null, card: null } : null, element);
   }
@@ -603,7 +608,7 @@
   /** Rules text for a name in the log, from any card of that name this viewer can see. */
   function textOf(name: string): string | null {
     const players = [boardProjection.agent, boardProjection.opponent];
-    const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).find(candidate => candidate.name === name);
+    const card = inspectableCards(players).find(candidate => candidate.name === name);
     const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
     return card?.text_box ?? permanent?.text_box ?? null;
   }
@@ -809,7 +814,7 @@
               <div class="tray-card">
                 <BoardCard name={item.name} width={104} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
-                  onpreview={element => previewName(element ? item.name : null, element)} />
+                  onpreview={element => previewTray(item, element)} />
                 <span class="type-caption">{item.placed.offer.label}</span>
               </div>
             {:else}
