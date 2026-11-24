@@ -82,3 +82,11 @@ Post-build concept review (`a5c3c68beb` vs `82c5d1d1b7`) records five reversible
 
 - Codie's type line is "Artifact Creature — Book Construct". `Book` is filed as an artifact subtype in `state/src/subtype.rs`. That is an assumption: if the CR lists Book as a creature type, move it (one line).
 - Stack spell rows (`SpellData`) carry neither `kicked`, `flashback` nor the new `from_prepared`. Codie's trigger reads `from_prepared`, so the policy cannot see whether a spell on the stack is prepared. That gap predates this pass; it is left for a shared observation change rather than one column.
+
+## 2026-11-23 concept review (`71148883e2` vs `88ce96bd6b`)
+
+Four reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md`:
+- Route non-legacy pooled mana restrictions (starting with Heartwood Crafter's `ManaRestriction::ExceptSpellsFromHand`) through existing `PlayerData.pooled_mana_classes` -> `FactKind::EffectProgram(POOLED_MANA)` instead of appending 6 hardcoded `turn_state` columns and a bespoke `RestrictedManaData` boolean. Keeps the 4 legacy column restrictions, `test_restricted_mana_input.py`, and the pinned pilot untouched while following the open-vocabulary fact rule.
+- Drive `selection_sampling.rs::unseen_objects` from `is_face_down_in_exile && !can_view_face_down_exile(obj, viewer)` and pair `fill_foretold_slots` with unrestricted `fill_face_down_exile_slots` in `search.rs` and `possible_worlds.rs`, fixing an open-decklist privacy leak for Gandalf's Flameshape.
+- Consolidate all static play permissions (`graveyard_type_sources`, `exile_counter_plays`, `extra_land_plays`) onto `LayerBoard.play_permissions`, deduplicate `exile_playable_objects`, add `PlayRoute::PrintedGraveyard` for Quilled Greatwurm (so counter removal never fires on Muldrotha/Zul routes), and check `cast.spell(spell).types.is_land()` in `cast_spell_action`.
+- Project `SpellOnStack.{from_prepared, flashback}` to `StackObjectData`, v11 `stack::{FROM_PREPARED, FLASHBACK}`, `text_observation.py`, and `experience_projection.py`, and replace the growing positional-tuple ladder in `permission_facts` with a named extension record for post-TLA grant terms (preserving Hama's legacy token sequence).

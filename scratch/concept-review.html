@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Shared Casting Profiles &amp; Play Permissions (Post-Build Audit)</title>
+  <title>MTG-419 Concept Review — Shared Casting, Play Permissions, Spending Restrictions &amp; Exile Privacy</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -17,8 +17,6 @@
       --yes-ink: #175c2c;
       --no-bg: #fce8e6;
       --no-ink: #9c1f1a;
-      --part-bg: #fef3dc;
-      --part-ink: #7d4e00;
       --exist-bg: #eceae4;
       --exist-ink: #3c3a35;
       --prop-bg: #e5effd;
@@ -38,8 +36,6 @@
         --yes-ink: #84df9f;
         --no-bg: #3b1918;
         --no-ink: #ff9c97;
-        --part-bg: #3a2d12;
-        --part-ink: #f7c96d;
         --exist-bg: #2a2824;
         --exist-ink: #d0cbc0;
         --prop-bg: #162a45;
@@ -48,16 +44,8 @@
       }
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--ink);
-    }
-    main {
-      max-width: 70rem;
-      margin: 0 auto;
-      padding: 2.5rem 1.25rem 4rem;
-    }
+    body { margin: 0; background: var(--bg); color: var(--ink); }
+    main { max-width: 72rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
     .kicker {
       font-size: 0.8rem;
       letter-spacing: 0.08em;
@@ -66,11 +54,7 @@
       font-weight: 650;
       margin: 0 0 0.4rem;
     }
-    h1 {
-      font-size: 1.9rem;
-      line-height: 1.18;
-      margin: 0 0 0.75rem;
-    }
+    h1 { font-size: 1.9rem; line-height: 1.18; margin: 0 0 0.75rem; }
     h2 {
       font-size: 1.3rem;
       line-height: 1.25;
@@ -78,22 +62,19 @@
       padding-top: 1.1rem;
       border-top: 1px solid var(--border);
     }
-    h3 {
-      font-size: 1.02rem;
-      margin: 1.35rem 0 0.45rem;
-    }
+    h3 { font-size: 1.02rem; margin: 1.35rem 0 0.45rem; }
     p { margin: 0.5rem 0 0.9rem; }
     .scope {
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 4px solid var(--accent);
-      padding: 0.9rem 1.1rem;
+      padding: 0.95rem 1.15rem;
       border-radius: 6px;
       margin: 1rem 0 1.6rem;
     }
     .badge {
       display: inline-block;
-      font-size: 0.74rem;
+      font-size: 0.73rem;
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -103,7 +84,6 @@
     }
     .yes { background: var(--yes-bg); color: var(--yes-ink); }
     .no { background: var(--no-bg); color: var(--no-ink); }
-    .partial { background: var(--part-bg); color: var(--part-ink); }
     .existing { background: var(--exist-bg); color: var(--exist-ink); }
     .proposed { background: var(--prop-bg); color: var(--prop-ink); }
     table {
@@ -130,7 +110,7 @@
       color: var(--muted);
     }
     tr:last-child td { border-bottom: none; }
-    tr.biggest td { background: color-mix(in srgb, var(--no-bg) 32%, var(--surface)); }
+    tr.biggest td { background: color-mix(in srgb, var(--no-bg) 34%, var(--surface)); }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
@@ -143,9 +123,7 @@
       border-radius: 6px;
       padding: 0.95rem 1.05rem;
     }
-    .card.proposed-box {
-      border-color: var(--prop-ink);
-    }
+    .card.proposed-box { border-color: var(--prop-ink); }
     pre {
       margin: 0.5rem 0;
       padding: 0.7rem 0.85rem;
@@ -168,269 +146,279 @@
       padding: 0.85rem 1.05rem;
       margin: 0.8rem 0;
     }
-    .trace-label {
-      font-weight: 700;
-      color: var(--accent);
-      margin-bottom: 0.35rem;
-    }
-    .q-list li { margin: 0.75rem 0; }
+    .trace-label { font-weight: 700; color: var(--accent); margin-bottom: 0.35rem; }
+    .q-list li { margin: 0.8rem 0; }
     .chosen {
       font-weight: 700;
       text-decoration: underline;
       text-underline-offset: 2px;
     }
     .muted { color: var(--muted); font-size: 0.9rem; }
-    .pill-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.5rem 0 1rem; }
+    .callout {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--no-ink);
+      padding: 0.8rem 1rem;
+      border-radius: 6px;
+      margin: 0.9rem 0 1.2rem;
+    }
   </style>
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Post-Build Concept Review (a5c3c68beb vs. 82c5d1d1b7)</p>
-  <h1>Do the casting, permission, and exile-visibility concepts line up after the 31-card build?</h1>
+  <p class="kicker">Managym · MTG-419 · Concept Review (71148883e2 vs. main 88ce96bd6b)</p>
+  <h1>Do the casting, play-permission, restricted-mana, and exile-privacy concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The whole shared casting-profile, play-permission, casting-pipeline, and exile-visibility model across
-    <code>managym</code> (<code>cast_permission.rs</code>, <code>play.rs</code>, <code>action.rs</code>,
-    <code>decision.rs</code>, <code>resolution.rs</code>, <code>zones.rs</code>, <code>retarget.rs</code>,
-    <code>statics.rs</code>, <code>mana.rs</code>, <code>stack_object.rs</code>, <code>card.rs</code>,
-    <code>observation.rs</code>, <code>continuation.rs</code>, <code>decision_context.rs</code>,
-    <code>structured_offer.rs</code>, <code>observation_encoder.rs</code>) and its Python / Academy consumers
-    (<code>experience_projection.py</code>, <code>text_observation.py</code>, <code>inspect.ts</code>).<br>
-    <strong>Why this area:</strong> Since the initial review, MTG-419 shipped <code>SpellProfile::BackFace</code>,
-    <code>PlayRoute::FreeFromHand</code>, <code>AdditionalCost::FlashSurcharge</code>, unified
-    <code>action::SPELL_PROFILE</code>, announcement-frame profile projection, per-profile resolution-cast
-    eligibility, and 31 more cards (now 46/62 prepare, 12/17 HOB, 12/13 TDM, 11/17 FDN). Reviewing the whole area
-    now — with 22 MTG-419 rows remaining (Heartwood Crafter, Codie, Tinybones, Gandalf, Glamdring, Quilled
-    Greatwurm, Loot, Redcap, plus non-casting shared rules) — exposes five structural mismatches already in the built
-    code or blocking the next slices.
+    <strong>Area reviewed:</strong> The whole shared casting-profile, play-permission, mana-spending restriction, stack provenance, and private-exile visibility/determinization system across <code>managym</code>
+    (<code>play.rs</code>, <code>cast_permission.rs</code>, <code>action.rs</code>, <code>statics.rs</code>,
+    <code>zones.rs</code>, <code>decision.rs</code>, <code>mana/preview.rs</code>, <code>state/src/mana.rs</code>,
+    <code>state/src/stack_object.rs</code>, <code>observation.rs</code>, <code>observation_encoder.rs</code>,
+    <code>observation_layout.rs</code>, <code>continuation.rs</code>, <code>policy_history.rs</code>,
+    <code>selection_sampling.rs</code>, <code>search.rs</code>, <code>possible_worlds.rs</code>) and its Python/Academy consumers
+    (<code>experience_projection.py</code>, <code>text_observation.py</code>, <code>academy/ui/src/lib/mana.ts</code>,
+    <code>Plate.svelte</code>).<br>
+    <strong>Why this area:</strong> Slice 1 already delivered the unified <code>Game::cast_choices</code> builder (R1),
+    <code>Game::resolved_play_route</code> (R2), front-face resolution <code>payment_preview</code> (R3), and
+    <code>SpellOnStack.from_prepared</code> + Codie (<code>c5c415307f</code>, <code>bf5e38d587</code>, <code>cb30b69432</code>).
+    Stepping back before Heartwood Crafter, Sanar, Tinybones, Gandalf, Glamdring, Loot, Redcap, and Quilled Greatwurm
+    exposes four remaining conceptual mismatches — two in the current plan that would add permanent column bloat and a
+    viewer-privacy leak if built as planned, and two in the built code.
   </div>
 
   <h2>1. Product concepts vs. code concepts</h2>
   <table>
     <thead>
       <tr>
-        <th style="width:23%">Product concept<br><span class="muted">What a player, policy, or Academy knows and does</span></th>
+        <th style="width:22%">Product concept<br><span class="muted">What a player, policy, or Academy knows and does</span></th>
         <th style="width:27%">Code concept<br><span class="muted">Types, records, and APIs behind it</span></th>
-        <th style="width:11%">Aligned?</th>
-        <th style="width:39%">What is wrong (where No / Partial)</th>
+        <th style="width:10%">Aligned?</th>
+        <th style="width:41%">What is wrong (where No)</th>
       </tr>
     </thead>
     <tbody>
       <tr class="biggest">
-        <td><strong>Begin casting a spell (from priority OR during resolution) and carry its provenance to the stack</strong><br>Whether paid or free, from hand, exile, graveyard, or a prepared copy, timing bypasses during resolution (CR 608.2g) and stack provenance distinguishes a cast prepared spell from a stack copy</td>
-        <td>Two constructors: <code>Game::cast_via</code> (<code>play.rs:97</code>) vs. <code>Decision::resolution_cast_choices</code> (<code>decision.rs:728</code>); <code>CastChoices.{free, resolving}</code>; <code>SpellOnStack</code> (no <code>from_prepared</code>); <code>Action::SelectCard</code> vs. <code>Action::CastSpell</code> in <code>CastDuringResolution</code></td>
+        <td><strong>Pooled mana with spending restrictions</strong><br>Lesson, Ally, Powerstone, Heartwood Crafter (“can’t spend on spells from hand”), and future Standard restrictions should flow to policy, LLM text, and Academy through one open-ended representation</td>
+        <td>Split across two paths:<br>1) <code>PlayerData.restricted_mana</code> &rarr; 18 hardcoded <code>player</code> columns + 6 <code>turn_state</code> columns + 4-item <code>REPRESENTABLE</code> allowlist (<code>observation_encoder.rs:1307</code>)<br>2) <code>PlayerData.pooled_mana_classes</code> &rarr; open-ended <code>FactKind::EffectProgram(POOLED_MANA)</code> rows (<code>observation.rs:1324</code>, <code>observation_encoder.rs:1958</code>), gated to <code>effect.is_some() || combat</code></td>
         <td><span class="badge no">No</span><br><span class="muted">Biggest mismatch</span></td>
-        <td><strong>One action with two owners + colliding booleans:</strong> <code>CastChoices.resolving</code> is set to <code>*paid</code>, so a <em>free</em> resolution cast (Etali, Yue, Cascade, Solstice) has <code>free: true, resolving: false</code>. As a result, <code>fixed_cast_cost_choices</code> (<code>play.rs:711</code>) treats a free resolution cast of Harbinger of the Tides as a priority cast and prompts to pay <code>{2}</code> for flash even though CR 608.2g ignores timing. Neither constructor derives <code>from_prepared</code> from <code>PlayGrant.prepared</code>, so <code>SpellOnStack</code> loses prepared provenance once the exile copy moves to the stack (blocking Codie). And <code>payment_preview</code> (<code>mana/preview.rs:169</code>) matches only <code>Action::CastSpell</code>, so front-face <code>Action::SelectCard</code> resolution casts get no payment preview while non-front profiles of the same card do.</td>
+        <td><strong>One idea under two representations + plan violates open-vocabulary rule:</strong> <code>scratch/plan.md</code> proposes appending 6 more hardcoded columns to <code>turn_state</code> and adding a second bespoke boolean to <code>RestrictedManaData</code> across Rust, PyO3, Experience, Python, TypeScript, and 6 JSON schemas just for Heartwood Crafter. Every future Standard restriction (Dragon, Creature, exile-only, activated-only) would repeat that 6-column-per-card bloat — even though <code>pooled_mana_classes</code> / <code>POOLED_MANA</code> <em>already</em> encodes arbitrary <code>ManaClass</code> values (restriction + effect + combat + 6-color amounts) to policy facts, <code>text_observation.py:857</code>, Academy <code>Plate.svelte:42</code>, and <code>PaymentPreview</code>.</td>
       </tr>
       <tr>
-        <td><strong>See which permission or type quota a play offer uses</strong><br>Muldrotha’s Creature/Land quota, Zul Ashur’s grant, or Omniscience’s free route should show consistently whether it is the only route or overlaps another</td>
-        <td><code>priority_actions_for_object</code> (<code>action.rs:683</code>) erases <code>route = (routes.len() &gt; 1).then_some(permission)</code>; <code>observation.rs:1089</code>, <code>action_focus</code> (<code>2161</code>), and <code>action_description</code> (<code>action.rs:64</code>) match only <code>route: Some(...)</code></td>
+        <td><strong>Private face-down exile &amp; hidden-card accounting</strong><br>Foretell (face-down, foretell-bearing card, cast for foretell cost) vs. Gandalf’s Flameshape (face-down, any card, viewable &amp; playable only while controlling a Wizard)</td>
+        <td><code>PlayGrant.foretold</code> + <code>Game::is_foretold</code> across visibility (<code>zones.rs:690</code>, <code>continuation.rs:274</code>, <code>observation.rs:1518,1714</code>, <code>policy_history.rs:78</code>), unseen pool (<code>selection_sampling.rs:141</code>), and determinization (<code>search.rs:187</code>, <code>possible_worlds.rs:420,600</code>)</td>
         <td><span class="badge no">No</span></td>
-        <td><strong>Wire compatibility leaks into observations:</strong> Omitting <code>route</code> on single-route <code>Action</code>s was done to keep single-route <code>Command</code>s wire-compatible. Because observation, focus, and description read <code>action.route</code> directly instead of resolving the single route, a <em>solitary</em> Muldrotha graveyard play loses its <code>quota_type</code> (becomes 0), loses Muldrotha from <code>action_focus</code>, and loses its route description — then suddenly gains all three when Zul Ashur overlaps the same card.</td>
+        <td><strong>One flag for two ideas + privacy leak in the current plan:</strong> The prior plan decoupled visibility from <code>is_foretold</code> but left <code>unseen_objects</code> and determinization reading <code>foretold_cards</code> only. Under that plan, Flameshape’s face-down exiled cards (<code>foretold: false</code>) disappear from <code>opponent_cards</code> <em>and</em> are omitted from <code>unseen_counts</code>, letting an opponent subtract <code>visible + unseen</code> from <code>main_counts</code> to deduce both exact exiled cards (and breaking <code>possible_worlds</code> pool conservation).</td>
       </tr>
       <tr>
-        <td><strong>Face-down private exile with conditional play</strong><br>Foretell (face-down, owner views, cast later for foretell cost) vs. Gandalf’s Flameshape (face-down, private view &amp; play while you control a Wizard)</td>
-        <td><code>PlayGrant.foretold: bool</code> and <code>Game::is_foretold</code> (<code>cast_permission.rs:267</code>), called in 6 files (<code>zones.rs</code>, <code>continuation.rs</code>, <code>observation.rs</code>, <code>policy_history.rs</code>, <code>cast_permission.rs</code>)</td>
+        <td><strong>Static play permissions, per-card routes, and printed face legality</strong><br>Omniscience, Vizier, Iroh, High Fae Trickster, Muldrotha, Tinybones (counter-marked foreign exile + any mana), Loot (controller-only extra land), Quilled Greatwurm (graveyard self-cast with counter removal), and spell//land MDFCs</td>
+        <td><code>LayerBoard.play_permissions</code> (6 fields, <code>statics.rs:191</code>); separate <code>LayerBoard.additional_land_plays_each_player</code> (<code>statics.rs:205</code>); ad-hoc battlefield scan in <code>play_routes</code> for Muldrotha (<code>play.rs:274</code>); front-face <code>spell.types.is_land()</code> guard in <code>cast_spell_action</code> (<code>play.rs:595</code>); un-deduplicated <code>priority_candidate_objects</code> (<code>action.rs:420</code>)</td>
         <td><span class="badge no">No</span></td>
-        <td><strong>One flag for two unrelated ideas:</strong> <code>foretold</code> is simultaneously the sole authority for “hidden face-down card in exile” AND for Foretell-specific rules (foretell cost lookup, front-face restriction, <code>fill_foretold_slots</code> determinization filtering on <code>.foretell().is_some()</code>). <code>PlayGrant</code> has 10 booleans and <code>source: Option&lt;ObjectId&gt;</code>, with no board-level <code>condition: Option&lt;Condition&gt;</code> for Gandalf’s “as long as you control a Wizard.”</td>
+        <td><strong>No single owner for static play permissions + route leaks:</strong> Muldrotha scans every battlefield permanent inside <code>play_routes</code> per graveyard card instead of reading <code>LayerBoard.play_permissions</code>; <code>additional_land_plays_each_player</code> lives outside <code>play_permissions</code>; <code>cast_spell_action</code> rejects front-face lands before resolving <code>cast.spell(...)</code>; chaining <code>exile_counter_objects</code> onto <code>exile_granted_objects</code> without deduplication would double-offer a card holding both a grant and a stash counter; and Quilled Greatwurm needs <code>PlayRoute::PrintedGraveyard</code> so its counter-removal cost never triggers when cast via Muldrotha or Zul Ashur.</td>
       </tr>
       <tr>
-        <td><strong>Play counter-marked exiled cards, spend zone-restricted mana, or price spells dynamically</strong><br>Tinybones stash counters (persisting across Tinybones copies, foreign lands &amp; spells); Heartwood Crafter mana (no hand spells); Glamdring (equipped creature power)</td>
-        <td><code>Counters</code> only on <code>Permanent</code>/<code>Player</code> (no <code>object_counters</code>); <code>SpendingContext::Cast(SpellSnapshot)</code> (no origin zone); <code>StaticAbility::SpellsCostLess</code> (fixed <code>u8</code> only); <code>StaticPlayPermissions</code> lacks counter-exile play &amp; controller-only extra land play</td>
+        <td><strong>Observe stack cast provenance &amp; extended grant terms</strong><br>Know whether a spell on the stack is prepared (Codie triggers on it, not on copies) or flashback (exiles on stack exit), and observe conditional/prepared exile grants cleanly</td>
+        <td><code>SpellOnStack.{from_prepared, flashback}</code> exists in rules (<code>stack_object.rs:13-16</code>); <code>StackObjectData</code> and <code>stack</code> columns expose <code>kicked</code> but neither <code>from_prepared</code> nor <code>flashback</code>; <code>permission_facts</code> (<code>observation_encoder.rs:2001-2031</code>) uses a 4-branch positional tuple ladder</td>
         <td><span class="badge no">No</span></td>
-        <td><strong>Three core casting/permission concepts still absent:</strong> Tinybones’s permission belongs on <code>LayerBoard.play_permissions</code> alongside Omniscience/Vizier/Iroh, backed by sparse <code>GameState.object_counters</code> + <code>PlayRoute::ExileCounter</code> (not exact-source grants). <code>SpendingContext::Cast</code> needs <code>from: ZoneType</code> so <code>ManaRestriction::allows</code> stays the single spending authority. Glamdring needs dynamic <code>EffectValue</code> reduction in <code>effective_spell_cost</code>.</td>
+        <td><strong>Rules state hidden from policy, LLM text, and Academy:</strong> A player or policy deciding whether to Counterspell a spell on the stack cannot tell a prepared spell from its copy or a flashback spell from a normal cast (violating the same-change observation contract). Meanwhile <code>permission_facts</code> appends unnamed positional booleans in nested <code>if/else if</code> branches — unsustainable once Slice 2 adds <code>condition</code> and <code>face_down</code>.</td>
       </tr>
       <tr>
-        <td><strong>Choose which printed face/program of a card to play</strong><br>Front, Adventure, Omen, or Modal BackFace — including an MDFC where one face is a land and one is a spell</td>
-        <td><code>SpellProfile::{Front, Adventure, Omen, BackFace}</code>, <code>action::SPELL_PROFILE</code>, <code>ContinuationFrame.spell_profile</code>, <code>play_routes</code> (<code>play.rs:188</code>), <code>cast_spell_action</code> (<code>play.rs:515</code>)</td>
-        <td><span class="badge partial">Partial</span></td>
-        <td><strong>Works for spell/permanent pairs; front-face <code>is_land()</code> leaks:</strong> <code>play_routes</code> reads <code>self.state[object].types.is_land()</code> (front face only) before profile selection, and <code>cast_spell_action</code> rejects <code>spell.types.is_land()</code> on the front face before resolving <code>cast.spell(...)</code>. A spell-front / land-back MDFC under Omniscience would offer <code>PlayLand { route: Some(FreeFromHand) }</code>; a land-front / spell-back MDFC would be rejected by <code>cast_spell_action</code>.</td>
-      </tr>
-      <tr>
-        <td><strong>Resolve Adventures, Omens, Modal BackFaces, Flashback, and prepared copies</strong><br>Competing CR 616 exile replacements, countered vs. resolving Adventures, copied Omens, prepared copy SBA &amp; control transfer</td>
-        <td><code>ZoneEntry::{resolving_adventure, adventure_player, profile, transformed, prepared}</code>, <code>ReplacementEffect::{AdventureExile, ExileInsteadOfGraveyard}</code>, <code>EventBinding::Shuffle</code>, <code>zones.rs:643</code> (Flashback), <code>sba.rs:279</code></td>
+        <td><strong>Begin casting a spell (priority or resolution), preview payment, and inspect lone routes</strong><br>CR 608.2g resolution timing bypass, single-route Muldrotha/Foretell/LibraryTop observations, and front-face resolution payment preview</td>
+        <td><code>Game::cast_choices(player, object, profile, CastAuthority)</code> (<code>play.rs:123</code>), <code>Decision::cast_authority()</code> (<code>play.rs:110</code>), <code>Game::resolved_play_route</code> (<code>play.rs:367</code>), <code>payment_preview</code> (<code>mana/preview.rs:171</code>)</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned and verified by 148 native tests, 194 replay checkpoints, Clone Legion (copy doesn’t duplicate prepare), Honest Work (ability loss doesn’t unprepare), Smaug + Bilbo (CR 616 order), Pyromancer’s Goggles + Omen, and Monica // Photon transform/return.</td>
+        <td>Aligned in <code>c5c415307f</code>, <code>bf5e38d587</code>, <code>cb30b69432</code>: one constructor sets orthogonal <code>resolving</code>, <code>free</code>, <code>flash_surcharge</code>, <code>flashback</code>, <code>from_prepared</code>; <code>resolved_play_route</code> preserves single-route wire compatibility while projecting lone routes; <code>payment_preview</code> covers front-face <code>SelectCard</code> resolution offers.</td>
       </tr>
       <tr>
-        <td><strong>Inspect permissions, quotas, profiles, and stack mana value across viewers</strong><br>v11 tensors, Python bindings, semantic text, Academy <code>Inspect.svelte</code></td>
-        <td><code>CardData.cast_permissions</code>, <code>PlayerData.spent_graveyard_types</code>, <code>StackObjectData.effective_mana_value</code>, <code>DecisionContextView</code>, <code>inspect.ts</code></td>
-        <td><span class="badge partial">Partial</span></td>
-        <td>Core projection is aligned and verified across 1,164 viewer snapshots; missing single-route Muldrotha projection (row 2), <code>CardData.counters</code> / v11 <code>FactKind::Counter</code> for exiled cards (Tinybones), <code>from_prepared</code> on stack records (Codie), and conditional face-down visibility (Gandalf).</td>
+        <td><strong>Printed profiles &amp; resolution/departure rules</strong><br>Adventure CR 616 exile vs. counter, Omen shuffle vs. copy, Modal BackFace transform/return, Flashback stack-exit exile, prepared-copy SBA &amp; control transfer</td>
+        <td><code>SpellProfile</code>, <code>action::SPELL_PROFILE</code>, <code>ContinuationFrame.spell_profile</code>, <code>ZoneEntry</code>, <code>ReplacementEffect::{AdventureExile, ExileInsteadOfGraveyard}</code>, <code>EventBinding::Shuffle</code>, <code>sba.rs:279</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Aligned and proven across Yue, Solstice Revelations, Smaug + Bilbo, Twinmaw, Scavenger Regent, Pyromancer’s Goggles, Monica // Photon, Clone Legion, Honest Work, Codie, and 194 replay checkpoints.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Biggest mismatch: two casting constructors, colliding booleans, and single-route erasure</h2>
+  <h2>2. Biggest mismatch: hardcoded columns per mana restriction vs. the existing open-ended <code>POOLED_MANA</code> fact program</h2>
   <p>
-    Every cast — whether started at priority or mid-resolution — answers the same four questions:
-    <strong>which object &amp; profile</strong>, <strong>is it during resolution (CR 608.2g)</strong>,
-    <strong>which route / cost treatment</strong> (normal, free, grant, flashback, quota, counter-exile),
-    and <strong>what stack provenance it carries</strong> (<code>from_prepared</code>, <code>flashback</code>,
-    <code>exile_instead_of_graveyard</code>). Right now priority and resolution assemble <code>CastChoices</code>
-    separately, conflate <code>free</code> with <code>!resolving</code>, and erase single routes before observation.
+    Every pooled mana class in the engine already has one canonical rules type: <code>ManaClass { combat, restriction, effect }</code> paired with <code>[u8; 6]</code> amounts.
+    Yet when projecting a player’s pool to observations, the code splits that one concept into two incompatible tracks — and the current plan would add 6 more hardcoded <code>turn_state</code> columns and another boolean on <code>RestrictedManaData</code> for Heartwood Crafter alone.
   </p>
 
   <div class="grid">
     <div class="card">
-      <p><span class="badge existing">Existing</span> Split constructors, leaky flags, erased single routes</p>
-<pre>// play.rs:97 — priority constructor only
-pub fn cast_via(&amp;self, player, object, route, profile) -&gt; CastChoices {
-    // sets free = (route == FreeFromHand), flashback, flash_surcharge
-    // never sets from_prepared!
-}
+      <p><span class="badge existing">Existing + old plan</span> Bespoke columns &amp; wire booleans for every new restriction</p>
+<pre>// observation_layout.rs — 24 hardcoded columns already, +6 more planned:
+turn_state::NONARTIFACT_MANA_WHITE..COLORLESS    // Powerstone (6 cols)
+turn_state::NONHAND_MANA_WHITE..COLORLESS        // Old plan: Heartwood (+6 cols!)
+// Next Standard card ("Dragon spells", "Creature spells", "activated abilities"):
+// +6 more columns each, plus another bool in:
+//   RestrictedManaData (observation.rs)
+//   PyRestrictedMana (bindings.rs)
+//   LegacyRestrictedManaView (experience.rs)
+//   experience_projection.py, text_observation.py
+//   academy/ui/src/lib/{types.ts, mana.ts}
+//   protocol/*.schema.json (6 files!)
 
-// decision.rs:728 — separate resolution constructor!
-fn resolution_cast_choices(&amp;self, object, profile) -&gt; Option&lt;CastChoices&gt; {
-    Some(CastChoices {
-        profile,
-        free: !paid,
-        resolving: *paid,  // BUG: false on free resolution casts!
-        exile_instead_of_graveyard,
-        ..Default::default()
+// Meanwhile, right next door in observation.rs:1324:
+pooled_mana_classes: pool.classes().iter().filter_map(|(class, amounts)| {
+    if class.effect.is_none() &amp;&amp; !class.combat {
+        return None; // &lt;-- arbitrarily skips pure restricted mana!
+    }
+    Some(PooledManaClassData {
+        restriction: class.restriction.as_ref().map(|r| r.describe()),
+        program: rules_tokens(&amp;Mana::of_class(class.clone(), *amounts), pack),
+        ..
     })
-}
-
-// play.rs:711 — Harbinger bug under Etali/Yue (free:true, resolving:false)
-if spell.flash_surcharge().is_some() {
-    return (cast.flash_surcharge || cast.resolving || !can_pay).then_some(cast);
-    // ^ offers KickerChoice to pay {2} for flash during free resolution!
-}
-
-// action.rs:683 + observation.rs:1089,2161 — solitary Muldrotha erased!
-let route = (routes.len() &gt; 1).then_some(permission); // None when sole!
-// observation.rs matches route: Some(route) -&gt; quota_type = None,
-// action_focus drops Muldrotha, action_description = None!
-
-// cast_permission.rs:267 — 6 files equate face-down exile with Foretell
-pub fn is_foretold(&amp;self, object: ObjectId) -&gt; bool {
-    self.grants_naming(object).any(|g| g.foretold)
-}</pre>
+})</pre>
     </div>
 
     <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed</span> One casting authority, orthogonal terms, resolved route inspection</p>
-<pre>// 1. One shared CastChoices builder (priority + resolution + preview)
-pub fn cast_choices_for_priority(&amp;self, player, object, route, profile) -&gt; CastChoices
-pub fn cast_choices_for_resolution(&amp;self, player, object, decision, profile) -&gt; CastChoices
-// Both set orthogonal flags:
-//   resolving: true for ALL CastDuringResolution (free AND paid!)
-//   free: route == FreeFromHand || (!paid &amp;&amp; resolving)
-//   from_prepared: grant.is_some_and(|g| g.prepared) -&gt; SpellOnStack.from_prepared
-//   (cleared to false in copy_stack_object, beside flashback &amp; exile_instead)
-//   flash_surcharge: required only when !resolving &amp;&amp; !can_cast_sorceries &amp;&amp; !instant
-// payment_preview handles both Action::CastSpell and Action::SelectCard during CastDuringResolution.
-
-// 2. Wire omission stays on Action; inspection resolves the real route
-pub fn resolved_play_route(&amp;self, action: &amp;Action) -&gt; Option&lt;PlayRoute&gt;
-// GraveyardType always emits quota_type, Muldrotha focus &amp; description,
-// whether solitary or overlapping Zul Ashur. Single-route Command stays unchanged.
-
-// 3. Profile-scoped land checks in permits_spell &amp; cast_spell_action
-// FreeFromHand / LibraryTop / Flashback / HandOnly check cast.spell().types,
-// not front-face self.state[object].types.
-
-// 4. Orthogonal exile visibility, counters, and spending context
-PlayGrant {
-    face_down: bool,                // hidden in exile (Foretell AND Gandalf)
-    foretold: bool,                 // Foretell cost &amp; determinization ONLY
-    condition: Option&lt;Condition&gt;,   // Gandalf: Control(Wizard)
-    ..
+      <p><span class="badge proposed">Proposed</span> Legacy 4 stay frozen; all new restrictions flow through <code>pooled_mana_classes</code> &rarr; <code>POOLED_MANA</code> facts</p>
+<pre>// 1. state/src/mana.rs — one spending authority
+pub enum SpendingContext {
+    Resolving,
+    Cast { spell: SpellSnapshot, from: ZoneType },
+    Activate { zone: ZoneType, source: Arc&lt;SpendingObject&gt; },
 }
-// Replace 5 visibility calls to is_foretold with:
-//   is_face_down_in_exile(object) &amp; can_view_face_down_exile(object, viewer)
-StaticPlayPermissions { exile_counter_plays: Vec&lt;CounterKind&gt;, extra_land_plays: u32, .. }
-PlayRoute::ExileCounter(CounterKind)
-GameState.object_counters: BTreeMap&lt;ObjectId, Counters&gt;
-SpendingContext::Cast { spell: SpellSnapshot, from: ZoneType }</pre>
+pub enum ManaRestriction {
+    Only(BTreeSet&lt;SpendPredicate&gt;),
+    ExceptNonartifactSpells,
+    ExceptSpellsFromHand, // describe(): "anything but spells from hand"
+}
+
+// 2. observation.rs — player_data splits ONLY at the legacy-column boundary:
+//   - Legacy 4 column restrictions (Lesson, Lesson|Shrine, Ally, Powerstone)
+//     stay in `restricted_mana` (byte-identical for pinned pilot &amp; v9/v10).
+//   - Any OTHER restriction (ExceptSpellsFromHand, future Standard rules)
+//     emits in `pooled_mana_classes` (counted once in `lesson_mana` total)
+//     with its learning-token `program` and `restriction: Some(r.describe())`.
+//   - `unrepresentable_state` keeps refusing unknown entries injected into
+//     `restricted_mana` (`test_restricted_mana_input.py` stays green!).
+
+// 3. Downstream consumers — ZERO new columns, ZERO schema/UI churn:
+//   - Policy input (v11 &amp; v9/v10): FactKind::EffectProgram(POOLED_MANA)
+//   - LLM text (`text_observation.py:857`): ALREADY renders `pooled.restriction`
+//   - Academy (`Plate.svelte:42` / `mana.ts:10`): ALREADY renders `pooled.restriction`
+//   - PaymentPreview (`mana/preview.rs:60`): ALREADY renders `r.describe()`</pre>
     </div>
   </div>
 
-  <h2>3. Concrete interaction walkthroughs (normal, failure, recovery &amp; counterexamples)</h2>
+  <div class="callout">
+    <strong>Why this also fixes a silent bug in <code>RestrictedManaData</code>:</strong>
+    Today <code>RestrictedManaData::new</code> sets <code>spells = []</code>, <code>abilities = []</code>, <code>except_nonartifact_spells = false</code> for any unrecognized variant — turning it into an empty <code>ManaRestriction::Only({})</code> on round-trip! Keeping <code>restricted_mana</code> strictly for the 4 legacy column restrictions and routing every open-ended restriction through <code>pooled_mana_classes</code> guarantees lossless round-tripping in <code>Observation</code>, JSON, learning tokens, text, and Academy with zero new columns.
+  </div>
+
+  <h2>3. Secondary architectural alignments (before Slice 2 &amp; Slice 3)</h2>
+  <div class="grid">
+    <div class="card proposed-box">
+      <p><span class="badge proposed">Proposed</span> One exile-privacy &amp; determinization authority (fixes Gandalf privacy leak)</p>
+<pre>// PlayGrant: orthogonal face-down visibility vs. Foretell rules
+PlayGrant {
+    face_down: bool,                // hidden in exile (Foretell + Gandalf)
+    foretold: bool,                 // Foretell cost &amp; foretell-card filter ONLY
+    condition: Option&lt;Condition&gt;,   // Gandalf: Control(Wizard)
+    ..
+}
+// Visibility + unseen-card accounting share ONE predicate:
+is_face_down_in_exile(object) -&gt; bool
+can_view_face_down_exile(object, viewer) -&gt; bool
+
+// selection_sampling.rs::unseen_objects(owner, viewer):
+//   include every exiled card of `owner` where
+//   is_face_down_in_exile(obj) &amp;&amp; !can_view_face_down_exile(obj, viewer)
+
+// search.rs &amp; possible_worlds.rs (opponent determinization):
+//   1. fill_foretold_slots(opponent, &amp;mut pool)         // foretell-bearers only
+//   2. fill_face_down_exile_slots(opponent, &amp;mut pool)  // any remaining unseen card
+//   Conservation: pool == hand_unknown + lib_unknown + foretold + other_face_down</pre>
+    </div>
+
+    <div class="card proposed-box">
+      <p><span class="badge proposed">Proposed</span> One <code>StaticPlayPermissions</code> owner, clean routes, &amp; stack provenance</p>
+<pre>// statics.rs — ALL static play permissions computed once in compute_board():
+struct StaticPlayPermissions {
+    look_at_top: bool,
+    free_from_hand: bool,
+    opponents_hand_only: bool,
+    graveyard_flashback: bool,
+    library_spells: Vec&lt;CardPredicate&gt;,
+    flash_spells: Vec&lt;CardPredicate&gt;,
+    graveyard_type_sources: Vec&lt;(ObjectId, PublicId)&gt;, // Muldrotha (no scan!)
+    exile_counter_plays: Vec&lt;ExileCounterPermission&gt;,  // Tinybones (own_turn, any_mana)
+    extra_land_plays: u32,                             // Loot + each-player combined
+}
+
+// play.rs + action.rs:
+// - PlayRoute::ExileCounter(CounterKind) -&gt; any_mana in casting_mana_cost
+// - PlayRoute::PrintedGraveyard -&gt; Quilled Greatwurm (doesn't pollute Muldrotha/Zul)
+// - exile_playable_objects(player) deduplicates grants &amp; counter-marked exile
+// - cast_spell_action checks cast.spell(spell).types.is_land() (not front face)
+
+// observation.rs + observation_layout.rs:
+// - StackObjectData.{from_prepared, flashback} -&gt; stack::{FROM_PREPARED, FLASHBACK}
+//   + text_observation.py + experience_projection.py (zero pinned-pilot break)
+// - permission_facts: named extension struct for post-TLA terms (keeps Hama tokens)</pre>
+    </div>
+  </div>
+
+  <h2>4. Concrete interaction walkthroughs (normal, failure, recovery &amp; counterexamples)</h2>
 
   <div class="trace">
-    <div class="trace-label">Walkthrough A — Harbinger of the Tides off Etali/Yue vs. Omniscience (CR 608.2g &amp; 118.9d)</div>
+    <div class="trace-label">Walkthrough A — Heartwood Crafter // Soul Tether + Codie (restricted mana &amp; stack provenance)</div>
     <ul>
-      <li><strong>Counterexample (broken today):</strong> Active player resolves Yue, the Moon Spirit (or Etali) and chooses Harbinger of the Tides with <code>{2}</code> open. Today <code>resolution_cast_choices</code> produces <code>CastChoices { free: true, resolving: false }</code>, so <code>fixed_cast_cost_choices</code> offers <code>KickerChoice</code> to pay <code>{2}</code> extra for flash during resolution — a nonexistent choice under CR 608.2g.</li>
-      <li><strong>Fixed path:</strong> <code>cast_choices_for_resolution</code> sets <code>resolving: true, free: true</code>. <code>fixed_cast_cost_choices</code> sees <code>cast.resolving</code> and skips the flash surcharge prompt, casting Harbinger cleanly for <code>{0}</code>.</li>
-      <li><strong>Contrast (priority Omniscience):</strong> On the opponent’s turn with Omniscience and <code>{2}</code> open, <code>cast_choices_for_priority</code> sets <code>resolving: false, free: true, flash_surcharge: true</code> — requiring the <code>{2}</code> surcharge to buy flash, while on the player’s own main phase with <code>{2}</code> open it remains optional.</li>
-      <li><strong>Failure &amp; recovery:</strong> With Omniscience and <code>{1}</code> open on the opponent’s turn, Harbinger fails <code>can_pay_cast</code> and is never offered. Cold replay from the pending announcement restores exact <code>CastChoices</code>.</li>
+      <li><strong>Normal path:</strong> Player 0 taps Heartwood Crafter for <code>{C}</code> with <code>ManaRestriction::ExceptSpellsFromHand</code>. In <code>Observation</code>, <code>lesson_mana[5] == 1</code>, <code>restricted_mana</code> is empty, and <code>pooled_mana_classes</code> holds <code>{ mana: [0,0,0,0,0,1], restriction: "anything but spells from hand", combat: false, program: [...] }</code>. Policy v11 reads the <code>POOLED_MANA</code> fact rows; <code>text_observation.py</code> prints <code>Of the mana above: C 1; only for anything but spells from hand; expires at step end.</code>; Academy’s <code>Plate.svelte</code> renders the same text. Casting linked Soul Tether from exile passes <code>SpendingContext::Cast { spell, from: ZoneType::Exile }</code>, spending the <code>{C}</code> and setting <code>SpellOnStack.from_prepared = true</code>.</li>
+      <li><strong>Stack visibility &amp; Codie fork:</strong> While Soul Tether is on the stack, Codie triggers and copies it (<code>from_prepared: false</code>). Both viewers’ <code>StackObjectData</code>, v11 <code>stack::FROM_PREPARED</code>, LLM text, and Academy distinguish the original prepared spell from its copy — so an opponent deciding whether to Counterspell sees which object is prepared (and which flashback spells would exile on leaving the stack).</li>
+      <li><strong>Failure / counterexample:</strong> Forking from priority to cast a spell from hand passes <code>from: ZoneType::Hand</code>; <code>ManaRestriction::allows</code> rejects Heartwood’s <code>{C}</code>, so the spell is not castable with that mana alone. Injecting an unknown subtype into <code>restricted_mana</code> (without <code>pooled_mana_classes</code>) still triggers <code>unrepresentable_state</code> (<code>test_restricted_mana_input.py</code> stays green).</li>
     </ul>
   </div>
 
   <div class="trace">
-    <div class="trace-label">Walkthrough B — Solitary Muldrotha vs. overlapping Zul Ashur + Muldrotha</div>
+    <div class="trace-label">Walkthrough B — Gandalf’s Flameshape vs. Foretell (privacy leak counterexample &amp; recovery)</div>
     <ul>
-      <li><strong>Counterexample (broken today):</strong> Muldrotha is on the battlefield and one Hungry Ghoul is in the graveyard (no Zul Ashur). <code>play_routes</code> returns <code>[GraveyardType { Creature }]</code>; because <code>routes.len() == 1</code>, <code>action.route</code> is <code>None</code>. The v11 action row emits <code>quota_type = 0</code>, <code>action_focus</code> omits Muldrotha, and Academy/LLM text gets no route description.</li>
-      <li><strong>Fixed path:</strong> <code>resolved_play_route</code> resolves the solitary <code>GraveyardType</code> while keeping <code>Action::CastSpell { route: None }</code> wire-compatible. Both solitary and overlapping Muldrotha offers project <code>quota_type = Creature</code>, focus <code>[card, Muldrotha]</code>, and describe the Creature quota.</li>
-      <li><strong>Failure &amp; recovery:</strong> Spending the Creature quota removes <code>GraveyardType { Creature }</code> for the rest of the turn; cloning before payment forks cleanly between spending Zul’s grant and spending Muldrotha’s quota.</li>
+      <li><strong>Counterexample (broken in prior plan):</strong> Player 0 resolves Flameshape, exiling Lightning Bolt and Mountain face down (<code>face_down: true, foretold: false, condition: Some(Control(Wizard))</code>). Under the prior plan, Player 1’s <code>opponent_cards</code> omits both cards, yet <code>unseen_objects(P0, P1)</code> checks only <code>foretold_cards(P0)</code> — so Player 1’s <code>unseen_counts</code> shrinks by exactly 1 Lightning Bolt and 1 Mountain, leaking both face-down cards via open decklists!</li>
+      <li><strong>Fixed path:</strong> <code>unseen_objects(P0, P1)</code> includes every exiled card of P0 where <code>is_face_down_in_exile &amp;&amp; !can_view_face_down_exile(obj, P1)</code>. Player 1’s <code>unseen_counts</code> keeps both cards; <code>search.rs</code> and <code>possible_worlds.rs</code> fill Foretell slots with foretell-bearing cards first and fill Flameshape’s slots via <code>fill_face_down_exile_slots</code> from any remaining unseen cards without violating pool conservation.</li>
+      <li><strong>Condition loss &amp; recovery:</strong> When Player 0 controls Gandalf + another Wizard and Gandalf dies, <code>can_view_face_down_exile(obj, P0)</code> remains <code>true</code>. When Player 0 loses their last Wizard, both cards hide from P0’s <code>agent_cards</code>, enter P0’s <code>unseen_objects</code>, and lock out play. When a new Wizard enters, both become visible and playable again immediately without mutating grants.</li>
     </ul>
   </div>
 
   <div class="trace">
-    <div class="trace-label">Walkthrough C — Heartwood Crafter &amp; Codie, Ravenous Codex (provenance &amp; restricted mana)</div>
+    <div class="trace-label">Walkthrough C — Tinybones #1 &rarr; #2 &amp; overlapping exile grant + Quilled Greatwurm + Muldrotha</div>
     <ul>
-      <li><strong>Normal path:</strong> Player controls Heartwood Crafter (prepared with Soul Tether in exile) and Codie. Heartwood Crafter taps for <code>{C}</code> with <code>ManaRestriction::ExceptFromHand</code>. Casting Soul Tether from exile passes <code>SpendingContext::Cast { spell, from: ZoneType::Exile }</code>, so Heartwood Crafter’s <code>{C}</code> pays for it; <code>cast_choices_for_priority</code> sets <code>from_prepared: true</code> from the exile copy’s grant and writes <code>SpellOnStack.from_prepared = true</code>. Codie triggers, copies Soul Tether via <code>copy_stack_object</code> (which clears <code>from_prepared = false</code>), and offers retargeting.</li>
-      <li><strong>Failure / fork path:</strong> Forking from the same priority state to cast an ordinary spell from hand passes <code>from: ZoneType::Hand</code>; Heartwood Crafter’s <code>{C}</code> is rejected by <code>ManaRestriction::allows</code> and never offered to pay it. Codie’s copy does not re-trigger Codie (<code>from_prepared == false</code>).</li>
-      <li><strong>Recovery:</strong> A pending target or payment Command on Soul Tether replays cold from the root and rejects stale object/revision Commands.</li>
+      <li><strong>Overlap counterexample (Tinybones):</strong> Opponent discards Lightning Bolt under Tinybones #1 (receives <code>CounterKind::Stash</code> in sparse <code>GameState.object_counters</code>), and another effect also gives Player 0 a <code>PlayGrant</code> on that same exiled card. Deduplicating in <code>exile_playable_objects(player)</code> visits the card once; <code>play_routes</code> yields both <code>Grant(k)</code> and <code>ExileCounter(Stash)</code> cleanly without duplicate actions.</li>
+      <li><strong>Foreign land &amp; timing (Tinybones):</strong> Tinybones #1 dies; Tinybones #2 enters. <code>LayerBoard.play_permissions[player].exile_counter_plays</code> immediately authorizes playing opponent’s stashed Mountain (enters under Player 0) and casting Lightning Bolt with any mana type (<code>casting_mana_cost</code> applies <code>pay_with_any_mana()</code>) during Player 0’s turn only. High Fae Trickster does not bypass own-turn timing; <code>HandOnly</code> blocks Lightning Bolt while allowing Mountain.</li>
+      <li><strong>Overlap counterexample (Quilled Greatwurm + Muldrotha):</strong> With Quilled Greatwurm in graveyard and Muldrotha on board, <code>play_routes</code> offers both <code>GraveyardType { Creature }</code> (pays <code>{4}{G}{G}</code>, spends Muldrotha’s Creature quota) and <code>PrintedGraveyard</code> (pays <code>{4}{G}{G}</code> + remove six +1/+1 counters, preserves Muldrotha’s quota). Because <code>CostComponent::RemoveCounters</code> keys on <code>PlayRoute::PrintedGraveyard</code>, Muldrotha never wrongly demands removing counters.</li>
     </ul>
   </div>
 
-  <div class="trace">
-    <div class="trace-label">Walkthrough D — Gandalf’s Flameshape vs. Foretell &amp; Tinybones #1 → #2</div>
-    <ul>
-      <li><strong>Normal path (Gandalf):</strong> Flameshape exiles the top two library cards with <code>ZoneEntry { face_down: true }</code> and <code>PlayGrant { face_down: true, condition: Some(Control(Wizard)), .. }</code> (<code>foretold: false</code>). While the caster controls Gandalf (or any other Wizard after Gandalf dies), <code>can_view_face_down_exile</code> reveals both cards to the caster only and <code>live_grants</code> offers them as legal plays.</li>
-      <li><strong>Failure / recovery (Gandalf):</strong> If the caster loses their last Wizard, both cards stay face down in exile, <code>can_view_face_down_exile</code> returns <code>false</code> even for their owner (hiding them from observation, continuation, and Academy while locking play), and <code>foretold: false</code> keeps them out of <code>foretold_cards</code> / <code>fill_foretold_slots</code> determinization (<code>search.rs</code>, <code>possible_worlds.rs</code>, <code>selection_sampling.rs</code>). When another Wizard enters, <code>can_view_face_down_exile</code> and <code>live_grants</code> restore access immediately without mutating grants.</li>
-      <li><strong>Normal &amp; prohibition path (Tinybones):</strong> Opponent discards Mountain and Lightning Bolt under Tinybones #1; both receive <code>CounterKind::Stash</code> in <code>GameState.object_counters</code> (projected on <code>CardData.counters</code> and v11 <code>FactKind::Counter</code>). Tinybones #1 dies; Tinybones #2 enters; <code>StaticPlayPermissions.exile_counter_plays</code> + <code>PlayRoute::ExileCounter(Stash)</code> offers both on the controller’s turn (foreign Mountain enters under Tinybones’s controller). Under <code>HandOnly</code>, Lightning Bolt is blocked while Mountain stays playable; on the opponent’s turn, High Fae Trickster does not bypass Tinybones’s own-turn timing.</li>
-    </ul>
-  </div>
-
-  <h2>4. Scope &amp; shared-rules boundary for the 22 remaining MTG-419 rows</h2>
+  <h2>5. Scope &amp; what stays outside MTG-419</h2>
   <ul>
-    <li><strong>Core casting-profile, permission &amp; payment work (MTG-419 Slices 1–3 — 10 cards):</strong>
-      <ul>
-        <li><em>Slice 1 (Alignment + Provenance):</em> Unified <code>CastChoices</code> / <code>resolving</code> fix, <code>SpellOnStack.from_prepared</code>, <code>resolved_play_route</code>, per-profile <code>is_land</code> checks, <code>SpendingContext::Cast.from</code> → <strong>Heartwood Crafter</strong>, <strong>Codie, Ravenous Codex</strong>, <strong>Sanar, Unfinished Genius</strong>.</li>
-        <li><em>Slice 2 (Exile permissions, counters &amp; dynamic pricing):</em> Sparse <code>object_counters</code> + <code>PlayRoute::ExileCounter</code>, decoupled <code>PlayGrant.{face_down, condition}</code>, dynamic <code>SpellsCostLess</code>, controller-only <code>AdditionalLandPlay</code> → <strong>Tinybones, Bauble Burglar</strong>, <strong>Gandalf, Goblins’ Bane</strong>, <strong>Glamdring, Foe-hammer</strong>, <strong>Loot, Exuberant Explorer</strong>, <strong>Redcap Gutter-Dweller</strong>.</li>
-        <li><em>Slice 3 (Graveyard counter-payment &amp; TDM completion):</em> <code>CostComponent::RemoveCounters</code> for graveyard casting and split-destination library search → <strong>Quilled Greatwurm</strong> (closes FDN casting/cost permissions), <strong>Bloomvine Regent // Claim Territory</strong> (closes TDM 13/13!).</li>
-      </ul>
-    </li>
-    <li><strong>Non-casting shared-rules families (12 remaining rows — clear split boundary if needed per 2026-11-24 steering):</strong>
-      <ul>
-        <li><em>Graveyard-zone triggers (2 FDN):</em> Flamewake Phoenix, Gate Colossus (needs graveyard trigger registration, not casting permissions).</li>
-        <li><em>Batch-collapsed triggers &amp; non-casting preparation effects (7 SOS/FRA):</em> Spiritcall Enthusiast, Kirol, History Buff (batch-collapsed <code>process_event_batch</code>); Grave Researcher, Emeritus of Ideation, Lluwen (graveyard-card costs &amp; surveil-then-count); Variable Chaser (APNAP optional whole-hand discard/draw); Pyre Rhymer (turn-scoped delayed mana trigger).</li>
-        <li><em>Non-casting HOB permanent mechanics (3 HOB):</em> An Unexpected Party (chosen creature type on entry), Bilbo, Luckwearer (shared-type control exchange), Great Ugly-Looking Goblin (Amass).</li>
-      </ul>
-      These 12 rows do not exercise new casting-profile or play-permission concepts; batch them only if they stay small and inside the 10% Engine Budget, or split cleanly at those exact named shared-rules boundaries with the remaining rows recorded.
-    </li>
-    <li><strong>Outside MTG-419 (unchanged):</strong> The 6 history-dependent preparation rows remain deferred to <strong>MTG-418</strong>; battlefield transform/meld/face-down overhaul remains with the battlefield-forms task.</li>
+    <li><strong>Inside MTG-419 (Slices 1–3, 9 remaining casting/permission rows):</strong>
+      Slice 1 finishes Heartwood Crafter (<code>SpendingContext::Cast.from</code> + <code>ManaRestriction::ExceptSpellsFromHand</code> via <code>pooled_mana_classes</code>), stack provenance projection (<code>from_prepared</code> &amp; <code>flashback</code>), and Sanar // Wild Idea.
+      Slice 2 delivers <code>StaticPlayPermissions</code> consolidation + per-profile <code>is_land</code> check, Tinybones (<code>object_counters</code> + <code>PlayRoute::ExileCounter</code>), Gandalf (decoupled <code>face_down</code>/<code>condition</code> + unseen/determinization), Glamdring (dynamic <code>SpellsCostLess</code>), Loot (controller <code>extra_land_plays</code>), and Redcap.
+      Slice 3 delivers Quilled Greatwurm (<code>PlayRoute::PrintedGraveyard</code> + <code>CostComponent::RemoveCounters</code>) and Bloomvine Regent (closes TDM 13/13).</li>
+    <li><strong>Concrete split boundary (12 non-casting shared-rules rows):</strong> Graveyard-zone triggers (2 FDN: Flamewake Phoenix, Gate Colossus), batch-collapsed triggers &amp; non-casting preparation effects (7 SOS/FRA), and non-casting HOB permanent mechanics (3 HOB: chosen creature type on entry, shared-type control exchange, Amass). Batch only what fits cleanly within the 10% Engine Budget; split cleanly at those named shared-rules boundaries otherwise.</li>
+    <li><strong>Outside MTG-419:</strong> Six history-dependent preparation rows belong to <strong>MTG-418</strong>; full battlefield transform/meld/face-down overhaul belongs to the battlefield-forms task.</li>
   </ul>
 
-  <h2>5. Review choices (headless defaults recorded in <code>scratch/plan.md</code>)</h2>
+  <h2>6. Review choices (headless defaults recorded in <code>scratch/plan.md</code>)</h2>
   <ol class="q-list">
     <li>
-      <strong>How should <code>CastChoices</code> distinguish priority casts from free and paid resolution casts?</strong><br>
-      <span class="chosen">a. Unify priority and resolution behind one shared constructor where <code>resolving: bool</code> is true for ALL <code>CastDuringResolution</code> casts (free and paid) and <code>free: bool</code> strictly means “without paying its mana cost” (selected — fixes Harbinger + Etali/Yue and gives <code>from_prepared</code> one owner).</span><br>
-      b. Keep separate priority/resolution constructors and add <code>|| cast.free</code> guards at each call site like <code>fixed_cast_cost_choices</code>.
+      <strong>How should new pooled-mana spending restrictions (starting with Heartwood Crafter’s <code>ExceptSpellsFromHand</code>) reach policy, LLM text, and Academy?</strong><br>
+      <span class="chosen">a. Keep the 4 legacy column restrictions unchanged and emit all other restrictions via existing <code>pooled_mana_classes</code> &rarr; <code>FactKind::EffectProgram(POOLED_MANA)</code> (selected — follows <code>AGENTS.md</code> open-vocabulary rule, zero new columns, zero schema/UI churn, zero pinned-pilot break, and handles every future Standard mana restriction automatically).</span><br>
+      b. Append 6 new columns to <code>turn_state</code> and add <code>except_spells_from_hand: bool</code> to <code>RestrictedManaData</code> across Rust, PyO3, Experience, Python, TypeScript, and JSON schemas.
     </li>
     <li>
-      <strong>How should solitary Muldrotha offers preserve <code>quota_type</code>, focus, and description without breaking retained single-route Commands?</strong><br>
-      <span class="chosen">a. Keep single-route <code>Action.route = None</code> for wire/Command compatibility, and resolve the route via <code>Game::resolved_play_route</code> when computing <code>GraveyardType</code> quota, focus, and descriptions (selected — fixes solitary Muldrotha with zero pinned-pilot or replay break).</span><br>
-      b. Always populate <code>Action.route = Some(...)</code> for every non-hand play and migrate retained Command captures.
+      <strong>How should non-foretold face-down exile (Gandalf’s Flameshape) behave in <code>unseen_objects</code> and determinization?</strong><br>
+      <span class="chosen">a. Include any face-down exiled card hidden from <code>viewer</code> in <code>unseen_objects</code>, and pair <code>fill_foretold_slots</code> with an unrestricted <code>fill_face_down_exile_slots</code> in <code>search.rs</code> and <code>possible_worlds.rs</code> (selected — eliminates the opponent open-decklist privacy leak and preserves pool conservation).</span><br>
+      b. Leave <code>unseen_objects</code> and determinization restricted to <code>foretold_cards</code> only.
     </li>
     <li>
-      <strong>How should Gandalf’s private face-down exile connect to Foretell’s face-down exile?</strong><br>
-      <span class="chosen">a. Decouple <code>PlayGrant.face_down</code> and <code>PlayGrant.condition: Option&lt;Condition&gt;</code> from <code>PlayGrant.foretold</code>, replacing the 5 visibility calls to <code>is_foretold</code> with <code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> while keeping <code>is_foretold</code> strictly for Foretell cost and determinization (selected — one visibility mechanism for all face-down exile without breaking Foretell).</span><br>
-      b. Add a separate <code>GameState.gandalf_exile</code> table alongside <code>CastPermissions</code>.
+      <strong>Where should Muldrotha’s graveyard-type sources, Tinybones’s exile-counter plays, and Loot’s extra land plays live?</strong><br>
+      <span class="chosen">a. Consolidate all static play permissions onto <code>LayerBoard.play_permissions</code> (<code>graveyard_type_sources</code>, <code>exile_counter_plays</code>, <code>extra_land_plays</code>), deduplicate <code>exile_playable_objects</code>, add <code>PlayRoute::PrintedGraveyard</code> for Quilled Greatwurm, and check <code>cast.spell(...).types.is_land()</code> in <code>cast_spell_action</code> (selected — one static-permission owner, removes per-card battlefield scans in <code>play_routes</code>, and prevents Tinybones/Quilled Greatwurm overlap bugs).</span><br>
+      b. Keep Muldrotha scanning the battlefield inside <code>play_routes</code> and keep <code>additional_land_plays_each_player</code> separate on <code>LayerBoard</code>.
     </li>
     <li>
-      <strong>How should Tinybones’s static exile-counter permission be evaluated?</strong><br>
-      <span class="chosen">a. Store exiled-card counters in sparse <code>GameState.object_counters: BTreeMap&lt;ObjectId, Counters&gt;</code> and publish Tinybones’s ability on <code>LayerBoard.play_permissions.exile_counter_plays</code> as <code>PlayRoute::ExileCounter(CounterKind)</code> (selected — reuses the exact same layered permission authority as Omniscience, Vizier, and Iroh; Tinybones #2 and control changes work automatically).</span><br>
-      b. Synthesize per-card <code>PlayGrant</code> entries whenever a card gains a stash counter or a Tinybones enters.
-    </li>
-    <li>
-      <strong>Should <code>Decision::CastDuringResolution</code> keep <code>Action::SelectCard</code> for front-face casts or convert all resolution casts to <code>Action::CastSpell</code>?</strong><br>
-      <span class="chosen">a. Keep <code>Action::SelectCard</code> for front-face resolution casts and <code>Action::CastSpell</code> for non-front profiles (selected — preserves retained TLA/Cascade replay compatibility without churn; revisit only if a unified resolution-cast action schema is scheduled).</span><br>
-      b. Emit <code>Action::CastSpell</code> for all resolution casts and re-record retained replay captures.
+      <strong>Should stack cast provenance (<code>from_prepared</code> and <code>flashback</code>) reach observations in Slice 1?</strong><br>
+      <span class="chosen">a. Yes — expose <code>from_prepared</code> and <code>flashback</code> on <code>StackObjectData</code>, append <code>stack::FROM_PREPARED</code> and <code>stack::FLASHBACK</code> columns, and project them in <code>text_observation.py</code> and <code>experience_projection.py</code> (selected — keeps rules and observations aligned per <code>AGENTS.md</code> with zero pinned-pilot break via prefix projection).</span><br>
+      b. Leave stack cast provenance hidden from observations until a later pass.
     </li>
   </ol>
 </main>
