@@ -954,16 +954,20 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
   (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
   or bending (`Performs { who, any_of }`), cards reaching a graveyard
   (`PutIntoGraveyard { whose, predicate }`) and putting counters
-  (`PutsCounters { who, kind, on }`). Noncombat damage to a player is
-  `DealsNoncombatDamage { source, to }`, both `Actor`s: the source's
-  controller is read as it is or last was, a spell's included, and the
-  damage dealt is "that many". Object events name a `TriggerSubject`
+  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
   instead, whose controller is the same kind of `Actor` ("a creature an
   opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
-  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
-  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }`,
+  `DealsCombatDamage { subject, to, per }` and
+  `DealsDamage { kind, source, to }`, where `per` says whether "one or
   more" creatures trigger once per batch or once each, and `attackers` says
-  whether the attack is alone or with at least one other creature. The ability
+  whether the attack is alone or with at least one other creature.
+  `DealsDamage` fires once per damage event of its `DamageKind` (any,
+  combat or noncombat) to a `DamageRecipientFilter` (a player actor, or
+  anything). Its source is any object, a spell included, matched as it is
+  or last was with its controller ("a source you control" is
+  `TriggerSubject::you_control(CardPredicate::default())`), and the damage
+  dealt is "that many". The ability
   description ("Whenever an opponent draws their second card each turn, ...")
   and the learning tokens come from one template per event, so a card that
   needs a new actor or count needs no new variant.
