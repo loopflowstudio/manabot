@@ -1,6 +1,6 @@
 //! Core Set 2019.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, Per, TargetSpec, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, StaticAbility, StaticScope,
@@ -12,6 +12,10 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        exclusion_mage(),
+        herald_of_faith(),
+        skeleton_archer(),
+        viashino_pyromancer(),
         aggressive_mammoth(),
         meteor_golem(),
         gigantosaurus(),
@@ -149,6 +153,108 @@ fn aggressive_mammoth() -> CardDefinition {
             power: Some(8),
             toughness: Some(8),
             keywords: Keywords::of(&[Keyword::Trample]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn exclusion_mage() -> CardDefinition {
+    let text_box = "When this creature enters, return target creature an opponent controls to its owner's hand.";
+    CardDefinition {
+        key: "m19.exclusion_mage",
+        scryfall_id: "ccad82f5-5c5c-42ad-b66e-942f0d9631ca",
+        printed: PrintedCharacteristics {
+            name: "Exclusion Mage".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::CreatureOpponentControls,
+                ))],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn herald_of_faith() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature attacks, you gain 2 life.";
+    CardDefinition {
+        key: "m19.herald_of_faith",
+        scryfall_id: "452591ca-7273-4e47-820b-3ff89697a036",
+        printed: PrintedCharacteristics {
+            name: "Herald of Faith".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::gain_life(2)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skeleton_archer() -> CardDefinition {
+    let text_box = "When this creature enters, it deals 1 damage to any target.";
+    CardDefinition {
+        key: "m19.skeleton_archer",
+        scryfall_id: "8fee5cc4-a686-4ce6-aa6b-1b8a88e6dea3",
+        printed: PrintedCharacteristics {
+            name: "Skeleton Archer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Skeleton".into(), "Archer".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::deal_damage(
+                    1,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn viashino_pyromancer() -> CardDefinition {
+    let text_box = "When this creature enters, it deals 2 damage to target player or planeswalker.";
+    CardDefinition {
+        key: "m19.viashino_pyromancer",
+        scryfall_id: "a82fdb2f-b199-44ff-9615-90fc074cb8b0",
+        printed: PrintedCharacteristics {
+            name: "Viashino Pyromancer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Lizard".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::deal_damage(
+                    2,
+                    ObjectSelector::Target(TargetSpec::PlayerOrPlaneswalker),
+                )],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -672,3 +672,18 @@ fn foundations_5d_battle_rattle_shaman() {
 fn foundations_5e_fleeting_distraction() {
     crate::assert_targeted_pump("Fleeting Distraction", "Gray Ogre", 1, (1, 2), &[], 0, 1);
 }
+
+#[test]
+fn foundations_5f_pelakka_wurm() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{enter_and_settle, move_and_settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Pelakka Wurm"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let wurm = enter_and_settle(&mut s, "Pelakka Wurm");
+    s.assert_life(0, 27);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+    move_and_settle(&mut s, wurm, ZoneType::Graveyard);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+    s.assert_life(0, 27);
+}

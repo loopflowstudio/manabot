@@ -115,3 +115,31 @@ fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
 fn printed_creature_aegis_turtle() {
     crate::printed_creature_combat("Aegis Turtle", 0, 5, &[]);
 }
+
+/// "When this creature enters, counter target artifact or creature spell":
+/// cast with flash over a creature spell and an instant, it offers only the
+/// creature spell.
+#[test]
+fn foundations_5f_voracious_greatshark() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{now, offered_targets, zone_of};
+    use crate::support::play::{cast, pass_until, settle, spend_colorless};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::{PlayerId, Target};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Voracious Greatshark", "Gray Ogre", "Lightning Bolt"]);
+    let ogre = cast(&mut s, "Gray Ogre");
+    spend_colorless(&mut s);
+    let bolt = cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    cast(&mut s, "Voracious Greatshark");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let offers = offered_targets(&s);
+    assert_eq!(offers, [Target::StackSpell(now(&s, ogre))]);
+    assert!(s.choose_target(Target::StackSpell(now(&s, ogre))));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, bolt), Some(ZoneType::Graveyard));
+    s.assert_life(1, 17);
+}

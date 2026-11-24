@@ -4,8 +4,8 @@ use managym_state::{
         Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        SacrificeCost, StaticAbility,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, SacrificeCost, StaticAbility,
     },
     mana::ManaCost,
     predicate::CardPredicate,
@@ -13,6 +13,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        voracious_greatshark(),
         aegis_turtle(),
         bastion_of_remembrance(),
         drannith_magistrate(),
@@ -122,6 +123,38 @@ fn aegis_turtle() -> CardDefinition {
             subtypes: vec!["Turtle".into()],
             power: Some(0),
             toughness: Some(5),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn voracious_greatshark() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, counter target artifact or creature spell.";
+    CardDefinition {
+        key: "iko.voracious_greatshark",
+        scryfall_id: "1400155f-8911-45fd-aab2-998c8a28292c",
+        printed: PrintedCharacteristics {
+            name: "Voracious Greatshark".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Shark".into()],
+            power: Some(5),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::CounterSpell {
+                    what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Artifact, CardType::Creature],
+                            ..Default::default()
+                        },
+                    }),
+                    exile: false,
+                }],
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

@@ -273,3 +273,8 @@ fn foundations_5e_bake_into_a_pie() {
     assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
     assert!(s.battlefield_permanents_named(1, "Food").is_empty());
 }
+
+#[test]
+fn foundations_5f_syr_alin_the_lions_claw() {
+    crate::attack_pumps_the_team("Syr Alin, the Lion's Claw", (4, 4), false);
+}

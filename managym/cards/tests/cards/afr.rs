@@ -162,3 +162,12 @@ fn removal_respects_mana_value_and_excluded_creature_types() {
         );
     }
 }
+
+#[test]
+fn foundations_5f_vampire_spawn() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Vampire Spawn"]);
+    enter_and_settle(&mut s, "Vampire Spawn");
+    assert_eq!((s.life(0), s.life(1)), (22, 18));
+}

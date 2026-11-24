@@ -2,15 +2,17 @@
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
     zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![soul_guide_lantern()]
+    vec![terror_of_mount_velus(), soul_guide_lantern()]
 }
 
 fn soul_guide_lantern() -> CardDefinition {
@@ -48,6 +50,33 @@ fn soul_guide_lantern() -> CardDefinition {
                     ..Default::default()
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn terror_of_mount_velus() -> CardDefinition {
+    let text_box = "Flying\nDouble strike (This creature deals both first-strike and regular combat damage.)\nWhen this creature enters, creatures you control gain double strike until end of turn.";
+    CardDefinition {
+        key: "thb.terror_of_mount_velus",
+        scryfall_id: "332dc6c3-7802-4bde-aa4e-0feab70c216f",
+        printed: PrintedCharacteristics {
+            name: "Terror of Mount Velus".into(),
+            mana_cost: Some(ManaCost::parse("{5}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::DoubleStrike]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
+                )],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

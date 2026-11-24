@@ -1,6 +1,9 @@
 //! Modern Horizons.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerSubject},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics,
@@ -13,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        ravenous_giant(),
         good_fortune_unicorn(),
         fists_of_flame(),
         force_of_negation(),
@@ -166,6 +170,33 @@ fn good_fortune_unicorn() -> CardDefinition {
                     1,
                 )],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ravenous_giant() -> CardDefinition {
+    let text_box = "At the beginning of your upkeep, this creature deals 1 damage to you.";
+    CardDefinition {
+        key: "mh1.ravenous_giant",
+        scryfall_id: "52337d8d-e0ee-4229-848d-9bbd989e15b7",
+        printed: PrintedCharacteristics {
+            name: "Ravenous Giant".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into()],
+            power: Some(5),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                effects: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::You,
+                    amount: 1.into(),
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -23,3 +23,15 @@ fn foundations_5d_involuntary_employment() {
     assert!(!keywords(&s, id).has(Keyword::Haste));
     assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
 }
+
+#[test]
+fn foundations_5f_inspiring_overseer() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::enter_and_settle;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Inspiring Overseer"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    enter_and_settle(&mut s, "Inspiring Overseer");
+    s.assert_life(0, 21);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+}

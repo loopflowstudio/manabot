@@ -34,3 +34,25 @@ fn foundations_permanent_soul_guide_lantern() {
     assert_eq!(fork.zone_size(0, ZoneType::Hand), hand + 1);
     assert_eq!(zone_of(&fork, other), Some(ZoneType::Graveyard));
 }
+
+/// "Creatures you control gain double strike until end of turn": the
+/// controller's creatures, the Dragon included, for this turn only.
+#[test]
+fn foundations_5f_terror_of_mount_velus() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{keywords, permanent_of};
+    use crate::support::play::enter_and_settle;
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Terror of Mount Velus", "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = enter_and_settle(&mut s, "Terror of Mount Velus");
+    let terror = permanent_of(&s, card).unwrap();
+    assert!(keywords(&s, ours).has(Keyword::DoubleStrike));
+    assert!(!keywords(&s, theirs).has(Keyword::DoubleStrike));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!keywords(&s, ours).has(Keyword::DoubleStrike));
+    assert!(keywords(&s, terror).has(Keyword::DoubleStrike));
+    assert!(keywords(&s, terror).has(Keyword::Flying));
+}

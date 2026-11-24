@@ -1,14 +1,14 @@
 //! Streets of New Capenna.
 
 use managym_state::{
-    ability::{Effect, ObjectSelector, PlayerSelector, TargetSpec},
+    ability::{Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     effect::{EffectDuration, Modification},
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![involuntary_employment()]
+    vec![inspiring_overseer(), involuntary_employment()]
 }
 
 fn involuntary_employment() -> CardDefinition {
@@ -33,6 +33,30 @@ fn involuntary_employment() -> CardDefinition {
                 ),
                 Effect::create_tokens("token.treasure", 1),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn inspiring_overseer() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, you gain 1 life and draw a card.";
+    CardDefinition {
+        key: "snc.inspiring_overseer",
+        scryfall_id: "35d9da1d-8678-4252-b0f8-9960795642f0",
+        printed: PrintedCharacteristics {
+            name: "Inspiring Overseer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into(), "Cleric".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::gain_life(1), Effect::DrawCards { count: 1.into() }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

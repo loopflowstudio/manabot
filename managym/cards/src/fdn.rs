@@ -18,6 +18,16 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        ambush_wolf(),
+        beast_kin_ranger(),
+        bigfin_bouncer(),
+        crackling_cyclops(),
+        dauntless_veteran(),
+        dazzling_angel(),
+        elementalist_adept(),
+        felidar_savior(),
+        hinterland_sanctifier(),
+        sanguine_syphoner(),
         boltwave(),
         faebloom_trick(),
         joust_through(),
@@ -1190,6 +1200,279 @@ fn uncharted_voyage() -> CardDefinition {
                 },
                 Effect::Surveil { count: 1 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ambush_wolf() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, exile up to one target card from a graveyard.";
+    CardDefinition {
+        key: "fdn.ambush_wolf",
+        scryfall_id: "2903832c-318e-42ab-bf58-c682ec2f7afd",
+        printed: PrintedCharacteristics {
+            name: "Ambush Wolf".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wolf".into()],
+            power: Some(4),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(
+                        1,
+                        TargetSpec::GraveyardCard {
+                            predicate: CardPredicate::default(),
+                        },
+                    ),
+                    effects: vec![Effect::exile(ObjectSelector::Target(
+                        TargetSpec::GraveyardCard {
+                            predicate: CardPredicate::default(),
+                        },
+                    ))],
+                }],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn beast_kin_ranger() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever another creature you control enters, this creature gets +1/+0 until end of turn.";
+    CardDefinition {
+        key: "fdn.beast_kin_ranger",
+        scryfall_id: "0102e0be-5783-4825-9489-713b1b1df0b2",
+        printed: PrintedCharacteristics {
+            name: "Beast-Kin Ranger".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Ranger".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature()),
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(1, 0),
+                )],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bigfin_bouncer() -> CardDefinition {
+    let text_box = "When this creature enters, return target creature an opponent controls to its owner's hand.";
+    CardDefinition {
+        key: "fdn.bigfin_bouncer",
+        scryfall_id: "9b1d5b76-b07e-45c6-800d-4cfce085164f",
+        printed: PrintedCharacteristics {
+            name: "Bigfin Bouncer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Shark".into(), "Pirate".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::CreatureOpponentControls,
+                ))],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crackling_cyclops() -> CardDefinition {
+    let text_box =
+        "Whenever you cast a noncreature spell, this creature gets +3/+0 until end of turn.";
+    CardDefinition {
+        key: "fdn.crackling_cyclops",
+        scryfall_id: "6e5b899a-52f7-471b-ad50-4fa6566758fd",
+        printed: PrintedCharacteristics {
+            name: "Crackling Cyclops".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cyclops".into(), "Wizard".into()],
+            power: Some(0),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(3, 0),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dauntless_veteran() -> CardDefinition {
+    let text_box =
+        "Whenever this creature attacks, creatures you control get +1/+1 until end of turn.";
+    CardDefinition {
+        key: "fdn.dauntless_veteran",
+        scryfall_id: "7a136f26-ac66-407f-b389-357222d2c4a2",
+        printed: PrintedCharacteristics {
+            name: "Dauntless Veteran".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::pump(1, 1),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dazzling_angel() -> CardDefinition {
+    let text_box = "Flying\nWhenever another creature you control enters, you gain 1 life.";
+    CardDefinition {
+        key: "fdn.dazzling_angel",
+        scryfall_id: "027dc444-e544-4693-8653-3dcdda530162",
+        printed: PrintedCharacteristics {
+            name: "Dazzling Angel".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature()),
+                vec![Effect::gain_life(1)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elementalist_adept() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)";
+    CardDefinition {
+        key: "fdn.elementalist_adept",
+        scryfall_id: "d9768cc6-8f53-4922-ae32-376a2f32d719",
+        printed: PrintedCharacteristics {
+            name: "Elementalist Adept".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::prowess()],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn felidar_savior() -> CardDefinition {
+    let text_box = "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, put a +1/+1 counter on each of up to two other target creatures you control.";
+    CardDefinition {
+        key: "fdn.felidar_savior",
+        scryfall_id: "cd092b14-d72f-4de0-8f19-1338661b9e3b",
+        printed: PrintedCharacteristics {
+            name: "Felidar Savior".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Beast".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::up_to(2, TargetSpec::CreatureYouControl)
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Targets(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                }],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn hinterland_sanctifier() -> CardDefinition {
+    let text_box = "Whenever another creature you control enters, you gain 1 life.";
+    CardDefinition {
+        key: "fdn.hinterland_sanctifier",
+        scryfall_id: "632df69e-6377-43d0-bba5-65518a320aa5",
+        printed: PrintedCharacteristics {
+            name: "Hinterland Sanctifier".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rabbit".into(), "Cleric".into()],
+            power: Some(1),
+            toughness: Some(2),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature()),
+                vec![Effect::gain_life(1)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sanguine_syphoner() -> CardDefinition {
+    let text_box =
+        "Whenever this creature attacks, each opponent loses 1 life and you gain 1 life.";
+    CardDefinition {
+        key: "fdn.sanguine_syphoner",
+        scryfall_id: "b1daf5bb-c8e9-4e79-a532-ca92a9a885cd",
+        printed: PrintedCharacteristics {
+            name: "Sanguine Syphoner".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Warlock".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

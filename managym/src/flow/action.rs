@@ -230,6 +230,14 @@ impl Game {
                                 "On the bottom".into()
                             })
                         }
+                        [Effect::Move {
+                            to: ZoneType::Library,
+                            library_end: Some(end),
+                            ..
+                        }] => Some(match end {
+                            LibraryEnd::Top => "On top".into(),
+                            LibraryEnd::Bottom => "On the bottom".into(),
+                        }),
                         [Effect::SelectCards {
                             from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
                             ..

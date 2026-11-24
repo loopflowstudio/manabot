@@ -97,3 +97,17 @@ fn foundations_5d_crawling_barrens() {
     assert!(!s.game().characteristics(id).is_creature());
     assert_eq!(counters(&s, id), 2);
 }
+
+#[test]
+fn foundations_5f_spitfire_lagac() {
+    use crate::support::inspect::library_card;
+    use crate::support::play::{enter_and_settle, move_and_settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Spitfire Lagac"]);
+    s.force_permanent_on_battlefield(0, "Spitfire Lagac");
+    enter_and_settle(&mut s, "Forest");
+    assert_eq!((s.life(0), s.life(1)), (20, 19));
+    let theirs = library_card(&s, 1, "Forest");
+    move_and_settle(&mut s, theirs, ZoneType::Battlefield);
+    assert_eq!((s.life(0), s.life(1)), (20, 19));
+}

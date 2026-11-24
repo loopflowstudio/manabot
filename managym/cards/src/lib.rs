@@ -36,6 +36,7 @@ mod dis;
 mod dka;
 mod dmu;
 mod dom;
+mod drk;
 mod dtk;
 mod ecl;
 mod eld;
@@ -60,6 +61,7 @@ mod jou;
 mod khm;
 mod kld;
 mod ktk;
+mod lci;
 mod lea;
 mod lrw;
 mod m10;
@@ -176,6 +178,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     dgm::cards,
     dmu::cards,
     dom::cards,
+    drk::cards,
     dtk::cards,
     ecl::cards,
     eld::cards,
@@ -200,6 +203,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     khm::cards,
     kld::cards,
     ktk::cards,
+    lci::cards,
     lea::cards,
     lrw::cards,
     m10::cards,

@@ -8775,5 +8775,380 @@
     "colors": [
       "B"
     ]
+  },
+  "Elementalist Adept": {
+    "name": "Elementalist Adept",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Prowess",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sanguine Syphoner": {
+    "name": "Sanguine Syphoner",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Warlock",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, each opponent loses 1 life and you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Vampire Spawn": {
+    "name": "Vampire Spawn",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, each opponent loses 2 life and you gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Dauntless Veteran": {
+    "name": "Dauntless Veteran",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, creatures you control get +1/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Spitfire Lagac": {
+    "name": "Spitfire Lagac",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Lizard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, this creature deals 1 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Mischievous Pup": {
+    "name": "Mischievous Pup",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Dog",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, return up to one other target permanent you control to its owner's hand.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Terror of Mount Velus": {
+    "name": "Terror of Mount Velus",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Double strike"
+    ],
+    "oracle_text": "Flying\nDouble strike (This creature deals both first-strike and regular combat damage.)\nWhen this creature enters, creatures you control gain double strike until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Exclusion Mage": {
+    "name": "Exclusion Mage",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, return target creature an opponent controls to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Inspiring Overseer": {
+    "name": "Inspiring Overseer",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Angel Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you gain 1 life and draw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Cloudblazer": {
+    "name": "Cloudblazer",
+    "mana_cost": "{3}{W}{U}",
+    "type_line": "Creature — Human Scout",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you gain 2 life and draw two cards.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Bigfin Bouncer": {
+    "name": "Bigfin Bouncer",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Shark Pirate",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, return target creature an opponent controls to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Pelakka Wurm": {
+    "name": "Pelakka Wurm",
+    "mana_cost": "{4}{G}{G}{G}",
+    "type_line": "Creature — Wurm",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhen this creature enters, you gain 7 life.\nWhen this creature dies, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Crow of Dark Tidings": {
+    "name": "Crow of Dark Tidings",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Zombie Bird",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Mill"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters or dies, mill two cards. (Put the top two cards of your library into your graveyard.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Herald of Faith": {
+    "name": "Herald of Faith",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Angel",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, you gain 2 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Ambush Wolf": {
+    "name": "Ambush Wolf",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Wolf",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, exile up to one target card from a graveyard.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Hinterland Sanctifier": {
+    "name": "Hinterland Sanctifier",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Rabbit Cleric",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever another creature you control enters, you gain 1 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Burrog Befuddler": {
+    "name": "Burrog Befuddler",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Frog Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, target creature an opponent controls gets -1/-0 until end of turn.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Skeleton Archer": {
+    "name": "Skeleton Archer",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Skeleton Archer",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, it deals 1 damage to any target.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Ball Lightning": {
+    "name": "Ball Lightning",
+    "mana_cost": "{R}{R}{R}",
+    "type_line": "Creature — Elemental",
+    "power": "6",
+    "toughness": "1",
+    "keywords": [
+      "Haste",
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nHaste (This creature can attack and {T} as soon as it comes under your control.)\nAt the beginning of the end step, sacrifice this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Ravenous Giant": {
+    "name": "Ravenous Giant",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Creature — Giant",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, this creature deals 1 damage to you.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Felidar Savior": {
+    "name": "Felidar Savior",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Cat Beast",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, put a +1/+1 counter on each of up to two other target creatures you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Pulse Tracker": {
+    "name": "Pulse Tracker",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Vampire Rogue",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, each opponent loses 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Syr Alin, the Lion's Claw": {
+    "name": "Syr Alin, the Lion's Claw",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nWhenever Syr Alin attacks, other creatures you control get +1/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Voracious Greatshark": {
+    "name": "Voracious Greatshark",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Creature — Shark",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, counter target artifact or creature spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Crackling Cyclops": {
+    "name": "Crackling Cyclops",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Cyclops Wizard",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever you cast a noncreature spell, this creature gets +3/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Dazzling Angel": {
+    "name": "Dazzling Angel",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Angel",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever another creature you control enters, you gain 1 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Viashino Pyromancer": {
+    "name": "Viashino Pyromancer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Lizard Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, it deals 2 damage to target player or planeswalker.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Beast-Kin Ranger": {
+    "name": "Beast-Kin Ranger",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Ranger",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever another creature you control enters, this creature gets +1/+0 until end of turn.",
+    "colors": [
+      "G"
+    ]
   }
 }

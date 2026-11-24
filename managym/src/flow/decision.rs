@@ -3541,6 +3541,20 @@ impl Game {
         self.reposition_library_object(owner, object, index);
     }
 
+    /// Put a card that has just entered its owner's library on top at the
+    /// bottom instead ("on the bottom of its owner's library"). Its position
+    /// is public, so this is no private permutation: facts about the cards
+    /// above it keep their places from the top.
+    pub(crate) fn place_entrant_on_bottom(&mut self, object: ObjectId) {
+        let owner = self.state[object].owner;
+        let bottom = self.state.zones.size(ZoneType::Library, owner) - 1;
+        self.state.known_library_mut(owner).move_top_to(bottom);
+        self.state
+            .zones
+            .reposition(ZoneType::Library, owner, object, 0);
+        self.assert_library_knowledge();
+    }
+
     /// Arbitrary reorders invalidate positional facts at the mutation boundary.
     pub(crate) fn reposition_library_object(
         &mut self,

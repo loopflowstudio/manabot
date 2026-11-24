@@ -1,5 +1,6 @@
 //! Worldwake.
 use managym_state::{
+    ability::{Ability, Effect, Per, PlayerSelector, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, StaticAbility, StaticScope,
@@ -9,7 +10,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![basilisk_collar()]
+    vec![pulse_tracker(), basilisk_collar()]
 }
 
 fn basilisk_collar() -> CardDefinition {
@@ -31,6 +32,33 @@ fn basilisk_collar() -> CardDefinition {
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             mana_cost: Some(ManaCost::parse("{1}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn pulse_tracker() -> CardDefinition {
+    let text_box = "Whenever this creature attacks, each opponent loses 1 life.";
+    CardDefinition {
+        key: "wwk.pulse_tracker",
+        scryfall_id: "4604a63c-ebe0-420f-968e-3ffc7641ce22",
+        printed: PrintedCharacteristics {
+            name: "Pulse Tracker".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Rogue".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::LoseLife {
+                    player: PlayerSelector::EachOpponent,
+                    amount: 1.into(),
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

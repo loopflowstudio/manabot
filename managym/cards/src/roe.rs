@@ -4,8 +4,8 @@ use managym_state::{
         TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        StaticAbility,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        pelakka_wurm(),
         fleeting_distraction(),
         battle_rattle_shaman(),
         evolving_wilds(),
@@ -157,6 +158,36 @@ fn fleeting_distraction() -> CardDefinition {
                     Modification::pump(-1, 0),
                 ),
                 Effect::DrawCards { count: 1.into() },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn pelakka_wurm() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhen this creature enters, you gain 7 life.\nWhen this creature dies, draw a card.";
+    CardDefinition {
+        key: "roe.pelakka_wurm",
+        scryfall_id: "8e732593-0bdc-4dd4-9b07-9aa1a780e6e8",
+        printed: PrintedCharacteristics {
+            name: "Pelakka Wurm".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wurm".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![
+                Ability::when_enters(TriggerSubject::This, vec![Effect::gain_life(7)]),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::DrawCards { count: 1.into() }],
+                },
             ],
             text_box: text_box.into(),
             ..Default::default()

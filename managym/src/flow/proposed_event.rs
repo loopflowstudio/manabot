@@ -739,7 +739,7 @@ impl Game {
                     if let Some(object_id) = moved_object.filter(|object_id| {
                         self.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
                     }) {
-                        self.put_on_bottom_of_library(object_id);
+                        self.place_entrant_on_bottom(object_id);
                     }
                 }
                 if let Some((owner, definition, count)) = known_hand_entry {

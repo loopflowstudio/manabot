@@ -1,7 +1,7 @@
 //! Throne of Eldraine.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        syr_alin_the_lions_claw(),
         bake_into_a_pie(),
         raging_redcap(),
         epic_downfall(),
@@ -272,6 +273,35 @@ fn bake_into_a_pie() -> CardDefinition {
                 Effect::destroy(ObjectSelector::Target(TargetSpec::Creature)),
                 Effect::create_tokens("token.food", 1),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn syr_alin_the_lions_claw() -> CardDefinition {
+    let text_box = "First strike (This creature deals combat damage before creatures without first strike.)\nWhenever Syr Alin attacks, other creatures you control get +1/+1 until end of turn.";
+    CardDefinition {
+        key: "eld.syr_alin_the_lions_claw",
+        scryfall_id: "4cddb2d2-d813-4b83-a592-380ba4edf54f",
+        printed: PrintedCharacteristics {
+            name: "Syr Alin, the Lion's Claw".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_other_you_control(CardPredicate::creature()),
+                    Modification::pump(1, 1),
+                )],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

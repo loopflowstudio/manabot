@@ -146,3 +146,17 @@ fn foundations_permanent_good_fortune_unicorn() {
     enter_and_settle(&mut s, "Serra Angel");
     assert_eq!(counters(&s, permanent_named(&s, "Serra Angel")), 1);
 }
+
+/// "At the beginning of your upkeep, this creature deals 1 damage to you":
+/// only its controller's upkeep.
+#[test]
+fn foundations_5f_ravenous_giant() {
+    use crate::support::game::five_color_setup;
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Ravenous Giant"]);
+    s.force_permanent_on_battlefield(0, "Ravenous Giant");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!((s.life(0), s.life(1)), (20, 20));
+    s.advance_to_active_step(0, StepKind::Main);
+    assert_eq!((s.life(0), s.life(1)), (19, 20));
+}

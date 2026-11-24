@@ -344,3 +344,15 @@ fn printed_creature_brazen_scourge() {
     use managym::state::card::Keyword;
     crate::printed_creature_combat("Brazen Scourge", 3, 3, &[Keyword::Haste]);
 }
+
+#[test]
+fn foundations_5f_cloudblazer() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::enter_and_settle;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Cloudblazer"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    enter_and_settle(&mut s, "Cloudblazer");
+    s.assert_life(0, 22);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 2);
+}

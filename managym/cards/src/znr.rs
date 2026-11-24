@@ -1,6 +1,8 @@
 //! Zendikar Rising.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
+    ability::{
+        Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
         PrintedCharacteristics,
@@ -13,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        spitfire_lagac(),
         crawling_barrens(),
         broken_wings(),
         highborn_vampire(),
@@ -128,6 +131,35 @@ fn crawling_barrens() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn spitfire_lagac() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, this creature deals 1 damage to each opponent.";
+    CardDefinition {
+        key: "znr.spitfire_lagac",
+        scryfall_id: "47f26493-812f-4c14-91c4-d2ab549a7b8a",
+        printed: PrintedCharacteristics {
+            name: "Spitfire Lagac".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Lizard".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: 1.into(),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

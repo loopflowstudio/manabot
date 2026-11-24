@@ -694,3 +694,23 @@ fn ward_does_not_trigger_for_controllers_own_spell() {
         0
     );
 }
+
+#[test]
+fn foundations_5f_burrog_befuddler() {
+    use crate::support::game::five_color_setup;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Burrog Befuddler", "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    crate::enter_choosing(
+        &mut s,
+        "Burrog Befuddler",
+        &[Target::Permanent(theirs)],
+        Target::Permanent(theirs),
+    );
+    assert_eq!(s.game().characteristics(theirs).pt(), (1, 2));
+    assert_eq!(s.game().characteristics(ours).pt(), (2, 2));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
+}

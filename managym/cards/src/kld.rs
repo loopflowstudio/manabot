@@ -15,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        cloudblazer(),
         brazen_scourge(),
         authority_of_the_consuls(),
         cultivators_caravan(),
@@ -160,6 +161,30 @@ fn brazen_scourge() -> CardDefinition {
             power: Some(3),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Haste]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cloudblazer() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, you gain 2 life and draw two cards.";
+    CardDefinition {
+        key: "kld.cloudblazer",
+        scryfall_id: "3cb12355-abd8-4bf3-aac1-f710ac162585",
+        printed: PrintedCharacteristics {
+            name: "Cloudblazer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Scout".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::gain_life(2), Effect::DrawCards { count: 2.into() }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

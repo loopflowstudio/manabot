@@ -10,3 +10,12 @@ fn foundations_grant_basilisk_collar() {
         &[Keyword::Deathtouch, Keyword::Lifelink],
     );
 }
+
+#[test]
+fn foundations_5f_pulse_tracker() {
+    use managym::flow::turn::StepKind;
+    let (mut s, ..) = crate::attack_and_resolve("Pulse Tracker");
+    assert_eq!((s.life(0), s.life(1)), (20, 19));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!((s.life(0), s.life(1)), (20, 18));
+}

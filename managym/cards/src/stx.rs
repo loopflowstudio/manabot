@@ -15,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        burrog_befuddler(),
         divide_by_zero(),
         enthusiastic_study(),
         eyetwitch(),
@@ -257,6 +258,33 @@ fn waterfall_aerialist() -> CardDefinition {
             statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
                 "{2}",
             )))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn burrog_befuddler() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, target creature an opponent controls gets -1/-0 until end of turn.";
+    CardDefinition {
+        key: "stx.burrog_befuddler",
+        scryfall_id: "6040c573-cd8c-4593-8ade-d9922482035c",
+        printed: PrintedCharacteristics {
+            name: "Burrog Befuddler".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Frog".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    Modification::pump(-1, 0),
+                )],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

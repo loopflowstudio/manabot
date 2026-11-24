@@ -58,6 +58,8 @@ mod dka;
 mod dmu;
 #[path = "cards/dom.rs"]
 mod dom;
+#[path = "cards/drk.rs"]
+mod drk;
 #[path = "cards/dtk.rs"]
 mod dtk;
 #[path = "cards/ecl.rs"]
@@ -104,6 +106,8 @@ mod khm;
 mod kld;
 #[path = "cards/ktk.rs"]
 mod ktk;
+#[path = "cards/lci.rs"]
+mod lci;
 #[path = "cards/lea.rs"]
 mod lea;
 #[path = "cards/lrw.rs"]
@@ -482,6 +486,120 @@ fn assert_targeted_pump(
         "{spell}"
     );
     assert_eq!(keywords(&s, subject), printed_keywords, "{spell}");
+}
+
+/// The ETB-targeting `name` enters from player 0's library, offers exactly
+/// `offers` for its trigger's target, and is handed `choice`.
+fn enter_choosing(
+    s: &mut support::game::Scenario,
+    name: &str,
+    offers: &[managym::state::game_object::Target],
+    choice: managym::state::game_object::Target,
+) -> managym::state::game_object::ObjectId {
+    use managym::agent::action::ActionSpaceKind;
+    use support::{
+        game::move_card,
+        inspect::{library_card, now, offered_targets},
+        play::{pass_until, settle},
+    };
+    let card = library_card(s, 0, name);
+    move_card(s, card, managym::state::zone::ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+    let mut offered = offered_targets(s);
+    offered.sort_by_key(|target| format!("{target:?}"));
+    let mut wanted = offers.to_vec();
+    wanted.sort_by_key(|target| format!("{target:?}"));
+    assert_eq!(offered, wanted, "{name} offers");
+    assert!(s.choose_target(choice));
+    settle(s);
+    now(s, card)
+}
+
+/// "When this creature enters, return target creature an opponent controls
+/// to its owner's hand": only the opposing creature is offered.
+fn bounces_an_opposing_creature(name: &str) {
+    use managym::state::{game_object::Target, zone::ZoneType};
+    use support::{
+        game::five_color_setup,
+        inspect::{card_of, zone_of},
+    };
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, theirs);
+    enter_choosing(
+        &mut s,
+        name,
+        &[Target::Permanent(theirs)],
+        Target::Permanent(theirs),
+    );
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Hand));
+    assert_eq!(s.game().state[support::inspect::now(&s, card)].owner.0, 1);
+    assert!(s.game().state.permanents[ours].is_some());
+}
+
+/// "Whenever another creature you control enters, you gain 1 life": the
+/// source's own entry and an opposing creature's entry gain nothing.
+fn gains_life_when_another_creature_enters(name: &str) {
+    use support::{
+        game::five_color_setup,
+        inspect::library_card,
+        play::{enter_and_settle, move_and_settle},
+    };
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    enter_and_settle(&mut s, name);
+    s.assert_life(0, 20);
+    enter_and_settle(&mut s, "Gray Ogre");
+    s.assert_life(0, 21);
+    let enemy = library_card(&s, 1, "Gray Ogre");
+    move_and_settle(&mut s, enemy, managym::state::zone::ZoneType::Battlefield);
+    s.assert_life(0, 21);
+}
+
+/// `name` is ready to attack alone, beside an idle Gray Ogre of each player;
+/// the attack trigger resolves before blockers.
+fn attack_and_resolve(
+    name: &str,
+) -> (
+    support::game::Scenario,
+    managym::state::game_object::PermanentId,
+    managym::state::game_object::PermanentId,
+    managym::state::game_object::PermanentId,
+) {
+    use managym::flow::turn::StepKind;
+    use support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        play::{attack_with, settle},
+    };
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, name);
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_summoning_sickness(&mut s, source);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, source);
+    settle(&mut s);
+    assert_eq!(s.current_step(), StepKind::DeclareAttackers);
+    (s, source, ally, enemy)
+}
+
+/// "Whenever this creature attacks, [scope] creatures you control get +1/+1
+/// until end of turn": the bonus reaches the controller's creatures named by
+/// the scope, never the opponent's, and ends at cleanup.
+fn attack_pumps_the_team(name: &str, printed: (i32, i32), includes_self: bool) {
+    use managym::flow::turn::StepKind;
+    let (mut s, source, ally, enemy) = attack_and_resolve(name);
+    let bonus = i32::from(includes_self);
+    assert_eq!(
+        s.game().characteristics(source).pt(),
+        (printed.0 + bonus, printed.1 + bonus)
+    );
+    assert_eq!(s.game().characteristics(ally).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(enemy).pt(), (2, 2));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(source).pt(), printed);
+    assert_eq!(s.game().characteristics(ally).pt(), (2, 2));
 }
 
 /// Makes the permanent a planeswalker: the catalog defines none, so target
