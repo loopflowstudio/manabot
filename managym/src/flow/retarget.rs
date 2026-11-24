@@ -55,23 +55,9 @@ impl Game {
                 .get(clause)
                 .cloned(),
             StackObject::TriggeredAbility(triggered) => {
-                let effects = match &triggered.inline_effects {
-                    Some(effects) => std::borrow::Cow::Borrowed(effects.as_slice()),
-                    None => {
-                        let object = triggered
-                            .source_lki
-                            .as_ref()
-                            .map_or(triggered.source_object(), |lki| lki.object);
-                        crate::state::ability::with_chosen_modes(
-                            self.source_face(object, triggered.source_definition_id)?
-                                .abilities
-                                .get(triggered.ability_index)?
-                                .effects(),
-                            &triggered.chosen_modes,
-                        )
-                    }
-                };
-                effect_target_requirements(&effects).get(clause).cloned()
+                effect_target_requirements(&self.stacked_trigger_effects(triggered)?)
+                    .get(clause)
+                    .cloned()
             }
         }
     }

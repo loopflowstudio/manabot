@@ -441,6 +441,31 @@ impl Game {
         }
     }
 
+    /// The effects a stacked triggered ability runs: its inline (delayed,
+    /// granted or reflexive) effects, or its printed ability's with a modal
+    /// trigger's chosen modes expanded. Resolution reads the printed ability
+    /// itself, since it also checks the intervening "if".
+    pub(crate) fn stacked_trigger_effects<'a>(
+        &'a self,
+        triggered: &'a TriggeredAbilityOnStack,
+    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
+        if let Some(effects) = &triggered.inline_effects {
+            return Some(std::borrow::Cow::Borrowed(effects.as_slice()));
+        }
+        let object = triggered
+            .source_lki
+            .as_ref()
+            .map_or(triggered.source_object(), |lki| lki.object);
+        let printed = self
+            .source_face(object, triggered.source_definition_id)?
+            .abilities
+            .get(triggered.ability_index)?;
+        Some(crate::state::ability::with_chosen_modes(
+            printed.effects(),
+            &triggered.chosen_modes,
+        ))
+    }
+
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
         let effects = ability.effects;
         let program = if ability.program {
