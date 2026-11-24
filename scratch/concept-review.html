@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Departed LKI, Trigger Contexts, Player Bindings &amp; Modal Triggers</title>
+<title>MTG-418 Concept Review · Spell LKI, Multi-Player Execution, Damage Events &amp; Query Completeness</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    max-width: 72rem;
+    max-width: 74rem;
     margin: 2.5rem auto;
     padding: 0 1.25rem 4rem;
     font: 16px/1.55 system-ui, -apple-system, sans-serif;
@@ -70,7 +70,7 @@
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
   th, td { padding: .6rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   th { font-weight: 700; background: var(--card); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin: 1rem 0; }
   .panel {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -96,162 +96,150 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Post-Life-Batch Concept Review · HEAD 3da933e53b</div>
-  <h1>Do MTG-418’s departed-object LKI, trigger contexts, player bindings, and modal triggers line up?</h1>
+  <div class="eyebrow">Managym · MTG-418 · Post-Death-Batch Concept Review · HEAD ac8add3da2</div>
+  <h1>Do MTG-418’s spell LKI, multi-player execution, damage events, and contextual queries line up?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s unified event-history, last-known-information (LKI),
-    trigger-matching/lifecycle, contextual-query, and consumer-projection surface
-    (<code>state/src/game_object.rs</code>, <code>state/src/predicate.rs</code>, <code>state/src/ability.rs</code>,
-    <code>state/src/stack_object.rs</code>, <code>flow/identity.rs</code>, <code>flow/triggers.rs</code>,
-    <code>flow/trigger.rs</code>, <code>flow/zones.rs</code>, <code>flow/statics.rs</code>,
-    <code>flow/resolution.rs</code>, <code>flow/layers.rs</code>, <code>agent/observation.rs</code>,
+    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, object/spell last-known-information (LKI),
+    trigger-matching/context, multi-player resolution, contextual-query, and consumer-projection surface
+    (<code>state/src/ability.rs</code>, <code>state/src/predicate.rs</code>, <code>state/src/card.rs</code>,
+    <code>state/src/game_object.rs</code>, <code>state/src/stack_object.rs</code>,
+    <code>flow/event.rs</code>, <code>flow/triggers.rs</code>, <code>flow/resolution.rs</code>,
+    <code>flow/decision.rs</code>, <code>flow/zones.rs</code>, <code>flow/damage.rs</code>,
+    <code>flow/statics.rs</code>, <code>flow/layers.rs</code>, <code>flow/tick.rs</code>,
     <code>agent/continuation.rs</code>, <code>agent/effect_execution.rs</code>,
-    <code>agent/observation_encoder.rs</code>, and <code>agent/ability_description.rs</code>) —
-    widened from the landed Life batch (<code>942d89cc91</code>..<code>86d1c65815</code>) and the next
-    <strong>Creature deaths &amp; turn death history</strong> slice
-    (<em>Tragic Banshee, Vengeful Bloodwitch, Midnight Reaper, Massacre Wurm, Garna Bloodfist of Keld,
-    Needletooth Pack, Slumbering Cerberus, Wardens of the Cycle, Kalastria Highborn†</em>)
-    across the remaining 43 primary FDN rows and cross-set witnesses.
+    <code>agent/observation.rs</code>, and <code>agent/ability_description.rs</code>) —
+    widened from the landed Death batch (<code>1d6947867d</code>..<code>ac8add3da2</code>, 46/81 primary FDN rows)
+    across the remaining 35 primary FDN rows, 11 history/query-gated cost-primary candidates, and the remaining
+    cross-set witnesses (<em>Unravel</em>, <em>Plasma Bolt</em>, <em>Michelangelo, Game Master</em>).
   </p>
   <p class="small">
-    The Life batch closed five of the prior review’s six seams: unified <code>triggering_amount: i32</code> +
-    <code>LosesLife</code>, <code>PutsCountersOn</code> with <code>TriggerSubject</code>,
-    <code>ObjectSelector::Paid(How)</code> + <code>PaymentReceipt::paid_as</code> + stack <code>paid_amount</code>,
-    composable <code>StaticAbility::CostsLess</code> + <code>ActivatedAbilityDefinition.condition</code> in one
-    <code>check_activation_terms</code> authority + <code>Player.starting_life</code>, layer-granted
-    <code>Modification::Firebending</code> (deleting <code>granted_firebending_triggers</code>), and live
-    <code>p.attacking</code> in the heuristic. CR 104.4b <code>GameOutcome::Draw</code> was deferred to its own
-    slice with a loop partner, and <code>frozen_sacrifice_162/163</code> drifted and must be diagnosed first.
-    Stepping back across the whole area at <code>3da933e53b</code> exposes four deep mismatches in departure LKI,
-    pending trigger visibility, player binding, and modal trigger lifecycles right in the path of the Death batch.
+    The Death batch closed all four seams from the prior review: complete layered <code>ObjectLki</code> with one
+    <code>PermanentFacts</code> matcher, departed triggering-permanent projection in <code>effect_execution</code>
+    and <code>target_reference</code>, condition-aware <code>event_player</code>, printed modal triggers carrying
+    <code>chosen_modes</code> (fixing CR 603.4 rechecks and unifying stacked-trigger effects reading), and
+    per-source lifelink batching (Finding 6). Stepping back at <code>ac8add3da2</code> before entering the Draw,
+    Cast, Stack/Counter, Damage, and Board/Graveyard slices exposes four structural mismatches in spell LKI,
+    multi-player execution, noncombat damage attribution, and zone/name/state queries — and shows why the two-card
+    Draw batch should be merged with Cast triggers and Stack/Counter results into one cohesive 12-card slice.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 3da933e53b</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at ac8add3da2</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code> at <code>3da933e53b</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code> at <code>ac8add3da2</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Per-player turn history &amp; v11 turn state</strong><br><span class="small">Closed per-seat counters for life gains/amount, life lost, deaths, departures, spend, raid, warp</span></td>
+        <td><strong>Departed permanent LKI, event players &amp; modal triggers</strong><br><span class="small">CR 603.10a, 608.2h, 700.2: one layered snapshot, controller vs. owner bindings, printed modal triggers</span></td>
         <td>
-          <code>TurnState.history: [PlayerTurnHistory; 2]</code> owns all 13 fields; v11 <code>player_turn_state</code>
-          carries cols 8–14; <code>academy/ui/src/lib/types.ts</code> matches <code>experience.rs</code>.
+          <code>ObjectLki</code> + <code>matches_permanent_facts</code> answer live and departed predicates;
+          <code>event_player</code> binds controller for dies/LTB/ETB/sacrificed and owner for graveyard;
+          <code>chosen_modes</code> keeps printed modal triggers intact with one <code>stacked_trigger_effects</code> reader;
+          <code>commit_lifelink_gains</code> batches lifelink per source.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Single state owner across rules, hash, v11 tensors, LLM text, and Academy.</td>
+        <td>Closed cleanly in <code>6921aaa592</code>..<code>e4579800a7</code> (hash v27).</td>
       </tr>
       <tr>
-        <td><strong>Trigger wrappers, per-member matching &amp; granted firebending</strong><br><span class="small">One pipeline for printed and layer-granted triggers, doublers, and CR 101.2 once-each-turn caps</span></td>
+        <td><strong>Turn history, trigger wrappers &amp; paid-cost LKI</strong><br><span class="small">Closed per-seat counters, unified <code>triggering_amount</code>, wrapper peeling, <code>ObjectSelector::Paid</code></span></td>
         <td>
-          <code>match_trigger_wrappers</code> + <code>collect_occurrences</code> peel all wrappers in one loop;
-          <code>Modification::Firebending(n)</code> pushes <code>Ability::firebending(n)</code> onto
-          <code>view.triggered_abilities</code>; <code>granted_firebending_triggers</code> is gone.
+          <code>PlayerTurnHistory</code> owns all 13 fields and v11 <code>player_turn_state</code> cols 8–14;
+          <code>match_trigger_wrappers</code> + <code>collect_occurrences</code> handle all wrapped and granted triggers;
+          <code>PaymentReceipt::paid_as</code> + <code>triggering_amount</code> (v11 slot 16) unify amounts.
         </td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Verified across wrapped attacks, combat hits, simultaneous grants, and Sozin’s Comet + Katara.</td>
+        <td>Single owners across rules, hash, v11, LLM text, and Academy.</td>
       </tr>
       <tr>
-        <td><strong>Composable queries, paid-cost LKI &amp; cost/activation gating</strong><br><span class="small"><code>EffectValue::Property</code>, <code>Paid(How)</code>, <code>CostsLess</code>, <code>check_activation_terms</code>, <code>triggering_amount</code></span></td>
+        <td><strong>Spell context &amp; departed spell LKI</strong><br><span class="small">CR 400.7, 603.10, 608.2h, 701.6a: one spell record answers controller, colors, announced X / mana value, and spend for both cast triggers and counter effects — live or after leaving the stack</span></td>
         <td>
-          <code>EffectValue::Property</code>, <code>ObjectSelector::Paid(How)</code> + <code>PaymentReceipt::paid_as</code>,
-          <code>StaticAbility::CostsLess</code>, <code>ActivatedAbilityDefinition.condition</code> in one
-          <code>check_activation_terms</code> authority, <code>Player.starting_life</code>, and unified
-          <code>triggering_amount: i32</code> (v11 fact slot 16) + <code>PutsCountersOn</code>.
-        </td>
-        <td><span class="badge yes">Yes</span></td>
-        <td>All six shared Life-batch unifications landed cleanly (CR 104.4b draw deferred to loop-partner slice).</td>
-      </tr>
-      <tr>
-        <td><strong>Last known characteristics &amp; status of departed permanents</strong><br><span class="small">CR 603.10a / 608.2h: one layered snapshot answers death/LTB predicates, trigger doubling, and resolution checks (“if it was attacking”)</span></td>
-        <td>
-          <strong>Split into two incompatible worlds:</strong>
-          <code>ObjectLki</code> (<code>game_object.rs:293</code>) keeps only partial booleans
-          (<code>was_creature</code>, <code>was_land</code>, <code>creature_types</code>), omitting layered
-          <code>types</code>, full <code>subtypes</code>, <code>colors</code>, <code>is_legendary</code>,
-          <code>name</code>, <code>was_attacking</code>, <code>was_tapped</code>, and <code>was_in_combat</code>.<br>
-          <code>subject_matches_moved_object</code> (<code>triggers.rs:2203</code>) reads
-          <code>&amp;self.state[moved_object]</code> (the <em>destination graveyard card</em>!) and overrides only
-          <code>power</code> and <code>was_creature</code>. <code>additional_trigger_times</code>
-          (<code>triggers.rs:1285</code>) falls back to <code>matches_printing</code>.
-          <code>Condition</code> has card-shaped <code>TriggeringHadCounters</code> and no
-          <code>TriggeringMatches(CardPredicate)</code>.
+          <strong>Split into four disconnected, incomplete mechanisms:</strong>
+          <code>ResolutionTarget.spell: Option&lt;SpellPayment&gt;</code> (<code>decision.rs:108</code>) stores only
+          <code>{ mana_value, spent }</code>, omitting <code>controller</code> and <code>colors</code>.
+          <code>PlayerSelector::TargetController</code> (<code>resolution.rs:748</code>) only matches
+          <code>Target::Permanent</code>, returning empty for <code>Target::StackSpell</code>.
+          <code>EffectValue::TriggeringManaValue</code> (<code>resolution.rs:195</code>) follows
+          <code>zones.successor(spell)</code> after departure — losing announced <code>X</code> and spell copies!
+          <code>EffectValue::Property</code> (<code>resolution.rs:58</code>) ignores <code>Target::StackSpell</code>
+          and lacks color count.
+          <code>Effect::asks_triggering_spell</code> (<code>ability.rs:2113</code>) is a stale hardcoded match that
+          misses <code>CreateToken</code>, <code>PutCounters</code>, <code>DrawCards</code>, <code>Property</code>,
+          <code>If</code>, and <code>TriggerModes</code>.
+          <code>continuation.rs:344</code> returns all-<code>None</code> for departed <code>Target::StackSpell</code>.
+          <code>SpellTargetsOnlyThis</code> sits outside <code>TriggerCondition::Casts</code>.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Biggest mismatch — one rules concept split into live vs. broken-printed departure matching.</strong>
-          Breaks <em>Kalastria Highborn</em> on a dying Clone-Vampire or granted Vampire (and falsely fires on an
-          <em>Honest Work</em>-ed Vampire); breaks <em>Katara</em> doubling a dying Clone-Ally; blocks
-          <em>Garna, Bloodfist of Keld</em> (“if it was attacking”) and invites card-shaped
-          <code>TriggeringWas*</code> variants.
+          <strong>Biggest mismatch — one rules concept fractured across 4 owners, with active CR 608.2h bugs.</strong>
+          Breaks <em>An Offer You Can’t Refuse</em> (empty <code>TargetController</code>),
+          <em>Unravel</em> on copies/stolen spells, <em>Ramos</em> (no color count, no context binding),
+          <em>Ovika</em>-style departed X mana value (reads X=0 from graveyard), <em>Gnarlback Rhino</em>
+          (no cast-targets-this filter), and viewer visibility of countered triggering spells on the stack.
         </td>
       </tr>
       <tr>
-        <td><strong>Public learnability of departed triggering context on the stack</strong><br><span class="small">When a stacked trigger branches on a departed permanent’s LKI, both players see what it read</span></td>
+        <td><strong>Multi-player instruction execution &amp; simultaneous mills</strong><br><span class="small">CR 101.4, 121.2c, 701.13: “each player draws”, “that player draws”, “each player mills X; for each creature milled this way…”</span></td>
         <td>
-          <code>continuation.rs:334</code> (<code>target_reference</code>) returns
-          <code>VisibleReference::default()</code> (all <code>None</code>) for any departed
-          <code>Target::Permanent(id)</code>, and <code>stack_frame</code> never projects a departed
-          triggering permanent’s <code>ObjectLki</code> through <code>effect_execution</code>.
+          <code>PlayerSelector</code> (<code>ability.rs:701</code>) has no <code>EachPlayer</code>.
+          <code>Effect::ForPlayer</code> (<code>resolution.rs:1851</code>) writes
+          <code>let [player] = self.selected_players(player, frame)[..] else { return None; };</code> —
+          silently becoming a no-op whenever more than one player is selected.
+          <code>Effect::MillCards</code> (<code>ability.rs:1245</code>) only takes <code>target: Option&lt;TargetSpec&gt;</code>
+          and clears <code>frame.this_way</code> per call (<code>resolution.rs:1143</code>), so two sequential mills
+          clobber the first player’s milled cards.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Public-learnability gap on stacked death triggers.</strong>
-          Two pending <em>Garna</em> triggers from two dying Gray Ogres (one attacking → draw; one non-attacking →
-          1 damage) produce byte-identical stack rows, continuation frames, v11 tensors, LLM text, and Academy labels.
+          <strong>One player-selection concept, three incompatible call sites.</strong>
+          Directly blocks <em>Scrawling Crawler</em> (“each player draws a card”) in the very next slice and
+          <em>Dread Summons</em> (“each player mills X… for each creature card put into a graveyard this way”) later.
         </td>
       </tr>
       <tr>
-        <td><strong>“That player” binding on zone-move &amp; sacrifice triggers</strong><br><span class="small">CR 603.10a: <code>Dies</code> / <code>LTB</code> / <code>Sacrificed</code> bind the permanent’s controller; <code>PutIntoGraveyard</code> binds the graveyard’s owner</span></td>
+        <td><strong>Noncombat damage events, spell damage control &amp; excess damage</strong><br><span class="small">CR 120.3, 120.4a: every damage event knows <code>combat</code>, its exact source’s controller, and its amount; excess resets per instruction</span></td>
         <td>
-          <code>triggers.rs:1086-1101</code> derives <code>trigger.player</code> from <code>event</code> alone:
-          every <code>CardMoved { to: Graveyard }</code> binds <code>self.state[*object].owner</code>;
-          non-graveyard LTB and <code>PermanentSacrificed</code> bind <code>None</code>.
+          <code>GameEvent::DamageDealt</code> (<code>event.rs:73</code>) drops <code>combat: bool</code> even though
+          <code>commit_damage</code> has it.
+          <code>Game::source_controller</code> (<code>damage.rs:260</code>) checks permanents and <code>object_lki</code>
+          then falls back to <code>provenance.owner</code> — skipping <code>stack_spell_controller</code> (unlike
+          <code>source_keywords</code> 5 lines above!).
+          <code>event_amount</code> (<code>triggers.rs:156</code>) returns <code>0</code> for <code>DamageDealt</code>,
+          and <code>TriggerCondition</code> only watches <code>CombatDamageToPlayers</code>.
+          <code>EventBinding::Damage</code> (<code>decision.rs:1524</code>) keeps stale <code>frame.excess_damage</code>
+          if a subsequent damage event deals 0 or is prevented.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>One event field conflates two rules roles.</strong>
-          When an opponent controls a creature <em>you</em> own and <em>Massacre Wurm</em> kills it,
-          <code>TriggeringPlayer</code> drains <em>you</em> (owner) instead of the opponent (controller).
+          <strong>Hidden split between combat-player hits and general damage.</strong>
+          Blocks <em>Niv-Mizzet, Visionary</em>, misattributes stolen-spell lifelink/damage control, and risks stale
+          excess damage on <em>Goblin Negotiation</em> under prevention.
         </td>
       </tr>
       <tr>
-        <td><strong>Printed modal triggered abilities on the stack</strong><br><span class="small">CR 603.3c / 603.4 / 700.2b: choosing a mode keeps printed identity, resolution intervening-if, and visible stack mode</span></td>
+        <td><strong>Negated conditions, all-zone P/T CDAs, target-relative names &amp; counter state triggers</strong><br><span class="small">Composable <code>Condition</code>, <code>PowerCda</code>, <code>CardPredicate</code>, and CR 603.8 state triggers</span></td>
         <td>
-          <code>triggers.rs:616</code> overwrites <code>trigger.inline_effects = Some(modes[mode])</code>,
-          conflating chosen printed modes with delayed/granted/reflexive triggers.<br>
-          <code>resolution.rs:509</code> skips <code>intervening_if</code> and sets <code>ability = None</code>
-          whenever <code>inline_effects.is_some()</code>.<br>
-          <code>observation.rs:1827</code> and <code>continuation.rs:619</code> set <code>chosen_mode</code> /
-          <code>mode</code> only for <code>StackObject::Spell</code>, while <code>trigger.program</code> stays
-          <code>false</code>.
+          <code>Condition</code> (<code>ability.rs:275</code>) has <code>YourTurn</code>, <code>AllOf</code>, <code>AnyOf</code>
+          but no <code>Not</code>.
+          <code>PowerCda</code> (<code>card.rs:324</code>) only sets power (not <code>*/*</code>) and only counts
+          <em>your</em> graveyard.
+          <code>CardPredicate</code> (<code>predicate.rs:26</code>) has <code>namesake</code> (source name only) but no
+          fixed <code>named</code> or target-name match.
+          <code>check_state_triggers</code> (<code>triggers.rs:1470</code>) hardcodes <code>NoCounters</code> instead of
+          also checking counter thresholds.
         </td>
         <td><span class="badge no">No</span></td>
         <td>
-          <strong>Overloaded field breaks CR 603.4 AND hides chosen modes from v11.</strong>
-          <em>Wardens of the Cycle</em>’s Mode 0 (gain 2) and Mode 1 (draw/lose 1) are indistinguishable in
-          <code>stack::MODE</code>, <code>ContinuationFrame.mode</code>, and <code>ContinuationProgram</code>;
-          any modal trigger with a non-monotonic <code>intervening_if</code> resolves illegally after its condition fails.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Frozen semantic conformance baseline</strong><br><span class="small">Recorded traces stay byte-identical unless an intentional rules fix is diagnosed and recorded</span></td>
-        <td>
-          <code>frozen_sacrifice_162</code> and <code>frozen_sacrifice_163</code> in
-          <code>semantic_conformance_tests</code> fail at <code>3da933e53b</code> (while the other 12 frozen cases pass).
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>
-          <strong>Undiagnosed regression blocker.</strong>
-          Must be bisected and fixed (or its exact intentional cause documented) <em>before</em> changing
-          <code>ObjectLki</code> / bumping match-state hash to v27 so a real drift is never hidden behind a hash refresh.
+          <strong>Small missing axes that invite card-shaped variants.</strong>
+          Directly needed by <em>Brineborn Cutthroat</em> (<code>Not(YourTurn)</code>), <em>Crusader of Odric</em>
+          and <em>Consuming Aberration</em> (<code>*/*</code> + opponents’ graveyards), <em>Hare Apparent</em> and
+          <em>Maelstrom Pulse</em> (name predicates), and <em>Mazemind Tome</em> (4+ page counters state trigger).
         </td>
       </tr>
     </tbody>
@@ -259,276 +247,203 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatches · Before vs. After</h2>
+  <h2>2. Biggest Mismatch: Spell Context &amp; Departed Spell LKI</h2>
   <div class="callout">
-    <p>
-      <strong>Why fix these four seams right now (before authoring the Death batch and remaining 43 primary rows):</strong>
-      Every single one is directly hit by the Death batch (<em>Kalastria Highborn, Garna, Massacre Wurm,
-      Wardens of the Cycle</em>) AND removes structural debt across the entire remaining FDN + cross-set cohort
-      (<em>Stroke of Midnight, Maelstrom Pulse, Feed the Swarm, Plasma Bolt, Michelangelo</em>, and any future modal
-      or departure-watching trigger).
-    </p>
+    <strong>The core problem:</strong> <code>managym</code> now has a clean, single authority for departed
+    <em>permanents</em> (<code>ObjectLki</code> recorded at <code>zones.rs:653</code>), but <em>spells</em> leaving the
+    stack at <code>zones.rs:658</code> record nothing. As a result, cast triggers, spell-targeting resolutions,
+    <code>TargetController</code>, <code>Property</code>, and stack observation projections each invent their own partial
+    fallback — and fail whenever a spell is countered, uncounterable, copied, or cast with <code>X</code>.
   </div>
 
-  <h3>A. One Complete <code>ObjectLki</code> &amp; Shared Live/Departed Predicate Matcher (<code>game_object.rs</code>, <code>identity.rs</code>, <code>layers.rs</code>, <code>triggers.rs</code>, <code>statics.rs</code>)</h3>
+  <h3>Concrete interaction walkthrough (normal path, failure, and recovery)</h3>
+  <p>
+    Seat 0 controls <em>Ramos, Dragon Engine</em> (and a constructed <em>Ovika</em>-style cast trigger: “create X tokens
+    where X is that spell’s mana value”). Seat 0 casts a stolen/multicolor <code>X</code> spell (say <em>Fireball</em>
+    at <code>X = 4</code>, MV 5, or a discounted 2-color spell for 2 mana with MV 7). Both cast triggers go on the stack
+    above the spell. Seat 1 responds with <em>An Offer You Can’t Refuse</em> (or <em>Unravel</em>) targeting the spell.
+  </p>
   <div class="grid">
     <div class="panel existing-box">
-      <div class="badge existing">Existing · 3da933e53b</div>
-      <h3>Destination-card fallback + partial booleans + card-shaped conditions</h3>
-<pre>// state/src/game_object.rs:293 (ObjectLki)
-pub creature_types: Vec&lt;String&gt;, // never read by trigger matching!
-pub was_creature: bool,          // no Artifact/Enchantment/PW/Battle!
-pub was_land: bool,
-// MISSING: types, subtypes, colors, is_legendary, name,
-//          was_attacking, was_tapped, was_in_combat
-
-// flow/triggers.rs:2203 (subject_matches_moved_object)
-let card = &amp;self.state[moved_object]; // destination graveyard printing!
-predicate.matches_with_types(card, ..., lki.power, &amp;|ty| {
-    if ty == CardType::Creature { lki.was_creature }
-    else { card.types.types.contains(&amp;ty) }
-}); // Clone-Vampire =&gt; Shapeshifter (MISSES Kalastria Highborn!)
-
-// state/src/ability.rs:374
-Condition::TriggeringHadCounters, // invites TriggeringWasAttacking...</pre>
+      <h3>Before <span class="badge existing">Existing at ac8add3da2</span></h3>
+      <ol>
+        <li><strong>Cast trigger binding fails:</strong> <code>Effect::asks_triggering_spell</code> only checks
+          <code>LoseLife { TriggeringManaValue }</code>, so neither <em>Ramos</em> (<code>PutCounters</code>) nor
+          <em>Ovika</em> (<code>CreateToken</code>) binds <code>context = Some(Target::StackSpell)</code>.</li>
+        <li><strong><em>An Offer You Can’t Refuse</em> fails:</strong> <code>CounterSpell</code> calls
+          <code>move_object</code>, removing the <code>SpellOnStack</code> at <code>zones.rs:658</code>. Then
+          <code>ForPlayer(TargetController, CreateToken(treasure, 2))</code> runs <code>selected_players(TargetController)</code>,
+          which only matches <code>Target::Permanent</code> and returns <code>[]</code> — zero Treasures created!</li>
+        <li><strong>Departed X / copy bug (CR 608.2h):</strong> Once the spell is countered,
+          <code>EffectValue::TriggeringManaValue</code> follows <code>zones.successor(spell)</code> into the graveyard and
+          reads <code>x = 0</code> (MV 1 instead of 5), or <code>0</code> for a spell copy or Rest-in-Peace exile.</li>
+        <li><strong>Both viewers go blind on the stack:</strong> <code>continuation::target_reference(Target::StackSpell)</code>
+          returns <code>VisibleReference::default()</code> once the spell leaves the stack, so neither player nor the policy
+          can see the countered spell’s definition, mana value, or color count while the trigger awaits resolution.</li>
+      </ol>
     </div>
     <div class="panel proposed-box">
-      <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>Complete layered <code>ObjectLki</code> + one <code>matches_permanent_facts</code> + <code>TriggeringMatches</code></h3>
-<pre>// state/src/game_object.rs (ObjectLki — hash contract v27):
-pub name: String,
-pub types: CardTypes,           // replaces was_creature &amp; was_land
-pub subtypes: Vec&lt;String&gt;,      // replaces creature_types (derived helper)
-pub colors: Colors,
-pub is_legendary: bool,
-#[serde(skip_serializing_if = "std::ops::Not::not")]
-pub was_attacking: bool,
-#[serde(skip_serializing_if = "std::ops::Not::not")]
-pub was_tapped: bool,
-#[serde(skip_serializing_if = "std::ops::Not::not")]
-pub was_in_combat: bool,
-// plus existing power, toughness, keywords, counters, copiable...
-
-// ONE matcher shared by layers.rs::matches_view AND Game::lki_matches_predicate:
-//   subject_matches_moved_object  --&gt; lki_matches_predicate
-//   additional_trigger_times      --&gt; lki_matches_predicate
-//   Condition::TriggeringMatches(CardPredicate) --&gt; live or lki_matches_predicate
-// Garna: TriggeringMatches(CardPredicate { attacking: true, ..default() })
-// Legacy TriggeringHadCounters kept untouched for pinned TLA pilots.</pre>
+      <h3>After <span class="badge proposed">Proposed · Hash v28</span></h3>
+      <ol>
+        <li><strong>One departure capture at <code>zones.rs:655–658</code>:</strong> The lone place a
+          <code>StackObject::Spell</code> leaves the stack records
+          <code>SpellLki { object, definition_id, controller, mana_value, spent, colors }</code> into
+          <code>GameState::spell_lki</code> (parallel to <code>object_lki</code>). Delete
+          <code>ResolutionTarget.spell: Option&lt;SpellPayment&gt;</code> — zero duplicate target snapshots.</li>
+        <li><strong>One reader <code>Game::spell_info(object)</code>:</strong> Reads live <code>StackObject::Spell</code>
+          while on the stack, else <code>self.state.spell_lki.get(object)</code>. Answers:
+          <code>PlayerSelector::TargetController</code> (works whether countered, uncounterable, stolen, or copied!),
+          <code>EffectValue::SpellManaSpent</code> / <code>SpellManaValue</code> (<em>Unravel</em>),
+          <code>EffectValue::Property { of: Triggering | Target, property: ManaValue | Colors }</code> (<em>Ramos</em>,
+          <em>Ovika</em>), legacy <code>TriggeringManaValue</code>, and <code>Condition::TriggeringSpellMatches</code>.</li>
+        <li><strong>One recursive trigger-context walker:</strong> Replace hardcoded <code>asks_triggering_spell</code>
+          with unified <code>ContextRead::TriggeringObject</code> in <code>Effect::reads</code> / <code>Ability::reads</code>,
+          so any effect or <code>intervening_if</code> reading <code>Triggering</code> binds the event’s permanent or stack spell.</li>
+        <li><strong>Public stack projection preserved across forks &amp; recovery:</strong>
+          <code>continuation::target_reference(Target::StackSpell)</code> falls back to
+          <code>spell_lki.definition_id</code>, and <code>effect_execution::project_stack_object</code> /
+          <code>project_pending_trigger</code> project departed <code>SpellLki</code> (definition, mana value, colors, spent)
+          using the existing <code>effect_execution</code> token channel — zero new v11 tensor columns, identical across
+          snapshot restores and search forks.</li>
+      </ol>
     </div>
   </div>
 
-  <h3>B. Departed Trigger-Context Projection in <code>continuation.rs</code> &amp; <code>effect_execution.rs</code></h3>
-  <div class="grid">
-    <div class="panel existing-box">
-      <div class="badge existing">Existing · 3da933e53b</div>
-      <h3>Departed context becomes blank; Garna’s two triggers look identical</h3>
-<pre>// agent/continuation.rs:334
-Target::Permanent(id) =&gt; self
-    .permanent_object(id)
-    .map(|object| self.visible_reference(object, viewer))
-    .unwrap_or_default(), // { object: None, definition: None, player: None }!
-
-// stack_frame projects PaymentReceipt, NEVER departed context ObjectLki.
-// =&gt; Pending Garna trigger from attacking Ogre vs. non-attacking Ogre:
-//    identical stack row, continuation frame, v11 facts, text &amp; Academy!</pre>
-    </div>
-    <div class="panel proposed-box">
-      <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>Resolve departed context definition + project LKI via <code>effect_execution</code></h3>
-<pre>// 1. agent/continuation.rs::target_reference:
-Target::Permanent(id) =&gt; self
-    .permanent_object(id)
-    .map(|object| self.visible_reference(object, viewer))
-    .or_else(|| self.departed_permanent_lki(id).map(|lki| VisibleReference {
-        definition: Some(lki.definition_id.0),
-        ..Default::default()
-    }))
-    .unwrap_or_default(),
-
-// 2. stack_frame &amp; describe_effect_execution (and pending trigger frame):
-//    When a triggered ability reads_triggering_permanent() and its context is a
-//    departed Target::Permanent(id), project that ObjectLki via Projection::lki
-//    (including was_attacking / was_tapped / types / subtypes / colors and a
-//    plain-language summary noting "attacking" when was_attacking is true).
-//    =&gt; Both viewers see the exact departed LKI in v11 ContinuationProgram,
-//       LLM text, and Academy without bespoke per-predicate stack columns!</pre>
-    </div>
-  </div>
-
-  <h3>C. Condition-Aware <code>event_player</code> &amp; Printed Modal Triggers Without Clobbering <code>inline_effects</code></h3>
-  <div class="grid">
-    <div class="panel existing-box">
-      <div class="badge existing">Existing · 3da933e53b</div>
-      <h3>Owner-vs-controller conflation + overloaded <code>inline_effects</code></h3>
-<pre>// flow/triggers.rs:1092 — ignores which TriggerCondition matched!
-GameEvent::CardMoved { object_id: object, to: ZoneType::Graveyard, .. }
-    =&gt; Some(self.state[*object].owner),
-// Massacre Wurm on stolen creature: drains OWNER instead of CONTROLLER!
-
-// flow/triggers.rs:616 + flow/resolution.rs:509:
-trigger.inline_effects = Some(modes[mode].clone()); // erases printed origin!
-// resolution.rs skips intervening_if &amp; sets ability = None;
-// observation.rs:1827 &amp; continuation.rs:619 leave chosen_mode/mode = None;
-// trigger.program is false =&gt; v11 policy CANNOT see chosen mode on stack!</pre>
-    </div>
-    <div class="panel proposed-box">
-      <div class="badge proposed">Proposed · MTG-418 Target</div>
-      <h3>One <code>event_player(leaf, event, hit)</code> + <code>chosen_modes</code> on <code>TriggeredAbilityOnStack</code></h3>
-<pre>// 1. flow/triggers.rs::event_player(leaf, event, hit):
-(TriggerCondition::PutIntoGraveyard { .. },
- GameEvent::CardMoved { object_id, .. }) =&gt; Some(self.state[*object_id].owner),
-(TriggerCondition::Dies { .. }
- | TriggerCondition::LeavesTheBattlefield { .. }
- | TriggerCondition::EntersTheBattlefield { .. },
- GameEvent::CardMoved { controller, .. }) =&gt; Some(*controller),
-(TriggerCondition::Sacrificed { .. },
- GameEvent::PermanentSacrificed { controller, .. }) =&gt; Some(*controller),
-
-// 2. TriggeredAbilityOnStack carries chosen_modes: Vec&lt;usize&gt; (skipped if empty);
-//    inline_effects stays None for printed TriggerModes triggers!
-//    • resolve_triggered_ability runs printed intervening_if (CR 603.4),
-//      preserves ability = Some(ability_index), and expands chosen_modes.
-//    • StackObjectData.chosen_mode &amp; ContinuationFrame.mode expose
-//      chosen_modes[0] for single-mode triggers (fills v11 stack::MODE!).
-//    • Multi-mode (up_to) triggers emit chosen effects in ContinuationProgram.
-//    • trigger_description renders the chosen mode(s) from chosen_modes.</pre>
-    </div>
-  </div>
-</section>
-
-<section>
-  <h2>3. Concrete Interaction &amp; Counterexample Verification <span class="badge proposed">Proposed</span></h2>
+  <h3>Counterexample stress tests</h3>
   <table>
     <thead>
       <tr>
-        <th style="width:19%">Interaction / Card</th>
-        <th style="width:33%">Normal Path, Failure &amp; Counterexample</th>
-        <th style="width:22%">Existing (<code>3da933e53b</code>)</th>
-        <th style="width:26%">Proposed Model</th>
+        <th style="width:28%">Counterexample</th>
+        <th style="width:36%">What could break</th>
+        <th style="width:36%">How the unified model survives</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Garna, Bloodfist of Keld</strong><br><span class="small">Departed attacking status + two-viewer stack learnability</span></td>
-        <td>
-          <strong>1. Attacking vs. non-attacking death:</strong> Two Gray Ogres die during combat — Ogre A was attacking, Ogre B was not. Both triggers sit on the stack simultaneously. Both viewers must see attacking LKI on trigger A (draws 1) and non-attacking LKI on trigger B (deals 1 to each opponent).<br>
-          <strong>2. Postcombat death (counterexample):</strong> Ogre A survives combat and dies in postcombat main → <code>was_attacking</code> cleared at EndOfCombat → deals 1 damage (not draw).<br>
-          <strong>3. Simultaneous wipe with Garna:</strong> Garna + attacking ally die together → Garna’s own death excluded (<code>another: true</code>), ally’s death triggers Garna and draws 1.
-        </td>
-        <td>
-          No <code>was_attacking</code> on <code>ObjectLki</code>, no <code>TriggeringMatches</code>, and departed <code>context</code> is blank so both triggers look identical on the stack.
-        </td>
-        <td>
-          <code>ObjectLki.was_attacking</code> + <code>Condition::TriggeringMatches(attacking)</code> + departed context projected via <code>effect_execution</code>. Both viewers distinguish the two stack triggers in v11, text, and Academy.
-        </td>
+        <td><strong>Uncounterable spell + <em>An Offer You Can’t Refuse</em></strong></td>
+        <td><code>counter_spell</code> leaves the spell on the stack; no <code>SpellLki</code> is written yet.</td>
+        <td><code>spell_info(object)</code> checks live <code>StackObject::Spell</code> first, returning its live
+          <code>controller</code>, so the controller still gets two Treasures (matching Offer’s ruling).</td>
       </tr>
       <tr>
-        <td><strong>Kalastria Highborn†</strong><br><span class="small">Layered Vampire LKI + placement target before optional payment</span></td>
-        <td>
-          <strong>1. Clone-Vampire &amp; granted Vampire (counterexample):</strong> A Clone copying a Vampire (or a creature granted Vampire in layer 4) dies → must trigger Highborn. A Vampire stripped of Vampire by <em>Honest Work</em> dies → must NOT trigger.<br>
-          <strong>2. Target-before-pay order (CR 603.3d):</strong> Highborn triggers → target player is chosen on placement BEFORE resolution; at resolution, paying <code>{B}</code> drains that target for 2, declining drains 0.
-        </td>
-        <td>
-          <code>subject_matches_moved_object</code> reads destination graveyard printing: misses Clone-Vampire and granted Vampire, falsely fires on <em>Honest Work</em>-ed Vampire.
-        </td>
-        <td>
-          <code>lki_matches_predicate</code> reads <code>lki.subtypes</code>; <code>Effect::target_spec</code> recurses into <code>OptionalPayment</code> so target is chosen at placement and <code>{B}</code> is offered on resolution.
-        </td>
+        <td><strong>Spell copy countered by <em>Unravel</em> or <em>Offer</em></strong></td>
+        <td>A copy isn’t a physical card, has <code>spent = 0</code>, and its controller may differ from the original card’s owner.</td>
+        <td><code>commit_zone_move</code> removes the copy’s <code>StackObject::Spell</code> at <code>zones.rs:658</code>
+          and records <code>SpellLki</code> with <code>spent: 0</code>, copied <code>mana_value</code> (including X), and copy <code>controller</code>.</td>
       </tr>
       <tr>
-        <td><strong>Massacre Wurm</strong><br><span class="small">Simultaneous SBA shrink + stolen-creature controller loss</span></td>
-        <td>
-          <strong>1. Entry sweep:</strong> Wurm enters, gives opponents’ creatures -2/-2; three 2-toughness opposing creatures die in one SBA batch → three triggers, opponent loses 6 life.<br>
-          <strong>2. Stolen creature (counterexample):</strong> Opponent gains control of <em>your</em> Gray Ogre; Massacre Wurm enters and kills it → <strong>opponent</strong> (its last controller) loses 2 life, NOT you (its owner).
-        </td>
-        <td>
-          <code>triggers.rs:1092</code> binds <code>self.state[*object].owner</code>, making <em>you</em> lose 2 life on your stolen Ogre.
-        </td>
-        <td>
-          <code>event_player(Dies, CardMoved)</code> binds <code>controller</code> (<code>lki.controller</code>), draining the opponent while <code>PutIntoGraveyard</code> still binds <code>owner</code>.
-        </td>
+        <td><strong><em>Scrawling Crawler</em> upkeep draw + suspended choice / empty library</strong></td>
+        <td><code>ForPlayer(EachPlayer, [Draw(1)])</code> previously dropped 2-player lists; or both players drawing could misorder APNAP triggers.</td>
+        <td><code>EachPlayer</code> yields <code>[active, non_active]</code> (CR 101.4, 121.2c). <code>ForPlayer</code> queues
+          each player’s block separated by existing <code>Effect::RestoreController</code>, surviving mid-resolution suspension
+          (e.g. <em>Painful Quandary</em>’s discard choice) and snapshot restores with zero new frame state.</td>
       </tr>
       <tr>
-        <td><strong>Wardens of the Cycle</strong><br><span class="small">Modal morbid end-step trigger + CR 603.4 &amp; v11 mode parity</span></td>
-        <td>
-          <strong>1. Normal &amp; negative controls:</strong> No death → no trigger; opponent creature death → triggers; previous turn’s death → no trigger. Mode 0 gains 2; Mode 1 draws 1 and loses 1.<br>
-          <strong>2. Stack visibility (counterexample):</strong> With Mode 0 vs. Mode 1 on the stack, both viewers see <code>chosen_mode</code> in v11 <code>stack::MODE</code>, <code>ContinuationFrame.mode</code>, text, and Academy.<br>
-          <strong>3. CR 603.4 modal control (counterexample):</strong> A constructed modal trigger with non-monotonic <code>intervening_if</code> loses its condition before resolution → must do nothing on resolution.
-        </td>
-        <td>
-          Choosing a mode sets <code>inline_effects</code>, hiding the mode in v11 (<code>stack::MODE == 0</code>) and skipping CR 603.4 <code>intervening_if</code> on resolution.
-        </td>
-        <td>
-          <code>TriggeredAbilityOnStack.chosen_modes</code> preserves printed ability identity, enforces CR 603.4 on resolution, and populates <code>stack::MODE</code> and <code>ContinuationFrame.mode</code>.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Tragic Banshee, Vengeful Bloodwitch, Midnight Reaper, Needletooth Pack, Slumbering Cerberus</strong><br><span class="small">Resolution-time morbid, simultaneous own deaths, nontoken filter, untap past restriction</span></td>
-        <td>
-          <strong>1. Banshee:</strong> Enters with no death (targets a creature), then a creature dies in response before resolution → target gets -13/-13; without death → -3/-3.<br>
-          <strong>2. Bloodwitch &amp; Reaper:</strong> Simultaneous wipe kills Bloodwitch, Reaper, a token, and an animated noncreature (or Clone-creature). Bloodwitch triggers for all 4; Reaper triggers for 3 (excluding the token, including itself and the animated noncreature).<br>
-          <strong>3. Needletooth Pack &amp; Cerberus:</strong> Opponent creature death turns on end-step counters and untaps Cerberus past <code>Restriction::DoesntUntap</code> (which still blocks Cerberus’s untap step).
-        </td>
-        <td>
-          Expressible with existing <code>CreatureDiedThisTurn</code>, <code>Effect::If</code>, <code>Dies</code>, and <code>Restriction::DoesntUntap</code>; animated noncreature / Clone-creature deaths benefit from unified <code>ObjectLki</code>.
-        </td>
-        <td>
-          No bespoke variants needed; directed per-set tests verify every timing, simultaneous-death, token, and untap boundary.
-        </td>
+        <td><strong>Turn 1 first-player draw step + <em>Dictate of Kruphix</em></strong></td>
+        <td>CR 103.8a skips the entire Turn 1 draw step, whereas <code>tick.rs:297</code> enters <code>StepKind::Draw</code> and only skips the TBA draw.</td>
+        <td><strong>Boundary preserved on purpose:</strong> skipping <code>StepKind::Draw</code> on Turn 1 alters Turn 1 priority
+          rounds in every pinned pilot and replay. Keep <code>tick.rs</code>’s step schedule intact and note the CR 103.8a Turn-1
+          caveat explicitly rather than breaking frozen evidence.</td>
       </tr>
     </tbody>
   </table>
 </section>
 
 <section>
-  <h2>4. Scope Boundary &amp; Rollout Slice <span class="badge proposed">Proposed</span></h2>
-  <div class="callout info">
-    <p><strong>Inside MTG-418 (next implementation slice — Conformance diagnostic, Death-batch unifications &amp; 9 cards):</strong></p>
-    <ol>
-      <li><strong>Step 0 · Diagnose and clear <code>frozen_sacrifice_162/163</code> first (before bumping match-state hash):</strong>
-        Bisect which life-batch commit (<code>942d89cc91</code>..<code>86d1c65815</code>) shifted the two sacrifice traces. Restore unintended drift or record the exact intentional semantic cause so the conformance suite is clean before v27.
-      </li>
-      <li><strong>Step 1 · Four cohesive shared unifications (land before authoring the 9 cards):</strong>
-        (a) Complete <code>ObjectLki</code> with layered <code>name</code>, <code>types</code>, <code>subtypes</code>, <code>colors</code>, <code>is_legendary</code>, plus <code>was_attacking</code>, <code>was_tapped</code>, <code>was_in_combat</code> (deleting redundant <code>was_creature</code>, <code>was_land</code>, <code>creature_types</code> field); share ONE <code>matches_permanent_facts</code> across <code>layers.rs::matches_view</code> and <code>Game::lki_matches_predicate</code>; wire <code>subject_matches_moved_object</code> and <code>additional_trigger_times</code> through it; add <code>Condition::TriggeringMatches(CardPredicate)</code> (keeping legacy <code>TriggeringHadCounters</code> for pinned TLA pilots); bump <code>hash_contract_version</code> to v27.<br>
-        (b) Resolve departed <code>Target::Permanent(id)</code> through <code>departed_permanent_lki</code> in <code>continuation.rs::target_reference</code>, and project departed triggering permanent LKI via <code>effect_execution</code> (<code>Projection::lki</code>) on pending/stacked triggers that <code>reads_triggering_permanent()</code>.<br>
-        (c) Replace the event-only player match in <code>triggers.rs</code> with condition-aware <code>event_player(leaf, event, hit)</code> (controller for <code>Dies</code>/<code>LTB</code>/<code>ETB</code>/<code>Sacrificed</code>, owner for <code>PutIntoGraveyard</code>).<br>
-        (d) Carry <code>chosen_modes: Vec&lt;usize&gt;</code> on <code>TriggeredAbilityOnStack</code> (keeping <code>inline_effects: None</code> for printed <code>TriggerModes</code> triggers), recheck CR 603.4 <code>intervening_if</code> and preserve <code>ability_index</code> on resolution, and expose chosen mode(s) in <code>StackObjectData.chosen_mode</code>, v11 <code>stack::MODE</code>, <code>ContinuationFrame.mode</code>, multi-mode <code>ContinuationProgram</code>, and <code>trigger_description</code>.
-      </li>
-      <li><strong>Step 2 · Author and verify all 9 Death-batch cards together</strong>
-        (8 primary: <em>Tragic Banshee, Vengeful Bloodwitch, Midnight Reaper, Massacre Wurm, Garna Bloodfist of Keld, Needletooth Pack, Slumbering Cerberus, Wardens of the Cycle</em>; 1 cost candidate: <em>Kalastria Highborn†</em>), placing each single-card fixture in its first-printing set module (<code>fdn.rs</code>, <code>grn.rs</code>, <code>mbs.rs</code>, <code>dmu.rs</code>, <code>wwk.rs</code>) and recording verified rows in <code>fdn.jsonl</code>.
-      </li>
-      <li><strong>Step 3 · Rebuild CPython 3.13 extension &amp; verify consumers:</strong>
-        Verify Garna’s departed attacking vs. non-attacking stack triggers and Wardens’ chosen modes across native obs, v11 tensors, LLM text, Academy context, and bundled v9/v11 pinned pilots.
-      </li>
-    </ol>
-    <p><strong>Outside this slice / MTG-418:</strong> CR 104.4b mandatory-loop draw (<code>GameOutcome::Draw</code> + loop partner <em>Vito, Thorn of the Dusk Rose</em> — tracked as its own dedicated slice because it spans outcome readers, rewards, and Academy); deleting legacy <code>Condition::TriggeringHadCounters</code> (pinned TLA pilot token compatibility); Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent working-review cleanup; casting permissions (Task 02) and battlefield forms/transform/meld (Task 05).</p>
-  </div>
+  <h2>3. Architectural Plan Across Upcoming Batches <span class="badge proposed">Written into scratch/plan.md</span></h2>
+  <p>
+    Two-card batches (<em>Draw listeners</em>: 2 cards; <em>Stack payment &amp; counter results</em>: 2 cards) fragment
+    closely related stack/player work. Merging <strong>Draw listeners + Filtered casts + Stack/Counter results</strong>
+    into the next slice lands <strong>8 primary FDN rows</strong> (46 → 54 of 81), the required <strong>EOE <em>Unravel</em></strong>
+    witness, and <strong>3 cost-primary FDN rows</strong> (<em>Archmage of Runes</em>, <em>Painful Quandary</em>,
+    <em>Ramos, Dragon Engine</em>) on one clean hash bump (v28):
+  </p>
+  <pre>
+Next slice · Draw listeners, cast triggers, and spell LKI / counter results (Hash v28, 12 cards)
+  1. PlayerSelector::EachPlayer (APNAP) + multi-player Effect::ForPlayer via existing RestoreController
+  2. GameState::spell_lki (recorded at zones.rs:658) + Game::spell_info + delete ResolutionTarget.spell
+     + PlayerSelector::TargetController on StackSpell + ObjectProperty::Colors
+  3. Unified ContextRead::TriggeringObject (replace asks_triggering_spell)
+     + departed Target::StackSpell projection in continuation.rs &amp; effect_execution.rs
+  4. TriggerCondition::Casts { targets: SpellTargetFilter } (Any | TargetsThis | TargetsOnlyThis)
+     + Condition::Not(Box&lt;Condition&gt;) (in statics.rs + layers.rs::ReadSet)
+  Cards (12): Scrawling Crawler, Dictate of Kruphix, Brineborn Cutthroat, Mindsparker,
+              Gnarlback Rhino, Mold Adder, Firespitter Whelp, An Offer You Can't Refuse,
+              Unravel (EOE), Archmage of Runes†, Painful Quandary†, Ramos, Dragon Engine†
+  (Ovika† waits for composite PaymentCost "Ward—{3}, Pay 3 life"; its departed-X MV path gets a native rule test.)
+
+Following slices (architectural unifications queued in plan)
+  · Damage recipients, amounts &amp; results:
+      GameEvent::DamageDealt.combat + Game::source_controller spell_info fix +
+      TriggerCondition::DealsNoncombatDamage (binding triggering_amount slot 16) +
+      unconditional frame.excess_damage reset in EventBinding::Damage.
+  · Count/filter live permanents &amp; Graveyard CDAs:
+      CardPredicate.named + target-name matching (Hare Apparent, Maelstrom Pulse);
+      CharacteristicPt / PowerCda actor scope (Crusader of Odric, Consuming Aberration, Enigma Drake).
+  · Move results &amp; retained characteristics:
+      Effect::MillCards optional player: Option&lt;PlayerSelector&gt; single-batch ThisWay +
+      actual-graveyard check for Dread Summons.
+  · State triggers &amp; activation costs:
+      TriggerCondition::CountersAtLeast in check_state_triggers (CR 603.8, Mazemind Tome).
+  · Dedicated CR 104.4b mandatory-loop draw slice + Working-review cleanup (Findings 3–5, conformance re-record).
+  </pre>
 </section>
 
 <section>
-  <h2>5. Choices Made for Review</h2>
-  <p>In headless graph mode, the bold option is selected and written into <code>scratch/plan.md</code>; reply with a number+letter (e.g. <code>1a</code>) to override any choice.</p>
+  <h2>4. Choices Made for Review (Reply with e.g. “1a, 2a”)</h2>
+  <p class="small">
+    Running headless in a Graph step: bold, reversible choices are recorded below and written into
+    <code>scratch/plan.md</code> and <code>scratch/questions.md</code> so <code>implement</code> proceeds directly.
+  </p>
   <ol class="questions">
     <li>
-      <strong>How should <em>Garna, Bloodfist of Keld</em> and departed permanent death/LTB triggers check characteristics and combat status?</strong>
-      <div class="choice"><b>1a</b> Add <code>was_attacking: bool</code> to <code>ObjectLki</code> and a bespoke <code>Condition::TriggeringWasAttacking</code>, leaving <code>subject_matches_moved_object</code> reading the destination graveyard card.</div>
-      <div class="choice"><span class="selected">1b (selected)</span> Complete <code>ObjectLki</code> with full layered characteristics (<code>name</code>, <code>types</code>, <code>subtypes</code>, <code>colors</code>, <code>is_legendary</code>) and combat/tap status (<code>was_attacking</code>, <code>was_tapped</code>, <code>was_in_combat</code>), share ONE <code>matches_permanent_facts</code> helper across live <code>matches_view</code> and departed <code>lki_matches_predicate</code> (fixing <code>subject_matches_moved_object</code> and <code>additional_trigger_times</code>), and add composable <code>Condition::TriggeringMatches(CardPredicate)</code> (keeping legacy <code>TriggeringHadCounters</code> for pinned TLA pilots).</div>
+      <strong>Where should departed spell facts live (<code>SpellLki</code> vs. per-target snapshots)?</strong>
+      <div class="choice">
+        <span class="selected">1a (Selected):</span> Store <code>SpellLki</code> in <code>GameState::spell_lki</code>
+        at the single stack-departure site (<code>zones.rs:658</code>), mirror <code>ObjectLki</code>, delete
+        <code>ResolutionTarget.spell</code>, and route all live/departed spell reads through <code>Game::spell_info</code>.
+      </div>
+      <div class="choice">
+        1b: Keep <code>ResolutionTarget.spell</code> and add a second <code>triggering_spell_lki</code> field to
+        <code>PendingTrigger</code> / <code>TriggeredAbilityOnStack</code> / <code>EffectFrame</code>. (Passed over: two
+        parallel owners for the same departed spell.)
+      </div>
     </li>
     <li>
-      <strong>How should a pending trigger’s departed triggering permanent (such as Garna’s attacking vs. non-attacking dying creature) be exposed to both viewers in v11, LLM text, and Academy?</strong>
-      <div class="choice"><b>2a</b> Add another bespoke stack column (e.g. <code>triggering_was_attacking</code>) to <code>StackObjectData</code> and v11 <code>stack</code>.</div>
-      <div class="choice"><span class="selected">2b (selected)</span> Resolve departed <code>Target::Permanent</code> definitions in <code>continuation.rs::target_reference</code> and project the departed triggering permanent’s <code>ObjectLki</code> through the existing <code>effect_execution</code> path (<code>Projection::lki</code> → v11 <code>ContinuationProgram</code> + plain-language summary) whenever a pending/stacked trigger <code>reads_triggering_permanent()</code>.</div>
+      <strong>Should the next slice merge Draw listeners (2), Filtered casts (5+3†), and Stack/Counter results (1+Unravel)?</strong>
+      <div class="choice">
+        <span class="selected">2a (Selected):</span> Yes — one cohesive 12-card slice (54/81 primary FDN + EOE
+        <em>Unravel</em> + 3 unblocked cost-primary rows) sharing <code>SpellLki</code>, <code>ForPlayer</code>,
+        <code>Condition::Not</code>, and cast-target filtering on one hash bump (v28).
+      </div>
+      <div class="choice">
+        2b: Land the 2-card Draw batch alone first, then separate Cast and Counter slices. (Passed over: adds extra
+        loop turns and hash bumps for closely coupled stack/player plumbing.)
+      </div>
     </li>
     <li>
-      <strong>How should printed modal triggered abilities (<em>Wardens of the Cycle</em> and future modal triggers) represent their chosen mode on the stack?</strong>
-      <div class="choice"><b>3a</b> Keep overwriting <code>inline_effects = Some(modes[mode])</code> and patch <code>intervening_if</code> and <code>chosen_mode</code> around it.</div>
-      <div class="choice"><span class="selected">3b (selected)</span> Carry <code>chosen_modes: Vec&lt;usize&gt;</code> onto <code>TriggeredAbilityOnStack</code> and leave <code>inline_effects: None</code> for printed <code>TriggerModes</code> triggers, so CR 603.4 <code>intervening_if</code>, <code>ability_index</code>, <code>StackObjectData.chosen_mode</code>, v11 <code>stack::MODE</code>, and <code>ContinuationFrame.mode</code> all work from one printed-ability authority.</div>
+      <strong>How should <em>Gnarlback Rhino</em>’s cast-target filter compose with <code>TriggerCondition::Casts</code>?</strong>
+      <div class="choice">
+        <span class="selected">3a (Selected):</span> Add <code>#[serde(default, skip_serializing_if = "SpellTargetFilter::is_any")] targets: SpellTargetFilter</code>
+        (<code>Any | TargetsThis | TargetsOnlyThis</code>) to <code>TriggerCondition::Casts</code> reading
+        <code>GameEvent::SpellCast.targets</code>, keeping legacy <code>SpellTargetsOnlyThis</code> for <em>emn</em> / pinned pilots.
+      </div>
+      <div class="choice">
+        3b: Add a new top-level <code>TriggerCondition::SpellTargetsThis</code> variant beside
+        <code>SpellTargetsOnlyThis</code>. (Passed over: duplicates cast-actor/predicate/nth matching.)
+      </div>
     </li>
     <li>
-      <strong>How should <code>frozen_sacrifice_162/163</code> be sequenced relative to the <code>ObjectLki</code> / hash v27 unification?</strong>
-      <div class="choice"><b>4a</b> Land the Death-batch <code>ObjectLki</code> changes first and refresh all frozen conformance hashes together at v27.</div>
-      <div class="choice"><span class="selected">4b (selected)</span> Bisect and resolve <code>frozen_sacrifice_162/163</code> at v26 <em>before</em> modifying <code>ObjectLki</code>, so any unintended regression from the Life batch is caught and fixed rather than masked by the v27 hash bump.</div>
+      <strong>How should CR 103.8a (skipping Turn 1’s Draw step) be handled for <em>Dictate of Kruphix</em>?</strong>
+      <div class="choice">
+        <span class="selected">4a (Selected):</span> Preserve <code>tick.rs</code>’s current Turn-1 step schedule so
+        pinned pilots and replay hashes don’t break; verify <em>Dictate of Kruphix</em> on Turn 2+ draw steps and track
+        CR 103.8a step-skipping as a separate rules-schedule decision if ever needed.
+      </div>
+      <div class="choice">
+        4b: Skip <code>StepKind::Draw</code> entirely on Turn 1 Seat 0 now. (Passed over: alters priority rounds across
+        all frozen pilots and conformance baselines.)
+      </div>
     </li>
   </ol>
 </section>
