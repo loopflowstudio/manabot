@@ -1,11 +1,15 @@
-at: 4ec08488d5119353cc431fbb36e482d2aff06d7b
+at: 5001d164b39609bfab7d4354f9422355c4fb2127
 first:
-  - path: managym/cards/tests/cards/dtk.rs
-    why: Compare the first response window and both forks
-  - path: managym/cards/src/ala.rs
-    why: Dragon Fodder creates two Goblins
+  - path: managym/cards/tests/cards/tla.rs
+    why: Follow the spell-copy fork at the response window with Doubling Season.
+  - path: managym/cards/tests/cards/m19.rs
+    why: See which creatures receive Heroic Reinforcements’ bonus and when it expires.
+  - path: managym/cards/src/m14.rs
+    why: Read the three Primeval Bounty triggers alongside their directed set fixture.
   - path: managym/cards/src/tokens.rs
-    why: The Goblin face supplies its printed characteristics
-  - path: managym/cards/src/dtk.rs
-    why: Impact Tremors triggers on each controlled creature entry
+    why: Compare the printed Dragon, Beast, Soldier and Elf Warrior token faces.
+  - path: managym/cards/tests/cards.rs
+    why: See the shared combat and token assertions used by the individual set fixtures.
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Find the definition and directed outcome for each of the 35 cards.
 hide: []
