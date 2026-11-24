@@ -800,6 +800,16 @@ pub enum ObjectSelector {
         #[serde(skip_serializing_if = "Option::is_none")]
         max_mana_value: Option<Box<EffectValue>>,
     },
+    /// Every card matching [predicate] in a public card zone owned by
+    /// `owner`, fixed as the instruction resolves, in seat order ("all
+    /// creature cards from all graveyards"). Ranges over physical cards by
+    /// owner, unlike `Each`'s permanents by controller; a hidden zone is
+    /// `Zone`, whose selection keeps sampling provenance.
+    ZoneMatching {
+        zone: ZoneType,
+        owner: Actor,
+        predicate: CardPredicate,
+    },
 }
 
 /// Whose battlefield permanents an [`ObjectSelector::Each`] ranges over.
@@ -888,7 +898,8 @@ impl ObjectSelector {
             | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
-            | Self::Each { .. } => None,
+            | Self::Each { .. }
+            | Self::ZoneMatching { .. } => None,
         }
     }
 

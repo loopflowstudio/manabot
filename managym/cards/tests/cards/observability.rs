@@ -491,10 +491,11 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
+        ObjectSelector::ZoneMatching { .. } => "ObjectSelector::ZoneMatching",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 17] {
+fn selector_witnesses() -> [ObjectSelector; 18] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -520,6 +521,11 @@ fn selector_witnesses() -> [ObjectSelector; 17] {
             predicate: CardPredicate::creature(),
             except: None,
             max_mana_value: Some(Box::new(EffectValue::X)),
+        },
+        ObjectSelector::ZoneMatching {
+            zone: ZoneType::Graveyard,
+            owner: Actor::AnyPlayer,
+            predicate: CardPredicate::creature(),
         },
     ]
 }

@@ -1896,3 +1896,33 @@ fn fiendish_panda_gains_one_counter_per_lifelink_source_in_combat() {
     assert_eq!(s.life(1), 10);
     assert_eq!(counters(&s, panda), 2);
 }
+
+#[test]
+fn raise_the_past_returns_small_creatures_together_so_momo_sees_the_sailor() {
+    use crate::support::inspect::zone_of;
+    let (s, moved) = crate::return_from_two_graveyards("Raise the Past");
+    for object in [moved.momo, moved.sailor] {
+        assert_eq!(zone_of(&s, object), Some(ZoneType::Battlefield));
+    }
+    assert_eq!(
+        zone_of(&s, moved.drake),
+        Some(ZoneType::Graveyard),
+        "mana value 3"
+    );
+    assert_eq!(
+        zone_of(&s, moved.bolt),
+        Some(ZoneType::Graveyard),
+        "not a creature"
+    );
+    assert_eq!(
+        zone_of(&s, moved.their_sailor),
+        Some(ZoneType::Graveyard),
+        "only your graveyard"
+    );
+    let momo = permanent_of(&s, moved.momo).unwrap();
+    assert_eq!(
+        s.game().characteristics(momo).power,
+        2,
+        "the Sailor entered with Momo"
+    );
+}

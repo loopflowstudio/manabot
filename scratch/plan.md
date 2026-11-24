@@ -46,18 +46,13 @@ The merge `361823be59` brought the native snapshot self-play workers, recording 
 
 Compression `705db6bab6` added `TargetRequirement::another(spec)` (equal to `{ another: true, ..one(spec) }`) and replaced the spelled-out clauses in `fdn`, `kld`, `ncc` and `tla`; At `f03864e4cd` all 873 card-crate tests passed in debug after it, including the Diaochan, Koma, Disciple, Patrol and Protectors witnesses; every card whose text says “another target” declares `another`. The merge `4c10520b67` changed vector-env slots, recording and rollout collection, not `flow/` or cards. Rerun the vector/recording consumer checks and the pinned pilot at gate.
 
-### C. Simultaneous public-zone movement · next
+### C. Simultaneous public-zone movement · built
 
-Add `ObjectSelector::ZoneMatching { zone, owner: Actor, predicate: CardPredicate }` beside `Each` in `Game::select` for non-battlefield card zones (owner-scoped physical cards, distinct from `Each`'s controller-scoped battlefield permanents and `Zone`'s hidden-zone sampling provenance). Use `Actor::includes` in deterministic seat order, `GameState::zone_cards` for physical cards and `object_matches_predicate` for the filter. Include the selector in `Effect::SelectCards`'s `cards_only` guard. `Effect::Move` already commits its selections as one `EventBatch`, so both cards can use that path. Raise the Past selects the caster's creatures with mana value at most two. Rise of the Dark Realms selects all players' creatures and uses the existing `under: None` default to return them under the caster's control. Preserve `Zone(_)` and `Each` serialization. Cover the new selector in `ability_description.rs`, learning tokens and `observability.rs`.
+`ObjectSelector::ZoneMatching { zone, owner: Actor, predicate }` names every physical card in a public card zone by owner, in seat order (`Game::select`; a debug assertion keeps hidden zones on `Zone`). `SelectCards` treats it as cards-only. Raise the Past (`fdn.rs`) and Rise of the Dark Realms (new `m14.rs`) are one `Effect::return_to_battlefield` over it, so the single `Effect::Move` batch enters every card together. Text, learning tokens and the `observability.rs` selector guard cover the variant.
 
-Unify mana-value reads in the same pass:
-- Delete duplicate `Game::permanent_mana_value` (`resolution.rs:2405`) and filter `ObjectSelector::Each` through `Game::object_mana_value`, which already uses the front cost for transformed DFCs (CR 712.8e) and sums both cards' costs for physical melds (CR 712.8g).
-- In `Game::object_matches_predicate` (`statics.rs:511`), pass `self.object_mana_value(object_id)` into `predicate.matches_printing(...)` so `SpellMatching` predicates include announced `X` on stack spells (CR 202.3e).
-- In `Game::entry_matches_predicate` (`statics.rs:588`), pass mana value `0` when `entry.manifested` is true (CR 708.2) instead of reading the hidden card's printed cost.
+Mana value has one reader, `Game::object_mana_value`: `permanent_mana_value` and `CardPredicate::matches_object_with_power` are gone. `Each { max_mana_value }` and `object_matches_predicate` read it (stack X counts), and `entry_matches_predicate` gives a manifested entry mana value 0.
 
-Use Day of Black Sun at X=0 to expose the duplicate. A manifested creature has mana value zero and should be destroyed. Transformed Cecil and a physical Ragnarok should keep their abilities and survive. Extend the existing Day of Black Sun check or use the constructed form setup alongside it.
-
-Use the two-graveyard setup for both spells. Check that entering Momo, Friendly Flier sees an entering Spectral Sailor. Use a Sailor owned by the opponent for the Rise fork to check ownership and control. Driver stays a death-trigger witness in B.
+Checks (debug, 81 passed with `observability::`): `fin::day_of_black_sun_at_zero_reads_manifest_transform_and_meld_mana_values` destroys a manifested Gray Ogre and keeps transformed Cecil, Ragnarok and a face-up Ogre; `fdn::raise_the_past_returns_small_creatures_together_so_momo_sees_the_sailor`; `m14::rise_of_the_dark_realms_takes_every_graveyard_creature_under_the_caster` (the opponent-owned Sailor enters under the caster; Momo gets +3). The two graveyards are `return_from_two_graveyards` in `cards/tests/cards.rs`. Engine lib tests (`ability_description`), rule suites and the pinned pilot are at gate.
 
 ### Finish and review the cohort
 

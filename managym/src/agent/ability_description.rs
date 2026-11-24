@@ -728,6 +728,22 @@ fn selector_description(selector: &ObjectSelector) -> String {
                 Scope::TargetPlayerControls => " target player controls",
             }
         ),
+        ObjectSelector::ZoneMatching {
+            zone,
+            owner,
+            predicate,
+        } => {
+            let zone = format!("{zone:?}").to_lowercase();
+            format!(
+                "each {} in {}",
+                predicate_description(predicate, "card"),
+                match owner {
+                    Actor::You => format!("your {zone}"),
+                    Actor::Opponent => format!("your opponents' {zone}s"),
+                    Actor::AnyPlayer => format!("all {zone}s"),
+                }
+            )
+        }
     }
 }
 

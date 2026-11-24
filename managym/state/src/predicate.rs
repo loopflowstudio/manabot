@@ -148,13 +148,7 @@ impl CardPredicate {
 
     /// Match against an object's printed characteristics.
     pub fn matches_object(&self, object: &Object) -> bool {
-        self.matches_object_with_power(object, object.power.unwrap_or(0))
-    }
-
-    /// Match against an object, substituting `power` (e.g. a permanent's
-    /// effective power including counters and until-EOT modifiers).
-    pub fn matches_object_with_power(&self, object: &Object, power: i32) -> bool {
-        self.matches(object, power, &[])
+        self.matches(object, object.power.unwrap_or(0), &[])
     }
 
     /// Full matching: `power` substitutes the card's printed power and

@@ -37,6 +37,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         luminous_rebuke(),
         leyline_axe(),
         sire_of_seven_deaths(),
+        raise_the_past(),
     ]
 }
 
@@ -642,6 +643,35 @@ fn sun_blessed_healer() -> CardDefinition {
                     false,
                 )],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn raise_the_past() -> CardDefinition {
+    let text_box = "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.";
+    CardDefinition {
+        key: "fdn.raise_the_past",
+        scryfall_id: "6c6be129-56da-4fe7-a6bd-6a1d402c09e1",
+        printed: PrintedCharacteristics {
+            name: "Raise the Past".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            // One move of every card: the creatures enter together and see
+            // each other enter (CR 603.6a).
+            spell_effects: vec![Effect::return_to_battlefield(
+                ObjectSelector::ZoneMatching {
+                    zone: ZoneType::Graveyard,
+                    owner: Actor::You,
+                    predicate: CardPredicate {
+                        max_mana_value: Some(2),
+                        ..CardPredicate::creature()
+                    },
+                },
+                false,
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

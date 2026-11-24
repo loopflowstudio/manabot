@@ -795,3 +795,41 @@ fn ragnarok_lethal_damage_orders_two_arrivals_and_resolves_one_death_trigger() {
         assert!(s.game().state.stack_objects.is_empty());
     }
 }
+
+/// Day of Black Sun at X=0 reads each battlefield form's mana value: a
+/// manifested Gray Ogre is a face-down 2/2 with mana value 0 (CR 708.2);
+/// transformed Cecil keeps its front face's 3 (CR 712.8e) and Ragnarok its
+/// two cards' total (CR 712.8g).
+#[test]
+fn day_of_black_sun_at_zero_reads_manifest_transform_and_meld_mana_values() {
+    use crate::support::{inspect::library_card, play::choose_mode};
+    let mut s = form_ragnarok(&["Day of Black Sun", "Cecil, Dark Knight", "Gray Ogre"]);
+    settle(&mut s);
+    let ragnarok = s.battlefield_permanents_named(0, RAGNAROK)[0];
+    let cecil = s.force_permanent_on_battlefield(0, "Cecil, Dark Knight");
+    s.game_mut().transform_permanent(cecil);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let hidden = library_card(&s, 1, "Gray Ogre");
+    let manifest = s.game_mut().manifest(hidden, PlayerId(1));
+    let manifest = permanent_of(&s, manifest).unwrap();
+
+    s.set_player_mana_pool(0, "BB");
+    cast(&mut s, "Day of Black Sun");
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+
+    let state = &s.game().state;
+    assert!(state.permanents[manifest].is_none(), "mana value 0");
+    for (survivor, why) in [
+        (ogre, "face-up Gray Ogre"),
+        (cecil, "Cecil's front face"),
+        (ragnarok, "both melded cards"),
+    ] {
+        assert!(state.permanents[survivor].is_some(), "{why}");
+        assert!(!s.game().characteristics(survivor).abilities_lost, "{why}");
+    }
+    assert_eq!(
+        s.game().characteristics(cecil).name,
+        "Cecil, Redeemed Paladin"
+    );
+}

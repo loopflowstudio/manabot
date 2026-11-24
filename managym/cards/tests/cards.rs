@@ -117,6 +117,8 @@ mod ktk;
 mod lea;
 #[path = "cards/m12.rs"]
 mod m12;
+#[path = "cards/m14.rs"]
+mod m14;
 #[path = "cards/m15.rs"]
 mod m15;
 #[path = "cards/m20.rs"]
@@ -313,4 +315,49 @@ fn check_kicked_return(name: &str, mana: &str, second_target: &str, excluded: &s
     settle(&mut s);
     assert_eq!(zone_of(&s, elves), Some(ZoneType::Battlefield));
     assert_eq!(zone_of(&s, other), Some(ZoneType::Graveyard));
+}
+
+/// The objects in both graveyards after a mass return resolves, followed to
+/// their current appearances.
+struct GraveyardReturn {
+    momo: managym::state::game_object::ObjectId,
+    sailor: managym::state::game_object::ObjectId,
+    drake: managym::state::game_object::ObjectId,
+    bolt: managym::state::game_object::ObjectId,
+    their_sailor: managym::state::game_object::ObjectId,
+}
+
+/// Cast `spell` over two graveyards: the caster's Momo, Spectral Sailor
+/// (mana value 1, flying), Wind Drake (mana value 3, flying) and Lightning
+/// Bolt, and the opponent's Spectral Sailor. Momo triggers once for each
+/// other flier entering under its controller's control together with it.
+fn return_from_two_graveyards(spell: &str) -> (support::game::Scenario, GraveyardReturn) {
+    use support::{
+        game::{five_color_setup, plant_in_graveyard},
+        inspect::now,
+        play::{cast, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&[
+        spell,
+        "Momo, Friendly Flier",
+        "Spectral Sailor",
+        "Wind Drake",
+        "Lightning Bolt",
+    ]);
+    let momo = plant_in_graveyard(&mut s, 0, "Momo, Friendly Flier");
+    let sailor = plant_in_graveyard(&mut s, 0, "Spectral Sailor");
+    let drake = plant_in_graveyard(&mut s, 0, "Wind Drake");
+    let bolt = plant_in_graveyard(&mut s, 0, "Lightning Bolt");
+    let their_sailor = plant_in_graveyard(&mut s, 1, "Spectral Sailor");
+    cast(&mut s, spell);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let moved = GraveyardReturn {
+        momo: now(&s, momo),
+        sailor: now(&s, sailor),
+        drake: now(&s, drake),
+        bolt: now(&s, bolt),
+        their_sailor: now(&s, their_sailor),
+    };
+    (s, moved)
 }

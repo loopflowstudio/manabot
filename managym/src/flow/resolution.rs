@@ -1059,6 +1059,7 @@ impl Game {
                     from,
                     ObjectSelector::Zone(_)
                         | ObjectSelector::TargetPlayersZone { .. }
+                        | ObjectSelector::ZoneMatching { .. }
                         | ObjectSelector::CardsThisWay
                 );
                 let candidates: Vec<_> = self
@@ -2375,10 +2376,28 @@ impl Game {
                     .flat_map(|player| self.battlefield_permanents(player))
                     .filter(|id| Some(*id) != excepted)
                     .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                    .filter(|id| {
-                        max_mana_value.is_none_or(|max| self.permanent_mana_value(*id) <= max)
-                    })
                     .filter_map(|id| self.permanent_object(id))
+                    .filter(|object| {
+                        max_mana_value
+                            .is_none_or(|max| i32::from(self.object_mana_value(*object)) <= max)
+                    })
+                    .collect()
+            }
+            ObjectSelector::ZoneMatching {
+                zone,
+                owner,
+                predicate,
+            } => {
+                debug_assert!(
+                    matches!(zone, ZoneType::Graveyard | ZoneType::Exile),
+                    "ZoneMatching reads a public card zone"
+                );
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .filter(|player| owner.includes(frame.controller, *player))
+                    .flat_map(|player| self.state.zone_cards(*zone, player))
+                    .map(|card| self.state.object_of(card))
+                    .filter(|object| self.object_matches_predicate(*object, predicate))
                     .collect()
             }
         }
@@ -2398,15 +2417,6 @@ impl Game {
                 _ => None,
             },
         }
-    }
-
-    /// A battlefield permanent's mana value (CR 202.3): that of its card;
-    /// 0 without a mana cost.
-    fn permanent_mana_value(&self, id: PermanentId) -> i32 {
-        self.state.permanents[id]
-            .as_ref()
-            .and_then(|permanent| self.state[permanent.object].mana_cost.as_ref())
-            .map_or(0, |cost| i32::from(cost.mana_value))
     }
 
     /// The battlefield permanents a selector names.
@@ -2692,7 +2702,9 @@ impl Game {
         }
     }
 
-    /// The object's mana value; a spell on the stack counts its announced X
+    /// The object's mana value: a transformed permanent's front face
+    /// (CR 712.8e), a melded permanent's two cards together (CR 712.8g), 0
+    /// face down (CR 708.2), and a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
         if let Some(second) = self.state.zones.melded_card(object) {

@@ -7250,5 +7250,29 @@
     "colors": [
       "W"
     ]
+  },
+  "Raise the Past": {
+    "name": "Raise the Past",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Rise of the Dark Realms": {
+    "name": "Rise of the Dark Realms",
+    "mana_cost": "{7}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put all creature cards from all graveyards onto the battlefield under your control.",
+    "colors": [
+      "B"
+    ]
   }
 }

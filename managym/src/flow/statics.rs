@@ -508,7 +508,14 @@ impl Game {
         } else {
             0
         };
-        predicate.matches_object_with_power(&self.state[object_id], power)
+        let object = &self.state[object_id];
+        predicate.matches_printing(
+            object,
+            object.kind(),
+            self.object_mana_value(object_id),
+            power,
+            &[],
+        )
     }
 
     /// A recorded event can still ask what its departed card was. Read the
@@ -585,8 +592,16 @@ impl Game {
         predicate.matches_printing(
             face,
             row.kind(),
+            // A manifested permanent is a face-down 2/2 with mana value 0
+            // (CR 708.2), whatever card it hides.
             entry.meld.map_or_else(
-                || row.mana_value_cost().map_or(0, |c| c.mana_value),
+                || {
+                    if entry.manifested {
+                        0
+                    } else {
+                        row.mana_value_cost().map_or(0, |c| c.mana_value)
+                    }
+                },
                 |(second, _)| {
                     self.meld_mana_value(
                         self.state.card_of(object).expect("melded primary card"),
