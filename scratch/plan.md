@@ -27,8 +27,8 @@ Built on this branch:
 
 Planned (not built yet):
 
-- **Complete two-seat face-down exile privacy (Gandalf):** `PlayGrant.face_down` and `condition: Option<Condition>`; `is_face_down_in_exile` / `can_view_face_down_exile(object, viewer)` replace visibility uses of `is_foretold`; hidden-exile resampling for **both** seats; `HiddenHandConstraints.face_down_exile`; `CastPermissionData` projects `prepared` and `condition`. Full design in Slice 2 item 4 below.
-- **Quilled Greatwurm's shared rules** (see Slice 3).
+- **Complete two-seat face-down exile privacy (Gandalf):** `PlayGrant.face_down` and `condition: Option<Condition>`; `is_face_down_in_exile` / `can_view_face_down_exile(object, viewer)` replace visibility uses of `is_foretold`; hidden-exile resampling for **both** seats; `HiddenHandConstraints.face_down_exile`; `CastPermissionData` projects `prepared` and `condition`. Design under "Next slice" below.
+- **Quilled Greatwurm's shared rules** (see "Then", item 2).
 
 ## Delivered
 
@@ -52,58 +52,31 @@ Behavior review of Slice 1 at `592331aa12` (debug build, constructed fixtures, e
 - **Met.** Stack provenance reaches every shared consumer: `StackObjectData.{from_prepared, flashback}`, v11 stack columns 38/39, LLM text and Academy's `decision_surface_view`. Both viewers see the Codie copy as `false` and the prepared original as `true`. Heartwood's `{C}` pays Soul Tether from exile and is refused for a Gray Ogre from hand. A reverted probe with `CRR` plus the restricted `{C}` showed the competing spends work: auto spends the restricted `{C}` first and leaves ordinary `{C}` floating, and manual offers `{R}`, ordinary `{C}` and the restricted `{C}` as separate spends. The restriction is a `POOLED_MANA` fact program (tokens come from the card's serialized definition) with zero `unrepresentable_state`. Sanar's condition holds while a matching spell is on the stack. It also holds after an instant resolves, and after its own prepared Wild Idea copy resolves (probe). Activation and the payment probe both check the condition. Wild Idea offers only instants and sorceries and reveals what it finds.
 - **D1 (fixed in `ccc91c6c69`). Cast history lost the profile.** A reverted probe in `sos.rs` used Sanar and Smaug (`cast_profile(.., SpellProfile::Adventure)`), targeting an opposing Ogre. `offers_ability(sanar, 0)` is true while Spew Flame is on the stack and false once it resolves. After the stack appearance departs, `recorded_object_matches_predicate` reads `source_base`, which is the Creature front. `SpellsCostLess.first_on_own_turn` reads the same history. Fix: the planned `RecordedCast { object, profile }`. Use this probe as its regression, plus an Omen (Charring Bite) control.
 - **D2 (fixed here).** `lea::clone_copy_survives_suspended_entry_and_keeps_its_printed_base` pinned a state hash from `f3d84a7abe`. Catalog additions since then (Codie included, before Slice 1) moved its definition ordinals. The pin is refreshed to `v19:5ab0103d…`, and the rest of the test passes. Full debug `managym-cards --test cards`: 897 tests pass. Plus the refreshed test, the earlier failure was this pin alone.
-- **Consumer nits (fixed in `ccc91c6c69`).** Text renders "only for anything but spells from hand", and the native spend label reads "(anything but spells from hand only)". Academy's `Rail.svelte` does not yet show the `from_prepared`/`flashback` tags. The data reaches `StackEntryView`.
-- **Controls.** Pass: the plan's five Rust controls, `heartwood`/`sanar`/`codie`/`harbinger`/`lone_graveyard`/`bilbo`, `managym --lib` (355) and the Validation Python controls (100 passed, U1952 pilot skipped, `test_pinned_pilot` shows no break). Slice 1 is satisfied except D1, which Slice 2 item 1 owns. Gate owns Clippy, the full workspace, Engine Budget and `conformance/`.
+- **Consumer nits (fixed in `ccc91c6c69`).** Exclusion wording dropped the extra "only"; Academy's `Rail.svelte` shows `prepared`/`flashback` badges.
+- **Controls.** Pass: the plan's five Rust controls, `heartwood`/`sanar`/`codie`/`harbinger`/`lone_graveyard`/`bilbo`, `managym --lib` (355) and the Validation Python controls (100 passed, U1952 pilot skipped, `test_pinned_pilot` shows no break). Slice 1 is satisfied. Gate owns Clippy, the full workspace, Engine Budget and `conformance/`.
 
 
-## Execution plan for remaining cohorts
+## Remaining work
 
-Fourteen MTG-419 rows remain (Gandalf in Slice 2, Quilled Greatwurm in Slice 3, plus 12 non-casting shared-rules rows); this pass built Tinybones, Glamdring, Loot, Redcap and Bloomvine Regent. Six further preparation rows belong to MTG-418. Post-Slice-1 concept review (`scratch/concept-review.html`) uncovered one live cast-history bug in built Slice 1 code, closed the Slice 1 consumer gaps, and tightened Slice 2's face-down exile privacy, route legality, and Glamdring reduction design.
+Fourteen MTG-419 rows remain: Gandalf, Quilled Greatwurm and 12 non-casting shared-rules rows. Built since Slice 1: `RecordedCast` with the Sanar Adventure/Omen regression and Momo first-flier control, exclusion wording without "only" and Rail `prepared`/`flashback` badges (`ccc91c6c69`); `StaticPlayPermissions` consolidation with profile-based hand-only refusal (`1bcaed4b62`); Tinybones (`d1e5558d19`); Glamdring (`083420edf3`); Loot and Redcap (`08ab9d7d0f`); Bloomvine Regent, TDM 13/13 (`40a4db9bc1`); their ledgers. Both D1 tests fail with the profile lookup reverted (debug build). The Clone state-hash pin moves with each new definition only through name-ordered catalog ordinals (checked once by removing Tinybones from `cards()`).
 
-### Slice 2 status (implement pass of 2026-11-24)
+### Next slice — Gandalf, Goblins' Bane // Flameshape (HOB): two-seat face-down exile privacy
 
-Built and committed: item 1 (`ccc91c6c69`: `RecordedCast`, Sanar Adventure/Omen regression, Momo first-flier control, exclusion wording without "only", Rail `prepared`/`flashback` badges), item 2 (`1bcaed4b62`), item 3 Tinybones (`d1e5558d19`), item 5 Glamdring (`083420edf3`), items 6–7 Loot and Redcap (`08ab9d7d0f`), item 8 ledgers for those rows. Each probe was checked on a debug build: both new D1 tests fail with the profile lookup reverted, and the Clone state-hash pin moved only because each new definition shifts name-ordered catalog ordinals (verified once by removing Tinybones from `cards()`).
+This teaches the most: it is the one remaining change to a shared invariant (viewer privacy and determinization), not a card on existing machinery.
 
-Still open in Slice 2:
-- **Item 4, Gandalf // Flameshape** — not started; the design below stands.
-- Tinybones evidence not yet exercised: an exact grant and a stash counter on the same exiled object (`exile_playable_objects` dedups by a seen-set, untested), a second Tinybones re-enabling plays after the first leaves (only "leaves → no plays" is tested), a stashed Omen or modal back face, and opposite-viewer controls with Vizier/foretell.
+- Decouple `PlayGrant.face_down: bool` and `PlayGrant.condition: Option<Condition>` from `PlayGrant.foretold`.
+- Replace the visibility uses of `is_foretold` (`zones.rs`, `continuation.rs`, `observation.rs`, `policy_history.rs`) with `is_face_down_in_exile` and `can_view_face_down_exile(object, viewer)` (both `shares_information` and the live `condition`). `is_foretold` stays for the Foretell cost and determinization.
+- `selection_sampling.rs::unseen_objects` includes every exiled card of `owner` with `is_face_down_in_exile(obj) && !can_view_face_down_exile(obj, viewer)`, **for `owner == viewer` and `owner != viewer` alike**.
+- One hidden-exile resampling path for both seats in `search.rs`, `possible_worlds.rs` and `knowledge.rs::shuffle_known_library`: pool `hidden_face_down_exile(owner, viewer)` with the unknown library, run `fill_foretold_slots` (foretell-bearers only) then `fill_face_down_exile_slots`.
+- `HiddenHandConstraints` / `PossibleWorldSpace` gain `face_down_exile: u32` (non-foretold hidden exile, skipped when zero); `validate_source` checks it and library slots subtract `foretold + face_down_exile`.
+- `CastPermissionData` projects `prepared` and `condition` (omitted when false/absent); `permission_facts` (`observation_encoder.rs`) emits conditional/prepared singleton grants through a named extension record, keeping Hama's token sequence byte-stable; text distinguishes generic face-down exile from foretold (`"face down in exile (hidden from players who cannot look at it)"`) and renders `condition`/`prepared` in `text_observation.py` and Academy `inspect.ts`.
+- Evidence: see the Gandalf row of "Interaction evidence still owed".
 
-### Slice 2 — Profile-faithful cast history, consumer parity, static permissions consolidation, counter-marked exile, two-seat private exile & dynamic pricing (fixes + 5 cards: Tinybones, Gandalf, Glamdring, Loot, Redcap)
+### Then
 
-1. **Profile-faithful `TurnState.spells_cast` & Slice 1 consumer parity (do first — proves the core invariant immediately):**
-   - Replace `TurnState.spells_cast: [Vec<ObjectId>; 2]` with `[Vec<RecordedCast>; 2]` where `RecordedCast { object: ObjectId, profile: SpellProfile }` (`turn.rs`, `play.rs`, `game.rs`, `triggers.rs`, `statics.rs`, `state/hash.rs`).
-   - Add `Game::recorded_cast_matches_predicate(cast, predicate)` resolving `profile` against the retained front printing when `live(cast.object)` is `None` (keeping `Front` on `ObjectKind::SpellCopy` using its own retained inset printing). Update both `Condition::CastThisTurn` (`statics.rs:911`) and `SpellsCostLess.first_on_own_turn` (`play.rs:542`).
-   - Add a regression fixture proving Sanar's Treasure activation remains legal after casting and resolving an Adventure Sorcery (Smaug's Spew Flame) or Omen Instant (Twinmaw's Charring Bite).
-   - Render concise `prepared` / `flashback` badges on `StackEntryView` items in `academy/ui/src/lib/board/Rail.svelte` (so Codie's copy and original are visually distinct in Academy).
-   - Drop redundant `"only "` before exclusions starting with `"anything but "` in `manabot/semantic/text_observation.py:865`, `academy/ui/src/lib/mana.ts:11`, and `academy/ui/src/lib/board/Plate.svelte:41` (`"for anything but spells from hand"` / `"for anything but nonartifact spells"`, leaving positive restrictions as `"only for Lesson spells"`).
-2. **Consolidate `StaticPlayPermissions` & per-profile legality:**
-   - Move Muldrotha's `graveyard_type_sources`, Tinybones's `exile_counter_plays`, and per-seat `extra_land_plays` (merging `AdditionalLandPlay` + `AdditionalLandPlayEachPlayer` and removing `LayerBoard.additional_land_plays_each_player`) onto `LayerBoard.play_permissions` in `statics.rs`. Remove the per-card battlefield scan from `play_routes`.
-   - Deduplicate exiled priority candidates in one `Game::exile_playable_objects(player)` iterator (covering `exile_granted_objects` + `exile_counter_objects` across both players' exile zones).
-   - Move `cast_spell_action`'s `is_land()` rejection (`play.rs:610`) after `cast_choices` so it checks `cast.spell(spell).types.is_land()`; in `play_routes:245`, guard `casts_only_from_hand` with `!land && !self.state[object].modal_back` and enforce `!self.casts_only_from_hand(player)` for non-hand spell casts (`!types.is_land()`), so a spell//land MDFC's back-face land play is never wrongly blocked.
-   - In `permits_spell` (`play.rs:334`), explicitly allow `PlayRoute::ExileCounter(_) => true` so stashed Adventures, Omens, and Modal BackFaces are castable under Tinybones.
-3. **Tinybones, Bauble Burglar (FDN):** Add sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` (projected to `CardData.counters`, v11 `FactKind::Counter`, LLM text, Academy), `PlayRoute::ExileCounter(CounterKind)` (applying `pay_with_any_mana()` in `casting_mana_cost` when the static permission grants it), and discard-event trigger. Deliver the full required interaction-evidence fixture (including overlapping grant + stash counter deduplication, casting a stashed Adventure/Omen, Tinybones #1 → #2, foreign land control, `HandOnly`, and High Fae Trickster non-bypass).
-4. **Gandalf, Goblins' Bane // Flameshape (HOB):**
-   - Decouple `PlayGrant.face_down: bool` and `PlayGrant.condition: Option<Condition>` from `PlayGrant.foretold`.
-   - Replace the 5 visibility calls to `is_foretold` (`zones.rs`, `continuation.rs`, `observation.rs`, `policy_history.rs`) with `is_face_down_in_exile` and `can_view_face_down_exile(object, viewer)` (enforcing both `shares_information` and live `condition`).
-   - Update `selection_sampling.rs::unseen_objects` to include every exiled card of `owner` where `is_face_down_in_exile(obj) && !can_view_face_down_exile(obj, viewer)` — **for both `owner == viewer` and `owner != viewer`**.
-   - Share one hidden-exile resampling path across **both** seats: in `search.rs`, `possible_worlds.rs`, and `knowledge.rs::shuffle_known_library` (own seat and `shares_information` opponent), pool `hidden_face_down_exile(owner, viewer)` with the unknown library and run `fill_foretold_slots` (foretell-bearers only) followed by `fill_face_down_exile_slots` (any remaining unseen card).
-   - Add `face_down_exile: u32` (non-foretold hidden exile count, `#[serde(skip_serializing_if = "crate::state::is_zero")]`) to `HiddenHandConstraints` / `PossibleWorldSpace`; check it in `validate_source` and subtract `foretold + face_down_exile` from library slots in `selection_sampling.rs`.
-   - Project `prepared` and `condition` on `CastPermissionData` (omitted when false/absent); update `permission_facts` (`observation_encoder.rs:1996`) so singleton conditional/prepared grants are emitted via a named extension record (keeping Hama's legacy token sequence byte-stable); update `text_observation.py:941` to distinguish foretold face-down exile from generic face-down exile (`"face down in exile (hidden from players who cannot look at it)"`) and render `condition` / `prepared` in `text_observation.py` and `academy/ui/src/lib/board/inspect.ts`.
-   - Test Flameshape cast on turn 3 with no Wizard on board (hidden from owner, in owner's `unseen_counts`, resampled by `determinize(owner)`!), Wizard persistence across Gandalf dying with another Wizard, losing all Wizards (hidden from owner, counted in unseen, unplayable), regaining a Wizard (visible & playable again), opponent `unseen_counts` privacy, and `possible_worlds` / `determinize` resampling.
-5. **Glamdring, Foe-hammer // Gleam of Death (HOB):** Retain `(source_id, view)` in `effective_spell_cost` (`play.rs:521`), add `EffectValue::AttachedCreaturePower` evaluated via a source-aware helper reading `self.attached_creature(source_id)` → `layer_view(c).power.max(0)` (0 when unequipped), and wire `SpellsCostLess` to support dynamic `EffectValue` reductions; Gleam of Death mills six and returns instants/sorceries before Adventure exile.
-6. **Loot, Exuberant Explorer (FDN):** Wire `StaticAbility::AdditionalLandPlay` into `StaticPlayPermissions.extra_land_plays` + private look-six selection bounded by resolution-time land count.
-7. **Redcap Gutter-Dweller (FDN):** Commit optional another-creature sacrifice before +1/+1 counter and `exile_top_cards_to_play(ThisTurn)`; create printed nonblocking Rat tokens.
-8. Update `fdn.jsonl` and `hob.jsonl` ledgers.
-
-### Slice 3 — Graveyard counter-payment, TDM completion & non-casting split boundary
-
-Built: item 2, Bloomvine Regent // Claim Territory (`40a4db9bc1`, composed from the search, a nested `SelectCards` and the outer selection's remaining live object; TDM 13/13).
-
-Quilled Greatwurm needs two shared rules this pass found absent: `TriggerCondition::DealsCombatDamage` matches only `CombatDamageToPlayers` (no creature recipients, no "that many" amount), and no `AdditionalCost` removes counters distributed among creatures. Both are rules-layer additions outside the casting core; build them with the card or split them with the history/queries work.
-
-1. **Quilled Greatwurm (FDN):** Add `PlayRoute::PrintedGraveyard` (so distributed `CostComponent::RemoveCounters` payment in `payment.rs` attaches strictly to Quilled Greatwurm's own graveyard permission and never interferes with Muldrotha or Zul Ashur on the same card) + combat-damage counter trigger. Include an overlap fixture with Muldrotha.
-2. **Bloomvine Regent // Claim Territory (TDM — closes TDM 13/13):** Split-destination library search revealing both found cards before choosing which enters tapped and which goes to hand.
-3. **Remaining 12 non-casting shared-rules rows (concrete split boundary):** None of these 12 rows exercises new casting-profile or play-permission concepts; batch only the small clean ones that fit within the 10% Engine Budget, and split cleanly at the named shared-rules boundary for any remaining family (recording the reason and rows per the 2026-11-24 steering):
+1. **Tinybones evidence not yet exercised** (built code, untested paths): an exact grant and a stash counter on the same exiled object (`exile_playable_objects` dedup), a second Tinybones re-enabling plays after the first leaves, a stashed Omen or modal back face, and opposite-viewer controls with Vizier/foretell. Full list in the evidence table.
+2. **Quilled Greatwurm (FDN).** Needs two shared rules found absent: `TriggerCondition::DealsCombatDamage` matches only `CombatDamageToPlayers` (no creature recipients, no "that many" amount), and no `AdditionalCost` removes counters distributed among creatures. Add `PlayRoute::PrintedGraveyard` so the distributed `CostComponent::RemoveCounters` payment attaches only to its own graveyard permission, never to Muldrotha's or Zul's on the same card. Build the two rules with the card or split them with the history/queries work; record which.
+3. **The 12 non-casting shared-rules rows.** None exercises a casting-profile or play-permission concept. Batch the small clean ones within the 10% Engine Budget; split any remaining family at its named rule, recording reason and rows (2026-11-24 steering):
 
 | Cohort | Cards | Shared rule needed (outside casting/permission core) |
 |---|---|---|
@@ -112,6 +85,8 @@ Quilled Greatwurm needs two shared rules this pass found absent: `TriggerConditi
 | Preparation (3) | Grave Researcher, Emeritus of Ideation, Lluwen, Exchange Student | Surveil-before-count + MV life loss; distinct graveyard-card exile costs for attack trigger / sorcery activation + Pest token. |
 | Preparation (2) | Variable Chaser, Pyre Rhymer | Separate APNAP optional whole-hand discard/draw; turn-scoped delayed mana trigger on tapping any Mountain for mana. |
 | HOB (3) | An Unexpected Party, Bilbo, Luckwearer, Great Ugly-Looking Goblin | Chosen creature type retained on entry; shared-card-type control exchange; Amass (create or grow existing Army). |
+
+4. Ledgers (`fdn.jsonl`, `hob.jsonl`, preparation) for each row as it lands.
 
 ### Deferred to MTG-418 (6 preparation rows)
 
