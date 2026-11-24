@@ -689,8 +689,11 @@ base mana value (`has_route_cost`, `route_mana_value`) and the permanent
 type it spends (`quota_type`, zero for none). `play_route` names the
 permission itself (`play_route_code`: 1 hand, 2 free from hand, 3 library
 top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type,
-8 exile counter; zero for an ordinary hand play), so two routes with the
-same cost, such as Tinybones's stash and an exact grant, stay distinct. The
+8 exile counter, 9 the card's own graveyard permission such as Quilled
+Greatwurm's; zero for an ordinary hand play), so two routes with the
+same cost, such as Tinybones's stash and an exact grant, stay distinct. A
+resolution cast is authorized by its resolving instruction and names no
+route, even when the card also holds a priority permission. The
 column is appended; a checkpoint trained before it does not read it. A
 type-limited offer focuses the card first and the permanent granting the
 allowance second.
