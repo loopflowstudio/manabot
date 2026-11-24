@@ -44,20 +44,33 @@ with float32 log-probabilities, master weights and optimizer state.
 
 ## Layout
 
-Every backend is one package, `manabot/backends/<name>/`, with at least these
-files; a backend may add private modules that its `policy.py` uses (torch's
-encoders and `live_tokens.py`):
+Every backend is one package, `manabot/backends/<name>/`, with these files
+under the same names:
 
 | File | Holds |
 | --- | --- |
 | `__init__.py` | the import guard naming the optional extra, and the files below as attributes loaded on first use (`backend.rl`) |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
+| `runtime.py` | device setup, execution admission and fresh policy construction |
 | `policy.py` | the policy: `prepare`, and the forward over a `Prepared` batch (logits and values) |
+| `live_tokens.py` | object attention over the valid objects of a packed batch |
+| `decision_memory.py` | the decision-memory encoder over prepared records |
+| `collection.py` | frozen collection forwards and the collector's private RNG |
 | `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
 | `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
+| `state.py` | the backend tensors of saved training state and numerical incidents |
 | `checkpoint.py` | the map from canonical names to the backend's layout, portable loading and export, and `BACKEND` |
 | `belief.py`, `belief_fit.py` | lazy belief sampling (`SamplerCodec` / `BeliefSampling`) and fitting (`BeliefTrainer`) exposed as `backend.belief` and `backend.belief_fit` |
+
+A backend adds modules only for what it alone needs. Torch's policy encoders
+are one module each (`semantic_cards.py`, `facts.py`, `shared_effects.py`,
+`records.py`, `recent_events.py`, `name_candidates.py`, `continuation.py`),
+with `numerics.py` for device arithmetic boundaries; it also holds the
+reference tools `bot.py`, `capture.py`, `decision_memory_probe.py` and
+`verify_decision_memory.py`. MLX's forward runs these encoders over packed
+rows inside `policy.py`, whose parameter containers mirror the torch modules'
+names; `gru.py` holds the packed GRU with its hand-written gradient.
 
 `resolve` returns the configured framework. Simulation loads a policy through
 `PolicyLoader`, checkpoint inspection reads its metadata and tensors through
@@ -377,7 +390,7 @@ keep torch's names (`torch_name` in `manabot.policy.checkpoint` maps canonical
 names back).
 
 Read card-program rows through `SemanticCardEncoder.lookup`
-(`manabot/backends/torch/_semantic_cards.py`), never `table[rows]`. Card and fact IDs
+(`manabot/backends/torch/semantic_cards.py`), never `table[rows]`. Card and fact IDs
 repeat heavily in a batch; under CUDA autograd `lookup` uses embedding
 backward, which groups repeated rows, where advanced indexing accumulates each
 row separately and made PPO updates 2.17× slower on an L4

@@ -25,21 +25,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from manabot.backends.torch._continuation import ContinuationEncoder
-from manabot.backends.torch._decision_memory import DecisionMemory
-from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
-from manabot.backends.torch._name_candidates import NameCandidateEncoder
-from manabot.backends.torch._numerics import buffer_on
-from manabot.backends.torch._recent_events import RecentEventEncoder
-from manabot.backends.torch._semantic_cards import (
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
+from manabot.backends.torch.continuation import ContinuationEncoder
+from manabot.backends.torch.decision_memory import DecisionMemory
+from manabot.backends.torch.facts import FactEncoder, RecordVocabulary
+from manabot.backends.torch.live_tokens import LiveTokens
+from manabot.backends.torch.name_candidates import NameCandidateEncoder
+from manabot.backends.torch.numerics import buffer_on
+from manabot.backends.torch.recent_events import RecentEventEncoder
+from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
-
-# Local imports
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
-from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,

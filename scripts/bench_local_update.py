@@ -572,7 +572,7 @@ def main() -> None:
         args.reference, "manabot/backends/torch/policy.py"
     )
     reference_facts = reference_module(
-        args.reference, "manabot/backends/torch/_facts.py"
+        args.reference, "manabot/backends/torch/facts.py"
     )
     reference_model.FactEncoder = reference_facts.FactEncoder
     match = _bench_match()

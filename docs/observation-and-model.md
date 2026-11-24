@@ -896,7 +896,7 @@ changed colors and keyword-counter timestamps; members keep one-based public
 object joins, and duplicate memberships survive. No rules record is deleted or
 semantically coalesced. The layout, routing and sum/normalization tradeoff are
 in the torch backend's shared-effect encoder
-([`manabot/backends/torch/_shared_effects.py`](../manabot/backends/torch/_shared_effects.py)) and
+([`manabot/backends/torch/shared_effects.py`](../manabot/backends/torch/shared_effects.py)) and
 [shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
 is an engineering result; it establishes no learning-quality advantage.
 
@@ -1497,6 +1497,6 @@ this proof first.
 | Observation space and layout | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
-| Recent events | [`manabot/backends/torch/_recent_events.py`](../manabot/backends/torch/_recent_events.py) |
-| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/_semantic_cards.py`](../manabot/backends/torch/_semantic_cards.py) |
+| Recent events | [`manabot/backends/torch/recent_events.py`](../manabot/backends/torch/recent_events.py) |
+| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/semantic_cards.py`](../manabot/backends/torch/semantic_cards.py) |
 | Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

@@ -11,7 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.policy.prepare import EventRows
 
 

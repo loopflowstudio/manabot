@@ -7,9 +7,9 @@ from typing import Any, cast
 import numpy as np
 import torch
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic, _catalog_order
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import FACT_VALID_INDEX, ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
