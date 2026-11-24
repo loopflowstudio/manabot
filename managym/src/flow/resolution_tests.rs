@@ -4663,60 +4663,143 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
 
-/// Isolate priority announcement before state-based cleanup. Two exiled spell
-/// copies share a program, but each grant and target choice names one appearance.
 #[test]
-fn priority_announces_each_granted_spell_copy_by_object() {
-    use crate::flow::{cast_permission::PlayGrant, game::PendingChoice};
+fn prepared_seed_sutures_survive_priority_and_counter_independently() {
+    use crate::state::mana::Mana;
 
-    let player = PlayerId(0);
-    let (mut game, first, second) = fixture(PlayerId(1));
+    let deck = BTreeMap::from([
+        ("Blossom-Blessed Angel".into(), 4),
+        ("Emergency Phytomedic".into(), 4),
+        ("Counterspell".into(), 4),
+        ("Plains".into(), 28),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        419,
+        true,
+    );
+    let player = game.active_player();
+    let opponent = PlayerId(1 - player.0);
+    game.state.turn.current_phase = 1;
+    game.state.turn.current_step = 0;
     game.state.priority.holder = player;
-    let bolt = game
-        .state
-        .latest_objects()
-        .find(|(_, object)| object.name == "Lightning Bolt")
-        .unwrap()
-        .0;
-    let copies = [first, second].map(|source| {
-        let id = game.state.id_gen_mut().next_id();
-        let copy = game.create_spell_copy(bolt, id, player);
-        let copy = game.move_object(copy, ZoneType::Exile);
-        assert!(game.state.card_of(copy).is_none());
-        let source = game.permanent_object(source).unwrap();
-        game.state.cast_permissions.grant(PlayGrant {
-            source: Some(source),
-            cost: Some(Default::default()),
-            ..PlayGrant::new(copy, player)
-        });
-        copy
+    game.state.players[player.0].mana_pool = Mana::parse("WW").into();
+    game.state.players[opponent.0].mana_pool = Mana::parse("UU").into();
+    game.scenario_force_card_in_hand(opponent, "Counterspell")
+        .unwrap();
+    let sources = ["Blossom-Blessed Angel", "Emergency Phytomedic"].map(|name| {
+        let object = game
+            .state
+            .latest_objects()
+            .find(|(_, o)| o.owner == player && o.name == name)
+            .unwrap()
+            .0;
+        game.move_object(object, ZoneType::Battlefield)
     });
-    for viewer in [player, PlayerId(1)] {
-        let observation = crate::agent::observation::Observation::for_player(&game, viewer);
-        for (copy, source) in copies.into_iter().zip([first, second]) {
-            let row = observation
+    let id = game.state.id_gen.next_id();
+    let unrelated = game.create_spell_copy(sources[0], id, player);
+    let unrelated = game.move_object(unrelated, ZoneType::Exile);
+    game.finish_action_step();
+    assert_eq!(game.state.zones.zone_of(unrelated), None);
+    let copies = sources.map(|source| {
+        let copy = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Exile, player)
+            .iter()
+            .copied()
+            .find(|object| {
+                game.play_grants_on(*object)
+                    .any(|grant| grant.source == Some(source))
+            })
+            .unwrap();
+        assert_eq!(game.state[copy].name, "Seed Suture");
+        for viewer in [player, opponent] {
+            let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+            let row = obs
                 .agent_cards
                 .iter()
-                .chain(&observation.opponent_cards)
+                .chain(&obs.opponent_cards)
                 .find(|row| row.id == game.state[copy].id.0 as i32)
-                .expect("public exile copy");
-            let [grant] = row.cast_permissions.as_slice() else {
-                panic!("one source per copy")
-            };
-            let source = game.state.permanents[source].as_ref().unwrap();
-            assert_eq!(grant.source_permanent_id, Some(source.id.0 as i32));
+                .unwrap();
+            assert_eq!(
+                row.cast_permissions[0].source_permanent_id,
+                Some(
+                    game.state.permanents[game.lookup_current_permanent(source).unwrap()]
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .0 as i32
+                )
+            );
         }
-    }
-    let actions = game.compute_player_actions(player);
-    for copy in copies {
-        let action = actions
+        copy
+    });
+    let cast = |game: &Game, object| {
+        game.action_space()
+            .unwrap()
+            .actions
             .iter()
-            .find(|action| matches!(action, Action::CastSpell {object, ..} if *object == copy))
-            .expect("each copy has its own cast");
+            .find(|a| matches!(a, Action::CastSpell {object: offered,..} if *offered == object))
+            .cloned()
+    };
+    let observation = crate::agent::observation::Observation::for_player(&game, player);
+    let config = crate::agent::observation_encoder::ObservationEncoderConfig::default();
+    let encoded = crate::agent::observation_encoder::encode(&observation, &config).unwrap();
+    let joins = copies.map(|copy| {
+        let source = game.preparation_source(copy).unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(
+                |action| matches!(action, Action::CastSpell { object, .. } if *object == copy),
+            )
+            .unwrap();
+        let offer = &observation.action_space.actions[index];
+        assert_eq!(
+            offer.focus,
+            [game.state[copy].id.0 as i32, game.state[source].id.0 as i32]
+        );
+        assert!(offer
+            .description
+            .as_ref()
+            .unwrap()
+            .contains(&game.state[source].name));
+        let start = index * config.max_focus_objects;
+        [encoded.action_focus[start], encoded.action_focus[start + 1]]
+    });
+    assert!(joins.iter().flatten().all(|row| *row >= 0));
+    assert_ne!(joins[0][0], joins[1][0]);
+    assert_ne!(joins[0][1], joins[1][1]);
+    for (chosen, other) in [(copies[0], copies[1]), (copies[1], copies[0])] {
         let mut fork = game.clone();
-        fork.execute_action(action).unwrap();
-        assert!(
-            matches!(fork.pending_choice, Some(PendingChoice::ChooseTargets { object, .. }) if object == copy)
+        checked_command(&mut fork, cast(&game, chosen).unwrap());
+        let target = Action::ChooseTarget {
+            player,
+            target: Target::Permanent(game.lookup_current_permanent(sources[0]).unwrap()),
+        };
+        checked_command(&mut fork, target.clone());
+        let counter = fork.action_space().unwrap().actions.iter().find(|a| matches!(a,Action::CastSpell {object,..} if fork.state[*object].name == "Counterspell")).cloned().unwrap();
+        checked_command(&mut fork, counter);
+        assert!(fork.state.stack_objects.is_empty());
+        assert!(fork.state.events.iter().any(|event| matches!(event, GameEvent::SpellCountered { object_id,.. } if object_id.slot()==chosen.slot())));
+        assert!(cast(&fork, chosen).is_none());
+        let life = fork.state.players[player.0].life;
+        checked_command(&mut fork, cast(&game, other).unwrap());
+        checked_command(&mut fork, target);
+        assert_eq!(fork.state.players[player.0].life, life + 1);
+        let permanent = fork.lookup_current_permanent(sources[0]).unwrap();
+        assert_eq!(
+            fork.state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .counter_count(CounterKind::PlusOnePlusOne),
+            1
         );
     }
 }

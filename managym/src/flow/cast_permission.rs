@@ -93,6 +93,9 @@ pub struct PlayGrant {
     /// CR 715.3d: only the permanent spell may be cast with this grant.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub on_adventure: bool,
+    /// This exact exile copy survives while linked to its battlefield source.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
 }
 
 #[deprecated(note = "use PlayGrant; ExileCastGrant will be removed in 0.4.0")]
@@ -118,6 +121,7 @@ impl PlayGrant {
             after_turn: None,
             foretold: false,
             on_adventure: false,
+            prepared: false,
         }
     }
 }
@@ -412,6 +416,26 @@ impl Game {
         self.grants_naming(object).find(|grant| grant.key == key)
     }
 
+    /// The battlefield appearance keeping this particular spell copy prepared.
+    pub(crate) fn preparation_source(&self, object: ObjectId) -> Option<ObjectId> {
+        if self.state[object].kind() != crate::state::game_object::ObjectKind::SpellCopy
+            || self.state.zones.zone_of(object) != Some(ZoneType::Exile)
+        {
+            return None;
+        }
+        self.play_grants_on(object)
+            .find(|grant| grant.prepared)?
+            .source
+    }
+
+    pub(crate) fn grant_player(&self, grant: &PlayGrant) -> Option<PlayerId> {
+        if grant.prepared {
+            let source = self.lookup_current_permanent(grant.source?).ok()?;
+            return self.state.permanents[source].as_ref().map(|p| p.controller);
+        }
+        Some(grant.player)
+    }
+
     /// The live grant letting `player` play this exact card now.
     /// Another player's card is castable too; a permanent spell enters
     /// under its caster's control (CR 110.2).
@@ -421,7 +445,7 @@ impl Game {
         object: ObjectId,
     ) -> impl Iterator<Item = &PlayGrant> {
         self.grants_naming(object).filter(move |grant| {
-            grant.player == player
+            self.grant_player(grant) == Some(player)
                 && (!grant.own_turn_only || self.active_player() == player)
                 && grant
                     .after_turn
@@ -501,7 +525,7 @@ impl Game {
             .grants
             .iter()
             .filter(move |grant| {
-                grant.player == player
+                self.grant_player(grant) == Some(player)
                     && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
             })
             .map(|grant| grant.object)

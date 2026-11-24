@@ -100,6 +100,13 @@ impl Game {
                 let verb = if card.types.is_land() { "Play" } else { "Cast" };
                 Some(format!("{verb} {} {terms}", card.name))
             }
+            Action::CastSpell { object, .. } => {
+                let source = self.preparation_source(*object)?;
+                Some(format!(
+                    "Cast {} from {} (object {})",
+                    self.state[*object].name, self.state[source].name, self.state[source].id.0
+                ))
+            }
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
                     .state

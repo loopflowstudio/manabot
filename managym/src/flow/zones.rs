@@ -448,6 +448,31 @@ impl Game {
         object
     }
 
+    fn prepare_inset(&mut self, source: ObjectId, controller: PlayerId) {
+        use crate::{flow::cast_permission::PlayGrant, state::card::InsetSpell};
+        let Some(InsetSpell::Prepared(program)) = &self.state[source].inset else {
+            return;
+        };
+        let program = program.clone();
+        let id = self.state.id_gen.next_id();
+        let copy = Object::from_definition(
+            id,
+            controller,
+            self.state[source].definition_id,
+            program,
+            false,
+        );
+        let copy = Object::spell_copy(copy, id, controller);
+        let object = self.add_object(copy);
+        self.state.place_object(object, controller, ZoneType::Exile);
+        self.capture_object_move(object, None, Some(ZoneType::Exile), controller);
+        self.state.cast_permissions.grant(PlayGrant {
+            source: Some(source),
+            prepared: true,
+            ..PlayGrant::new(object, controller)
+        });
+    }
+
     /// Count permanents a player controls matching a predicate (e.g.
     /// "for each Island you control").
     pub(crate) fn count_battlefield_matching(
@@ -745,6 +770,9 @@ impl Game {
                 self.state.turn.history[holder.0].land_entered = true;
             }
             self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
+            if entry.prepared {
+                self.prepare_inset(object_id, holder);
+            }
         }
 
         if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {

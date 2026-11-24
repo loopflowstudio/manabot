@@ -32,6 +32,8 @@ pub(crate) struct ZoneEntry {
         skip_serializing_if = "crate::state::card::SpellProfile::is_front"
     )]
     pub profile: crate::state::card::SpellProfile,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
     /// Battlefield: enters with these counters.
@@ -308,6 +310,7 @@ impl ReplacementCandidate {
                 format!("Prevent {amount} damage")
             }
             ReplacementEffect::DoubleDamageToController => "Double the damage".into(),
+            ReplacementEffect::EntersPrepared => "Enter prepared".into(),
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
             ReplacementEffect::EntersWithPlusOneCounters { count, .. } => {
@@ -1209,7 +1212,8 @@ impl Game {
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
-                            ReplacementEffect::EntersTapped
+                            ReplacementEffect::EntersPrepared
+                            | ReplacementEffect::EntersTapped
                             | ReplacementEffect::EntersWithXCounters { .. }
                             | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
@@ -1450,6 +1454,9 @@ impl Game {
             }
             (ProposedEvent::Damage { amount, .. }, ReplacementEffect::DoubleDamageToController) => {
                 *amount = amount.saturating_mul(2);
+            }
+            (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersPrepared) => {
+                entry.prepared = true;
             }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersTapped) => {
                 entry.tapped = true;

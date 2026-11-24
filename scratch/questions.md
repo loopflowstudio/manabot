@@ -36,3 +36,5 @@ Use two prepared sources in the first priority fixture. A single Seed Suture can
 Use Regent’s existing Omen as the prepared-inset control. Changing only the inset kind isolates the hand and Cascade eligibility rule.
 
 Use an unrelated exiled spell copy as the negative cleanup control in the two-source fixture.
+
+For the two-copy fixture, both branches cast Counterspell through a native Command and then cast the surviving Seed Suture targeting the Angel. This checks that the surviving offer still executes after the counter.

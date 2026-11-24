@@ -36,6 +36,7 @@ mod emn;
 mod eoe;
 mod fdn;
 mod fin;
+mod fra;
 mod frf;
 mod fut;
 mod gpt;
@@ -145,6 +146,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     eoe::cards,
     fdn::cards,
     fin::cards,
+    fra::cards,
     frf::cards,
     fut::cards,
     gpt::cards,

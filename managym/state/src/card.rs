@@ -491,6 +491,7 @@ pub enum ReplacementEffect {
     /// Double damage that would be dealt to this permanent's controller or a
     /// permanent they control. This driver makes ordering observable.
     DoubleDamageToController,
+    EntersPrepared,
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
     /// This object enters tapped unless its entering controller already

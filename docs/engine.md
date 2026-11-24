@@ -1292,7 +1292,13 @@ for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() 
 let zone = game.state.zones.zone_of(game.state.object_of(card));
 ```
 
-A token or copy that leaves the battlefield or stack is briefly in another
+A prepared permanent links its battlefield appearance to a spell copy in exile.
+The copy belongs to the controller at preparation. Its casting permission follows
+the permanent’s current controller. Casting moves the copy to the stack and ends
+the link, even if the spell is subsequently countered. A source that leaves the
+battlefield loses its link, and the next state-based check removes the exile copy.
+
+An ordinary token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
 a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps

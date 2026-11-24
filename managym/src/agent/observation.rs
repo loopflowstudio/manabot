@@ -1686,7 +1686,10 @@ impl Observation {
             cast_permissions: game
                 .play_grants_on(object_id)
                 .map(|grant| CastPermissionData {
-                    player_id: game.state.players[grant.player.0].id.0 as i32,
+                    player_id: game.state.players
+                        [game.grant_player(grant).expect("visible grant").0]
+                        .id
+                        .0 as i32,
                     cost: game.grant_cast_cost(grant),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),
@@ -2141,8 +2144,14 @@ impl Observation {
                 route: Some(crate::flow::cast_permission::PlayRoute::GraveyardType { source, .. }),
                 ..
             } => vec![game.state[object].id, game.state[source].id],
+            Action::CastSpell { object, .. } => {
+                let mut focus = vec![game.state[object].id];
+                if let Some(source) = game.preparation_source(*object) {
+                    focus.push(game.state[source].id);
+                }
+                focus
+            }
             Action::PlayLand { object, .. }
-            | Action::CastSpell { object, .. }
             | Action::ActivateCardAbility { object, .. }
             | Action::Foretell { object, .. }
             | Action::ScryCard { object, .. }
