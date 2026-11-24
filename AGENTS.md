@@ -849,6 +849,10 @@ Tests that build pages and retain module-level references must restore saved
 `sys.modules` entries and remove neighbours first imported during the build,
 while keeping new dependency imports (including Torch lazy registrations).
 
+Etude lists a file in its experiment pages if it defines `training_jobs`,
+`eval_jobs` or `report`. Standalone benchmark CLIs use `render_report` for
+their offline report renderer.
+
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
 namespace or a `python -m` invocation's `__main__`; the same holds for agent
