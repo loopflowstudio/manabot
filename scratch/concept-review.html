@@ -3,142 +3,193 @@
 <title>Foundations · concept review</title>
 <style>
 :root{color-scheme:light dark}
-body{font:1.02rem/1.55 system-ui,-apple-system,sans-serif;margin:2.5rem auto;padding:0 1.1rem;max-width:56rem}
+body{font:1.02rem/1.55 system-ui,-apple-system,sans-serif;margin:2.5rem auto;padding:0 1.1rem;max-width:58rem}
 h1,h2,h3{line-height:1.25}
 h2{margin-top:2.2rem;border-top:1px solid color-mix(in srgb,GrayText 35%,transparent);padding-top:1rem}
 table{border-collapse:collapse;width:100%;margin:1rem 0}
 caption{text-align:left;font-weight:600;margin-bottom:.4rem}
 td,th{padding:.55rem .6rem;text-align:left;vertical-align:top;border-bottom:1px solid color-mix(in srgb,GrayText 40%,transparent)}
-code{font-size:.92em;overflow-wrap:anywhere}
-.tag{display:inline-block;padding:.1rem .45rem;border-radius:.3rem;font-size:.82rem;font-weight:600;letter-spacing:.01em}
+code{font-size:.91em;overflow-wrap:anywhere}
+.tag{display:inline-block;padding:.1rem .45rem;border-radius:.3rem;font-size:.82rem;font-weight:600;letter-spacing:.01em;vertical-align:middle}
 .existing{border:1px solid GrayText}
 .proposed{border:1px solid LinkText;color:LinkText}
 .no{font-weight:700;color:color-mix(in srgb,crimson 82%,CanvasText)}
 .yes{font-weight:700;color:color-mix(in srgb,seagreen 82%,CanvasText)}
-.callout{border-left:4px solid LinkText;padding:.7rem 1rem;margin:1rem 0;background:color-mix(in srgb,LinkText 8%,transparent)}
+.callout{border-left:4px solid LinkText;padding:.75rem 1rem;margin:1.1rem 0;background:color-mix(in srgb,LinkText 8%,transparent)}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
-@media (max-width:44rem){.compare{grid-template-columns:1fr}}
-.panel{border:1px solid color-mix(in srgb,GrayText 45%,transparent);border-radius:.45rem;padding:.8rem 1rem}
+@media (max-width:46rem){.compare{grid-template-columns:1fr}}
+.panel{border:1px solid color-mix(in srgb,GrayText 45%,transparent);border-radius:.45rem;padding:.85rem 1rem}
 .panel h3{margin-top:0;font-size:1rem}
 ul{padding-left:1.3rem}
+.muted{opacity:.82;font-size:.94rem}
+pre{overflow-x:auto;padding:.65rem .8rem;border-radius:.35rem;background:color-mix(in srgb,GrayText 12%,transparent);font-size:.88rem;line-height:1.4}
 </style>
 <main>
 <h1>Do the product’s concepts and the code’s concepts line up?</h1>
-<p><strong>Area reviewed:</strong> Foundations card authoring across Batch 5d (36 grant, attachment, search, and optional-effect cards plus exact-source, attachment-LKI, and search-disclosure edits) widened to the shared decision surface (<code>Action::ChooseMode</code> descriptions, attachment resolution/traces, trigger subjects, library search/disclosure) and the upcoming Batch 5e modal/choice spell cohort · reviewed at <code>b8805c64</code> against base <code>dca0a901</code>.</p>
+<p><strong>Area reviewed:</strong> Foundations card authoring across the full branch through Batch 5e and compression (<code>82c5d1d1..de0479da</code>), widened to the four shared engine authorities Batch 5e touched and the remaining 57 unaudited Foundations rows (Batches 5f and 5g) are about to build on: <strong>library placement &amp; disclosure</strong>, <strong>layered characteristics &amp; cache invalidation</strong>, <strong>blocking prohibitions &amp; combat declarations</strong>, and <strong>temporary vs. printed replacement shields</strong>. <strong>Why:</strong> Batch 5e closed all four 5d mismatches and <code>de0479da</code> grouped the last 57 rows into three batches; reviewing the whole area now catches both a split introduced in 5e (<code>OwnerPutsIntoLibrary</code>) and three structural traps waiting in 5f/5g.</p>
 
-<h2>Batch 5d &amp; shared decision surface · concept alignment <span class="tag existing">Existing</span></h2>
+<h2>Whole-area concept alignment <span class="tag existing">Existing</span></h2>
 <table>
-<caption>Product concepts a player or card author knows vs. code concepts at <code>b8805c64</code></caption>
+<caption>Product concepts a player or card author knows vs. code concepts at <code>de0479da</code></caption>
 <tr><th>Product concept</th><th>Code concept</th><th>Aligned?</th></tr>
 <tr>
-  <td>Choose a spell mode (<code>Bushwhack</code>, <code>Deadly Plot</code>, upcoming <code>Boros Charm</code>) or a “you may” option at resolution (<code>Reclamation Sage</code>, <code>Crawling Barrens</code>, <code>Solemn Simulacrum</code>, <code>Battle-Rattle Shaman</code>, <code>Micromancer</code>, <code>Fierce Empath</code>). Every legal option tells the acting player what choosing it does.</td>
-  <td><code>Game::action_description</code> (<code>managym/src/flow/action.rs:153-239</code>) has three separate branches for <code>Action::ChooseMode</code>: trigger placement uses <code>effects_description</code>; <code>PendingChoice::SpellMode</code> falls into the trigger branch and returns <code>None</code>; <code>Decision::Modal</code> checks a 6-arm allowlist and returns <code>None</code> for everything else.</td>
-  <td><span class="no">No</span> · action with no single description owner. Academy renders identical <code>Choose a mode (Bushwhack)</code> buttons and <code>Choose a mode (Reclamation Sage)</code> vs. <code>Decline</code>; LLM text prints only <code>Choose mode …; mode 0</code>.</td>
+  <td><strong>Put a card at a chosen library position and track who knows it</strong> (<code>Uncharted Voyage</code> top/bottom, <code>Wan Shi Tong</code> 2nd-from-top/bottom, <code>Cruel Tutor</code> private search-to-top, upcoming <code>Campus Guide</code> revealed search-to-top).</td>
+  <td>Split across two engines: <code>OwnerPutsIntoLibrary { top: false }</code> emits <code>PlaceTargetInLibrary</code> + <code>EventBinding::PlaceInLibrary</code> (concise labels <code>Second from the top</code> / <code>On the bottom</code> in <code>flow/action.rs:226</code>); <code>top: true</code> emits <code>Effect::Move { library_end }</code> + <code>EventBinding::Moved</code> (misses <code>action.rs:226</code> and renders verbose <code>Put target creature on the top of its owner's library</code>). Worse, <code>EventBinding::Moved { library_end: Bottom }</code> inserts on top then calls <code>put_on_bottom_of_library</code> → <code>forget_order()</code> (<code>decision.rs:3552</code>), wiping earlier known top cards; and Library→Library <code>Move</code> (<code>resolution.rs:821-826</code>) bypasses <code>EventBatch</code> and calls <code>forget_order()</code>, dropping both private top knowledge (<code>Cruel Tutor</code>) and public reveal + top knowledge (<code>Campus Guide</code>).</td>
+  <td><span class="no">No</span> · one concept split across two engines, inconsistent modal labels, and broken library knowledge on bottom and search-to-top placements.</td>
 </tr>
 <tr>
-  <td>An Aura or Equipment ability acts on whatever it is attached to at resolution, or what it was last attached to if the Aura/Equipment left first (CR 608.2h).</td>
-  <td><code>frame_attached</code> (<code>flow/resolution.rs:557-564</code>) now reads <code>Permanent.attached_to</code> or <code>ObjectLki.attached_to</code> — but <code>ActivatedAbilityOnStack.attached</code> (<code>flow/play.rs:1698</code>), <code>resolve_activated_ability</code>’s <code>frame.context_target</code> (<code>flow/resolution.rs:335-362</code>), and <code>"attached at activation"</code> (<code>agent/effect_execution.rs:471</code>) still capture and project the activation-time wearer.</td>
-  <td><span class="no">No</span> · stale shadow record that contradicts resolution. Moving <code>Watery Grasp</code> to a new creature before resolution shuffles the new wearer while execution traces and continuation <code>context</code> still point at the old wearer.</td>
+  <td><strong>Layered characteristic effects &amp; live conditions</strong> (<code>Witness Protection</code>, <code>Eaten by Piranhas</code>, <code>Twinblade Paladin</code>, <code>Kitesail Corsair</code>). One static effect applies across all layers (CR 613.6) and updates immediately when life or combat state changes.</td>
+  <td><code>StaticAbility::Continuous</code> (<code>flow/layers.rs:917</code>) handles layers 4–7, while <code>Layer::Name</code> + <code>FactKind::SetName</code> + <code>record_vocabulary::set_names</code> are trapped inside the TLA-only bundle <code>AttachedSetsCharacteristics</code> (<code>state/src/card.rs:410, 984</code>), which cannot set colors (needed by both <code>Witness Protection</code> and <code>Eaten by Piranhas</code>). Separately, <code>TrackedState::life_mut</code> (<code>flow/game.rs:535-540</code>) mutates <code>player.life</code> <strong>without bumping any cache revision</strong>, so a static life-threshold condition (<code>Twinblade Paladin</code>) will read stale cached keywords across damage and lifegain.</td>
+  <td><span class="no">No</span> · <code>Layer::Name</code> trapped outside <code>Modification</code>, plus an untracked <code>life_mut</code> cache-invalidation hole waiting for <code>Twinblade Paladin</code>.</td>
 </tr>
 <tr>
-  <td>Trigger on “enchanted creature” (Aura) or “equipped creature” (Equipment) — the same attachment relation on two permanent subtypes, matching <code>StaticScope::Attached</code> and <code>ObjectSelector::Attached</code>.</td>
-  <td><code>TriggerSubject::EnchantedCreature</code> and <code>TriggerSubject::EquippedCreature</code> (<code>state/src/ability.rs:488-490</code>), executed by one identical match arm <code>EnchantedCreature | EquippedCreature</code> in <code>flow/triggers.rs:2209, 2241</code>.</td>
-  <td><span class="no">No</span> · one concept under two names. Duplicates both the enum variant and catalog learning-token kind solely to print <code>equipped creature</code> instead of <code>enchanted creature</code>.</td>
+  <td><strong>Blocking prohibitions</strong> (<code>Vampire Interloper</code>, <code>Sower of Chaos</code>, <code>Stromkirk Noble</code>, <code>Juggernaut</code>). A creature that can’t block is never offered as a blocker; listing and submission share one rule.</td>
+  <td><code>eligible_blockers</code> (<code>flow/combat_actions.rs:341</code>) checks only <code>tapped</code>, <code>is_creature</code>, and <code>combat_condition_met</code> (<code>CantAttackOrBlock</code>), omitting <code>Modification::CantBlock</code> and <code>BlockRestriction::CantBlock</code>. <code>blocker_can_block_attacker</code> (<code>combat_actions.rs:357</code>) rejects them, leaving <code>tick.rs:415</code> to emit a dead 1-action <code>DeclareBlocker { attacker: None }</code> space (auto-skipped only when <code>skip_trivial</code> is true). Blocking restrictions are also split across <code>Restriction</code> (<code>card.rs:468</code>) and <code>BlockRestriction</code> (<code>card.rs:1049</code>).</td>
+  <td><span class="no">No</span> · listing and legality disagree on who can block, surfacing impossible blockers as dead prompts.</td>
 </tr>
 <tr>
-  <td>Single-card library search into hand: restricted searches allow fail-to-find and reveal the card into hand; unrestricted searches (<code>Rune-Scarred Demon</code>, <code>Vile Entomber</code>) require a card from a nonempty library without revealing into hand; “you may search” declines before shuffling.</td>
-  <td>Two separate search engines: (1) <code>Effect::search_library</code> / <code>search_for_card</code> → <code>SelectCards</code> + <code>Move { unrevealed }</code> + <code>ShuffleLibrary</code> (used by TLA, <code>Solemn Simulacrum</code>, <code>Rune-Scarred Demon</code>, <code>Vile Entomber</code>); (2) <code>Effect::SearchDistinctNames { count: 1 }</code> (used by <code>Bushwhack</code>, <code>Micromancer</code>, <code>Fierce Empath</code>), which bypasses <code>EventBatch</code>, prompts Decline-only on 0 matches, prints <code>up to 1 … with different names and reveal them</code>, and misses <code>Decision::Modal</code>’s <code>Search your library</code> label. Also <code>Move { unrevealed: true }</code> hardcodes hand text without checking <code>to == Hand</code> (<code>ability_description.rs:947</code>) and <code>proposed_event.rs:693</code> emits <code>CardRevealed</code> on public-zone Graveyard → Hand moves.</td>
-  <td><span class="no">No</span> · one idea under two engines, plus an unguarded negative flag and public-zone reveal conflation.</td>
+  <td><strong>Turn-limited combat-damage prevention</strong> (<code>Fleeting Flight</code>) alongside printed prevention (<code>Fog Bank</code>) and death-exile replacements (<code>Elspeth’s Smite</code>, <code>Scorching Dragonfire</code>, <code>Obliterating Bolt</code>, <code>Grappling Kraken</code>).</td>
+  <td><code>Modification::ExileIfWouldDie</code> and <code>CounterKind::Stun</code> already exist and work for the other 4 Batch 5g cards. However, <code>collect_replacements</code> for <code>ProposedEvent::Damage</code> (<code>flow/proposed_event.rs:1095-1170</code>) scans only printed <code>permanent.replacement_effects</code> and never checks <code>effects_on(target)</code>; <code>Modification</code> has no combat-damage prevention shield.</td>
+  <td><span class="no">No</span> · spell-created prevention has no <code>Modification</code> record and cannot participate in <code>Decision::OrderReplacement</code> with doublers.</td>
 </tr>
 <tr>
-  <td>Act on this exact battlefield object only (<code>Arcanis</code>, <code>Skyknight Squire</code>, <code>Crawling Barrens</code>) vs. follow the card into graveyard/exile after departure (<code>Avatar Destiny</code>).</td>
-  <td><code>ObjectSelector::ExactSource</code> vs. <code>ObjectSelector::This</code> (<code>flow/resolution.rs:2181-2186</code>).</td>
-  <td><span class="yes">Yes</span> · genuinely distinct rules (CR 400.7 vs. CR 603.10a). Arcanis’s leave-and-return fork distinguishes graveyard and re-entered successors cleanly.</td>
+  <td><strong>Batch 5e + compression deliveries:</strong> every <code>ChooseMode</code> option explains itself; activated Aura/Equipment abilities read resolution-time attachment (or LKI); Auras/Equipment share one attached trigger subject; single-card tutors use <code>search_library</code>; modal triggers borrow printed rules from their source face.</td>
+  <td><code>flow/action.rs:149-163, 217-241</code>, deleted <code>ActivatedAbilityOnStack.attached</code>, <code>TriggerSubject::Attached</code> + <code>token_renames.rs</code> alias, <code>Effect::search_library</code> with hidden-zone-only <code>CardRevealed</code>, and <code>pending_trigger_mode_rule</code> in <code>flow/triggers.rs:527</code>.</td>
+  <td><span class="yes">Yes</span> · all four 5d mismatches resolved cleanly (with the remaining <code>Move { library_end }</code> modal label fixed in row 1 above).</td>
 </tr>
 <tr>
-  <td>Batch 5e spell choices: <code>Refute</code> (caster draws then discards after countering), <code>Opt</code> (Scry 1 then draw), <code>Uncharted Voyage</code> (owner puts creature on top or bottom, then caster surveils 1).</td>
-  <td>Current <code>scratch/plan.md</code> Batch 5e notes erroneously ask for an “opponent chooser in Refute” and say “Opt should reuse Lightshell Duo’s retained-order surveil path.”</td>
-  <td><span class="no">No</span> · plan mismatch before Batch 5e starts. <code>Refute</code>’s discard chooser is the caster (already supported); <code>Opt</code> uses existing <code>Effect::Scry { count: 1 }</code> (top/bottom, not graveyard); <code>Uncharted Voyage</code> is the real chooser-handoff card and needs top-or-bottom on <code>OwnerPutsIntoLibrary</code>.</td>
+  <td><strong>Combat damage assignment &amp; between-step first-strike visibility</strong> (trample, multiple blockers, <code>Drogskol Reaver</code>).</td>
+  <td>Sequential <code>Decision::AssignCombatDamage</code> in <code>combat_actions.rs:162-282</code> with explicit labels in <code>action.rs:166-186</code>; <code>another_damage_step</code> and <code>first_strike_participant</code> projected across native, v11, LLM text, and Academy.</td>
+  <td><span class="yes">Yes</span> · linear action space and consistent shared surface.</td>
 </tr>
 </table>
 
 <div class="callout">
-<strong>Biggest mismatch · blind <code>Action::ChooseMode</code> offers on the shared decision surface.</strong><br>
-Every modal spell cast (<code>Bushwhack</code>, <code>Deadly Plot</code>, <code>Seeker’s Folly</code>, upcoming <code>Boros Charm</code> and <code>Valorous Stance</code>) and every Batch 5d “you may” resolution choice (<code>Reclamation Sage</code>, <code>Crawling Barrens</code>, <code>Battle-Rattle Shaman</code>, <code>Solemn Simulacrum</code>’s draw, <code>Micromancer</code>, <code>Fierce Empath</code>) reaches Academy and LLM text with <code>ActionOption.description = None</code>. Native Rust tests did not see it because <code>choose_mode(&amp;mut s, 0)</code> selects by raw integer index without inspecting descriptions.
+<strong>Biggest mismatch · library placement &amp; knowledge authority (<code>Uncharted Voyage</code>, <code>Cruel Tutor</code>, <code>Campus Guide</code>).</strong><br>
+Putting a card into a library now runs through two disconnected code paths with three user-visible breaks: (1) <code>Uncharted Voyage</code>’s owner choice renders verbose raw sentences while <code>Wan Shi Tong</code> renders concise labels; (2) putting a permanent on the bottom of a library wipes every previously known top card via <code>forget_order()</code>; and (3) searching a library and putting the chosen card on top after shuffling wipes <code>known_library</code> too, leaving <code>Cruel Tutor</code> blind to its own chosen card and giving <code>Campus Guide</code> no way to emit <code>CardRevealed</code> and public top-of-library knowledge without breaking <code>Cruel Tutor</code>’s privacy.
 </div>
 
-<h2>Before vs. after · one description authority <span class="tag proposed">Proposed</span></h2>
+<h2>Before vs. after · four pre-5f alignments <span class="tag proposed">Proposed</span></h2>
+
 <div class="compare">
 <div class="panel">
-<h3>Before <span class="tag existing">Existing</span></h3>
-<p><strong>Casting <code>Bushwhack</code> (<code>PendingChoice::SpellMode</code>)</strong></p>
-<ul>
-  <li>Academy button 0: <code>Choose a mode (Bushwhack)</code></li>
-  <li>Academy button 1: <code>Choose a mode (Bushwhack)</code></li>
-  <li>LLM text: <code>Choose mode Bushwhack; mode 0</code> / <code>mode 1</code></li>
-</ul>
-<p><strong>Resolving <code>Reclamation Sage</code> (<code>Decision::Modal</code>)</strong></p>
-<ul>
-  <li>Academy button 0: <code>Choose a mode (Reclamation Sage)</code></li>
-  <li>Academy button 1: <code>Decline</code></li>
-  <li>LLM text: <code>Choose mode Reclamation Sage; mode 0</code> / <code>mode 1. Native description: Decline</code></li>
-</ul>
+<h3>1. Library placement &amp; disclosure <span class="tag existing">Existing</span></h3>
+<pre>Uncharted Voyage (owner modal):
+  0: "Put target creature on the top of its owner's library"
+  1: "Put target creature on the bottom of its owner's library"
+  -> choosing Bottom calls insert_top() then forget_order()
+     (erases earlier Scry/Surveil known top cards!)
+
+Cruel Tutor / Campus Guide (after ShuffleLibrary):
+  Move(Library -> Library, Top) -> reorder_in_library()
+  -> calls forget_order()
+  -> Cruel Tutor: caster forgets the card they put on top
+  -> Campus Guide: no CardRevealed, no public top knowledge</pre>
 </div>
 <div class="panel">
-<h3>After <span class="tag proposed">Proposed</span></h3>
-<p><strong>Casting <code>Bushwhack</code> (<code>PendingChoice::SpellMode</code>)</strong></p>
-<ul>
-  <li>Button 0: <code>Search your library for up to 1 basic land card…</code></li>
-  <li>Button 1: <code>Choose 1–1 creature you control…</code></li>
-  <li>Same native <code>effects_description</code> across Academy and LLM text.</li>
-</ul>
-<p><strong>Resolving <code>Reclamation Sage</code> (<code>Decision::Modal</code>)</strong></p>
-<ul>
-  <li>Button 0: <code>Destroy target artifact or enchantment</code></li>
-  <li>Button 1: <code>Decline</code></li>
-  <li>Keep concise idioms (<code>Decline</code>, <code>Add …</code>, <code>Create a … token</code>, <code>On top</code> / <code>Second from the top</code> / <code>On the bottom</code>, <code>Search your library</code>), fall back to <code>effects_description(effects)</code> instead of <code>None</code>.</li>
-</ul>
+<h3>1. Library placement &amp; disclosure <span class="tag proposed">Proposed</span></h3>
+<pre>Uncharted Voyage (owner modal, action.rs:226):
+  0: "On top"    (shifts known top indices +1, inserts public/own[0])
+  1: "On the bottom" (places directly at index 0; keeps known top intact)
+
+Effect::Reveal { what } -> emits CardRevealed + records frame.revealed:
+  Cruel Tutor: [ShuffleLibrary, put_in_library(Selected, Top)]
+    -> sets known_library.own[0] only (private; digest unchanged)
+  Campus Guide: [Reveal(Selected), ShuffleLibrary, put_in_library(Selected, Top)]
+    -> emits CardRevealed; sets known_library.public[0] &amp; own[0]</pre>
 </div>
 </div>
 
-<h3>Stress-testing the proposed cleanups (normal, failure, recovery, counterexamples)</h3>
+<div class="compare">
+<div class="panel">
+<h3>2. Characteristics &amp; life revision <span class="tag existing">Existing</span></h3>
+<pre>Layer::Name reachable ONLY via:
+  StaticAbility::AttachedSetsCharacteristics(SetCharacteristics)
+  (cannot set colors for Witness Protection / Eaten by Piranhas)
+
+TrackedState::life_mut (flow/game.rs:535):
+  mutates player.life with NO revision bump
+  -> Twinblade Paladin at 24 -> 25 life reads stale cached
+     characteristics (missing Double Strike until unrelated write)</pre>
+</div>
+<div class="panel">
+<h3>2. Characteristics &amp; life revision <span class="tag proposed">Proposed</span></h3>
+<pre>Modification::SetName(String) in StaticAbility::Continuous:
+  Witness Protection = one StaticAbility::continuous across
+  Layers 1 (SetName), 4 (SetCreatureTypes/SetTypes), 5 (SetColors),
+  6 (LoseAllAbilities), 7b (SetBasePt); record_vocabulary scans both.
+
+TrackedState::revisions.life + ReadSet.life (matching mana/tapped):
+  life_mut bumps revisions.life; Context records reads_life;
+  board cache invalidates immediately when a life condition is live.</pre>
+</div>
+</div>
+
+<div class="compare">
+<div class="panel">
+<h3>3. Blocking prohibitions &amp; 4. Prevention shield <span class="tag existing">Existing</span></h3>
+<pre>DeclareBlockers with Vampire Interloper / Sower of Chaos:
+  eligible_blockers queues Interloper
+  blocker_can_block_attacker rejects every attacker
+  -> tick.rs emits dead 1-action [DeclareBlocker(None)] space
+
+Fleeting Flight ("Prevent all combat damage to it this turn"):
+  collect_replacements(Damage) scans ONLY permanent.replacement_effects
+  -> spell cannot attach a turn-limited prevention shield that
+     orders against Twinflame Tyrant in Decision::OrderReplacement</pre>
+</div>
+<div class="panel">
+<h3>3. Blocking prohibitions &amp; 4. Prevention shield <span class="tag proposed">Proposed</span></h3>
+<pre>DeclareBlockers (one legality authority):
+  eligible_blockers excludes unconditional cant-block (Modification
+  + BlockRestriction::CantBlock(default)); tick.rs skips queued
+  blockers with 0 legal attackers instead of emitting a dead prompt.
+  Juggernaut enforces must_attack in both listing and declare_attacker.
+
+Modification::PreventCombatDamage (EndOfTurn):
+  collect_replacements(Damage) scans effects_on(target) when combat
+  -> participates in Decision::OrderReplacement alongside doublers,
+     survives LoseAllAbilities (CR 615.1), expires at cleanup.</pre>
+</div>
+</div>
+
+<h3>Stress-testing the proposals (normal, failure, recovery, counterexamples)</h3>
 <ul>
-  <li><strong>Modal descriptions (<code>flow/action.rs</code>):</strong> Pure presentation derived from the pending choice’s effect list. Policy v11 tensors, <code>mode_index</code>, Command binding, stale rejection, state hashes, and pinned pilots are untouched. <em>Counterexample check:</em> keep the concise <code>PlaceTargetInLibrary</code> / <code>AddMana</code> / <code>Decline</code> arms ahead of the fallback so existing short labels do not regress; audit any existing text-observation snapshot that pinned the old blank fallback.</li>
-  <li><strong>Single attachment authority (<code>flow/play.rs</code>, <code>flow/resolution.rs</code>, <code>agent/effect_execution.rs</code>):</strong> Normal path: <code>Watery Grasp</code> or <code>Adventuring Gear</code> reads current attachment at resolution; <code>Path to Redemption</code> (sacrificed as cost) or removed <code>Starlight Snare</code> reads <code>ObjectLki.attached_to</code>. Failure/fork: moving <code>Watery Grasp</code> to Hill Giant while activated on Gray Ogre shuffles Hill Giant and projects Hill Giant consistently with no contradictory <code>attached at activation</code> trace. <em>Counterexample check:</em> no activated ability uses <code>ObjectSelector::Triggering</code> or <code>TriggeringPower</code>, so removing <code>ActivatedAbilityOnStack.attached</code> and its <code>frame.context_target</code> assignment breaks zero callers; verify <code>Path to Redemption</code>’s sacrifice-cost LKI still captures <code>attached_to</code> before departure.</li>
-  <li><strong>One attached trigger subject (<code>state/src/ability.rs</code>, <code>flow/triggers.rs</code>, <code>cards/token_renames.rs</code>):</strong> Replace <code>TriggerSubject::EnchantedCreature</code> + <code>EquippedCreature</code> with <code>TriggerSubject::Attached</code>, register a <code>token_renames.rs</code> alias to <code>TriggerSubject::EnchantedCreature</code> so pinned TLA pilots compute identical token IDs, and render <code>equipped creature</code> vs. <code>enchanted creature</code> in <code>ability_description.rs</code> from the card’s printed subtype. <em>Counterexample check:</em> confirm <code>tests/model/test_pinned_pilot.py</code> passes unchanged.</li>
-  <li><strong>One single-card library search path (<code>cards/src/{bro,dmu,scg}.rs</code>, <code>flow/proposed_event.rs</code>, <code>agent/ability_description.rs</code>):</strong> Switch <code>Bushwhack</code>, <code>Micromancer</code>, and <code>Fierce Empath</code> from <code>SearchDistinctNames { count: 1 }</code> to <code>Effect::search_library(predicate, 1.into(), vec![Effect::return_to_hand(ObjectSelector::Selected)])</code> (matching TLA). On zero matching cards, <code>SelectCards</code> auto-shuffles without a dead Decline-only prompt, and moves flow through <code>EventBatch</code>. Guard <code>ability_description.rs:947</code> with <code>*to == ZoneType::Hand</code>, and only emit <code>GameEvent::CardRevealed</code> when moving from a hidden zone (<code>Library</code>), while public-zone returns (<code>Graveyard</code> → <code>Hand</code>) update <code>known_hand</code> without a spurious reveal event. <em>Counterexample check:</em> verify no existing graveyard-return test asserts <code>GameEvent::CardRevealed</code>; preserve <code>unrevealed: bool</code> with <code>skip_serializing_if = "Not::not"</code> so existing TLA catalog token digests do not shift.</li>
-  <li><strong>Batch 5e library placement (<code>Uncharted Voyage</code>):</strong> Extend <code>OwnerPutsIntoLibrary</code> / <code>PlaceTargetInLibrary</code> with a placement-choice mode (<code>TopOrBottom</code> vs. default <code>SecondFromTopOrBottom</code> via <code>skip_serializing_if</code> so TLA tokens stay identical) rather than cloning a second effect variant. Fork at the owner’s top/bottom choice before the caster’s private Surveil 1 to test chooser handoff and private order retention.</li>
+  <li><strong>Library placement &amp; <code>Effect::Reveal</code>:</strong>
+    <em>Normal:</em> <code>Uncharted Voyage</code> offers <code>On top</code> / <code>On the bottom</code>; bottom placement preserves any prior scried/surveilled top card; <code>Campus Guide</code> emits <code>CardRevealed</code> and sets both <code>public[0]</code> and <code>own[0]</code> after shuffling.
+    <em>Failure / fork:</em> Declining <code>Campus Guide</code> (or 0 basics) runs <code>if_declined: [ShuffleLibrary]</code> with no reveal and empty <code>known_library</code>. Forking <code>Uncharted Voyage</code> after scry 1 distinguishes top (shifts scried card to index 1 behind creature at index 0) from bottom (keeps scried card at index 0).
+    <em>Counterexample caught:</em> <code>Cruel Tutor</code> calls <code>Effect::put_in_library(Selected, Top)</code> with <code>unrevealed: false</code> (default). Making <code>!unrevealed</code> reveal Library→Library moves would break <code>Cruel Tutor</code>’s privacy and shift its catalog digest. Using explicit <code>Effect::Reveal { what }</code> + <code>frame.revealed</code> keeps <code>Cruel Tutor</code> private and digest-identical while making <code>Campus Guide</code> public.
+    <em>Compatibility note:</em> Keep <code>PlaceTargetInLibrary</code> / <code>EventBinding::PlaceInLibrary</code> for <code>Wan Shi Tong</code>’s second-from-top mode rather than retiring them in this task; <code>OrderLibrary</code> only accepts <code>Top | Bottom</code>, and retiring runtime tokens adds unnecessary pinned-pilot churn.</li>
+  <li><strong><code>Modification::SetName</code> &amp; <code>revisions.life</code>:</strong>
+    <em>Normal:</em> <code>Witness Protection</code> and <code>Eaten by Piranhas</code> each compose as one <code>StaticAbility::continuous</code> effect (CR 613.6); <code>Twinblade Paladin</code> gains double strike immediately upon reaching 25 life and loses it immediately upon dropping to 24.
+    <em>Failure / recovery:</em> Destroying <code>Witness Protection</code> restores original name, colors, subtypes, abilities, and P/T and clears <code>FactKind::SetName</code>. Taking 1 damage from 25 to 24 during first-strike priority strips double strike before regular combat damage.
+    <em>Counterexample check:</em> Keep <code>StaticAbility::AttachedSetsCharacteristics</code> intact for TLA’s <code>Honest Work</code> so pinned pilot digests stay identical; have <code>record_vocabulary::set_names</code> scan both <code>SetCharacteristics.named</code> and <code>Modification::SetName</code> so <code>"Legitimate Businessperson"</code> enters the set-name vocabulary automatically.</li>
+  <li><strong>Blocking prohibitions &amp; <code>Juggernaut</code>:</strong>
+    <em>Normal:</em> <code>Vampire Interloper</code> and a creature hit by <code>Sower of Chaos</code> never enter <code>blockers_to_declare</code> and are rejected by <code>declare_blocker</code>. <code>Stromkirk Noble</code> (Human) and <code>Juggernaut</code> (Wall) use existing <code>BlockRestriction::CantBeBlockedBy</code>. <code>Juggernaut</code> omits <code>attack: false</code> in <code>DeclareAttackers</code> and rejects <code>declare_attacker(id, false)</code> when able to attack.
+    <em>Failure / counterexample check:</em> When <code>Juggernaut</code> is tapped, summoning-sick, or under <code>Pacifism</code> (<code>CantAttackOrBlock</code>), <code>eligible_attackers</code> excludes it so the requirement never forces an illegal attack. Check whether any existing <code>skip_trivial: false</code> combat test asserts a 1-option <code>DeclareBlocker(None)</code> prompt for a ground blocker facing only a flyer; if so, filter unconditional cant-block in <code>eligible_blockers</code> and keep the 0-attacker skip scoped cleanly.</li>
+  <li><strong><code>Modification::PreventCombatDamage</code>:</strong>
+    <em>Normal:</em> <code>Fleeting Flight</code> applies a <code>+1/+1</code> counter, <code>Flying</code>, and <code>Modification::PreventCombatDamage</code> (<code>EndOfTurn</code>). Combat damage to the creature is prevented; noncombat damage (<code>Lightning Bolt</code>) still lands; the shield expires at cleanup.
+    <em>Interaction / counterexample:</em> Under <code>Twinflame Tyrant</code>, the creature’s controller receives <code>Decision::OrderReplacement</code> with both candidates (each with a distinct <code>ReplacementId</code>). Under <code>Witness Protection</code> (<code>LoseAllAbilities</code>), the spell-created prevention shield still applies (CR 615.1) because <code>collect_replacements</code> reads <code>effects_on(target)</code> independently of <code>view.abilities_lost</code>.</li>
 </ul>
 
-<h2>Batch 5c · archived review (resolved at <code>229eb493</code>)</h2>
-<table><tr><th>Caller interaction</th><th>Native representation</th><th>Fit</th></tr>
-<tr><td>Pay for one of Lantern’s two abilities. Sacrifice it immediately. Resolve the chosen ability after priority passes.</td><td>Each ActivatedAbilityDefinition owns its costs and effects. The THB fixture observes the source in the graveyard before resolution on both branches.</td><td><span class="yes">Yes</span></td></tr>
-<tr><td>Activate Arcanis for {2}{U}{U}. Return the original permanent if it is still there.</td><td>Resolved at <code>229eb493</code>: Arcanis now uses <code>ObjectSelector::ExactSource</code>. The Onslaught leave-and-return fork keeps a re-entered Arcanis on the battlefield.</td><td><span class="yes">Yes</span></td></tr></table>
+<h2>Outside this work (noted plainly, not part of MTG-421)</h2>
+<ul>
+  <li><strong><code>CardPredicate</code> inline size (<code>min_toughness: Option&lt;u8&gt;</code> asymmetry):</strong> <code>CardPredicate</code> (25 inline fields) sits by value inside <code>Effect</code> / <code>Decision</code> / <code>GameState</code>, which forced <code>min_toughness</code> to <code>Option&lt;u8&gt;</code> in Batch 5e to stay under the <code>GameState</code> size budget. Boxing <code>CardPredicate</code> on cold runtime variants or unifying P/T bounds is a broader engine refactor outside Foundations card authoring.</li>
+  <li><strong>Competing death-exile replacements:</strong> <code>ExileIfWouldDie</code> and <code>CounterKind::Finality</code> currently redirect in <code>normalize_proposal</code> before <code>collect_replacements</code>. That is sound for all 5g cards while any-origin graveyard replacements (<code>Dryad Militant</code>, <code>Darksteel Colossus</code>) remain deferred to the replacement-events track, which should promote death redirection into <code>collect_replacements</code> when multiple death replacements can compete.</li>
+</ul>
 
-<h2>Batch 5b · existing behavior</h2>
-<table><tr><th>Card instruction</th><th>Native owner</th><th>Fit</th></tr>
-<tr><td>Choose a mode and its target</td><td>Deadly Plot’s casting fixture plays both branches, including returning Hungry Ghoul tapped. (Mode action descriptions were blank in <code>action.rs</code>; fixed by the proposal above.)</td><td><span class="no">No</span> · blank mode labels on <code>PendingChoice::SpellMode</code></td></tr>
-<tr><td>Deal 3 damage to any target</td><td>Lightning Strike’s target offer and resolution check the opposing permanent’s current hexproof. The damage instruction applies to every applicable type on the chosen object.</td><td><span class="yes">Yes</span></td></tr>
-<tr><td>Deal 3 damage to each player</td><td><code>DealDamageToPlayer</code> builds one event batch from <code>PlayerSelector</code>. No selector includes every seat. Slagstorm stays pending.</td><td><span class="no">No</span> · deferred</td></tr></table>
-
-<h2>Earlier branch interactions (Slices 1–3 &amp; Batch 5a · existing)</h2>
-<p>Lightshell Duo’s surveil and private <code>LibraryKnowledge</code>, Arahbo + Helpful Hunter trigger ordering, Regal Caracal’s intrinsic vs. continuous lifelink, Prideful Parent + Anthem of Champions, Ajani’s Pridemate per-source lifelink batching, trample combat assignment, Drogskol Reaver’s between-step combat observation (<code>another_damage_step</code> and <code>first_strike_participant</code>), Twinflame Tyrant / Fog Bank / Gratuitous Violence / Authority of the Consuls / Diregraf Ghoul replacements, Dragon Fodder + Impact Tremors, and Azula’s copied permanent spell under Doubling Season all held their native alignment checks. Bucket C deferrals remain documented with concrete blockers: Curator of Destinies (two-pile handoff), Run Away Together (different-controller targeting relation), Drakuseth (cross-clause target distinctness and per-clause damage in one batch), Slagstorm (all-players simultaneous damage batch), Affectionate Indrik (source fights announced target), Dragon Mage (simultaneous two-player discard-hand before draw), and Joraga Invocation / Confiscate / quality hexproof / changeling / all-zone graveyard replacements. Gate still owns live Academy, LLM text, v11 tensor parity, closed-deck privacy, Command replay/stale rejection, and a playable planeswalker loyalty activation proof.</p>
+<h2>Archived reviews · resolved on branch <span class="tag existing">Existing</span></h2>
+<p class="muted"><strong>Batch 5d (<code>8098ca4c</code> → resolved in <code>1079f047</code> &amp; <code>1199f2f5</code>):</strong> Unified <code>ChooseMode</code> descriptions across <code>SpellMode</code>, <code>TriggerModes</code>, and <code>Decision::Modal</code>; deleted <code>ActivatedAbilityOnStack.attached</code> so <code>frame_attached</code> is the sole attachment authority; unified <code>TriggerSubject::Attached</code> with a <code>token_renames.rs</code> alias; moved single-card tutors onto <code>search_library</code> with hidden-zone-only <code>CardRevealed</code>; corrected Batch 5e notes for <code>Refute</code>, <code>Opt</code>, and <code>Uncharted Voyage</code>.<br>
+<strong>Slices 1–3 &amp; Batches 5a–5c:</strong> Lightshell Duo private <code>LibraryKnowledge</code>, Arahbo + Helpful Hunter trigger ordering, Regal Caracal intrinsic vs. granted lifelink, Ajani’s Pridemate per-source lifelink batching, trample/multi-blocker combat assignment, Drogskol Reaver between-step observation, Twinflame Tyrant / Fog Bank / Gratuitous Violence / Authority of the Consuls replacements, Dragon Fodder + Impact Tremors + Doubling Season, and Arcanis’s <code>ObjectSelector::ExactSource</code> all held alignment. Gate retains live Academy/LLM/v11 parity, corpus refresh, and the 10% Engine Budget proof.</p>
 
 <h2>Questions for review</h2>
+<p class="muted">Headless Graph pass: bold choices below are written into <code>scratch/plan.md</code> as reversible design choices made for review.</p>
 <ol>
-  <li>What qualifies a row for authoring? <strong>1a · Complete native interaction (selected).</strong> 1b · Empty planning dependency list.</li>
-  <li>What should a policy receive at combat priority? <strong>2a · The native damage pass and remembered participants (selected).</strong> 2b · Reconstruct timing from prior observations.</li>
-  <li>How should Fog Bank identify its combat damage? <strong>3a · Match this permanent at either endpoint (selected).</strong> 3b · Give each direction a separate replacement identity.</li>
-  <li>Where should damage read source control? <strong>4a · One native lookup for discovery and commitment (selected).</strong> 4b · Independent lookups at both stages.</li>
-  <li>Which seat determines whether Authority applies? <strong>5a · Prospective controller (selected).</strong> 5b · Card owner.</li>
-  <li>Which Doubling Season boundary does the completed fixture exercise? <strong>6a · Resolve a permanent-spell copy beside the original (selected).</strong> 6b · Add a playable loyalty activation first.</li>
-  <li>What establishes an evasion claim? <strong>7a · Compare legal blocker offers (selected).</strong> 7b · Inspect the printed keyword and final damage.</li>
-  <li>How should Slagstorm select recipients? <strong>8a · Select every seat within one damage batch (recommended).</strong> 8b · Sequence separate controller and opponent batches.</li>
-  <li>How should an author specify the object Arcanis returns? <strong>9a · Choose the exact source object (delivered at <code>229eb493</code>).</strong> 9b · Guard successor-aware movement with a battlefield predicate.</li>
-  <li>How should <code>Action::ChooseMode</code> render for spell modes and “you may” resolution choices? <strong>10a · One shared authority in <code>action.rs</code> using <code>effects_description</code> (with concise idioms for Decline/AddMana/Library placement) (selected for review).</strong> 10b · Expand the manual allowlist per card family.</li>
-  <li>What owns attachment identity for resolving activated abilities? <strong>11a · Delete <code>ActivatedAbilityOnStack.attached</code> and read <code>Permanent.attached_to</code> / <code>ObjectLki.attached_to</code> everywhere (selected for review).</strong> 11b · Keep the activation-time snapshot alongside <code>frame_attached</code>.</li>
-  <li>How should triggered abilities refer to the attached creature? <strong>12a · One <code>TriggerSubject::Attached</code> (aliased to <code>EnchantedCreature</code> in <code>token_renames.rs</code>), deriving Aura/Equipment wording from card subtype (selected for review).</strong> 12b · Keep separate <code>EnchantedCreature</code> and <code>EquippedCreature</code> variants and tokens.</li>
-  <li>Which engine path should single-card tutors into hand use? <strong>13a · Standard <code>Effect::search_library</code> + <code>return_to_hand(Selected)</code> (reserving <code>SearchDistinctNames</code> for multi-card distinct-name tutors) (selected for review).</strong> 13b · Keep using <code>SearchDistinctNames { count: 1 }</code> for single-card tutors.</li>
+  <li>How should <code>Campus Guide</code>’s revealed search-to-top coexist with <code>Cruel Tutor</code>’s unrevealed search-to-top? <strong>1a · Add <code>Effect::Reveal { what }</code> tracking <code>frame.revealed</code>, so <code>Move(Library → Library, Top)</code> always sets <code>known_library.own[0]</code> and also sets <code>public[0]</code> when revealed (selected for review).</strong> 1b · Add a <code>revealed: bool</code> flag to <code>Effect::Move</code> alongside <code>unrevealed: bool</code>.</li>
+  <li>How should <code>Uncharted Voyage</code> align with <code>Wan Shi Tong</code>’s library placement choice? <strong>2a · Give <code>Move { to: Library, library_end }</code> concise <code>On top</code> / <code>On the bottom</code> modal labels in <code>action.rs</code> and fix bottom placement so it preserves known top cards, keeping <code>PlaceTargetInLibrary</code> for second-from-top (selected for review).</strong> 2b · Delete <code>PlaceTargetInLibrary</code> / <code>EventBinding::PlaceInLibrary</code> and retire their runtime tokens in <code>token_renames.rs</code>.</li>
+  <li>Where should <code>Witness Protection</code>’s name replacement live? <strong>3a · Add <code>Modification::SetName(String)</code> to <code>StaticAbility::Continuous</code> (and scan it in <code>record_vocabulary::set_names</code>), keeping <code>AttachedSetsCharacteristics</code> for TLA compatibility (selected for review).</strong> 3b · Add a <code>colors</code> field to <code>SetCharacteristics</code> and keep name replacement outside <code>Modification</code>.</li>
+  <li>How should <code>Twinblade Paladin</code>’s life-threshold static condition invalidate cached layer views? <strong>4a · Add <code>revisions.life</code> / <code>reads_life</code> matching <code>reads_mana</code> and <code>reads_tapped</code>, bumped in <code>TrackedState::life_mut</code> (selected for review).</strong> 4b · Bump <code>revisions.characteristics</code> unconditionally on every life change.</li>
+  <li>How should <code>Fleeting Flight</code>’s turn-limited combat-damage prevention enter the replacement pipeline? <strong>5a · Add <code>Modification::PreventCombatDamage</code> (<code>EndOfTurn</code>) scanned in <code>collect_replacements(Damage)</code> via <code>effects_on(target)</code> so it orders in <code>Decision::OrderReplacement</code> and survives <code>LoseAllAbilities</code> (selected for review).</strong> 5b · Add a temporary <code>GrantReplacement</code> mechanism that depends on the permanent’s abilities.</li>
 </ol>
 </main>
 </html>
