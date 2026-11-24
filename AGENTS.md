@@ -104,6 +104,9 @@ checkpoints or experiment evidence.
   `lf pr publish` stages tracked edits, including edits left after a path-scoped
   commit. Temporarily preserve unrelated edits outside the checkout and restore
   them after publication.
+- In a Loopflow Graph step, commit your own edits, scratch notes included,
+  before finishing. A clean tree skips the separate commit-message session
+  Loopflow otherwise starts for what a step leaves behind.
 
 ### Experiments
 
