@@ -244,13 +244,9 @@ impl<'a> CanonicalMatchState<'a> {
                 copy: object.copy().cloned(),
                 object_id: object.id,
                 definition_id: object.definition_id,
-                backing_definition_id: object
-                    .form
-                    .as_deref()
-                    .and_then(|form| form.backing())
-                    .map(|(id, _)| *id),
+                backing_definition_id: object.backing().map(|(id, _)| *id),
                 front_definition_id: object
-                    .transforming_faces()
+                    .form_faces()
                     .filter(|faces| faces.back_up)
                     .map(|faces| faces.front.0),
                 owner: object.owner,

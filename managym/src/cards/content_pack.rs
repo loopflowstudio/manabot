@@ -342,8 +342,8 @@ impl ContentPack {
     /// face-down permanent have none. Physical backing decides, never the
     /// catalog row of the face it shows.
     pub fn transforming_faces(&self, object: &Object) -> Option<TransformingFaces> {
-        match object.form.as_deref() {
-            Some(form) => form.faces().cloned(),
+        match object.form {
+            Some(_) => object.form_faces().cloned(),
             None => {
                 let (back, row) = self.back_face_row(object.definition_id)?;
                 Some(TransformingFaces {
@@ -385,7 +385,7 @@ impl ContentPack {
     /// when the catalog cannot reconstruct its kind, face, or copy exceptions.
     pub(crate) fn retain_copiable_values(&self, object: &Object) -> Option<Arc<CopiableValues>> {
         if object.copy().is_none()
-            && object.transforming_faces().is_none()
+            && object.form_faces().is_none()
             && self.definition(object.definition_id).is_some_and(|row| {
                 row.is_token != object.is_card() && &row.printed == object.copiable_face()
             })

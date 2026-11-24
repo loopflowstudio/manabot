@@ -639,24 +639,6 @@ pub struct BattlefieldForm {
     copy: Option<crate::effect::CopyEffect>,
 }
 
-impl BattlefieldForm {
-    pub fn backing(&self) -> Option<&Face> {
-        self.backing.as_ref()
-    }
-
-    pub fn faces(&self) -> Option<&TransformingFaces> {
-        self.faces.as_ref()
-    }
-
-    pub fn copy(&self) -> Option<&crate::effect::CopyEffect> {
-        self.copy.as_ref()
-    }
-
-    pub fn is_face_down(&self) -> bool {
-        self.face_down
-    }
-}
-
 /// One object in a game: a card, a token or a copy of a spell, told apart
 /// by [`Object::kind`]. Its shown characteristics are read through `Deref`;
 /// zone state (a `Permanent`, a stack entry) lives beside it.
@@ -762,20 +744,24 @@ impl Object {
 
     /// The copy effect that made this object a copy (CR 707.2).
     pub fn copy(&self) -> Option<&crate::effect::CopyEffect> {
-        self.form.as_deref().and_then(BattlefieldForm::copy)
+        self.form.as_deref()?.copy.as_ref()
+    }
+
+    /// The printing behind a face-down, melded or entry-copy form.
+    pub fn backing(&self) -> Option<&Face> {
+        self.form.as_deref()?.backing.as_ref()
     }
 
     /// Raw faces held by the form: a transformed card or a transforming token.
-    /// A double-faced card on its front face reads its faces from the catalog.
-    pub fn transforming_faces(&self) -> Option<&TransformingFaces> {
-        self.form.as_deref().and_then(BattlefieldForm::faces)
+    /// A double-faced card on its front face has none here; whether an object
+    /// can transform is `ContentPack::transforming_faces`.
+    pub fn form_faces(&self) -> Option<&TransformingFaces> {
+        self.form.as_deref()?.faces.as_ref()
     }
 
     /// Face down (CR 708.2).
     pub fn is_face_down(&self) -> bool {
-        self.form
-            .as_deref()
-            .is_some_and(BattlefieldForm::is_face_down)
+        self.form.as_deref().is_some_and(|form| form.face_down)
     }
 
     /// The base that a zone move restores, including fixture edits. It never
@@ -798,11 +784,8 @@ impl Object {
     }
 
     pub fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
-        let form = self.form.as_deref();
-        form.and_then(|form| form.backing.as_ref())
-            .or(form
-                .and_then(|form| form.faces.as_ref())
-                .map(|faces| &faces.front))
+        self.backing()
+            .or(self.form_faces().map(|faces| &faces.front))
             .map_or((self.definition_id, &self.definition), |(id, row)| {
                 (*id, row)
             })
@@ -874,7 +857,7 @@ impl Object {
     /// Its mana cost for mana value: a transformed permanent's is its front
     /// face's (CR 712.8e).
     pub fn mana_value_cost(&self) -> Option<&ManaCost> {
-        match self.transforming_faces() {
+        match self.form_faces() {
             Some(faces) if faces.back_up => faces.front.1.mana_cost.as_ref(),
             _ => self.mana_cost.as_ref(),
         }
@@ -882,7 +865,7 @@ impl Object {
 
     /// Whether its back face is up (CR 712.8).
     pub fn is_transformed(&self) -> bool {
-        self.transforming_faces().is_some_and(|faces| faces.back_up)
+        self.form_faces().is_some_and(|faces| faces.back_up)
     }
 
     /// Show the up face of `faces`, applying the copy effect's exceptions
