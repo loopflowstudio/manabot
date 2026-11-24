@@ -500,7 +500,18 @@ pub fn encode(
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     #[cfg(feature = "benchmark")]
     let allocation_timer = crate::benchmark_search::Timer::new("encoding/native_allocation");
-    let mut encoded = EncodedObservation {
+    let mut encoded = allocate(config);
+    #[cfg(feature = "benchmark")]
+    drop(allocation_timer);
+    #[cfg(feature = "benchmark")]
+    let _encode_timer = crate::benchmark_search::Timer::new("encoding/native_encode");
+    encode_into(obs, config, encoded.buffers_mut())?;
+    Ok(encoded)
+}
+
+/// A reusable one-observation workspace shared by dense and CSR writers.
+pub fn allocate(config: &ObservationEncoderConfig) -> EncodedObservation {
+    EncodedObservation {
         relations: vec![0.0; config.relations_len()],
         effects: vec![0.0; config.effects_len()],
         effect_details: vec![0.0; config.effect_details_len()],
@@ -550,14 +561,34 @@ pub fn encode(
         stack_valid: vec![0.0; config.stack_rows()],
         actions_valid: vec![0.0; config.max_actions],
         events_valid: vec![0.0; config.max_events],
-    };
+    }
+}
 
-    #[cfg(feature = "benchmark")]
-    drop(allocation_timer);
-    #[cfg(feature = "benchmark")]
-    let _encode_timer = crate::benchmark_search::Timer::new("encoding/native_encode");
-    encode_into(obs, config, encoded.buffers_mut())?;
-    Ok(encoded)
+/// Exact numbers of rows written, with seat-local counts for two-seat tables.
+#[derive(Default, Debug)]
+pub struct ObservationCounts {
+    pub cards: [usize; 2],
+    pub permanents: [usize; 2],
+    pub known_hand: [usize; 2],
+    pub known_library: [usize; 2],
+    pub decklists: [usize; 2],
+    pub stack: usize,
+    pub actions: usize,
+    pub events: usize,
+    pub facts: usize,
+    pub relations: usize,
+    pub effects: usize,
+    pub effect_details: usize,
+    pub effect_members: usize,
+    pub decision_memory: [usize; 4],
+}
+
+pub fn encode_counted(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    out: EncodedObservationMut<'_>,
+) -> Result<ObservationCounts, ObservationEncodeError> {
+    encode_into_memory(obs, config, out, None)
 }
 
 pub fn encode_into(
@@ -565,7 +596,7 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
-    encode_into_memory(obs, config, out, None)
+    encode_counted(obs, config, out).map(|_| ())
 }
 
 pub fn encode_into_incremental(
@@ -578,7 +609,7 @@ pub fn encode_into_incremental(
     if result.is_err() {
         *cursor = Default::default();
     }
-    result
+    result.map(|_| ())
 }
 
 fn encode_into_memory(
@@ -586,7 +617,7 @@ fn encode_into_memory(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
     cursor: Option<&mut super::decision_memory::MemoryEncoding>,
-) -> Result<(), ObservationEncodeError> {
+) -> Result<ObservationCounts, ObservationEncodeError> {
     // Deprecated v9/v10 rows read the card lists they were trained on.
     let legacy;
     let obs = match config.layout {
@@ -688,6 +719,7 @@ fn encode_into_memory(
         out.decision_members.len(),
         config.max_decision_members * super::decision_memory::MEMBER_DIM,
     )?;
+    let mut counts = ObservationCounts::default();
     let memory = if config.max_decision_records != 0
         || config.max_decision_reference_details != 0
         || config.max_decision_references != 0
@@ -740,6 +772,12 @@ fn encode_into_memory(
                 });
             }
         }
+        counts.decision_memory = [
+            starts[0] + memory.records.len(),
+            starts[1] + memory.details.len(),
+            starts[2] + memory.references.len(),
+            starts[3] + memory.members.len(),
+        ];
         Some((starts, memory))
     } else {
         None
@@ -959,6 +997,8 @@ fn encode_into_memory(
     .into_iter()
     .enumerate()
     {
+        counts.known_hand[seat] = player.known_hand.len();
+        counts.known_library[seat] = player.known_library.len();
         if player.known_hand.len() > config.max_cards_per_player {
             return Err(ObservationEncodeError::Capacity {
                 field: "known hand",
@@ -999,6 +1039,7 @@ fn encode_into_memory(
     }
     for (seat, player) in [&obs.agent, &obs.opponent].into_iter().enumerate() {
         let rows = decklist_rows(player);
+        counts.decklists[seat] = rows.len();
         if rows.len() > config.max_cards_per_player {
             return Err(ObservationEncodeError::Capacity {
                 field: "decklist definitions",
@@ -1147,8 +1188,8 @@ fn encode_into_memory(
     {
         row[stack::SOURCE] = link(object.source_permanent_id);
     }
-    encode_facts(obs, &object_to_index, &ranks, out.facts)?;
-    super::shared_effects::encode(
+    counts.facts = encode_facts(obs, &object_to_index, &ranks, out.facts)?;
+    [counts.effects, counts.effect_details, counts.effect_members] = super::shared_effects::encode(
         obs,
         &object_to_index,
         &ranks,
@@ -1157,7 +1198,7 @@ fn encode_into_memory(
         out.effect_members,
     )?;
 
-    super::continuation::encode_into(
+    counts.relations = super::continuation::encode_into(
         &obs.continuation,
         obs.agent.player_index as usize,
         &object_to_index,
@@ -1183,13 +1224,14 @@ fn encode_into_memory(
                 super::legacy_input::history(obs, config.max_events, config.max_cards_per_player)
             }
         };
+        counts.events = rows.len();
         for (index, row) in rows.iter().enumerate() {
             out.events[index * config.event_dim()..(index + 1) * config.event_dim()]
                 .copy_from_slice(row);
             out.events_valid[index] = 1.0;
         }
     } else {
-        encode_events(
+        counts.events = encode_events(
             &obs.recent_events,
             config.max_events,
             out.events,
@@ -1197,7 +1239,14 @@ fn encode_into_memory(
         );
     }
 
-    Ok(())
+    counts.cards = [
+        obs.agent_cards.len() + obs.agent_sideboard.len(),
+        obs.opponent_cards.len(),
+    ];
+    counts.permanents = [obs.agent_permanents.len(), obs.opponent_permanents.len()];
+    counts.stack = obs.stack_objects.len();
+    counts.actions = obs.action_space.actions.len().min(config.max_actions);
+    Ok(counts)
 }
 
 // ---------------------------------------------------------------------------
@@ -2039,7 +2088,7 @@ fn encode_facts(
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
-) -> Result<(), ObservationEncodeError> {
+) -> Result<usize, ObservationEncodeError> {
     let facts = facts(obs);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
@@ -2065,7 +2114,7 @@ fn encode_facts(
         }
         row[fact::VALID] = 1.0;
     }
-    Ok(())
+    Ok(facts.len())
 }
 
 fn encode_actions(
@@ -2133,7 +2182,12 @@ fn encode_actions(
     }
 }
 
-fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_valid: &mut [f32]) {
+fn encode_events(
+    events: &[EventData],
+    max_events: usize,
+    out: &mut [f32],
+    out_valid: &mut [f32],
+) -> usize {
     // Presentation-only domain facts are additive to `recent_events`, but the
     // fixed policy ABI must remain byte-for-byte compatible.
     let learning_events = events
@@ -2141,6 +2195,7 @@ fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_v
         .filter(|event| event.event_type <= 6)
         .collect::<Vec<_>>();
     let start_index = learning_events.len().saturating_sub(max_events);
+    let count = learning_events.len() - start_index;
     for (event_index, event) in learning_events.into_iter().skip(start_index).enumerate() {
         let row_start = event_index * EVENT_DIM;
         let row = &mut out[row_start..row_start + EVENT_DIM];
@@ -2153,6 +2208,7 @@ fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_v
         row[event::CONTROLLER] = event.controller_id as f32;
         out_valid[event_index] = 1.0;
     }
+    count
 }
 
 fn phase_index(phase: PhaseKind) -> usize {
@@ -2234,6 +2290,32 @@ mod tests {
                 Err(ObservationEncodeError::Capacity { .. })
             ));
         }
+    }
+
+    #[test]
+    fn counts_describe_the_written_prefix_even_when_its_values_are_zero() {
+        let mut obs = sample_observation();
+        obs.agent_permanents[0].used_abilities = (0..7).collect();
+        let config = ObservationEncoderConfig {
+            max_actions: 2,
+            action_overflow: super::ActionOverflow::FirstLegal,
+            ..Default::default()
+        };
+        let mut row = super::allocate(&config);
+        let counts = super::encode_counted(&obs, &config, row.buffers_mut()).unwrap();
+        assert_eq!(counts.cards, [1, 1]);
+        assert!(row.card_turn_state.iter().all(|v| *v == 0.0));
+        assert_eq!(counts.permanents, [1, 1]);
+        assert_eq!(counts.actions, 2);
+        assert_eq!(counts.facts, 7);
+        assert_eq!(counts.stack, 0);
+        assert_eq!(
+            counts.events,
+            obs.recent_events
+                .iter()
+                .filter(|e| e.event_type <= 6)
+                .count()
+        );
     }
 
     #[test]

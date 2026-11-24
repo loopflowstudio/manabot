@@ -663,6 +663,20 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
+For a v11 acting-view batch, call
+`encode_observation_batch(envs, layout, action_overflow="error")`.
+`VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
+returns the batch from the step together with per-stream rewards, terminated
+flags and truncated flags. It includes the events from that step. Each
+`ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
+each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+strings for native-endian int32 row offsets and the layout's value dtype.
+One span belongs to each batch item, or to each (item, seat) if `seat_axis`
+is true. Subtract consecutive offsets for live counts, including all-zero
+live rows. Companion validity masks derive from those counts. Object joins
+retain the layout's coordinates. The default overflow policy rejects excess
+actions. With `"first-legal"`, `action_counts` gives the retained prefix.
+
 For a batched allocation, `layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape

@@ -14,3 +14,8 @@
 - Every timing was taken with machine load at 140–200 on 16 cores (other
   checkouts compiling). Only CPU-time shares, counts, bytes and exactness
   are trusted. End-to-end wall and RSS numbers are deferred (plan.md).
+
+- Slice 2 uses live engine frontiers and emitted vector steps as the producers
+  of certified CSR. A writable vector buffer or a Python observation restored
+  from JSON cannot establish that provenance. Keep the public extent scanner
+  for external dictionaries; the next retention slice owns the collector switch.

@@ -44,6 +44,7 @@ from managym.enums import (  # noqa: F401
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
+type PolicyObservation = ObservationBuffers | managym.ObservationBatch
 
 # Release that removes `ObservationSpace.encode`, `space.encoder` and
 # `ObservationEncoder`.

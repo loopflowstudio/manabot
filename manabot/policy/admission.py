@@ -65,10 +65,12 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.decision_memory import (
     admit_memory,
+    memory_vocabulary,
     retained_memory,
     validate_memory_vocabulary,
     validate_retained_memory,
 )
+from manabot.policy.native_rows import NativeRows, native_rows
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     OBJECT_KEYS,
@@ -79,6 +81,7 @@ from manabot.policy.prepare import (
     record_word,
 )
 from manabot.policy.readings import PROGRAM_KINDS, Readings
+import managym
 
 # Native columns these checks read, by name.
 _FACT_ORDINAL = column("facts", "value_2")  # a program row's ordinal
@@ -289,6 +292,71 @@ def admit(
     return measured
 
 
+def admit_native(
+    batch: managym.ObservationBatch, spec: Spec, *, bucketed: bool
+) -> NativeRows:
+    """The encoder owns row boundaries and native joins. Admit model-dependent lookups."""
+    rows = native_rows(
+        batch, spec.space, bucketed=bucketed, objects=object_trimming(spec.model)
+    )
+    data = {key: table.values for key, table in rows.tables.items()}
+    if spec.model.belief_count_buckets:
+        beliefs(data, spec.model)
+    lookup = spec.tables.definition_rows
+    size = spec.definition_count if lookup is None else len(lookup)
+    ids = [
+        data["semantic_cards"],
+        data["agent_permanents"][:, PERMANENT_DEFINITION_INDEX],
+        data["opponent_permanents"][:, PERMANENT_DEFINITION_INDEX],
+        data["stack"][:, STACK_DEFINITION_INDEX],
+        data["relations"][:, _RELATION_DEFINITIONS],
+    ]
+    candidates = data["name_candidates"]
+    names(candidates, spec.tables.name_definitions)
+    if lookup is not None:
+        ids.extend(
+            data[key][:, column(key, "definition")]
+            for key in ("known_hand", "known_library", "decklists", "name_candidates")
+        )
+    if spec.model.recent_events:
+        ids.append(data["events"][:, _EVENT_SUBJECTS])
+    if "decision_records" in data:
+        refs = data["decision_references"]
+        details = data["decision_reference_details"]
+        ids.append(refs[:, column("decision_references", "definition")])
+        definition = (details[:, _DETAIL_FIELD] == 0) & (
+            details[:, _DETAIL_TOKEN_KIND] == 7
+        )
+        ids.append(record_word(details, _DETAIL_VALUE)[definition] + 1)
+        headers = data["decision_records"]
+        if (
+            not spec.space.config.decision_memory_include_own
+            and (headers[:, column("decision_records", "chooser_role")] == 1).any()
+        ):
+            raise ValueError("own-seat decision memory is disabled")
+        memory_vocabulary(headers, details, refs, spec.tables)
+    for values in ids:
+        definition_ids(values, size, lookup)
+    if spec.model.catalog_records():
+        assert lookup is not None
+        catalog = Catalog(
+            lookup, spec.tables.record_name_keys, spec.tables.record_token_keys
+        )
+        live = data["facts"]
+        kinds = live[:, FACT_KIND_INDEX]
+        fact_vocabulary(live, kinds, np.isin(kinds, PROGRAM_KINDS), catalog)
+        effects = data["effects"]
+        details = data["effect_details"]
+        effect_vocabulary(
+            effects[:, EFFECT_MODIFICATION].astype(np.int64),
+            effects[:, EFFECT_SOURCE_DEFINITION],
+            details[:, DETAIL_KIND].astype(np.int64),
+            details[:, DETAIL_VALUE].astype(np.int64),
+            catalog,
+        )
+    return rows
+
+
 def check_memory_contract(obs: ObservationBuffers, spec: Spec) -> None:
     """Check capture, chooser roles and capacities on the original memory export."""
     retained = bool(spec.space.config.max_decision_records)
@@ -409,30 +477,7 @@ def facts(
         raise ValueError("invalid fact kind")
     program = np.isin(kinds, PROGRAM_KINDS)
     if catalog is not None:
-        ident, detail = (
-            record_word(rows, FACT_ID_INDEX),
-            record_word(rows, FACT_DETAIL_INDEX),
-        )
-        named = (kinds > 0) & ~np.isin(kinds, ORDINAL_ID_KINDS)
-        restriction = kinds == FACT_COMBAT_RESTRICTION
-        named_detail = (
-            np.isin(kinds, NAMED_DETAIL_KINDS) & (detail != 0)
-        ) | restriction
-        if (~(program | named_detail) & (detail != 0)).any():
-            raise ValueError("fact kind carries no detail")
-        spaces = RecordNamespace
-        catalog.require_names(
-            np.where(kinds == FACT_SET_NAME, spaces.NAME, spaces.TOKEN)[named],
-            ident[named],
-        )
-        catalog.require_names(
-            np.where(restriction, spaces.RESTRICTION, spaces.TOKEN)[named_detail],
-            detail[named_detail],
-        )
-        catalog.require_tokens(rows[..., FACT_VALUE_INDEX][program], detail[program])
-        definition_ids(
-            rows[..., FACT_SOURCE_INDEX], len(catalog.definitions), catalog.definitions
-        )
+        fact_vocabulary(rows, kinds, program, catalog)
     if not program.any():
         return
     positions, selected = np.argwhere(program), rows[program]
@@ -453,6 +498,33 @@ def facts(
     )
     if not np.array_equal(owners, np.repeat(owners[starts], lengths, axis=0)):
         raise ValueError("fact program changes owner or provenance")
+
+
+def fact_vocabulary(
+    rows: np.ndarray, kinds: np.ndarray, program: np.ndarray, catalog: Catalog
+) -> None:
+    ident, detail = (
+        record_word(rows, FACT_ID_INDEX),
+        record_word(rows, FACT_DETAIL_INDEX),
+    )
+    named = (kinds > 0) & ~np.isin(kinds, ORDINAL_ID_KINDS)
+    restriction = kinds == FACT_COMBAT_RESTRICTION
+    named_detail = (np.isin(kinds, NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
+    if (~(program | named_detail) & (detail != 0)).any():
+        raise ValueError("fact kind carries no detail")
+    spaces = RecordNamespace
+    catalog.require_names(
+        np.where(kinds == FACT_SET_NAME, spaces.NAME, spaces.TOKEN)[named],
+        ident[named],
+    )
+    catalog.require_names(
+        np.where(restriction, spaces.RESTRICTION, spaces.TOKEN)[named_detail],
+        detail[named_detail],
+    )
+    catalog.require_tokens(rows[..., FACT_VALUE_INDEX][program], detail[program])
+    definition_ids(
+        rows[..., FACT_SOURCE_INDEX], len(catalog.definitions), catalog.definitions
+    )
 
 
 def _indexes(values: np.ndarray, maximum: int, name: str) -> np.ndarray:
@@ -531,15 +603,23 @@ def shared_effects(
     if len(np.unique(global_orders)) != len(global_orders):
         raise ValueError("duplicate effect membership order")
     if catalog is not None:
-        catalog.require_names(
-            RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
-        )
-        definition_ids(source, len(catalog.definitions), catalog.definitions)
-        unsigned = (ids[:, 0] << 16) | ids[:, 1]
-        token_kinds = PROGRAM_TOKEN_KIND[kinds]
-        program = token_kinds != 0
-        catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
-        catalog.require_tokens(token_kinds[program], unsigned[program])
+        effect_vocabulary(halves, source, kinds, ids, catalog)
+
+
+def effect_vocabulary(
+    halves: np.ndarray,
+    source: np.ndarray,
+    kinds: np.ndarray,
+    ids: np.ndarray,
+    catalog: Catalog,
+) -> None:
+    catalog.require_names(RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1])
+    definition_ids(source, len(catalog.definitions), catalog.definitions)
+    unsigned = (ids[:, 0] << 16) | ids[:, 1]
+    token_kinds = PROGRAM_TOKEN_KIND[kinds]
+    program = token_kinds != 0
+    catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
+    catalog.require_tokens(token_kinds[program], unsigned[program])
 
 
 def relations(

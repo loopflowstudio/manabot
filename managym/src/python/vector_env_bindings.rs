@@ -205,6 +205,38 @@ impl PyVectorEnv {
             .collect())
     }
 
+    /// Advance all streams and return the exact emitted observations (including
+    /// step events), rewards, termination and truncation in matching row order.
+    #[pyo3(signature = (actions, layout, action_overflow="error"))]
+    fn step_observation_batch(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<(
+        super::observation_batch::ObservationBatch,
+        Vec<f64>,
+        Vec<bool>,
+        Vec<bool>,
+    )> {
+        let config = super::observation_batch::config(&layout.borrow(py), action_overflow)?;
+        let results = py
+            .allow_threads(|| self.inner.step(&actions))
+            .map_err(map_agent_err)?;
+        let rewards = results.iter().map(|row| row.reward).collect();
+        let terminated = results.iter().map(|row| row.terminated).collect();
+        let truncated = results.iter().map(|row| row.truncated).collect();
+        self.last_info = results.iter().map(|row| row.info.clone()).collect();
+        let batch = super::observation_batch::batch(
+            py,
+            layout,
+            config,
+            results.into_iter().map(|row| Ok(row.obs)),
+        )?;
+        Ok((batch, rewards, terminated, truncated))
+    }
+
     #[pyo3(signature = (buffers, action_overflow="error", *, layout=None))]
     fn set_buffers(
         &mut self,
@@ -924,6 +956,7 @@ impl PyRolloutPool {
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encode_observations_into, m)?)?;
+    super::observation_batch::register(m)?;
     m.add_class::<PyVectorEnv>()?;
     m.add_class::<PyRolloutPool>()
 }

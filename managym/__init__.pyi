@@ -494,6 +494,18 @@ class RolloutPool:
     def finish_random(self) -> int: ...
     def scores(self) -> tuple[list[float], int, int]: ...
 
+class ObservationBatch:
+    """Immutable v11 values and native-endian int32 offsets, grouped by observation."""
+    @property
+    def layout(self) -> ObservationLayout: ...
+    @property
+    def batch_size(self) -> int: ...
+    @property
+    def action_counts(self) -> list[int]: ...
+    def tables(self) -> dict[str, tuple[bool, bytes, bytes]]:
+        """Seat grouping, offsets and live values for each table. Masks derive from spans."""
+        ...
+
 class VectorEnv:
     def enable_statistics(self) -> None: ...
     def statistics(self) -> list[GameStatistics | None]: ...
@@ -520,6 +532,12 @@ class VectorEnv:
     def step(
         self, actions: List[int]
     ) -> List[Tuple[Observation, float, bool, bool, Dict[str, Any]]]: ...
+    def step_observation_batch(
+        self,
+        actions: Sequence[int],
+        layout: ObservationLayout,
+        action_overflow: str = "error",
+    ) -> tuple[ObservationBatch, list[float], list[bool], list[bool]]: ...
     def set_buffers(
         self,
         buffers: Dict[str, np.ndarray],
@@ -1306,6 +1324,9 @@ def encode_observation_into(
     """
     ...
 
+def encode_observation_batch(
+    envs: Sequence[Env], layout: ObservationLayout, action_overflow: str = "error"
+) -> ObservationBatch: ...
 def encode_observations_into(
     envs: Sequence[Env],
     layout: ObservationLayout,

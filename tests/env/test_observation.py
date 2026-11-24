@@ -402,3 +402,60 @@ class TestObservationSpace:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_native_batch_freezes_live_rows_and_retains_first_legal(
+    player_configs: list[managym.PlayerConfig],
+) -> None:
+    env = managym.Env(seed=17)
+    env.reset(player_configs)
+    space = ObservationSpace(ObservationConfig(max_actions=1))
+    with pytest.raises(managym.ObservationCapacity):
+        managym.encode_observation_batch([env], space.layout)
+    batch = managym.encode_observation_batch([env, env], space.layout, "first-legal")
+    assert batch.action_counts == [1, 1]
+    tables = batch.tables()
+    seat_axis, offsets, data = tables["actions"]
+    assert not seat_axis
+    np.testing.assert_array_equal(np.frombuffer(offsets, np.int32), [0, 1, 2])
+    values = np.frombuffer(data, np.float32)
+    assert values.size == 2 * space.shapes["actions"][-1]
+    for source in (values, np.frombuffer(offsets, np.int32)):
+        with pytest.raises(ValueError):
+            source.setflags(write=True)
+    tables.clear()
+    env.step(0)
+    assert batch.tables()["actions"] == (False, offsets, data)
+    with pytest.raises(TypeError):
+        managym.ObservationBatch()
+
+
+def test_vector_step_batch_keeps_outcomes_and_emitted_events(
+    player_configs: list[managym.PlayerConfig],
+) -> None:
+    space = ObservationSpace()
+    dense, packed = (managym.VectorEnv(2, seed=19) for _ in range(2))
+    for env in (dense, packed):
+        env.reset_all(player_configs)
+    for actions in ([0, 1], [0, 0]):
+        expected = dense.step(actions)
+        batch, rewards, terminated, truncated = packed.step_observation_batch(
+            actions, space.layout
+        )
+        for i, (obs, reward, terminal, limit, _) in enumerate(expected):
+            assert (rewards[i], terminated[i], truncated[i]) == (
+                reward,
+                terminal,
+                limit,
+            )
+            encoded = encode_observation(space, obs)
+            table = batch.tables()["events"]
+            offsets = np.frombuffer(table[1], np.int32)
+            values = np.frombuffer(table[2], np.float32).reshape(
+                -1, space.shapes["events"][-1]
+            )
+            np.testing.assert_array_equal(
+                values[offsets[i] : offsets[i + 1]],
+                encoded["events"][encoded["events_valid"] == 1],
+            )
+            assert batch.action_counts[i] == int(encoded["actions_valid"].sum())

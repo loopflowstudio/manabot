@@ -137,7 +137,7 @@ pub fn encode(
     headers: &mut [f32],
     details: &mut [f32],
     members: &mut [f32],
-) -> Result<(), super::observation_encoder::ObservationEncodeError> {
+) -> Result<[usize; 3], super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::{split_id, ObservationEncodeError as Error};
     use crate::cards::tokens::name_value;
 
@@ -258,7 +258,7 @@ pub fn encode(
         row[effect::MEMBER_COUNT] = m as f32 - row[effect::MEMBER_OFFSET];
         row[effect::VALID] = 1.0;
     }
-    Ok(())
+    Ok([records.len(), d, m])
 }
 
 /// The header duration column and the copy-exception fact's duration: the record's

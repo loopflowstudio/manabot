@@ -180,7 +180,10 @@ checkpoints or experiment evidence.
 
 For dense observation dictionaries, `historical_mean` includes masked
 object slots. Preserve their supplied numeric features when skipping zero
-padding. Relation features use the relation validity column.
+padding. Relation features use the relation validity column. V11 native
+`ObservationBatch` offsets certify live rows and native joins. Keep model layout
+and vocabulary admission on that path. Read-only NumPy dictionaries get full
+admission because their origin and writable aliases are unknown.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic

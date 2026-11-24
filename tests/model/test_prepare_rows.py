@@ -24,7 +24,7 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy.admission import Spec, check
+from manabot.policy.admission import Spec, admit_native, check
 from manabot.policy.buckets import bucket_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
 from manabot.policy.readings import fresh_readings, legacy_readings, read_numeric
@@ -509,3 +509,52 @@ def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
             strict=True,
         ):
             torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
+
+
+@pytest.mark.parametrize("bucketed", [False, True])
+def test_native_batch_preserves_prepared_rows_and_full_external_admission(
+    bucketed: bool,
+) -> None:
+    space = ObservationSpace()
+    env = shared_effect_root(2)
+    branch = env.clone_env()
+    branch.step(0)
+    engines = [branch, env, branch]
+    batch = managym.encode_observation_batch(engines, space.layout)
+    dense = space.allocate(len(engines))
+    counts = managym.encode_observations_into(
+        engines, space.layout, dense, len(engines)
+    )
+    assert batch.action_counts == counts
+    policy = ActorCritic(
+        space,
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),
+        bucketed_shapes=bucketed,
+        live_tokens=True,
+    )
+    for inference in (False, True):
+        expected = policy.prepare(dense, inference=inference)
+        actual = policy.prepare(batch, inference=inference)
+        np.testing.assert_equal(asdict(actual), asdict(expected))
+    with pytest.raises(ValueError, match="layout differs"):
+        other = ActorCritic(
+            ObservationSpace(space.config.model_copy(update={"max_actions": 3})),
+            policy.config,
+        )
+        other.check_observation(batch)
+    spec = policy._admission_spec()
+    assert spec.tables.definition_rows is not None
+    lookup = spec.tables.definition_rows.copy()
+    # The native definition fits the runtime catalog, but this checkpoint cannot read it.
+    used = dense["agent_permanents"][..., PERMANENT_DEFINITION_INDEX]
+    lookup[int(used[used > 0][0])] = -1
+    with pytest.raises(ValueError, match="unadmitted semantic definition"):
+        admit_native(
+            batch,
+            replace(spec, tables=replace(spec.tables, definition_rows=lookup)),
+            bucketed=bucketed,
+        )
+    dense["actions_valid"][0, 0] = 0.5
+    dense["actions_valid"].flags.writeable = False
+    with pytest.raises(ValueError, match="invalid_action_mask"):
+        policy.prepare(dense)

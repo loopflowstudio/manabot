@@ -25,6 +25,7 @@ from managym.decision_memory import (
 if TYPE_CHECKING:
     from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
     from manabot.env.observation import ObservationBuffers
+    from manabot.policy.native_rows import NativeRows
     from manabot.policy.prepare import Packed, Tables
 
 
@@ -461,41 +462,47 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
 
 def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
     """Validate only owned values, including for a control without learned heads."""
-    from manabot.policy.prepare import record_word
-
     if _RECORDS not in obs:
         return
-    programs = definition_programs()
     for batch in range(obs[_RECORDS].shape[0]):
         count, detail_count, reference_count, _ = memory_lengths(obs, batch)
-        references = obs[_REFERENCES][batch, :reference_count]
-        for definition in references[
-            references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
-        ].astype(np.int64):
-            if (
-                not 0 < definition <= len(programs)
-                or not programs[int(definition) - 1].eligible
-            ):
-                raise ValueError("ineligible decision-memory definition shortcut")
-        headers = obs[_RECORDS][batch, :count]
-        details = obs[_DETAILS][batch, :detail_count]
-        if not np.isin(
-            record_word(headers, _RECORD_KIND), decision_name_values()
-        ).all():
-            raise ValueError("unadmitted decision-memory kind")
-        chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
-        if not np.isin(
-            record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()
-        ).all():
-            raise ValueError("unadmitted decision-memory choice")
-        program = details[:, _DETAIL_FIELD] == 0
-        tables.tokens(
-            details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
-            record_word(details[program, _DETAIL_VALUE], 0),
+        memory_vocabulary(
+            obs[_RECORDS][batch, :count],
+            obs[_DETAILS][batch, :detail_count],
+            obs[_REFERENCES][batch, :reference_count],
+            tables,
         )
-        named = record_word(headers, _RECORD_NAME)
-        if (named < 0).any() or (named >= len(tables.name_definitions)).any():
-            raise ValueError("invalid decision-memory name row")
+
+
+def memory_vocabulary(
+    headers: np.ndarray, details: np.ndarray, references: np.ndarray, tables: "Tables"
+) -> None:
+    from manabot.policy.prepare import record_word
+
+    programs = definition_programs()
+    for definition in references[
+        references[:, _REFERENCE_DEFINITION_ONLY] == 1, _REFERENCE_DEFINITION
+    ].astype(np.int64):
+        if (
+            not 0 < definition <= len(programs)
+            or not programs[int(definition) - 1].eligible
+        ):
+            raise ValueError("ineligible decision-memory definition shortcut")
+    if not np.isin(record_word(headers, _RECORD_KIND), decision_name_values()).all():
+        raise ValueError("unadmitted decision-memory kind")
+    chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1
+    if not np.isin(
+        record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()
+    ).all():
+        raise ValueError("unadmitted decision-memory choice")
+    program = details[:, _DETAIL_FIELD] == 0
+    tables.tokens(
+        details[program, _DETAIL_TOKEN_KIND].astype(np.int64),
+        record_word(details[program, _DETAIL_VALUE], 0),
+    )
+    named = record_word(headers, _RECORD_NAME)
+    if (named < 0).any() or (named >= len(tables.name_definitions)).any():
+        raise ValueError("invalid decision-memory name row")
 
 
 @dataclass(frozen=True)
@@ -589,7 +596,7 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     return arrays
 
 
-def retained_memory(obs: "ObservationBuffers") -> "PrefixObservation | None":
+def retained_memory(obs: object) -> "PrefixObservation | None":
     from manabot.env.memory_store import PrefixObservation
 
     return (
@@ -727,7 +734,7 @@ def _featurize_records(nodes: list[RecordNode], tables: Tables) -> None:
         for key in blocks:
             blocks[key].append(local[key])
         detail_base += len(_node_rows(node)[1])
-    prepared = _prepare_dense_memory(
+    prepared = _prepare_memory_rows(
         {key: np.concatenate(parts, axis=1) for key, parts in blocks.items()}, tables
     )
     assert prepared is not None
@@ -779,7 +786,7 @@ def _chunk_features(
 
 def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
     """The dense encoder owns the canonical empty shapes and dtypes."""
-    empty = _prepare_dense_memory(
+    empty = _prepare_memory_rows(
         {
             key: np.zeros((0, 0, width), np.float32)
             for key, width in MEMORY_WIDTHS.items()
@@ -1020,6 +1027,7 @@ def prepare_memory(
     *,
     fold: bool = False,
     roots: Mapping[str, int] | None = None,
+    native: "NativeRows | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
     retained = retained_memory(obs)
     return (
@@ -1029,21 +1037,29 @@ def prepare_memory(
             else _prepare_retained(retained, tables)
         )
         if retained is not None
-        else _prepare_dense_memory(obs, tables)
+        else _prepare_memory_rows(obs, tables, native=native)
     )
 
 
-def _prepare_dense_memory(
-    obs: "ObservationBuffers", tables: "Tables"
+def _prepare_memory_rows(
+    obs: "ObservationBuffers", tables: "Tables", *, native: "NativeRows | None" = None
 ) -> MemoryRows[np.ndarray] | None:
     from manabot.policy.prepare import pack, record_word
 
-    if _RECORDS not in obs:
-        return None
-    headers = obs[_RECORDS]
-    lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
-    batches, slots = np.nonzero(headers[..., _RECORD_VALID])
-    selected = headers[batches, slots]
+    if native is None:
+        if _RECORDS not in obs:
+            return None
+        headers = obs[_RECORDS]
+        lengths = headers[..., _RECORD_VALID].sum(1).astype(np.int64)
+        batches, slots = np.nonzero(headers[..., _RECORD_VALID])
+        selected = headers[batches, slots]
+    else:
+        if _RECORDS not in native.tables:
+            return None
+        spans = native.tables[_RECORDS]
+        lengths = spans.counts.astype(np.int64)
+        batches, slots = spans.coordinates
+        selected = spans.values
 
     def word_pairs(rows: np.ndarray, span: slice) -> np.ndarray:
         halves = rows[:, span]
@@ -1083,23 +1099,29 @@ def _prepare_dense_memory(
     positions: list[np.ndarray] = []
     reference_base = record_base = 0
     for batch, length in enumerate(lengths):
-        _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
-        references = obs[_REFERENCES][batch, :reference_count]
+        if native is None:
+            _, detail_count, reference_count, member_count = memory_lengths(obs, batch)
+            records = obs[_RECORDS][batch, :length]
+            references = obs[_REFERENCES][batch, :reference_count]
+            raw_details = obs[_DETAILS][batch, :detail_count]
+            members = obs[_MEMBERS][batch, :member_count]
+        else:
+            records, raw_details, references, members = (
+                native.tables[key].group(batch) for key in MEMORY_FIELDS
+            )
         references_list.append(references)
-        raw_details = obs[_DETAILS][batch, :detail_count]
         expanded, owners = _expand_details(references, raw_details)
         details_list.append(expanded)
         detail_routes.append(owners + reference_base)
-        members = obs[_MEMBERS][batch, :member_count]
         member_routes.append(
             members[:, _MEMBER_REFERENCE].astype(np.int64) - 1 + reference_base
         )
-        counts = headers[batch, :length, _RECORD_COUNTS].astype(np.int64).ravel()
+        counts = records[:, _RECORD_COUNTS].astype(np.int64).ravel()
         groups.append(
             np.repeat(np.arange(length * 3, dtype=np.int64) + record_base * 3, counts)
         )
         positions.append((members[:, _MEMBER_ORDINAL, None] / 128).astype(np.float32))
-        reference_base += reference_count
+        reference_base += len(references)
         record_base += int(length)
     references = (
         np.concatenate(references_list)

@@ -146,27 +146,52 @@ v9/v11 pinned games, layer-input checks and sparse-coordinate regression
 passed; the optional u1952 checkpoint was not configured. Whole-update
 throughput and RSS remain deferred (above).
 
-### 2. Native emits exact live counts; Python stops rescanning
+### 2. Done — exact v11 spans from the native encoder through policy preparation
 
-- **Next:** emit exact v11 counts with immutable, native-owned CSR values
-  and offsets. Use the native representation to skip checks on binary
-  masks, offset partitions and native index bounds. Keep model-specific
-  vocabulary and saved-column checks. External dictionaries and writable
-  copies keep their full admission and dense preparation semantics. A NumPy
-  writeable flag alone cannot establish origin or exclude writable aliases.
+`encode_observation_batch` returns immutable CSR tables from live frontiers.
+`VectorEnv.step_observation_batch` returns them from the actual step, with
+outcomes and emitted events. Both use the same encoder and one reusable native
+row workspace. V11 local search consumes the batch by default. Torch and MLX
+bind the layout and checkpoint vocabularies, then read offsets for row counts,
+bucketing and gathers. The model retains its padded coordinates where needed.
 
-- **Hypothesis:** admission (16.6 ms) and the trims in `prepare`/`_facts`
-  (`padded`, `nonzero`, `isin`, `any(0)`) shrink in proportion to live rows
-  once each table carries `count[B]` / `offsets[B+1]` written at encode time.
-  The native cost of writing counts is under 1% of encode.
-- **Deletes:** validity-rescan extents (and `axis_extents`, if #583 lands
-  first), the `_valid` float arrays as a source of counts, and the `1e-12` /
-  `(x - 1) + 1` float guards on references.
-- **Check:** native directed test of counts on a constructed position;
-  `tests/env/test_observation.py`, `tests/verify/test_native_buffer_capacities.py`,
-  `tests/training/test_action_cutoff.py`; admission rejection contracts.
+The dense external API still needs `axis_extents` for poisoned padding,
+gaps and joins into otherwise empty slots. This scanner landed before slice 2.
+The merged host preparation already converts admitted references to integer
+slots before subtracting their base. Neither the scanner nor float round-trip
+guards supply extents for the native batch.
 
-### 3. Typed columns: int32 references, ids, kinds; uint8 flags
+`uv run python -m scratch.compare_spans` replayed seed 24, 256 streams,
+every 40th step through step 320. It used one native vector per transport with
+the same global seed stride. All dense buffers, outcomes and every learning
+and inference `Prepared` field matched slice 1 (`fe46e6b375` for the reference
+preparation). Median process CPU ms per 256-stream batch on the shared M4 Max:
+
+| Stage | Dense | Native CSR |
+| --- | ---: | ---: |
+| Step and encode, including returned outcomes | 28.72 | 33.61 |
+| Admission | 13.89 | 1.01 |
+| Admitted preparation, learning | 30.09 | 24.88 |
+| Admitted preparation, CPU inference | 22.95 | 18.71 |
+
+The packed export costs 4.89 ms more at the producer in these samples.
+Step timing includes game advancement, packing and freezing the bytes; the
+cost of writing counts alone was not isolated. The host gain outweighed the
+producer cost in this probe. Whole-update throughput and peak RSS still need
+the idle-machine run.
+
+Median transported offsets and values were **3,797,400 bytes**, down from
+60.2 MB dense. All-zero live rows and zero columns within live rows still
+occupy bytes. At the current dtypes, 16,384 rows at this occupancy imply
+about **243 MB** before headroom and retention-specific compaction. Use this
+measured occupancy in slice 4. The earlier estimate counted nonzero bytes.
+
+The directed native count test, dense and immutable observations, capacity
+and cutoff contracts, Torch and MLX admission rejections, memory preparation,
+and the search frontier passed. Existing writable training rollout buffers
+use full dense admission until the retention migration in slice 4.
+
+### 3. Next — typed columns: int32 references, ids, kinds; uint8 flags
 
 - **Hypothesis:** removes the float→int `astype` calls (4.8%) and the 16-bit
   value halves, and shrinks the live bytes further. Correctness and
@@ -178,9 +203,12 @@ throughput and RSS remain deferred (above).
 
 ### 4. Ragged retention and rollout storage
 
-- **Hypothesis:** per-update observation storage falls from ≥3.7 GB to under
-  100 MB. Peak RSS falls by GBs at 256 streams, and minibatch gather copies
-  live bytes only.
+- **Hypothesis:** a rollout stores live bytes and offsets, with minibatches
+  gathering only those bytes. Size the estimate from the post-slice-3 dtype
+  mix. Slice 2 measured about 243 MB at 16,384 rows before allocator
+  headroom, against ≥3.7 GB dense. Measure peak RSS at 256 streams.
+- Migrate the collector’s writable vector destinations and row selection to
+  owned spans together with retention, including paused and recovered streams.
 - **Deletes:** dense `[capacity, *shape]` `ObservationRows` arrays, and
   re-padding before the learner. A minibatch is a gather over CSR row spans.
 - **Check:** gathering arbitrary indexes reproduces the dense rows exactly;

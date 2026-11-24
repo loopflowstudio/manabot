@@ -1,5 +1,6 @@
 """Whole-prefix memories reach both heads and survive ordinary policy tooling."""
 
+from dataclasses import asdict
 import json
 from pathlib import Path
 from typing import Literal
@@ -823,3 +824,21 @@ def test_no_head_admission_rejects_changed_companion_capacity(field: str) -> Non
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     with pytest.raises(ValueError, match="capacity mismatch"):
         control.prepare(obs)
+
+
+def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
+    space, _ = memory_root()
+    env = managym.Env(seed=111, decision_memory=True)
+    env.reset(Match().to_rust())
+    early = env.clone_env()
+    for _ in range(4):
+        env.step(0)
+    games = [early, env]
+    batch = managym.encode_observation_batch(games, space.layout)
+    dense = space.allocate(len(games))
+    managym.encode_observations_into(games, space.layout, dense, len(games))
+    assert dense["decision_records"][1].any()
+    model = policy(space, "gru", 1)
+    packed = model.prepare(batch)
+    assert packed.memory is not None
+    np.testing.assert_equal(asdict(packed), asdict(model.prepare(dense)))
