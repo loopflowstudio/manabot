@@ -17,6 +17,8 @@ Rune-Scarred Demon exposed a disclosure error in the shared move instruction. Th
 
 The 36 Batch 5d fixtures, ten native controls and registered-printing conformance passed. The working phase continues with the remaining 80 base rows, grouped by shared rules and fixture. The named Batch 5d audit is complete. Gate retains live v11, text and Academy parity, closed-deck privacy, Command replay and stale rejection, and the legal loyalty activation.
 
+At `fac7b31d05`, the rebuilt CPython 3.13 release extension admitted all 36 definitions by name with the ledger’s first-printing keys. Its program spans contained the exact-source, equipped-creature and unrevealed-move tokens on their respective cards. The effect vocabulary tests and both committed v9 and v11 pilot replays passed (11 Python cases). The optional u1952 replay skipped because its checkpoint path was unset.
+
 **Batch 5c.** All 15 named triggered and activated permanents have first-printing definitions and directed native outcomes linked in the FDN ledger. Golem, Merfolk and Unicorn needed entries in the creature subtype table. Arcanis checks for the same battlefield object when its return ability resolves. Soul-Guide Lantern's untargeted activation uses the opposing seat's graveyard, while its entry chooses one card from either graveyard.
 At `1677261e`, all 15 directed native tests and registered-printing conformance passed. The rebuilt CPython 3.13 extension lists all 15 in the world pool. The follow-up at `d455fb70` consolidated the permanent and instant-or-sorcery type lists in `managym/state/src/predicate.rs`. Use those constructors when a Batch 5d selector has the same meaning.
 

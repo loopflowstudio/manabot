@@ -1,21 +1,21 @@
-at: 2927a386c9432f6be7ff79754d9e00986cc930d4
+at: fac7b31d0595cd74c868525dd969d550891c644d
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Find each card’s definition and directed outcome.
-  - path: managym/state/src/predicate.rs
-    why: Shares graveyard and spell type filters across sets.
-  - path: managym/cards/src/m21.rs
-    why: Shipwreck Dowser applies that filter to graveyard targets.
-  - path: managym/cards/src/ons.rs
-    why: Follow Arcanis’s return through battlefield identity.
-  - path: managym/cards/src/thb.rs
-    why: Compare targeted entry with untargeted graveyard exile.
-  - path: managym/state/src/subtype.rs
-    why: Locate the three new creature types.
+    why: Find each result, fixture and unresolved rule.
+  - path: managym/README.md
+    why: Read the identity and search disclosure contracts.
+  - path: managym/state/src/ability.rs
+    why: Defines unrestricted searches and their movement disclosure.
+  - path: managym/src/flow/resolution.rs
+    why: Resolves attachments and decides when moves reveal cards.
+  - path: managym/src/flow/identity.rs
+    why: Retains the exact wearer when its attachment leaves.
+  - path: managym/cards/src/ala.rs
+    why: Shows how overlapping creature types receive one grant.
+  - path: managym/cards/tests/cards/zen.rs
+    why: Compares wearers across reattachment and removal during landfall.
   - path: managym/cards/tests/cards/ons.rs
-    why: Compare Arcanis’s return across a removal response.
-  - path: managym/cards/tests/cards/thb.rs
-    why: Trace both sacrifices from the same graveyards.
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Check three draw triggers and graveyard target eligibility.
+    why: Forks Arcanis across removal and return.
+  - path: managym/cards/tests/cards.rs
+    why: Follows search and discard choices on independent forks.
 hide: []
