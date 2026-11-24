@@ -165,3 +165,15 @@ decision kinds.
 ## Post-merge concept review at `8838269f91`
 
 For the post-merge full-branch concept review at `8838269f91` (`scratch/concept-review.html`): stay on hash contract v31 and close three post-merge mismatches before `gate`: (1) switch *Quilled Greatwurm* (`fdn.rs:3407`) from `EffectValue::X` to `EffectValue::TriggeringAmount` (keeping `DealsCombatDamage { to: None }` + `CombatDamageTotals` for CR 510.2 trample totals, stopping `triggers.rs:1010` from writing `CombatDamageTotals` into `trigger.x` / clamping at 255, deleting `bound_x`'s Greatwurm special case, and threading `triggering_amount` into `trigger_description` so simultaneous *Drake Hatcher*, *Bloodthirsty Conqueror*, *Niv-Mizzet*, *Lathril*, and *Quilled Greatwurm* triggers show their exact `i32` amount in `OrderTriggers` and stack labels); (2) add `#[serde(default, skip_serializing_if = "SpellProfile::is_front")] pub profile: SpellProfile` to `SpellLki` (zero front-face hash change), share one `recorded_spell_matches_predicate` helper across `recorded_cast_matches_predicate`, `Condition::TriggeringSpellMatches`, and `subject_matches_damage_source`, and resolve the cast profile name in `effect_execution::spell_lki`; (3) add exhaustive `TriggerCondition::inner(&self)` (including `Prepared`, no wildcard) and route `once_each_turn`, `condition_event_kinds`, `triggering_noun`, and `bound_x` through it. Also sync `docs/observation-and-model.md`'s v11 Layout table widths (`40 × 56`, `32 × 46`, `2 × 15`).
+
+## Post-merge receipt selection and waiting-seat labels
+
+The merged conformance README identifies the opening-hand and casting-only
+receipts as historical. Refresh the active casting-history receipts and the
+live Academy fixtures (which still have opening filenames). The pre-change
+semantic binary reproduced all 14 recorded final witnesses.
+
+The directed Hatcher check reached the right LLM label but Academy rejected
+seat 1's frame: “decision context is not oriented to its acting viewer”.
+The public stack entry already carries the exact amount. Keep the pending
+decision narration with the acting seat, as the wire validators require.

@@ -1,4 +1,4 @@
-at: 31588d944d771ef3fcae1c17f6171989e008d866
+at: 3e220871af04fc9964638a7e06058e8fe6d04e14
 first:
   - path: docs/engine.md
     why: When a mandatory chain ends in a draw
@@ -8,6 +8,8 @@ first:
     why: What both players see before an ability resolves
   - path: managym/state/src/ability.rs
     why: Object properties, aggregate queries and trigger conditions
+  - path: managym/state/src/stack_object.rs
+    why: Spell profile retained when the spell leaves the stack
   - path: managym/src/flow/turn.rs
     why: Attack history and once-per-turn ability use
   - path: managym/src/flow/priority.rs
@@ -23,9 +25,11 @@ first:
   - path: managym/src/flow/layers.rs
     why: Layer read sets, static scopes and characteristic comparisons
   - path: managym/src/flow/statics.rs
-    why: Live-or-LKI permanent reads and condition evaluation
+    why: Match predicates against live and departed spells
   - path: managym/src/flow/resolution.rs
     why: Read current or last-known characteristics and scope players
+  - path: managym/src/agent/ability_description.rs
+    why: Bind event amounts in placement and stack labels
   - path: managym/src/agent/effect_execution.rs
     why: Shared stack/trigger read checks and departed LKI projection
   - path: managym/src/agent/observation.rs
@@ -36,6 +40,8 @@ first:
     why: Foundations definitions using the shared rules
   - path: managym/cards/tests/cards/fdn.rs
     why: Play through forced loops and intervening choices
+  - path: managym/cards/tests/cards/tdm.rs
+    why: Charring Bite remains a sorcery after Counterspell
   - path: managym/cards/tests/cards/eoe.rs
     why: Station follows its payer through departure
   - path: tests/semantic/test_text_observation.py
@@ -44,6 +50,6 @@ first:
     why: Follow pending power through policy, text and Academy
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Source and directed fixture for each card
-  - path: conformance/semantic-kernel-w17-v6/evidence-opening-v1.json
+  - path: conformance/semantic-kernel-w17-v6/evidence-casting-history-v1.json
     why: Trace and final state hashes for fourteen games
 hide: []

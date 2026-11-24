@@ -631,33 +631,47 @@ reader, six references, three cards). Next step: implement items 1–4 below,
 rerun the Greatwurm, Drake Hatcher and observability fixtures, then repeat
 this review before `gate`.
 
-## Post-merge concept alignment (Next slice before gate)
+## Post-merge concept alignment
 
-Full-branch concept review at `8838269f91` against merged `main` (`610370233c`, recorded in `scratch/concept-review.html`) verified that turn history, permanent LKI, paid-cost stack projection (Ayli and station), CR 603.8 state triggers, untap events, draw outcome projection, packed/dense v11 layouts, and Finding 18's stabilized CR 104.4b loop watch all align. Three post-merge concept mismatches remain to close in one focused `implement` pass on hash contract **v31** before `gate`:
+Implemented at `ab1f3ff59b` on hash contract v31, following the
+[concept review](concept-review.html) and decomposition findings above.
 
-1. **Unify event-bound trigger amounts on `EffectValue::TriggeringAmount` (`i32`) and show them in trigger descriptions.**
-   - *Experience & model:* Every event-bound trigger amount (*Drake Hatcher*, *Lathril*, *Niv-Mizzet, Visionary*, *Bloodthirsty Conqueror*, and *Quilled Greatwurm*) uses one unclamped `i32` carrier (`trigger.triggering_amount` → `ContinuationFrame.triggering_amount` → `FactKind::TriggeringAmount`), never stealing `trigger.x` (CR 107.3 announced X / CR 107.3m ETB spell X, `u8` clamped at 255). Every `OrderTriggers` offer and Academy/LLM stack entry displays that trigger's concrete committed amount directly, so simultaneous triggers with different amounts (e.g., 1 and 3 damage) are never indistinguishable.
-   - *Code changes:*
-     - `managym/cards/src/fdn.rs`: change `quilled_greatwurm()`'s counter count from `EffectValue::X` to `EffectValue::TriggeringAmount` (keep `DealsCombatDamage { to: None, per: Per::Object }` + `CombatDamageTotals` for CR 510.2 trample batching).
-     - `managym/src/flow/triggers.rs`: remove the `GameEvent::CombatDamageTotals` arm that copies `amount` into `trigger.x` (`trigger.triggering_amount` already carries `total as i32`; keep `trigger.x` only for CR 107.3m ETB spell X and legacy TLA `CountersPut` for pinned-pilot stability).
-     - `managym/src/agent/ability_description.rs` & `managym/src/agent/observation.rs`: delete `bound_x`'s `DealsCombatDamage { to: None }` special case, and pass `triggering_amount: i32` into `trigger_description` (from both `pending_trigger_description` and `observation.rs::stack_object_data`). When `triggering_amount == 0` (static card text / `observability.rs`), keep the symbolic phrase; when `triggering_amount > 0`, render `EffectValue::TriggeringAmount` directly with its concrete bound value (e.g., `"that many (N)"` / `"that much (N)"`) without brittle string `.replace(...)`.
-   - *Directed checks:* Update `fdn.rs::quilled_greatwurm_triggers_name_their_creature_and_damage_on_the_stack` to assert `trigger.triggering_amount` / `frame.triggering_amount` and `trigger.x == 0`; add a `> 255` combat-damage Greatwurm test (verifying >255 counters with no `u8::MAX` clamp); add a simultaneous two-amount *Drake Hatcher* (1 and 3 damage) test verifying distinct `OrderTriggers` offer labels and stack descriptions for both viewers.
-   - *Evidence refresh (hash v31):* Because `fdn.quilled_greatwurm`'s definition changes `content_digest` on hash v31 (zero pinned-pilot impact — TLA/Elemental decks never include Greatwurm), refresh `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json`, `evidence-casting-history-v1.json`, the authored-match / parity receipts, and `managym/academy/fixtures/choice-navigation-opening-v1.json` (and any other fixture embedding `content_digest`), verifying identical commands, offer counts, and outcomes.
+- Quilled Greatwurm uses the same signed `TriggeringAmount` as Drake Hatcher.
+  A creature with 258 counters dealt 260 damage and finished with 518 counters.
+  The trigger and continuation had X = 0. Hatcher's order offers and both
+  viewers' stack entries identified the 1- and 3-damage hits. The trample
+  split, static catalog tokens, and legacy counter/entering X paths remain
+  covered. The two card fixtures are in `cards/tests/cards/fdn.rs`.
+- The first two-seat Python check caught Academy rejecting the waiting
+  viewer's frame because it put an event-amount message in pending decision
+  narration. Both viewers now see the public stack label, while only the
+  actor receives pending narration. The text/Academy fixture exercised both.
+- A departed spell retains its cast profile in `SpellLki`. Turn-history
+  casts, triggering spells and spell damage sources use the same predicate
+  matcher. In `tdm::countered_omen_keeps_its_cast_profile_for_the_waiting_trigger`,
+  Counterspell removed Charring Bite before the trigger resolved. The
+  retained spell was red, its pending description named the Omen and mana
+  value two, both viewers had the same execution tokens, and the trigger
+  gained one life. Front-face serialization omits the profile.
+- The exhaustive `TriggerCondition::inner` supplies the wrapper child for
+  once-per-turn limits, event indexing, trigger nouns and bound X.
+  `prepared_preserves_a_nested_once_each_turn_limit` passed for a limited
+  and an unlimited prepared trigger.
+- The rebuilt v11 layout reported 56 permanent columns, 46 stack columns
+  and 15 player-turn columns, matching the corrected table.
 
-2. **Preserve `SpellProfile` on `SpellLki` and unify departed-spell predicate matching (CR 608.2h, 715.3, 702.181, 712.11).**
-   - *Experience & model:* When an Adventure, Omen, or modal back-face spell leaves the stack (countered or resolved), every query about "that spell" — `Condition::TriggeringSpellMatches`, `subject_matches_damage_source`, and departed-spell continuation projection — sees the cast spell profile, never the front Creature/Artifact face the card reverted to.
-   - *Code changes:*
-     - `managym/state/src/stack_object.rs` & `managym/src/flow/zones.rs`: add `#[serde(default, skip_serializing_if = "SpellProfile::is_front")] pub profile: SpellProfile` to `SpellLki` and populate it from `spell.profile` in `Game::spell_lki` (zero serialization change for front-face spells; stays on hash contract v31).
-     - `managym/src/flow/statics.rs` & `managym/src/flow/triggers.rs`: extract one `Game::recorded_spell_matches_predicate(object, profile, predicate)` helper shared by `recorded_cast_matches_predicate`, `Condition::TriggeringSpellMatches` (reading `self.spell_info(object_id)` for `profile`), and `subject_matches_damage_source`'s spell fallback (reading `self.spell_info(damage_source)`).
-     - `managym/src/agent/effect_execution.rs`: in `spell_lki`, resolve the cast profile's printing name via `default_content_pack().recorded_spell(...)` when `!spell.profile.is_front()` (leaving front-face summaries and tokens unchanged).
-   - *Directed checks:* Add a test casting an Instant/Sorcery Adventure or Omen, countering it before a `TriggeringSpellMatches(instant_or_sorcery)` cast trigger resolves, and verifying the condition still holds and the departed-spell projection names the cast profile alongside its mana value and colors.
-
-3. **Unify `TriggerCondition` wrapper recursion with exhaustive `TriggerCondition::inner(&self)`.**
-   - *Experience & model:* Every trigger wrapper (`WasCast`, `OnceEachTurn`, `FromZone`, `Prepared`, `InGraveyard`, `ActiveIf`, `WhileSourceAttacking`) delegates transparently with one compiler-checked owner; adding a wrapper can never silently break `once_each_turn()` (currently missing `Prepared`, which leaves `GrantClock` as `None` and panics at `triggers.rs:911`).
-   - *Code changes:* Add exhaustive `TriggerCondition::inner(&self) -> Option<&Self>` (no wildcard `_`) in `managym/state/src/ability.rs` and route `once_each_turn`, `condition_event_kinds`, `triggering_noun`, and `bound_x` through it. Add a unit test verifying `Prepared { condition: OnceEachTurn { .. } }.once_each_turn() == true`.
-
-4. **Sync v11 layout widths in `docs/observation-and-model.md`.**
-   - Update lines 724–726 of `docs/observation-and-model.md` from `40 × 53`, `32 × 40`, `2 × 8` to `40 × 56`, `32 × 46`, `2 × 15` so the documented v11 Layout table matches `observation_layout.rs`.
+The 12 focused native cases passed, including the Hatcher catalog and
+snapshot, Greatwurm trample, and front-face spell controls. A final run
+exercised Hatcher's semantic order offers and the countered Omen.
+A pre-change run and a rebuilt run produced 14 full semantic tapes. Across
+3,150 Commands, only the content digest and v31 state hashes moved.
+Action-space digests, pending-choice digests, event boundaries, decisions and
+outcomes matched at every step. The 174-Command authored match kept every
+offer count and winner (seat 0). Live, headless and replay had no divergence
+over 175 checkpoints and 1,050 viewer checks. Four Academy demos replayed
+their 192 prefix Commands; all five navigation positions kept their offers.
+The active casting-history evidence is refreshed. Opening-hand and
+casting-only conformance receipts retain their original revisions.
 
 ## Remaining shared work
 
@@ -691,16 +705,23 @@ Full-branch concept review at `8838269f91` against merged `main` (`610370233c`, 
 1. Integrated replay and privacy checks (below), including recorded Watch
    playback of a partial attack declaration and of the departed-Clone
    interaction.
-2. Frozen pilot compatibility on the merged preparation path
-   (`tests/model/test_pinned_pilot.py` with the rebuilt extension).
-3. Engine Budget: digests moved (untap events in the hashed ledger, hash v31,
+2. Engine Budget: digests moved (untap events in the hashed ledger, hash v31,
    per-resolution loop watch). Adopt the PR's own run as the reference if it
    stays within 10%; the `bench_states` stress layers are listed under
    Performance below.
-4. The four Academy failures in `scratch/questions.md`: gate confirms whether
+3. The four Academy failures in `scratch/questions.md`: gate confirms whether
    they also fail on main.
 
-**Next.** Implement the **Post-merge concept alignment** slice above (items 1–4, staying on hash contract **v31**), rebuild and install the cp313 extension, run focused Rust + Python checks (including `tests/model/test_pinned_pilot.py`), refresh any moved v31 `content_digest` receipts, and then hand off to `gate` for items 1–4 under Open before publishing. At the prior synced head `60908f4ccf`, debug nextest (`--profile ci`: `cards`, `managym` lib, `search_state_contract`, `canonical_replay_tests`, `match_state_hash_tests`, `semantic_conformance_tests`) ran 1697 tests, all passing.
+The rebuilt CPython 3.13 extension replayed the bundled v9 and v11 pilots.
+The optional u1952 checkpoint was unavailable. The directed text check
+read Hatcher's concrete counter count in the LLM text and both Academy
+stack entries. The effect-execution model/text check and the named-layout
+check passed.
+
+**Next.** Repeat decomposition review against the directed cases above.
+Integrated Watch privacy, Engine Budget measurements and the Academy
+baseline comparisons remain for gate. The 1,697 passing native checks
+at synced head `60908f4ccf` predate this alignment pass.
 
 ## Directed interactions for integrated validation
 
