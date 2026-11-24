@@ -1535,7 +1535,9 @@ impl Observation {
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
-            is_summoning_sick: permanent.summoning_sick,
+            is_summoning_sick: permanent.summoning_sick
+                && characteristics.is_creature()
+                && !characteristics.keywords.has(Keyword::Haste),
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,

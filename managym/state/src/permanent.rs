@@ -271,10 +271,10 @@ impl Permanent {
             object: object_id,
             controller: object.owner,
             tapped: false,
-            // CR 302.6 applies to any permanent that is a creature; only
-            // creatures and Vehicles can attack or pay {T} as creatures here.
-            summoning_sick: (object.types.is_creature() || object.has_subtype("Vehicle"))
-                && !object.keywords.has(Keyword::Haste),
+            // CR 302.6: control since the turn began, whatever the
+            // permanent is now; `permanent_can_tap` reads whether it is a
+            // creature without haste when that matters.
+            summoning_sick: true,
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,
