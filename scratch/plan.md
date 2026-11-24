@@ -410,8 +410,8 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 54 of 81 primary rows with definitions and native
-fixture evidence. The 27 pending primary rows are in the later batches below.
+The FDN ledger has 58 of 81 primary rows with definitions and native
+fixture evidence. The 23 pending primary rows are in the later batches below.
 Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
 witnesses. Hunter, Hatcher, Prowler and Blast are covered cost-primary
 witnesses. Daggers identify pending cost candidates whose full ledger
@@ -525,26 +525,27 @@ The working phase for this batch is satisfied except Finding 8 (text only). At t
 
 8. **A cast trigger reading its spell calls the spell "that permanent".** `selector_description` (`agent/ability_description.rs:728`) describes `ObjectSelector::Triggering` as "that permanent" whatever the event. Ramos's stack and card text reads "Put the number of colors of that permanent +1/+1 counters on this", although the triggering object is a spell. Reproduction: describe `c17.ramos_dragon_engine`'s trigger. Fix: describe `Triggering` by the event's noun. For `Casts` (and other spell events) say "that spell"; keep "that permanent" for permanent events. Either thread the noun from `condition_description` into the effect text or say "that object" everywhere. Assert Ramos's text in `c17.rs`.
 
-Next: Finding 8 can ride with the next slice's text work. Then implement the four slices below to close all 81 primary FDN rows and the remaining cross-set witnesses.
+Finding 8 was fixed in the departed-name and damage slice below.
 
-### Next slice · Departed-name LKI repair and damage recipients, amounts and results (Hash v29)
+### Implemented slice · Departed-name LKI repair and damage recipients, amounts and results (Hash v29)
 
-Built around two unifications (see [scratch/concept-review.html](concept-review.html)):
+Built in `2279c515b2` on hash contract **v29**. Four primary FDN rows (Goblin Negotiation and Niv-Mizzet, Visionary `fdn`; Gateway Sneak `rna`, new module; Trygon Predator `dis`, new module) and the cost-primary Lathril, Blade of the Elves (`khc`, new module, with `token.green_elf_warrior`, the green Lorwyn printing beside TLA's green-white one) link to their first-printing modules and directed tests. The FDN ledger has **58 of 81** primary rows. Quilled Greatwurm stays pending with its blocker in the ledger: its trigger watches combat damage to any recipient, but `DealsCombatDamage` fires only on `CombatDamageToPlayers`; its graveyard cast needs `play_permissions` and distributed counter removal.
 
-1. **Rules-only departed names and one departed-printing reader** (fixes the active `compatibility_names_and_content_allocations_are_metamorphic` failure, a silent departed-`Clone` predicate bug, CR 201.2a, and per-snapshot `String` allocations):
-   - Replace `ObjectLki.name: String` (`state/src/game_object.rs:307`) with `#[serde(skip_serializing_if = "Option::is_none")] pub renamed: Option<String>`, populated in `snapshot_current_permanent` (`flow/identity.rs:70`) only when `characteristics.name != definition.name` (e.g. `SetCharacteristics { named }` or face-down `""`). Unmodified printed and copied permanents store `None`, so compatibility card renames never enter `GameState::deterministic_hash`.
-   - Share `Game::lki_face_printing` (`copiable.printed` else `source_base` for name/supertypes) and `Game::lki_mana_printing` (`copiable.front` else `lki_face_printing` for mana value, CR 712.8e) across `statics.rs::lki_matches_predicate` and `resolution.rs::departed_property`; effective departed name is `lki.renamed.as_deref().unwrap_or(&face.name)`.
-   - Enforce CR 201.2a (`!a.is_empty() && a == b`) in `layers.rs::matches_permanent_facts` so two nameless face-down permanents never match as namesakes.
-2. **Unified damage attribution, noncombat triggers and excess damage**:
-   - Add `combat: bool` to `GameEvent::DamageDealt` (`flow/event.rs:73`).
-   - Fix `Game::source_controller` (`flow/damage.rs:260`) to consult `self.spell_info(source)` after `object_lki` and before owner provenance (matching `source_keywords`, fixing stolen-spell lifelink and damage attribution).
-   - Add `TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }` reading `GameEvent::DamageDealt { source: Some(src), target: DamageTarget::Player(p), amount, combat: false }` through `source_controller`; wire `event_amount` (`amount as i32`) and `event_player` (`Some(*p)`) so noncombat triggers bind into existing `triggering_amount` (v11 fact slot 16) with zero new stack/tensor columns.
-   - Unconditionally set `frame.excess_damage = excess.unwrap_or(0)` in `EventBinding::Damage` (`flow/decision.rs:1515`) so prevented/zero damage never leaks stale excess damage.
+Shared changes:
 
-Cards (4 primary → 58/81, plus cost candidates):
-- Primary FDN: *Goblin Negotiation* (`fdn`), *Niv-Mizzet, Visionary* (`fdn`, reuses existing `StaticAbility::NoMaximumHandSize`), *Gateway Sneak* (`rna`), *Trygon Predator* (`dis`, uses 2-player `TargetSpec::PermanentOpponentControls`).
-- Cost-primary candidates: *Lathril, Blade of the Elves* (`khc`, combat-damage token creation + tap-10-Elves activation cost); check *Quilled Greatwurm*† (`fdn`) and record its `play_permissions` / distributed-counter-removal blocker if still gated.
-- Verify `compatibility_names_and_content_allocations_are_metamorphic` passes in debug, plus stolen-spell noncombat damage, departed-source noncombat damage, prevented excess damage, and departed-`Clone` LKI predicate witnesses.
+- `ObjectLki.renamed: Option<String>` replaces `name`; `snapshot_current_permanent` fills it only when the layered name differs from the object's copiable name. `Game::lki_face_printing` (copy/back face, else retained base) and `Game::lki_mana_printing` (front face, CR 712.8e) serve `lki_matches_predicate` (via `PermanentFacts::departed`) and `departed_property`. The departed Clone bug was real: a Clone that left as a Gray Ogre matched Clone's mana value 4 (`resolution_tests::departed_copy_matches_predicates_as_the_copied_face`).
+- Namesake matching requires a nonempty name (CR 201.2a) in `matches_permanent_facts`.
+- `GameEvent::DamageDealt { combat }` (omitted when false). `Game::source_controller` (now `pub(crate)`) reads a live then departed spell's controller before owner provenance, so lifelink and damage attribution follow a stolen spell.
+- `TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }` on `EventKind::DamageDealt`; `event_amount` and `event_player` bind the damage and the damaged player, so `TriggeringAmount` and "that player" need no new columns. Text: "Whenever a source you control deals noncombat damage to an opponent". Observability guard and witness added; `docs/engine.md` describes it and the departed-face readers.
+- `EventBinding::Damage` always sets `frame.excess_damage` (0 when none).
+- Finding 8 fixed: `name_triggering_object` rewrites `ObjectSelector::Triggering`'s "that permanent" to the event's noun (`spell` for cast triggers, `card` for graveyard arrivals) in trigger and granted-trigger text. Ramos's stack text is asserted in `c17.rs`.
+- `Vedalken` joined the subtype table. The Clone hash in `lea.rs` moved to v29.
+
+Checks, all debug: cards target (917), `managym` lib (360), rules (188), `match_state_hash_tests`, `search_state_contract`, `canonical_replay_tests`, content pack, engine, scenario, authored match, and `compatibility_names_and_content_allocations_are_metamorphic` (passes again). The 14 `frozen_*` cases and the inventory test still fail only as stale evidence (catalog grew; re-record at the final head as described above). After rebuilding and atomically installing the cp313 extension, the focused Python selection passed (116 passed, 1 skipped).
+
+Witnesses: Niv-Mizzet draws 3 for a Bolt to the opponent, 0 when the Bolt's controller is changed to the opponent (stolen spell), 0 to its controller or a creature, 1 for a sacrificed Fanatical Firebrand (departed source), and 0 for its own combat damage. Goblin Negotiation makes 3 Goblins at X = 5 on a 2/2, 0 at X = 2, and 0 when a later damage instruction to a player follows (the stale-excess control). No catalog card prevents damage to a creature, so "prevented excess" is covered by that later-instruction control rather than by real prevention.
+
+Next: the live-board counts, name predicates and turn departures slice below.
 
 ### Following slices
 
