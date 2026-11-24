@@ -118,3 +118,10 @@ steps one of two streams to a terminal with chooser `-1`. The completed game
 and winner appear in the recording. An explicit fresh load installs seed 44
 with the replacement setup, leaves the neighboring stream alone and clears
 the terminal buffer. The next fresh load keeps that setup at seed 46.
+
+## Ship review
+
+CI run 45336861647 at `f79b52bbe1` failed two tests that stepped past a
+terminal (`tests/sim/test_heuristic.py`, `tests/verify/test_native_observation_contract.py`);
+both now deal the next game explicitly. Saving parked slots without opening
+games is Task d68ca2. See `scratch/ship-review.html`.

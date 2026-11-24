@@ -119,6 +119,8 @@ def test_native_batch_matches_scalar_choices_rewards_and_reset(seed: int) -> Non
             scalar = managym.Env(seed=min(seed + episodes, 2**64 - 1))
             raw, _ = scalar.reset(configs)
             selector.reset()
+            # A finished slot stays parked until the caller deals the next game.
+            ((batched, _),) = batch.reset_all(configs)
     assert episodes > 0
 
 
