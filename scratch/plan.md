@@ -54,6 +54,8 @@ Mana value has one reader, `Game::object_mana_value`: `permanent_mana_value`, `C
 
 Checks (debug, 81 passed with `observability::`): `fin::day_of_black_sun_at_zero_reads_manifest_transform_and_meld_mana_values` destroys a manifested Gray Ogre and keeps transformed Cecil, Ragnarok and a face-up Ogre; `fdn::raise_the_past_returns_small_creatures_together_so_momo_sees_the_sailor`; `m14::rise_of_the_dark_realms_takes_every_graveyard_creature_under_the_caster` (the opponent-owned Sailor enters under the caster; Momo gets +3). The two graveyards are `return_from_two_graveyards` in `cards/tests/cards.rs`. Engine lib tests (`ability_description`), rule suites and the pinned pilot are at gate.
 
+Decomposition check at `c1c8a2f490`: met. Both cards are data over `ZoneMatching` plus the existing `Effect::Move` batch and `under: None` (the resolving player controls), with no card dispatch. Every live mana-value reader (`Each { max_mana_value }`, `object_matches_predicate`, `LayerValue::ManaValue`, the layer view's `mana_value`, `SpellOrPermanent { min_mana_value }`) goes through `object_mana_value`. The one printed read left is `recorded_object_matches_predicate` (`statics.rs:548`), the departed object's LKI, which is correct. Rerun in debug after compression: the three directed checks plus `observability::` (80 passed). `Zone(ZoneType)` overlaps `ZoneMatching { owner: You }`; that note is in `questions.md`.
+
 ### Finish and review the cohort
 
 Next slice: Ordeal of Nylea with the `EffectFrame.attached` split, since it changes a shared frame owner that Heartfire Immolator, Undying Malice and the cohort review then rely on. Then the two clause gaps and the modal-trigger owner, then the remaining cards.
