@@ -42,3 +42,8 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
 
 - **Benchmark timing:** Count explicit slot loads alongside native steps.
   Hash terminal rewards and flags before loading the next batch.
+
+- **Continuation saves:** Keep the incoming replay format and explicitly open
+  pending fresh roots at capture time. Snapshot allocation reuses the opening or
+  replaces it with a branch and refunds its seed. Collection itself leaves
+  finished slots parked at the batch boundary.

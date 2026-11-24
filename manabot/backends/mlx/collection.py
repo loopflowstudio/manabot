@@ -19,13 +19,12 @@ from manabot.backends.mlx.rl import (
     require,
 )
 from manabot.backends.mlx.rollout import check_packed, observation_arrays, packing_mask
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.learning import Precision
-from manabot.training.rollout.numerics import SampledRows
+from manabot.training.rollout.numerics import SampledRows, prepared_chunks
 from manabot.training.rollout.selection_data import SelectionDraw
 
 
@@ -45,8 +44,14 @@ class CollectionSession:
         self._key, draw = mx.random.split(self._key)
         return draw
 
-    def snapshot_rng(self) -> object:
+    def snapshot_rng(self) -> np.ndarray:
         return np.array(self._key)
+
+    def restore_rng(self, state: object) -> None:
+        key = np.asarray(state)
+        if key.shape != (2,) or key.dtype != np.uint32:
+            raise ValueError("expected an MLX uint32 sampling key")
+        self._key = mx.array(key)
 
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
@@ -99,21 +104,13 @@ class CollectionScope:
         *,
         execution_rows: int | None = None,
     ) -> SampledRows:
-        count = len(observation["actions_valid"])
-        width = count if execution_rows is None else execution_rows
-        if width < 1:
-            raise ValueError("execution rows must be positive")
         logs_parts: list[mx.array] = []
         value_parts: list[mx.array] = []
         needs_parts: list[np.ndarray] = []
         agent = self.inference.agent
-        for start in range(0, count, width):
-            with profiler.track("Observation preparation"):
-                obs = self.inference.prepare(
-                    select_rows(
-                        observation, np.arange(start, min(start + width, count))
-                    )
-                )
+        for obs in prepared_chunks(
+            observation, execution_rows, self.inference.prepare, profiler
+        ):
             with profiler.track("Policy inference and action selection"):
                 logits, value = agent.forward_distribution(obs)
                 logs_parts.append(self._policy_logs(logits, obs))
@@ -126,7 +123,7 @@ class CollectionScope:
                 )
                 value_parts.append(value.reshape(-1))
                 if obs.bucket_needs is not None:
-                    needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+                    needs_parts.append(obs.bucket_needs)
             del obs, logits, value
         # Draw once for the original group, independent of execution chunk size.
         logs = mx.concatenate(logs_parts)

@@ -616,10 +616,8 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.validate_actions_len(seeds.len())?;
         self.validate_ready_for_step()?;
-        self.next_seeds = seeds;
-        self.reset_each_into(self.player_configs.clone(), write)
+        self.reset_each_into_at(self.player_configs.clone(), Some(seeds), write)
     }
 
     /// Per-env `skip_trivial` collapse counters for the current games.
@@ -692,10 +690,27 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
+        self.reset_each_into_at(player_configs, None, write)
+    }
+
+    /// Install the supplied roots directly. Each next game continues by the vector stride.
+    pub fn reset_each_into_at<F, S: Into<GameSetup>>(
+        &mut self,
+        player_configs: Vec<S>,
+        seeds: Option<Vec<u64>>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
         let player_configs: Vec<GameSetup> = player_configs.into_iter().map(Into::into).collect();
         self.validate_actions_len(player_configs.len())?;
         for configs in &player_configs {
             Self::validate_player_configs(configs.len())?;
+        }
+        if let Some(seeds) = seeds {
+            self.validate_actions_len(seeds.len())?;
+            self.next_seeds = seeds;
         }
         self.player_configs = player_configs;
 

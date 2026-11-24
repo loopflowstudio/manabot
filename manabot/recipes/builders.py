@@ -10,6 +10,7 @@ from manabot.infra.config import (
     ObservationConfig,
 )
 from manabot.infra.run_settings import RunSettings
+from manabot.policy.protocol import BackendName
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
 from manabot.training.loops.self_play import SelfPlay
@@ -43,7 +44,7 @@ def fitted_horizon(wall_seconds: float, seconds_per_update: float) -> int:
 class SelfPlayRecipe(RunSettings):
     """Validate the execution device before Etude opens the named run."""
 
-    backend: Literal["torch", "mlx"] = Field(
+    backend: BackendName = Field(
         default="torch", exclude_if=lambda value: value == "torch"
     )
     device: Literal["cpu", "mps", "cuda"] = "cpu"

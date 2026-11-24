@@ -29,6 +29,7 @@ from manabot.env.memory_store import (
     archive_memory,
     gather_memory,
     restore_memory,
+    select_rows,
 )
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
@@ -95,6 +96,21 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
     assert space.shapes["decision_records"] == (4, 74)
+
+
+def test_slicing_a_compact_export_preserves_edits_and_prefix_order() -> None:
+    _, dense = memory_input()
+    store = MemoryStore((4, 1024, 1024, 16384))
+    full = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
+    empty = Prefix(PrefixIdentity("empty", 0, "root"), None)
+    obs = CompactObservation({}, (full, empty, full), (4, 1024, 1024, 16384))
+    obs["decision_records"][2, 0, 3] = 21
+    selected = select_rows(obs, slice(1, 3))
+    assert isinstance(selected, CompactObservation)
+    assert selected.prefixes == (empty, full)
+    assert selected.memory_capacities == obs.memory_capacities
+    assert selected["decision_records"][1, 0, 3] == 21
+    assert np.shares_memory(selected["decision_records"], obs["decision_records"])
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])

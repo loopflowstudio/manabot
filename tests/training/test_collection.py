@@ -11,8 +11,10 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env import target_practice
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.profiler import Profiler
+from manabot.policy.prepare import Prepared
 from manabot.training.rollout.collection import (
     Collector,
     ObservationRows,
@@ -58,6 +60,34 @@ def _make_collector(
 
 def _make_agent():
     return ActorCritic(ObservationSpace(), ModelConfig(attention_on=False))
+
+
+def test_collection_borrows_whole_groups_and_chunk_views(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = _make_agent()
+    group = agent.observation_space.allocate(3)
+    group["actions_valid"][:, 0] = group["agent_player_valid"][:, 0] = 1
+    session = TorchCollectionSession(device="cpu", seed=7)
+    with session.scope(agent) as scope:
+        prepare = scope.inference.prepare
+        widths = []
+
+        def check_borrow(rows: ObservationBuffers) -> Prepared[torch.Tensor]:
+            assert all(
+                np.shares_memory(value, group[key])
+                for key, value in rows.items()
+                if value.size
+            )
+            widths.append(len(rows["actions_valid"]))
+            if widths[-1] == 3:
+                assert rows is group
+            return prepare(rows)
+
+        monkeypatch.setattr(scope.inference, "prepare", check_borrow)
+        scope.sample(group, Profiler())
+        scope.sample(group, Profiler(), execution_rows=2)
+    assert widths == [3, 2, 1]
 
 
 def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
@@ -165,6 +195,10 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collect(collector, agent, 7)
+    assert all(
+        not np.shares_memory(data, collector._buffers[key])
+        for key, data in first.next_obs.items()
+    )
     first_logs = first.observations().log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)

@@ -343,33 +343,34 @@ class CompactObservation(PrefixObservation):
         rows: Mapping[str, np.ndarray],
         prefixes: Sequence[Prefix],
         capacities: MemoryCapacities,
+        *,
+        memory: Mapping[str, np.ndarray] | None = None,
     ) -> None:
         super().__init__(rows, prefixes, capacities)
-        self.update(gather_memory(self.prefixes))
+        self.update(gather_memory(self.prefixes) if memory is None else memory)
 
 
 def select_rows(
-    rows: Mapping[str, np.ndarray], indexes: np.ndarray
+    rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
 ) -> dict[str, np.ndarray]:
-    if isinstance(rows, CompactObservation):
-        selected = CompactObservation(
-            {key: value[indexes] for key, value in rows.items()},
-            [rows.prefixes[int(i)] for i in indexes],
-            rows.memory_capacities,
+    selected = {key: value[indexes] for key, value in rows.items()}
+    if isinstance(rows, PrefixObservation):
+        prefixes = (
+            rows.prefixes[indexes]
+            if isinstance(indexes, slice)
+            else tuple(rows.prefixes[int(i)] for i in indexes)
         )
-        # An explicit export is arbitrary dense input, including edits made
-        # after export. Never replace those bytes with its original prefix.
-        selected.update({key: rows[key][indexes] for key in MEMORY_FIELDS})
-        return selected
-    if isinstance(rows, PrefixObservation) and not any(
-        key in rows for key in MEMORY_FIELDS
-    ):
-        return PrefixObservation(
-            {k: v[indexes] for k, v in rows.items() if k not in MEMORY_FIELDS},
-            [rows.prefixes[int(i)] for i in indexes],
-            rows.memory_capacities,
-        )
-    return {k: v[indexes] for k, v in rows.items()}
+        if isinstance(rows, CompactObservation):
+            # Dense exports may contain edits made after prefix capture.
+            return CompactObservation(
+                selected,
+                prefixes,
+                rows.memory_capacities,
+                memory={key: selected[key] for key in MEMORY_FIELDS},
+            )
+        if not any(key in rows for key in MEMORY_FIELDS):
+            return PrefixObservation(selected, prefixes, rows.memory_capacities)
+    return selected
 
 
 def gather_bytes(prefixes: Sequence[Prefix]) -> int:

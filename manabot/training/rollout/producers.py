@@ -9,10 +9,12 @@ draw each game's pair natively from that game's seed, so draws match for any
 worker count. No policy or CUDA state enters a producer thread.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from functools import partial
+import operator
 from pathlib import Path
 from typing import Any, Literal
 
@@ -97,6 +99,18 @@ class BufferedStreams:
         self._check()
         if count != self.num_envs:
             raise ValueError("producer row count differs from global streams")
+
+    @property
+    def games(self) -> list[GameInputs]:
+        """Current replay inputs in global slot order."""
+        return [game for shard in self._shards for game in shard.native.games]
+
+    @contextmanager
+    def reconstructing(self) -> Iterator[None]:
+        with ExitStack() as stack:
+            for shard in self._shards:
+                stack.enter_context(shard.native.reconstructing())
+            yield
 
     def set_buffers(
         self,
@@ -205,13 +219,22 @@ class BufferedStreams:
             ]
         )
 
-    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
+    def reset_each_into_buffers(
+        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+    ) -> None:
         self._rows(len(players))
+        if seeds is not None:
+            self._rows(len(seeds))
+            # Admit the whole list before any producer replaces its streams.
+            seeds = [operator.index(seed) for seed in seeds]
+            if any(not 0 <= seed < 2**64 for seed in seeds):
+                raise ValueError("native seed must fit uint64")
         self._run(
             [
                 partial(
                     shard.native.reset_each_into_buffers,
                     players[shard.rows],
+                    seeds=None if seeds is None else seeds[shard.rows],
                 )
                 for shard in self._shards
             ]
@@ -398,6 +421,19 @@ class BufferedStreams:
                 result.acting_player if result.acting_player is not None else -1,
             )
             for result in self.load_slots_into_buffers(loads)
+        ]
+
+    def state_digests(self, active: list[bool] | None = None) -> list[str | None]:
+        """Hash selected games in global slot order, leaving masked slots empty."""
+        self._check()
+        if active is not None:
+            self._rows(len(active))
+        return [
+            digest
+            for shard in self._shards
+            for digest in shard.native.state_digests(
+                None if active is None else active[shard.rows]
+            )
         ]
 
     def current_game_generations(self) -> list[int]:

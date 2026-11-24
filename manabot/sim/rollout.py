@@ -116,8 +116,14 @@ class BatchedSampler:
 class RandomBatchController:
     """Uniform-over-valid batched controller (mirrors RandomMatchupPlayer)."""
 
-    def __init__(self, seed: int = 0):
+    def __init__(self, seed: int = 0) -> None:
         self._rng = np.random.default_rng(seed)
+
+    def snapshot_rng(self) -> dict[str, Any]:
+        return self._rng.bit_generator.state
+
+    def restore_rng(self, state: dict[str, Any]) -> None:
+        self._rng.bit_generator.state = state
 
     def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         valid = buffers["actions_valid"][rows] > 0
