@@ -37,6 +37,8 @@ pub enum EventSubject {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
+    Object(ObjectEventRef),
+    Definition(CardDefId),
     Card(ObjectId),
     Permanent(PermanentId),
     Player(PlayerId),

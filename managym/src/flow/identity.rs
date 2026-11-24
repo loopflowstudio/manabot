@@ -18,6 +18,12 @@ use crate::{
 /// How a permanent showing no name is called in human labels.
 pub(crate) const FACE_DOWN_NAME: &str = "a face-down permanent";
 
+/// Exact public reference and the storage slot a decision or event may cite.
+pub(crate) struct ObservedIdentity {
+    pub reference: ObjectEventRef,
+    pub visible_slot: Option<u32>,
+}
+
 impl Game {
     /// The object a live battlefield permanent is.
     pub fn permanent_object(&self, permanent_id: PermanentId) -> Option<ObjectId> {
@@ -70,30 +76,44 @@ impl Game {
             .then(|| object.retained_base().0)
     }
 
-    /// Whether `object` stands for a manifested or face-down permanent, live
-    /// or as it last existed, rather than for its physical card (CR 708.2).
-    /// A manifest turned face up keeps the alias its earlier references used.
-    pub(crate) fn hides_physical_card(&self, object: ObjectId) -> bool {
-        match self.lookup_current_permanent(object) {
-            Ok(id) => {
-                self.state.permanents[id]
-                    .as_ref()
-                    .is_some_and(|permanent| permanent.manifested)
-                    || self.state[object].is_face_down()
-            }
-            Err(_) => self.object_lki(object).is_some_and(|lki| {
-                lki.battlefield.manifested || lki.definition_id == CardDefId::ANONYMOUS
-            }),
-        }
+    /// A permanent's alias survives departure in last-known information. Each
+    /// manifest entry mints a fresh alias, so incarnation zero identifies it
+    /// without disclosing the physical card's previous zone changes (CR 708.2).
+    pub(crate) fn observed_identity(&self, object: ObjectId) -> Option<ObservedIdentity> {
+        let (entity, hides_card) = if let Ok(id) = self.lookup_current_permanent(object) {
+            let permanent = self.state.permanents[id].as_ref()?;
+            (
+                permanent.id,
+                permanent.manifested || self.state[object].is_face_down(),
+            )
+        } else if let Some(lki) = self.object_lki(object) {
+            (
+                lki.presentation_id,
+                lki.battlefield.manifested || lki.definition_id == CardDefId::ANONYMOUS,
+            )
+        } else {
+            (self.state.objects.provenance(object)?.0, false)
+        };
+        Some(ObservedIdentity {
+            reference: ObjectEventRef {
+                entity,
+                incarnation: if hides_card { 0 } else { object.generation() },
+            },
+            visible_slot: (!hides_card).then_some(object.slot() as u32),
+        })
     }
 
-    /// Face-down battlefield references must not identify the physical card,
-    /// whose public id can depend on its position in the submitted deck.
+    pub(crate) fn hidden_card_alias(&self, object: ObjectId) -> Option<ObjectEventRef> {
+        let identity = self.observed_identity(object)?;
+        identity
+            .visible_slot
+            .is_none()
+            .then_some(identity.reference)
+    }
+
     pub(crate) fn observed_object_id(&self, object: ObjectId) -> PublicId {
-        if self.hides_physical_card(object) {
-            if let Some(alias) = self.object_event_ref(object) {
-                return alias.entity;
-            }
+        if let Some(alias) = self.hidden_card_alias(object) {
+            return alias.entity;
         }
         self.state
             .objects
@@ -202,28 +222,8 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// The one viewer identity of a current or departed object: its
-    /// permanent alias while on (or last on) the battlefield, else its public
-    /// id, with the appearance's incarnation. An object hiding its physical
-    /// card reports incarnation 0: the alias is minted per entry, and the
-    /// card's generation counts zone moves a viewer may not have seen.
-    pub(crate) fn object_event_ref(&self, object_ref: ObjectId) -> Option<ObjectEventRef> {
-        let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
-            self.state.permanents[permanent_id].as_ref()?.id
-        } else if let Some(lki) = self.object_lki(object_ref) {
-            lki.presentation_id
-        } else {
-            self.state.objects.provenance(object_ref)?.0
-        };
-        let incarnation = if self.hides_physical_card(object_ref) {
-            0
-        } else {
-            object_ref.generation()
-        };
-        Some(ObjectEventRef {
-            entity,
-            incarnation,
-        })
+    pub(crate) fn object_event_ref(&self, object: ObjectId) -> Option<ObjectEventRef> {
+        Some(self.observed_identity(object)?.reference)
     }
 
     pub(crate) fn permanent_event_ref(&self, permanent_id: PermanentId) -> Option<ObjectEventRef> {

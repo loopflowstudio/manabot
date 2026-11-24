@@ -13,8 +13,8 @@ use crate::{
         effect_execution::{contribution_phrase, spent_mana_phrase},
     },
     experience::{
-        DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
-        OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
+        DecisionContextView, DecisionObjectView, DecisionTargetView, OfferSubjectView, PaidView,
+        RequiredNullable, SubjectRef,
     },
     flow::{
         action::cost_label,
@@ -32,17 +32,13 @@ use crate::{
 impl Game {
     fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         self.state.live(object)?;
-        // A face-down permanent is named by its permanent alias, never by the
-        // card's public id or the storage slot that holds it.
-        let event = self.object_event_ref(object)?;
-        let display_id = event.entity.0;
+        let identity = self.observed_identity(object)?;
+        let display_id = identity.reference.entity.0;
         Some(DecisionObjectView {
-            entity_id: if self.hides_physical_card(object) {
-                display_id
-            } else {
-                object.slot() as u32
+            entity_id: identity.visible_slot.unwrap_or(display_id),
+            subject: SubjectRef::Object {
+                id: identity.reference.into(),
             },
-            subject: SubjectRef::Object { id: event.into() },
             display_id,
             label: self.observed_object_name(object),
         })
@@ -72,27 +68,12 @@ impl Game {
                 label: format!("Seat {}", player.0 + 1),
             }),
             Target::Permanent(permanent) => {
-                let permanent = self.state.permanents[*permanent].as_ref()?;
-                let mut view = self.decision_object(permanent.object)?;
-                view.display_id = permanent.id.0;
-                if let SubjectRef::Object { ref mut id } = view.subject {
-                    id.entity = permanent.id.0;
-                }
-                Some(view)
+                self.decision_object(self.permanent_object(*permanent)?)
             }
-            Target::StackSpell(object) => self.decision_object(*object),
+            Target::StackSpell(object) | Target::GraveyardCard(object) => {
+                self.decision_object(*object)
+            }
             Target::StackAbility(id) => self.decision_object(self.stack_ability_source(*id)?),
-            Target::GraveyardCard(reference) => {
-                let mut view = self.decision_object(*reference)?;
-                // Keep the announced incarnation even if the card later moved.
-                view.subject = SubjectRef::Object {
-                    id: ObjectRenderId {
-                        entity: view.display_id,
-                        incarnation: reference.generation(),
-                    },
-                };
-                Some(view)
-            }
         }
     }
 
@@ -153,7 +134,7 @@ impl Game {
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
                             | Action::TurnFaceUp { .. }
-            | Action::Foretell { .. }
+                            | Action::Foretell { .. }
                             // The creature an attack declaration sends in acts;
                             // its decline names the same creature as a choice.
                             | Action::DeclareAttacker { attack: true, .. } => "source",
@@ -204,11 +185,15 @@ impl Game {
                 crate::state::zone::ZoneType::Graveyard,
             ] {
                 for object in self.state.zones.zone_objects(zone, player).iter() {
-                    if self.hides_physical_card(*object) {
-                        continue;
-                    }
-                    if let Some(view) = self.decision_object(*object) {
-                        subjects.insert(format!("object:{}", object.slot()), view.subject);
+                    if let Some(identity) = self.observed_identity(*object) {
+                        if let Some(slot) = identity.visible_slot {
+                            subjects.insert(
+                                format!("object:{slot}"),
+                                SubjectRef::Object {
+                                    id: identity.reference.into(),
+                                },
+                            );
+                        }
                     }
                 }
             }

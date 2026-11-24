@@ -5,7 +5,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::Decision,
-        event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
+        event::{EventEntity, EventSubject, GameEvent},
         game::Game,
         statics::Characteristics,
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
@@ -1833,66 +1833,43 @@ impl Observation {
     /// the physical card it hides (CR 708.2), and a face-down permanent that
     /// moves to a hidden zone names no object.
     pub(crate) fn event_data(game: &Game, event: &GameEvent) -> Vec<EventData> {
-        let mut rows = Self::event_rows(event);
-        let source = match event {
-            GameEvent::DamageDealt { source, .. } => *source,
-            GameEvent::AbilityCountered { source_object, .. }
-            | GameEvent::AbilityTriggered { source_object, .. } => Some(*source_object),
-            _ => None,
-        };
-        if let Some(alias) = source
-            .filter(|object| game.hides_physical_card(*object))
-            .and_then(|object| game.object_event_ref(object))
-        {
-            for row in &mut rows {
-                row.source_kind = EventEntityKind::Object as i32;
-                row.source_id = alias.entity.0 as i32;
-                row.source_incarnation = alias.incarnation as i32;
-            }
-        }
-        if let GameEvent::CardMoved {
-            departed: Some(departed),
-            to: ZoneType::Hand | ZoneType::Library,
-            ..
-        } = event
-        {
-            if game.hides_physical_card(*departed) {
-                for row in &mut rows {
-                    row.source_kind = EventEntityKind::None as i32;
-                    row.source_id = -1;
-                }
-            }
-        }
-        rows
-    }
-
-    fn event_rows(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
+        use EventEntity::{Card, Object, Player};
+
+        let source_entity = |object| game.hidden_card_alias(object).map_or(Card(object), Object);
         match event {
             GameEvent::PermanentSacrificed { .. } | GameEvent::Bent { .. } => Vec::new(),
-            GameEvent::CardRevealed { owner, definition } => {
-                let mut data =
-                    Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));
-                data.source_kind = EventEntityKind::Definition as i32;
-                data.source_id = definition.0 as i32;
-                vec![data]
-            }
+            GameEvent::CardRevealed { owner, definition } => vec![Self::build_event_data(
+                EventType::CardRevealed,
+                Some(EventEntity::Definition(*definition)),
+                None,
+                0,
+                Some(*owner),
+            )],
             GameEvent::CardMoved {
                 object_id,
+                departed,
                 from,
                 to,
                 controller,
                 face_down,
                 ..
             } => {
-                let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
+                let hidden = *face_down
+                    || (from.is_none() && *to == ZoneType::Hand)
+                    || (matches!(to, ZoneType::Hand | ZoneType::Library)
+                        && departed
+                            .and_then(|object| game.hidden_card_alias(object))
+                            .is_some());
+                let mut data = Self::build_event_data(
+                    EventType::CardMoved,
+                    (!hidden).then_some(Card(*object_id)),
+                    None,
+                    0,
+                    Some(*controller),
+                );
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
-                // Outside cards and face-down arrivals name no public object.
-                if (from.is_none() && *to == ZoneType::Hand) || *face_down {
-                    data.source_kind = EventEntityKind::None as i32;
-                    data.source_id = -1;
-                }
                 vec![data]
             }
             GameEvent::DamageDealt {
@@ -1901,14 +1878,13 @@ impl Observation {
                 amount,
                 ..
             } => {
-                let source_entity = source.map(EventEntity::Card);
                 let target_entity = Some(match *target {
                     DamageTarget::Player(p) => EventEntity::Player(p),
                     DamageTarget::Permanent(p) => EventEntity::Permanent(p),
                 });
                 vec![Self::build_event_data(
                     EventType::DamageDealt,
-                    source_entity,
+                    source.map(source_entity),
                     target_entity,
                     *amount as i32,
                     None,
@@ -1940,19 +1916,23 @@ impl Observation {
                 source_object,
                 controller,
                 ..
-            } => vec![Self::card_event_data(
+            } => vec![Self::build_event_data(
                 EventType::AbilityCountered,
-                *source_object,
-                *controller,
+                Some(source_entity(*source_object)),
+                None,
+                0,
+                Some(*controller),
             )],
             GameEvent::AbilityTriggered {
                 source_object,
                 controller,
                 ..
-            } => vec![Self::card_event_data(
+            } => vec![Self::build_event_data(
                 EventType::AbilityTriggered,
-                *source_object,
-                *controller,
+                Some(source_entity(*source_object)),
+                None,
+                0,
+                Some(*controller),
             )],
             GameEvent::CombatAttackersDeclared {
                 player,
@@ -1961,26 +1941,23 @@ impl Observation {
             } => attackers
                 .iter()
                 .map(|attacker| {
-                    let mut data = Self::object_event_data(
+                    Self::build_event_data(
                         EventType::CombatAttackersDeclared,
-                        Some(*attacker),
-                        None,
+                        Some(Object(*attacker)),
+                        Some(Player(*defender)),
                         0,
                         Some(*player),
-                    );
-                    data.target_kind = EventEntityKind::Player as i32;
-                    data.target_id = defender.0 as i32;
-                    data
+                    )
                 })
                 .collect(),
             GameEvent::BlockersDeclared { assignments } => assignments
                 .iter()
                 .flat_map(|(attacker, blockers)| {
                     blockers.iter().map(|blocker| {
-                        Self::object_event_data(
+                        Self::build_event_data(
                             EventType::BlockersDeclared,
-                            Some(*attacker),
-                            Some(*blocker),
+                            Some(Object(*attacker)),
+                            Some(Object(*blocker)),
                             0,
                             None,
                         )
@@ -1991,35 +1968,22 @@ impl Observation {
                 source,
                 target,
                 amount,
-            } => {
-                let mut data = match target {
-                    EventSubject::Object(target) => Self::object_event_data(
-                        EventType::CombatDamageDealt,
-                        Some(*source),
-                        Some(*target),
-                        *amount as i32,
-                        None,
-                    ),
-                    EventSubject::Player(_) => Self::object_event_data(
-                        EventType::CombatDamageDealt,
-                        Some(*source),
-                        None,
-                        *amount as i32,
-                        None,
-                    ),
-                };
-                if let EventSubject::Player(player) = target {
-                    data.target_kind = EventEntityKind::Player as i32;
-                    data.target_id = player.0 as i32;
-                }
-                vec![data]
-            }
+            } => vec![Self::build_event_data(
+                EventType::CombatDamageDealt,
+                Some(Object(*source)),
+                Some(match target {
+                    EventSubject::Object(target) => Object(*target),
+                    EventSubject::Player(player) => Player(*player),
+                }),
+                *amount as i32,
+                None,
+            )],
             GameEvent::PermanentsDied { objects } => objects
                 .iter()
                 .map(|object| {
-                    Self::object_event_data(
+                    Self::build_event_data(
                         EventType::PermanentsDied,
-                        Some(*object),
+                        Some(Object(*object)),
                         None,
                         objects.len() as i32,
                         None,
@@ -2053,27 +2017,6 @@ impl Observation {
         }
     }
 
-    fn object_event_data(
-        event_type: EventType,
-        source: Option<ObjectEventRef>,
-        target: Option<ObjectEventRef>,
-        amount: i32,
-        controller: Option<PlayerId>,
-    ) -> EventData {
-        let mut data = Self::build_event_data(event_type, None, None, amount, controller);
-        if let Some(source) = source {
-            data.source_kind = EventEntityKind::Object as i32;
-            data.source_id = source.entity.0 as i32;
-            data.source_incarnation = source.incarnation as i32;
-        }
-        if let Some(target) = target {
-            data.target_kind = EventEntityKind::Object as i32;
-            data.target_id = target.entity.0 as i32;
-            data.target_incarnation = target.incarnation as i32;
-        }
-        data
-    }
-
     fn card_event_data(event_type: EventType, object: ObjectId, controller: PlayerId) -> EventData {
         Self::build_event_data(
             event_type,
@@ -2091,8 +2034,8 @@ impl Observation {
         amount: i32,
         controller: Option<PlayerId>,
     ) -> EventData {
-        let (source_kind, source_id) = Self::event_entity(source);
-        let (target_kind, target_id) = Self::event_entity(target);
+        let (source_kind, source_id, source_incarnation) = Self::event_entity(source);
+        let (target_kind, target_id, target_incarnation) = Self::event_entity(target);
 
         EventData {
             event_type: event_type as i32,
@@ -2104,19 +2047,31 @@ impl Observation {
             controller_id: controller.map_or(-1, |player| player.0 as i32),
             from_zone: -1,
             to_zone: -1,
-            source_incarnation: -1,
-            target_incarnation: -1,
+            source_incarnation,
+            target_incarnation,
         }
     }
 
-    fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
+    fn event_entity(entity: Option<EventEntity>) -> (i32, i32, i32) {
         match entity {
-            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.slot() as i32),
-            Some(EventEntity::Permanent(permanent)) => {
-                (EventEntityKind::Permanent as i32, permanent.0 as i32)
+            Some(EventEntity::Card(object)) => {
+                (EventEntityKind::Card as i32, object.slot() as i32, -1)
             }
-            Some(EventEntity::Player(player)) => (EventEntityKind::Player as i32, player.0 as i32),
-            None => (EventEntityKind::None as i32, -1),
+            Some(EventEntity::Permanent(permanent)) => {
+                (EventEntityKind::Permanent as i32, permanent.0 as i32, -1)
+            }
+            Some(EventEntity::Player(player)) => {
+                (EventEntityKind::Player as i32, player.0 as i32, -1)
+            }
+            Some(EventEntity::Object(object)) => (
+                EventEntityKind::Object as i32,
+                object.entity.0 as i32,
+                object.incarnation as i32,
+            ),
+            Some(EventEntity::Definition(definition)) => {
+                (EventEntityKind::Definition as i32, definition.0 as i32, -1)
+            }
+            None => (EventEntityKind::None as i32, -1, -1),
         }
     }
 
