@@ -68,6 +68,14 @@ Behavior review of Slice 4 at `0c0491a8e0` found it satisfied (probe details in 
 - Validation (debug): `managym-cards --test cards` 911; `managym --lib` + `rules_tests` + `conformance_tests` + `content_pack_tests` + `canonical_replay_tests` + `search_tests` + `possible_worlds_tests` + `engine_tests` 597 (one width-pin failure, fixed and rerun); protocol schema tests 19; Academy vitest 634 and `npm run check`; extension rebuilt from `df6551641f`: `test_text_observation`, `test_restricted_mana_input`, `test_pooled_mana_classes_input`, `test_casting_profiles`, `test_choice_navigation`, `test_pinned_pilot` (unchanged), `test_skip_forced_decisions`, `test_package_boundaries` pass. Academy fixtures refreshed.
 - `a9687cf6b4` (after the plan mark) folds `play_land` and `cast_spell_action`'s shared checks into `Game::priority_play` (priority, pending choice, face kind per CR 305.9, `permits_spell`); `permits_spell` resolves the selected face once. Rechecked in debug at realign: `--lib identity_tests` 4, `rules_tests cr_712` 5, cards `airbend|flameshape|tinybones` 19 pass.
 
+Behavior review of items 1–3 at `baa3f9815f` found them satisfied and added no defects beyond item 4. What it checked:
+- Every `play_lands: true` grant comes from Oracle "you may play": Kellan, Redcap Gutter-Dweller, The Legend of Roku, Zuko and Flameshape (through `exile_top_cards_to_play`). Tinybones "play" uses `ExileCounter`. Airbend, foretell, Hama/Azula, Zul, adventure exile and prepared copies are "cast" grants and stay cast-only.
+- The land rule in `permits_spell` matches CR 305.9 and the MDFC permission ruling: Muldrotha plays Tidal Haven through `Land` and never puts a land face on a spell kind.
+- Forged `PlayLand` Commands (`None`, `Grant`, `LibraryTop`) fail through `permitted_play_routes`. `priority_play` rejects a Command without leaving a witness change.
+- `play_route` reads `one_hot:10` (codes 1..10 plus "above"), so `PrintedGraveyard` = 9 needs no new width.
+- Debug reruns: `--lib identity_tests` 4; `rules_tests cr_712` 5; cards `airbend|flameshape|tinybones|earthbent|redcap|zuko|legend_of_roku|kellan` 33. Python `test_text_observation`, `test_casting_profiles` and `test_pinned_pilot`: 86 pass, 1 skipped, pilot unchanged.
+- Consequence for gate: grants that now serialize `play_lands` change the state hash and `PlayGrantExtension` tokens of positions that hold them. Frozen recordings that contain such a grant will not reproduce their stored hashes on this branch. `canonical_replay_tests` and conformance pass.
+
 Item 4 + concept-review repairs (from the post-Slice-5 items 1–3 concept review, `d46d360241`, `scratch/concept-review.html`):
 
 4. **Model-alignment repairs before/alongside Quilled Greatwurm** (`flow/play.rs`, `flow/action.rs`, `agent/observation.rs`, `academy/ui/src/lib/board/view.ts`):
