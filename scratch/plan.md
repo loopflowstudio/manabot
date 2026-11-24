@@ -148,3 +148,9 @@ After the prescribed extension rebuild and atomic install, run `uv run pytest te
 - Many copies of Emergency Phytomedic with individual Seed Sutures, then different prepared permanents sharing and differing in spell names. Include a control transfer and several target creatures. Measure link lookup, legal offers, observation/encoding and fork cost, then casting one copy. Include an ordinary board with zero links.
 
 Use the same harness and hardware for comparisons. For new board states that the base cannot construct, report candidate work/counts by size and compare equivalent workloads on revisions supporting those states. Separate changed rules digests from timing claims. Select optimizations from measured costs, retain replay and legal-choice witnesses, and leave deck selection and training to integrated validation.
+
+## Permission terms before a control change
+
+The transfer and cold replay witnesses establish who can cast now. Before transfer, the public permission row still describes two different futures with the same player and source fields. In the prepared cohort, project whether entitlement follows the source controller from the native grant into CastPermissionData. Retain the resolved player for direct consumption. Carry the term through canonical observation, bindings, a v11 fact, LLM text and Academy inspection. Use the existing transfer position before control changes to compare the two visible terms for both viewers. Keep retained observations readable without inferring a missing term from a card name. Leave grant storage, search cloning and Command dispatch with their current owners.
+
+Run the returning-Angel witness at a fresh decision revision. Alter only the new offer’s object precondition to identify the departed object, compare the state hash on rejection, then execute the genuine offer and check Phytomedic’s surviving link. Complete this alongside all prepared rows sharing the path before returning to review.

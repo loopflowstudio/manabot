@@ -42,3 +42,5 @@ For the two-copy fixture, both branches cast Counterspell through a native Comma
 The transfer review selects a fixed-player source-conditioned grant as the comparison. Transfer holds both object identities constant while distinguishing a change of caster from a loss of access.
 
 The ordinary-play transfer replay uses Agent of Treachery to take the Angel and Spectral Sailor to keep a response available after payment.
+
+Project the caster rule on visible permissions so a policy can distinguish the effects of a control change before choosing it. Use the existing transfer fixture as the paired control.
