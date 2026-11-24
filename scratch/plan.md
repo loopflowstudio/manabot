@@ -27,7 +27,10 @@ Built on this branch (`88ce96bd6b..307465b649`):
 
 Remaining model completion (Slice 5, detailed below):
 
-- **Printed graveyard self-permission (`PlayRoute::PrintedGraveyard`) for Quilled Greatwurm**, with a route-attached distributed `CostComponent::RemoveCounters` payment and creature combat-damage trigger amount.
+- **“May play” vs. “may cast” on `PlayGrant` (`play_lands: bool`)**, closing the live Airbend-on-Earthbent-land and cast-only-grant-on-MDFC-land-face bugs and aligning LLM/Academy/fact wording.
+- **Policy route identity (`action::PLAY_ROUTE`)**, appending one categorical column (`Category { size: 10 }`) so overlapping same-MV routes (`ExileCounter` vs. `Grant`, `PrintedGraveyard` vs. `Grant`, `GrantedFlashback` vs. `Grant`) are distinguishable in the v11 policy tensor.
+- **Per-`(object, profile)` route disambiguation & `play_land` priority guards**, keeping lone-route MDFC land plays on `route: None` under Omniscience and matching `cast_spell_action`'s `pending_choice` / `priority.holder` checks.
+- **Printed graveyard self-permission (`PlayRoute::PrintedGraveyard`) for Quilled Greatwurm**, with a route-attached distributed any-counter `CostComponent::RemoveCounters` payment and per-creature aggregated `YourTurn` combat-damage trigger.
 
 ## Delivered
 
@@ -64,17 +67,40 @@ Post-Slice-3 concept review (`307465b649`, recorded in `scratch/concept-review.h
 
 Validation at Slice 4 (debug): `managym-cards --test cards` 909, `managym --lib` 358, `rules_tests` 191 (2 ignored), `possible_worlds_tests` 8, `search_tests` 11, `engine_tests` 13, `conformance_tests`, `content_pack_tests`, `canonical_replay_tests`. Academy board vitest 478 and `npm run check` are clean. `test_choice_navigation`, `test_text_observation` and `test_pinned_pilot`: 91 pass, 1 skipped (extension rebuilt from `301782c18f`; later Rust changes do not touch Python-visible shapes). After the `f6c6d31a9e` label/commitment merge, `rules_tests cr_712` (3) and `--lib identity_tests` (2) pass in debug.
 
-### Slice 5: Quilled Greatwurm (FDN) — `PlayRoute::PrintedGraveyard`
+### Slice 5: Model-completion repairs + Quilled Greatwurm (FDN)
 
-Quilled Greatwurm is the last untested play-permission axis in MTG-419: a printed graveyard self-permission with a route-attached additional cost that must coexist cleanly with Muldrotha and Zul on the same card.
+Post-Slice-4 concept review (`8e89bd5646`, recorded in `scratch/concept-review.html`) found three residual model gaps and two Quilled Greatwurm Oracle corrections. Fold all of them into Slice 5 in this order:
 
-1. **`PlayRoute::PrintedGraveyard`** (`flow/cast_permission.rs`, `play.rs`, `action.rs`, `payment.rs`, `observation.rs`):
-   - Printed graveyard-cast permission on `PrintedCharacteristics` carrying its route-specific additional cost (`CostComponent::RemoveCounters { count, kind, predicate }`, distributed among controlled permanents matching `predicate`, analogous to `Decision::DistributeCounters`).
-   - `play_routes` emits `PlayRoute::PrintedGraveyard` for the card in its owner's graveyard; `cost_components` and `can_pay_cast` attach the counter-removal cost **only** when `cast.route == Some(PlayRoute::PrintedGraveyard)` (never on Muldrotha's `GraveyardType { Creature }` or Zul's `Grant` on the same card).
-   - `action_description` labels the route clearly; payment choices, `PaymentPreview`, LLM text, and Academy offers handle distributed counter removal cleanly.
-2. **Creature combat-damage trigger with damage amount** (`state/src/ability.rs`, `flow/triggers.rs`, `flow/resolution.rs`):
-   - Extend `TriggerCondition::DealsCombatDamage` to match combat damage dealt to creatures as well as players and pass the damage amount ("put that many +1/+1 counters on that creature") to the triggered frame.
-3. **Author Quilled Greatwurm** in `managym/cards/src/fdn.rs`, update `fdn.jsonl`, and prove the Quilled Greatwurm + Muldrotha + Zul overlap fixture in `managym/cards/tests/cards/fdn.rs` (normal cast, graveyard cast removing six +1/+1 counters distributed across multiple creatures, Muldrotha casting it without removing counters while spending the Creature quota, and insufficient counters blocking `PrintedGraveyard` while keeping Muldrotha open).
+1. **“May play” vs. “may cast” on `PlayGrant` (`play_lands: bool`)** (`flow/cast_permission.rs`, `flow/play.rs`, `agent/observation.rs`, `agent/observation_encoder.rs`, `agent/record_vocabulary.rs`, `managym/experience_projection.py`, `manabot/semantic/text_observation.py`, `academy/ui/src/lib/board/inspect.ts`):
+   - Add `#[serde(skip_serializing_if = "std::ops::Not::not")] pub play_lands: bool` to `PlayGrant` (default `false` = cast spells only). Set `play_lands: true` **only** in `exile_top_cards_to_play` (Redcap, Flameshape, Loot, Zuko, The Legend of Roku) and in `fdn::granted_foreign_land_enters_under_its_players_control`.
+   - Unify `PlayRoute::Grant(key)` in `permits_spell` into one arm checking `(!cast.spell(&self.state[object]).types.is_land() || grant.play_lands) && (cast.profile.is_front() || (!grant.on_adventure && !grant.foretold && !grant.flashback))`.
+   - Project `play_lands` through `CastPermissionData`, `PlayGrantExtension` (and register `"play_lands"` in `record_vocabulary.rs`), Python bindings, `experience_projection.py`, protocol schemas, LLM text (`"may be played"` when `play_lands`, `"may be cast"` otherwise — never `"as a land play"` for a cast-only grant on a land), and Academy `permissionTerms` (`"may play this"` vs. `"may cast this"`).
+   - Directed regression tests: airbending an Earthbent Mountain offers no `PlayLand` and rejects a forged `PlayLand` Command; Airbend / Hama / Azula / Zul on `Tidal Errand // Tidal Haven` offers only the front Sorcery, never `Tidal Haven`; Redcap / Flameshape still plays both plain lands and `Tidal Haven`.
+
+2. **Per-`(object, profile)` route disambiguation & `play_land` priority guards** (`flow/play.rs`, `flow/action.rs`, `tests/rules/cr_712_modal_faces.rs`):
+   - Add `permitted_play_routes(player, object, profile)` filtering `play_routes(player, object)` through `cast_choices` + `permits_spell` (before affordability). Use it in `priority_actions_for_object` (looping `profile` outer so `route = (routes.len() > 1).then_some(permission)` is per face) and in `selected_play_route(player, object, profile, selected)` / `resolved_play_route`.
+   - Result: under Omniscience, `Tidal Haven` and `Kelp Hollow` land faces stay `route: None` (matching plain `Island`'s wire shape and keeping `resolved_play_route` `None` for ordinary hand plays), while spell faces keep `Some(Hand)` / `Some(FreeFromHand)` on overlap even if only one is affordable. Update `cr_712_modal_faces.rs` expectations accordingly.
+   - Add `if self.pending_choice.is_some()` and `if self.state.priority.holder != player` guards to `play_land` (matching `cast_spell_action`), with a negative unit test in `flow::action::identity_tests`.
+
+3. **Policy route identity (`action::PLAY_ROUTE`)** (`agent/observation.rs`, `agent/observation_json.rs`, `agent/observation_layout.rs`, `agent/observation_encoder.rs`, `python/bindings.rs`, `managym/__init__.pyi`):
+   - Add `pub play_route: Option<u8>` to `ActionOption` (omitted from JSON when `None`, matching `route_mana_value`/`quota_type`), populated via `play_route_code(route)` whenever `resolved_play_route(action)` is `Some(route)`.
+   - Append column 29 `action::PLAY_ROUTE` (`ValueKind::Category { size: 10 }`: 0 absent / ordinary lone hand, 1..9 `PlayRoute` variants including `PrintedGraveyard`) to `action::COLUMNS`. Preserves saved prefixes and `test_pinned_pilot`.
+   - Prove distinct encoded v11 action rows for Tinybones `ExileCounter` vs. `Grant` (in `fdn::a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant`) and for Quilled Greatwurm `PrintedGraveyard` vs. `Grant` vs. `GraveyardType`.
+
+4. **Quilled Greatwurm (FDN) — `PlayRoute::PrintedGraveyard`, any-counter removal & aggregated combat-damage trigger** (`state/src/card.rs`, `state/src/ability.rs`, `flow/cast_permission.rs`, `flow/play.rs`, `flow/action.rs`, `flow/payment.rs`, `flow/damage.rs`, `flow/triggers.rs`, `flow/proposed_event.rs`, `flow/resolution.rs`, `agent/record_vocabulary.rs`, `cards/src/fdn.rs`):
+   - **Oracle text (verified):** `{4}{G}{G}` Creature — Wurm (7/7), **Trample**. *"Whenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it."* / *"You may cast this card from your graveyard by removing six counters from among creatures you control in addition to paying its other costs."*
+   - **`PlayRoute::PrintedGraveyard` + `CostComponent::RemoveCounters { remaining: u8, kind: Option<CounterKind>, predicate: CardPredicate }`:**
+     - Printed graveyard-cast permission on `PrintedCharacteristics` carrying its route-specific counter-removal cost (`count: 6, kind: None, predicate: creature`).
+     - `play_routes` emits `PlayRoute::PrintedGraveyard` for the card in its owner's graveyard; `permits_spell` admits front face; `cost_components` and `can_pay_cast` attach `RemoveCounters` **only** when `cast.route == Some(PlayRoute::PrintedGraveyard)` (never on Muldrotha's `GraveyardType { Creature }` or a `Grant` on the same card).
+     - Removing from a controlled creature with one counter kind removes it directly (`Action::SelectCard`); a creature holding multiple counter kinds (e.g. stun + `+1/+1`) inserts `CostComponent::RemoveCounterKind { from, kinds }` (`ChooseMode`, mirroring `CostComponent::TapPays`) so strategic kind selection is never hidden. `action_description`, `PaymentPreview` (`will_owe_a_choice` already returns `NeedsChoice`), LLM text, and Academy offers handle both cleanly.
+   - **Aggregated `YourTurn` combat-damage trigger:**
+     - Emit a per-combat-damage-step aggregated event (alongside `CombatDamageToPlayers`) carrying each source creature and the **total** combat damage it dealt across players, creatures, planeswalkers, and battles (CR 510.2 / Gatherer: Trample splitting across blocker + player or multi-blocked creatures triggers **once** for that creature with the sum).
+     - Support combat damage to any recipient (or `DealsCombatDamage` recipient extension) with `Condition::YourTurn` intervening-if / gate, passing the damage total to the triggered frame to put that many `+1/+1` counters on the triggering creature (when it survived combat).
+   - **Author Quilled Greatwurm** in `managym/cards/src/fdn.rs`, update `fdn.jsonl`, check `scripts/refresh_card_fixture.py` on `"colors": null` for prepare/MDFC layouts, refresh Academy fixtures, and prove the overlap & evidence fixtures in `managym/cards/tests/cards/fdn.rs`:
+     - Quilled Greatwurm + Muldrotha + `Grant` overlap (normal cast; `PrintedGraveyard` removing six counters distributed across multiple creatures including mixed counter kinds such as `+1/+1` + stun, preserving Muldrotha quota; `GraveyardType { Creature }` without removing counters while spending Muldrotha quota; `Grant` without removing counters or Muldrotha quota; insufficient counters blocking only `PrintedGraveyard`; distinct encoded `action::PLAY_ROUTE` rows).
+     - Quilled Greatwurm combat damage trigger (single trigger with total damage on Trample split across blocker + player during your turn; no trigger when blocking during opponent's turn; no counters if the creature died in combat).
+     - Glamdring cast from a Tinybones stash (`ExileCounter`) spending mana of any type after Glamdring's reduction.
+     - Controlled opponent's Flameshape card through Python (`agent.inspected` with `CastPermissionData` terms, constructed position or documented unreachable).
 
 ### Split out of MTG-419 (recorded boundaries & deferred rows)
 
@@ -96,7 +122,8 @@ Slice 4 delivered the MDFC, Tinybones, Gandalf and Scry + top-library exile rows
 
 | Position | Required fork or outcome |
 |---|---|
-| Quilled Greatwurm + Muldrotha + Zul (Slice 5) | Overlapping `PrintedGraveyard` (removes six +1/+1 counters distributed among controlled creatures, preserves Muldrotha quota) vs. `GraveyardType { Creature }` (no counter removal, spends Muldrotha quota) vs. Zul `Grant` (no counter removal, preserves Muldrotha quota); insufficient counters closes only `PrintedGraveyard`; combat damage to creatures puts that many +1/+1 counters on the creature. |
+| Airbend on Earthbent Mountain & cast-only grant on `Tidal Errand // Tidal Haven` (Slice 5) | `PlayGrant.play_lands: false` blocks `PlayLand` offers and rejects forged `PlayLand` Commands on Airbend/Hama/Azula/Zul; Redcap/Flameshape (`play_lands: true`) keeps playing lands and `Tidal Haven`; LLM/Academy render `"cast"` vs. `"play"`. |
+| Quilled Greatwurm + Muldrotha + Grant (Slice 5) | Overlapping `PrintedGraveyard` (removes six counters of any kind distributed among controlled creatures, prompting kind choice when a creature has multiple counter kinds, preserves Muldrotha quota) vs. `GraveyardType { Creature }` (no counter removal, spends Muldrotha quota) vs. `Grant` (no counter removal, preserves Muldrotha quota); distinct encoded `action::PLAY_ROUTE` rows (also asserted on Tinybones + Grant); insufficient counters closes only `PrintedGraveyard`; combat damage during your turn triggers once per creature for total combat damage (including Trample splits), never during opponent's turn. |
 | Glamdring cast from a Tinybones stash (`ExileCounter`) | Spends mana of any type on the cost after Glamdring's reduction. The shared CR 601.2h owner is covered by the Azula test; this row is the route combination itself. Add beside the Slice 5 fixtures in `fdn.rs`. |
 | Controlled opponent's Flameshape card through Python | Stays in `agent.inspected` with its `CastPermissionData` terms in the Python projection. No catalog card grants player control with a face-down exile in reach; build it as a constructed position, or record that it is unreachable. |
 

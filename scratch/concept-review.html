@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Unified (Object, Profile, Route) Play, Academy Tray Inspection, Library-Top Exile &amp; Cohort Boundary</title>
+  <title>MTG-419 Concept Review — Cast vs. Play Grants, Policy Route Identity, Per-Face Route Disambiguation &amp; Quilled Greatwurm</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -162,33 +162,32 @@
       border-radius: 6px;
       margin: 0.9rem 0 1.2rem;
     }
-    .inspect-demo {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.7rem 0.85rem;
-      background: var(--surface-alt);
-      font-size: 0.88rem;
+    .tensor-demo {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
       margin: 0.5rem 0;
     }
-    .inspect-title { font-weight: 700; margin-bottom: 0.3rem; }
-    .inspect-line {
-      border-top: 1px solid var(--border);
-      padding-top: 0.32rem;
-      margin-top: 0.32rem;
-      color: var(--muted);
+    .tensor-demo th, .tensor-demo td {
+      padding: 0.4rem 0.55rem;
+      border: 1px solid var(--border);
     }
-    .inspect-line.added { color: var(--prop-ink); font-weight: 600; }
-    .inspect-line.missing { color: var(--no-ink); font-style: italic; }
+    .tensor-demo td.same { background: color-mix(in srgb, var(--no-bg) 45%, var(--surface)); }
+    .tensor-demo td.diff { background: color-mix(in srgb, var(--prop-bg) 55%, var(--surface)); font-weight: 700; color: var(--prop-ink); }
   </style>
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Post-Slice-3 Concept Review (307465b649 vs. main 88ce96bd6b)</p>
-  <h1>Do the shared casting-profile, play-permission, face-down exile, and Academy concepts line up?</h1>
+  <p class="kicker">Managym · MTG-419 · Post-Slice-4 Concept Review (8e89bd5646 vs. main 88ce96bd6b)</p>
+  <h1>Do the shared casting-profile, play-permission, policy-route, and Quilled Greatwurm concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The whole shared casting-profile, play-permission, cost-modification/spending, face-down exile privacy/resampling, and off-board play-inspection system across <code>managym</code> (<code>play.rs</code>, <code>cast_permission.rs</code>, <code>statics.rs</code>, <code>action.rs</code>, <code>agent/action.rs</code>, <code>zones.rs</code>, <code>knowledge.rs</code>, <code>search.rs</code>, <code>possible_worlds.rs</code>, <code>selection_sampling.rs</code>, <code>structured_offer.rs</code>, <code>observation.rs</code>, <code>observation_encoder.rs</code>, <code>record_vocabulary.rs</code>) and its consumers (<code>experience_projection.py</code>, <code>text_observation.py</code>, <code>academy/ui/src/lib/board/Board.svelte</code>, <code>Inspect.svelte</code>, <code>view.ts</code>, <code>inspect.ts</code>, <code>Rail.svelte</code>) plus the remaining cohort boundary in <code>scratch/plan.md</code>.<br>
-    <strong>Why this area:</strong> Slice 3 (<code>a60e4570d7..307465b649</code>) closed every Slice 2 review defect: one CR 601.2h <code>any_mana</code> owner, atomic two-seat face-down exile privacy and refill, full <code>CastPermissionData</code> / <code>PlayGrantTerms</code> / <code>inspect.ts</code> parity, <code>exile_with_play_grant</code>, and Gandalf // Flameshape. Reviewing the whole branch fresh against base <code>88ce96bd6b</code> finds <strong>four remaining mismatches</strong>: (1) <strong>biggest</strong> — playing a card <code>(object, profile, route)</code> is still half-owned by front-face <code>land</code> pre-filters in <code>play_routes</code> and a profile-less <code>Action::PlayLand</code>; (2) Academy’s play tray throws away <code>CardState</code> on hover (hiding all <code>permissionTerms</code> and <code>counterTerms</code> right where a player acts) and <code>Board.svelte</code> omits <code>agent.inspected</code>; (3) top-of-library play-grant exiles wipe remaining <code>known_library</code> positions instead of shifting them via <code>library_top_departure</code>; and (4) <code>scratch/plan.md</code> still mixes Quilled Greatwurm (a real <code>PlayRoute::PrintedGraveyard</code> permission) with 12 non-casting shared-rules rows that belong in separate Tasks.
+    <strong>Area reviewed:</strong> The complete shared casting-profile and play-permission model across <code>managym</code> (<code>flow/play.rs</code>, <code>flow/cast_permission.rs</code>, <code>flow/action.rs</code>, <code>flow/payment.rs</code>, <code>flow/statics.rs</code>, <code>flow/decision.rs</code>, <code>flow/zones.rs</code>, <code>flow/damage.rs</code>, <code>flow/triggers.rs</code>, <code>flow/mana/preview.rs</code>, <code>agent/action.rs</code>, <code>agent/observation.rs</code>, <code>agent/observation_layout.rs</code>, <code>agent/observation_encoder.rs</code>, <code>agent/structured_offer.rs</code>, <code>agent/record_vocabulary.rs</code>), its consumers (<code>managym/experience_projection.py</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/board/{view.ts,Board.svelte,inspect.ts,Inspect.svelte,Rail.svelte}</code>), and the unbuilt Slice 5 plan for Quilled Greatwurm in <code>scratch/plan.md</code>.<br>
+    <strong>Why this area:</strong> Slice 4 (<code>301782c18f..8e89bd5646</code>) landed profile-aware <code>Action::PlayLand</code>, unified Academy tray inspection via <code>inspectableCards</code> / <code>previewTray</code>, <code>library_top_departure</code> on top-library play grants, and the recursive condition walk. Reviewing the whole branch fresh against base <code>88ce96bd6b</code> — plus Slice 5 before building it — uncovers <strong>four real conceptual mismatches</strong>:
+    (1) <strong>biggest</strong> — <code>PlayGrant</code> collapses “may cast” and “may play”, letting cast-only grants (Airbend on Earthbent lands, Airbend/Hama/Azula/Zul on Spell//Land MDFCs) illegally play lands and falsely describing them as land plays;
+    (2) overlapping same-mana-value routes (Tinybones <code>ExileCounter</code> vs. <code>Grant</code> today; Quilled Greatwurm <code>PrintedGraveyard</code> vs. <code>Grant</code> in Slice 5) produce byte-for-byte identical v11 policy action rows;
+    (3) route disambiguation (<code>selected_play_route</code>) is still object-scoped rather than <code>(object, profile)</code>-scoped (leaking <code>Some(PlayRoute::Hand)</code> onto MDFC land plays under Omniscience) and <code>play_land</code> omits <code>pending_choice</code> / <code>priority.holder</code> guards;
+    (4) Slice 5’s Quilled Greatwurm plan misses two Oracle rules — its graveyard cost removes <em>any</em> six counters (not only +1/+1 counters), and its combat damage trigger fires <em>once per creature</em> for total combat damage dealt during <em>your turn</em> (including Trample splits and multi-blocks).
   </div>
 
   <h2>1. Product concepts vs. code concepts</h2>
@@ -203,179 +202,199 @@
     </thead>
     <tbody>
       <tr class="biggest">
-        <td><strong>Playing a card picks <code>(object, profile, route)</code></strong><br>Whether a play casts a spell or plays a land, the zone opens candidate routes and the chosen printed face (<code>Front</code>, <code>Adventure</code>, <code>Omen</code>, <code>BackFace</code>) decides legality, label, commitment, and battlefield entry.</td>
-        <td><code>play_routes</code> (<code>play.rs:231-334</code>), <code>permits_spell</code> (<code>play.rs:337-371</code>), <code>Action::PlayLand</code> (<code>agent/action.rs:44-50</code>), <code>play_land</code> (<code>play.rs:590-621</code>), <code>action_description</code> (<code>action.rs:109</code>), <code>structured_offer.rs:659</code>.</td>
+        <td><strong>“May play” (lands + spells) vs. “may cast” (spells only)</strong><br>Impulse effects (Redcap, Flameshape, Loot, Zuko, Roku) say “you may <em>play</em>” and allow lands and spells. Airbend, Hama, Azula, Zul Ashur, Sphinx, Foretell, Adventure, and Prepared say “you may <em>cast</em>” and never allow playing a land.</td>
+        <td><code>PlayGrant</code> (<code>cast_permission.rs:58-120</code>), <code>permits_spell</code> (<code>play.rs:340-376</code>), <code>grant_base_cost</code> (<code>cast_permission.rs:572-585</code>), <code>CastPermissionData</code> (<code>observation.rs:201-252</code>), <code>text_observation.py:973-1010</code>, <code>inspect.ts:121-153</code>.</td>
         <td><span class="badge no">No</span><br><span class="muted">Biggest mismatch</span></td>
-        <td><strong>Split ownership between front-face <code>play_routes</code> and profile-aware <code>permits_spell</code>, plus a profile-less <code>Action::PlayLand</code>:</strong>
-          (1) <code>Action::PlayLand</code> drops <code>profile</code>; <code>play_land</code> validates front-face <code>!card_ref.types.is_land()</code>, never calls <code>permits_spell</code>, and never sets <code>ZoneEntry.transformed</code>; <code>action_description:109</code> and <code>structured_offer.rs:659</code> drop back-face land names.
-          (2) <code>play_routes</code> still pre-filters by front-face <code>land = self.state[object].types.is_land()</code>: Omniscience (<code>play.rs:239</code>) hides back-face spells of a Land//Spell MDFC while <code>permits_spell:362</code> lets <code>FreeFromHand</code> emit a bogus free land play on a Spell//Land MDFC; Muldrotha (<code>play.rs:307</code>) blocks Artifact Lands’ Artifact slot and Land//Creature MDFCs; Vizier (<code>play.rs:328</code>) blocks Land//Creature MDFCs on top of library.</td>
+        <td><strong>One struct silently allows lands on every grant:</strong>
+          <code>PlayGrant</code> has no <code>play_lands</code> flag. In <code>permits_spell</code>, <code>PlayRoute::Grant(key)</code> falls through <code>_ =&gt; cast.profile.is_front()</code> for front faces and allows <code>BackFace</code> whenever <code>!on_adventure &amp;&amp; !foretold &amp;&amp; !flashback</code>.
+          Live failures today: (a) airbending an Earthbent Mountain in TLA offers and executes a free <code>Action::PlayLand</code> from exile, and <code>text_observation.py</code> prints <em>“may be played from EXILE by Hero: as a land play”</em>; (b) Airbend, Hama, Azula, or Zul on <code>Tidal Errand // Tidal Haven</code> offers and executes <code>PlayLand { profile: BackFace }</code>.</td>
       </tr>
       <tr>
-        <td><strong>Inspecting a playable off-board card in Academy</strong><br>Hovering or focusing any card in the play tray (Tinybones stash, Flameshape, Foretell, Airbend, Prepared copy, Muldrotha/Zul graveyard, Vizier library top, or a controlled opponent’s visible face-down exile) shows its counters and active play-permission terms.</td>
-        <td><code>Board.svelte:573-574</code> (<code>cards</code>), <code>Board.svelte:606</code> (<code>textOf</code>), <code>Board.svelte:810-812</code> (tray <code>onpreview</code>), <code>view.ts:162-172</code> (<code>knownName</code>), <code>inspect.ts:121</code> (<code>permissionTerms</code>).</td>
-        <td><span class="badge no">No</span><br><span class="muted">Live UI mismatch</span></td>
-        <td><strong>Two disjoint definitions of “visible cards” in Academy:</strong>
-          (1) <code>Board.svelte:812</code> calls <code>previewName(item.name, element)</code> on every tray card, discarding <code>item.placed.anchor.id</code> and passing <code>card={null}</code> to <code>&lt;Inspect&gt;</code> — so every <code>permissionTerms</code> and <code>counterTerms</code> line built in Slices 2–3 is invisible right where the player clicks to play the card!
-          (2) <code>Board.svelte:573,606</code> build <code>cards</code> and <code>textOf</code> without <code>player.inspected</code> (unlike <code>view.ts:165</code>), so a controlled opponent’s visible Flameshape/Foretell card (placed in <code>agent.inspected</code> by <code>experience_projection.py:481-488</code>) has no <code>CardState</code> or rules text in <code>Board.svelte</code>.</td>
+        <td><strong>Policy can distinguish overlapping legal routes on the same card</strong><br>When two routes offer the same card at the same mana value with different rules costs or consequences (Tinybones <code>ExileCounter</code> any-mana vs. colored <code>Grant</code>; Quilled Greatwurm <code>PrintedGraveyard</code> removing 6 counters vs. <code>Grant</code>; Iroh <code>GrantedFlashback</code> exiling on exit vs. <code>Grant</code>), the policy sees which route each action uses.</td>
+        <td><code>ActionOption</code> (<code>observation.rs:940-980, 1111-1126</code>), <code>action::COLUMNS</code> (<code>observation_layout.rs:455-488</code>), <code>encode_actions</code> (<code>observation_encoder.rs:2314-2324</code>).</td>
+        <td><span class="badge no">No</span><br><span class="muted">Live policy blind spot</span></td>
+        <td><strong>Route identity is projected only as scalar MV + Muldrotha quota:</strong>
+          <code>ActionOption</code> has <code>route_mana_value</code> and <code>quota_type</code>, but no <code>play_route</code> category. On <code>fdn::a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant</code> today and on Slice 5’s Quilled Greatwurm + Grant overlap, the two distinct <code>CastSpell</code> offers produce <strong>byte-for-byte identical v11 action vectors and focus</strong>.</td>
       </tr>
       <tr>
-        <td><strong>Exiling the top of a library shifts remaining library knowledge</strong><br>When Redcap, Flameshape, or another top-library impulse exiles card 0, position 0 leaves the library and scried cards underneath shift up by one instead of vanishing.</td>
-        <td><code>cast_permission.rs:216-237</code> (<code>exile_top_cards_to_play</code>), <code>cast_permission.rs:437-457</code> (<code>exile_with_play_grant</code>), <code>zones.rs:692-702</code> (<code>library_top_departure</code>); minor cousins: <code>play.rs:555</code> (<code>zone_of</code> vs <code>casting_zone</code>) and <code>record_vocabulary.rs:304</code> (top-level-only condition walk).</td>
-        <td><span class="badge no">No</span><br><span class="muted">Live knowledge mismatch</span></td>
-        <td><code>draw_cards</code> sets <code>ZoneEntry { library_top_departure: true }</code> so <code>known_library.remove_top()</code> shifts remaining positions. <code>exile_with_play_grant</code> leaves <code>library_top_departure: false</code>, so <code>zones.rs:697</code> calls <code>known_library.forget_order()</code> — wiping all scried/public library knowledge whenever Redcap or Flameshape exiles from the top. Also, <code>record_vocabulary.rs:304</code> walks only top-level <code>spell_effects</code> instead of reusing <code>objects(&amp;json)</code>, and <code>play.rs:555</code> reads <code>zone_of</code> instead of <code>casting_zone</code>.</td>
+        <td><strong>Each <code>(object, profile)</code> disambiguates only its own routes, and land plays obey priority</strong><br>A land face with only one legal route (<code>Hand</code>) stays an ordinary lone-route play even when its other face has Omniscience’s <code>FreeFromHand</code>. Executing <code>PlayLand</code> checks priority and pending choices just like <code>CastSpell</code>.</td>
+        <td><code>selected_play_route</code> / <code>resolved_play_route</code> / <code>play_land</code> (<code>play.rs:378-423, 596-635</code>), <code>priority_actions_for_object</code> (<code>action.rs:680-734</code>).</td>
+        <td><span class="badge no">No</span><br><span class="muted">Residual Slice 4 split</span></td>
+        <td><strong>Two leftover cracks:</strong>
+          (1) <code>routes.len() &gt; 1</code> and <code>selected_play_route</code> are still object-scoped, not <code>(object, profile)</code>-scoped. Under Omniscience, <code>Tidal Haven</code> and <code>Kelp Hollow</code> emit <code>Action::PlayLand { route: Some(PlayRoute::Hand) }</code> (<code>cr_712_modal_faces.rs:104, 158</code>), labeling them <em>“Play Kelp Hollow from hand”</em> and violating <code>resolved_play_route</code>’s own doc comment (<em>“None for an ordinary hand play”</em>).
+          (2) <code>play_land</code> checks <code>can_play_land</code> (<code>is_active_player</code>) but omits <code>pending_choice.is_none()</code> and <code>priority.holder == player</code>, unlike <code>cast_spell_action</code>.</td>
       </tr>
       <tr>
-        <td><strong>MTG-419 cohort boundary: casting/permissions vs. unrelated engine subsystems</strong><br>MTG-419 delivers one shared casting-profile and play-permission model across its cohorts; unrelated rules systems belong in their own Tasks.</td>
-        <td><code>scratch/plan.md</code> “Remaining work” lists Quilled Greatwurm alongside 12 non-casting rows (graveyard triggers, batch-collapsed triggers, surveil-before-count, APNAP wheel, delayed Mountain mana trigger, entry-chosen creature type, control exchange, Amass).</td>
-        <td><span class="badge no">No</span><br><span class="muted">Scope boundary</span></td>
-        <td><strong>Quilled Greatwurm is core casting/permission work</strong> — the only card proving a printed graveyard self-permission (<code>PlayRoute::PrintedGraveyard</code>) whose route-attached cost (<code>CostComponent::RemoveCounters</code>) does not leak onto Muldrotha or Zul routes on the same card. The other <strong>12 rows</strong> exercise zero new casting-profile or play-permission concepts; keeping them in MTG-419 mixes five unrelated shared-rules systems into one PR and threatens the 10% Engine Budget.</td>
+        <td><strong>Quilled Greatwurm (Slice 5, pre-build): any-counter graveyard cost &amp; single per-creature combat trigger</strong><br><em>Trample. Whenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it. You may cast this card from your graveyard by removing six counters from among creatures you control in addition to paying its other costs.</em></td>
+        <td>Planned in <code>scratch/plan.md</code> Slice 5: <code>PlayRoute::PrintedGraveyard</code>, <code>CostComponent::RemoveCounters</code>, <code>TriggerCondition::DealsCombatDamage</code>.</td>
+        <td><span class="badge no">No</span><br><span class="muted">Plan vs. Oracle</span></td>
+        <td><strong>Two Oracle errors in the Slice 5 plan before coding:</strong>
+          (1) The plan restricted counter removal to <code>+1/+1</code> counters only; Oracle removes <em>any six counters</em> of any kind (requiring a kind choice when a chosen creature holds multiple counter kinds, e.g. stun + +1/+1).
+          (2) The plan described a per-event creature-damage trigger; Oracle is <em>during your turn</em>, any combat damage recipient, and CR 510.2 / Gatherer triggers <em>once per creature</em> for its <em>total</em> combat damage (so Trample splitting damage across blocker + player puts one trigger with the sum).</td>
       </tr>
       <tr>
-        <td><strong>One casting authority &amp; CR 601.2f &rarr; 601.2h ordering</strong><br>Priority, resolution, and payment preview build <code>CastChoices</code> through one builder; reductions settle before any-type mana spending.</td>
-        <td><code>Game::cast_choices(CastAuthority)</code> (<code>play.rs:123</code>), <code>grant_base_cost</code> / <code>grant_cast_cost</code> (<code>cast_permission.rs:550-581</code>), single <code>pay_with_any_mana()</code> in <code>effective_spell_cost</code> (<code>play.rs:546-587</code>).</td>
+        <td><strong>One casting authority &amp; CR 601.2f &rarr; 601.2h ordering</strong><br>Priority, resolution, and payment preview share one builder; reductions settle before any-type mana spending.</td>
+        <td><code>Game::cast_choices(CastAuthority)</code> (<code>play.rs:123</code>), <code>grant_base_cost</code> / <code>grant_cast_cost</code>, single <code>pay_with_any_mana()</code> in <code>effective_spell_cost</code> (<code>play.rs:549-594</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned through Slice 3 (<code>a60e4570d7</code>): Azula + Glamdring and colored Kicker under <code>any_mana</code> verified; <code>CastAuthority</code> unifies priority, resolution, and preview.</td>
+        <td>Aligned across priority, resolution, preview, Azula + Glamdring, and colored Kicker.</td>
       </tr>
       <tr>
-        <td><strong>Two-seat face-down exile privacy &amp; atomic refill</strong><br>Foretell hides from opponent; Flameshape hides from both seats without a Wizard. Determinization and possible worlds refill both slot kinds simultaneously without duplicating cards or merging grants.</td>
-        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code>, atomic <code>refill_hidden_exile_slots</code> + <code>ZoneManager::exchange_face_down_exile</code>, <code>knowledge.rs:180</code> guard, <code>HiddenHandConstraints.face_down_exile</code>, <code>selection_sampling.rs:611</code>, <code>experience_projection.py:485</code>.</td>
+        <td><strong>Two-seat face-down exile privacy, atomic refill &amp; library-top shift</strong><br>Foretell hides from opponent; Flameshape hides from both seats without a Wizard; top-library play grants shift remaining known library positions instead of wiping them.</td>
+        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code>, <code>refill_hidden_exile_slots</code>, <code>library_top_departure: true</code> in <code>exile_top_cards_to_play</code>, <code>HiddenHandConstraints.face_down_exile</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned in <code>8f50ab2d34</code> &amp; <code>4a6728fcd9</code>: Foretell + Flameshape coexistence verified across both viewers, determinize, and possible worlds.</td>
+        <td>Aligned through Slice 4 (<code>8f50ab2d34</code>, <code>06c5a19dde</code>); verified across determinize, possible worlds, and Scry + Zuko.</td>
       </tr>
       <tr>
-        <td><strong>Grant observability, cast history, static permissions, counters &amp; stack provenance</strong><br>Every grant term, exiled counter, open-ended mana restriction, profile-faithful turn cast, and prepared/flashback stack flag reaches native, v11 tensors, LLM text, and Academy.</td>
-        <td><code>CastPermissionData.{prepared, face_down, condition}</code>, <code>PlayGrantTerms</code> + <code>PlayGrantExtension</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>LayerBoard.play_permissions</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>, <code>StackObjectData.{from_prepared, flashback}</code>, <code>Rail.svelte</code>, <code>inspect.ts::permissionTerms</code>.</td>
+        <td><strong>Academy tray inspection, stack provenance, cast history &amp; open-ended mana facts</strong><br>Hovering tray cards (including <code>agent.inspected</code>) inspects <code>CardState</code>; stack shows <code>prepared</code>/<code>flashback</code>; turn history is profile-faithful; non-legacy mana restrictions emit <code>POOLED_MANA</code> facts.</td>
+        <td><code>view.ts::inspectableCards</code>, <code>Board.svelte::previewTray</code>, <code>inspect.ts::permissionTerms</code>, <code>Rail.svelte</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>LayerBoard.play_permissions</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned in Slices 1–3 (<code>badf9179d3</code>, <code>ccc91c6c69</code>, <code>c01c99e5d9</code>): pinned pilot unbroken; all grant terms render in <code>inspect.ts</code> (awaiting only Mismatch 2’s tray wiring in <code>Board.svelte</code>).</td>
+        <td>Aligned through Slice 4 (<code>d7dadb608b</code>); only the “play” vs. “cast” wording in <code>inspect.ts</code> / <code>text_observation.py</code> updates with Mismatch 1.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Biggest mismatch — before and after</h2>
+  <h2>2. Biggest mismatch — “may cast” vs. “may play” on <code>PlayGrant</code></h2>
   <div class="callout">
-    <strong>Why this is the biggest mismatch:</strong> The entire branch’s thesis is <em>“a play picks <code>(object, profile, route)</code>; the route opens the zone and the profile supplies characteristics and legality.”</em> Today that thesis breaks the moment a modal double-faced card has a land on either face: <code>play_routes</code> rejects legal back-face spells when the front is a land, <code>permits_spell</code> accepts bogus <code>FreeFromHand</code> land plays when the back is a land, and <code>Action::PlayLand</code> throws away the selected profile so <code>play_land</code> immediately rejects its own legal offer.
+    <strong>Why this is the biggest mismatch:</strong> Seven of the eight <code>PlayGrant</code> producers in the engine are strictly <em>“may cast”</em> permissions (Airbend, Hama, Azula, Zul Ashur, Sphinx, Foretell, Adventure, Prepared), and only one (<code>exile_top_cards_to_play</code> for Redcap, Flameshape, Loot, Zuko, Roku) is a <em>“may play”</em> permission. Because <code>PlayGrant</code> omits that distinction, real TLA and MDFC positions illegally offer and execute land plays from cast-only grants and describe them to LLMs and Academy as land plays.
   </div>
 
   <div class="grid">
     <div class="card">
-      <p><span class="badge existing">Existing · HEAD 307465b649</span></p>
-      <h3>Front-face pre-filters + profile-less <code>PlayLand</code></h3>
-      <pre>// play.rs:236-243 (Omniscience)
-let land = self.state[object].types.is_land();
-if !land &amp;&amp; free_from_hand { // ❌ hides Land//Spell back face
-  [Hand, FreeFromHand]
+      <p><span class="badge existing">Existing · HEAD 8e89bd5646</span></p>
+      <h3>Every <code>PlayGrant</code> silently permits land plays</h3>
+      <pre>// cast_permission.rs:58-120
+pub struct PlayGrant {
+  // ❌ no play_lands flag: Airbend, Hama, Azula, Zul
+  //    look identical to Redcap / Flameshape / Roku!
+  ...
 }
 
-// play.rs:307 (Muldrotha)
-if matches!(kind, Instant|Sorcery|Kindred)
-   || (land &amp;&amp; kind != Land) { continue; } // ❌ hides Land//Creature
-                                           //    &amp; Artifact Land's Artifact slot
+// play.rs:371-375 (permits_spell)
+PlayRoute::Grant(key) if !cast.profile.is_front() =&gt; self
+    .grant_by_key(object, key)
+    .is_some_and(|g| !g.on_adventure &amp;&amp; !g.foretold &amp;&amp; !g.flashback),
+_ =&gt; cast.profile.is_front(), // ❌ Front land ALWAYS true!
 
-// play.rs:328 (Vizier)
-Some(Library) if !land &amp;&amp; top == Some(object) // ❌ hides Land//Creature
-
-// play.rs:362 (permits_spell)
-PlayRoute::FreeFromHand =&gt; true, // ❌ offers FreeFromHand PlayLand!
-
-// agent/action.rs:44 + play.rs:590
-Action::PlayLand { player, object, route } // ❌ no profile!
-fn play_land(...) {
-  if !card_ref.types.is_land() { Err(...) } // ❌ rejects Spell//Land back face
-  // ❌ never calls permits_spell; never sets transformed: true
-}</pre>
+// Live result on Earthbent Mountain airbent by Aang:
+//   offers: Action::PlayLand { profile: Front, route: None }
+//   label:  "Play Mountain using permission 1"
+//   LLM:    "may be played from EXILE by Hero: as a land play"
+// Live result on Tidal Errand // Tidal Haven exiled by Hama/Airbend:
+//   offers: Action::PlayLand { profile: BackFace, route: None }</pre>
     </div>
 
     <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed · One profile/route owner</span></p>
-      <h3>Zone routes in <code>play_routes</code>, profile legality in <code>permits_spell</code>, profile on <code>PlayLand</code></h3>
-      <pre>// play.rs: play_routes opens zone routes; plain lands stay lone Hand
-let has_nonland = !land || self.state[object].modal_back;
-if has_nonland &amp;&amp; free_from_hand { [Hand, FreeFromHand] }
-// Muldrotha: drop `|| (land &amp;&amp; kind != Land)` — permits_spell checks profile
-// Vizier: `Some(Library) if has_nonland &amp;&amp; top == Some(object)`
+      <p><span class="badge proposed">Proposed · Explicit <code>play_lands: bool</code> (default false)</span></p>
+      <h3>Cast-only by default; opt in for “may play” effects</h3>
+      <pre>// cast_permission.rs: PlayGrant (default false = "may cast")
+#[serde(skip_serializing_if = "std::ops::Not::not")]
+pub play_lands: bool, // true ONLY in exile_top_cards_to_play
 
-// play.rs: permits_spell is the ONE profile-vs-route authority
-PlayRoute::FreeFromHand =&gt; !spell.types.is_land(),
-PlayRoute::Hand | PlayRoute::ExileCounter(_) =&gt; true,
-PlayRoute::GraveyardType { kind, .. } =&gt; spell.types.types.contains(&amp;kind),
-PlayRoute::LibraryTop =&gt; library_spells.any(|p| cast.matches_spell(..., p)),
+// play.rs: ONE arm for all PlayRoute::Grant(key)
+PlayRoute::Grant(key) =&gt; self
+    .grant_by_key(object, key)
+    .is_some_and(|grant| {
+        let land = cast.spell(&amp;self.state[object]).types.is_land();
+        (!land || grant.play_lands)
+            &amp;&amp; (cast.profile.is_front()
+                || (!grant.on_adventure &amp;&amp; !grant.foretold &amp;&amp; !grant.flashback))
+    }),
 
-// agent/action.rs + play.rs: PlayLand mirrors CastSpell
-Action::PlayLand {
-  #[serde(skip_serializing_if = "SpellProfile::is_front")]
-  profile: SpellProfile,
-  player: PlayerId, object: ObjectId, route: Option&lt;PlayRoute&gt;,
-}
-fn play_land(..., profile: SpellProfile) {
-  let cast = self.cast_choices(player, obj, profile, Priority(route))?;
-  if !cast.spell(card).types.is_land() || !self.permits_spell(player, obj, cast) {
-    return Err(...);
-  }
-  ZoneEntry { controller, transformed: profile == BackFace, .. }
-}</pre>
+// Live result after fix:
+//   Airbent Earthbent Mountain: 0 legal plays; PlayLand rejected!
+//   Airbend/Hama/Azula/Zul on Tidal Errand: Front castable,
+//     BackFace (Tidal Haven) rejected!
+//   Redcap/Flameshape/Loot/Zuko/Roku (play_lands: true):
+//     Front, BackFace, and plain Mountain all playable!
+//   LLM &amp; Academy: "may cast" when !play_lands; "may play" when true.</pre>
     </div>
   </div>
 
-  <h3>Concrete interaction walkthrough — Spell//Land &amp; Land//Creature MDFCs</h3>
+  <h3>Concrete interaction walkthrough — Airbend on an Earthbent Mountain &amp; Hama on <code>Tidal Errand // Tidal Haven</code></h3>
   <div class="trace">
-    <div class="trace-label">Normal path (Omniscience + Spell//Land MDFC in hand; Vizier + Land//Creature on library top)</div>
+    <div class="trace-label">Normal path, failure, and recovery</div>
     <ol>
-      <li><strong>Spell//Land in hand with Omniscience:</strong> <code>play_routes</code> yields <code>[Hand, FreeFromHand]</code>. For <code>Front</code> (Spell), <code>permits_spell</code> accepts both routes (two <code>CastSpell</code> offers). For <code>BackFace</code> (Land), <code>permits_spell</code> rejects <code>FreeFromHand</code> and accepts <code>Hand</code> &rarr; one <code>Action::PlayLand { profile: BackFace, route: Some(Hand) }</code>. Executing it enters <code>transformed: true</code> as the back-face land, records <code>PublicCommitment::PlayLand { card: "&lt;BackFace&gt;" }</code>, and encodes <code>action::SPELL_PROFILE = BackFace (3)</code>.</li>
-      <li><strong>Ordinary basic Mountain in hand with Omniscience:</strong> <code>has_nonland</code> is <code>false</code> &rarr; <code>play_routes</code> stays <code>[Hand]</code> &rarr; <code>Action::PlayLand { profile: Front, route: None }</code> &rarr; wire JSON omits both <code>profile</code> and <code>route</code> (100% compatible with retained replays).</li>
-      <li><strong>Land//Creature on library top with Vizier:</strong> <code>has_nonland</code> is <code>true</code> &rarr; <code>play_routes</code> yields <code>[LibraryTop]</code>. <code>permits_spell</code> rejects <code>Front</code> (Land, not a creature spell) and accepts <code>BackFace</code> (Creature) &rarr; offers <code>Action::CastSpell { profile: BackFace, route: None }</code> from library top.</li>
-      <li><strong>Failure &amp; recovery:</strong> A malformed or stale Command sending <code>PlayLand { profile: Front, route: Some(FreeFromHand) }</code> or <code>PlayLand { profile: BackFace, route: Some(GraveyardType { Creature }) }</code> is rejected cleanly inside <code>play_land</code> via <code>permits_spell</code> before spending any route or land play.</li>
+      <li><strong>Airbend on an Earthbent Mountain (TLA):</strong> P0 earthbends a Mountain (now a Land Creature); P1 casts <code>Airbender's Reversal</code> targeting it. <code>Game::airbend</code> exiles it with <code>PlayGrant { cost: Some({2}), play_lands: false }</code>. On P0’s main phase, <code>permits_spell</code> sees <code>land &amp;&amp; !grant.play_lands</code> &rarr; <code>false</code>. Neither <code>PlayLand</code> nor <code>CastSpell</code> is offered; a forged <code>Action::PlayLand</code> Command is rejected cleanly inside <code>play_land</code> without spending the turn’s land play.</li>
+      <li><strong>Hama / Airbend / Zul on <code>Tidal Errand // Tidal Haven</code>:</strong> The Sorcery front is castable via <code>Grant</code> (for waterbend / <code>{2}</code> / printed cost), while <code>BackFace</code> (<code>Tidal Haven</code>, Land) is rejected by <code>!grant.play_lands</code>.</li>
+      <li><strong>Redcap / Flameshape / Loot / Zuko / Roku on both cards:</strong> <code>exile_top_cards_to_play</code> sets <code>play_lands: true</code>. Both a plain Mountain and <code>Tidal Haven</code> (<code>BackFace</code>) are offered as <code>Action::PlayLand</code>, enter back face up when <code>BackFace</code>, and display <em>“may play”</em> in LLM text and Academy <code>permissionTerms</code>.</li>
+      <li><strong>Compatibility &amp; recovery:</strong> Because <code>play_lands</code> defaults to <code>false</code> and is omitted from serialization when <code>false</code>, all retained TLA Airbend/Hama/Azula/Foretell captures and the pinned pilot (Gray Ogre / Badgermole Cub / Mountain / Forest) remain untouched.</li>
     </ol>
   </div>
 
-  <h2>3. Live consumer &amp; knowledge fixes (Mismatches 2 &amp; 3)</h2>
-  <div class="grid">
-    <div class="card">
-      <p><span class="badge existing">Existing · Academy play tray (Board.svelte:812)</span></p>
-      <div class="inspect-demo">
-        <div class="inspect-title">Hovering Flameshape / Tinybones card in the tray</div>
-        <div><strong>Lightning Strike</strong> · <code>{1}{R}</code></div>
-        <div>Lightning Strike deals 3 damage to any target.</div>
-        <div class="inspect-line missing">card = null (previewName dropped anchor.id) &rarr; stash counters &amp; permissionTerms hidden!</div>
-        <div class="inspect-line missing">Controlled opponent’s visible Flameshape card in agent.inspected &rarr; missing from cards map &amp; textOf!</div>
-      </div>
-    </div>
-    <div class="card proposed-box">
-      <p><span class="badge proposed">Proposed · Tray uses CardState + Board includes inspected</span></p>
-      <div class="inspect-demo">
-        <div class="inspect-title">Hovering the same card in the tray</div>
-        <div><strong>Lightning Strike</strong> · <code>{1}{R}</code></div>
-        <div>Lightning Strike deals 3 damage to any target.</div>
-        <div class="inspect-line added">1 stash counter (Tinybones) · or ·</div>
-        <div class="inspect-line added">You may play this face down, seen only while it may be played, only if you control a Wizard permanent.</div>
-      </div>
-    </div>
-  </div>
+  <h2>3. Live policy blind spot — overlapping same-MV routes (Mismatch 2)</h2>
+  <p>Compare the encoded v11 policy action rows when two legal routes offer the same card at the same mana value — already live in <code>fdn::a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant</code> and coming in Slice 5 for <code>Quilled Greatwurm</code>:</p>
+  <table class="tensor-demo">
+    <thead>
+      <tr>
+        <th>Offer (same card, same MV)</th>
+        <th><code>action_type</code></th>
+        <th><code>focus</code></th>
+        <th><code>spell_profile</code></th>
+        <th><code>route_mana_value</code></th>
+        <th><code>quota_type</code></th>
+        <th><span class="badge proposed">Proposed</span> <code>action::PLAY_ROUTE</code> (col 29)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Tinybones <code>ExileCounter(Stash)</code> (any-type mana)</td>
+        <td class="same">CAST_SPELL (1)</td>
+        <td class="same">[card]</td>
+        <td class="same">0 (Front)</td>
+        <td class="same">mv / 10</td>
+        <td class="same">0</td>
+        <td class="diff">8 (ExileCounter)</td>
+      </tr>
+      <tr>
+        <td>Exact <code>PlayRoute::Grant(0)</code> (colored mana)</td>
+        <td class="same">CAST_SPELL (1)</td>
+        <td class="same">[card]</td>
+        <td class="same">0 (Front)</td>
+        <td class="same">mv / 10</td>
+        <td class="same">0</td>
+        <td class="diff">6 (Grant)</td>
+      </tr>
+      <tr>
+        <td>Quilled Greatwurm <code>PrintedGraveyard</code> (removes 6 counters!)</td>
+        <td class="same">CAST_SPELL (1)</td>
+        <td class="same">[wurm]</td>
+        <td class="same">0 (Front)</td>
+        <td class="same">0.6</td>
+        <td class="same">0</td>
+        <td class="diff">9 (PrintedGraveyard)</td>
+      </tr>
+      <tr>
+        <td>Quilled Greatwurm <code>Grant(0)</code> (no counter removal)</td>
+        <td class="same">CAST_SPELL (1)</td>
+        <td class="same">[wurm]</td>
+        <td class="same">0 (Front)</td>
+        <td class="same">0.6</td>
+        <td class="same">0</td>
+        <td class="diff">6 (Grant)</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="muted">Appending <code>action::PLAY_ROUTE</code> (<code>ValueKind::Category { size: 10 }</code>: 0 absent / ordinary hand, 1..9 route variants) at column 29 — with <code>ActionOption.play_route: Option&lt;u8&gt;</code> omitted from JSON when <code>None</code> — separates every cross-route overlap while keeping saved prefixes and <code>test_pinned_pilot</code> unchanged.</p>
 
-  <div class="trace">
-    <div class="trace-label">Library-top exile knowledge walkthrough (Scry 2 &rarr; Redcap / Flameshape)</div>
-    <ul>
-      <li><span class="badge existing">Existing</span> P0 scries <code>[Lightning Strike, Mountain]</code> to positions <code>0, 1</code> (<code>known_library.own = {0: Strike, 1: Mountain}</code>). Redcap exiles top 1 via <code>exile_top_cards_to_play</code> &rarr; <code>library_top_departure: false</code> &rarr; <code>known_library.forget_order()</code> wipes <code>Mountain</code> from position 0.</li>
-      <li><span class="badge proposed">Proposed</span> <code>exile_top_cards_to_play</code> passes <code>library_top_departure: true</code> into <code>exile_with_play_grant</code> (matching <code>draw_cards</code>). <code>known_library.remove_top()</code> drops exiled position 0 and shifts <code>Mountain</code> to <code>{0: Mountain}</code>. On Flameshape (exile top 2 face down after scrying 3), positions 0 and 1 leave <code>known_library</code> (no leak of face-down exile) while position 2 stays accurate at position 0 under both <code>assert_library_knowledge()</code> and <code>determinize()</code>.</li>
-    </ul>
-  </div>
-
-  <h2>4. Cohort boundary — Quilled Greatwurm in, 12 non-casting rows split out</h2>
+  <h2>4. Per-face route disambiguation &amp; Quilled Greatwurm Oracle alignment (Mismatches 3 &amp; 4)</h2>
   <div class="grid">
     <div class="card proposed-box">
-      <p><span class="badge proposed">Build in MTG-419</span></p>
-      <h3>Quilled Greatwurm (<code>PlayRoute::PrintedGraveyard</code>)</h3>
-      <p>The last untested play-permission axis in the cohort: a <strong>printed self-permission</strong> in the graveyard whose route-attached additional cost (removing six +1/+1 counters distributed among controlled creatures) applies <em>only</em> when cast via <code>PlayRoute::PrintedGraveyard</code>, never when cast via Muldrotha’s <code>GraveyardType { Creature }</code> or Zul’s <code>Grant</code> on the same card.</p>
-      <p class="muted">Needs only two small shared rules: creature recipients + damage amount on <code>DealsCombatDamage</code>, and distributed <code>CostComponent::RemoveCounters</code>.</p>
-    </div>
-    <div class="card">
-      <p><span class="badge existing">Split into separate Tasks (2026-11-24 steering)</span></p>
-      <h3>12 non-casting rows (outside casting/permission core)</h3>
+      <p><span class="badge proposed">Mismatch 3 · Per-face routes &amp; <code>play_land</code> guards</span></p>
+      <h3><code>permitted_play_routes(player, object, profile)</code></h3>
+      <p>Filter <code>play_routes(player, object)</code> through <code>cast_choices</code> + <code>permits_spell</code> (before affordability) per <code>profile</code>, and pass <code>profile</code> into <code>selected_play_route</code> and <code>resolved_play_route</code>:</p>
       <ul>
-        <li><strong>Graveyard-zone triggers (2 FDN):</strong> Flamewake Phoenix, Gate Colossus.</li>
-        <li><strong>Batch-collapsed “one or more” triggers (2 prep):</strong> Spiritcall Enthusiast, Kirol, History Buff.</li>
-        <li><strong>Surveil-before-count &amp; graveyard-exile costs (3 prep):</strong> Grave Researcher, Emeritus of Ideation, Lluwen, Exchange Student.</li>
-        <li><strong>APNAP whole-hand wheel &amp; delayed Mountain mana trigger (2 prep):</strong> Variable Chaser // Arc of Fortune, Pyre Rhymer // Molten Tide (also depends on <code>03_event_history</code>).</li>
-        <li><strong>Entry-chosen type, control exchange, Amass (3 HOB):</strong> An Unexpected Party, Bilbo, Luckwearer, Great Ugly-Looking Goblin.</li>
+        <li>Under Omniscience, <code>Tidal Haven</code> and <code>Kelp Hollow</code> (Land faces) have lone permitted route <code>[Hand]</code> &rarr; <code>route: None</code>, matching plain <code>Island</code> on the wire and dropping the spurious <em>“from hand”</em> suffix.</li>
+        <li>Under Omniscience, <code>Tidal Errand</code> and <code>Kelp Warden</code> (Spell faces) have permitted routes <code>[Hand, FreeFromHand]</code> &rarr; both still carry <code>Some(route)</code> even when only one is affordable.</li>
+        <li><code>play_land</code> adds the same <code>pending_choice.is_none()</code> and <code>priority.holder == player</code> guards as <code>cast_spell_action</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card proposed-box">
+      <p><span class="badge proposed">Mismatch 4 · Slice 5 Oracle fidelity before coding</span></p>
+      <h3>Quilled Greatwurm (FDN) exact rules</h3>
+      <ul>
+        <li><strong>Any six counters:</strong> <code>CostComponent::RemoveCounters { remaining: u8, kind: Option&lt;CounterKind&gt;, predicate: CardPredicate }</code> (<code>kind: None</code> for Quilled Greatwurm). Removing from a creature with one counter kind removes it immediately; a creature holding multiple counter kinds (e.g. stun + +1/+1) opens a <code>ChooseMode</code> kind pick (mirroring <code>CostComponent::TapPays</code>).</li>
+        <li><strong>Aggregated combat damage trigger:</strong> <em>“Whenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it.”</em> Aggregate total combat damage dealt per source creature per combat-damage step across players, creatures, planeswalkers, and battles, gate on <code>Condition::YourTurn</code>, and put that many +1/+1 counters on the triggering creature (one trigger per creature even under Trample splits or multi-blocks, CR 510.2).</li>
       </ul>
     </div>
   </div>
@@ -383,21 +402,21 @@ fn play_land(..., profile: SpellProfile) {
   <h2>5. Choices made for review (headless Graph run)</h2>
   <p class="muted">All four choices are reversible and written directly into <code>scratch/plan.md</code>. Reply with e.g. <code>2b</code> or <code>4b</code> if you want to reverse any choice.</p>
   <ol class="q-list">
-    <li><strong>Unified <code>(object, profile, route)</code> play &amp; MDFC test fixture:</strong>
-      <br><span class="chosen">1a (chosen):</span> Give <code>Action::PlayLand</code> an omitted-when-Front <code>profile: SpellProfile</code>, remove front-face <code>land</code> pre-filters in <code>play_routes</code> (keeping plain lands on lone <code>Hand</code>), validate <code>permits_spell</code> inside <code>play_land</code>, prove both Spell//Land and Land//Creature MDFC paths via rules fixture(s) in <code>managym/src/cards/fixtures.rs</code>, and replace the churning Clone state-hash pin in <code>lea.rs</code> with direct value assertions in the same change.
-      <br>1b: Keep <code>play_routes</code>’s front-face <code>land</code> guards until a real Standard Land//Spell MDFC is authored, fixing only <code>Action::PlayLand</code> for Spell//Land.
+    <li><strong>“May play” vs. “may cast” polarity on <code>PlayGrant</code>:</strong>
+      <br><span class="chosen">1a (chosen):</span> Add <code>play_lands: bool</code> (default <code>false</code> = cast spells only, omitted when <code>false</code>) on <code>PlayGrant</code>, <code>CastPermissionData</code>, and <code>PlayGrantExtension</code>; set <code>true</code> only in <code>exile_top_cards_to_play</code> (Redcap, Flameshape, Loot, Zuko, Roku) and the explicit foreign-land unit test; enforce <code>!land || grant.play_lands</code> in one unified <code>PlayRoute::Grant</code> arm in <code>permits_spell</code>; reflect “play” vs. “cast” in LLM text and Academy <code>permissionTerms</code>.
+      <br>1b: Default <code>PlayGrant</code> to allowing lands and opt cast-only producers into <code>cast_only: true</code> (touches 7 call sites and changes existing TLA Airbend/Hama/Azula/Foretell serialization and fact tokens).
     </li>
-    <li><strong>Academy tray inspection &amp; <code>agent.inspected</code>:</strong>
-      <br><span class="chosen">2a (chosen):</span> Add <code>...(player.inspected ?? [])</code> to <code>Board.svelte</code>’s <code>cards</code> and <code>textOf</code>, and resolve <code>CardState</code> from <code>item.placed.anchor.id</code> on tray hover so every playable exiled/graveyard/library/inspected card displays its <code>permissionTerms</code> and <code>counterTerms</code> right in the tray.
-      <br>2b: Keep tray hover name-only and show grant terms only inside the Exile/Graveyard zone popups.
+    <li><strong>Policy route identity for overlapping same-MV routes:</strong>
+      <br><span class="chosen">2a (chosen):</span> Add <code>ActionOption.play_route: Option&lt;u8&gt;</code> (omitted from JSON when <code>None</code>) and append one categorical column <code>action::PLAY_ROUTE</code> (<code>Category { size: 10 }</code>) at column 29 of <code>action::COLUMNS</code>, separating <code>ExileCounter</code> vs. <code>Grant</code>, <code>PrintedGraveyard</code> vs. <code>Grant</code>, and <code>GrantedFlashback</code> vs. <code>Grant</code> without touching saved prefixes or the pinned pilot.
+      <br>2b: Leave same-MV cross-route overlaps indistinguishable in the policy tensor and rely only on <code>route_mana_value</code> and <code>quota_type</code>.
     </li>
-    <li><strong>Library-top exile knowledge &amp; small hygiene:</strong>
-      <br><span class="chosen">3a (chosen):</span> Set <code>library_top_departure: true</code> in <code>exile_top_cards_to_play</code> (preserving shifted <code>known_library</code> positions under Redcap/Flameshape), switch <code>SpellsFromOutsideHandCostLess</code> to <code>casting_zone</code>, and walk the full serialized definition JSON in <code>record_vocabulary::play_grant_conditions</code>.
-      <br>3b: Keep <code>forget_order()</code> on top-of-library exiles and leave the top-level-only condition walker as-is.
+    <li><strong>Per-<code>(object, profile)</code> route disambiguation &amp; <code>play_land</code> priority guard:</strong>
+      <br><span class="chosen">3a (chosen):</span> Compute permitted routes per <code>(object, profile)</code> via <code>permitted_play_routes</code> before checking <code>len() &gt; 1</code>, pass <code>profile</code> into <code>selected_play_route</code> / <code>resolved_play_route</code> so lone-route MDFC land plays stay <code>route: None</code>, and guard <code>play_land</code> on <code>pending_choice.is_none()</code> and <code>priority.holder == player</code>.
+      <br>3b: Keep object-scoped <code>selected_play_route</code> and accept <code>route: Some(PlayRoute::Hand)</code> on MDFC land plays under Omniscience.
     </li>
-    <li><strong>MTG-419 remaining cohort scope:</strong>
-      <br><span class="chosen">4a (chosen):</span> Build Quilled Greatwurm (<code>PlayRoute::PrintedGraveyard</code> + distributed counter removal + creature combat damage) and finish the remaining Tinybones/Gandalf/MDFC interaction evidence inside MTG-419, then formally split the 12 non-casting shared-rules rows into separate follow-up Tasks by their named rule boundaries (alongside the 6 MTG-418 history rows) before Decomposition, Performance, and Gate.
-      <br>4b: Keep all 12 non-casting rows inside MTG-419 and build those five unrelated engine subsystems on this branch.
+    <li><strong>Quilled Greatwurm Oracle fidelity in Slice 5:</strong>
+      <br><span class="chosen">4a (chosen):</span> Model <code>CostComponent::RemoveCounters</code> with <code>kind: Option&lt;CounterKind&gt;</code> (<code>None</code> = any counter kind, prompting a mode pick when a chosen creature has multiple counter kinds), and aggregate combat damage per source creature per combat-damage step with <code>Condition::YourTurn</code> so Trample splits and multi-blocks trigger once with the exact total.
+      <br>4b: Hardcode <code>+1/+1</code> counters only and fire one trigger per individual combat-damage event.
     </li>
   </ol>
 </main>
