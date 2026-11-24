@@ -476,9 +476,9 @@ Compression (`e4579800a7`) gave stacked triggers one effects reader, `Game::stac
 
 Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
-Still open from this slice: re-record conformance evidence (catalog grew again, hash v27) at the final head; Findings 3–5 and 7.
+Still open from this slice: re-record conformance evidence (catalog grew again, hash v27, now v28) at the final head; Findings 3–5. Finding 7 was fixed in `4502508574`.
 
-**Compression at the draw/cast slice.** Stack lookups now go through `spell_on_stack` and `stack_index_of(Target)`; X-inclusive mana value is `Object::mana_value_with_x`; one `trigger_context` binds the event object for the intervening-if and the stacked ability; pending trigger text and definitions share `pending_trigger_description`/`pending_trigger_definition`. Finding 7 is fixed there: a modal trigger with zero chosen modes reads "no modes chosen". Debug workspace: 1588 passed; the 15 stale `frozen_*`/inventory cases fail as recorded above, and `compatibility_names_and_content_allocations_are_metamorphic` fails (state hash diverges at step 47 after renaming objects). That test fails identically at `1ca881442e`, before this compression: some state the hash covers now depends on an object's name. Investigate before re-recording evidence. Focused Python: 116 passed, 1 skipped.
+**Compression at the draw/cast slice.** Stack lookups now go through `spell_on_stack` and `stack_index_of(Target)`; X-inclusive mana value is `Object::mana_value_with_x`; one `trigger_context` binds the event object for the intervening-if and the stacked ability; pending trigger text and definitions share `pending_trigger_description`/`pending_trigger_definition`. Finding 7 is fixed there: a modal trigger with zero chosen modes reads "no modes chosen". Debug workspace: 1588 passed; the 15 stale `frozen_*`/inventory cases fail as recorded above, and `compatibility_names_and_content_allocations_are_metamorphic` fails (state hash diverges at step 47 after renaming objects). It fails identically at `1ca881442e`. Cause (read at `f11b0b882c`): the test rewrites every `Object.name` (`conformance.rs::rename_compatibility_cards`), and the death batch's v27 `ObjectLki` serializes the layered `name` (`state/src/game_object.rs:307`) into the hashed state, so the first departure diverges. `SpellLki` carries no name. Remaining: keep the departed name out of hashed identity (it follows from `source_base` and copy provenance, or hash the definition key instead), or rename it in the test alongside `Object.name`; decide which before re-recording evidence. Focused Python: 116 passed, 1 skipped.
 
 **Death batch behavior review at `4581548f6f`**
 
@@ -513,7 +513,7 @@ Checks, all debug: cards target (912), `managym` lib (359), rules (188), `match_
 
 Not covered (see `scratch/questions.md`): a noncreature Dragon for Firespitter's overlap, a multi-target spell for Rhino, spell copies for Unravel and An Offer, and a stolen spell for An Offer.
 
-Next: the behavior review of this batch, then **Damage recipients, amounts and results** below, whose `source_controller` fix now reads `spell_info`.
+Next: the behavior review of this batch (compression `4502508574` landed; the review has not run), which also settles the metamorphic name-hash failure above. Then **Damage recipients, amounts and results** below, whose `source_controller` fix now reads `spell_info`.
 
 ### Later slices
 
