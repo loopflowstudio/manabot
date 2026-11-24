@@ -77,3 +77,8 @@ Post-build concept review (`a5c3c68beb` vs `82c5d1d1b7`) records five reversible
 - Decouple `PlayGrant.face_down` and `PlayGrant.condition: Option<Condition>` from `PlayGrant.foretold`, replacing the 5 visibility calls to `is_foretold` with `is_face_down_in_exile` / `can_view_face_down_exile` while keeping `is_foretold` strictly for Foretell cost and determinization (unblocking Gandalf's Flameshape).
 - Publish Tinybones's static exile-counter permission on `LayerBoard.play_permissions.exile_counter_plays` as `PlayRoute::ExileCounter(CounterKind)`, backed by sparse `GameState.object_counters`.
 - Keep `Action::SelectCard` for front-face `CastDuringResolution` offers and `Action::CastSpell` for non-front profiles to preserve retained replay captures.
+
+## 2026-11-23 implement pass
+
+- Codie's type line is "Artifact Creature — Book Construct". `Book` is filed as an artifact subtype in `state/src/subtype.rs`. That is an assumption: if the CR lists Book as a creature type, move it (one line).
+- Stack spell rows (`SpellData`) carry neither `kicked`, `flashback` nor the new `from_prepared`. Codie's trigger reads `from_prepared`, so the policy cannot see whether a spell on the stack is prepared. That gap predates this pass; it is left for a shared observation change rather than one column.
