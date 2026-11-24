@@ -342,3 +342,176 @@ fn both_samplers_deal_the_hidden_manifest_under_a_pending_bolt() {
     });
     assert_eq!(outcomes[0], outcomes[1]);
 }
+
+#[test]
+fn manifested_cecil_reveals_in_place_between_two_ember_island_copies() {
+    use crate::support::{
+        game::{set_counters, Scenario},
+        play::{cast, choose, resolve_top, spend_colorless},
+    };
+    use managym::{
+        agent::action::Action,
+        decision::Command,
+        state::{game_object::Target, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&[
+        "Cecil, Dark Knight",
+        "Lightning Bolt",
+        "Ember Island Production",
+    ]);
+    let player = PlayerId(0);
+    s.force_card_in_hand(1, "Lightning Bolt");
+    let cards = pin_top(&mut s, &["Cecil, Dark Knight", "Forest"]);
+    let original = s.game_mut().manifest(cards[0], player);
+    s.game_mut().manifest(cards[1], player);
+    let target = s.game().lookup_current_permanent(original).unwrap();
+    set_counters(&mut s, target, CounterKind::PlusOnePlusOne, 1);
+    let copy = |s: &mut Scenario| {
+        cast(s, "Ember Island Production");
+        choose(s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+        assert!(s.choose_target(Target::Permanent(target)));
+        spend_colorless(s);
+        resolve_top(s);
+    };
+    copy(&mut s);
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::TurnFaceUp { .. })));
+    s.set_player_mana_pool(0, "BR");
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(target)));
+    let turns: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, a)| match a {
+            Action::TurnFaceUp { object, .. } => Some((index, *object)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].1, original);
+    let view = Observation::for_player(s.game(), PlayerId(1));
+    let public = view
+        .opponent_permanents
+        .iter()
+        .find(|p| p.plus1_counters == 1)
+        .unwrap()
+        .id;
+    let snapshot = s.snapshot();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let cmd = Command {
+        command_id: "turn-cecil-up".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[turns[0].0].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    s.game_mut().execute_semantic_command(&cmd).unwrap();
+    assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.players[0].mana_pool.mana().total(), 0);
+    assert_eq!(s.game().permanent_object(target), Some(original));
+    assert_eq!(
+        s.game().state.stack_objects.last().unwrap().targets(),
+        &[Target::Permanent(target)]
+    );
+    for viewer in [player, PlayerId(1)] {
+        let view = Observation::for_player(s.game(), viewer);
+        let row = view
+            .agent_permanents
+            .iter()
+            .chain(&view.opponent_permanents)
+            .find(|p| p.id == public)
+            .unwrap();
+        assert_eq!(row.object_id, Some(public));
+        assert_eq!(row.plus1_counters, 1);
+        assert_eq!(row.characteristics.name, "Cecil, Dark Knight");
+        encode(&view, &ObservationEncoderConfig::default()).unwrap();
+    }
+    resolve_top(&mut s);
+    assert_eq!(
+        s.game().state.permanents[target].as_ref().unwrap().damage,
+        3
+    );
+    s.set_player_mana_pool(0, "3UU");
+    copy(&mut s);
+    let content = managym::cards::content_pack::default_content_pack();
+    let copies = Observation::for_player(s.game(), player);
+    for name in ["", "Cecil, Dark Knight"] {
+        let row = copies
+            .agent_permanents
+            .iter()
+            .find(|p| p.is_token && p.characteristics.name == name)
+            .unwrap();
+        let id = s
+            .battlefield_permanents_named(0, name)
+            .into_iter()
+            .find(|id| s.game().state.permanents[*id].as_ref().unwrap().id.0 as i32 == row.id)
+            .unwrap();
+        let object = s.game().permanent_object(id).unwrap();
+        assert_eq!(
+            content
+                .object_row(&s.game().state[object])
+                .back_face
+                .is_some(),
+            !name.is_empty()
+        );
+    }
+    let mut fork = snapshot.restore(Default::default()).unwrap();
+    let game = fork.benchmark_game_mut();
+    let pass = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::PassPriority { .. }))
+        .unwrap();
+    game.step(pass).unwrap();
+    assert_eq!(game.state.players[0].mana_pool.mana().total(), 1);
+    assert!(game.state[original].name.is_empty());
+    assert_eq!(
+        game.state.stack_objects.last().unwrap().targets(),
+        &[Target::Permanent(target)]
+    );
+}
+
+#[test]
+fn turn_up_shows_the_creature_while_its_controller_chooses_mana() {
+    use crate::support::play::{choose, spend_named};
+    use managym::{agent::action::Action, state::mana::Mana};
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let card = pin_top(&mut s, &["Gray Ogre"])[0];
+    let printing = s.game().state[card].definition_id;
+    let object = s.game_mut().manifest(card, PlayerId(0));
+    s.set_player_mana_pool(0, "1WUR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::TurnFaceUp { object: chosen, .. } if *chosen == object),
+    );
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    let opponent = Observation::for_player(s.game(), PlayerId(1));
+    let shown = &opponent.opponent_permanents[0];
+    assert_eq!(shown.registry_key, printing.0 as i32);
+    assert!(shown.characteristics.name.is_empty());
+    let snapshot = s.snapshot();
+    for (spend, keep) in [("{W}", "U"), ("{U}", "W")] {
+        *s.game_mut() = snapshot
+            .restore(Default::default())
+            .unwrap()
+            .benchmark_game_mut()
+            .clone();
+        spend_named(&mut s, |description| description.contains(spend));
+        if s.game().state[object].name.is_empty() {
+            spend_named(&mut s, |description| description.contains("{C}"));
+        }
+        assert_eq!(s.game().state[object].name, "Gray Ogre");
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(keep));
+    }
+}

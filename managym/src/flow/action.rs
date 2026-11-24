@@ -106,6 +106,11 @@ impl Game {
                 let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
                 Some(format!("Tap {name} for {}", mana_description(&output)))
             }
+            Action::TurnFaceUp { object, .. } => Some(format!(
+                "Turn {} face up for {}",
+                self.state[*object].retained_base().1.name,
+                crate::agent::ability_description::cost_description(self.manifest_cost(*object)?)
+            )),
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
@@ -407,6 +412,11 @@ impl Game {
             } => self.state.card_id(object).and_then(|card| {
                 self.activation_ability(ActivationSource::Card(card), ability_index)
             }),
+            Action::TurnFaceUp { object, .. } => {
+                return self
+                    .manifest_cost(object)
+                    .is_some_and(|cost| cost.mana_value > 0)
+            }
             Action::Foretell { .. } => return true,
             _ => return false,
         };
@@ -421,6 +431,19 @@ impl Game {
         })
     }
 
+    fn manifest_cost(&self, object: ObjectId) -> Option<&ManaCost> {
+        let permanent = self.state.permanents[self.state.permanent_of(object)?].as_ref()?;
+        let card = &self.state[object];
+        if !permanent.manifested || card.definition_id != crate::state::card::CardDefId::ANONYMOUS {
+            return None;
+        }
+        let (_, printing) = card.retained_base();
+        printing
+            .mana_cost
+            .as_ref()
+            .filter(|_| printing.types.is_creature())
+    }
+
     fn priority_activate_ability_actions(
         &self,
         player: PlayerId,
@@ -432,6 +455,15 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
+            if self
+                .manifest_cost(permanent.object)
+                .is_some_and(|cost| self.can_pay_mana_cost(player, cost))
+            {
+                actions.push(Action::TurnFaceUp {
+                    player,
+                    object: permanent.object,
+                });
+            }
             if self.activations_prohibited(permanent_id) {
                 continue;
             }
@@ -996,6 +1028,39 @@ impl Game {
                 object,
                 ability_index,
             } => self.activate_card_ability_action(*player, *object, *ability_index),
+            Action::TurnFaceUp { player, object } => {
+                use super::decision::{
+                    Decision, EffectFrame, FrameCompletion, SuspendedResolution,
+                };
+                use super::payment::PaymentProgress;
+                let permanent = self
+                    .lookup_current_permanent(*object)
+                    .map_err(|_| AgentError("manifest has departed".into()))?;
+                if self.state.priority.holder != *player
+                    || self.state.permanents[permanent]
+                        .as_ref()
+                        .unwrap()
+                        .controller
+                        != *player
+                {
+                    return Err(AgentError("manifest controller must have priority".into()));
+                }
+                let cost = self
+                    .manifest_cost(*object)
+                    .ok_or_else(|| AgentError("no manifest turn-up cost".into()))?
+                    .clone();
+                let mut frame = EffectFrame::new(*player, Vec::new());
+                frame.bind_source(Some(*object), Some(*object));
+                frame.completion = FrameCompletion::TurnFaceUp(*object);
+                let mut payment =
+                    PaymentProgress::new(*player, CostComponent::mana(cost), vec![], vec![]);
+                payment.committed = true;
+                *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame,
+                    decision: Decision::Payment(payment),
+                });
+                Ok(())
+            }
             Action::Foretell { player, object } => {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));

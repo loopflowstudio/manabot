@@ -142,6 +142,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "paid announcement",
     "paid by",
     "paid source",
+    "turn face up",
     "paid spell",
     "pay casting costs",
     "payer",
@@ -393,6 +394,7 @@ impl<'a> Projection<'a> {
         // retains nothing; every other destination is a fact.
         match completion {
             FrameCompletion::Priority => {}
+            FrameCompletion::TurnFaceUp(object) => self.object_id("turn face up", *object),
             FrameCompletion::Continue => self.field("return", &"turn action"),
             FrameCompletion::CombatNormal => {
                 self.summary(|| "Normal combat damage follows these choices.".into());
@@ -1165,6 +1167,7 @@ pub(crate) fn project_decision(
                         out.field("once each turn ability", &key.1);
                     }
                 }
+
                 SpendCompletion::Foretell(card) => {
                     out.object_id("cast from hand", game.state.object_of(*card))
                 }

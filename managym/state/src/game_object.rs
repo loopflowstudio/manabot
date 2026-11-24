@@ -771,6 +771,12 @@ impl Object {
         self.show(id, definition);
     }
 
+    /// Reveal the original printing in place after paying a manifest cost.
+    pub fn reveal_manifest(&mut self) {
+        let (id, definition) = self.printed.take().expect("manifest retains its printing");
+        self.show(id, definition);
+    }
+
     /// Show the front face, if the back face is up.
     pub fn turn_front_face_up(&mut self) {
         if let Some((id, definition)) = self.front.take() {

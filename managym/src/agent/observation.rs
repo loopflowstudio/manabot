@@ -2090,6 +2090,7 @@ impl Observation {
             Action::PlayLand { object, .. }
             | Action::CastSpell { object, .. }
             | Action::ActivateCardAbility { object, .. }
+            | Action::TurnFaceUp { object, .. }
             | Action::Foretell { object, .. }
             | Action::ScryCard { object, .. }
             | Action::SelectCard { object, .. }

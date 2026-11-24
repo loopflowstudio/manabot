@@ -149,6 +149,7 @@ pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
+    /// Entered by manifest. Keep its public alias through reveal; the anonymous face marks it face down.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub manifested: bool,
     pub id: PublicId,

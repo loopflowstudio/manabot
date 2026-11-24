@@ -1852,6 +1852,7 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
         Action::CastSpell { .. } => OfferVerb::Cast,
         Action::ActivateAbility { .. }
         | Action::ActivateCardAbility { .. }
+        | Action::TurnFaceUp { .. }
         | Action::Foretell { .. } => OfferVerb::ActivateAbility,
         Action::PassPriority { .. } => OfferVerb::PassPriority,
         Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,

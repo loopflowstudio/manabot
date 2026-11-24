@@ -538,6 +538,7 @@ pub const RECORD_NAMES: &[&str] = &[
     "BoardCounts",
     "Ready",
     "Foretell",
+    "TurnFaceUp",
 ];
 
 /// Exact signed words, shared with fact and execution transport conventions.
@@ -984,6 +985,12 @@ pub(crate) fn capture(
                 .push(reference(game, *object, viewer, true));
             true
         }
+        Action::TurnFaceUp { object, .. } => {
+            choice
+                .references
+                .push(reference(game, *object, viewer, false));
+            true
+        }
         Action::Foretell { .. } => {
             choice
                 .references
@@ -998,6 +1005,7 @@ pub(crate) fn capture(
     if public {
         choice.kind = Some(match action {
             Action::PassPriority { .. } => "PassPriority".into(),
+            Action::TurnFaceUp { .. } => "TurnFaceUp".into(),
             Action::Foretell { .. } => "Foretell".into(),
             _ => format!("{:?}", action.action_type()),
         });

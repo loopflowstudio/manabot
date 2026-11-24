@@ -156,7 +156,8 @@ impl Game {
                             | Action::CastSpell { .. }
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
-                            | Action::Foretell { .. }
+                            | Action::TurnFaceUp { .. }
+            | Action::Foretell { .. }
                             // The creature an attack declaration sends in acts;
                             // its decline names the same creature as a choice.
                             | Action::DeclareAttacker { attack: true, .. } => "source",

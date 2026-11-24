@@ -42,6 +42,8 @@ use crate::{
 pub enum FrameCompletion {
     /// A completed root ability restarts the priority round.
     Priority,
+    /// The committed manifest payment reveals this exact appearance when paid.
+    TurnFaceUp(#[serde(serialize_with = "crate::state::game_object::exact")] ObjectId),
     /// A turn action or rule batch returns to the existing tick/priority state.
     Continue,
     StateBased {
@@ -895,6 +897,7 @@ impl SuspendedResolution {
                 | FrameCompletion::Activated { .. }
                 | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
+                | FrameCompletion::TurnFaceUp(_)
                 | FrameCompletion::Continue
                 | FrameCompletion::Spell { .. } => {}
             }
@@ -1375,6 +1378,13 @@ impl Game {
                         self.push_to_stack(
                             crate::state::stack_object::StackObject::ActivatedAbility(ability),
                         );
+                    }
+                    FrameCompletion::TurnFaceUp(object) => {
+                        if self.state.permanent_of(object).is_some() {
+                            self.state[object].reveal_manifest();
+                        }
+                        self.state.priority_mut().start_round(frame.controller);
+                        return;
                     }
                     FrameCompletion::Continue => return,
                     FrameCompletion::Spell { object, attach_to } => {

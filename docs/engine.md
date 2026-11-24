@@ -229,7 +229,7 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
 ```
 
 The unseen pool is the opponent's unknown hand cards, library and face-down
-foretold cards. Public hand minima and exact viewer-known library positions
+foretold cards, plus the printings under manifested permanents the viewer cannot inspect. The permanents keep their public identities across deals. Public hand minima and exact viewer-known library positions
 reserve distinct definition witnesses; the remaining cards are shuffled.
 Everything the viewer can see is preserved.
 [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
@@ -1038,7 +1038,11 @@ nameless 2/2 creature and can see the other card in the graveyard. With one card
 left, that card enters face down automatically. With an empty library, the spell
 finishes resolving. Copying the face-down creature creates a face-up, nameless
 2/2. It has no back face, even if the manifested card can transform. Copying
-that token again preserves those characteristics. Turning a manifested creature face up is still pending.
+that token again preserves those characteristics. With priority, the controller can
+show a manifested creature card and pay its mana cost to turn it face up. This
+keeps its counters and public object reference. Spells already targeting it
+still target the same permanent. A subsequent token copy sees the revealed
+creature, including its back face when it can transform.
 
 Esper Origins illustrates a zone change with a different face up. Cast it from hand
 to surveil two and gain two life. Cast it from your graveyard for its flashback

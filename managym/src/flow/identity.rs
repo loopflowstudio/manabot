@@ -46,8 +46,15 @@ impl Game {
         permanent: &crate::state::permanent::Permanent,
     ) -> Option<CardDefId> {
         let object = &self.state[permanent.object];
-        if permanent.manifested {
-            self.shares_information(viewer, permanent.controller)
+        if permanent.manifested && object.definition_id == CardDefId::ANONYMOUS {
+            // Announcing the special action shows the creature and its cost
+            // before the controller chooses which mana to spend.
+            use super::decision::{FrameCompletion, ResolutionRef};
+            let showing = self.state.suspended_decision.as_ref().is_some_and(|pending| {
+                pending.continuation().into_iter().any(|part| matches!(part, ResolutionRef::Frame(frame)
+                    if matches!(frame.completion, FrameCompletion::TurnFaceUp(id) if id == permanent.object)))
+            });
+            (showing || self.shares_information(viewer, permanent.controller))
                 .then(|| object.retained_base().0)
         } else {
             object.definition_id.catalog_id()
