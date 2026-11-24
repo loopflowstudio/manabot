@@ -75,14 +75,7 @@ The native cast-order witness lives in `managym/cards/tests/cards/rix.rs`, the c
 
 **Behavior review at 33253cd2.** Both native cases passed with `cargo test --manifest-path managym/Cargo.toml -p managym --lib seed_suture`. The cold replay passed with `uv run pytest -q tests/env/test_game_snapshot.py -k transferred_seed_suture`. The native receipt held one white contribution. The live and restored branches tapped the same Plains and agreed on stack control, the surviving link and the search witness. This slice changed entitlement only.
 
-**Working phase remains open.** Inspect the two source-conditioned grants immediately before `change_control` in the transfer fixture. Both report the original caster and the Angel as source. `Observation::printed_card_data` drops the caster rule, so v11 cannot encode it and LLM text describes both grants as “while they control” the Angel. After transfer, one entitlement follows the Angel and the fixed-player grant lapses. Project that rule alongside the resolved caster through the shared consumers and check both viewers before transfer. The returning-Angel precondition witness and remaining prepared rows are still implementation work. Gate owns the full suites.
-
-**Remaining preparation work.** The transfer fixture rejects the old Command by revision and compares the state hash. That leaves rejection of a current-revision Command with an incorrect object precondition unverified. Keep the exact-source grant as the single record of preparation. Transfer needed no second owner field or copied caster on the exile object.
-
-**Next end-to-end witness.** Start with the Angel and Phytomedic both prepared. Remove and return the Angel before casting either Seed Suture. Check that ordinary cleanup removes the old copy, the returning Angel gets a fresh link, and the Phytomedic keeps its original one. Inspect the two surviving offers in Academy and LLM text, then cast the returning Angel’s copy through its native Command. Use this witness within the cohort below.
-
-**Next implementation cohort.** Complete the prepared-copy lifecycle and its Academy and LLM projections together with all SOS and FRA rows the shared path supports. Use the set selectors below to account for every remaining row. Run directed checks for the whole cohort before review. Apply the same grouping to Adventure, Omen and Foundations permissions. Split a cohort only where a specific missing rule or distinct implementation path requires it, and list the affected rows and dependency together.
-
+**Prepared-entry cohort.** The transfer and returning-Angel checks now distinguish current caster, source control and source incarnation. The closing table lists the remaining preparation rows and their dependencies. The next shared path is resolving prepare/unprepare against an exact live source, including idempotent preparation and conditional upkeep triggers. Adventure, Omen and Foundations retain their separate cohorts below.
 
 ## Scope
 
@@ -151,8 +144,41 @@ After the prescribed extension rebuild and atomic install, run `uv run pytest te
 
 Use the same harness and hardware for comparisons. For new board states that the base cannot construct, report candidate work/counts by size and compare equivalent workloads on revisions supporting those states. Separate changed rules digests from timing claims. Select optimizations from measured costs, retain replay and legal-choice witnesses, and leave deck selection and training to integrated validation.
 
-## Permission terms before a control change
+## Prepared entry and entitlement
 
-The transfer and cold replay witnesses establish who can cast now. Before transfer, the public permission row still describes two different futures with the same player and source fields. In the prepared cohort, project whether entitlement follows the source controller from the native grant into CastPermissionData. Retain the resolved player for direct consumption. Carry the term through canonical observation, bindings, a v11 fact, LLM text and Academy inspection. Use the existing transfer position before control changes to compare the two visible terms for both viewers. Keep retained observations readable without inferring a missing term from a card name. Leave grant storage, search cloning and Command dispatch with their current owners.
+Both viewers now receive the current caster and whether entitlement follows the source controller. The same term reaches canonical captures, Python, v11 grant facts, LLM text and Academy inspection. The returning-Angel witness submits the fresh cast offer with only the departed permanent’s precondition substituted. It checks the state hash on rejection, casts with the returned permanent’s address, and checks Phytomedic’s existing link.
 
-Run the returning-Angel witness at a fresh decision revision. Alter only the new offer’s object precondition to identify the departed object, compare the state hash on rejection, then execute the genuine offer and check Phytomedic’s surviving link. Complete this alongside all prepared rows sharing the path before returning to review.
+The prepared-entry fixture puts each source onto the battlefield, finds its printed spell copy in exile, casts it through priority, resolves the pending choices and checks consumption. The SOS and FRA ledgers name each covered definition and test. The fixture covers 18 SOS and 13 FRA rows. These are casting witnesses. They do not by themselves verify every front-face trigger or branch of an inset spell.
+
+### Remaining preparation rows
+
+| Cards | Owner | Required behavior |
+|---|---|---|
+| Emeritus of Truce | resolution | Target-player Inkling creation followed by a creature-count comparison and preparation of the still-present source. |
+| Joined Researchers | triggers and resolution | Compare opponent hand size at end-step trigger and resolution, then prepare the source. |
+| Spiritcall Enthusiast | entry triggers | Recognize a batch of one or more entering tokens and resolve preparation once. |
+| Emeritus of Ideation | attack payment | Allow declining or exiling eight distinct graveyard cards before preparing the attacker. |
+| Encouraging Aviator, Scathing Shadelock, Emeritus of Conflict, Abigale, Poet Laureate, Tam, Observant Sequencer | triggered abilities | Resolve preparation of the exact source from its attack, first main phase, third spell cast, creature spell cast or landfall trigger, respectively. Repeated preparation leaves the existing copy in place. |
+| Harmonized Trio | activation payment | Select and commit two other untapped creatures plus the source as one cost, then prepare it. |
+| Emeritus of Woe, Bloodline Recollector | turn history and end-step triggers | Read the qualifying number of creature deaths at the end step and at resolution, then prepare the source. |
+| Grave Researcher | resolution | Finish surveil before testing the graveyard creature count and preparing the live source. Reanimate reads the moved creature’s mana value. |
+| Leech Collector, Scheming Silvertongue | turn history and triggers | Read the first life-gain event or the second-main total life gained, respectively, when determining preparation. |
+| Emeritus of Abundance | attack triggers | Recheck eight controlled lands before a resolving attack trigger prepares the current source. |
+| Kirol, History Buff | zone-change triggers | Recognize one or more cards leaving the controller’s graveyard in a batch and prepare once. |
+| Lluwen, Exchange Student | activation payment | Sorcery-speed graveyard creature exile as cost followed by preparation. The Pest token needs its attack trigger. |
+| Sanar, Unfinished Genius | activation legality | Check whether the controller cast an instant or sorcery this turn before publishing the Treasure activation. |
+| Biblioplex Tomekeeper, Infinite Coursework | resolution and linked exile | Explicitly unprepare an exact source and remove its linked copy. Tomekeeper also selects eligible prepare/unprepare modes. Coursework applies ability loss and an untap lock to the attached creature. |
+| Skycoach Waypoint | activation resolution | Targeted prepare action from a land independently of its mana ability. |
+| Variable Chaser | multiplayer resolution choices | Collect each player’s optional whole-hand discard choice in order and apply the corresponding draw-seven instructions. |
+| Pyre Rhymer | mana production | A turn-scoped effect adds red when the caster taps a Mountain for mana, including Mountains gained later in the turn. |
+| Heartwood Crafter | mana payment | Retain cast origin in the spending context so its mana cannot pay for hand spells. |
+| Paradox Shaper, Stingerquill Voxmancer, Woodwork Prodigy | trigger conditions | Read the exact live link for an intervening “if unprepared” at upkeep and at resolution. |
+| Whiplash Wordsmith | continuous effects and turn history | Test noncombat damage dealt to an opponent this turn for flying and haste. |
+| Codie, Ravenous Codex | cast triggers and preparation resolution | Identify an actually cast prepared spell on the stack for copying and retargeting. Mass preparation acts once per eligible unprepared source. |
+| Hexhaven Dueling Arena | turn history and activation resolution | Track which creature attacked this turn for the cheaper target restriction and resolve both prepare activations. |
+
+### Directed checks
+
+At `1852a68d`, the two `prepared_insets_cast_from_exile` cases exercised 31 physical cards. Results included Cadet, Heartwood, Treasure, Elemental and Spirit creation, Omit Variables milling three and Bind to Life milling seven. All Aboard required a controlled non-Pilot target.
+
+At `fae97841`, the native transfer and returning-Angel tests passed. The rebuilt CPython 3.13 extension passed both Zul Ashur text/policy cases and the transferred Seed Suture cold replay. The experience schema matched its Rust authority. Academy’s inspection tests passed (10), and Svelte reported zero errors and warnings.

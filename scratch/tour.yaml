@@ -1,21 +1,21 @@
-at: ca29b012c9a2a8965622c215f2d9eac7a7145873
+at: fae97841dafc8573f5fcec8900f9d98c28fb3511
 first:
   - path: docs/engine.md
-    why: Follow the linked copy from entry through casting
-  - path: managym/cards/src/fra.rs
-    why: See both creatures share Seed Suture
-  - path: managym/src/flow/proposed_event.rs
-    why: Apply preparation when battlefield entry succeeds
-  - path: managym/src/flow/zones.rs
-    why: Create the exile object and its source grant
-  - path: managym/src/flow/cast_permission.rs
-    why: Derive casting entitlement from the live source
-  - path: managym/src/flow/sba.rs
-    why: Keep only linked copies in exile
+    why: Follow the exile copy through transfer and blink
   - path: managym/src/agent/observation.rs
-    why: Join each cast offer to its source
+    why: Read current caster and source entitlement together
+  - path: managym/src/agent/observation_encoder.rs
+    why: See which grant facts reach the policy
+  - path: academy/ui/src/lib/board/inspect.ts
+    why: See how a viewer reads source control
+  - path: managym/cards/src/fra.rs
+    why: Follow repeated spell programs across distinct sources
+  - path: managym/cards/src/sos.rs
+    why: Inspect the prepared creatures and inset programs
   - path: managym/src/flow/resolution_tests.rs
-    why: Check both viewers, stale Commands and fixed-player access
-  - path: tests/env/test_game_snapshot.py
-    why: Replay the transferred Angel’s cast and payment
+    why: Compare control transfer with a new battlefield incarnation
+  - path: managym/cards/tests/cards/sos.rs
+    why: Exercise exile casts across both sets
+  - path: scratch/plan.md
+    why: Find the dependency for each remaining preparation card
 hide: []
