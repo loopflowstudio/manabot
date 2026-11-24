@@ -173,10 +173,18 @@ The post-merge concept review ([concept-review.html](concept-review.html), at `6
 
 Built: `EntryFace` with a flattened serializer (`transformed` bool plus `modal_back` when true); the commit asserts a modal back shows instead of falling back to transform. Witness `agent::effect_execution::tests::a_pending_modal_back_entry_never_reads_as_entering_transformed`. `cr_712_modal_faces::spell_land_back_face_is_played_back_face_up_once` asserted main's `is_transformed()` for a played modal back; it now asserts the opposite (CR 712.11). Engine suites green apart from the known `historical_captures…`; the cards crate fails nine tests identically at base (merge breaks, `questions.md`); Python checks pass.
 
-## Then: `gate`
+## Next: `gate`
 
-- Read CI on the PR head; a failure caused by the merge is fixed in place, starting with the nine cards-crate tests in `questions.md`. Engine Budget passed at `0784a13607` (see the performance review above); rerun it after the entry-face change.
-- Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
+CI at `39da9aef8d` (run before the entry-face commits; `03a71493ac` was cancelled; `6af5e5d458` queued at realign) failed these jobs. Start gate from this list, rechecking each against the head run:
+
+- **Rust Tests**: `historical_captures_move_battlefield_and_spell_rows_onto_their_records` (known base failure); `cr_712_modal_faces::spell_land_back_face_is_played_back_face_up_once` (fixed by `03a71493ac`); semantic conformance `frozen_case_inventory_…`, `compatibility_names_and_content_allocations_are_metamorphic`, `frozen_elemental_161`–`164`, `frozen_elemental_world_gr_vs_ug`/`ug_vs_gr` (frozen evidence to re-record). The nine local cards-crate failures in `questions.md` did not show in the failed log; check whether CI reached the cards crate.
+- **Protocol v1 Conformance** and **Academy UI**: `src/lib/protocol-conformance.test.ts`, `LegacyPermanentView fields` expects 34 fields, Rust emits 33 (or the reverse): the TypeScript legacy permanent view and the projection disagree after the merge.
+- **Academy Integration**: `tests/academy/test_authored_match_parity.py::test_checked_authored_match_parity_receipt`, `state_before` digest moved (retained parity receipt; re-record if the move is this branch's state change).
+- **Integration (model)**: `tests/model/test_record_coverage.py::test_every_id_random_games_emit_has_a_catalog_row` (program tokens `(1, 0x02728fa8)`, `(1, 0x12067587)` missing from `agent/record_vocabulary.rs`, game 16 Ba Sing Se / Clone decks); `tests/model/test_recent_events.py::test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset` (`assert 0 > 2`); `tests/semantic/test_text_observation.py::test_esper_origins_text_follows_the_spell_onto_its_saga_face` (expects `"; cast from graveyard."`, text now continues `"cast from graveyard; cast with flashback"` — main's casting authority adds the flashback clause).
+
+Then:
+
+- Rerun Engine Budget after the entry-face change (passed at `0784a13607`, 2.4 points above the floor).
 - Rerun vector/recording consumers and canonical replay over the merged tree.
-- The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's; recheck them against the new base.
+- Recheck the base failures in `questions.md` (eight Python tests, Academy numpy import, `experience.py` format drift) against the new base.
 - Delete `scratch/` in the pre-land commit.
