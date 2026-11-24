@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Full-Branch Audit at HEAD a126bf2e4e</title>
+<title>MTG-418 Concept Review · Full-Branch Audit at HEAD 066264c33d</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -95,15 +95,15 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym, Manabot &amp; Academy · MTG-418 · Post-Alignment Full-Branch Concept Review · HEAD a126bf2e4e</div>
-  <h1>Do MTG-418’s event-history and contextual-query concepts line up across the whole branch?</h1>
+  <div class="eyebrow">Managym, Manabot &amp; Academy · MTG-418 · Full-Branch Concept Review · HEAD 066264c33d</div>
+  <h1>Do MTG-418’s event-history, contextual-query, and state-invalidation concepts line up across the whole branch?</h1>
   <p>
-    <strong>Area reviewed:</strong> The entire built MTG-418 event-history and contextual-query surface across
+    <strong>Area reviewed:</strong> The complete MTG-418 event-history and contextual-query surface across
     <code>managym</code>, <code>manabot</code>, <code>managym.academy</code> / <code>academy/ui</code>, and
-    <code>docs</code> against merged base <code>610370233c</code> (including the post-merge alignment pass
-    <code>ab1f3ff59b</code>, active v31 receipt refresh <code>3e220871af</code>, and compression
-    <code>a721dc4cbb</code>; <strong>81/81 primary FDN rows</strong>, <strong>16/17 cost-primary rows</strong>,
-    all 5 cross-set query families on hash contract <strong>v31</strong>):
+    <code>docs</code> against merged base <code>610370233c</code>, including the damage-history cache-boundary fix
+    (<code>b62f8b7ece</code>), the trigger-wrapper / stack-X / turn-state compression (<code>3b774590f3</code>),
+    and the realigned plan (<code>066264c33d</code>; <strong>81/81 primary FDN rows</strong>,
+    <strong>16/17 cost-primary rows</strong>, all 5 cross-set query families on hash contract <strong>v31</strong>):
     <code>state/src/{ability,card,game_object,permanent,predicate,stack_object}.rs</code>,
     <code>src/flow/{action,damage,decision,event,game,layers,mana,payment,play,priority,proposed_event,resolution,retarget,sba,statics,tick,trigger,triggers,turn,zones}.rs</code>,
     <code>src/agent/{ability_description,continuation,effect_execution,env,observation,observation_encoder,observation_layout}.rs</code>,
@@ -112,23 +112,25 @@
     <code>manabot/{policy/{checkpoint,prepare,readings},backends/torch/*,semantic/text_observation}.py</code>,
     <code>managym/academy/{recording,server,trace}.py</code>,
     <code>academy/ui/src/lib/{recording,types,board/*}</code>, and
-    <code>docs/{engine,observation-and-model}.md</code> + <code>managym/README.md</code>.
+    <code>docs/{development,engine,observation-and-model}.md</code> + <code>managym/README.md</code>.
   </p>
   <div class="callout">
-    <strong>Outcome: Nothing to change.</strong> All <strong>eight of eight</strong> product/rules concepts in the
-    MTG-418 event-history and contextual-query area now line up with the code at <code>a126bf2e4e</code>. The three
-    post-merge mismatches caught at <code>8838269f91</code> &mdash; (1) <em>Quilled Greatwurm</em> splitting event
-    amounts across <code>TriggeringAmount</code> and <code>u8</code> <code>X</code> while leaving
-    <code>OrderTriggers</code>/stack labels numberless, (2) <code>SpellLki</code> dropping <code>SpellProfile</code>
-    for departed Adventures/Omens, and (3) manual <code>TriggerCondition</code> wrapper walkers missing
-    <code>Prepared</code> &mdash; plus the stale v11 layout table in <code>docs/observation-and-model.md</code>,
-    are all cleanly resolved and compressed on hash contract <strong>v31</strong> without breaking pinned pilots.
-    No new proposed code changes are needed; the branch is ready to proceed to <code>gate</code>.
+    <strong>Outcome: Nothing to change.</strong> All <strong>nine of nine</strong> product/rules concepts in the
+    MTG-418 area line up with single owners at <code>066264c33d</code>. The two code passes since the prior audit
+    (<code>a126bf2e4e</code>) closed the last two structural seams cleanly: (1)
+    <code>TrackedState::damage_history_mut</code> (<code>b62f8b7ece</code>) aligned turn damage-pair writes with
+    <code>TrackedState</code>’s existing non-layer write discipline (<code>mark_damage</code>,
+    <code>object_lki_mut</code>, <code>spell_lki_mut</code>), eliminating redundant layer-board rebuilds during
+    combat damage and bringing the paired local Engine Budget back inside the 10% gate with identical digests; and
+    (2) <code>match_trigger_wrappers</code> (<code>3b774590f3</code>) closed the nested <code>InGraveyard</code>
+    fallthrough and added a debug assertion against any future unpeeled wrapper, alongside single readers
+    <code>StackObject::x()</code> and <code>config.turn_state_dim()</code>. No proposed code or plan change is
+    needed; the branch is ready for <code>gate</code>.
   </div>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at a126bf2e4e vs. Base 610370233c</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 066264c33d vs. Base 610370233c</span></h2>
   <p class="small">
     Every row pairs what a player, replay inspector, or policy author expects with the concrete types, owners, and
     projections in the branch today. No proposed redesign remains open in this area.
@@ -137,7 +139,7 @@
     <thead>
       <tr>
         <th style="width:22%">Product / Rules Concept</th>
-        <th style="width:40%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>a126bf2e4e</code>)</th>
+        <th style="width:40%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>066264c33d</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Verification &amp; Single-Owner Check</th>
       </tr>
@@ -156,8 +158,24 @@
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          One owner, one turn reset (<code>advance_step_position</code>), one reader per fact. Duplicate life
-          conditions deleted (<code>635e54710f</code>); viewer-safe v11 projections and LLM text agree.
+          One owner, one turn reset (<code>advance_step</code>), one reader per fact. Duplicate life conditions
+          deleted; viewer-safe v11 projections and LLM text agree.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Damage-history cache invalidation boundary</strong><br><span class="small">Recording who damaged whom this turn never alters continuous-effect layers</span></td>
+        <td>
+          <code>TrackedState::damage_history_mut()</code> (<code>flow/game.rs:664</code>) mutates
+          <code>turn.damage_pairs</code> without bumping <code>revisions.characteristics</code> or
+          <code>revisions.triggers</code>, matching <code>mark_damage</code>, <code>object_lki_mut</code>, and
+          <code>spell_lki_mut</code>. Trigger matching, resolution, observations, and canonical hashing all read
+          <code>damage_pairs</code> directly.
+        </td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>
+          <strong>Aligned in <code>b62f8b7ece</code>.</strong> Audited all readers of <code>damage_pairs</code>:
+          zero references in <code>layers.rs</code>, <code>statics.rs</code>, or <code>TriggerIndex</code>; turn
+          rollover clears <code>damage_pairs</code> inside <code>advance_step</code>, which bumps revisions.
         </td>
       </tr>
       <tr>
@@ -172,12 +190,12 @@
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          One live/LKI reader across resolution, layers, stack projection, v11 tensors, and text. Station paid-cost
-          projection aligned in <code>cdfd651ff5</code>.
+          One live/LKI reader across resolution, layers, stack projection, v11 tensors, and text. Dynamic mana
+          abilities survive Layer 6 <code>lose_nonmana_abilities</code> and finalize via <code>finalize_characteristics</code>.
         </td>
       </tr>
       <tr>
-        <td><strong>Event-bound trigger amounts (&ldquo;that much&rdquo; / &ldquo;that many&rdquo;)</strong><br><span class="small">CR 510.2, 603.2, 608.2h · One committed <code>i32</code> per trigger occurrence, shown wherever triggers are ordered or inspected</span></td>
+        <td><strong>Event-bound trigger amounts (&ldquo;that much&rdquo; / &ldquo;that many&rdquo;)</strong><br><span class="small">CR 510.2, 603.2, 608.2h · One committed <code>i32</code> per trigger occurrence</span></td>
         <td>
           Unified on <code>EffectValue::TriggeringAmount</code> + <code>trigger.triggering_amount: i32</code> across
           <em>Drake Hatcher</em>, <em>Lathril</em>, <em>Niv-Mizzet, Visionary</em>, <em>Bloodthirsty Conqueror</em>,
@@ -188,17 +206,15 @@
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          <strong>Resolved in <code>ab1f3ff59b</code> + <code>a721dc4cbb</code>.</strong>
           No 255 clamp or fake <code>stack::HAS_X</code> on Greatwurm (260 damage &rarr; 518 counters,
-          <code>trigger.x == 0</code>); simultaneous 1- and 3-damage Hatcher triggers are distinct in
-          <code>OrderTriggers</code> and both viewers’ stack entries while respecting Academy’s acting-viewer
-          narration contract.
+          <code>trigger.x == 0</code>); simultaneous 1- and 3-damage Hatcher triggers stay distinct in
+          <code>OrderTriggers</code> and stack labels while respecting Academy’s acting-viewer contract.
         </td>
       </tr>
       <tr>
         <td><strong>Departed spell LKI &amp; cast-profile queries</strong><br><span class="small">CR 608.2h, 702.181, 712.11, 715.3 · &ldquo;That spell&rdquo; keeps the profile it was cast as</span></td>
         <td>
-          <code>SpellLki</code> (<code>stack_object.rs:49-55</code>) carries
+          <code>SpellLki</code> (<code>stack_object.rs:49-62</code>) carries
           <code>#[serde(default, skip_serializing_if = "SpellProfile::is_front")] pub profile: SpellProfile</code>,
           populated at the single stack-departure site (<code>zones.rs:767,1085</code>) and read via
           <code>Game::spell_info</code>. <code>recorded_cast_matches_predicate</code>,
@@ -209,28 +225,27 @@
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          <strong>Resolved in <code>ab1f3ff59b</code> + <code>a721dc4cbb</code>.</strong>
-          A countered Omen (<em>Charring Bite</em>) stays a red sorcery with MV 2 for
+          Countered Omen (<em>Charring Bite</em>) stays a red sorcery with MV 2 for
           <code>TriggeringSpellMatches</code>, prints <code>Last known spell Charring Bite</code>, and keeps
-          front-face serialization unchanged on hash v31. (Two pre-existing <code>main</code> spell-surface
-          boundaries are noted in &sect;4.)
+          front-face serialization unchanged on hash v31. (Live resolving inset spells also read their inset printing
+          in <code>damage_source_facts</code>; prospective departed-spell damage note in &sect;4.)
         </td>
       </tr>
       <tr>
-        <td><strong><code>TriggerCondition</code> wrapper transparency</strong><br><span class="small">Every wrapper delegates uniformly to its inner condition without drift</span></td>
+        <td><strong><code>TriggerCondition</code> wrapper transparency &amp; gating</strong><br><span class="small">Every wrapper delegates uniformly and never silently falls through as a leaf</span></td>
         <td>
           Exhaustive <code>TriggerCondition::inner(&amp;self)</code> (no wildcard <code>_</code>) and
           <code>TriggerCondition::leaf(&amp;self)</code> in <code>state/src/ability.rs:3049-3098</code>.
           <code>once_each_turn</code>, <code>condition_event_kinds</code> (<code>triggers.rs:113</code>),
-          <code>triggering_noun</code> (<code>ability_description.rs:132</code>), and <code>bound_x</code>
-          (<code>ability_description.rs:144</code>) all route through <code>inner()</code> / <code>leaf()</code>.
+          <code>triggering_noun</code>, and <code>bound_x</code> route through <code>inner()</code> /
+          <code>leaf()</code>. <code>match_trigger_wrappers</code> (<code>triggers.rs:1727-1780</code>) rejects
+          nested <code>InGraveyard</code> and asserts <code>leaf.inner().is_none()</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          <strong>Resolved in <code>ab1f3ff59b</code> + <code>a721dc4cbb</code>.</strong>
-          Adding any future wrapper forces a compile error in <code>inner()</code> and
-          <code>condition_description()</code>. Nested <code>Prepared(OnceEachTurn)</code> now assigns a grant clock
-          instead of panicking.
+          <strong>Tightened in <code>3b774590f3</code>.</strong> Adding any future wrapper forces a compile error in
+          <code>inner()</code> and <code>condition_description()</code> and trips a debug assertion if omitted from
+          <code>match_trigger_wrappers</code>.
         </td>
       </tr>
       <tr>
@@ -269,17 +284,18 @@
       <tr>
         <td><strong>Packed CSR &amp; dense v11 observation layout, checkpoint prefixes &amp; docs</strong><br><span class="small">Append-only columns + fact-kind gating + synced reference docs</span></td>
         <td>
-          <code>encode_rows</code> writes <code>player_turn_state</code> (15 v11 / 8 legacy),
-          <code>permanent</code> (56 v11: MTG-418 at 53–55 after main’s 52), <code>stack</code> (46 v11:
-          MTG-418 at 40–45 after main’s 37–39), <code>relations</code> kind 11, and
-          <code>FactKind::{AbilityResolution, TriggeringAmount}</code> gated by <code>&lt;= tables.fact_kinds</code>
-          (<code>manabot/policy/prepare.py:1191</code>). <code>docs/observation-and-model.md:724-726</code> prints
-          <code>40 &times; 56</code>, <code>32 &times; 46</code>, and <code>2 &times; 15</code>.
+          <code>encode_rows</code> uses <code>config.turn_state_dim()</code> (<code>observation_encoder.rs:1040</code>)
+          and <code>StackObject::x()</code> (<code>observation.rs:2012</code>) to write
+          <code>player_turn_state</code> (15 v11 / 8 legacy), <code>permanent</code> (56 v11: MTG-418 at 53–55 after
+          main’s 52), <code>stack</code> (46 v11: MTG-418 at 40–45 after main’s 37–39), <code>relations</code> kind
+          11, and <code>FactKind::{AbilityResolution, TriggeringAmount}</code> gated by
+          <code>&lt;= tables.fact_kinds</code> (<code>manabot/policy/prepare.py:1191</code>).
+          <code>docs/observation-and-model.md</code>, <code>docs/engine.md</code>, <code>docs/development.md</code>,
+          and <code>managym/README.md</code> match the code.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Code, schemas, checkpoint prefixes, pinned v9/v11 pilots, <code>docs/observation-and-model.md</code>,
-          <code>docs/engine.md</code>, and <code>managym/README.md</code> all agree.
+          Code, schemas, checkpoint prefixes, pinned v9/v11 pilots, and all reference docs agree.
         </td>
       </tr>
     </tbody>
@@ -287,90 +303,83 @@
 </section>
 
 <section>
-  <h2>2. Before &rarr; After Verification of the Post-Merge Alignment</h2>
+  <h2>2. Before &rarr; After Verification of the Recent Performance &amp; Wrapper Pass</h2>
   <p>
-    At <code>8838269f91</code>, the largest conceptual mismatch was splitting event-bound trigger amounts across
-    <code>EffectValue::TriggeringAmount</code> (<code>i32</code>) and <code>EffectValue::X</code> (<code>u8</code>),
-    alongside departed inset spells losing <code>SpellProfile</code> and <code>once_each_turn()</code> skipping
-    <code>Prepared</code>. Comparing the pre-alignment head against <code>a126bf2e4e</code> confirms all three
-    now have one owner across rules, descriptions, policy input, and Academy.
+    Since the prior concept review at <code>a126bf2e4e</code>, the largest remaining mismatch was operational and
+    structural: recording a turn damage pair mutated <code>GameState</code> through <code>TrackedState::DerefMut</code>,
+    telling the engine that continuous-effect layers had changed on every creature hit (forcing 38 board rebuilds on
+    a 16-vs-16 combat step and pushing Search-64 +15.8% past the 10% Engine Budget), while
+    <code>match_trigger_wrappers</code> still had a silent <code>leaf =&gt;</code> fallthrough that could treat a
+    nested <code>InGraveyard</code> wrapper as a leaf. Both are now closed cleanly at <code>066264c33d</code>.
   </p>
 
   <div class="grid">
     <div class="panel no-box">
-      <h3>Before <span class="badge existing">Historical at 8838269f91</span></h3>
-      <pre>// 1. Quilled Greatwurm duplicated combat totals into u8 trigger.x
-//    (clamped at 255, fake stack::HAS_X) while Drake Hatcher &amp; co.
-//    had byte-identical OrderTriggers &amp; stack labels.
-effects: vec![Effect::put_counters(
-    ObjectSelector::Triggering,
-    CounterKind::PlusOnePlusOne,
-    EffectValue::X, // clamped u8::MAX = 255
-)],
+      <h3>Before <span class="badge existing">Historical at 369696da5f</span></h3>
+      <pre>// 1. flow/damage.rs wrote turn.damage_pairs via DerefMut,
+//    bumping revisions.characteristics + triggers on every hit:
+self.state.turn.damage_pairs.record(source, object_ref);
+// -&gt; 16v16 combat: 38 board rebuilds (vs 5 on ref)
+// -&gt; Search-64: 68.132s vs 58.847s (+15.8%, FAILS 10% budget)
 
-// 2. SpellLki had no SpellProfile -&gt; countered Omen reverted to
-//    Creature front face in TriggeringSpellMatches &amp; spell_lki.
-
-// 3. TriggerCondition::once_each_turn() omitted Prepared -&gt;
-//    granted Prepared(OnceEachTurn) panicked on firing.</pre>
+// 2. flow/triggers.rs::match_trigger_wrappers silently treated
+//    any unpeeled wrapper (e.g. nested InGraveyard) as a leaf:
+leaf =&gt; return Some((leaf, once)),</pre>
     </div>
     <div class="panel yes-box">
-      <h3>After <span class="badge existing">Existing at a126bf2e4e</span></h3>
-      <pre>// 1. Single i32 TriggeringAmount owner (fdn.rs:3407, triggers.rs:165)
-//    + TriggerText formatting in OrderTriggers &amp; both viewers’ stack
-//    labels (ability_description.rs:23-95,1155), with acting-only
-//    pending narration (decision_context.rs:315).
-effects: vec![Effect::put_counters(
-    ObjectSelector::Triggering,
-    CounterKind::PlusOnePlusOne,
-    EffectValue::TriggeringAmount, // unclamped i32, trigger.x == 0
-)],
+      <h3>After <span class="badge existing">Existing at 066264c33d</span></h3>
+      <pre>// 1. flow/game.rs:664 exposes TrackedState::damage_history_mut(),
+//    matching mark_damage / object_lki_mut / spell_lki_mut:
+self.state.damage_history_mut().record(source, object_ref);
+// -&gt; 16v16 combat: 6 board rebuilds; 0.0478ms (was 0.1007ms)
+// -&gt; Search-64: 60.820s vs 61.668s (PASSES, identical digests)
 
-// 2. SpellLki.profile (stack_object.rs:55, skipped when front) +
-//    shared recorded_spell_matches_predicate &amp; recorded_spell_printing
-//    (statics.rs:710-735, effect_execution.rs:377).
-
-// 3. Exhaustive TriggerCondition::inner() &amp; leaf() (ability.rs:3049,3090)
-//    driving once_each_turn, condition_event_kinds, triggering_noun, bound_x.</pre>
+// 2. flow/triggers.rs:1767 closes nested InGraveyard and
+//    enforces wrapper exhaustiveness in debug builds:
+TriggerCondition::InGraveyard { .. } =&gt; return None,
+leaf =&gt; {
+    debug_assert!(leaf.inner().is_none(), "unhandled trigger wrapper: {leaf:?}");
+    return Some((leaf, once));
+}</pre>
     </div>
   </div>
 </section>
 
 <section>
-  <h2>3. Concrete Interactions, Failures &amp; Recovery Checked at <code>a126bf2e4e</code></h2>
+  <h2>3. Concrete Interactions, Failures &amp; Recovery Checked at <code>066264c33d</code></h2>
   <table>
     <thead>
       <tr>
         <th style="width:27%">Interaction / Counterexample</th>
         <th style="width:36%">Rules &amp; State Path</th>
-        <th style="width:37%">Verified Result at <code>a126bf2e4e</code> <span class="badge existing">Existing</span></th>
+        <th style="width:37%">Verified Result at <code>066264c33d</code> <span class="badge existing">Existing</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Over-255 <em>Quilled Greatwurm</em> combat hit + simultaneous trample split</strong></td>
-        <td><code>CombatDamageTotals</code> &rarr; <code>event_amount</code> &rarr; <code>trigger.triggering_amount: i32</code> (<code>trigger.x == 0</code>) &rarr; <code>EffectValue::TriggeringAmount</code>.</td>
-        <td><span class="badge yes">Aligned</span> 260-damage Ogre places all 260 counters (518 total) with <code>trigger.x == 0</code> and matching stack/fact values; trample splits stay one summed trigger per creature (CR 510.2).</td>
+        <td><strong>16-vs-16 combat damage with <code>damage_history_mut</code> + Ooze/Hellkite snapshots</strong></td>
+        <td><code>commit_damage</code> &rarr; <code>damage_history_mut()</code> (preserves <code>Arc&lt;LayerBoard&gt;</code>) &rarr; direct reads in <code>triggers.rs</code>, <code>resolution.rs</code>, <code>observation.rs</code>, <code>hash.rs</code>; reset in <code>advance_step</code>.</td>
+        <td><span class="badge yes">Aligned</span> <code>recording_creature_damage_reuses_the_layer_board</code> confirms <code>Arc::ptr_eq</code>; board rebuilds drop 38 &rarr; 6; paired Search-64 &amp; headless step digests match reference byte-for-byte; Academy 174-Command parity holds.</td>
       </tr>
       <tr>
-        <td><strong>Simultaneous 1- and 3-damage <em>Drake Hatcher</em> hits across both viewers</strong></td>
-        <td><code>pending_trigger_description</code> &rarr; <code>TriggerText</code>; <code>Observation::stack_object_data</code>; <code>decision_context.rs:315</code> viewer guard.</td>
-        <td><span class="badge yes">Aligned</span> <code>OrderTriggers</code> offers and both viewers’ public stack labels distinguish <code>(1)</code> and <code>(3)</code>; only the acting viewer gets pending decision narration so Academy’s waiting-viewer frame validator holds.</td>
+        <td><strong>Live inset Omen (<em>Charring Bite</em>) dealing 5 damage under <em>Gratuitous Violence</em></strong></td>
+        <td><code>ProposedEvent::Damage</code> &rarr; <code>damage_source_facts</code> &rarr; <code>source_base</code> reads live stack <code>Object</code> (<code>show_inset(Omen)</code>).</td>
+        <td><span class="badge yes">Aligned</span> Live stack object has <code>CardType::Sorcery</code> (<code>is_creature() == false</code>), so <em>Gratuitous Violence</em> does not double <em>Charring Bite</em>’s damage. (Departed-spell note in &sect;4.)</td>
       </tr>
       <tr>
-        <td><strong>Countered Omen (<em>Charring Bite</em>) with waiting cast trigger</strong></td>
-        <td><code>zones.rs:767</code> captures <code>SpellLki { profile: Omen, .. }</code> &rarr; <code>spell_matches_predicate</code> &amp; <code>effect_execution::spell_lki</code>.</td>
-        <td><span class="badge yes">Aligned</span> <code>TriggeringSpellMatches(instant_or_sorcery)</code> resolves <code>true</code> (+1 life); both viewers receive identical execution tokens; summary prints <code>Last known spell Charring Bite: mana value 2, 1 color(s), 2 mana spent</code>.</td>
+        <td><strong>Over-255 <em>Quilled Greatwurm</em> hit &amp; simultaneous <em>Drake Hatcher</em> hits across viewers</strong></td>
+        <td><code>event_amount</code> &rarr; <code>trigger.triggering_amount: i32</code> (<code>trigger.x == 0</code>) &rarr; <code>TriggerText</code> &rarr; acting-only <code>decision_context.rs:315</code>.</td>
+        <td><span class="badge yes">Aligned</span> 260-damage hit places all 260 counters; 1- and 3-damage Hatcher triggers are distinct in <code>OrderTriggers</code> and both viewers’ stack labels without failing Academy’s waiting-viewer validator.</td>
       </tr>
       <tr>
-        <td><strong>Nested <code>Prepared(OnceEachTurn(..))</code> trigger</strong></td>
-        <td><code>TriggerCondition::inner()</code> / <code>once_each_turn()</code> &rarr; <code>layers.rs:1285</code> clock assignment &rarr; <code>triggers.rs:906</code>.</td>
-        <td><span class="badge yes">Aligned</span> <code>once_each_turn()</code> recurses through <code>Prepared</code> (and every other wrapper exhaustively), assigning a <code>GrantClock</code> and preventing panic.</td>
+        <td><strong>Nested <code>InGraveyard</code> or <code>Prepared(OnceEachTurn)</code> wrapper</strong></td>
+        <td><code>TriggerCondition::inner()</code> / <code>once_each_turn()</code> + <code>match_trigger_wrappers</code>.</td>
+        <td><span class="badge yes">Aligned</span> <code>Prepared(OnceEachTurn)</code> assigns a grant clock without panicking; a nested <code>InGraveyard</code> returns <code>None</code> instead of falling through as a leaf; any new unpeeled wrapper fails a debug assertion.</td>
       </tr>
       <tr>
-        <td><strong>CR 104.4b mandatory loop vs. finite 100-counter chain &amp; stale-action rejection</strong></td>
-        <td><code>PriorityState.loop_watch</code> + <code>tick_priority</code> stabilization + <code>execute_action</code> <code>Ok(())</code> guard + <code>loop_fingerprint()</code>.</td>
-        <td><span class="badge yes">Aligned</span> Mandatory loops draw even with held instants or <code>skip_trivial = false</code>; finite 100-counter chains finish without false draw; rejected/stale actions leave <code>loop_watch</code> and state witness intact; draws keep <code>won: false</code> for both seats in Academy.</td>
+        <td><strong>CR 104.4b mandatory loop vs. finite 100-counter chain, stale rejection &amp; draw rendering</strong></td>
+        <td><code>PriorityState.{loop_watch, resolution_owed}</code> + post-stabilization <code>end_mandatory_loop()</code> + <code>loop_fingerprint()</code> + <code>execute_action</code> <code>Ok(())</code> guard + <code>winner: int | None</code> in Academy.</td>
+        <td><span class="badge yes">Aligned</span> Mandatory loops draw with held instants or <code>skip_trivial = false</code>; 100-counter finite chains finish; rejected actions preserve state witness; draws keep <code>won: false</code> for both seats across Python and Svelte Academy.</td>
       </tr>
     </tbody>
   </table>
@@ -379,46 +388,48 @@ effects: vec![Effect::put_counters(
 <section>
   <h2>4. Intentional Boundaries &amp; Separate Follow-Ups Outside MTG-418</h2>
   <p class="small">
-    These items were audited during the full-branch pass and deliberately kept outside MTG-418 rather than reopened:
+    These items were audited during the full-branch pass at <code>066264c33d</code> and deliberately kept outside
+    MTG-418 rather than reopened:
   </p>
   <ul>
-    <li><strong>Pre-existing <code>main</code> spell-predicate mana value on X-spells:</strong> <code>SpellLki</code> records <code>mana_value_with_x(spell.x)</code> for <code>EffectValue::SpellManaValue</code> and <code>ObjectProperty::ManaValue</code> (CR 202.3e), while <code>CardPredicate</code> matching over stack spells (<code>statics.rs:591,669,734</code>, shared with <code>main</code>’s <code>TargetSpec::SpellMatching</code> on <em>Chilling Screech</em>) still compares printed <code>mana_cost.mana_value</code>. No MTG-418 card checks <code>min_mana_value</code>/<code>max_mana_value</code> in a spell cast/trigger predicate; unifying <code>CardPredicate</code> over live and departed stack spells with <code>spell.x</code> belongs to a separate CR 202.3e follow-up if needed.</li>
-    <li><strong>Pre-existing <code>trigger_event_label</code> suffix on inset spells:</strong> <code>flow/action.rs:343</code> formats <code>" &mdash; event: {definition.name}"</code> from <code>target_reference().definition</code> (which is the front card’s <code>CardDefId</code> because <code>VisibleReference</code> carries no <code>SpellProfile</code>). <code>effect_execution::spell_lki</code> already names the cast profile (<code>Charring Bite</code>), and extending <code>VisibleReference</code> would churn the wire/observation schema.</li>
+    <li><strong>Prospective departed-spell damage type/keywords in <code>flow/damage.rs:261,278-292</code>:</strong> Live inset spells on the stack (such as <em>Charring Bite</em>) already read their cast-profile printing through <code>source_base</code> because <code>self.object(source)</code> returns the live stack object with <code>show_inset</code> applied. Only a <em>departed</em> inset spell dealing damage after leaving the stack (no catalog card does this today; spells remain on the stack through resolution) would fall back to front-face <code>retained_base</code> in <code>damage_source_facts</code> / <code>source_keywords</code> instead of <code>recorded_spell_printing(source, spell.profile)</code>. File or fix when a spell-sourced delayed damage trigger lands.</li>
+    <li><strong>Chosen-tap payment solver optimization (<em>Lathril</em> 10–12 Elf stress board):</strong> Planning the announced model and candidate pool once per pending decision in <code>flow/mana.rs</code> is a general payment optimization, not an event-history concept mismatch. With the local paired Engine Budget passing at <code>b62f8b7ece</code>, it stays ordered after <code>gate</code> (or as its own Task unless hosted CI budget fails).</li>
+    <li><strong>Pre-existing <code>main</code> spell-predicate mana value on X-spells &amp; <code>trigger_event_label</code> suffix:</strong> <code>SpellLki</code> preserves CR 202.3e <code>mana_value_with_x</code> for <code>SpellManaValue</code> and <code>ObjectProperty::ManaValue</code>, while <code>CardPredicate</code> matching on stack spells shares <code>main</code>’s printed cost check; <code>trigger_event_label</code> reads front-card <code>VisibleReference.definition</code> while <code>effect_execution::spell_lki</code> names the inset spell. Neither affects any MTG-418 card.</li>
     <li><strong>Legacy serialized variants kept intact for pinned TLA pilots:</strong> <code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>TriggerCondition::{PutsCounters, DealsCombatDamage, NoCounters}</code>, <code>Condition::TriggeringHadCounters</code>, and <code>CountersPut</code>’s legacy <code>trigger.x</code> binding remain unchanged so <code>tests/model/test_pinned_pilot.py</code> stays unbroken.</li>
-    <li><strong><code>TargetSpec::GraveyardCardYouOwnWithinSourcePower</code>:</strong> Kept as one shared reader across <em>Fiendish Panda</em>, <em>Alesha</em>, and <em>Sandbender</em> until a second dynamic target bound warrants a frameless target evaluator.</li>
-    <li><strong>Documented ledger/cross-task boundaries:</strong> <em>Ovika, Enigma Goliath</em> waits on composite mana-and-life ward costs; <em>Plasma Bolt</em>’s warp cast writer belongs at warp cast commit in the casting-permissions work; integrated Watch privacy, Engine Budget measurements, and the four pre-existing Academy test checks remain with <code>gate</code>.</li>
+    <li><strong>Documented ledger, UI, and gate boundaries:</strong> <em>Ovika, Enigma Goliath</em> waits on composite mana-and-life ward costs; <em>Plasma Bolt</em>’s warp cast writer belongs at warp cast commit in casting-permissions; <code>Inspect.svelte</code>’s <code>seat ${seat}</code> label reflects its board-independent props (matching <code>text_observation.py</code>); full debug suite, integrated Watch replay/privacy, hosted Engine Budget, and the Academy / <code>test_learn_evidence.py</code> baseline comparisons against <code>main</code> belong to <code>gate</code>.</li>
   </ul>
 </section>
 
 <section>
   <h2>5. Review Questions (Reply with e.g. &ldquo;1a&rdquo;)</h2>
   <p class="small">
-    Running headless in a Graph step: the review finds <strong>nothing to change</strong> in the design or plan,
-    keeping MTG-418 on hash contract <strong>v31</strong> for <code>gate</code>.
+    Running headless in a Graph step: the review finds <strong>nothing to change</strong> in the design, code, or
+    plan, keeping MTG-418 on hash contract <strong>v31</strong> for <code>gate</code>.
   </p>
   <ol class="questions">
     <li>
-      <strong>Proceed directly to <code>gate</code> with the aligned MTG-418 model as built at <code>a126bf2e4e</code>?</strong>
+      <strong>Proceed directly to <code>gate</code> with the MTG-418 branch as built at <code>066264c33d</code>?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Yes &mdash; all eight event-history and contextual-query
-        concepts line up with single owners across <code>managym</code>, <code>manabot</code>, Academy, and docs,
-        so no further design or implementation pass is needed before <code>gate</code>.
+        <span class="selected">1a (Selected):</span> Yes &mdash; all nine event-history, contextual-query, and
+        cache-invalidation concepts line up with single owners across <code>managym</code>, <code>manabot</code>,
+        Academy, and docs, and the local paired Engine Budget passes with identical digests.
       </div>
       <div class="choice">
-        1b: Reopen implementation before <code>gate</code> to address a separate pre-existing seam from &sect;4.
-        (Passed over: neither seam is introduced by MTG-418 nor breaks any card in the MTG-418 cohort.)
+        1b: Reopen implementation before <code>gate</code> to address a prospective item from &sect;4 (departed
+        inset-spell damage profile or the chosen-tap payment slice). (Passed over: no live card hits the departed
+        inset-spell damage path, and the local paired Engine Budget already passes without the payment slice.)
       </div>
     </li>
     <li>
-      <strong>Keep the two pre-existing <code>main</code> spell-surface items (&sect;4: X-spell MV in <code>CardPredicate</code> and <code>trigger_event_label</code>’s front-card suffix on inset spells) as separate follow-ups rather than widening MTG-418?</strong>
+      <strong>Keep the chosen-tap payment optimization (<code>flow/mana.rs</code>) outside MTG-418’s acceptance gate unless hosted Engine Budget fails?</strong>
       <div class="choice">
-        <span class="selected">2a (Selected):</span> Yes &mdash; keep MTG-418 focused on its delivered cohort and
-        hash v31 contract; file separate follow-ups only when a card or UI surface depends on them.
+        <span class="selected">2a (Selected):</span> Yes &mdash; <code>b62f8b7ece</code> already puts Search-64
+        ahead of reference on the paired local budget; defer the payment-solver allocation cleanup to its own Task
+        unless hosted CI needs it.
       </div>
       <div class="choice">
-        2b: Pull X-aware <code>CardPredicate</code> spell matching or <code>VisibleReference</code> profile naming
-        into MTG-418 now. (Passed over: expands scope into <code>main</code>’s casting/targeting and wire-reference
-        surfaces outside this Task’s cohort.)
+        2b: Build the chosen-tap payment slice inside MTG-418 before <code>gate</code>. (Passed over: adds payment
+        solver churn unrelated to event history after the budget gate is already green.)
       </div>
     </li>
   </ol>
