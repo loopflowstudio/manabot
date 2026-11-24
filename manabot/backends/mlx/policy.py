@@ -5,10 +5,9 @@ module, for the scalar catalog policies admitted by `require_supported`.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
-The catalog GRU always encodes every definition. PyTorch learning encodes
-only the rows a batch references; the others never reach the loss, so their
-outputs receive no gradient either way. GRU input and recurrent biases remain
-separate parameters, preserving Adam state and global gradient-norm clipping.
+Learner batches select the catalog programs their observations reference.
+Inference uses the full catalog schedule. The GRU keeps separate input and
+recurrent biases for Adam and global gradient-norm clipping.
 
 Compute precision is policy-owned. Unless given, it follows the model's width
 (`manabot.backends.mlx.arrays.default_precision`): bfloat16 from
@@ -50,7 +49,7 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
-    Packed,
+    CatalogPrograms,
     Prepared,
     Tables,
     prepare,
@@ -86,9 +85,115 @@ def _gru_cell(
     return (1 - update) * new + update * previous
 
 
+def _gru_cell_backward(
+    x: mx.array,
+    previous: mx.array,
+    recurrent_weight: mx.array,
+    hidden_bias: mx.array,
+    upstream: mx.array,
+) -> tuple[mx.array, mx.array, mx.array]:
+    """Reverse one `_gru_cell` step from its inputs and dL/dh' `upstream` [L,H]
+    -> (dL/dx [L,3H], dL/d(recurrent pre-activation) [L,3H], dL/dprevious [L,H]).
+
+    The gates are recomputed rather than saved: the forward keeps only states.
+    The recurrent gradient differs from dL/dx only in its new-gate third, which
+    the reset gate scales.
+    """
+    hidden = previous.shape[1]
+    recurrent = previous @ recurrent_weight.T + hidden_bias
+    gates = mx.sigmoid(x[:, : 2 * hidden] + recurrent[:, : 2 * hidden])
+    reset, update = gates[:, :hidden], gates[:, hidden:]
+    recurrent_new = recurrent[:, 2 * hidden :]
+    new = mx.tanh(x[:, 2 * hidden :] + reset * recurrent_new)
+    new_pre = upstream * (1 - update) * (1 - new * new)
+    reset_pre = new_pre * recurrent_new * reset * (1 - reset)
+    update_pre = upstream * (previous - new) * update * (1 - update)
+    dx = mx.concatenate([reset_pre, update_pre, new_pre], axis=1)
+    drecurrent = mx.concatenate([reset_pre, update_pre, new_pre * reset], axis=1)
+    dprevious = upstream * update + drecurrent @ recurrent_weight
+    return dx, drecurrent, dprevious
+
+
 # `mx.compile` fuses each step's elementwise gate arithmetic; it traces once per
-# live-row count, which the static catalog schedule repeats on every call.
+# live-row count and reuses it across schedules.
 _compiled_gru_cell = mx.compile(_gru_cell)
+_compiled_gru_cell_backward = mx.compile(_gru_cell_backward)
+
+
+def gru_recurrence(sizes: Sequence[int]) -> Callable[..., mx.array]:
+    """The recurrence of a packed schedule with live counts `sizes`, as one
+    differentiable function (projected [N,3H], Wh [3H,H], hidden_bias [3H]) ->
+    every step's state [N,H] in packed order.
+
+    Autograd never sees the per-step slices: MLX gives every slice output a
+    whole-input zero cotangent, which makes a traced backward quadratic in the
+    number of steps. The hand-written VJP runs the steps in reverse with a
+    compiled cell, concatenates the input-projection gradient once and forms
+    dWh and the hidden-bias gradient as one matmul and one sum over every
+    packed row.
+    """
+    offsets = np.concatenate(([0], np.cumsum(sizes))).tolist()
+    total = offsets[-1]
+    # Packed row of each row's previous state; step 0 reads an appended zero row.
+    previous_rows = mx.array(
+        np.concatenate(
+            [np.full(sizes[0], total)]
+            + [
+                offsets[step - 1] + np.arange(sizes[step])
+                for step in range(1, len(sizes))
+            ]
+        ).astype(np.int32)
+    )
+
+    @mx.custom_function
+    def recurrence(
+        projected: mx.array, recurrent_weight: mx.array, hidden_bias: mx.array
+    ) -> mx.array:
+        state = mx.zeros((sizes[0], recurrent_weight.shape[1]), dtype=projected.dtype)
+        outputs: list[mx.array] = []
+        for step, live in enumerate(sizes):
+            x = projected[offsets[step] : offsets[step] + live]
+            state = _compiled_gru_cell(x, state[:live], recurrent_weight, hidden_bias)
+            outputs.append(state)
+        return mx.concatenate(outputs)
+
+    @recurrence.vjp
+    def recurrence_vjp(
+        primals: tuple[mx.array, mx.array, mx.array],
+        cotangent: mx.array,
+        output: mx.array,
+    ) -> tuple[mx.array, mx.array, mx.array]:
+        projected, recurrent_weight, hidden_bias = primals
+        zero = mx.zeros((1, output.shape[1]), dtype=output.dtype)
+        previous = mx.take(mx.concatenate([output, zero]), previous_rows, axis=0)
+        dx: list[mx.array] = []
+        drecurrent: list[mx.array] = []
+        carried = None
+        for step in reversed(range(len(sizes))):
+            start, live = offsets[step], sizes[step]
+            upstream = cotangent[start : start + live]
+            if carried is not None:
+                pad = live - carried.shape[0]
+                upstream = upstream + (
+                    mx.pad(carried, [(0, pad), (0, 0)]) if pad else carried
+                )
+            step_dx, step_drecurrent, carried = _compiled_gru_cell_backward(
+                projected[start : start + live],
+                previous[start : start + live],
+                recurrent_weight,
+                hidden_bias,
+                upstream,
+            )
+            dx.append(step_dx)
+            drecurrent.append(step_drecurrent)
+        all_drecurrent = mx.concatenate(drecurrent[::-1])
+        return (
+            mx.concatenate(dx[::-1]),
+            all_drecurrent.T @ previous,
+            all_drecurrent.sum(axis=0),
+        )
+
+    return recurrence
 
 
 class PackedGRU(nn.Module):
@@ -110,34 +215,28 @@ class PackedGRU(nn.Module):
         self.hidden_bias = mx.zeros((3 * hidden_size,))
 
     def run(
-        self, table: mx.array, steps: Sequence[mx.array]
+        self, table: mx.array, rows: mx.array, sizes: Sequence[int]
     ) -> tuple[mx.array, mx.array]:
-        """Step t reads rows `steps[t]` of `table` [T,D] (its live sequences, in
-        sorted order) -> (every step's state [T,H] in packed order, each
-        sequence's final state [S,H] in sorted order).
+        """Packed row p reads row `rows[p]` of `table` [T,D]; step t holds the
+        `sizes[t]` live sequences, in sorted order -> (every step's state [N,H]
+        in packed order, each sequence's final state [S,H] in sorted order).
 
-        Each step gathers its inputs from `table` rather than slicing one
-        projected array: MLX materializes a whole-input zero cotangent for
-        every slice or split output, which makes the backward quadratic in
-        the number of steps (15.5 s against 0.39 s at 713 steps on the M2).
+        Every token is gathered and projected once; `gru_recurrence` owns the
+        steps and their gradient.
         """
-        state = mx.zeros((steps[0].shape[0], self.hidden_size), dtype=table.dtype)
-        outputs: list[mx.array] = []
-        finished: list[mx.array] = []
-        for step, index in enumerate(steps):
-            live = index.shape[0]
-            x = mx.take(table, index, axis=0) @ self.Wx.T + self.input_bias
-            state = _compiled_gru_cell(x, state[:live], self.Wh, self.hidden_bias)
-            outputs.append(state)
-            following = steps[step + 1].shape[0] if step + 1 < len(steps) else 0
-            if following < live:
-                finished.append(state[following:])
-        return mx.concatenate(outputs), mx.concatenate(finished[::-1])
+        projected = mx.take(table, rows, axis=0) @ self.Wx.T + self.input_bias
+        states = gru_recurrence(sizes)(projected, self.Wh, self.hidden_bias)
+        return states, mx.take(states, mx.array(final_rows(sizes)), axis=0)
 
 
-def packed_steps(rows: np.ndarray, schedule: Packed[np.ndarray]) -> list[mx.array]:
-    """Split packed-order `rows` into the schedule's steps (`PackedGRU.run`)."""
-    return [mx.array(part) for part in np.split(rows, np.cumsum(schedule.sizes)[:-1])]
+def final_rows(sizes: Sequence[int]) -> np.ndarray:
+    """Packed row of each sorted sequence's last step: sequence s is live in the
+    steps whose size exceeds s, a prefix because sizes never increase."""
+    counts = np.asarray(sizes)
+    offsets = np.concatenate(([0], np.cumsum(counts)[:-1]))
+    sequences = np.arange(counts[0])
+    lengths = np.searchsorted(-counts, -sequences, side="left")
+    return (offsets[lengths - 1] + sequences).astype(np.int32)
 
 
 def _take(table: mx.array, rows: mx.array) -> mx.array:
@@ -284,8 +383,6 @@ class Continuation(nn.Module):
 class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
-    catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed[np.ndarray]
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -384,16 +481,12 @@ class MLXActorCritic(nn.Module):
             }
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
-        programs = tables.full_programs
-        tokens, schedule = programs.tokens, programs.schedule
         named = np.nonzero(tables.name_definitions != 0)[0]
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
             "_static",
             _Static(
-                packed_steps(tokens, schedule),
-                schedule,
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
                 tables,
@@ -625,6 +718,8 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             inference=inference,
+            select_programs=not inference,
+            compact_learner=self.bucketed_shapes,
             bucketed=self.bucketed_shapes,
             binding=self._binding(),
         )
@@ -652,18 +747,23 @@ class MLXActorCritic(nn.Module):
 
     # Programs ----------------------------------------------------------------------
 
-    def programs(self) -> mx.array:
-        """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
+    def programs(self, programs: CatalogPrograms[np.ndarray] | None = None) -> mx.array:
+        """Encode selected definitions at their one-based catalog rows. Others stay zero."""
         with self.forward_precision():
-            static: _Static = self._static
-            cards = self.semantic_cards
-            _, finished = cards.encoder.run(
-                cards.token_embedding.weight, static.catalog_steps
+            full = self._static.tables.full_programs
+            if programs is None:
+                programs = full
+            weights = self.semantic_cards.token_embedding.weight
+            table = mx.zeros(
+                (len(full.rows) + 1, self.dims.hidden), dtype=weights.dtype
             )
-            encoded = _take(finished, mx.array(static.catalog.restore))
-            return mx.concatenate(
-                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
+            if not len(programs.rows):
+                return table
+            _, finished = self.semantic_cards.encoder.run(
+                weights, mx.array(programs.tokens), programs.schedule.sizes
             )
+            encoded = _take(finished, mx.array(programs.schedule.restore))
+            return table.at[mx.array(programs.rows)].add(encoded)
 
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
@@ -738,9 +838,65 @@ class MLXActorCritic(nn.Module):
     def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
         with self.forward_precision():
-            return self._forward(batch)
+            logits, values = self.forward_heads(batch)
+            return logits, values.astype(mx.float32)
 
-    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+    def _attend_objects(
+        self,
+        batch: Prepared[np.ndarray],
+        objects: mx.array,
+        validity: mx.array,
+        sign: mx.array,
+    ) -> mx.array:
+        count, hidden = objects.shape[1:]
+        packed = batch.packed_attention
+        if packed is not None:
+            encoded = []
+            for group in packed.groups:
+                slots = mx.array(group)
+                indices = mx.maximum(slots, 0)
+                attended = _take(objects.reshape(-1, hidden), indices)
+                owners = _take(sign.reshape(-1, 1), indices)
+                values = self._attention_stack(attended, owners, slots >= 0)
+                encoded.append(values.reshape(-1, hidden))
+            # Missing objects all point to the final, constant zero vector.
+            encoded.append(mx.zeros((1, hidden), objects.dtype))
+            return _take(mx.concatenate(encoded), mx.array(packed.restore))
+
+        attended, attended_validity = objects, validity
+        columns = batch.attention_columns
+        if columns is not None:
+            selected = mx.array(columns)
+            attended = mx.take(objects, selected, axis=1)
+            attended_validity = mx.take(validity, selected, axis=1)
+            sign = mx.take(sign, selected, axis=1)
+        encoded_objects = self._attention_stack(attended, sign, attended_validity != 0)
+        if columns is not None:
+            # Restore the original coordinates; unused columns are zero.
+            positions = np.zeros(count, dtype=np.int64)
+            positions[columns] = np.arange(len(columns))
+            used = np.zeros(count, dtype=np.float32)
+            used[columns] = 1
+            encoded_objects = (
+                mx.take(encoded_objects, mx.array(positions), axis=1)
+                * self._floating(used)[None, :, None]
+            )
+        return encoded_objects
+
+    def _attention_stack(
+        self, attended: mx.array, sign: mx.array, keep: mx.array
+    ) -> mx.array:
+        mask = mx.where(keep, 0.0, -mx.inf).astype(attended.dtype)[:, None, None, :]
+        keep = keep[..., None].astype(attended.dtype)
+        encoded_objects = self.attention(attended, sign, mask, keep)
+        for layer in self.extra_attention:
+            encoded_objects = layer(encoded_objects, sign, mask, keep)
+        if "final_norm" in self:
+            encoded_objects = self.final_norm(encoded_objects) * keep
+        return encoded_objects
+
+    def forward_heads(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+        """Within forward_precision, return logits and the compute-dtype critic."""
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
@@ -750,7 +906,7 @@ class MLXActorCritic(nn.Module):
         b = batch.batch
         programs = static.cache.get("programs")
         if programs is None:
-            programs = self.programs()
+            programs = self.programs(batch.programs)
         # Every object reader sees the normalized table; raw `programs` keep
         # scoring naming candidates.
         definitions = self._definition_table(self._public(programs))
@@ -884,38 +1040,14 @@ class MLXActorCritic(nn.Module):
         # Attention over the object table.
         validity = self._floating(batch.validity)
         sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
-        attended, attended_validity = objects, validity
-        columns = batch.attention_columns
-        if columns is not None:
-            selected = mx.array(columns)
-            attended = mx.take(objects, selected, axis=1)
-            attended_validity = mx.take(validity, selected, axis=1)
-            sign = mx.take(sign, selected, axis=1)
-        keep = attended_validity != 0
-        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
-        keep = keep[..., None].astype(objects.dtype)
-        encoded_objects = self.attention(attended, sign, mask, keep)
-        for layer in self.extra_attention:
-            encoded_objects = layer(encoded_objects, sign, mask, keep)
-        if "final_norm" in self:
-            encoded_objects = self.final_norm(encoded_objects) * keep
-        if columns is not None:
-            # Restore the original coordinates; unused columns are zero.
-            positions = np.zeros(count, dtype=np.int64)
-            positions[columns] = np.arange(len(columns))
-            used = np.zeros(count, dtype=np.float32)
-            used[columns] = 1
-            encoded_objects = (
-                mx.take(encoded_objects, mx.array(positions), axis=1)
-                * self._floating(used)[None, :, None]
-            )
+        encoded_objects = self._attend_objects(batch, objects, validity, sign)
         keep = (validity != 0)[..., None].astype(objects.dtype)
 
         # Masked-mean critic.
         value = self.value_head.layers
         projected = value[1](value[0](encoded_objects)) * keep
         pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
-        values = value[5](value[4](value[3](pooled_value))).astype(mx.float32)
+        values = value[5](value[4](value[3](pooled_value)))
         # A horizon bootstrap can contain only non-acting viewers.
         if not batch.legal_batches.size:
             return mx.full(batch.legal.shape, -1e8, dtype=mx.float32), values
@@ -1059,7 +1191,7 @@ class MLXActorCritic(nn.Module):
                 ]
             )
             states, _ = facts.program_sequence.run(
-                program, packed_steps(schedule.gather, schedule)
+                program, mx.array(schedule.gather), schedule.sizes
             )
             program = program + _take(states, mx.array(schedule.unpack))
             flat = mx.where(
@@ -1129,7 +1261,7 @@ class MLXActorCritic(nn.Module):
         sequence = _take(table, mx.array(routes.token_indexes))
         schedule = routes.schedule
         _, finished = effects.reducer.gru.run(
-            sequence, packed_steps(schedule.gather, schedule)
+            sequence, mx.array(schedule.gather), schedule.sizes
         )
         pooled = _take(finished, mx.array(schedule.restore))
         encoded = effects.reducer.output(mx.tanh(pooled))

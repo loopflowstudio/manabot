@@ -1,6 +1,7 @@
 """Declared training precisions: admission, TF32 switches and bf16 forwards."""
 
-from typing import Literal
+from contextlib import AbstractContextManager
+from typing import Literal, cast
 
 import numpy as np
 import pytest
@@ -55,34 +56,51 @@ def test_bf16_autocasts_gpu_forwards(device: str) -> None:
     assert (context.device, context.fast_dtype) == (device, torch.bfloat16)
 
 
+@pytest.mark.parametrize("precision", ["bf16", "bfloat16", "fp32"])
+def test_cpu_refuses_unsupported_torch_precision(precision: str) -> None:
+    declared = cast(Precision, precision)  # unchecked input from a caller
+    with pytest.raises(ValueError, match="precision"):
+        torch_learner.forward_precision(declared, torch.device("cpu"))
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
+    )
+    with pytest.raises(ValueError, match="precision"):
+        Learner(agent, "cpu", minibatch_rows=1, precision=declared)
+
+
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
 def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
     kind: Literal["scalar", "categorical_wdl"], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A real attention agent collects and learns under bf16 autocast (CPU).
-
-    This proves CPU context wiring only. CUDA's recurrent kernels choose
-    different dtypes; the CUDA admission test covers the semantic-card path.
-    """
+    """Both collection and learning run their real GPU forwards under autocast."""
+    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+        device = "cuda"
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_macos_or_newer(
+        14, 0
+    ):
+        device = "mps"
+    else:
+        pytest.skip("bfloat16 collection and learning require CUDA or MPS")
     torch.manual_seed(5)
-    torch.set_num_threads(1)
     agent = ActorCritic(
         ObservationSpace(),
         ModelConfig(hidden_dim=16, num_attention_heads=2, value_kind=kind),
-    )
+    ).to(device)
     forwards: list[bool] = []
     entries: list[bool] = []
     for name in ("forward", "forward_distribution"):
         method = getattr(agent, name)
 
         def tracked(*args: object, _method: object = method) -> object:
-            forwards.append(torch.is_autocast_enabled("cpu"))
+            forwards.append(torch.is_autocast_enabled(device))
             return _method(*args)  # type: ignore[operator]
 
         monkeypatch.setattr(agent, name, tracked)
     real = torch_learner.forward_precision
 
-    def recorded(declared: Precision, device: torch.device) -> object:
+    def recorded(
+        declared: Precision, device: torch.device
+    ) -> AbstractContextManager[object]:
         entries.append(declared == "bf16")
         return real(declared, device)
 
@@ -97,12 +115,13 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
-        learning_seats="both",
-        numerics=TorchCollectionSession(device="cpu", seed=0, precision="bf16"),
+        learning_seats="one",
+        batch_closure="exact-quota",
+        numerics=TorchCollectionSession(device=device, seed=0, precision="bf16"),
     )
 
     batch = collect(collector, agent, 1)
-    learner = Learner(agent, "cpu", minibatch_rows=2, precision="bf16")
+    learner = Learner(agent, device, minibatch_rows=2, precision="bf16")
     result = update_damped_iteration(
         torch_backend,
         learner,
@@ -120,4 +139,4 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
     assert np.isfinite(batch.logprobs).all()
     assert result["rows"] > 0
     assert all(p.dtype == torch.float32 for p in agent.parameters())
-    assert not torch.is_autocast_enabled("cpu")
+    assert not torch.is_autocast_enabled(device)
