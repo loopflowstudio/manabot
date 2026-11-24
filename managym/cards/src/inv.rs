@@ -9,7 +9,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![captain_sisay()]
+    vec![opt(), captain_sisay()]
 }
 
 fn captain_sisay() -> CardDefinition {
@@ -37,6 +37,26 @@ fn captain_sisay() -> CardDefinition {
                 )],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn opt() -> CardDefinition {
+    let text_box = "Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\nDraw a card.";
+    CardDefinition {
+        key: "inv.opt",
+        scryfall_id: "958262ec-8e52-40cf-a9fd-a60e42643e15",
+        printed: PrintedCharacteristics {
+            name: "Opt".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::Scry { count: 1 },
+                Effect::DrawCards { count: 1.into() },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

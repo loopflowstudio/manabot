@@ -130,6 +130,10 @@ impl From<&TurnState> for CanonicalTurn {
 
 #[derive(Serialize)]
 struct CanonicalCombat {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    first_strikers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    regular_damage_step: bool,
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     attackers_to_declare: Vec<PermanentId>,
@@ -139,6 +143,8 @@ struct CanonicalCombat {
 impl From<&CombatState> for CanonicalCombat {
     fn from(combat: &CombatState) -> Self {
         Self {
+            first_strikers: combat.first_strikers.clone(),
+            regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
@@ -178,7 +184,7 @@ struct CanonicalMatchState<'a> {
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],
-    trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
+    trigger_placement: Option<&'a crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
     effects: &'a [crate::state::effect::ContinuousEffect],
@@ -274,7 +280,7 @@ impl<'a> CanonicalMatchState<'a> {
             pending_events,
             observation_events,
             pending_triggers,
-            trigger_placement,
+            trigger_placement: trigger_placement.as_deref(),
             delayed_triggers,
             exile_links,
             effects: effects.as_slice(),

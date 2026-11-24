@@ -578,7 +578,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 37] = [
+pub const MODIFICATION_NAMES: [&str; 39] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -616,6 +616,8 @@ pub const MODIFICATION_NAMES: [&str; 37] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "SetName",
+    "PreventCombatDamage",
 ];
 
 impl ContinuousEffectData {
@@ -651,7 +653,8 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "SetCreatureTypes"
             }
-            Modification::AddTypes(_)
+            Modification::SetName(_)
+            | Modification::AddTypes(_)
             | Modification::SetTypes { .. }
             | Modification::SetColors(_)
             | Modification::AddColors(_)
@@ -667,6 +670,7 @@ impl ContinuousEffectData {
                     crate::cards::tokens::rules_tokens(modification, default_content_pack())
                         .expect("registered rules payload");
                 match modification {
+                    Modification::SetName(_) => "SetName",
                     Modification::AddTypes(_) => "AddTypes",
                     Modification::SetTypes { .. } => "SetTypes",
                     Modification::SetColors(_) => "SetColors",
@@ -713,6 +717,7 @@ impl ContinuousEffectData {
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::PreventCombatDamage => "PreventCombatDamage",
             Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
@@ -784,6 +789,7 @@ pub struct PermanentData {
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
     pub attacking: bool,
+    pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     pub exhausted_abilities: i32,
@@ -799,9 +805,11 @@ pub struct PermanentData {
     pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
     pub attached_to: Option<i32>,
-    /// Name and creature types set by an effect (Honest Work); absent while
-    /// the printed ones apply.
+    /// The name a layer 1 effect set (Honest Work, Witness Protection);
+    /// absent while the printed one applies.
     pub name: Option<String>,
+    /// The creature types a layer 4 effect set (Eaten by Piranhas), each
+    /// independent of the name; absent while the printed ones apply.
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
     pub is_granted_land: bool,
@@ -908,7 +916,8 @@ pub struct ActionOption {
     #[serde(default)]
     pub pays_directly: bool,
     /// `mode_index` is an announced number (X for a spell or activation, a
-    /// replicate count, a resolving payment's X) rather than an option index.
+    /// replicate count, a resolving payment's X, an amount of combat damage)
+    /// rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
 }
@@ -998,10 +1007,21 @@ impl Observation {
             .winner_index()
             .is_some_and(|winner| winner == agent_player.0);
 
+        let step = if game.state.turn.current_step_kind() == StepKind::CombatDamage
+            && game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|c| c.in_first_strike_damage_step())
+        {
+            StepKind::FirstStrikeCombatDamage
+        } else {
+            game.state.turn.current_step_kind()
+        };
         let turn = TurnData {
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
-            step: game.state.turn.current_step_kind(),
+            step,
             active_player_id: game.state.players[game.active_player().0].id.0 as i32,
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };
@@ -1041,12 +1061,16 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
+                            let mode_index = match action {
+                                Action::ChooseMode { mode, .. } => Some(*mode),
+                                _ => None,
+                            };
                             ActionOption {
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
-                                announces_x: game.announces_x(action),
+                                announces_x: mode_index.is_some() && game.announces_x(),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -1061,10 +1085,7 @@ impl Observation {
                                 name_index,
                                 name_definition,
                                 name_group,
-                                mode_index: match action {
-                                    Action::ChooseMode { mode, .. } => Some(*mode),
-                                    _ => None,
-                                },
+                                mode_index,
                                 ability_index: match action {
                                     Action::ActivateAbility { ability_index, .. }
                                     | Action::ActivateCardAbility { ability_index, .. } => {
@@ -1517,6 +1538,11 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
+            first_strike_participant: game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.first_strikers.contains(&perm_id)),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
@@ -1552,9 +1578,9 @@ impl Observation {
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
             name: characteristics
-                .characteristics_set
+                .name_set
                 .then(|| characteristics.name.to_string()),
-            creature_types: characteristics.characteristics_set.then(|| {
+            creature_types: characteristics.creature_types_set.then(|| {
                 characteristics
                     .creature_types
                     .iter()
@@ -2151,18 +2177,36 @@ impl Observation {
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
-                if let (
-                    Action::ChooseMode { mode, .. },
-                    Some(Decision::OrderReplacement { candidates, .. }),
-                ) = (
+                match (
                     action,
                     game.state.suspended_decision.as_ref().map(|s| &s.decision),
                 ) {
-                    return candidates
-                        .get(*mode)
-                        .map(|candidate| game.state[candidate.source()].id)
-                        .into_iter()
-                        .collect();
+                    (
+                        Action::ChooseMode { mode, .. },
+                        Some(Decision::OrderReplacement { candidates, .. }),
+                    ) => {
+                        return candidates
+                            .get(*mode)
+                            .map(|candidate| game.state[candidate.source()].id)
+                            .into_iter()
+                            .collect();
+                    }
+                    // An amount of combat damage is about the attacker
+                    // assigning it and the blocker receiving it.
+                    (
+                        Action::ChooseMode { .. },
+                        Some(Decision::AssignCombatDamage {
+                            attacker, blocker, ..
+                        }),
+                    ) => {
+                        return [attacker, blocker]
+                            .into_iter()
+                            .filter_map(|object| game.state.permanent_of(*object))
+                            .filter_map(|permanent| game.state.permanents[permanent].as_ref())
+                            .map(|permanent| permanent.id)
+                            .collect();
+                    }
+                    _ => {}
                 }
                 // Other decisions focus the resolving or cast object's card.
                 let object_id = game

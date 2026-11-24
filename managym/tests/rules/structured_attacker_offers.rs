@@ -638,3 +638,111 @@ fn compound_decline_stops_before_a_later_attacker_declaration() {
         assert_equivalent_surface(&replay, &expected);
     }
 }
+
+/// Every declaration reachable through `compound_offers`, recorded as the
+/// attacking (tapped) subset of `tracked`; the defender's land drop stops
+/// trivial skipping before the attacker's next untap step. Each offer and attacker mask must
+/// apply; none may fail as stale, invariant or wrong-decision.
+fn reachable_declarations(
+    game: &Game,
+    tracked: &[(PermanentId, &'static str)],
+) -> BTreeSet<BTreeSet<&'static str>> {
+    if !game
+        .action_space()
+        .is_some_and(|space| space.kind == ActionSpaceKind::DeclareAttacker)
+    {
+        return BTreeSet::from([tracked
+            .iter()
+            .filter(|(id, _)| game.state.permanents[*id].as_ref().unwrap().tapped)
+            .map(|(_, name)| *name)
+            .collect()]);
+    }
+    let offers = game.compound_offers().expect("attacker declaration offers");
+    let mut submissions = Vec::new();
+    if offers.projection().offers[0].verb == OfferVerb::DeclareAttackers {
+        let offer = attacker_offer(&offers);
+        let (role, candidates) = attacker_candidates(offer);
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.label != "Juggernaut"),
+            "a must-attack creature is never an optional candidate"
+        );
+        for mask in 0..1 << candidates.len() {
+            submissions.push(submission_for_mask(offer, role, candidates, mask).0);
+        }
+    } else {
+        for offer in &offers.projection().offers {
+            submissions.push(OfferSubmission {
+                offer_id: offer.id,
+                answers: Vec::new(),
+            });
+        }
+    }
+    let mut reached = BTreeSet::new();
+    for submission in submissions {
+        let mut next = game.clone();
+        next.apply_offer_submission(&offers, &submission)
+            .expect("every offered declaration applies");
+        reached.extend(reachable_declarations(&next, tracked));
+    }
+    reached
+}
+
+#[test]
+fn compound_offers_require_a_creature_that_attacks_each_combat() {
+    use managym::state::game_object::PlayerId;
+
+    let deck = BTreeMap::from([
+        ("Gray Ogre".to_string(), 10),
+        ("Juggernaut".to_string(), 10),
+        ("Mountain".to_string(), 20),
+    ]);
+    for skip_trivial in [false, true] {
+        for order in [["Gray Ogre", "Juggernaut"], ["Juggernaut", "Gray Ogre"]] {
+            let mut scenario = Scenario::new(deck.clone(), deck.clone(), 816);
+            scenario.advance_to_active_step(0, StepKind::Main);
+            scenario.game_mut().scenario_clear_hand(PlayerId(0));
+            let tracked: Vec<_> = order
+                .iter()
+                .map(|name| {
+                    let id = scenario.force_permanent_on_battlefield(0, name);
+                    scenario.game_mut().state.permanents[id]
+                        .as_mut()
+                        .unwrap()
+                        .summoning_sick = false;
+                    (id, *name)
+                })
+                .collect();
+            scenario.game_mut().skip_trivial = skip_trivial;
+            scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
+            let game = scenario.game();
+            assert_eq!(
+                game.action_space().unwrap().kind,
+                ActionSpaceKind::DeclareAttacker
+            );
+            let juggernaut = tracked[order.iter().position(|n| *n == "Juggernaut").unwrap()].0;
+            let juggernaut_pending = game.action_space().unwrap().actions.iter().any(
+                |action| matches!(action, Action::DeclareAttacker { permanent, .. } if *permanent == juggernaut),
+            ) || game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.attackers_to_declare.contains(&juggernaut));
+            if juggernaut_pending {
+                assert!(matches!(
+                    game.structured_attacker_offers(),
+                    Err(StructuredOfferError::WrongDecision)
+                ));
+            }
+            assert_eq!(
+                reachable_declarations(game, &tracked),
+                BTreeSet::from([
+                    BTreeSet::from(["Juggernaut"]),
+                    BTreeSet::from(["Gray Ogre", "Juggernaut"]),
+                ]),
+                "skip_trivial {skip_trivial}, order {order:?}"
+            );
+        }
+    }
+}

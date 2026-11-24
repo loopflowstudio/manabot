@@ -305,11 +305,13 @@ change already touches it; do not rewrite a module only for style. Rust in
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
   `managym/src/cards/token_renames.rs`; a name is never reused with a new
-  meaning. Never learn a `CardDefId`: tables indexed by card or name bind by
-  definition key or name. A change that alters what a stored pilot computes
-  fails `tests/model/test_pinned_pilot.py` until it adds the rename or column
-  or declares the break with `scripts/pinned_pilot.py record --reason`. Do not
-  bump the input version for a layout change.
+  meaning. When removing a registered execution label, retire its token and
+  its `execution/<kind>/<name>` record name there. Never learn a `CardDefId`.
+  Bind tables indexed by card or name by definition key or name. A change that
+  alters what a stored pilot computes fails `tests/model/test_pinned_pilot.py`
+  until it adds the rename or column or declares the break with
+  `scripts/pinned_pilot.py record --reason`. Do not bump the input version for
+  a layout change.
 - The engine has no world label. New checkpoints, recordings, decision captures
   (v6) and evaluation records write none; a reader ignores one in an older file
   (`manabot.model.world.current_binding_form`, optional `world` fields omitted
@@ -370,19 +372,19 @@ change already touches it; do not rewrite a module only for style. Rust in
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
   restoring weights. Older runs supply their model settings from the initial raw policy.
-- New observation state reaches the policy input, LLM text and learning
-  tokens in the same change. `ObservationSpace` pairs the config with its
-  native `ObservationLayout`. Pass `space.layout` to scalar, batch and vector
-  encoding and derive buffers from it. Validate the full buffer contract
-  before encoding, including exact keys and companion shapes. The layout
-  supplies the input version, optional blocks and capacities. The sole encoder
-  lives in `managym/src/agent/`. Read columns and row kinds by native name
-  (`column("facts", "value")` in `manabot.env.observation`). Give new columns
-  or rows a directed native test on a constructed position.
-  `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
-  warning aliases removed in 0.3.0; frozen experiment files keep them.
-  `managym/cards/tests/cards/observability.rs` names each `Observation` field's
-  tensor columns or fact kind and fails to compile when a field is unlisted.
+- Model and name rules state and observation fields directly after the
+  Comprehensive Rules, not derived consequence flags; new state reaches policy
+  input, LLM text and learning tokens together. To extend an integer-serialized
+  enum, append its discriminant for wire JSON, tag out-of-order values for the
+  next minor release (`0.3.0`), and map them into append-only named policy
+  columns (keeping any legacy coarse column set) for stored checkpoints. Pass
+  `ObservationSpace.layout` to encoding and derive buffers from it, validate
+  keys and companion shapes before encoding, read columns by native name
+  (`column("facts", "value")`), test new columns on a constructed position, and
+  keep the sole encoder in `managym/src/agent/`. `ObservationSpace.encode`,
+  `space.encoder` and `ObservationEncoder` are 0.3.0 warning aliases (kept for
+  frozen experiments); `managym/cards/tests/cards/observability.rs` enforces
+  every `Observation` field's tensor or fact mapping.
 - Decklist disclosure (open by default, or closed) lives on native
   `GameSetup.decklists` and the resolved `GameState.disclosure`, written by
   `MatchConfig.decklists` and Academy `GameConfig.decklists`. Observations, search and possible worlds read it
@@ -672,12 +674,12 @@ its dev-dependency). Both test targets mount the engine's `tests/support/` (`gam
 primitive defined once. `five_color_setup` decks hold four copies of each listed
 name; a fifth `force_permanent_on_battlefield` of that name returns an existing
 copy, so list another card when a test needs more. `inspect::keywords` reads
-printed and until-end-of-turn keywords only; assert static grants through the
-observation. `force_permanent_on_battlefield` places a permanent without an
-entry event (no triggers or turn history); `enter_and_settle` and
+the layered characteristics, including static grants. `force_permanent_on_battlefield` places
+a permanent without an entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A forced permanent is not summoning-sick. With exactly enough untapped lands a
+A forced creature starts summoning-sick. Use `clear_summoning_sickness` when
+a constructed position needs it to attack or pay a tap cost immediately. With exactly enough untapped lands a
 manual payment finishes itself after its last object choice; calling `pay_rest`
 then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
@@ -790,7 +792,7 @@ A `TriggerCondition` is "whenever X does Y": an event over its actor, never an
 `BeginningOf { step, whose }`, `Performs { who, any_of }` for keyword actions
 (search, scry, surveil, the four bends) and `PutIntoGraveyard { whose,
 predicate }`, `PutsCounters { who, kind, on }`. An object actor is a
-`TriggerSubject` (`This`, `EnchantedCreature`, or `Matching { controlled_by,
+`TriggerSubject` (`This`, `Attached`, or `Matching { controlled_by,
 predicate, another }`, whose controller is the same `Actor`; card code uses
 `you_control`, `another_you_control`, `any`, `another`), as in
 `Dies { subject }`, `Sacrificed { subject }`,

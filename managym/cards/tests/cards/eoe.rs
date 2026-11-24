@@ -230,7 +230,13 @@ fn silencer_requires_combat_damage_to_the_player() {
         game::clear_summoning_sickness,
         play::{attack_with, cast_card, pass_until, settle_targeting_opponent},
     };
-    use managym::{agent::action::ActionSpaceKind, state::card::ReplacementEffect};
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            ability::Actor,
+            card::{DamageTransform, ReplacementEffect},
+        },
+    };
 
     for prevent in [false, true] {
         let mut s = five_color_unfunded_setup(&["Virulent Silencer", "Gray Ogre"]);
@@ -240,7 +246,12 @@ fn silencer_requires_combat_damage_to_the_player() {
         if prevent {
             let object = card_of(&s, defender);
             s.game_mut().state[object].replacement_effects =
-                vec![ReplacementEffect::PreventDamageToController { amount: 2 }];
+                vec![ReplacementEffect::ModifyDamage {
+                    creature_source: false,
+                    source_by: Actor::AnyPlayer,
+                    recipient_by: Actor::You,
+                    transform: DamageTransform::Prevent(2),
+                }];
         }
         pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
         attack_with(&mut s, attacker);

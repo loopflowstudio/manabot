@@ -72,3 +72,20 @@ fn warstorm_surge_has_the_entering_creature_deal_its_power() {
     s.assert_life(1, 17);
     s.assert_life(0, 23);
 }
+
+#[test]
+fn foundations_grant_swiftfoot_boots() {
+    use managym::state::card::Keyword;
+    crate::check_attachment_grant(
+        "Swiftfoot Boots",
+        Some("1"),
+        (2, 2),
+        &[Keyword::Hexproof, Keyword::Haste],
+    );
+}
+
+#[test]
+fn foundations_5d_rune_scarred_demon() {
+    use managym::state::zone::ZoneType;
+    crate::assert_required_library_search("Rune-Scarred Demon", ZoneType::Hand);
+}

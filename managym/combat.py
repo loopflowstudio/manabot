@@ -34,6 +34,7 @@ class DeclarableCreature(BaseModel):
     label: str
     can_block: list[ObjectRenderId]
     must_block: bool
+    must_attack: bool
 
 
 class DeclarationStep(BaseModel):

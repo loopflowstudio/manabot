@@ -167,7 +167,7 @@ def test_player_mana_is_scalar_and_combat_stats_keep_their_thresholds() -> None:
     space = ObservationSpace()
     readings = fresh_readings(space)
     columns = published_columns(space)
-    for key, width, pools in (("agent_player", 99, 31), ("player_turn_state", 16, 6)):
+    for key, width, pools in (("agent_player", 100, 31), ("player_turn_state", 16, 6)):
         mana = [
             r
             for col, r in zip(columns[key], readings[key], strict=True)
@@ -301,7 +301,7 @@ CONFIGURATIONS = {
     "memory": (
         {
             "max_decision_records": 512,
-            "max_decision_reference_details": 8192,
+            "max_decision_reference_details": 16384,
             "max_decision_references": 8192,
             "max_decision_members": 65536,
         },

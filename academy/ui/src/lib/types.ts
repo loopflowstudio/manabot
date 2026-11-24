@@ -114,6 +114,7 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  first_strike_participant?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */

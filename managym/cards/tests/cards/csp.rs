@@ -33,3 +33,30 @@ fn dark_depths_becomes_marit_lage_when_its_last_ice_counter_is_removed() {
     assert!(keywords(&s, lage).has(Keyword::Indestructible));
     assert_eq!(s.battlefield_permanents_named(0, "Marit Lage").len(), 1);
 }
+
+#[test]
+fn foundations_spell_flashfreeze() {
+    crate::check_counterspell("Flashfreeze", "Gray Ogre", "Sol Ring");
+}
+
+#[test]
+fn foundations_5e_deathmark() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, offered_targets, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Deathmark", "Savannah Lions", "Llanowar Elves", "Gray Ogre"]);
+    let lions = s.force_permanent_on_battlefield(1, "Savannah Lions");
+    let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, lions);
+    cast(&mut s, "Deathmark");
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(lions)));
+    assert!(offers.contains(&Target::Permanent(elves)));
+    assert!(!offers.contains(&Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(lions)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+}

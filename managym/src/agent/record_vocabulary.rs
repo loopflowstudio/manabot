@@ -181,10 +181,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
-        (
-            "ReplacementEffect",
-            &["PreventDamageToController", "DoubleDamageToController"][..],
-        ),
+        ("DamageTransform", &["Prevent"][..]),
+        // Offered only by a resolved shield record, never printed.
+        ("ReplacementEffect", &["PreventCombatDamage"][..]),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
             "EventBinding",
@@ -297,7 +296,13 @@ fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json
 fn set_names(value: &serde_json::Value) -> Vec<String> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("named")?.as_str().map(str::to_owned))
+        // `SetCharacteristics::named` (Honest Work) and `Modification::SetName`.
+        .filter_map(|map| {
+            map.get("named")
+                .or_else(|| map.get("SetName"))?
+                .as_str()
+                .map(str::to_owned)
+        })
         .collect()
 }
 

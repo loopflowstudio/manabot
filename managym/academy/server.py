@@ -259,7 +259,8 @@ STOP_STEP_TO_ENGINE_STEP = {
     "end_step": "ENDING_END",
 }
 ENGINE_STEP_TO_STOP_STEP = {
-    engine: stop for stop, engine in STOP_STEP_TO_ENGINE_STEP.items()
+    **{engine: stop for stop, engine in STOP_STEP_TO_ENGINE_STEP.items()},
+    "COMBAT_FIRST_STRIKE_DAMAGE": "combat_damage",
 }
 STOP_SIDES = ("my", "opponent")
 # Defaults chosen for the INTERACTIVE_DECK matchup: act in your own main

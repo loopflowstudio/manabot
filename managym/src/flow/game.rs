@@ -112,7 +112,7 @@ pub struct GameState {
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
-    pub trigger_placement: Option<TriggerPlacement>,
+    pub trigger_placement: Option<Box<TriggerPlacement>>,
     /// Delayed triggered abilities (CR 603.7) waiting for their events, in
     /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
@@ -421,6 +421,8 @@ pub enum PendingChoice {
 ///   `characteristics`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
+/// - `life`: both life totals, which a static condition may read ("as long
+///   as you have 25 or more life"); compared like `mana_pools`.
 ///
 /// `DerefMut` on `TrackedState` advances every counter. Its typed accessors
 /// write fields no derivation reads, or advance only the counters their
@@ -433,6 +435,7 @@ pub(crate) struct Revisions {
     pub mana_pools: u64,
     pub tapped: u64,
     pub triggers: u64,
+    pub life: u64,
 }
 
 /// `GameState` with the `Revisions` its derived caches key on. State can
@@ -512,7 +515,7 @@ impl TrackedState {
         &mut self.state.pending_triggers
     }
 
-    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<TriggerPlacement> {
+    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<Box<TriggerPlacement>> {
         &mut self.state.trigger_placement
     }
 
@@ -532,7 +535,9 @@ impl TrackedState {
         &mut self.state.object_lki
     }
 
+    /// Life totals feed `life` only.
     pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {
+        self.revisions.life += 1;
         self.state
             .players
             .get_mut(player.0)
@@ -728,8 +733,8 @@ impl DerefMut for TrackedState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CombatDamagePass {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CombatDamagePass {
     FirstStrike,
     NormalWithFirstStrike,
     Normal,
@@ -784,8 +789,8 @@ pub struct Game {
 
 // Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
 // with bench_footprint before raising a ceiling. Object and Permanent repeat
-// for each occupied row. TrackedState allows 32 bytes for its revisions
-// in addition to the GameState ceiling.
+// for each occupied row. TrackedState allows 40 bytes for its five
+// revision counters in addition to the GameState ceiling.
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     use crate::state::game_object::Object;
@@ -794,9 +799,9 @@ const _: () = {
     assert!(size_of::<Object>() <= 96);
     assert!(size_of::<Permanent>() <= 168);
     assert!(size_of::<GameState>() <= 4096);
-    assert!(size_of::<TrackedState>() <= 4128);
+    assert!(size_of::<TrackedState>() <= 4136);
     assert!(size_of::<Game>() <= 5248);
-    let cache_limit = if cfg!(debug_assertions) { 104 } else { 96 };
+    let cache_limit = if cfg!(debug_assertions) { 112 } else { 104 };
     assert!(size_of::<DerivedCache>() <= cache_limit);
 };
 

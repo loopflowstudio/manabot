@@ -475,6 +475,7 @@ impl Game {
                 Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::AssignCombatDamage { .. } => ("assign_combat_damage", "Assign combat damage from the attacker."),
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
@@ -506,7 +507,7 @@ impl Game {
             let choosing_mode = placement
                 .placing
                 .as_ref()
-                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+                .is_some_and(|trigger| self.pending_trigger_mode_rule(trigger).is_some());
             view.stage = if choosing_mode {
                 "trigger_mode"
             } else if placement.placing.is_some() {
@@ -517,7 +518,7 @@ impl Game {
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
                 let description = crate::agent::ability_description::trigger_description(
-                    &self.state[trigger.source_object()],
+                    self.trigger_source_face(trigger)?,
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );

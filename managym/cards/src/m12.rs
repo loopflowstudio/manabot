@@ -5,14 +5,19 @@ use managym_state::{
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        rune_scarred_demon(),
+        swiftfoot_boots(),
         sundial_of_the_infinite(),
         visions_of_beyond(),
         warstorm_surge(),
@@ -90,6 +95,56 @@ fn warstorm_surge() -> CardDefinition {
                     by: Some(ObjectSelector::Triggering),
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn swiftfoot_boots() -> CardDefinition {
+    let text_box = "Equipped creature has hexproof and haste. (It can't be the target of spells or abilities your opponents control. It can attack and {T} no matter when it came under your control.)\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "m12.swiftfoot_boots",
+        scryfall_id: "8b82753b-284c-44ba-9d48-d28913f02a5f",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::AddKeywords(Keywords::of(&[
+                    Keyword::Hexproof,
+                    Keyword::Haste,
+                ]))],
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
+            name: "Swiftfoot Boots".into(),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            mana_cost: Some(ManaCost::parse("{2}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rune_scarred_demon() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, search your library for a card, put it into your hand, then shuffle.";
+    CardDefinition {
+        key: "m12.rune_scarred_demon",
+        scryfall_id: "509e0f81-0591-4b28-978e-a2f1c46b7427",
+        printed: PrintedCharacteristics {
+            name: "Rune-Scarred Demon".into(),
+            mana_cost: Some(ManaCost::parse("{5}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Demon".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::search_for_card(ZoneType::Hand)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

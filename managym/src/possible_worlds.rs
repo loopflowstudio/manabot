@@ -666,11 +666,14 @@ impl HiddenHandConstraints {
                             matches!(
                                 suspended.decision,
                                 crate::flow::decision::Decision::OrderReplacement { .. }
+                                    | crate::flow::decision::Decision::AssignCombatDamage { .. }
                             )
                         }) =>
                 {
-                    // All prospective entrants and replacement sources are
-                    // public and pinned; the retained alternatives stay valid.
+                    // All prospective entrants and replacement sources, and
+                    // the attacker, blocker and damage already assigned, are
+                    // public battlefield state; the retained alternatives stay
+                    // valid.
                 }
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::Scry

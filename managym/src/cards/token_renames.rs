@@ -5,6 +5,22 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (
+        Variant,
+        "ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (
+        Structure,
+        "/ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (Variant, "ReplacementEffect::DoubleDamageToController", None),
+    (
+        Structure,
+        "/ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
     (Structure, "/Effect::SearchLandsOpponentSplits", None),
     (Structure, "/ManaUse", None),
     (Structure, "/TriggerCondition::AttacksAlone", None),
@@ -79,11 +95,18 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Variant, "TriggerSubject::Another", None),
     (Variant, "TriggerSubject::AnotherYouControl", None),
     (Variant, "TriggerSubject::AnyYouControl", None),
+    // Auras and Equipment share one attachment subject.
+    (
+        Variant,
+        "TriggerSubject::EnchantedCreature",
+        Some("TriggerSubject::Attached"),
+    ),
     (Field, "abilities", None),
     (Field, "controller_only", None),
     (Field, "opponent_picks", Some("picks")),
     (Field, "restricted", None),
     (Field, "spells", None),
+    (Text, "attached at activation", None),
     (Text, "land choices remaining", None),
     (Text, "selected lands", None),
     // Split into `contribution` facts naming how and toward what each paid.
@@ -93,6 +116,27 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "token",
+        "execution/1//ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::DoubleDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/1//ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::PreventDamageToController",
+        None,
+    ),
+    ("token", "execution/6/attached at activation", None),
     ("token", "execution/6/land choices remaining", None),
     ("token", "execution/6/selected lands", None),
     ("token", "execution/6/waterbend contributions", None),

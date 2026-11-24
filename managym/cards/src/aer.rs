@@ -2,13 +2,15 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, ObjectSelector},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    mana::ManaCost,
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PrintedCharacteristics,
+    },
+    mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![heroic_intervention()]
+    vec![druid_of_the_cowl(), heroic_intervention()]
 }
 
 fn heroic_intervention() -> CardDefinition {
@@ -27,6 +29,28 @@ fn heroic_intervention() -> CardDefinition {
                     Keyword::Indestructible,
                 ])),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn druid_of_the_cowl() -> CardDefinition {
+    let text_box = "{T}: Add {G}.";
+    CardDefinition {
+        key: "aer.druid_of_the_cowl",
+        scryfall_id: "a683f79b-0330-4fac-8279-6c0d888414b8",
+        printed: PrintedCharacteristics {
+            name: "Druid of the Cowl".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Druid".into()],
+            power: Some(1),
+            toughness: Some(3),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("G"),
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
