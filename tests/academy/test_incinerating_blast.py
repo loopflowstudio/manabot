@@ -72,7 +72,11 @@ def test_blast_commands_complete_once_from_equal_restores(tmp_path: Path) -> Non
         committed = first.search_witness_json()
         assert second.search_witness_json() == committed
         outcomes.add(first.state_digest())
-        discarded = offer["label"].removeprefix("Select ")
+        discarded = offer["verb"] != "decline"
+        expected = ["Incinerating Blast"]
+        if discarded:
+            expected.append(offer["label"].removeprefix("Select "))
+        expected.sort()
         for viewer in (0, 1):
             obs = first.observation_for_player(viewer)
             caster_cards = obs.agent_cards if viewer == 0 else obs.opponent_cards
@@ -81,17 +85,14 @@ def test_blast_commands_complete_once_from_equal_restores(tmp_path: Path) -> Non
                 for c in caster_cards
                 if c.zone == managym.ZoneEnum.GRAVEYARD
             )
-            expected = ["Incinerating Blast"]
-            if offer["verb"] != "decline":
-                expected.append(discarded)
-            assert graveyard == sorted(expected)
+            assert graveyard == expected
             projection = recovery_frame(first, viewer, tmp_path)["projection"]
             facts = projection["decision_context"]["recent_facts"]
             assert facts.count("Incinerating Blast finished resolving.") == 1
             side = projection["agent" if viewer == 0 else "opponent"]
             assert sorted(card["name"] for card in side["graveyard"]) == graveyard
             caster = obs.agent if viewer == 0 else obs.opponent
-            assert caster.turn_history.cards_drawn == int(offer["verb"] != "decline")
+            assert caster.turn_history.cards_drawn == int(discarded)
             assert not obs.stack_objects
         with pytest.raises(managym.AgentError, match="stale_revision"):
             first.execute_semantic_command_json(command)
@@ -111,8 +112,9 @@ def recovery_frame(env: managym.Env, viewer: int, path: Path) -> dict[str, Any]:
 
 def test_pending_blast_privacy_and_recovery(tmp_path: Path) -> None:
     space = ObservationSpace()
-    roots = [pending_blast(name) for name in ("Island", "Plains")]
-    for env, name in zip(roots, ("Island", "Plains"), strict=True):
+    names = ("Island", "Plains")
+    roots = [pending_blast(name) for name in names]
+    for env, name in zip(roots, names, strict=True):
         frame = recovery_frame(env, 0, tmp_path)
         assert frame == recovery_frame(env.snapshot().restore(), 0, tmp_path)
         assert {o["label"] for o in frame["offers"]} == {
@@ -131,16 +133,19 @@ def test_pending_blast_privacy_and_recovery(tmp_path: Path) -> None:
     waiting = recovery_frame(a, 1, tmp_path)
     assert not waiting["offers"] and waiting["prompt"] is None
     assert waiting == recovery_frame(b, 1, tmp_path)
-    for viewer in (0, 1):
-        left, right = (env.observation_for_player(viewer) for env in roots)
-        assert (left.toJSON() == right.toJSON()) == (viewer == 1)
-        x, y = (encode_observation(space, obs) for obs in (left, right))
-        if viewer == 0:
-            assert not np.array_equal(x["semantic_cards"], y["semantic_cards"])
-        else:
-            assert x.keys() == y.keys()
-            for key in x:
-                np.testing.assert_array_equal(x[key], y[key], err_msg=key)
+    caster_a, caster_b = (env.observation_for_player(0) for env in roots)
+    assert caster_a.toJSON() != caster_b.toJSON()
+    cards_a, cards_b = (
+        encode_observation(space, obs)["semantic_cards"] for obs in (caster_a, caster_b)
+    )
+    assert not np.array_equal(cards_a, cards_b)
+
+    opponent_a, opponent_b = (env.observation_for_player(1) for env in roots)
+    assert opponent_a.toJSON() == opponent_b.toJSON()
+    x, y = (encode_observation(space, obs) for obs in (opponent_a, opponent_b))
+    assert x.keys() == y.keys()
+    for key in x:
+        np.testing.assert_array_equal(x[key], y[key], err_msg=key)
 
 
 def test_reconnect_to_restored_blast(

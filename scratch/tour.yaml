@@ -1,7 +1,7 @@
 at: 6c230ba7e545a3e58e037d64635878573cf9770c
 first:
   - path: tests/academy/test_incinerating_blast.py
-    why: Exact restores, public resolution and pending viewer privacy
+    why: Compare bound Commands on exact restores, then inspect each viewer and reconnect
   - path: scratch/plan.md
     why: Card obligations, fixture results and remaining replay work
   - path: managym/src/flow/turn.rs
