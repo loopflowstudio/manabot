@@ -1,7 +1,7 @@
 //! Foundations behavior through ordinary activation, payment and combat.
 use crate::support::{
     game::{five_color_setup, move_card, Scenario},
-    inspect::{card_of, permanent_named, permanent_of},
+    inspect::{card_of, keywords, permanent_named, permanent_of},
     play::{activate, attack_with, cast, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
@@ -2041,4 +2041,54 @@ fn soulstone_sanctuary_has_all_creature_types_until_a_later_type_change() {
     assert_eq!(view.creature_types.listed(), ["Citizen".to_string()]);
     assert!(!view.has_subtype("Human") && !view.is_land());
     assert_eq!(view.pt(), (2, 2), "a Citizen with one creature type");
+}
+
+/// The granted "When this creature deals combat damage, sacrifice it" fires
+/// on combat damage only (CR 510.2): biting with Rocky Rebuke keeps the
+/// Goblin, hitting the opponent in combat sacrifices it.
+#[test]
+fn dropkick_bomber_sacrifices_its_goblin_after_combat_damage_only() {
+    let mut s = five_color_setup(&[
+        "Dropkick Bomber",
+        "Raging Goblin",
+        "Rocky Rebuke",
+        "Gray Ogre",
+    ]);
+    let bomber = s.force_permanent_on_battlefield(0, "Dropkick Bomber");
+    let goblin = s.force_permanent_on_battlefield(0, "Raging Goblin");
+    let other = s.force_permanent_on_battlefield(0, "Raging Goblin");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(s.game().characteristics(goblin).pt(), (2, 2));
+    assert_eq!(
+        s.game().characteristics(bomber).pt(),
+        (2, 3),
+        "other Goblins"
+    );
+
+    activate(&mut s, bomber, 0);
+    assert!(
+        !s.choose_target(Target::Permanent(bomber)),
+        "another Goblin"
+    );
+    assert!(s.choose_target(Target::Permanent(goblin)));
+    settle(&mut s);
+    assert!(keywords(&s, goblin).has(Keyword::Flying));
+    assert!(!keywords(&s, other).has(Keyword::Flying));
+
+    cast(&mut s, "Rocky Rebuke");
+    assert!(s.choose_target(Target::Permanent(goblin)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none(), "the bite hit");
+    assert!(
+        s.game().state.permanents[goblin].is_some(),
+        "noncombat damage"
+    );
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, goblin);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().state.players[1].life, 18);
+    assert!(s.game().state.permanents[goblin].is_none(), "sacrificed");
+    assert!(s.game().state.permanents[other].is_some());
 }

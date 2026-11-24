@@ -120,7 +120,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
         TriggerCondition::CardsLeaveYourGraveyard => EventKinds::of(EventKind::CardsLeftGraveyard),
-        TriggerCondition::SourceDealsDamage => EventKinds::of(EventKind::SourceDealtDamage),
+        TriggerCondition::SourceDealsDamage | TriggerCondition::SourceDealsCombatDamage => {
+            EventKinds::of(EventKind::SourceDealtDamage)
+        }
         TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
@@ -885,23 +887,27 @@ impl Game {
         if sources.is_empty() {
             return;
         }
-        let mut totals = std::collections::BTreeMap::<ObjectId, i32>::new();
+        // Each source's total, and whether every part of it was combat damage.
+        let mut totals = std::collections::BTreeMap::<ObjectId, (i32, bool)>::new();
         for event in events {
             if let GameEvent::DamageDealt {
                 source: Some(source),
                 amount,
+                combat,
                 ..
             } = event
             {
-                let total = totals.entry(*source).or_default();
+                let (total, all_combat) = totals.entry(*source).or_insert((0, true));
                 *total = total.saturating_add(*amount as i32);
+                *all_combat &= *combat;
             }
         }
         for source in sources {
-            if let Some(&amount) = totals.get(&source.lki.object) {
+            if let Some(&(amount, combat)) = totals.get(&source.lki.object) {
                 let event = GameEvent::SourceDealtDamage {
                     source: source.lki.object,
                     amount,
+                    combat,
                 };
                 self.check_triggers_for_event(&event, std::slice::from_ref(&source));
             }
@@ -1781,6 +1787,10 @@ impl Game {
             (TriggerCondition::SourceDealsDamage, GameEvent::SourceDealtDamage { source, .. }) => {
                 *source == source_object
             }
+            (
+                TriggerCondition::SourceDealsCombatDamage,
+                GameEvent::SourceDealtDamage { source, combat, .. },
+            ) => *combat && *source == source_object,
             (TriggerCondition::Dies { subject }, GameEvent::CardMoved { from, to, .. }) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;
                 died && self.subject_matches_moved_object(

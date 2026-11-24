@@ -80,6 +80,7 @@ impl Game {
                     source,
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
+                    combat,
                 });
                 if let Some(source) = combat_source {
                     self.emit_observation_event(GameEvent::CombatDamageDealt {
@@ -123,6 +124,7 @@ impl Game {
                     source,
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
+                    combat,
                 });
                 if let (Some(source), Some(target)) = (combat_source, event_target) {
                     self.emit_observation_event(GameEvent::CombatDamageDealt {

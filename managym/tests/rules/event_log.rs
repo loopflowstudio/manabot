@@ -61,6 +61,7 @@ fn event_log_records_damage() {
         source: Some(bolt),
         target: DamageTarget::Player(PlayerId(1)),
         amount: 3,
+        combat: false,
     }));
 }
 

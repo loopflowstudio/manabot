@@ -7341,5 +7341,17 @@
     "keywords": [],
     "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
     "colors": []
+  },
+  "Dropkick Bomber": {
+    "name": "Dropkick Bomber",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"",
+    "colors": [
+      "R"
+    ]
   }
 }

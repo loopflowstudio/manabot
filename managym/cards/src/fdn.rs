@@ -7,7 +7,8 @@ use managym_state::{
     card::ManaAbility,
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticPtBuff, StaticScope,
+        TargetCostReduction,
     },
     effect::{CopyException, Modification},
     mana::{Mana, ManaCost},
@@ -40,7 +41,60 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         sire_of_seven_deaths(),
         raise_the_past(),
         soulstone_sanctuary(),
+        dropkick_bomber(),
     ]
+}
+
+fn dropkick_bomber() -> CardDefinition {
+    let text_box = "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"";
+    let goblin = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::subtype("Goblin"),
+    };
+    CardDefinition {
+        key: "fdn.dropkick_bomber",
+        scryfall_id: "b44f758e-716a-408e-96d4-b58403591c2a",
+        printed: PrintedCharacteristics {
+            name: "Dropkick Bomber".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(3),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Goblin")),
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{R}"),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::another(goblin.clone()),
+                    effects: vec![
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(goblin.clone()),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                        ),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(goblin),
+                            Modification::GrantTriggered(Box::new(Ability::Triggered {
+                                condition: TriggerCondition::SourceDealsCombatDamage,
+                                intervening_if: None,
+                                effects: vec![Effect::sacrifice_this()],
+                            })),
+                        ),
+                    ],
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn soulstone_sanctuary() -> CardDefinition {

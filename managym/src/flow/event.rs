@@ -65,6 +65,10 @@ pub enum GameEvent {
         source: Option<ObjectId>,
         target: DamageTarget,
         amount: u32,
+        /// Combat damage (CR 510.2). Trigger matching reads it; the history
+        /// it records keeps its bytes.
+        #[serde(skip)]
+        combat: bool,
     },
     LifeChanged {
         player: PlayerId,
@@ -183,6 +187,9 @@ pub enum GameEvent {
     SourceDealtDamage {
         source: ObjectId,
         amount: i32,
+        /// All of it was combat damage: one combat damage step's batch.
+        #[serde(skip)]
+        combat: bool,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {

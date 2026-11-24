@@ -168,6 +168,9 @@ pub enum TriggerCondition {
     CardsLeaveYourGraveyard,
     /// Whenever this source deals damage to any recipient.
     SourceDealsDamage,
+    /// "When this creature deals combat damage" (CR 510.2) to any recipient,
+    /// creature or player: once per combat damage step it deals any.
+    SourceDealsCombatDamage,
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
     /// prevented damage excluded. `per` says whether it triggers once for
     /// each creature that does or once per combat damage step ("one or

@@ -1122,6 +1122,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
         TriggerCondition::CardsLeaveYourGraveyard => "TriggerCondition::CardsLeaveYourGraveyard",
         TriggerCondition::SourceDealsDamage => "TriggerCondition::SourceDealsDamage",
+        TriggerCondition::SourceDealsCombatDamage => "TriggerCondition::SourceDealsCombatDamage",
         TriggerCondition::DealsCombatDamage { .. } => "TriggerCondition::DealsCombatDamage",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
     }
@@ -1155,6 +1156,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         },
         TriggerCondition::CardsLeaveYourGraveyard,
         TriggerCondition::SourceDealsDamage,
+        TriggerCondition::SourceDealsCombatDamage,
         TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::any(CardPredicate::creature()),
             to: Actor::You,

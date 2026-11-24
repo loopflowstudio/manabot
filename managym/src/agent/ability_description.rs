@@ -224,6 +224,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         ),
         TriggerCondition::CardsLeaveYourGraveyard => "Whenever one or more cards leave your graveyard".into(),
         TriggerCondition::SourceDealsDamage => "this source deals damage".into(),
+        TriggerCondition::SourceDealsCombatDamage => {
+            "When this creature deals combat damage".into()
+        }
         TriggerCondition::DealsCombatDamage { subject, to, per } => {
             let to = actor_noun(*to);
             match per {
