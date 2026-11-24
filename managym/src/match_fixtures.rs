@@ -46,8 +46,8 @@ fn new_match(seed: u64) -> Game {
 pub fn build_fixture(id: &str) -> Result<Game, String> {
     let mut game = new_match(SETUP_SEED);
     let (count, drain_observations) = match id {
-        "interactive-midgame-48-w4-v1" => (48, true),
-        "interactive-heavy-80-w4-v1" => {
+        "interactive-midgame-48-opening-v1" => (48, true),
+        "interactive-heavy-80-opening-v1" => {
             game.reseed(HEAVY_ACTION_SEED);
             (80, false)
         }
@@ -122,12 +122,12 @@ fn check_shape(id: &str, game: &Game) -> Result<(), String> {
     let slots = game.state.permanents.len();
     let events = game.state.events.len();
     match id {
-        "interactive-midgame-48-w4-v1" if action_count != 2 => Err(format!(
+        "interactive-midgame-48-opening-v1" if action_count != 2 => Err(format!(
             "midgame fixture drift: expected 2 root actions, got {action_count}"
         )),
-        "interactive-heavy-80-w4-v1" if objects != 120 || slots != 28 || events != 499 => {
+        "interactive-heavy-80-opening-v1" if objects != 120 || slots != 27 || events != 558 => {
             Err(format!(
-                "heavy fixture drift: expected cards/slots/events 120/28/499, got {objects}/{slots}/{events}"
+                "heavy fixture drift: expected cards/slots/events 120/27/558, got {objects}/{slots}/{events}"
             ))
         }
         _ => Ok(()),
@@ -141,7 +141,10 @@ mod tests {
 
     #[test]
     fn fixtures_are_exact_and_deterministic() {
-        for id in ["interactive-midgame-48-w4-v1", "interactive-heavy-80-w4-v1"] {
+        for id in [
+            "interactive-midgame-48-opening-v1",
+            "interactive-heavy-80-opening-v1",
+        ] {
             let first = build_fixture(id).expect("first fixture build");
             let second = build_fixture(id).expect("second fixture build");
             assert_eq!(
@@ -154,7 +157,12 @@ mod tests {
 
     #[test]
     fn historical_fixtures_are_not_reinterpreted_under_current_rules() {
-        for id in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+        for id in [
+            "interactive-midgame-48-v1",
+            "interactive-heavy-80-v1",
+            "interactive-midgame-48-w4-v1",
+            "interactive-heavy-80-w4-v1",
+        ] {
             assert!(build_fixture(id).is_err(), "historical fixture {id}");
         }
     }

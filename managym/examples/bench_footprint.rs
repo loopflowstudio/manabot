@@ -60,8 +60,8 @@ fn main() -> Result<(), String> {
         "{}",
         json!({"allocator": managym::allocator::NAME, "mode": mode, "sizes": inline_sizes()})
     );
-    let midgame = measure_fixture("interactive-midgame-48-w4-v1", cold)?;
-    let heavy = measure_fixture("interactive-heavy-80-w4-v1", cold)?;
+    let midgame = measure_fixture("interactive-midgame-48-opening-v1", cold)?;
+    let heavy = measure_fixture("interactive-heavy-80-opening-v1", cold)?;
     for fixture in [&midgame, &heavy] {
         println!("{}", json!(fixture.position));
         for row in std::iter::once(&fixture.game).chain(&fixture.fields) {

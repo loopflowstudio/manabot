@@ -75,7 +75,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
     s.pass_priority();
     s.pass_priority(); // resolve to the choice
     assert_eq!(s.game().state.players[0].life, 0);
-    assert!(s.game().state.players[0].alive);
+    assert!(s.game().state.loss(0).is_none());
     assert_ne!(s.action_space().kind, ActionSpaceKind::Priority);
     let choice = s
         .action_space()
@@ -85,7 +85,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
         .expect("resolution choice");
     s.step_action(choice);
     assert_eq!(s.game().state.players[0].life, 2);
-    assert!(s.game().state.players[0].alive);
+    assert!(s.game().state.loss(0).is_none());
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert!(s.game().state.stack_objects.is_empty());
 }

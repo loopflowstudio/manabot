@@ -3177,6 +3177,7 @@ fn earth_rumble_wrestlers() -> CardDefinition {
     let condition = || {
         Some(Condition::AnyOf(vec![
             Condition::ControlsAtLeast {
+                distinct_names: false,
                 count: 1,
                 predicate: CardPredicate {
                     card_type: Some(CardType::Land),
@@ -7309,6 +7310,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
                 types: vec![CardType::Creature],
                 subtypes: Vec::new(),
                 condition: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
                     count: 8,
                     predicate: CardPredicate {
                         namesake: true,
@@ -7714,6 +7716,7 @@ fn raucous_audience() -> CardDefinition {
                 tap_source: true,
                 effects: vec![Effect::If {
                     condition: Condition::ControlsAtLeast {
+                        distinct_names: false,
                         count: 1,
                         predicate: CardPredicate {
                             min_power: Some(4),

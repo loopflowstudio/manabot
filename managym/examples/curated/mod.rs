@@ -64,6 +64,11 @@ pub fn setup(usable_taps: bool) -> GameSetup {
 /// The old curated workload stays intact; these roots add overlapping Ally
 /// anthems and type-dependent power to ordinary steps and complete search scores.
 pub fn add_layer_board(env: &mut managym::agent::env::Env) {
+    let actor = env.current_agent_index().unwrap();
+    let mut obs = env.observation_for_player(actor).unwrap();
+    while obs.turn.turn_number == 0 {
+        obs = env.step(0).unwrap().0; // These fixture decks keep both dealt hands.
+    }
     for name in [
         "White Lotus Reinforcements",
         "White Lotus Reinforcements",

@@ -28,6 +28,7 @@ from manabot.policy.readings import (
     legacy_readings,
     published_columns,
 )
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 WORLD = "elemental-world-v2"
@@ -43,6 +44,7 @@ def sampled_batches(
         env = managym.Env(seed=500 + game, skip_trivial=True, decision_memory=memory)
         setups = [managym.authored_deck_setup(WORLD, d) for d in rng.sample(decks, 2)]
         raw, _ = env.reset(setups)
+        raw = keep_opening_hands(env, raw)
         for step in range(400):
             if step % stride == 0:
                 yield {
@@ -240,7 +242,8 @@ def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
     has_x, x = columns.index("has_x"), columns.index("x")
     env = managym.Env(seed=7, skip_trivial=True)
     deck = {"Plains": 36, "United Front": 4}
-    env.reset([managym.PlayerConfig(name, dict(deck)) for name in ("a", "b")])
+    raw, _ = env.reset([managym.PlayerConfig(name, dict(deck)) for name in ("a", "b")])
+    keep_opening_hands(env, raw)
     env.scenario_clear_hand(0)
     env.scenario_force_card_in_hand(0, "United Front")
     for _ in range(5):
