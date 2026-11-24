@@ -46,6 +46,72 @@ Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-
 
 *Choices made for review (reversible):* (1a) `Option<CastReceipt>` on `Permanent` + `kicked` on `PendingTrigger` / `TriggeredAbilityOnStack` so CR 603.4 recheck survives source removal; (2a) `ObjectSelector::ZoneMatching` reusing `Effect::Move` over bespoke mass-reanimation effects; (3a) `Modification::SetName` + `StaticContinuous` lowering over extending `SetCharacteristics`; (4a) general `freeze_delayed_effect` helper and `SourceCountersMinus` over the single-field `matches!`.
 
+## Batch 2 decomposition (graveyard choices, costs, simultaneous movement)
+
+I mapped this against `e1806481`. The cohort's rules duplicate three facts, and each needs one owner.
+
+**A. How a permanent was cast.** It has three representations today:
+- `Permanent.{was_cast, cast_x, cast_spent}` is written at `zones.rs:880` from `cast_spell`.
+- `EntersWithCounters.if_cast` asks the stack again (`proposed_event.rs:1153`, via `find_spell_on_stack_index` plus a controller check).
+- `kicked` lives only on `EffectFrame`, so `Condition::Kicked` is `is_resolution_only` and `check_intervening_if` passes `frame: None`. An ETB "if it was kicked" therefore can't be written.
+- *Owner:* `CastReceipt { kicked, x, spent }` (state crate), recorded once as `Permanent.cast: Option<CastReceipt>`. One `entering_cast_receipt(object, controller)` serves both entry construction and `if_cast`. `PendingTrigger` and `TriggeredAbilityOnStack` gain `kicked` next to their existing `x`/`spent`. Those two stay general "the ability's X and payment" fields because reflexive triggers (`resolution.rs:1729`) and activated payments also fill them.
+- `Condition::Kicked` stops being resolution-only. With a frame it reads `frame.kicked`. At fire time it reads the entering source's `cast`. The resolution recheck in `resolve_triggered_ability` runs against the frame built from `triggered.kicked`, so removing the source in response doesn't change the answer.
+- `TriggerCondition::WasCast` reads `cast.is_some()`.
+- Serialization: `Permanent.cast` and `kicked` skip when absent or false, which keeps existing snapshots and hashes for uncast or unkicked objects.
+
+**B. Whether a target fits its clause, given its source.** Four sites hold copies today:
+- `fits_trigger_clause` (`triggers.rs:244`) checks `another` against the live source only, plus distinctness, mana budget and source bound.
+- Trigger mode availability (`triggers.rs:501`) checks `another` against the live permanent only.
+- `retarget.rs:101–116` checks distinctness, budget, `another` and source bound.
+- `resolution_targets` (`resolution.rs:516`) checks spec legality only. It never applies `another` or `within_source_bound`.
+- *Owner:* one `target_fits_clause(requirement, target, ClauseSource { object, reference }, controller)`. It combines `target_is_legal` with `another` and `within_source_bound`. `another` excludes the live source permanent and every `departure_arrivals(source)` as `Target::GraveyardCard`/`ExiledCard`, which is how Fiendish Panda can't return itself. All four sites call it. Choice-time-only rules (distinctness, `total_mana_value_x`) stay at the two choice sites (placement and retarget) as one `choice_admits` wrapper, so placement and retarget share one function too. `resolution_targets` takes the `ClauseSource`.
+
+**C. Every matching card in a public zone.** `ObjectSelector::Each` is battlefield-only by contract, and `Zone(ZoneType)` is the resolving player's hidden-selection provenance.
+- *Owner:* `ObjectSelector::ZoneMatching { zone, owner: Actor, predicate: CardPredicate }`, resolved in `Game::select` beside `Each`. Its result feeds the existing `Effect::Move` batch, giving one simultaneous `EventBatch` with ETB triggers and `under` for control.
+- Raise the Past is `Move { what: ZoneMatching { Graveyard, You, creature mv≤2 }, to: Battlefield }`. Rise of the Dark Realms is the same with `AnyPlayer` and `under: You`.
+- `Zone(_)` and `Each` keep their serialized shapes. The new variant reaches `ability_description.rs`, the learning tokens and the `observability.rs` guard in the same change.
+
+**Not built in Batch 2: model item 3 (`freeze_delayed_effect`).** Nine-Lives Familiar is still its only consumer, and no Batch 2 or 3 card creates a delayed trigger that reads a creation-time value. The single `matches!` at `resolution.rs:1970` stays until a second real consumer appears. Generalizing now would mean inventing one.
+
+### Delete — do not maintain (deepest owner first, consumers moved in the same cut)
+
+1. `Permanent.was_cast`, `cast_x`, `cast_spent`, and their writes at `zones.rs:880–882`. Consumers move to `Permanent.cast`: `triggers.rs:1082` (the ETB frame's x/spent, which now also gives kicked) and `triggers.rs:1719` (`WasCast`).
+2. The stack re-lookup inside `EntersWithCounters.if_cast` (`proposed_event.rs:1153–1160`). It moves to `entering_cast_receipt`.
+3. `Condition::Kicked` in `is_resolution_only`. The `debug_assert` stays for the remaining resolution-only conditions.
+4. The inline `another` checks at `triggers.rs:250`, `triggers.rs:501` and `retarget.rs:109`, and the separate `within_source_bound` calls at `triggers.rs:265` and `retarget.rs:114`. All move into `target_fits_clause`.
+5. No old path is deleted for C. Nothing bespoke exists to replace; the new selector is the only implementation.
+
+### Implement slices (one shared mechanism per loop pass)
+
+1. **A, cast receipts.** Build the type, the permanent field, entry construction, `if_cast`, trigger `kicked`, and `Kicked` in intervening-if. Cards: Sun-Blessed Healer and Nullpriest of Oblivion, each in its first-printing set file (read the printing from Scryfall; Nullpriest predates FDN).
+   - Directed cases: cast kicked, then unkicked, then blinked (receipt `None`, no trigger). In the kicked case, kill the source in response to the ETB; the trigger still resolves. Familiar's cast/blink cases still pass.
+   - Fork at the kicker choice and at the target Command, and reject the stale Command.
+2. **B, clause legality.** Build `target_fits_clause` and `ClauseSource`, then move the four sites onto it. Cards: Fiendish Panda; Driver of the Dead (`avr.rs`, existing), whose remaining restrictions get exercised.
+   - Panda's death trigger never offers its own graveyard card, and its power bound reads LKI after the +1/+1 counters.
+   - A retargeted or resolution-time target outside Panda's bound is illegal.
+   - The existing Jailer, Wolfbat and TLA within-power cases still pass.
+3. **C, zone selection.** Build `ZoneMatching`. Cards: Raise the Past and Rise of the Dark Realms, on one two-graveyard setup.
+   - Check simultaneous entry: two Driver of the Dead triggers see each other. Check ownership versus control under Rise, and ETB triggers.
+4. **Remaining cohort on the same setup, composed from existing parts.**
+   - Heartfire Immolator: prowess, self-sacrifice cost, `SourcePower` LKI. Pump it, sacrifice it, return it before resolution; the damage uses its departed power.
+   - Ordeal of Nylea: `Attacks { EnchantedCreature }`, `Sacrificed { This }`, basic-land search.
+   - Feldon's Cane (`atq.rs`): exiles itself as a cost, then shuffles.
+   - Any of these that needs a new rules variant gets it as its own directed variant, never as card logic.
+
+### Review criterion (`coverage-decomposition-review`)
+
+Healer, Nullpriest, Panda, Driver, Raise the Past, Rise of the Dark Realms, Immolator, Ordeal and Cane each compose from the shared mechanisms, with no card-specific engine branch and no duplicate state:
+- one `CastReceipt` owner;
+- one `target_fits_clause` behind placement, mode availability, retarget and resolution;
+- one zone selector feeding `Effect::Move`.
+
+The review should find:
+- No `was_cast`/`cast_x`/`cast_spent` and no stack re-lookup for cast provenance: `rg 'was_cast\b|cast_x|cast_spent|find_spell_on_stack_index' managym/src/flow/{zones,proposed_event,triggers}.rs` is empty apart from unrelated spell lookups.
+- No inline `requirement.another` outside `target_fits_clause`.
+- Every card above defined in its first-printing set file with a directed test in `managym/cards/tests/cards/<set>.rs`, passing in debug.
+
+This concerns growing the card file, not runtime speed.
+
 ## Remaining batches
 
 1. **Exact departures and linked returns — built (`e6f6ef27`, compress `47dec0aa`/`2955a3d8`); behavior review passed (`scratch/behavior-review.md`).**
@@ -55,7 +121,7 @@ Record of the post-Batch 1 review (`4127aa97` → `1eee5c08`): `scratch/concept-
    - Gate: Jailer's learning program gained an explicit `TargetClause`. If `tests/model/test_pinned_pilot.py` fails, declare it with `scripts/pinned_pilot.py record --reason` (the extension was not rebuilt here). Full debug nextest, clippy and Engine Budget are still to run.
    - Not covered: Malice or Call paired with a blink in response (the Call case covers simultaneous deaths). Add it in the Batch 1 review if a fixture is cheap; otherwise carry it to Batch 2's integrated cases.
 2. **Graveyard choices, costs and simultaneous movement.**
-   - *Foundation:* Land items 1–2 (and item 3 if convenient): `Option<CastReceipt>` + trigger `kicked` surviving source removal; unified `requirement.another` (live + `departure_arrivals`) and `resolution_targets` source-bound recheck; `ObjectSelector::ZoneMatching` for simultaneous graveyard moves; general `freeze_delayed_effect` cleanup.
+   - *Foundation:* Land items 1–2 as decomposed above (A cast receipts, B clause legality, C zone selection). Item 3 waits for a second consumer.
    - *Cards & fixtures:* Use one two-graveyard setup for Raise the Past, Rise of the Dark Realms, Driver of the Dead (remaining target restrictions), Fiendish Panda (including self-exclusion in graveyard), Heartfire Immolator, Sun-Blessed Healer (including removal in response to kicked ETB), Nullpriest of Oblivion, Feldon's Cane (`atq.rs`) and Ordeal of Nylea. Abyssal Harvester is blocked (see below).
 3. **Effective characteristics and grants.**
    - *Foundation:* Land item 4 (`Modification::SetName`, `StaticContinuous` lowering for transformation Auras, mana-cache invalidation for static ability removal/grant in `zones.rs:934`, `record_vocabulary.rs` scan, and decoupled observed `name` / `creature_types_set` in `observation.rs:1572`).
