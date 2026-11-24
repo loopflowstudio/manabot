@@ -1,11 +1,11 @@
-at: f81c0ca258140f047b5cc24298705b44dd428015
+at: a82e9ba2aa83a418ddcd4ec3f4e46954bf8821ff
 first:
-  - path: managym/cards/src/isd.rs
-    why: Diregraf Ghoul supplies its own tapped-entry replacement
-  - path: managym/cards/tests/cards/isd.rs
-    why: Compare same-cost creatures when priority returns
-  - path: managym/tests/fixtures/scryfall_cards.json
-    why: Check printed characteristics against Innistrad number 97
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Link the Foundations reprint to native coverage
+  - path: managym/cards/src/ala.rs
+    why: Dragon Fodder creates two Goblins
+  - path: managym/cards/src/tokens.rs
+    why: The Goblin face supplies its printed characteristics
+  - path: managym/cards/src/dtk.rs
+    why: Impact Tremors triggers on each controlled creature entry
+  - path: managym/cards/tests/cards/dtk.rs
+    why: Follow the response windows on both branches
 hide: []
