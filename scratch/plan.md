@@ -186,7 +186,35 @@ The native BLB fixture casts Gray Ogre for three, spends two on a Food activatio
 
 The directed native crossing and the trigger learning-token check passed. After rebuilding the CPython 3.13 extension, the named fact-layout check and the live two-viewer text/tensor test passed. The latter cast Serra Angel for five with a Duo in play, then passed priority. Each chooser saw five mana spent in the text and one fact joined to the caster, first as self and then as opponent.
 
-**Next slice.** Unravel compares its target spell’s own payment with that spell’s mana value on the stack. Exercise a discounted target after an intervening cast changes the player total, plus a full-price control.
+## Remaining mechanic batches
+
+Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6:
+
+> Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
+
+**Implement the second-draw batch together.** Erudite Wizard adds a counter, Homunculus Horde creates a copy with the source’s copiable values, and Mischievous Mystic creates a flying Faerie. Use the draw occurrence at commitment, as Collector uses the gain ordinal. Draw three cards in one instruction with all three listeners present. Check one trigger per listener on draw two, including draws matched after the instruction completes. Resolve and inspect the counter, copy and token separately. A listener entering after draw two misses the crossing. Check opposing draws, the next turn’s reset, restored pending triggers and both viewers’ history projections. Record each card’s fixture in its ledger row. If copy semantics block Horde, record the exact failing interaction and finish Wizard and Mystic before batch review.
+
+Each pending FDN primary row appears once below. A dagger marks a cost-primary candidate for the existing newly-expressible-cost review. Its complete ledger obligation decides whether it can ship. The cross-set witnesses are named alongside their mechanic. The batch order after second draw is provisional.
+
+- **Second draw in a turn (selected)** — Erudite Wizard; Homunculus Horde; Mischievous Mystic.
+- **Attack declaration and raid** — Armasaur Guide; Skyship Buccaneer; Midnight Snack; Battlesong Berserker; Goblin Boarders; Gorehorn Raider; Searslicer Goblin; Alesha, Who Laughs at Fate; Ancestor Dragon; Jazal Goldmane; Storm Fleet Spy; Chart a Course; Aurelia, the Warleader; Linden, the Steadfast Queen.
+- **Power at attack, combat or resolution** — Bulk Up; Courageous Goblin; Ashroot Animist; Bite Down; Nessian Hornbeetle; Ruby, Daring Tracker†; Halana and Alena, Partners; Surrak, the Hunt Caller.
+- **Life events, totals and payment thresholds** — Vanguard Seraph; Bloodthirsty Conqueror; Stromkirk Bloodthief; Hidetsugu's Second Rite; Sanguine Indulgence†; Ayli, Eternal Pilgrim†; Exemplar of Light; Bloodtithe Collector.
+- **Draw-step and individual draw listeners** — Scrawling Crawler; Dictate of Kruphix.
+- **Creature deaths and turn death history** — Tragic Banshee; Vengeful Bloodwitch; Slumbering Cerberus; Needletooth Pack; Wardens of the Cycle; Midnight Reaper; Garna, Bloodfist of Keld; Kalastria Highborn†; Massacre Wurm.
+- **Filtered casts, targets and spell attributes** — Archmage of Runes†; Brineborn Cutthroat; Painful Quandary†; Mindsparker; Gnarlback Rhino; Mold Adder; Ovika, Enigma Goliath†; Ramos, Dragon Engine†; Firespitter Whelp.
+- **Stack payment and counter results** — An Offer You Can't Refuse; Unravel (EOE, discounted and full-price targets after an intervening cast).
+- **Damage recipients, amounts and results** — Goblin Negotiation; Quilled Greatwurm†; Koma, World-Eater†; Niv-Mizzet, Visionary; Lathril, Blade of the Elves†; Gateway Sneak; Trygon Predator.
+- **Count or filter live permanents** — Hare Apparent; Brass's Bounty; Krenko, Mob Boss; Dwynen's Elite; Elvish Archdruid†; Inspiring Call; Ingenious Leonin; Leonin Vanguard; Volley Veteran; Archway Angel; Dragonmaster Outcast; Cryptic Caves†.
+- **Graveyard thresholds, counts and characteristic definitions** — Kiora, the Rising Tide; Crypt Feaster; Revenge of the Rats; Consuming Aberration; Enigma Drake; Crusader of Odric.
+- **Move results and retained characteristics** — Stroke of Midnight; Scavenging Ooze; Cemetery Recruitment; Dread Summons; Maelstrom Pulse; Feed the Swarm.
+- **Cost reductions from the board** — Arcane Epiphany†; Ghalta, Primal Hunger†; Ballyrush Banneret†; Gate Colossus†.
+- **Kicked spells and entry provenance** — Sun-Blessed Healer†; Gnarlid Colony†; Grow from the Ashes†; Nullpriest of Oblivion†; Gatekeeper of Malakir†.
+- **Resolving payments, sacrifices and choices** — Arbiter of Woe†; Vampire Gourmand†; Perforating Artist†; Frenzied Goblin†; Mentor of the Meek†; Desecration Demon†; Redcap Gutter-Dweller†; Springbloom Druid†.
+- **Activation costs, thresholds, mana and tap events** — Zul Ashur, Lich Lord†; Fishing Pole†; Ravenous Amulet†; Wishclaw Talisman†; Immersturm Predator†; Savage Ventmaw†; Mazemind Tome; Three Tree Mascot†.
+- **Turn departures and alternative casts** — Plasma Bolt (EOE) and Michelangelo, Game Master (TMT). The interaction table below distinguishes each predicate and retains the warp integration check.
+
+Bakersbane Duo is complete as a cross-set witness. Its receipt-backed crossing supplies the integrated Unravel control. Keep the spell’s own receipt as the payment authority when implementing that batch. No additional spend accumulator is needed for Unravel.
 
 ## Evidence to carry forward
 

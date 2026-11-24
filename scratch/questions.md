@@ -40,3 +40,5 @@ Prowler’s turn-wide fact uses the active player row as its v11 join for either
 The Blast privacy fixture uses identical closed lists for both substitutions and ordinary forced-action skipping. Nonacting LLM privacy is checked at capture admission because only the chooser receives a decision prompt.
 
 Bakersbane Duo uses Tolarian Terror discounted by five graveyard spells for the three-to-five crossing. Counterspell supplies the countered branch while Unravel remains its own slice.
+
+For the next batch, use the three second-draw listeners together. Their shared crossing and three different outcomes can be checked from one draw sequence.
