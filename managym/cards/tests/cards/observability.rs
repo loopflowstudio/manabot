@@ -1158,7 +1158,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         },
         TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::any(CardPredicate::creature()),
-            to: Actor::You,
+            to: Some(Actor::You),
             per: Per::Batch,
         },
         TriggerCondition::Sacrificed {
@@ -1509,6 +1509,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "rockalanche_earthbends_by_forests_you_control_and_flashes_back",
         ),
+        StaticAbility::CastFromGraveyardRemovingCounters(_) => witnessed(
+            "StaticAbility::CastFromGraveyardRemovingCounters",
+            Seen::Actions("the graveyard card is offered as a cast on its own play route"),
+            "Quilled Greatwurm",
+            "fdn",
+            "quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters",
+        ),
         StaticAbility::Foretell(_) => witnessed(
             "StaticAbility::Foretell",
             Seen::Actions("foretelling is offered from hand; then the foretold permission columns"),
@@ -1824,6 +1831,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CostsLessByGreatestPower(creature()),
         StaticAbility::FlashIf(Condition::YourTurn),
         StaticAbility::Flashback(ManaCost::parse("{2}")),
+        StaticAbility::CastFromGraveyardRemovingCounters(6),
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
@@ -2253,7 +2261,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     for per in [Per::Object, Per::Batch] {
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::This,
-            to: Actor::AnyPlayer,
+            to: Some(Actor::AnyPlayer),
             per,
         });
         expected.push(format!("Per::{per:?}"));

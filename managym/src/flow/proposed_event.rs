@@ -617,6 +617,7 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        let mut totals: Vec<(PermanentId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
         // choices. Match its subjects while every pre-batch permanent still
         // exists: moving a Food first would erase the predicate it satisfied.
@@ -687,6 +688,20 @@ impl Game {
                 }
             } else {
                 None
+            };
+            let dealt = match (&batch.binding, &event) {
+                (
+                    EventBinding::Combat,
+                    ProposedEvent::Damage {
+                        source: Some(source),
+                        amount,
+                        ..
+                    },
+                ) if *amount > 0 => self
+                    .lookup_current_permanent(*source)
+                    .ok()
+                    .map(|source| (source, *amount as u32)),
+                _ => None,
             };
             let hit = if matches!(batch.binding, EventBinding::Combat) {
                 match &event {
@@ -759,6 +774,12 @@ impl Game {
                 }
                 died.extend(death);
                 hits.extend(hit);
+                if let Some((source, amount)) = dealt {
+                    match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
+                        Some((_, total)) => *total += amount,
+                        None => totals.push((source, amount)),
+                    }
+                }
             }
             results.push(EventResult {
                 committed,
@@ -797,6 +818,9 @@ impl Game {
         }
         if !hits.is_empty() {
             self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
+        }
+        if !totals.is_empty() {
+            self.emit_trigger_event(GameEvent::CombatDamageTotals { dealt: totals });
         }
         self.process_event_batch(&sources);
         BatchProgress::Complete { results, followups }

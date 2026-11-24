@@ -50,6 +50,10 @@ pub enum PlayRoute {
     /// A card someone else owns, in exile with a counter of this kind, on
     /// its player's turn (Tinybones's stash counters).
     ExileCounter(crate::state::permanent::CounterKind),
+    /// The card's own printed permission to cast it from its owner's
+    /// graveyard for an additional cost other than flashback (Quilled
+    /// Greatwurm's counters).
+    PrintedGraveyard,
 }
 
 /// The observed code of a route (0 is an ordinary hand play): offers name
@@ -65,6 +69,7 @@ pub fn play_route_code(route: PlayRoute) -> u8 {
         PlayRoute::Grant(_) => 6,
         PlayRoute::GraveyardType { .. } => 7,
         PlayRoute::ExileCounter(_) => 8,
+        PlayRoute::PrintedGraveyard => 9,
     }
 }
 

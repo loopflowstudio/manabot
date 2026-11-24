@@ -2121,6 +2121,7 @@ impl Observation {
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CombatDamageToPlayers { .. }
+            | GameEvent::CombatDamageTotals { .. }
             | GameEvent::LibrarySearched { .. }
             | GameEvent::CountersPut { .. }
             | GameEvent::Scried { .. }
@@ -2356,6 +2357,11 @@ impl Observation {
                                 crate::flow::payment::CostComponent::TapPays { tapped, .. } => {
                                     Some(*tapped)
                                 }
+                                // Which counter to remove is about the creature chosen.
+                                crate::flow::payment::CostComponent::RemoveCounters {
+                                    choosing_from: Some(object),
+                                    ..
+                                } => Some(*object),
                                 _ => game.payment_source_object(&payment.operation),
                             }
                         }

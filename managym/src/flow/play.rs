@@ -287,6 +287,9 @@ impl Game {
                         routes.push(PlayRoute::GrantedFlashback);
                     }
                 }
+                if self.state[object].graveyard_counter_cast().is_some() {
+                    routes.push(PlayRoute::PrintedGraveyard);
+                }
                 if self.active_player() != player
                     || (!self.state[object].types.is_permanent() && !self.state[object].modal_back)
                 {
@@ -388,9 +391,9 @@ impl Game {
                     && (cast.profile.is_front()
                         || (!grant.on_adventure && !grant.foretold && !grant.flashback))
             }),
-            PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback => {
-                !land && cast.profile.is_front()
-            }
+            PlayRoute::PrintedFlashback
+            | PlayRoute::GrantedFlashback
+            | PlayRoute::PrintedGraveyard => !land && cast.profile.is_front(),
         }
     }
 
@@ -801,6 +804,13 @@ impl Game {
             return false;
         }
         if card.discard_cost() && self.discard_candidates(player, Some(object)).is_empty() {
+            return false;
+        }
+        if cast.route == Some(PlayRoute::PrintedGraveyard)
+            && card
+                .graveyard_counter_cast()
+                .is_some_and(|count| self.removable_counters(player) < u32::from(count))
+        {
             return false;
         }
         if cast.kicked && card.bargain() {

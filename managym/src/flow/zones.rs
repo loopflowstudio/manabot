@@ -546,6 +546,13 @@ impl Game {
         self.state.events_mut().push(event);
     }
 
+    /// Offer `event` to triggered abilities only: it joins no ledger,
+    /// observation or policy history, because it restates what those
+    /// already record in another shape.
+    pub(crate) fn emit_trigger_event(&mut self, event: GameEvent) {
+        self.state.pending_events_mut().push(event);
+    }
+
     /// Publish an additive viewer fact in the committed observation window
     /// without changing trigger matching or the rules-event ledger.
     /// Presentation projection consumes these facts; policy encoders filter

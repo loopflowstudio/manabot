@@ -2109,7 +2109,7 @@ fn bumi_unleashed() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     effects: vec![
@@ -5307,7 +5307,7 @@ fn invasion_tactics() -> CardDefinition {
                             subtype: Some("Ally".into()),
                             ..Default::default()
                         }),
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Batch,
                     },
                     intervening_if: None,
@@ -9862,7 +9862,7 @@ fn the_rise_of_sozin() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     effects: vec![Effect::OptionalManaPaymentX {
@@ -11097,7 +11097,7 @@ fn waterbender_ascension() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 intervening_if: None,

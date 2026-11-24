@@ -462,6 +462,10 @@ impl Game {
                     ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
                 CostComponent::Forage { .. } =>
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
+                CostComponent::RemoveCounters { choosing_from: None, .. } =>
+                    ("additional_cost", "Choose a creature you control to remove a counter from. Each removal commits immediately; the cost completes once the stated number of counters, of any kinds, are removed from among your creatures."),
+                CostComponent::RemoveCounters { .. } =>
+                    ("additional_cost", "Choose which kind of counter to remove from the chosen creature. Each mode is one counter kind on it."),
                 CostComponent::TapPays { .. } =>
                     ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
                 CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) =>

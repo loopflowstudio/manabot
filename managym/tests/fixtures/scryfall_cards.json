@@ -8171,5 +8171,19 @@
     "colors": [
       "R"
     ]
+  },
+  "Quilled Greatwurm": {
+    "name": "Quilled Greatwurm",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Wurm",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it. (It must survive to get the counters.)\nYou may cast this card from your graveyard by removing six counters from among creatures you control in addition to paying its other costs.",
+    "colors": [
+      "G"
+    ]
   }
 }

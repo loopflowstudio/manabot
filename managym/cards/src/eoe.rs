@@ -101,7 +101,7 @@ fn virulent_silencer() -> CardDefinition {
                         card_types_any: vec![CardType::Artifact],
                         ..CardPredicate::creature()
                     }),
-                    to: Actor::Opponent,
+                    to: Some(Actor::Opponent),
                     per: Per::Object,
                 },
                 effects: vec![Effect::GivePlayerCounters {

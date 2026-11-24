@@ -946,6 +946,11 @@ pub enum StaticAbility {
     /// Printed flashback (CR 702.34): castable from its owner's graveyard for
     /// this cost, then exiled instead of going anywhere else.
     Flashback(ManaCost),
+    /// "You may cast this card from your graveyard by removing N counters
+    /// from among creatures you control in addition to paying its other
+    /// costs" (Quilled Greatwurm): a printed graveyard cast whose additional
+    /// cost is counters of any kinds.
+    CastFromGraveyardRemovingCounters(u8),
     /// Printed foretell (CR 702.143): during its owner's turn it may be exiled
     /// face down from hand for {2}, then cast on a later turn for this cost.
     Foretell(ManaCost),
@@ -1620,6 +1625,14 @@ impl PrintedCharacteristics {
     pub fn flashback(&self) -> Option<&ManaCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Flashback(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    /// The counters a printed graveyard cast removes, if it has one.
+    pub fn graveyard_counter_cast(&self) -> Option<u8> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CastFromGraveyardRemovingCounters(count) => Some(*count),
             _ => None,
         })
     }

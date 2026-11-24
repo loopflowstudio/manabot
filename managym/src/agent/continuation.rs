@@ -721,6 +721,10 @@ impl Game {
                     {
                         frame.mode = Some(cost.count);
                     }
+                    // A counter-removal cost shows how many are still owed.
+                    CostComponent::RemoveCounters { remaining, .. } => {
+                        frame.mode = Some(usize::from(*remaining));
+                    }
                     _ => {}
                 }
                 // What this payment has already committed: mana as it was

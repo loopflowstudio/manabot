@@ -37,6 +37,9 @@ struct FiredTrigger {
     ability_index: usize,
     granted: Option<Vec<Effect>>,
     program: bool,
+    /// What this one occurrence is about when an event triggers once per
+    /// object with its own amount: "it" and X ("that many").
+    occurrence: Option<(Target, u8)>,
 }
 
 /// Exact battlefield source facts used while matching one or more committed
@@ -118,8 +121,11 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             })
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
-        TriggerCondition::DealsCombatDamage { .. } => {
+        TriggerCondition::DealsCombatDamage { to: Some(_), .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
+        }
+        TriggerCondition::DealsCombatDamage { to: None, .. } => {
+            EventKinds::of(EventKind::CombatDamageTotals)
         }
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
@@ -133,6 +139,15 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::NthCounter { .. }
         | TriggerCondition::PutsCounters { .. }
         | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
+    }
+}
+
+/// The event condition inside the condition-gating wrapper ("during your
+/// turn", "while saddled"), whose multiplicity it keeps.
+fn event_condition(condition: &TriggerCondition) -> &TriggerCondition {
+    match condition {
+        TriggerCondition::ActiveIf { condition, .. } => event_condition(condition),
+        condition => condition,
     }
 }
 
@@ -984,16 +999,17 @@ impl Game {
                         .ability_triggers_this_turn
                         .contains_key(&(source.lki.object, ability_index)))
                 {
-                    let times = self.trigger_occurrences(condition, source, event);
-                    fired.extend(std::iter::repeat_n(
-                        FiredTrigger {
-                            source: source.clone(),
-                            ability_index,
-                            granted: None,
-                            program: false,
-                        },
-                        times,
-                    ));
+                    fired.extend(
+                        self.trigger_occurrence_bindings(condition, source, event)
+                            .into_iter()
+                            .map(|occurrence| FiredTrigger {
+                                source: source.clone(),
+                                ability_index,
+                                granted: None,
+                                program: false,
+                                occurrence,
+                            }),
+                    );
                 }
             }
             // Departure triggers use the grants captured at the event boundary.
@@ -1024,16 +1040,17 @@ impl Game {
                 } else {
                     effects.clone()
                 };
-                let times = self.trigger_occurrences(condition, source, event);
-                fired.extend(std::iter::repeat_n(
-                    FiredTrigger {
-                        source: source.clone(),
-                        ability_index: 0,
-                        granted: Some(effects),
-                        program: effective.program,
-                    },
-                    times,
-                ));
+                fired.extend(
+                    self.trigger_occurrence_bindings(condition, source, event)
+                        .into_iter()
+                        .map(|occurrence| FiredTrigger {
+                            source: source.clone(),
+                            ability_index: 0,
+                            granted: Some(effects.clone()),
+                            program: effective.program,
+                            occurrence,
+                        }),
+                );
             }
         }
 
@@ -1056,6 +1073,7 @@ impl Game {
             ability_index,
             granted,
             program,
+            occurrence,
         } in fired
         {
             let TriggerSourceSnapshot {
@@ -1087,7 +1105,9 @@ impl Game {
             };
             let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
             let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
-            let context = if reads_triggering_permanent {
+            let context = if let Some((it, _)) = occurrence {
+                Some(it)
+            } else if reads_triggering_permanent {
                 self.triggering_permanent(event).or(match event {
                     // "exile it from their graveyard": the card a discard put there.
                     GameEvent::CardMoved {
@@ -1129,6 +1149,7 @@ impl Game {
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
             let (x, spent) = match event {
+                _ if let Some((_, x)) = occurrence => (x, Default::default()),
                 GameEvent::CountersPut { count, .. } => {
                     (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
                 }
@@ -1176,6 +1197,47 @@ impl Game {
                 inline_effects: granted,
                 program,
             });
+        }
+    }
+
+    /// Each occurrence of one of `source`'s triggered abilities on `event`
+    /// (`trigger_occurrences` of them). Combat damage totals trigger once
+    /// for each matching creature with its own total, and each extra
+    /// trigger repeats that creature's binding (CR 603.2c).
+    fn trigger_occurrence_bindings(
+        &self,
+        condition: &TriggerCondition,
+        source: &TriggerSourceSnapshot,
+        event: &GameEvent,
+    ) -> Vec<Option<(Target, u8)>> {
+        let times = self.trigger_occurrences(condition, source, event);
+        match (event_condition(condition), event) {
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    per: Per::Object,
+                    ..
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) if times > 0 => {
+                let each = 1 + self.additional_trigger_times(source);
+                dealt
+                    .iter()
+                    .filter(|(creature, _)| {
+                        self.subject_matches_permanent(
+                            subject,
+                            source.lki.object,
+                            source.controller,
+                            *creature,
+                        )
+                    })
+                    .flat_map(|(creature, amount)| {
+                        let x = u8::try_from(*amount).unwrap_or(u8::MAX);
+                        std::iter::repeat_n(Some((Target::Permanent(*creature), x)), each)
+                    })
+                    .collect()
+            }
+            _ => vec![None; times],
         }
     }
 
@@ -1931,8 +1993,12 @@ impl Game {
             ),
             (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
             | (
-                TriggerCondition::DealsCombatDamage { .. },
+                TriggerCondition::DealsCombatDamage { to: Some(_), .. },
                 GameEvent::CombatDamageToPlayers { .. },
+            )
+            | (
+                TriggerCondition::DealsCombatDamage { to: None, .. },
+                GameEvent::CombatDamageTotals { .. },
             ) => self.trigger_multiplicity(condition, source_object, source_controller, event) > 0,
             (
                 TriggerCondition::BecomesTapped { subject },
@@ -2110,9 +2176,14 @@ impl Game {
         source_controller: PlayerId,
         event: &GameEvent,
     ) -> usize {
-        let (subject, per, creatures) = match (condition, event) {
+        let totals: Vec<PermanentId>;
+        let (subject, per, creatures) = match (event_condition(condition), event) {
             (
-                TriggerCondition::DealsCombatDamage { subject, to, per },
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: Some(to),
+                    per,
+                },
                 GameEvent::CombatDamageToPlayers { creatures },
             ) => {
                 // In the two-seat combat model only the defending player, the
@@ -2122,6 +2193,17 @@ impl Game {
                     return 0;
                 }
                 (subject, per, creatures)
+            }
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: None,
+                    per,
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) => {
+                totals = dealt.iter().map(|(creature, _)| *creature).collect();
+                (subject, per, &totals)
             }
             (
                 TriggerCondition::Attacks {

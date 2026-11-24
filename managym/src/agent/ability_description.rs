@@ -199,14 +199,16 @@ fn condition_description(condition: &TriggerCondition) -> String {
             }
         ),
         TriggerCondition::DealsCombatDamage { subject, to, per } => {
-            let to = actor_noun(*to);
+            let to = to
+                .map(|to| format!(" to {}", actor_noun(to)))
+                .unwrap_or_default();
             match per {
                 Per::Object => format!(
-                    "Whenever {} deals combat damage to {to}",
+                    "Whenever {} deals combat damage{to}",
                     subject_description(subject)
                 ),
                 Per::Batch => format!(
-                    "Whenever {} deal combat damage to {to}",
+                    "Whenever {} deal combat damage{to}",
                     one_or_more(subject, "creatures")
                 ),
             }
@@ -1437,7 +1439,7 @@ mod tests {
             (
                 TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::you_control(CardPredicate::subtype("Ally")),
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Batch,
                 },
                 "Whenever one or more Ally creatures you control deal combat damage to a player",
@@ -1445,7 +1447,7 @@ mod tests {
             (
                 TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::any(CardPredicate::creature()),
-                    to: Actor::You,
+                    to: Some(Actor::You),
                     per: Per::Object,
                 },
                 "Whenever a creature deals combat damage to you",

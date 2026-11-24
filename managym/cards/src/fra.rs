@@ -207,7 +207,7 @@ fn carnivorous_cultivator() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::This,
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 intervening_if: None,

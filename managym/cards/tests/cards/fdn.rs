@@ -2219,3 +2219,289 @@ fn redcap_makes_nonblocking_rats_and_trades_one_for_a_counter_and_a_card() {
         s.game().state[exiled].name
     );
 }
+
+/// Quilled Greatwurm's own graveyard permission removes six counters, of
+/// any kinds, from among its caster's creatures, asking for the kind only
+/// when a creature holds several. Muldrotha's creature permission and an
+/// exact grant overlap it on the same card; neither removes counters, and
+/// only Muldrotha's spends its quota. Too few counters closes only the
+/// Greatwurm's own route.
+#[test]
+fn quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{has_action, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        flow::cast_permission::{play_route_code, PlayGrant, PlayRoute},
+        state::permanent::CounterKind,
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Quilled Greatwurm", "Muldrotha, the Gravetide", "Gray Ogre"]);
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = move_from_library(&mut s, 0, "Quilled Greatwurm", ZoneType::Graveyard);
+    let add = |s: &mut crate::support::game::Scenario,
+               id: managym::state::game_object::PermanentId,
+               kind: CounterKind,
+               n: i32| {
+        s.game_mut().state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .counters
+            .change(kind, n);
+    };
+    add(&mut s, muldrotha, CounterKind::PlusOnePlusOne, 4);
+    add(&mut s, muldrotha, CounterKind::Stun, 1);
+    add(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(wurm, PlayerId(0)));
+    s.set_player_mana_pool(0, "4GG");
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    let routes = |s: &crate::support::game::Scenario| -> Vec<PlayRoute> {
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::CastSpell {
+                    object,
+                    route: Some(route),
+                    ..
+                } if *object == wurm => Some(*route),
+                _ => None,
+            })
+            .collect()
+    };
+    let offered = routes(&s);
+    assert_eq!(offered.len(), 3, "{offered:?}");
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let mut codes: Vec<u8> = obs
+        .action_space
+        .actions
+        .iter()
+        .zip(&s.action_space().actions)
+        .filter(|(_, a)| matches!(a, Action::CastSpell { object, .. } if *object == wurm))
+        .filter_map(|(option, _)| option.play_route)
+        .collect();
+    codes.sort_unstable();
+    assert_eq!(
+        codes,
+        vec![
+            play_route_code(PlayRoute::Grant(0)),
+            play_route_code(PlayRoute::GraveyardType {
+                source: s.game().state.permanents[muldrotha]
+                    .as_ref()
+                    .unwrap()
+                    .object,
+                permanent_id: s.game().state.permanents[muldrotha].as_ref().unwrap().id,
+                kind: managym::state::card::CardType::Creature,
+            }),
+            play_route_code(PlayRoute::PrintedGraveyard),
+        ]
+    );
+    assert!(obs
+        .action_space
+        .actions
+        .iter()
+        .any(|option| option.description.as_deref()
+            == Some("Cast Quilled Greatwurm from graveyard by removing six counters")
+            || option.description.as_deref()
+                == Some("Cast Quilled Greatwurm from graveyard by removing 6 counters")));
+
+    let counters = |s: &crate::support::game::Scenario,
+                    id: managym::state::game_object::PermanentId|
+     -> Vec<(CounterKind, i32)> {
+        s.game().state.permanents[id]
+            .as_ref()
+            .unwrap()
+            .counters
+            .iter()
+            .collect()
+    };
+    let cast_by = |route: fn(&PlayRoute) -> bool| {
+        fork_choosing(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, route: Some(r), .. } if *object == wurm && route(r)),
+        )
+    };
+
+    // The Greatwurm's own route: one counter at a time, the kind asked of
+    // the creature holding two kinds.
+    let mut own = cast_by(|r| *r == PlayRoute::PrintedGraveyard);
+    let ogre_object = own.game().state.permanents[ogre].as_ref().unwrap().object;
+    let muldrotha_object = own.game().state.permanents[muldrotha]
+        .as_ref()
+        .unwrap()
+        .object;
+    choose(
+        &mut own,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre_object),
+    );
+    assert!(counters(&own, ogre).is_empty());
+    choose(
+        &mut own,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == muldrotha_object),
+    );
+    let modes: Vec<usize> = own
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        modes,
+        vec![
+            CounterKind::PlusOnePlusOne as usize,
+            CounterKind::Stun as usize
+        ]
+    );
+    let obs = Observation::for_player(own.game(), PlayerId(0));
+    assert!(obs
+        .action_space
+        .actions
+        .iter()
+        .any(|option| option.description.as_deref()
+            == Some("Remove a stun counter from Muldrotha, the Gravetide")));
+    choose(
+        &mut own,
+        |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == CounterKind::Stun as usize),
+    );
+    for _ in 0..4 {
+        choose(
+            &mut own,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == muldrotha_object),
+        );
+    }
+    settle(&mut own);
+    assert!(counters(&own, muldrotha).is_empty());
+    assert!(own.game().state.cast_permissions.spent_types.is_empty());
+    assert_eq!(
+        own.battlefield_permanents_named(0, "Quilled Greatwurm")
+            .len(),
+        1
+    );
+
+    // Muldrotha's permission and the grant remove nothing; only Muldrotha's
+    // spends the creature quota.
+    for (muldrothas, spent) in [(true, 1), (false, 0)] {
+        let mut other = if muldrothas {
+            cast_by(|r| matches!(r, PlayRoute::GraveyardType { .. }))
+        } else {
+            cast_by(|r| matches!(r, PlayRoute::Grant(_)))
+        };
+        settle(&mut other);
+        assert_eq!(counters(&other, muldrotha).len(), 2);
+        assert_eq!(counters(&other, ogre).len(), 1);
+        assert_eq!(other.game().state.cast_permissions.spent_types.len(), spent);
+        assert_eq!(
+            other
+                .battlefield_permanents_named(0, "Quilled Greatwurm")
+                .len(),
+            1
+        );
+    }
+
+    // Five counters close only the Greatwurm's own route.
+    add(&mut s, ogre, CounterKind::PlusOnePlusOne, -1);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let left = routes(&s);
+    assert_eq!(left.len(), 2, "{left:?}");
+    assert!(!left.contains(&PlayRoute::PrintedGraveyard));
+    assert!(has_action(
+        &s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == wurm)
+    ));
+    assert_eq!(zone_of(&s, wurm), Some(ZoneType::Graveyard));
+}
+
+/// "Whenever a creature you control deals combat damage during your turn,
+/// put that many +1/+1 counters on it": each creature triggers once with
+/// its own total, a trample split across a blocker and the player included.
+/// A creature that dies in combat gets nothing, and blocking on the
+/// opponent's turn triggers nothing.
+#[test]
+fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
+    use crate::support::play::{choose, pass_until};
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PermanentId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Quilled Greatwurm", "Gray Ogre", "Muldrotha, the Gravetide"]);
+    let force = |s: &mut crate::support::game::Scenario, player: usize, name: &str| {
+        s.game_mut()
+            .scenario_force_battlefield(PlayerId(player as _), name, true)
+            .unwrap()
+    };
+    let wurm = force(&mut s, 0, "Quilled Greatwurm");
+    let unblocked = force(&mut s, 0, "Gray Ogre");
+    let doomed = force(&mut s, 0, "Gray Ogre");
+    let chump = force(&mut s, 1, "Gray Ogre");
+    let wall = force(&mut s, 1, "Muldrotha, the Gravetide");
+    let plus = |s: &crate::support::game::Scenario, id: PermanentId| {
+        s.game().state.permanents[id]
+            .as_ref()
+            .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
+    };
+    let life = s.life(1);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        let blocks: &[(PermanentId, PermanentId)] = &[(chump, wurm), (wall, doomed)];
+        choose(&mut s, |a| match a {
+            Action::DeclareBlocker {
+                blocker,
+                attacker: Some(attacker),
+                ..
+            } => blocks.contains(&(*blocker, *attacker)),
+            _ => false,
+        });
+    }
+    s.advance_to_step(StepKind::PostcombatMain);
+    assert_eq!(s.life(1), life - 5 - 2);
+    assert_eq!(plus(&s, wurm), Some(7));
+    assert_eq!(plus(&s, unblocked), Some(2));
+    assert_eq!(plus(&s, doomed), None, "died in combat");
+
+    // On the opponent's turn the Greatwurm's controller blocks: no trigger.
+    s.advance_to_active_step(1, StepKind::Main);
+    let attacker = s.game().state.permanents[wall]
+        .as_ref()
+        .map(|_| wall)
+        .unwrap();
+    crate::support::game::clear_summoning_sickness(&mut s, attacker);
+    s.game_mut().state.permanents[wurm].as_mut().unwrap().tapped = false;
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, attacker);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        choose(&mut s, |a| match a {
+            Action::DeclareBlocker {
+                blocker,
+                attacker: Some(_),
+                ..
+            } => *blocker == wurm,
+            Action::DeclareBlocker { attacker: None, .. } => true,
+            _ => false,
+        });
+    }
+    s.advance_to_step(StepKind::PostcombatMain);
+    assert!(
+        s.game().state.permanents[wall].is_none(),
+        "the Greatwurm dealt its damage"
+    );
+    assert_eq!(plus(&s, wurm), Some(7));
+}

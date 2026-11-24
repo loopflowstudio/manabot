@@ -148,12 +148,14 @@ pub enum TriggerCondition {
         predicate: CardPredicate,
     },
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
-    /// prevented damage excluded. `per` says whether it triggers once for
-    /// each creature that does or once per combat damage step ("one or
-    /// more").
+    /// prevented damage excluded. `to` is a player matching that actor, or
+    /// `None` for any recipient ("deals combat damage"); then each creature
+    /// that does triggers once with its total that step as X ("that many")
+    /// and itself as "it". `per` says whether it triggers once for each
+    /// creature that does or once per combat damage step ("one or more").
     DealsCombatDamage {
         subject: TriggerSubject,
-        to: Actor,
+        to: Option<Actor>,
         per: Per,
     },
     /// The inner condition, for an ability that functions only while its

@@ -9,6 +9,7 @@
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
+        cast_permission::PlayRoute,
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         proposed_event::ProposedEvent,
@@ -20,6 +21,7 @@ use crate::{
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, ManaCost},
         payment::{How, PaymentReceipt, Toward},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -99,6 +101,14 @@ pub enum CostComponent {
     TapPays {
         tapped: ObjectId,
         options: Vec<TapPayment>,
+    },
+    /// Remove `remaining` more counters, of any kinds, from among creatures
+    /// the payer controls (Quilled Greatwurm), one at a time. Each removal
+    /// commits at once. `choosing_from` is the creature just chosen while
+    /// its payer names which of its several kinds to remove.
+    RemoveCounters {
+        remaining: u8,
+        choosing_from: Option<ObjectId>,
     },
     /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
     /// paid rather than its other cost.
@@ -483,6 +493,89 @@ impl Game {
                 .any(|id| self.can_pay_with_mana_abilities(player, cost, Some(id)))
     }
 
+    /// The creatures `player` controls that hold a counter, in battlefield
+    /// order: what a counter-removal cost removes from.
+    pub(crate) fn counter_removal_candidates(&self, player: PlayerId) -> Vec<ObjectId> {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| self.permanent_matches_predicate(*id, &CardPredicate::creature()))
+            .filter_map(|id| {
+                let permanent = self.state.permanents[id].as_ref()?;
+                (!permanent.counters.is_empty()).then_some(permanent.object)
+            })
+            .collect()
+    }
+
+    /// The counters, of any kinds, on creatures `player` controls.
+    pub(crate) fn removable_counters(&self, player: PlayerId) -> u32 {
+        self.counter_removal_candidates(player)
+            .into_iter()
+            .filter_map(|object| self.state.permanent_of(object))
+            .filter_map(|id| self.state.permanents[id].as_ref())
+            .map(|permanent| {
+                permanent
+                    .counters
+                    .iter()
+                    .map(|(_, count)| count.max(0) as u32)
+                    .sum::<u32>()
+            })
+            .sum()
+    }
+
+    /// Remove one counter of `kind` from `object` as part of a cost, then
+    /// owe one fewer. Removing counters fires no trigger here.
+    fn remove_cost_counter(
+        &mut self,
+        payment: &mut Payment,
+        object: ObjectId,
+        kind: CounterKind,
+        remaining: u8,
+    ) {
+        self.commit_counter_change(object, kind, -1, None);
+        if remaining > 1 {
+            payment.owed[0] = CostComponent::RemoveCounters {
+                remaining: remaining - 1,
+                choosing_from: None,
+            };
+        } else {
+            payment.owed.remove(0);
+        }
+    }
+
+    /// Name the kind of counter to remove from the creature just chosen for
+    /// a counter-removal cost; `mode` is the kind's `CounterKind` index.
+    pub(crate) fn remove_counter_kind_action(
+        &mut self,
+        player: PlayerId,
+        mode: usize,
+    ) -> Result<(), AgentError> {
+        let mut payment = self.pending_payment(player)?.clone();
+        let CostComponent::RemoveCounters {
+            remaining,
+            choosing_from: Some(object),
+        } = payment.owed[0]
+        else {
+            return Err(AgentError("no counter kind is being chosen".into()));
+        };
+        let kind = self
+            .removable_kinds(object)
+            .into_iter()
+            .find(|kind| *kind as usize == mode)
+            .ok_or_else(|| AgentError("that creature has no counter of this kind".into()))?;
+        self.pending_choice = None;
+        self.remove_cost_counter(&mut payment, object, kind, remaining);
+        self.advance_payment(player, payment)
+    }
+
+    /// The kinds of counter on `object`, in `CounterKind` order.
+    pub(crate) fn removable_kinds(&self, object: ObjectId) -> Vec<CounterKind> {
+        self.state
+            .permanent_of(object)
+            .and_then(|id| self.state.permanents[id].as_ref())
+            .map(|permanent| permanent.counters.iter().map(|(kind, _)| kind).collect())
+            .unwrap_or_default()
+    }
+
     /// The parts of `operation`'s total cost its payer chooses how to pay,
     /// in the order they are paid, ending with its mana. The total is fixed
     /// here, once announcement is over (CR 601.2f, 602.2b).
@@ -517,6 +610,14 @@ impl Game {
                 }
                 if card.discard_cost() {
                     owed.push(CostComponent::Discard);
+                }
+                if cast.route == Some(PlayRoute::PrintedGraveyard) {
+                    if let Some(remaining) = card.graveyard_counter_cast() {
+                        owed.push(CostComponent::RemoveCounters {
+                            remaining,
+                            choosing_from: None,
+                        });
+                    }
                 }
                 let cost = self
                     .effective_spell_cost(player, *object, *cast, Some(targets))
@@ -899,6 +1000,29 @@ impl Game {
                         payment.owed.remove(0);
                     }
                 }
+            }
+            CostComponent::RemoveCounters {
+                remaining,
+                choosing_from: None,
+            } => {
+                if !self.counter_removal_candidates(player).contains(&object) {
+                    return Err(AgentError(
+                        "not a creature you control with a counter".into(),
+                    ));
+                }
+                self.pending_choice = None;
+                match self.removable_kinds(object)[..] {
+                    [kind] => self.remove_cost_counter(&mut payment, object, kind, remaining),
+                    _ => {
+                        payment.owed[0] = CostComponent::RemoveCounters {
+                            remaining,
+                            choosing_from: Some(object),
+                        }
+                    }
+                }
+            }
+            CostComponent::RemoveCounters { .. } => {
+                return Err(AgentError("choose which counter to remove".into()));
             }
             CostComponent::Mana { cost, help } => {
                 // Delve: a card exiled from the payer's graveyard pays {1}.

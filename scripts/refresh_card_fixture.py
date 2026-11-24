@@ -112,7 +112,9 @@ def oracle_cards() -> dict[str, dict]:
             continue
         if card.get("layout") in ("adventure", "prepare"):
             # These layouts register one physical card under its front name.
-            front = card["card_faces"][0]
+            # A face's null field (prepare faces print no colors) leaves
+            # the card's value in place.
+            front = {k: v for k, v in card["card_faces"][0].items() if v is not None}
             by_name.setdefault(front["name"], card | front)
         if card.get("layout") in ("modal_dfc", "transform"):
             for face in card["card_faces"]:

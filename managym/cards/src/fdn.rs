@@ -32,6 +32,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         suspicious_shambler(),
         tinybones_bauble_burglar(),
         loot_exuberant_explorer(),
+        quilled_greatwurm(),
         redcap_gutter_dweller(),
         zul_ashur_lich_lord(),
     ]
@@ -133,7 +134,7 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                                 Modification::GrantTriggered(Box::new(Ability::Triggered {
                                     condition: TriggerCondition::DealsCombatDamage {
                                         subject: TriggerSubject::This,
-                                        to: Actor::AnyPlayer,
+                                        to: Some(Actor::AnyPlayer),
                                         per: Per::Object,
                                     },
                                     intervening_if: None,
@@ -396,6 +397,43 @@ fn suspicious_shambler() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn quilled_greatwurm() -> CardDefinition {
+    let text_box = "Trample\nWhenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it. (It must survive to get the counters.)\nYou may cast this card from your graveyard by removing six counters from among creatures you control in addition to paying its other costs.";
+    CardDefinition {
+        key: "fdn.quilled_greatwurm",
+        scryfall_id: "31b60531-3d33-4e66-923a-29008716b15c",
+        printed: PrintedCharacteristics {
+            name: "Quilled Greatwurm".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wurm".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::YourTurn,
+                    condition: Box::new(TriggerCondition::DealsCombatDamage {
+                        subject: TriggerSubject::you_control(CardPredicate::creature()),
+                        to: None,
+                        per: Per::Object,
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Triggering,
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::X,
+                )],
+            }],
+            statics: vec![StaticAbility::CastFromGraveyardRemovingCounters(6)],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

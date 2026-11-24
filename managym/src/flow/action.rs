@@ -102,6 +102,10 @@ impl Game {
                     PlayRoute::LibraryTop => "from library".into(),
                     PlayRoute::Hand => "from hand".into(),
                     PlayRoute::FreeFromHand => "from hand without paying its mana cost".into(),
+                    PlayRoute::PrintedGraveyard => {
+                        let count = card.graveyard_counter_cast().unwrap_or_default();
+                        format!("from graveyard by removing {count} counters")
+                    }
                     PlayRoute::ExileCounter(kind) => format!(
                         "from exile with a {} counter",
                         kind.name().replace('_', " ")
@@ -223,6 +227,34 @@ impl Game {
                     tap_payments_text(std::slice::from_ref(
                         options.iter().find(|paid| paid.mode() == *mode)?
                     ))
+                ))
+            }
+            Action::ChooseMode { mode, .. }
+                if self.state.suspended_decision.is_none()
+                    && matches!(
+                        self.paying(),
+                        Some((_, _, CostComponent::RemoveCounters { .. }))
+                    ) =>
+            {
+                let (
+                    _,
+                    _,
+                    CostComponent::RemoveCounters {
+                        choosing_from: Some(object),
+                        ..
+                    },
+                ) = self.paying()?
+                else {
+                    return None;
+                };
+                let kind = self
+                    .removable_kinds(*object)
+                    .into_iter()
+                    .find(|kind| *kind as usize == *mode)?;
+                Some(format!(
+                    "Remove a {} counter from {}",
+                    crate::agent::ability_description::counter_description(kind),
+                    self.state[*object].name
                 ))
             }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
@@ -353,6 +385,9 @@ impl Game {
                         if help.delve.is_some() && self.state.suspended_decision.is_none() =>
                     {
                         Some(format!("Exile {name} to pay {{1}} (delve)"))
+                    }
+                    CostComponent::RemoveCounters { .. } => {
+                        Some(format!("Remove a counter from {name}"))
                     }
                     CostComponent::Discard
                     | CostComponent::Mana { .. }
@@ -1040,6 +1075,30 @@ impl Game {
                     (ActionSpaceKind::PayOrNot, actions, Vec::new())
                 }
             }
+            CostComponent::RemoveCounters {
+                choosing_from: None,
+                ..
+            } => (
+                ActionSpaceKind::LookAndSelect,
+                select(self.counter_removal_candidates(player)),
+                Vec::new(),
+            ),
+            // Each mode is a kind of counter on the creature chosen
+            // (its `CounterKind` index), so the creature is the focus.
+            CostComponent::RemoveCounters {
+                choosing_from: Some(object),
+                ..
+            } => (
+                ActionSpaceKind::Modal,
+                self.removable_kinds(*object)
+                    .into_iter()
+                    .map(|kind| Action::ChooseMode {
+                        player,
+                        mode: kind as usize,
+                    })
+                    .collect(),
+                vec![self.state[*object].id],
+            ),
             // The offers are about the permanent just tapped, so it is the
             // focus; each mode names its payment (`TapPayment::mode`).
             CostComponent::TapPays { tapped, options } => (
@@ -1176,6 +1235,15 @@ impl Game {
                     && matches!(self.paying(), Some((_, _, CostComponent::TapPays { .. }))) =>
             {
                 self.tap_pays_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && matches!(
+                        self.paying(),
+                        Some((_, _, CostComponent::RemoveCounters { .. }))
+                    ) =>
+            {
+                self.remove_counter_kind_action(*player, *mode)
             }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
