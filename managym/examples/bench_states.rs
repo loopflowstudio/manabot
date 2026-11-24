@@ -41,6 +41,7 @@ const STATES: &[(&str, &str)] = &[
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
+    ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
@@ -118,6 +119,8 @@ struct Seat {
     hand: Vec<String>,
     graveyard: Vec<String>,
     tokens: Vec<String>,
+    /// Library cards manifested face down after the named permanents enter.
+    manifests: usize,
 }
 impl Seat {
     fn add(&mut self, name: &str, count: usize) {
@@ -272,6 +275,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "duplicate-tokens"
         | "diverse-statics"
         | "attachments"
+        | "face-down"
         | "triggers"
         | "zones"
         | "mixed" => {
@@ -310,6 +314,10 @@ fn recipe(name: &str, size: usize) -> Recipe {
                             .extend(std::iter::repeat_n("Pillar Launch".into(), size));
                         seat.graveyard
                             .extend(std::iter::repeat_n("Gray Ogre".into(), size));
+                    }
+                    "face-down" => {
+                        seat.add("Gray Ogre", size);
+                        seat.manifests = size;
                     }
                     _ => seat.add("Gray Ogre", size),
                 }
@@ -399,6 +407,18 @@ fn build(recipe: &Recipe) -> Env {
         for token in &seat.tokens {
             let game = env.benchmark_game_mut();
             let id = game.create_token(token, PlayerId(i), false).unwrap();
+            game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+        }
+        for _ in 0..seat.manifests {
+            let game = env.benchmark_game_mut();
+            let top = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, PlayerId(i))
+                .last()
+                .expect("library card to manifest");
+            let manifested = game.manifest(top, PlayerId(i));
+            let id = game.lookup_current_permanent(manifested).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }

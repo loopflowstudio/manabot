@@ -759,7 +759,13 @@ impl Game {
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
         let departing_object = object_id;
-        let second = self.state.zones.separate_melded_card(object_id);
+        // A write through `zones` advances every revision; most moves have
+        // no melded card to release, so read before writing.
+        let second = self
+            .state
+            .zones
+            .melded_card(object_id)
+            .and_then(|_| self.state.zones.separate_melded_card(object_id));
         let owner = self.state.entry_object(object_id).owner;
 
         let definition = self.state.entry_object(object_id).definition_id;

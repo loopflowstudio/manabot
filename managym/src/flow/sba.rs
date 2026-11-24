@@ -271,16 +271,21 @@ impl Game {
                     .is_some_and(|permanent| permanent.attached_to.is_some())
             })
             .collect();
-        let detached: Vec<PermanentId> = self
-            .layer_views(attached.into_iter())
-            .filter(|(id, view)| {
-                !view.has_subtype("Aura")
-                    && !(view.has_subtype("Equipment")
-                        && !view.is_creature()
-                        && self.attached_creature(*id).is_some())
-            })
-            .map(|(id, _)| id)
-            .collect();
+        // Earlier actions of this batch may have moved permanents, so reading
+        // layered views rebuilds the board; skip it when nothing is attached.
+        let detached: Vec<PermanentId> = if attached.is_empty() {
+            Vec::new()
+        } else {
+            self.layer_views(attached.into_iter())
+                .filter(|(id, view)| {
+                    !view.has_subtype("Aura")
+                        && !(view.has_subtype("Equipment")
+                            && !view.is_creature()
+                            && self.attached_creature(*id).is_some())
+                })
+                .map(|(id, _)| id)
+                .collect()
+        };
         for permanent_id in detached {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
