@@ -40,6 +40,7 @@ fn rhys_the_redeemed() -> CardDefinition {
                     mana_cost: ManaCost::parse("{4}{G/W}{G/W}"),
                     tap_source: true,
                     effects: vec![Effect::CreateTokenCopy {
+                        count: 1.into(),
                         of: ObjectSelector::each_you_control(creature_token),
                         exceptions: vec![],
                     }],

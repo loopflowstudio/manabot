@@ -972,6 +972,8 @@ pub enum Effect {
     /// the token's own copiable values (CR 707.9b), so a copy of it inherits
     /// them.
     CreateTokenCopy {
+        #[serde(skip_serializing_if = "is_fixed_one")]
+        count: EffectValue,
         of: ObjectSelector,
         exceptions: Vec<Modification<EffectValue>>,
     },

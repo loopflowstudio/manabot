@@ -1,13 +1,13 @@
 //! Final Fantasy.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, Except, ObjectSelector, PaymentCost, Per,
-        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect,
+        EffectValue, Except, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        StaticAbility,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticScope,
     },
     effect::Modification,
     mana::{Color, Colors, Mana, ManaCost},
@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        the_fire_crystal(),
         cecil(),
         esper_origins(),
         fang(),
@@ -335,6 +336,61 @@ fn sazh_s_chocobo() -> CardDefinition {
                     CounterKind::PlusOnePlusOne,
                     1,
                 )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn the_fire_crystal() -> CardDefinition {
+    let text_box = "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.";
+    CardDefinition {
+        key: "fin.the_fire_crystal",
+        scryfall_id: "ea430b17-2014-4b8e-b53f-43bcfc06f7cd",
+        printed: PrintedCharacteristics {
+            name: "The Fire Crystal".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Artifact]),
+            supertypes: vec!["Legendary".into()],
+            statics: vec![
+                StaticAbility::SpellsCostLess(SpellCostReduction {
+                    first_on_own_turn: false,
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Red],
+                        ..Default::default()
+                    },
+                    condition: Condition::Always,
+                    generic: 1,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::YouControl(CardPredicate::creature()),
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Haste]),
+                }),
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}{R}{R}"),
+                tap_source: true,
+                effects: vec![
+                    Effect::CreateTokenCopy {
+                        count: 1.into(),
+                        of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        exceptions: vec![],
+                    },
+                    Effect::CreateDelayedTrigger {
+                        remember: Some(ObjectSelector::CreatedThisWay),
+                        event: DelayedEvent::EndStep { your_turn: false },
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
+                        effects: vec![Effect::Sacrifice {
+                            what: ObjectSelector::Remembered,
+                            optional: false,
+                        }],
+                    },
+                ],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

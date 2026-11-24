@@ -24,6 +24,7 @@ fn clone_legion() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{7}{U}{U}")),
             types: CardTypes::new([CardType::Sorcery]),
             spell_effects: vec![Effect::CreateTokenCopy {
+                count: 1.into(),
                 of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
                 exceptions: vec![],
             }],

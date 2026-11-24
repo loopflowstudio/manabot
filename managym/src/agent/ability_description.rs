@@ -931,7 +931,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateTokenCopy { of, exceptions } => copy_description(of, exceptions),
+        CreateTokenCopy { of, count, exceptions } => copy_description(of, count, exceptions),
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
@@ -1094,16 +1094,21 @@ fn effect_description(effect: &Effect) -> Option<String> {
 }
 
 /// "Create a token that's a copy of this[, except …]" (CR 707.9).
-fn copy_description(of: &ObjectSelector, exceptions: &[Modification<EffectValue>]) -> String {
+fn copy_description(
+    of: &ObjectSelector,
+    count: &EffectValue,
+    exceptions: &[Modification<EffectValue>],
+) -> String {
+    let tokens = if *count == EffectValue::Fixed(1) {
+        "a token that's a copy".into()
+    } else {
+        format!("{} tokens that are copies", value_description(count))
+    };
     let mut text = match of {
-        ObjectSelector::Each { .. } => format!(
-            "For {}, create a token that's a copy of it",
-            selector_description(of)
-        ),
-        _ => format!(
-            "Create a token that's a copy of {}",
-            selector_description(of)
-        ),
+        ObjectSelector::Each { .. } => {
+            format!("For {}, create {tokens} of it", selector_description(of))
+        }
+        _ => format!("Create {tokens} of {}", selector_description(of)),
     };
     for (index, exception) in exceptions.iter().enumerate() {
         // "It …", lowercased after "except".

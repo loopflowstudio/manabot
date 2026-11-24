@@ -3418,6 +3418,7 @@ fn ember_island_production() -> CardDefinition {
     let text_box = "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.";
     let production = |target: TargetSpec, size: i32, subtype: &str| {
         vec![Effect::CreateTokenCopy {
+            count: 1.into(),
             of: ObjectSelector::Target(target),
             exceptions: vec![
                 Modification::Nonlegendary,
@@ -4385,6 +4386,7 @@ fn foggy_swamp_visions() -> CardDefinition {
                 effects: vec![
                     Effect::exile(ObjectSelector::Target(creature_card())),
                     Effect::CreateTokenCopy {
+                        count: 1.into(),
                         of: ObjectSelector::Target(creature_card()),
                         exceptions: vec![],
                     },
@@ -5702,6 +5704,7 @@ fn joo_dee_one_of_many() -> CardDefinition {
                 effects: vec![
                     Effect::Surveil { count: 1 },
                     Effect::CreateTokenCopy {
+                        count: 1.into(),
                         of: ObjectSelector::This,
                         exceptions: vec![],
                     },
@@ -7300,6 +7303,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
                 effects: vec![Effect::CreateTokenCopy {
+                    count: 1.into(),
                     of: ObjectSelector::This,
                     exceptions: vec![],
                 }],
@@ -7673,6 +7677,7 @@ fn ran_and_shaw() -> CardDefinition {
                         },
                     }),
                     effects: vec![Effect::CreateTokenCopy {
+                        count: 1.into(),
                         of: ObjectSelector::This,
                         exceptions: vec![Modification::Nonlegendary],
                     }],

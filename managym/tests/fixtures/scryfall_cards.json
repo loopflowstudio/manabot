@@ -6847,5 +6847,57 @@
     "colors": [
       "W"
     ]
+  },
+  "Driver of the Dead": {
+    "name": "Driver of the Dead",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature dies, return target creature card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Electroduplicate": {
+    "name": "Electroduplicate",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rite of Replication": {
+    "name": "Rite of Replication",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.",
+    "colors": [
+      "U"
+    ]
+  },
+  "The Fire Crystal": {
+    "name": "The Fire Crystal",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.",
+    "colors": [
+      "R"
+    ]
   }
 }

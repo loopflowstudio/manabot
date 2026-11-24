@@ -2,7 +2,7 @@
 use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        electroduplicate(),
         blasphemous_edict(),
         claws_out(),
         homunculus_horde(),
@@ -68,7 +69,7 @@ fn homunculus_horde() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Draws { who: Actor::You, nth: Some(2) },
-                effects: vec![Effect::CreateTokenCopy { of: ObjectSelector::This, exceptions: vec![] }],
+                effects: vec![Effect::CreateTokenCopy { count: 1.into(), of: ObjectSelector::This, exceptions: vec![] }],
             }],
             text_box: "Whenever you draw your second card each turn, create a token that's a copy of this creature.".into(),
             ..Default::default()
@@ -262,6 +263,35 @@ fn claws_out() -> CardDefinition {
                 ObjectSelector::each_you_control(CardPredicate::creature()),
                 Modification::pump(2, 2),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn electroduplicate() -> CardDefinition {
+    let text_box = "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+    CardDefinition {
+        key: "fdn.electroduplicate",
+        scryfall_id: "abb06b1c-5d4e-49b9-9c4a-e60ab656a257",
+        printed: PrintedCharacteristics {
+            name: "Electroduplicate".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{2}{R}{R}"))],
+            spell_effects: vec![Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                exceptions: vec![
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                    Modification::GrantTriggered(Box::new(Ability::Triggered {
+                        condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
+                        intervening_if: None,
+                        effects: vec![Effect::sacrifice_this()],
+                    })),
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

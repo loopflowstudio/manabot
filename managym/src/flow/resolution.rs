@@ -1580,7 +1580,12 @@ impl Game {
                 }
                 None
             }
-            Effect::CreateTokenCopy { of, exceptions } => {
+            Effect::CreateTokenCopy {
+                of,
+                count,
+                exceptions,
+            } => {
+                let count = self.effect_value(count, frame);
                 let exceptions: Vec<_> = exceptions
                     .iter()
                     .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
@@ -1615,7 +1620,7 @@ impl Game {
                     .map(|copied| ProposedEvent::CreateTokens {
                         definition: Box::new(self.copy_source(copied, exceptions.clone())),
                         controller: frame.controller,
-                        count: 1,
+                        count,
                         entry: ZoneEntry::default(),
                     })
                     .collect();

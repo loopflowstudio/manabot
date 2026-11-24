@@ -22,3 +22,4 @@
 - Keep the public reference selected at manifest entry through reveal. Use a pending Lightning Bolt to expose a broken join at the first turn-up fixture.
 - Use a pending Bolt cast by the manifest controller, with another Bolt in the opponent’s hand, to give the sampling viewer a genuine priority decision.
 - Use Cecil and Ember Island Production on both sides of the same reveal. Use Gray Ogre for distinguishable generic mana choices and Llanowar Elves for the seeded Academy reconnect and replay.
+- Use flashback for Electroduplicate, ordinary Rite under Doubling Season and kicked Rite on the Fire Crystal token. Four same-name graveyard cards distinguish exact death targets in both trigger orders.

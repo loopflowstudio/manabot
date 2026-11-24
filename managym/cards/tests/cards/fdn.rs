@@ -701,3 +701,193 @@ fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
     assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
+
+fn replicate(
+    s: &mut crate::support::game::Scenario,
+    target: managym::state::game_object::PermanentId,
+    kicked: bool,
+) {
+    use crate::support::play::{cast, choose};
+    use managym::{agent::action::Action, state::game_object::Target};
+    cast(s, "Rite of Replication");
+    choose(s, |action| {
+        if kicked {
+            matches!(action, Action::PayCost { .. })
+        } else {
+            matches!(action, Action::Decline { .. })
+        }
+    });
+    assert!(s.choose_target(Target::Permanent(target)));
+    settle(s);
+}
+
+#[test]
+fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
+    use crate::support::{
+        inspect::{library_card, offered_targets, zone_of},
+        play::{cast_card, command, resolve_top},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, player::ManaPayment},
+    };
+    use std::collections::BTreeSet;
+
+    let driver = "Driver of the Dead";
+    let mut s = five_color_setup(&[
+        driver,
+        "Electroduplicate",
+        "Rite of Replication",
+        "Doubling Season",
+        "Llanowar Elves",
+        "Gray Ogre",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    let original = s.force_permanent_on_battlefield(0, driver);
+    let mut eligible = BTreeSet::new();
+    for (owner, name) in [(0, "Llanowar Elves"); 4].into_iter().chain([
+        (0, "Gray Ogre"),
+        (1, "Llanowar Elves"),
+        (0, "Forest"),
+    ]) {
+        let card = library_card(&s, owner, name);
+        let card = move_card(&mut s, card, ZoneType::Graveyard);
+        if owner == 0 && name == "Llanowar Elves" {
+            eligible.insert(card);
+        }
+    }
+    let spell = library_card(&s, 0, "Electroduplicate");
+    let spell = move_card(&mut s, spell, ZoneType::Graveyard);
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(original)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
+    let drivers = s.battlefield_permanents_named(0, driver);
+    assert_eq!(drivers.len(), 3);
+    replicate(
+        &mut s,
+        *drivers.iter().find(|id| **id != original).unwrap(),
+        false,
+    );
+    let mut tokens = BTreeSet::new();
+    for id in s.battlefield_permanents_named(0, driver) {
+        assert_eq!(
+            s.game().characteristics(id).keywords.has(Keyword::Haste),
+            id != original
+        );
+        if id != original {
+            tokens.insert(card_of(&s, id));
+        }
+    }
+    assert_eq!(tokens.len(), 4);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    let snapshot = s.snapshot();
+    let mut first_order = Vec::new();
+    for reverse in [false, true] {
+        *s.game_mut() = snapshot
+            .restore(Default::default())
+            .unwrap()
+            .benchmark_game_mut()
+            .clone();
+        let mut tokens = tokens.clone();
+        let mut eligible = eligible.clone();
+        while s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            let actions = &s.action_space().actions;
+            let next = if reverse {
+                actions.last()
+            } else {
+                actions.first()
+            }
+            .unwrap()
+            .clone();
+            command(&mut s, |action| action == &next);
+        }
+        assert_eq!(s.game().state.stack_objects.len(), 4);
+        let sources: Vec<_> = s
+            .game()
+            .state
+            .stack_objects
+            .iter()
+            .map(|trigger| trigger.source_object())
+            .collect();
+        if reverse {
+            assert!(sources.iter().rev().eq(first_order.iter()));
+        } else {
+            first_order = sources;
+        }
+        while let Some(trigger) = s.game().state.stack_objects.last() {
+            assert_eq!(trigger.controller(), PlayerId(0));
+            let source = trigger.source_object();
+            assert!(tokens.remove(&source));
+            resolve_top(&mut s);
+            assert!(permanent_of(&s, source).is_none());
+            let offered = offered_targets(&s)
+                .into_iter()
+                .map(|target| match target {
+                    Target::GraveyardCard(card) => card,
+                    _ => panic!("unexpected death trigger target {target:?}"),
+                })
+                .collect::<BTreeSet<_>>();
+            assert_eq!(offered, eligible);
+            let chosen = eligible.pop_first().unwrap();
+            command(
+                &mut s,
+                |action| matches!(action, Action::ChooseTarget { target: Target::GraveyardCard(card), .. } if *card == chosen),
+            );
+            assert_eq!(
+                s.game().state.stack_objects.last().unwrap().source_object(),
+                source
+            );
+            resolve_top(&mut s);
+            assert_eq!(zone_of(&s, chosen), Some(ZoneType::Battlefield));
+        }
+        assert!(tokens.is_empty() && eligible.is_empty());
+        assert_eq!(s.battlefield_permanents_named(0, driver), [original]);
+    }
+}
+
+#[test]
+fn copy_sacrifice_scheduled_by_the_fire_crystal_remembers_only_its_token() {
+    use crate::support::{
+        inspect::top_spell,
+        play::{cast, resolve_top},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+
+    let mut s = five_color_setup(&["The Fire Crystal", "Gray Ogre", "Rite of Replication"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let crystal = s.force_permanent_on_battlefield(0, "The Fire Crystal");
+    cast(&mut s, "Gray Ogre");
+    assert_eq!(top_spell(&s).spent.total(), 2);
+    settle(&mut s);
+    let ogre = permanent_named(&s, "Gray Ogre");
+    activate(&mut s, crystal, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let ogres = s.battlefield_permanents_named(0, "Gray Ogre");
+    assert_eq!(ogres.len(), 2);
+    let token = *ogres.iter().find(|id| **id != ogre).unwrap();
+    replicate(&mut s, token, true);
+    let ogres = s.battlefield_permanents_named(0, "Gray Ogre");
+    assert_eq!(ogres.len(), 7);
+    assert!(ogres
+        .iter()
+        .all(|id| s.game().characteristics(*id).keywords.has(Keyword::Haste)));
+    let crystal_object = card_of(&s, crystal);
+    move_card(&mut s, crystal_object, ZoneType::Graveyard);
+    assert!(ogres
+        .iter()
+        .all(|id| !s.game().characteristics(*id).keywords.has(Keyword::Haste)));
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    resolve_top(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Gray Ogre"),
+        ogres
+            .into_iter()
+            .filter(|id| *id != token)
+            .collect::<Vec<_>>()
+    );
+}

@@ -795,6 +795,7 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateTokenCopy {
+            count: 1.into(),
             of: ObjectSelector::Target(TargetSpec::Creature),
             exceptions: vec![Modification::Nonlegendary],
         },

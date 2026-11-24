@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        rite_of_replication(),
         beastmaster_ascension(),
         bloodchief_ascension(),
         burst_lightning(),
@@ -277,6 +278,34 @@ fn into_the_roil() -> CardDefinition {
                     otherwise: vec![],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rite_of_replication() -> CardDefinition {
+    let text_box = "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.";
+    let copy = |n| Effect::CreateTokenCopy {
+        count: EffectValue::Fixed(n),
+        of: ObjectSelector::Target(TargetSpec::Creature),
+        exceptions: vec![],
+    };
+    CardDefinition {
+        key: "zen.rite_of_replication",
+        scryfall_id: "4530fe45-8a3d-48e9-a7a5-abf8fb1485e3",
+        printed: PrintedCharacteristics {
+            name: "Rite of Replication".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{5}"))],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::If {
+                condition: Condition::Kicked,
+                then: vec![copy(5)],
+                otherwise: vec![copy(1)],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
