@@ -370,12 +370,12 @@ impl Game {
             if self.state.pending_triggers.is_empty() {
                 return None;
             }
-            *self.state.trigger_placement_mut() = Some(TriggerPlacement {
+            *self.state.trigger_placement_mut() = Some(Box::new(TriggerPlacement {
                 remaining: std::mem::take(self.state.pending_triggers_mut()),
                 active: self.active_player(),
                 group: 0,
                 placing: None,
-            });
+            }));
         }
         loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();

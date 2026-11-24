@@ -721,12 +721,12 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
                 batch.push(t);
             }
         }
-        game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+        game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
             remaining: batch,
             active,
             group: 0,
             placing: None,
-        });
+        }));
         game.state
             .pending_triggers
             .push(trigger(source, vec![Effect::gain_life(9)], 99));
@@ -1049,12 +1049,12 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     let template = game.state[bolt].clone();
     game.state[current].become_copy_of(&template, &[]);
     let trigger_id = pending.id;
-    game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+    game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
         remaining: vec![pending],
         active: PlayerId(0),
         group: 0,
         placing: None,
-    });
+    }));
     let label = game
         .action_description(&crate::agent::action::Action::ChooseTrigger {
             player: PlayerId(0),
