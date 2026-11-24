@@ -81,11 +81,11 @@ Behavior review of D7 at `b35dfe9ef0` (2026-11-24): fixed, no new defects. `boun
 
 Decomposition, the stress-state measurement and their compresses are done (see Later phases); the measurement proposed no engine change. Main was merged at `8d1df716c6` (backend/training files only, no engine change), so the main comparisons below still hold.
 
-### Pre-gate rules repair
+### Pre-gate rules repair (delivered `ee3a8bbcd9`, `672ddd4961`)
 
 Iroh's grant prices Lessons at {1} and non-Lesson instants and sorceries at their mana cost. Each graveyard route checks the front face for its own permission. The Rust type predicate is now `is_instant_or_sorcery`; observations retain the `is_spell` field. The directed test covers ineligible creature, artifact, enchantment and Adventure cards, rejection of a forged flashback choice without state change, and an ordinary graveyard cast with Muldrotha.
 
-A top-card play marks its zone move as a library-top departure. Vizier and Planetarium use the same stack entry during priority and resolution. The scry fixtures check both viewers, including a deeper position that Vizier cannot inspect. Land plays use the same departure check. The current catalog only permits casting from the library top.
+A top-card play marks its zone move as a library-top departure. Vizier and Planetarium use the same stack entry during priority and resolution. The scry fixtures check both viewers, including a deeper position that Vizier cannot inspect. Land plays use the same departure check. `672ddd4961` reads the departure from `is_library_top` alone (it already requires the library zone), so casts and land plays share one test. The current catalog only permits casting from the library top.
 
 Next is **gate**, including:
 
@@ -184,6 +184,6 @@ Both builds matched the committed ordered score digests for seeds 1–3 (`980243
 
 Restricted-source payment remains the clearest opportunity. An eightfold larger profile hand produced 68× the payment calls in search. The basics-only diagnostic made zero calls, but at size 64 it also offered 109 actions and ran 436 simulations, so its 196 ms cannot quantify a semantics-preserving speedup. The independent `diverse-mana` cast-choice cell reached 742,045 calls and 8.58 s at size 32. Prepared-copy cast-choice search also grew faster than board size and warrants profiling if it becomes a consumer bottleneck. Priority offers grew linearly at about 17 allocations per offer. Scanning grants for each exiled object entails quadratic identity comparisons, but the measurements did not isolate enough cost in those comparisons to justify maintaining an index.
 
-**Repaired revision `ee3a8bbcd9`.** The release `bench_states` rerun on the M4 Max at default sizes 4, 8 and 16 reproduced every retained work row in all four families (96/51/87/63) and each behavior digest above. The repair does not change the work in these positions, because none of them casts from the library top or puts an ineligible permanent in a graveyard under Iroh. The paired Engine Budget on `ee3a8bbcd9` ([run 45434070994](https://github.com/loopflowstudio/manabot/actions/runs/45434070994)) was still running when implementation ended. Gate reads its verdict.
+**Repaired revision `ee3a8bbcd9`.** The release `bench_states` rerun on the M4 Max at default sizes 4, 8 and 16 reproduced every retained work row in all four families (96/51/87/63) and each behavior digest above. The repair does not change the work in these positions, because none of them casts from the library top or puts an ineligible permanent in a graveyard under Iroh. The paired Engine Budget on `ee3a8bbcd9` ([run 45434070994](https://github.com/loopflowstudio/manabot/actions/runs/45434070994)) was still in progress at realign (2026-11-24). Gate reads its verdict. HEAD differs from `ee3a8bbcd9` in `managym` only by `672ddd4961`, a behavior-equivalent simplification of the departure check, so gate's own Engine Budget run on HEAD is the final measurement.
 
 Gate should compare the repaired revision against the existing reference. Any future reference adoption requires its own reviewed measurement and rationale under [the Engine Budget procedure](../docs/development.md#engine-performance-budget).
