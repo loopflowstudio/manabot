@@ -343,21 +343,21 @@ impl Game {
         }
     }
 
-    /// A library permission tests the characteristics of the proposed spell.
+    /// Whether the cast's route permits its selected face: a library or
+    /// graveyard permission tests the characteristics of that face.
     pub(super) fn permits_spell(
         &self,
         player: PlayerId,
         object: ObjectId,
         cast: CastChoices,
     ) -> bool {
-        if crate::cards::content_pack::default_content_pack()
+        let Some(face) = crate::cards::content_pack::default_content_pack()
             .spell_definition(&self.state[object], cast.profile)
-            .is_none()
-        {
+        else {
             return false;
-        }
+        };
         let route = cast.route.unwrap_or(PlayRoute::Hand);
-        let land = cast.spell(&self.state[object]).types.is_land();
+        let land = face.types.is_land();
         if !matches!(route, PlayRoute::Hand | PlayRoute::FreeFromHand)
             && self.casts_only_from_hand(player)
             && !land
@@ -381,7 +381,7 @@ impl Game {
             }
             PlayRoute::GraveyardType { kind, .. } => {
                 (kind == crate::state::card::CardType::Land) == land
-                    && cast.spell(&self.state[object]).types.types.contains(&kind)
+                    && face.types.types.contains(&kind)
             }
             PlayRoute::Grant(key) => self.grant_by_key(object, key).is_some_and(|grant| {
                 (!land || grant.play_lands)
@@ -632,6 +632,41 @@ impl Game {
         })
     }
 
+    /// The choices of a land play (`land`) or a cast of `profile` through
+    /// `selected`, before timing: the player holds priority with no choice
+    /// pending, the face is a land exactly when `land` (CR 305.9) and its
+    /// route permits it.
+    fn priority_play(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        selected: Option<PlayRoute>,
+        profile: SpellProfile,
+        land: bool,
+    ) -> Result<CastChoices, AgentError> {
+        if self.pending_choice.is_some() {
+            return Err(AgentError("a choice is already pending".to_string()));
+        }
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
+        }
+        let route = self.selected_play_route(player, object, profile, selected)?;
+        let cast = self
+            .cast_choices(player, object, profile, CastAuthority::Priority(route))
+            .ok_or_else(|| AgentError("the card has no such face".into()))?;
+        if cast.spell(&self.state[object]).types.is_land() != land {
+            return Err(AgentError(if land {
+                "only land faces can be played".into()
+            } else {
+                "land faces cannot be cast".into()
+            }));
+        }
+        if !self.permits_spell(player, object, cast) {
+            return Err(AgentError("permission does not allow this play".into()));
+        }
+        Ok(cast)
+    }
+
     pub(crate) fn play_land(
         &mut self,
         player: PlayerId,
@@ -639,30 +674,15 @@ impl Game {
         selected: Option<PlayRoute>,
         profile: SpellProfile,
     ) -> Result<(), AgentError> {
-        if self.pending_choice.is_some() {
-            return Err(AgentError("a choice is already pending".to_string()));
-        }
-        if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
-        }
         let object = self.state.object_of(card);
-        let route = self.selected_play_route(player, object, profile, selected)?;
-        let cast = self
-            .cast_choices(player, object, profile, CastAuthority::Priority(route))
-            .ok_or_else(|| AgentError("the card has no such face".into()))?;
-        if !cast.spell(&self.state[object]).types.is_land() {
-            return Err(AgentError("only land cards can be played".to_string()));
-        }
-        if !self.permits_spell(player, object, cast) {
-            return Err(AgentError("permission does not allow this land".into()));
-        }
+        let cast = self.priority_play(player, object, selected, profile, true)?;
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
         let controller = (self.state[object].owner != player).then_some(player);
-        self.spend_play_route(player, Some(route));
+        self.spend_play_route(player, cast.route);
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
@@ -686,27 +706,10 @@ impl Game {
         selected: Option<PlayRoute>,
         profile: SpellProfile,
     ) -> Result<(), AgentError> {
-        if self.pending_choice.is_some() {
-            return Err(AgentError("a choice is already pending".to_string()));
-        }
-
-        let spell = self
-            .state
+        self.state
             .object(object)
             .map_err(|_| AgentError("spell must name a current object".into()))?;
-        let route = self.selected_play_route(player, object, profile, selected)?;
-        let cast = self
-            .cast_choices(player, object, profile, CastAuthority::Priority(route))
-            .ok_or_else(|| AgentError("the card has no such spell".into()))?;
-        if cast.spell(spell).types.is_land() {
-            return Err(AgentError("land cards cannot be cast".into()));
-        }
-        if !self.permits_spell(player, object, cast) {
-            return Err(AgentError("permission does not allow this spell".into()));
-        }
-        if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
-        }
+        let cast = self.priority_play(player, object, selected, profile, false)?;
         if self.has_instant_timing(player, object, cast) {
             if !self.can_cast_instants(player) {
                 return Err(AgentError("cannot cast instant now".to_string()));
