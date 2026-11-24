@@ -1,13 +1,19 @@
-at: 450250857443ceab2ece07091d4b75c1fe8022ea
+at: b5bbe85dca8009d38ded61182717bd28d2b143b6
 first:
+  - path: docs/engine.md
+    why: When a mandatory chain ends in a draw
   - path: managym/README.md
     why: When combat triggers read power and keep it
   - path: managym/state/src/ability.rs
     why: Object properties, aggregate queries and trigger conditions
   - path: managym/src/flow/turn.rs
     why: Attack history and once-per-turn ability use
+  - path: managym/src/flow/priority.rs
+    why: The loop watch and its pending resolution count
   - path: managym/src/flow/tick.rs
-    why: Commit attackers before matching their triggers
+    why: Count resolutions after stabilization and terminal losses
+  - path: managym/src/flow/action.rs
+    why: Clear the watch when a priority action succeeds
   - path: managym/src/flow/triggers.rs
     why: Bind each trigger's event object once
   - path: managym/src/flow/layers.rs
@@ -21,9 +27,11 @@ first:
   - path: managym/cards/src/fdn.rs
     why: Foundations definitions using the shared rules
   - path: managym/cards/tests/cards/fdn.rs
-    why: Replay timing, source departure and trigger-doubling cases
+    why: Play through forced loops and intervening choices
   - path: tests/verify/test_immolator_source_power.py
     why: Follow pending power through policy, text and Academy
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Source and directed fixture for each card
+  - path: conformance/semantic-kernel-w17-v6/evidence-opening-v1.json
+    why: Trace and final state hashes for fourteen games
 hide: []
