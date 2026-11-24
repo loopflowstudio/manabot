@@ -198,8 +198,8 @@ The MLX learner encodes the catalog definitions referenced by each prepared
 batch. With bucketed shapes it selects those definitions after trimming the
 observation. For attention it sorts observations by live object count and packs
 equal groups separately when that saves dense slots: two groups below 192 rows,
-three below 256 and four from 256. Otherwise
-it uses the object columns present anywhere in the batch. It restores the
+three below 256 and four from 256. Otherwise it uses the object columns present
+anywhere in the batch. It restores the
 bucket's object coordinates before the critic and action focus lookups.
 Bucketed learner batches also encode only live fact rows, scattering each into
 its own observation's objects.
@@ -269,17 +269,19 @@ with every batch, so a compiled graph would retrace per call; only the GRU cell
 and its reverse are compiled. Each `PackedGRU` gathers and projects its tokens
 once, and its recurrence is an `mx.custom_function` with a hand-written VJP:
 autograd never traces the per-step slices, whose whole-input zero cotangents
-would make the backward quadratic in the number of steps. Collection samples once per group across execution chunks.
+would make the backward quadratic in the number of steps. Collection samples
+once per group across execution chunks.
 Portable exports contain the policy’s float32 parameters and lookup buffers.
 
 ### Profile captured learner minibatches
 
-Replay the learner arrays and initial policy from a Torch capture on the Apple GPU.
+Replay the learner arrays and initial policy from a Torch capture (`CAPTURE`, a
+`torch.capture` directory) on the Apple GPU.
 The first minibatch warms the path. Each subsequent batch contributes one sample
 to the reported medians.
 
 ```sh
-uv run --extra mlx python -m scripts.profile_mlx_learner capture --bucketed --precision bfloat16 --out profile.json
+uv run --extra mlx python -m scripts.profile_mlx_learner CAPTURE --bucketed --precision bfloat16 --out profile.json
 ```
 
 Omit `--bucketed` for padded shapes. Precision defaults to float32. The output
