@@ -117,4 +117,5 @@ Paired on the M4 Max against merge-base `5d85077748` built with this branch's be
 
 ## Next
 
-Advance to `engine-optimization` (Measurement) and `pr-publish`; the gate items in `questions.md` stay for gate.
+- engine-optimization implement (2026-11-24): no slice built. Both measured regressions were fixed in `29d7adc98d` (engine-measure), and every `bench_states` work counter equals the reference, so there is no bottleneck left to fix. The speed verdict belongs to CI's same-runner Engine Budget.
+- Advance to `pr-publish`; the gate items in `questions.md` stay for gate.
