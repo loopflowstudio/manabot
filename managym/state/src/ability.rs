@@ -2012,16 +2012,12 @@ impl Effect {
         if let Some(amount) = self.amount().filter(|a| a.reads(ContextRead::PaidCost)) {
             return Some(amount.clone());
         }
-        let found = std::cell::RefCell::new(None);
+        let mut found = None;
         self.any_child_effect(|effect| {
-            let amount = effect.paid_cost_amount();
-            let hit = amount.is_some();
-            if hit {
-                *found.borrow_mut() = amount;
-            }
-            hit
+            found = effect.paid_cost_amount();
+            found.is_some()
         });
-        found.into_inner()
+        found
     }
 
     /// Whether this program reads its enclosing ability's resolution ordinal.
@@ -2032,7 +2028,7 @@ impl Effect {
 
     /// Instructions within this resolution. Delayed and reflexive triggers
     /// inspect their programs when those abilities resolve.
-    fn any_child_effect(&self, test: impl Fn(&Effect) -> bool + Copy) -> bool {
+    fn any_child_effect(&self, mut test: impl FnMut(&Effect) -> bool) -> bool {
         match self {
             Self::OnNthResolutionThisTurn { effect, .. } => test(effect),
             Self::If {

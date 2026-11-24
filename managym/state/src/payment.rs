@@ -164,11 +164,13 @@ impl PaymentReceipt {
             .map(|paid| paid.object)
     }
 
-    /// The permanents this payment sacrifices as it completes.
-    pub fn sacrificed(&self) -> impl Iterator<Item = ObjectId> + '_ {
+    /// The objects that paid by being `how`, toward any part of the cost, in
+    /// the order chosen (`How::Sacrificed`: what this payment sacrifices as it
+    /// completes).
+    pub fn paid_as(&self, how: How) -> impl Iterator<Item = ObjectId> + '_ {
         self.contributions()
             .iter()
-            .filter(|paid| paid.how == How::Sacrificed)
+            .filter(move |paid| paid.how == how)
             .map(|paid| paid.object)
     }
 

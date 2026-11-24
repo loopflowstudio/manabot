@@ -1166,7 +1166,7 @@ pub(crate) fn project_decision(
                     out.payment(payment);
                     for permanent in payment
                         .receipt
-                        .sacrificed()
+                        .paid_as(How::Sacrificed)
                         .filter_map(|object| game.state.permanent_of(object))
                     {
                         out.target(

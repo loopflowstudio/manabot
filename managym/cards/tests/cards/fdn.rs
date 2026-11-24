@@ -402,7 +402,10 @@ fn hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left() {
             else {
                 panic!("fork {index}: one activation")
             };
-            assert_eq!(ability.paid.sacrificed().collect::<Vec<_>>(), [chosen]);
+            assert_eq!(
+                ability.paid.paid_as(How::Sacrificed).collect::<Vec<_>>(),
+                [chosen]
+            );
         }
 
         select_card(&mut s, ogre_object);

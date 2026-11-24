@@ -698,7 +698,7 @@ impl Game {
                     CostComponent::Mana { .. } => {
                         frame.sacrifice = payment
                             .receipt
-                            .sacrificed()
+                            .paid_as(How::Sacrificed)
                             .find_map(|object| self.state.permanent_of(object))
                             .map(|id| self.target_reference(Target::Permanent(id), viewer));
                         frame.waterbend = payment.waterbends();

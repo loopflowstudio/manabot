@@ -54,3 +54,5 @@ The life batch renamed the branch-only `triggering_damage` and `EffectValue::Tri
 `Player.starting_life` reaches no tensor column: every setup starts at 20, and only a constructed fixture changes it. Ayli's threshold shows through which activations are offered.
 
 The CR 104.4b draw detector is deferred to its own slice with a loop partner (Vito, Thorn of the Dusk Rose). Bloodthirsty Conqueror's ledger row carries `pending` for it.
+
+`managym::semantic_conformance_tests frozen_sacrifice_162` and `frozen_sacrifice_163` fail at ab34e99193, before the life-batch compression: the regenerated case hash differs from `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json`. Gate should find which life-batch change moved the trace (activation terms, firebending as a granted trigger, or the heuristic's live attackers) and either restore it or record the shift.

@@ -126,10 +126,8 @@ impl Game {
                 ObjectSelector::Paid(how) => aggregate.evaluate(
                     frame
                         .spent
-                        .contributions()
-                        .iter()
-                        .filter(|paid| paid.how == *how)
-                        .filter_map(|paid| self.object_property_or_lki(paid.object, *property)),
+                        .paid_as(*how)
+                        .filter_map(|paid| self.object_property_or_lki(paid, *property)),
                 ),
                 _ => aggregate.evaluate(
                     self.selected_permanents(of, frame)
@@ -211,10 +209,8 @@ impl Game {
             EffectValue::LifeLostThisWay => frame.life_lost,
             EffectValue::PowerTappedToPay => frame
                 .spent
-                .contributions()
-                .iter()
-                .filter(|paid| paid.how == How::Tapped)
-                .filter_map(|paid| self.permanent_power_or_lki(paid.object))
+                .paid_as(How::Tapped)
+                .filter_map(|paid| self.permanent_power_or_lki(paid))
                 .map(|power| power.max(0))
                 .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
@@ -2321,10 +2317,7 @@ impl Game {
                 .collect(),
             ObjectSelector::Paid(how) => frame
                 .spent
-                .contributions()
-                .iter()
-                .filter(|paid| paid.how == *how)
-                .map(|paid| paid.object)
+                .paid_as(*how)
                 .filter(|object| self.state.live(*object).is_some())
                 .collect(),
             ObjectSelector::Remembered => frame

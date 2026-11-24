@@ -26,7 +26,7 @@ fn feldons_cane_is_exiled_as_a_cost_and_shuffles_the_graveyard_into_the_library(
     let paid = &top_activation(&s).paid;
     assert_eq!(paid.contributed(How::Exiled, Toward::Printed).count(), 1);
     assert_eq!(paid.contributed(How::Tapped, Toward::Printed).count(), 1);
-    assert_eq!(paid.sacrificed().count(), 0);
+    assert_eq!(paid.paid_as(How::Sacrificed).count(), 0);
     s.assert_zone_size(0, ZoneType::Graveyard, 2);
     settle(&mut s);
     s.assert_zone_size(0, ZoneType::Graveyard, 0);

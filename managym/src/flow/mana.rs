@@ -1863,7 +1863,7 @@ impl Game {
             CostComponent::ExileGrantor(object) => Some(*object),
             _ => None,
         });
-        for object in payment.receipt.sacrificed().chain(grantors) {
+        for object in payment.receipt.paid_as(How::Sacrificed).chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
                 model.reserve(SourceReservation {
                     permanent,

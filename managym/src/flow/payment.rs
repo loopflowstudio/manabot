@@ -1100,7 +1100,7 @@ impl Game {
         };
         let events = payment
             .receipt
-            .sacrificed()
+            .paid_as(How::Sacrificed)
             .filter(|object| self.state.permanent_of(*object).is_some())
             .map(|target| ProposedEvent::Sacrifice { target })
             .chain(source_costs);
