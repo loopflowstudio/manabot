@@ -14,7 +14,7 @@ import time
 
 from pydantic import TypeAdapter
 
-from manabot.backends import resolve
+from manabot.backends import local_cpu_backend
 from manabot.eval.admission import (
     OPPONENT_NAMES,
     AnchorKind,
@@ -32,7 +32,7 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import Backend, BackendName
 from manabot.sim.child import ChildProcess
 from manabot.sim.matchup import (
     SELECTED_SUITE,
@@ -128,16 +128,14 @@ def _prepare(
     game_seconds: float,
     max_commands: int,
     heuristic_actions: int | None,
+    backend_name: BackendName = "torch",
 ) -> None:
     try:
         if isinstance(checkpoint, StoredArtifact):
             checkpoint = materialize_artifact(checkpoint)
-        import torch
-
-        torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,
-            backend=resolve("torch"),
+            backend=local_cpu_backend(backend_name),
             opponent=opponent,
             deal_seeds=seeds,
             authored_matchup=matchup,
@@ -160,6 +158,7 @@ def prepare_local_request(
     matchup: AuthoredMatchup | DeckMatchup | None,
     *,
     deadline: float,
+    backend_name: BackendName = "torch",
     mirrors: bool = False,
     game_seconds: float = 120,
     max_commands: int = 10_000,
@@ -177,6 +176,7 @@ def prepare_local_request(
             game_seconds,
             max_commands,
             heuristic_actions,
+            backend_name,
         ),
     )
     try:
@@ -195,7 +195,7 @@ def prepare_local_request(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--checkpoint", type=Path, help="Local policy .pt file")
+    source.add_argument("--checkpoint", type=Path, help="Local policy checkpoint")
     source.add_argument(
         "--request", type=Path, help="Previously admitted EvaluationRequest JSON"
     )
@@ -209,9 +209,15 @@ def main(argv: list[str] | None = None) -> int:
         "--status", type=Path, help="Inspect retained evaluation progress"
     )
     parser.add_argument(
+        "--backend",
+        choices=("torch", "mlx"),
+        default="torch",
+        help="CPU float32 backend for checkpoint admission and play (default %(default)s)",
+    )
+    parser.add_argument(
         "--opponent",
         default="heuristic",
-        help="heuristic, scripted_greedy, random, or a local policy .pt",
+        help="heuristic, scripted_greedy, random, or a local policy checkpoint",
     )
     parser.add_argument(
         "--deal-seed",
@@ -258,7 +264,9 @@ def main(argv: list[str] | None = None) -> int:
                 if not math.isfinite(args.seconds) or args.seconds <= 0:
                     parser.error("--seconds must be positive")
                 result = continue_evaluation(
-                    directory, deadline=time.time() + args.seconds
+                    directory,
+                    deadline=time.time() + args.seconds,
+                    backend_name=args.backend,
                 )
             return _describe(result, directory)
         except Exception as exc:
@@ -292,12 +300,18 @@ def main(argv: list[str] | None = None) -> int:
                 tuple(args.deal_seed or [101]),
                 matchup,
                 deadline=deadline,
+                backend_name=args.backend,
                 mirrors=args.include_mirrors,
                 game_seconds=args.game_seconds,
                 max_commands=args.max_commands,
             )
         atomic_json(args.out / "request.json", request.model_dump(mode="json"))
-        result = evaluate_local(request, deadline=deadline, out_dir=args.out / "panel")
+        result = evaluate_local(
+            request,
+            deadline=deadline,
+            out_dir=args.out / "panel",
+            backend_name=args.backend,
+        )
     except Exception as exc:
         atomic_json(
             args.out / "admission-failure.json",

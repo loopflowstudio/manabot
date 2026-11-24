@@ -297,21 +297,27 @@ impl PyVectorEnv {
         })
     }
 
+    #[pyo3(signature = (player_configs, *, seeds=None))]
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
         player_configs: Vec<Bound<'_, PyAny>>,
+        seeds: Option<Vec<u64>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
             .map(|row| super::bindings::game_setup(&row))
             .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
-            })
+            inner.reset_each_into_at(
+                configs,
+                seeds,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
+                },
+            )
         })
     }
 

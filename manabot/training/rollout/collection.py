@@ -3,8 +3,7 @@
 A ``Collector`` is the state of some native game streams: ``open_collector``
 starts them, ``collect`` (or ``collect_pair``) steps them under a frozen
 behavior scope and returns a ``RolloutBatch``, and ``close_collector`` releases
-them. A collector is changed in place and cannot be saved or restored; a
-resumed loop opens fresh streams. Who learns and when a batch closes are separate declarations. One-seat collection
+them. At an update boundary, capture_collector retains the native roots for replay. Who learns and when a batch closes are separate declarations. One-seat collection
 alternates learner seats by stream; default both-seat self-play keeps a separate
 trajectory for each seat. Complete-game closure collects at least the requested
 decisions per native stream, then finishes its current game. Complete trajectories
@@ -35,6 +34,7 @@ import time
 from typing import Any, Literal, Protocol, TypedDict
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
@@ -84,8 +84,10 @@ from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.rollout.snapshot_vector import (
     SlotInstall,
     SnapshotBranch,
+    SnapshotRecipe,
     SnapshotVector,
     SnapshotVectorFactory,
+    replay_prefixes,
 )
 from manabot.training.rollout.snapshots import (
     BatchPlan,
@@ -102,6 +104,7 @@ from manabot.training.state.game_errors import (
     RecordAttempt,
 )
 from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig
+from managym.recording import DecisionAnnotation
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -692,6 +695,171 @@ class Collector:
     snapshot_bank: SnapshotBank | None = None
 
 
+class StreamRootState(BaseModel):
+    """A global slot's committed native inputs and independently verified output."""
+
+    model_config = ConfigDict(extra="forbid")
+    slot: int = Field(ge=0)
+    recipe: SnapshotRecipe
+    memory_cursors: list[list[int]]
+    # Recorded probabilities and values came from the behavior policy at that
+    # decision. Prefix replay can reproduce digests but cannot infer those values.
+    annotations: list[DecisionAnnotation | None] = Field(
+        default_factory=list, exclude_if=lambda rows: not rows
+    )
+
+
+class CollectorSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal[1]
+    # Native streams advance by a stride of num_envs, so it fixes every next seed.
+    num_envs: int = Field(ge=1)
+    learning_seats: Literal["one", "both"]
+    batch_closure: BatchClosure
+    opponent_mode: str
+    streams: list[StreamRootState]
+    # None denotes an ordinary producer. Native snapshot producers park none;
+    # a save holding parked sources is rejected on restore.
+    parked_fresh: list[StreamRootState] | None
+    learned_game_rows: dict[int, int]
+    opponent_rng: dict[str, Any] | None
+
+    @model_validator(mode="after")
+    def validate_slots(self) -> "CollectorSnapshot":
+        if len(self.streams) != self.num_envs or any(
+            root.slot != i for i, root in enumerate(self.streams)
+        ):
+            raise ValueError("invalid collector stream geometry")
+        parked = [r.slot for r in self.parked_fresh or ()]
+        if parked != sorted(set(parked)) or any(i >= self.num_envs for i in parked):
+            raise ValueError("invalid parked fresh slots")
+        if (self.opponent_mode == "random") != (self.opponent_rng is not None):
+            raise ValueError("incompatible opponent RNG")
+        if any(
+            not 0 <= i < self.num_envs or n < 0
+            for i, n in self.learned_game_rows.items()
+        ):
+            raise ValueError("invalid learned game rows")
+        return self
+
+
+def stream_roots(env: RecordedVectorEnv | BufferedStreams) -> list[StreamRootState]:
+    roots = []
+    for game, digest, chooser, cursors in zip(
+        env.games,
+        env.state_digests(),
+        env.current_agent_indices(),
+        env.decision_memory_cursors(),
+        strict=True,
+    ):
+        if digest is None or chooser not in (0, 1):
+            raise ValueError(f"stream {game.stream} has no live decision")
+        # A branch records only its suffix; join its root's prefix so the save
+        # replays the whole game from its seed. The prefix carries no annotations.
+        inputs = env.game_inputs(game.stream)
+        prefix = [None] * (len(inputs.actions) - len(game.actions))
+        roots.append(
+            StreamRootState(
+                slot=game.stream,
+                recipe=SnapshotRecipe.from_inputs(inputs, digest, chooser),
+                memory_cursors=cursors,
+                annotations=[*prefix, *game.annotations][: inputs.committed]
+                if game.annotations
+                else [],
+            )
+        )
+    return roots
+
+
+def capture_collector(collector: Collector) -> CollectorSnapshot:
+    """Capture settled slots without drawing from the collector or its opponent.
+
+    A snapshot collector first opens the fresh game its next allocation would
+    install in each parked slot. Playing that opening, or overwriting it with a
+    branch and refunding its seed, matches the uncaptured collector.
+    """
+    env = collector._env
+    if collector._episodes:
+        _open_fresh_roots(collector)
+    return CollectorSnapshot(
+        schema_version=1,
+        num_envs=collector.num_envs,
+        learning_seats=collector.learning_seats,
+        batch_closure=collector.batch_closure,
+        opponent_mode=collector.opponent_mode,
+        streams=stream_roots(env),
+        parked_fresh=[] if collector.stats.snapshot is not None else None,
+        learned_game_rows=collector.stats.learned_game_rows,
+        opponent_rng=collector._opponent.snapshot_rng()
+        if collector.opponent_mode == "random"
+        else None,
+    )
+
+
+def reconstruct_roots(
+    env: RecordedVectorEnv | BufferedStreams,
+    roots: list[StreamRootState],
+    deck_source: UniformDecks | None,
+) -> None:
+    setups = [Match(root.recipe.match).to_rust() for root in roots]
+    if deck_source is not None:
+        # Native resolves mixed disclosure at each subsequent game seed.
+        setups = [GameSetup(setup, decklists=deck_source.decklists) for setup in setups]
+    replay_prefixes(env, setups, [r.recipe for r in roots])
+    for root, game, digest, chooser, cursors, selected in zip(
+        roots,
+        env.games,
+        env.state_digests(),
+        env.current_agent_indices(),
+        env.decision_memory_cursors(),
+        env.recording_mask(),
+        strict=True,
+    ):
+        recipe = root.recipe
+        if (game.stream, game.seed, digest, chooser, cursors) != (
+            root.slot,
+            recipe.seed,
+            recipe.root_digest,
+            recipe.root_chooser,
+            root.memory_cursors,
+        ):
+            raise ValueError(f"collector root mismatch in slot {root.slot}")
+        if root.annotations and len(root.annotations) != len(recipe.actions):
+            raise ValueError(
+                f"collector annotation length mismatch in slot {root.slot}"
+            )
+        if selected and root.annotations:
+            game.annotations = root.annotations.copy()
+
+
+def reconstruct_collector(
+    collector: Collector, snapshot: CollectorSnapshot, deck_source: UniformDecks | None
+) -> None:
+    env = collector._env
+    with env.reconstructing():
+        if (
+            collector.num_envs != snapshot.num_envs
+            or collector.learning_seats != snapshot.learning_seats
+            or collector.batch_closure != snapshot.batch_closure
+            or collector.opponent_mode != snapshot.opponent_mode
+            or (collector.stats.snapshot is not None)
+            != (snapshot.parked_fresh is not None)
+        ):
+            raise ValueError("incompatible collector stream geometry")
+        if snapshot.parked_fresh:
+            # Native snapshot producers keep one playing state per slot.
+            raise ValueError("parked fresh sources cannot be restored")
+        reconstruct_roots(env, snapshot.streams, deck_source)
+        collector.stats.learned_game_rows = snapshot.learned_game_rows.copy()
+        if (
+            collector.game_errors is not None
+            and collector.batch_closure == "exact-quota"
+        ):
+            collector._game_actions = [list(r.recipe.actions) for r in snapshot.streams]
+        if snapshot.opponent_rng is not None:
+            collector._opponent.restore_rng(snapshot.opponent_rng)
+
+
 def _cell_identity(config: MatchConfig) -> tuple[object, ...]:
     return (
         config.world,
@@ -738,6 +906,7 @@ def open_collector(
     snapshot_vector: SnapshotVector | SnapshotVectorFactory | None = None,
     snapshot_bank: SnapshotBank | None = None,
     snapshots: bool = False,
+    snapshot: CollectorSnapshot | None = None,
     capture_predicate: CapturePredicate | None = None,
     operation: OperationScope = no_operation,
     games_path: Path | None = None,
@@ -954,7 +1123,19 @@ def open_collector(
             )
         elif uniform_roster:
             env.set_uniform_roster(uniform_roster)
-        if sampler is not None:
+        if opponent_mode == "random":
+            collector._opponent = RandomBatchController(seed=seed + 1)
+        elif opponent_mode == "frozen":
+            collector._opponent = BatchedSampler(
+                opponent_agent,
+                deterministic=False,
+                seed=seed + 1,
+                device=numerics.device_name,
+                execution_rows=execution_rows,
+            )
+        if snapshot is not None:
+            reconstruct_collector(collector, snapshot, deck_source)
+        elif sampler is not None:
             collector.stream_matches = [
                 _assigned_match(collector, a) for a in assignments
             ]
@@ -972,17 +1153,7 @@ def open_collector(
             for row in range(num_envs):
                 _record_assignment(collector, row)
 
-        if opponent_mode == "random":
-            collector._opponent = RandomBatchController(seed=seed + 1)
-        elif opponent_mode == "frozen":
-            collector._opponent = BatchedSampler(
-                opponent_agent,
-                deterministic=False,
-                seed=seed + 1,
-                device=numerics.device_name,
-                execution_rows=execution_rows,
-            )
-        if not snapshots:
+        if not snapshots and snapshot is None:
             for row in range(num_envs):
                 _expose(collector, row, "game_roots")
     except BaseException:
@@ -1659,6 +1830,18 @@ def _install_roots(
                 f"snapshot {request.snapshot_id} root identity mismatch in slot {slot}"
             )
     return {request.slot: generations[request.slot] for request in requests}
+
+
+def _open_fresh_roots(collector: Collector) -> None:
+    """Open the next fresh game of each slot whose last episode ended or was cut."""
+    slots = [i for i, e in enumerate(collector._episodes) if not e.fresh_ready]
+    generations = _install_roots(
+        collector, [SlotInstall(slot, -1, None) for slot in slots], None
+    )
+    for slot in slots:
+        collector._episodes[slot] = _EpisodeAssignment(
+            generation=generations[slot], fresh_ready=True
+        )
 
 
 def _capture_decisions(

@@ -236,6 +236,12 @@ and takes the same options. Construct it with `num_envs` and `seed`, use
 global stream identities across producers. A game recorded from a batch opens
 exactly like a scalar one.
 
+To reopen buffered streams at saved game seeds, call
+`reset_each_into_buffers(setups, seeds=seeds)` after binding the buffers. Pass
+one setup and one seed per slot in stream order. This can be the first reset.
+The next game in each stream advances from its supplied seed by the normal
+stride. Replay the committed actions to reach a saved decision.
+
 `capture.close()` writes each selected game still in progress as
 **interrupted**, with the reason, and syncs the file. Rows written at game end
 are flushed but not synced, so a process that is killed can lose its most

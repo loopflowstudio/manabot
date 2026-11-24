@@ -1,7 +1,7 @@
 """Numerical collection contract; native streams and stored rows stay on the host.
 
 A session owns the private sampling RNG across frozen policy scopes. Its state
-is opaque recovery data, retained in CollectorSnapshot at its existing path.
+is opaque recovery data, serialized by the framework.
 """
 
 from contextlib import AbstractContextManager
@@ -46,3 +46,4 @@ class CollectionSession(ActionValidator, Protocol):
         self, agent: BackendPolicy
     ) -> AbstractContextManager[CollectionScope]: ...
     def snapshot_rng(self) -> object: ...
+    def restore_rng(self, state: object) -> None: ...

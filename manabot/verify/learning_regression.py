@@ -496,6 +496,7 @@ def report_recipe(
                         request,
                         deadline=deadline,
                         out_dir=target,
+                        backend_name=backend.name,
                     )
                 result.validate_cohort()
                 if result.status != "completed" or result.request.deal_seeds != deals:
