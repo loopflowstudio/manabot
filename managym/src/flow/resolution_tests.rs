@@ -5255,7 +5255,7 @@ fn a_pending_manifest_entry_stays_hidden_while_replacements_are_ordered() {
         agent::observation::Observation,
         flow::{
             decision::{Decision, EffectFrame},
-            proposed_event::ZoneEntry,
+            proposed_event::{EntryFace, ZoneEntry},
         },
     };
     let player = PlayerId(0);
@@ -5280,7 +5280,7 @@ fn a_pending_manifest_entry_stays_hidden_while_replacements_are_ordered() {
         let mut counters = crate::state::permanent::Counters::default();
         counters.change(CounterKind::PlusOnePlusOne, 1);
         let entry = ZoneEntry {
-            manifested: true,
+            face: EntryFace::Manifested,
             controller: Some(player),
             counters,
             ..Default::default()

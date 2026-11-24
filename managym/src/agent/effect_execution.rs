@@ -750,6 +750,7 @@ impl<'a> Projection<'a> {
             EntryFace::Front => {}
             EntryFace::Transformed => self.field("enters transformed", &true),
             EntryFace::ModalBack => self.field("enters back face up", &true),
+            EntryFace::Manifested | EntryFace::Melded { .. } => {}
         }
         if let Some(object) = entry.attached_to {
             self.object("enters attached to", object);
@@ -1611,7 +1612,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::state::player::PlayerConfig;
+    use crate::state::{player::PlayerConfig, zone::ZoneType};
 
     fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
         let mut out = Projection::new(game, PlayerId(0), true);
@@ -1623,10 +1624,10 @@ mod tests {
     }
 
     /// A modal back face entering is not a transformation (CR 712.11,
-    /// 712.14): its retained entry says which face is up and records only
-    /// the modal key beside the historical `transformed` one.
+    /// 712.14), and each entry form records only its own historical key:
+    /// `manifested`, `transformed`, `modal_back` or the `meld` pair.
     #[test]
-    fn a_pending_modal_back_entry_never_reads_as_entering_transformed() {
+    fn an_entry_face_reads_and_records_only_its_own_form() {
         let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
         let game = Game::new(
             vec![
@@ -1654,9 +1655,68 @@ mod tests {
             })
             .unwrap()
         };
-        assert_eq!(wire(EntryFace::ModalBack)["transformed"], false);
-        assert_eq!(wire(EntryFace::ModalBack)["modal_back"], true);
-        assert_eq!(wire(EntryFace::Transformed)["transformed"], true);
-        assert!(wire(EntryFace::Front).get("modal_back").is_none());
+        let library = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0));
+        let partner = game.state.card_of(library[0]).unwrap();
+        let partner_index = serde_json::to_value(partner).unwrap();
+        let melded = EntryFace::Melded {
+            partner,
+            result: CardDefId(7),
+        };
+        let keys = |face| {
+            let wire = wire(face);
+            ["manifested", "transformed", "modal_back", "meld"]
+                .map(|key| wire.get(key).cloned().unwrap_or(serde_json::Value::Null))
+        };
+        let null = serde_json::Value::Null;
+        assert_eq!(
+            keys(EntryFace::Front),
+            [null.clone(), false.into(), null.clone(), null.clone()]
+        );
+        assert_eq!(
+            keys(EntryFace::Transformed),
+            [null.clone(), true.into(), null.clone(), null.clone()]
+        );
+        assert_eq!(
+            keys(EntryFace::ModalBack),
+            [null.clone(), false.into(), true.into(), null.clone()]
+        );
+        assert_eq!(
+            keys(EntryFace::Manifested),
+            [true.into(), false.into(), null.clone(), null.clone()]
+        );
+        assert_eq!(
+            keys(melded),
+            [
+                null.clone(),
+                false.into(),
+                null,
+                serde_json::json!([partner_index, 7])
+            ]
+        );
+        // Each face's keys sit where the historical fields did, between
+        // `face_down` and `attached_to`.
+        let bytes = |face| {
+            serde_json::to_string(&ZoneEntry {
+                face,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let front = bytes(EntryFace::Front);
+        assert!(front.contains(r#""face_down":false,"transformed":false}"#));
+        assert_eq!(
+            bytes(EntryFace::Manifested),
+            front.replace(r#""transformed""#, r#""manifested":true,"transformed""#)
+        );
+        assert_eq!(
+            bytes(melded),
+            front.replace(
+                r#""transformed":false"#,
+                &format!(r#""transformed":false,"meld":[{partner_index},7]"#)
+            )
+        );
     }
 }

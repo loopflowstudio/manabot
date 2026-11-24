@@ -175,7 +175,7 @@ Built: `EntryFace` with a flattened serializer (`transformed` bool plus `modal_b
 
 Performance review (engine-performance-review, 2026-11-24, at `0c4b94b9f5`; engine source as of `6af5e5d458`): **accepted; no change made.** Release builds as CI builds them, host load 57–107, so only instructions retired and digests count. `bench_steps` digest `10601622128491155944` (118,559 steps) equals the reference on both sides; instructions 45.397B/45.362B at `39da9aef8d` vs 45.441B/45.366B/45.406B at HEAD (interleaved), a difference inside run-to-run noise (<0.1%). `bench_search` seeds 1–3 digests equal the reference (`13638875039089371439`, `5466143068363283977`, `9998925852575961750`); search was not paired, since the change replaces a `bool` with a one-byte `Copy` enum and a branch with a `match` on the zone-entry commit and the pending-entry projection, off every per-step loop. No curated game reaches a modal back entry (steps digest unmoved despite the played-modal-back `is_transformed` correction). `bench_states` not rerun: no work counter can depend on which arm the commit takes. CI's same-runner Engine Budget on the head run remains the speed gate (2.4 points above the floor at `0784a13607`).
 
-## Next: entry face owns manifest and meld (post-build concept review)
+## Built: entry face owns manifest and meld (post-build concept review)
 
 The post-build review ([concept-review.html](concept-review.html), at `876e2f49a1`) found `EntryFace` correct but incomplete: `ZoneEntry` still answers "what does the entering permanent show?" with three fields, `manifested: bool`, `meld: Option<(CardId, CardDefId)>` and `face: EntryFace`, which no writer combines and no rule allows together (a manifest is face down, CR 708.2; a meld result is the combined card, CR 712.4c). Each reader re-derives the precedence. Choices made for review: 1a, 2a, 3a on the page.
 
@@ -185,6 +185,8 @@ The post-build review ([concept-review.html](concept-review.html), at `876e2f49a
    - Serialization unchanged byte for byte: the flattened `EntryFace` sits where `face` is, between today's `manifested` and `meld`, so the custom serializer emits `manifested` (only when true), `transformed`, `modal_back` (only when true), `meld` (only when present, same tuple encoding). Extend the wire witness `a_pending_modal_back_entry_never_reads_as_entering_transformed` (or rename it to cover the face keys) to all five variants.
 2. `SpellProfile` (stack) stays separate from `EntryFace` (battlefield); `EntryFace::played_as` is the one bridge.
 3. Checks: debug nextest lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests`, cards crate (`dsk` manifest and `fin` meld tests in particular; the nine known failures stay identical); `cargo fmt --all`; rebuild the cp313 extension; `tests/semantic/test_manifest_text.py`, `tests/model/test_pinned_pilot.py`, `tests/academy/test_manifest_recovery.py`.
+
+Built 2026-11-24: `ZoneEntry.manifested` and `.meld` are gone; every reader is one `match entry.face`. The wire witness, renamed `an_entry_face_reads_and_records_only_its_own_form`, compares each variant's bytes with the front entry's plus only its historical key. Checks: engine suites 613/614 (only `historical_captures…`), cards crate the same nine failures, the three Python files pass.
 
 ## Then: `gate`
 

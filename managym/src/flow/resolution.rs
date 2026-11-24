@@ -1331,7 +1331,10 @@ impl Game {
                     }
                 }
                 let entry = ZoneEntry {
-                    meld: Some((cards[1], content.definition_id(result)?)),
+                    face: EntryFace::Melded {
+                        partner: cards[1],
+                        result: content.definition_id(result)?,
+                    },
                     ..Default::default()
                 };
                 frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(

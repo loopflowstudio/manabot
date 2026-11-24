@@ -761,7 +761,7 @@ impl Game {
             object,
             ZoneType::Battlefield,
             ZoneEntry {
-                manifested: true,
+                face: EntryFace::Manifested,
                 controller: Some(controller),
                 ..Default::default()
             },
@@ -827,24 +827,22 @@ impl Game {
         entry: &ZoneEntry,
     ) -> Option<&PrintedCharacteristics> {
         let object = self.state.entry_object(object);
-        let face: &PrintedCharacteristics = if entry.manifested {
-            &*MANIFESTED
-        } else if let Some((_, result)) = entry.meld {
-            default_content_pack().definition(result)?.printed.as_ref()
-        } else {
-            match entry.face {
-                EntryFace::Front => object,
-                EntryFace::ModalBack => {
-                    &default_content_pack()
-                        .back_face_row(object.retained_base().0)?
-                        .1
-                        .printed
-                }
-                EntryFace::Transformed => {
-                    let pack = default_content_pack();
-                    let back = pack.transforming_faces(object)?.back.0;
-                    &pack.definition(back)?.printed
-                }
+        let face: &PrintedCharacteristics = match entry.face {
+            EntryFace::Front => object,
+            EntryFace::ModalBack => {
+                &default_content_pack()
+                    .back_face_row(object.retained_base().0)?
+                    .1
+                    .printed
+            }
+            EntryFace::Transformed => {
+                let pack = default_content_pack();
+                let back = pack.transforming_faces(object)?.back.0;
+                &pack.definition(back)?.printed
+            }
+            EntryFace::Manifested => &MANIFESTED,
+            EntryFace::Melded { result, .. } => {
+                default_content_pack().definition(result)?.printed.as_ref()
             }
         };
         (!face.types.is_instant_or_sorcery()).then_some(face)
@@ -980,22 +978,22 @@ impl Game {
         }
 
         if to_zone == ZoneType::Battlefield {
-            if let Some((second, result)) = entry.meld {
-                let second_slot = self.state.zones.join_melded_card(object_id, second);
-                self.capture_object_move(second_slot, old_zone, Some(to_zone), holder);
-                let row = default_content_pack()
-                    .definition(result)
-                    .expect("meld result");
-                self.state[object_id].show_melded(result, row.printed.clone());
-            }
-            if entry.manifested {
-                self.state[object_id].turn_face_down(MANIFESTED.clone());
-            }
             match entry.face {
                 EntryFace::Front => {}
                 EntryFace::ModalBack => self.show_modal_back(object_id),
                 EntryFace::Transformed => {
                     self.turn_over(object_id, FormTransition::Transform);
+                }
+                EntryFace::Manifested => {
+                    self.state[object_id].turn_face_down(MANIFESTED.clone());
+                }
+                EntryFace::Melded { partner, result } => {
+                    let partner_slot = self.state.zones.join_melded_card(object_id, partner);
+                    self.capture_object_move(partner_slot, old_zone, Some(to_zone), holder);
+                    let row = default_content_pack()
+                        .definition(result)
+                        .expect("meld result");
+                    self.state[object_id].show_melded(result, row.printed.clone());
                 }
             }
             let permanent_id = PermanentId(self.state.permanents.len());
@@ -1004,7 +1002,7 @@ impl Game {
                 object_id,
                 &self.state[object_id],
             );
-            permanent.manifested = entry.manifested;
+            permanent.manifested = entry.face == EntryFace::Manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
             permanent.spell_entry = entry.spell;

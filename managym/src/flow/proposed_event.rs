@@ -56,14 +56,9 @@ pub(crate) struct ZoneEntry {
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
-    /// Battlefield: manifest as a nameless 2/2 creature (CR 701).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub manifested: bool,
-    /// Battlefield: which face is up as it enters.
+    /// Battlefield: what the entering permanent shows.
     #[serde(flatten)]
     pub face: EntryFace,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub meld: Option<(CardId, CardDefId)>,
     /// CR 614.1c, 614.12: this entry owns the prospective copy already on
     /// the row. It is an instruction for the new object, not old copy state
     /// carried across a zone change. The row already records its values in
@@ -85,7 +80,9 @@ pub(crate) struct ZoneEntry {
     pub inspected_library_departure: bool,
 }
 
-/// The face a card shows as it enters the battlefield.
+/// What a card shows as it enters the battlefield. The forms exclude one
+/// another: a manifest shows no face, and a meld result is the combined
+/// card's single face.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum EntryFace {
     #[default]
@@ -95,6 +92,11 @@ pub(crate) enum EntryFace {
     /// A modal double-faced card played or cast as its back face enters
     /// with that face up (CR 712.11). It never transforms.
     ModalBack,
+    /// Manifested: a face-down nameless 2/2 creature (CR 701.40a, 708.2).
+    Manifested,
+    /// This card and `partner` enter melded as the `result` card
+    /// (CR 701.42a, 712.4c).
+    Melded { partner: CardId, result: CardDefId },
 }
 
 impl EntryFace {
@@ -109,19 +111,29 @@ impl EntryFace {
     }
 }
 
-/// Recorded bytes keep the historical `transformed` key; `modal_back`
-/// appears only for a modal back entry.
+/// Recorded bytes keep the historical entry keys in their order: `manifested`
+/// only when true, `transformed` always, `modal_back` only when true and
+/// `meld` as a `[partner, result]` pair only when present.
 impl serde::Serialize for EntryFace {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(serde::Serialize)]
         struct Keys {
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            manifested: bool,
             transformed: bool,
             #[serde(skip_serializing_if = "std::ops::Not::not")]
             modal_back: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            meld: Option<(CardId, CardDefId)>,
         }
         Keys {
+            manifested: *self == EntryFace::Manifested,
             transformed: *self == EntryFace::Transformed,
             modal_back: *self == EntryFace::ModalBack,
+            meld: match *self {
+                EntryFace::Melded { partner, result } => Some((partner, result)),
+                _ => None,
+            },
         }
         .serialize(serializer)
     }
@@ -138,7 +150,7 @@ impl ZoneEntry {
     /// The entering object shows no printing: a foretold exile or a manifest
     /// (CR 406.3, 708.2).
     pub(crate) fn is_face_down(&self) -> bool {
-        self.face_down || self.manifested
+        self.face_down || self.face == EntryFace::Manifested
     }
 
     /// Apply entry counters granted by the mana spent to cast this spell.
