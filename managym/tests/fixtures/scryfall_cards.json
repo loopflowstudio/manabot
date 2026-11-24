@@ -7399,5 +7399,114 @@
     "colors": [
       "G"
     ]
+  },
+  "Ayli, Eternal Pilgrim": {
+    "name": "Ayli, Eternal Pilgrim",
+    "mana_cost": "{W}{B}",
+    "type_line": "Legendary Creature — Kor Cleric",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\n{1}, Sacrifice another creature: You gain life equal to the sacrificed creature's toughness.\n{1}{W}{B}, Sacrifice another creature: Exile target nonland permanent. Activate only if you have at least 10 life more than your starting life total.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
+  "Bloodthirsty Conqueror": {
+    "name": "Bloodthirsty Conqueror",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Creature — Vampire Knight",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Deathtouch",
+      "Flying"
+    ],
+    "oracle_text": "Flying, deathtouch\nWhenever an opponent loses life, you gain that much life. (Damage causes loss of life.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Bloodtithe Collector": {
+    "name": "Bloodtithe Collector",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Vampire Noble",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, if an opponent lost life this turn, each opponent discards a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Exemplar of Light": {
+    "name": "Exemplar of Light",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Creature — Angel",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you gain life, put a +1/+1 counter on this creature.\nWhenever you put one or more +1/+1 counters on this creature, draw a card. This ability triggers only once each turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Hidetsugu's Second Rite": {
+    "name": "Hidetsugu's Second Rite",
+    "mana_cost": "{3}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "If target player has exactly 10 life, Hidetsugu's Second Rite deals 10 damage to that player.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Sanguine Indulgence": {
+    "name": "Sanguine Indulgence",
+    "mana_cost": "{3}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {3} less to cast if you've gained 3 or more life this turn.\nReturn up to two target creature cards from your graveyard to your hand.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Stromkirk Bloodthief": {
+    "name": "Stromkirk Bloodthief",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Vampire Rogue",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "At the beginning of your end step, if an opponent lost life this turn, put a +1/+1 counter on target Vampire you control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Vanguard Seraph": {
+    "name": "Vanguard Seraph",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Angel Warrior",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Surveil"
+    ],
+    "oracle_text": "Flying\nWhenever you gain life for the first time each turn, surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
+    "colors": [
+      "W"
+    ]
   }
 }
