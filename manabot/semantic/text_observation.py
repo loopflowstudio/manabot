@@ -51,6 +51,7 @@ _STEPS = (
     "second main",
     "end",
     "cleanup",
+    # Appended at index 12 to match StepEnum; reorder before "combat damage" in 0.3.0.
     "first-strike combat damage",
 )
 _SPACES = (

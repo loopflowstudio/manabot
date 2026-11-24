@@ -31,6 +31,7 @@ class StepEnum(IntEnum):
     POSTCOMBAT_MAIN_STEP = 9
     ENDING_END = 10
     ENDING_CLEANUP = 11
+    # Appended as 12 to preserve Observation JSON discriminants; reorder before COMBAT_DAMAGE in 0.3.0.
     COMBAT_FIRST_STRIKE_DAMAGE = 12
 
 

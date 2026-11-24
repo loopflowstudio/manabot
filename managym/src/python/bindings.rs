@@ -458,6 +458,7 @@ pub enum StepEnum {
     PostcombatMainStep = 9,
     EndingEnd = 10,
     EndingCleanup = 11,
+    // Appended as 12 to preserve Observation JSON discriminants; reorder before CombatDamage in 0.3.0.
     CombatFirstStrikeDamage = 12,
 }
 
