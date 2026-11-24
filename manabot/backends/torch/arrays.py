@@ -62,10 +62,16 @@ def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str,
     return arrays
 
 
-def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> Any:
-    # The dataclass structure is unchanged; only the generic array leaf changes.
-    if prefix in moved:
-        return moved[prefix]
+def host_tensor(array: np.ndarray) -> Tensor:
+    """Writable exports can share CPU storage with Torch."""
+    return torch.from_numpy(array if array.flags.writeable else array.copy())
+
+
+def _replace_arrays(
+    value: Any, moved: dict[str, Tensor] | None = None, prefix: str = ""
+) -> Any:
+    if isinstance(value, np.ndarray):
+        return host_tensor(value) if moved is None else moved[prefix]
     if is_dataclass(value) and not isinstance(value, type):
         return replace(
             value,
@@ -123,30 +129,26 @@ def transfer(
     lengths remain on the host; all array leaves retain their shape and dtype.
     """
     device = torch.device(device)
-    arrays = array_fields(batch, np.ndarray)
-    tensors = {
-        key: torch.from_numpy(value if value.flags.writeable else value.copy())
-        for key, value in arrays.items()
-    }
-    transferred = copies = 0
-    if device.type != "cpu":
-        groups: dict[torch.dtype, list[str]] = {}
-        for key, tensor in tensors.items():
-            groups.setdefault(tensor.dtype, []).append(key)
-        moved: dict[str, Tensor] = {}
-        for dtype, keys in groups.items():
-            sizes = [tensors[key].numel() for key in keys]
-            block = torch.empty(
-                sum(sizes), dtype=dtype, pin_memory=device.type == "cuda"
-            )
-            torch.cat([tensors[key].reshape(-1) for key in keys], out=block)
-            transferred += block.numel() * block.element_size()
-            copies += 1
-            block = block.to(device, non_blocking=device.type == "cuda")
-            for key, part in zip(keys, block.split(sizes), strict=True):
-                moved[key] = part.view(tensors[key].shape)
-        tensors = moved
+    if device.type == "cpu":
+        return _replace_arrays(batch), 0, 0
+
+    # Only a device copy needs to group fields before rebuilding the batch.
+    groups: dict[torch.dtype, list[tuple[str, Tensor]]] = {}
+    for key, value in array_fields(batch, np.ndarray).items():
+        tensor = host_tensor(value)
+        groups.setdefault(tensor.dtype, []).append((key, tensor))
+
+    moved: dict[str, Tensor] = {}
+    transferred = 0
+    for dtype, group in groups.items():
+        sizes = [tensor.numel() for _, tensor in group]
+        block = torch.empty(sum(sizes), dtype=dtype, pin_memory=device.type == "cuda")
+        torch.cat([tensor.reshape(-1) for _, tensor in group], out=block)
+        transferred += block.numel() * block.element_size()
+        block = block.to(device, non_blocking=device.type == "cuda")
+        for (key, tensor), part in zip(group, block.split(sizes), strict=True):
+            moved[key] = part.view(tensor.shape)
     moved_batch = cast(
-        "Prepared[Tensor] | CatalogPrograms[Tensor]", _replace_arrays(batch, tensors)
+        "Prepared[Tensor] | CatalogPrograms[Tensor]", _replace_arrays(batch, moved)
     )
-    return moved_batch, transferred, copies
+    return moved_batch, transferred, len(groups)

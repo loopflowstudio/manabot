@@ -131,10 +131,10 @@ def test_admitted_forward_performs_no_validation_reads(grad: bool) -> None:
 def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
-    check = admission.check
+    admit = admission.admit
 
     def admitted_rows(epochs: int) -> list[int]:
-        monkeypatch.setattr(admission, "check", check)
+        monkeypatch.setattr(admission, "admit", admit)
         agent, batch = _policy(history=False)
         rows: list[int] = []
 
@@ -142,12 +142,13 @@ def test_learning_admits_each_trained_row_once(
             obs: ObservationBuffers,
             spec: admission.Spec,
             legal: np.ndarray,
-            bucketed: BucketedObservation | None = None,
-        ) -> None:
+            *,
+            bucketed: bool,
+        ) -> BucketedObservation | None:
             rows.append(len(legal))
-            check(obs, spec, legal, bucketed)
+            return admit(obs, spec, legal, bucketed=bucketed)
 
-        monkeypatch.setattr(admission, "check", counting_checks)
+        monkeypatch.setattr(admission, "admit", counting_checks)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(

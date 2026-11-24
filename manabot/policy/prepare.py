@@ -127,15 +127,15 @@ _EVENT_STATUS = columns("events", "source_status", "target_status")
 SEATS = ("agent", "opponent")
 
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
-# Validity of the visible object table, in its concatenation order.
-OBJECT_VALIDITY_KEYS = (
-    "agent_player_valid",
-    "opponent_player_valid",
-    "agent_cards_valid",
-    "opponent_cards_valid",
-    "agent_permanents_valid",
-    "opponent_permanents_valid",
+# The two seats' object rows in gather order. V11 appends the stack.
+OBJECT_KEYS = (
+    "agent_player",
+    "opponent_player",
+    "agent_cards",
+    "opponent_cards",
+    *_PERMANENT_KEYS,
 )
+OBJECT_VALIDITY_KEYS = tuple(f"{key}_valid" for key in OBJECT_KEYS)
 
 
 # -- checkpoint lookup tables ----------------------------------------------------
@@ -641,15 +641,16 @@ def prepare(
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
-    validity = np.concatenate([obs[key] for key in OBJECT_VALIDITY_KEYS], 1)
     stack = obs.get("stack")
+    validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
-        validity = np.concatenate((validity, obs["stack_valid"]), 1)
+        validity_rows.append(obs["stack_valid"])
     belief = _belief(obs)
     if belief is not None:
-        validity = np.concatenate(
-            (validity, belief.validity, np.ones((len(validity), 1), np.float32)), 1
+        validity_rows.extend(
+            (belief.validity, np.ones((len(belief.validity), 1), np.float32))
         )
+    validity = np.concatenate(validity_rows, 1)
     columns = None
     if inference and not live_tokens:
         used = np.nonzero((validity != 0).any(0))[0]

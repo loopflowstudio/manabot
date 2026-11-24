@@ -117,4 +117,7 @@ def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     assert (transferred, copies) == (0, 0)
     cpu = array_fields(shared, torch.Tensor)
     for key, value in cpu.items():
-        np.testing.assert_array_equal(value.numpy(), arrays[key])
+        source = arrays[key]
+        np.testing.assert_array_equal(value.numpy(), source)
+        if source.size:
+            assert np.shares_memory(value.numpy(), source) == source.flags.writeable
