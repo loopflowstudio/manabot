@@ -356,26 +356,16 @@ Immolator source power. All eight ledger rows link to their source and fixture.
   Ashroot's power after resolution to show the pump stays fixed; the
   `ModifyPt` path already stores a fixed value.
 
-**Findings still open after the power batch**
+**Life batch behavior review at `67f9d3ee34`**
 
-The power batch closed the wrapped-member, once-per-turn, layer-comparison
-and condition-only projection findings; Academy `types.ts` now carries the
-viewer history and stack `mana_spent` fields. These remain:
+The working phase for the life batch is satisfied except Finding 6 below. These passed at this head, all in debug: the cards target (887, including the ten life-batch cases and the Sozin's Comet/Katara control), the `managym` lib (359, including the live-attacker heuristic control), and `search_state_contract` plus `canonical_replay_tests` (12). The extension was built at `a0b213f734`, and the compression after it changed no behavior. With it, 109 text-observation and named-layout Python checks passed. All eight ledger rows name their first-printing source and fixture. Conqueror's row also records the deferred CR 104.4b draw as pending.
 
-1. `granted_firebending_triggers` (`flow/triggers.rs`) still bypasses the
-   shared occurrence path. Cast Sozin's Comet with Katara, the Fearless and
-   declare Katara as the only attacker. One and two Comet casts each produce
-   one native stack entry labeled delayed, with five and ten mana. Katara
-   should have two and four ordinary firebending triggers, each for five
-   mana. Keep each grant as an ability occurrence with the same doublers,
-   ordering and source binding as printed attack abilities; counter one
-   entry to distinguish separate grants from a summed output.
-   [Avatar release notes](https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes)
-2. The heuristic (`agent/heuristic/mod.rs`, around the
-   `CombatAttackersDeclared` branch) seeds its unblocked-attacker map from
-   the declaration event. An unblocked token already attacking before
-   declaration has no entry. Seed from the live attacking permanents and keep
-   the declaration event scoped to actual declarations.
+- The definitions match the printed rules and the Scryfall rulings. Seraph's `nth: Some(1)` reads the turn's committed gain ordinal, so a Seraph that arrives after the turn's first gain waits for the next turn. Conqueror binds the life actually lost, so Teferi's Protection gives no event. Life paid as a cost goes through `commit_life_change` and triggers it, per the ruling. Bloodthief and Collector use CR 603.4 intervening-if conditions. Second Rite reads the life total on resolution (CR 608.2c). Ayli reads the sacrificed creature's LKI toughness, shows the pending amount to both viewers, and checks "activate only if" only on activation (CR 602.5b, matching the ruling). Indulgence's discount is generic mana only.
+- Findings 1 and 2 are closed. Firebending grants are ordinary attack triggers that pass through the shared occurrence path, and the heuristic reads the live `attacking` permanents.
+- Rules reading recorded in questions.md, not a defect: each combat source's damage to a player is its own `LifeChanged`, so two unblocked attackers give two Conqueror triggers (2 and 3) rather than one trigger for 5. The total gained is the same. No CR rule or card ruling settles whether simultaneous damage from several sources is one life-loss event; CR 119.9 only covers gains.
+
+**Findings still open**
+
 3. Six Academy fixtures still assume reset starts in priority: two cases in
    `test_semantic_boundary.py` ask for `pass_priority` at the opening Keep
    offer; `test_combat_preview.py` and all three Blast cases inject a board
@@ -392,6 +382,7 @@ viewer history and stack `mana_spent` fields. These remain:
 5. Six early ledger rows lack fixture pointers (Cat Collector, Venom
    Connoisseur, Predator Ooze, Steel Hellkite, Fumigate, Exsanguinate). Their
    fixtures are named in the slices above.
+6. **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
 
 Still open beyond findings: recorded Watch playback of a partial
 declaration, the full debug and browser gate, frozen pilot compatibility on
@@ -440,7 +431,7 @@ Checks: the debug cards target (887) and engine lib (359), rules/content-pack/en
 
 Compression (`86d1c65815`) replaced the per-reader contribution filters with `PaymentReceipt::paid_as(How)` and dropped a `RefCell` from the paid-cost amount search.
 
-**Blocker before publication.** `managym --test semantic_conformance_tests` cases `frozen_sacrifice_162` and `frozen_sacrifice_163` still fail at `f8104bf1af`: their regenerated hashes (`bf4ed233…`, `b549c0b7…`) differ from `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` (`2a490fbd…`, `cdea442c…`). Find which life-batch commit moved the trace (`942d89cc91` amounts, `d0321cdc58` activation terms / granted firebending / live attackers, `724ae4afc1` heuristic pump), then restore the behavior or record the shift with its cause.
+**Conformance evidence is stale, not drifted (behavior review at `67f9d3ee34`).** All 14 debug `frozen_*` cases and the inventory test fail at this head, not only `sacrifice-162/163`. The evidence was last recorded at `5be4b4d5ba`; the power and life batches since added cards. Each `ReplayCase` embeds the default content pack's `content_digest`, and its state and action-space digests hash catalog ids, so every trace hash moves when the catalog grows. Dumping each regenerated case's prompts, actions, event boundaries, game-over flags and winners at `5be4b4d5ba` and at this head gave byte-identical sequences (14 cases, 3048 commands). No rules behavior moved. Before publication, re-record at the final head: `cargo run --release --manifest-path managym/Cargo.toml --bin semantic_conformance -- record --root <staged copy>`, then copy its `evidence.json` over `evidence-opening-v1.json` and note the cause ("catalog grew: power and life batches") in the commit.
 
 Not built in this slice:
 
@@ -453,11 +444,13 @@ Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card
 
 Concept review at `3da933e53b` ([concept-review.html](concept-review.html)) widened from the Life batch and Death batch across departed LKI, trigger contexts, player bindings, and modal trigger lifecycles. Follow this exact sequence so every conformance drift and structural seam is resolved before authoring the nine cards:
 
-#### Step 0 · Diagnose and clear `frozen_sacrifice_162/163` before bumping the state hash
+#### Step 0 · Re-record semantic-kernel evidence once the catalog settles
 
-Bisect which Life-batch commit (`942d89cc91`..`86d1c65815`) moved `frozen_sacrifice_162` and `frozen_sacrifice_163` while the other 12 frozen cases stayed unchanged. Restore any unintended rules or projection drift (or record an intentional fix with its exact cause) so `semantic_conformance_tests` is understood and clean at v26 before `ObjectLki` changes bump the hash to v27.
+Diagnosed at review (see the life slice): the frozen cases moved only because the catalog grew. Command sequences are identical to `5be4b4d5ba`. Re-record after the last card lands, and again after any hash-version bump, rather than bisecting.
 
 #### Step 1 · Four shared unifications (land before authoring the Death batch)
+
+Fix Finding 6 first: batch lifelink gains per source. The Death batch then authors on a correct gain ledger.
 
 1. **Complete `ObjectLki` + one live/departed `CardPredicate` matcher + `Condition::TriggeringMatches(CardPredicate)`** (`state/src/game_object.rs`, `state/src/ability.rs`, `flow/identity.rs`, `flow/layers.rs`, `flow/triggers.rs`, `flow/statics.rs`, `state/hash.rs`).
    - Capture the permanent’s complete layered characteristics and combat/tap status in `snapshot_current_permanent`: `name: String`, `types: CardTypes`, `subtypes: Vec<String>`, `colors: Colors`, `is_legendary: bool`, plus `was_attacking: bool`, `was_tapped: bool`, and `was_in_combat: bool` (`skip_serializing_if = "Not::not"`). Delete the redundant partial fields `was_creature`, `was_land`, and `creature_types` on `ObjectLki` (`lki.types.is_creature()`, `lki.types.is_land()`, and a derived `lki.creature_types()` helper replace them). Bump `hash_contract_version` to v27.
