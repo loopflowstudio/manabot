@@ -260,14 +260,14 @@ def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(
     assert root.search_witness_json() == witness
     for viewer in (0, 1):
         obs = session.env.observation_for_player(viewer)
-        product = viewer_view(obs, viewer)
+        product = viewer_view(obs, viewer, winner=None)
         assert product["opponent"]["hand"] == []
         assert "sideboard" not in product["opponent"]
         assert product["opponent"]["known_hand"] == {
             str(k): v for k, v in obs.opponent.known_hand.items()
         }
         # Even the transitional swapped-view adapter must redact owner IDs.
-        swapped = viewer_view(obs, 1 - viewer)
+        swapped = viewer_view(obs, 1 - viewer, winner=None)
         assert "sideboard" not in swapped["opponent"]
     recovery = session.current_recovery("reconnect")["frame"]
     assert recovery["projection"] == result["update"]["frame"]["projection"]

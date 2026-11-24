@@ -55,12 +55,18 @@ impl Game {
             } => {
                 let view = self.characteristics(*permanent);
                 let ability = view.activated_abilities.get(*ability_index)?;
-                if !ability.exile_grantor {
+                if !ability.has_grantor_cost() {
                     return None;
                 }
                 let grantor = self.state.permanent_of(ability.granted_by?.grantor)?;
+                // Two grantors of one ability differ only by the grantor named.
+                let (also_tap, grantor_cost) = match (ability.exile_grantor, ability.tap_source) {
+                    (true, _) => ("", "exile"),
+                    (false, true) => (", {T},", "tap"),
+                    (false, false) => ("", "tap"),
+                };
                 Some(format!(
-                    "Activate ability of {}: pay {} and exile {} (permanent {}) — {}",
+                    "Activate ability of {}: pay {}{also_tap} and {grantor_cost} {} (permanent {}) — {}",
                     view.name,
                     crate::agent::ability_description::cost_description(&ability.mana_cost),
                     self.characteristics(grantor).name,
@@ -984,6 +990,17 @@ impl Game {
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
         if self.state.opening().is_some() {
             return self.choose_opening(action);
+        }
+        if matches!(
+            action,
+            Action::PlayLand { .. }
+                | Action::CastSpell { .. }
+                | Action::ActivateAbility { .. }
+                | Action::ActivateCardAbility { .. }
+                | Action::Foretell { .. }
+        ) {
+            // CR 104.4b: a player who acts at priority has broken any loop.
+            self.state.priority_mut().loop_watch = None;
         }
         match action {
             Action::ChooseTrigger { player, trigger_id } => {

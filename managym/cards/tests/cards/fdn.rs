@@ -1033,7 +1033,7 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
 #[test]
 fn leyline_axe_moves_its_grants_when_equipped_again() {
     use crate::support::game::enters_battlefield_with_triggers;
-    use managym::state::target::Target;
+    use managym::state::game_object::Target;
     let mut s = five_color_setup(&["Leyline Axe", "Gray Ogre"]);
     let axe = enters_battlefield_with_triggers(&mut s, 0, "Leyline Axe");
     let ogres = [0, 1].map(|_| enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre"));
@@ -3323,12 +3323,75 @@ fn fishing_pole_baits_by_tapping_itself_and_fishes_when_its_creature_untaps() {
     assert!(s.battlefield_permanents_named(0, "Fish").is_empty());
 }
 
-/// Conqueror gains whatever the opponent loses, and a drain answers every
-/// gain. Against Herald of Eternal Dawn the loop can never end, so the game
-/// is a draw (CR 104.4b); against a large but finite life total it drains
-/// to a win.
+/// Two Fishing Poles on one creature grant two activations that differ only
+/// in which Pole they tap: each names its own Pole in focus and text, and
+/// paying one taps that Pole alone.
 #[test]
-fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() {
+fn two_fishing_poles_on_one_creature_offer_activations_naming_each_pole() {
+    use crate::support::inspect::{counters_of, tapped};
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::{game_object::Target, permanent::CounterKind::Bait},
+    };
+
+    let mut s = five_color_setup(&["Fishing Pole", "Gray Ogre"]);
+    let poles = [
+        s.force_permanent_on_battlefield(0, "Fishing Pole"),
+        s.force_permanent_on_battlefield(0, "Fishing Pole"),
+    ];
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    crate::support::game::clear_summoning_sickness(&mut s, ogre);
+    for pole in poles {
+        s.set_player_mana_pool(0, "2");
+        activate(&mut s, pole, 0);
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        spend_colorless(&mut s);
+        settle(&mut s);
+    }
+    s.set_player_mana_pool(0, "1");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let granted: Vec<_> = observation
+        .action_space
+        .actions
+        .iter()
+        .zip(&s.action_space().actions)
+        .filter(|(_, action)| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == ogre))
+        .map(|(option, action)| (option.clone(), action.clone()))
+        .collect();
+    assert_eq!(granted.len(), 2);
+    let public = |id: managym::state::game_object::PermanentId| {
+        s.game().state.permanents[id].as_ref().unwrap().id.0 as i32
+    };
+    for ((option, _), pole) in granted.iter().zip(poles) {
+        assert_eq!(option.focus, [public(ogre), public(pole)]);
+        let description = option.description.as_deref().expect("names its Pole");
+        assert!(description.contains("tap Fishing Pole"), "{description}");
+    }
+    assert_ne!(granted[0].0.description, granted[1].0.description);
+
+    let second = granted[1].1.clone();
+    crate::support::play::choose(&mut s, |action| *action == second);
+    spend_colorless(&mut s);
+    assert!(tapped(&s, ogre) && tapped(&s, poles[1]) && !tapped(&s, poles[0]));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, poles[1], Bait), 1);
+    assert_eq!(counters_of(&s, poles[0], Bait), 0);
+}
+
+/// Bloodthirsty Conqueror beside a Gray Ogre that drains each opponent 1
+/// whenever its controller gains life: every loss is gained back and every
+/// gain is a loss. The opponent has Herald of Eternal Dawn (can't lose) or
+/// `opponent_life`. Hands are empty; Lightning Bolt is on the stack at the
+/// opponent, and player 0 holds `spare_bolts` more with mana for them.
+fn conqueror_drain_loop(
+    herald: bool,
+    opponent_life: i32,
+    spare_bolts: usize,
+) -> (
+    crate::support::game::Scenario,
+    managym::state::game_object::PermanentId,
+) {
     use crate::support::{
         game::{clear_hand, force_new_card_in_hand, inject_ability},
         play::{cast_card, target_opponent},
@@ -3337,42 +3400,63 @@ fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() 
         Ability, Actor, Effect, EffectValue, PlayerSelector, TriggerCondition,
     };
 
-    for herald in [true, false] {
-        let mut s = five_color_setup(&[
-            "Bloodthirsty Conqueror",
-            "Gray Ogre",
-            "Herald of Eternal Dawn",
-            "Lightning Bolt",
-        ]);
-        s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
-        let drain = s.force_permanent_on_battlefield(0, "Gray Ogre");
-        let drain = card_of(&s, drain);
-        inject_ability(
-            &mut s,
-            drain,
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::GainsLife {
-                    who: Actor::You,
-                    nth: None,
-                },
-                effects: vec![Effect::LoseLife {
-                    player: PlayerSelector::EachOpponent,
-                    amount: EffectValue::Fixed(1),
-                }],
+    let mut s = five_color_setup(&[
+        "Bloodthirsty Conqueror",
+        "Gray Ogre",
+        "Herald of Eternal Dawn",
+        "Lightning Bolt",
+    ]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    let drain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let drain_card = card_of(&s, drain);
+    inject_ability(
+        &mut s,
+        drain_card,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::GainsLife {
+                who: Actor::You,
+                nth: None,
             },
-        );
-        if herald {
-            s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn");
-        } else {
-            s.game_mut().state.players[1].life = 200;
+            effects: vec![Effect::LoseLife {
+                player: PlayerSelector::EachOpponent,
+                amount: EffectValue::Fixed(1),
+            }],
+        },
+    );
+    if herald {
+        s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn");
+    }
+    s.game_mut().state.players[1].life = opponent_life;
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.set_player_mana_pool(0, &"R".repeat(1 + spare_bolts));
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    for _ in 0..spare_bolts {
+        force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    }
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    (s, drain)
+}
+
+/// Pass priority, whoever holds it, until the game ends or `passes` run out.
+fn pass_until_over(s: &mut crate::support::game::Scenario, passes: usize) {
+    for _ in 0..passes {
+        if s.game().is_game_over() {
+            return;
         }
-        clear_hand(&mut s, 0);
-        clear_hand(&mut s, 1);
-        s.set_player_mana_pool(0, "R");
-        let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
-        cast_card(&mut s, bolt);
-        target_opponent(&mut s);
+        s.pass_priority();
+    }
+}
+
+/// Against Herald of Eternal Dawn the drain can never end, so the game is a
+/// draw (CR 104.4b); against a large but finite life total it drains to a
+/// win.
+#[test]
+fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() {
+    for herald in [true, false] {
+        let (mut s, _) = conqueror_drain_loop(herald, if herald { 20 } else { 200 }, 0);
         s.game_mut().skip_trivial = true;
         s.pass_priority();
         assert!(s.game().is_game_over());
@@ -3385,4 +3469,104 @@ fn bloodthirsty_conqueror_draws_a_mandatory_loop_against_a_protected_opponent() 
             assert_eq!(s.life(1), 0);
         }
     }
+}
+
+/// The loop is the players' passes, not one call into the engine: offered
+/// every priority (no trivial skipping), or holding an instant they never
+/// cast, players who only pass are still in the loop.
+#[test]
+fn bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices() {
+    let (mut s, _) = conqueror_drain_loop(true, 20, 0);
+    s.game_mut().skip_trivial = false;
+    pass_until_over(&mut s, 2_000);
+    assert!(s.game().state.mandatory_loop_draw());
+
+    let (mut s, _) = conqueror_drain_loop(true, 20, 1);
+    s.game_mut().skip_trivial = true;
+    pass_until_over(&mut s, 2_000);
+    assert!(s.game().state.mandatory_loop_draw());
+    assert_eq!(s.game().winner_index(), None);
+}
+
+/// Casting the held Bolt at the drain is a way to stop: it ends the watch,
+/// and with the drain gone the chain runs out.
+#[test]
+fn bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain() {
+    use crate::support::play::choose;
+    use managym::agent::action::Action;
+    use managym::state::game_object::Target;
+
+    let (mut s, drain) = conqueror_drain_loop(true, 20, 1);
+    s.game_mut().skip_trivial = true;
+    pass_until_over(&mut s, 40);
+    assert!(!s.game().is_game_over());
+    assert!(s.game().state.priority.loop_watch.is_some());
+    while s.action_space().player != Some(PlayerId(0)) {
+        s.pass_priority();
+    }
+    choose(&mut s, |action| matches!(action, Action::CastSpell { .. }));
+    assert!(s.game().state.priority.loop_watch.is_none());
+    assert!(s.choose_target(Target::Permanent(drain)));
+    // With nothing else to do, the chain unwinds and the game moves on.
+    assert!(!s.game().is_game_over());
+    assert!(s.game().state.permanents[drain].is_none());
+    assert!(s.game().state.stack_objects.is_empty());
+    assert!(s.game().state.priority.loop_watch.is_none());
+}
+
+/// A long chain that uses something up is no loop (CR 104.4b asks for "no
+/// way to stop"): each gain removes one of the Ogre's 100 +1/+1 counters to
+/// gain 1 more, so the chain runs far past the watch's unwatched prefix and
+/// ends on its own with every counter spent.
+#[test]
+fn a_finite_chain_over_counters_is_no_mandatory_loop() {
+    use crate::support::{
+        game::{clear_hand, force_new_card_in_hand, inject_ability, set_counters},
+        inspect::counters_of,
+        play::{cast_card, target_opponent},
+    };
+    use managym::state::{
+        ability::{Ability, Actor, Condition, Effect, ObjectSelector, TriggerCondition},
+        permanent::CounterKind,
+    };
+
+    let mut s = five_color_setup(&["Bloodthirsty Conqueror", "Gray Ogre", "Lightning Bolt"]);
+    s.force_permanent_on_battlefield(0, "Bloodthirsty Conqueror");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 100);
+    let ogre_card = card_of(&s, ogre);
+    inject_ability(
+        &mut s,
+        ogre_card,
+        Ability::Triggered {
+            intervening_if: Some(Condition::SourceCountersAtLeast {
+                kind: CounterKind::PlusOnePlusOne,
+                count: 1,
+            }),
+            condition: TriggerCondition::GainsLife {
+                who: Actor::You,
+                nth: None,
+            },
+            effects: vec![
+                Effect::RemoveCounters {
+                    from: ObjectSelector::This,
+                    up_to: 1,
+                    chosen: Some(CounterKind::PlusOnePlusOne),
+                },
+                Effect::gain_life(1),
+            ],
+        },
+    );
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.set_player_mana_pool(0, "R");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    cast_card(&mut s, bolt);
+    target_opponent(&mut s);
+    s.game_mut().skip_trivial = true;
+    s.pass_priority();
+    assert!(!s.game().is_game_over());
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 0);
+    assert_eq!(s.life(0), 20 + 3 + 100);
+    assert_eq!(s.life(1), 17);
 }

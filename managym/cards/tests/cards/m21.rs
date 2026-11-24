@@ -157,6 +157,41 @@ fn mazemind_tome_exiles_itself_once_its_fourth_page_counter_is_paid() {
     assert_eq!(s.life(0), life);
 }
 
+/// Only the printed state trigger waits for itself (CR 603.8): a granted or
+/// delayed trigger from the same Tome at the same ability index is another
+/// ability, so the Tome's four page counters still trigger beside it.
+#[test]
+fn mazemind_tome_state_trigger_is_not_held_by_another_trigger_of_the_tome() {
+    use crate::support::game::set_counters;
+    use managym::state::{permanent::CounterKind::Page, stack_object::StackObject};
+
+    let mut s = five_color_setup(&["Mazemind Tome", "Gray Ogre"]);
+    let tome = s.force_permanent_on_battlefield(0, "Mazemind Tome");
+    set_counters(&mut s, tome, Page, 3);
+    activate(&mut s, tome, 0);
+    let triggered = |s: &crate::support::game::Scenario| {
+        s.game()
+            .state
+            .stack_objects
+            .iter()
+            .filter(|item| matches!(item, StackObject::TriggeredAbility(_)))
+            .count()
+    };
+    assert_eq!(triggered(&s), 1);
+
+    // The waiting state trigger becomes one with its own effects, as a
+    // granted trigger of the Tome would be.
+    for item in &mut s.game_mut().state.stack_objects {
+        if let StackObject::TriggeredAbility(trigger) = item {
+            assert_eq!(trigger.ability_index, 0);
+            trigger.inline_effects = Some(Vec::new());
+        }
+    }
+    s.game_mut().skip_trivial = false;
+    s.pass_priority();
+    assert_eq!(triggered(&s), 2);
+}
+
 fn permanent_untap(
     s: &mut crate::support::game::Scenario,
     id: managym::state::game_object::PermanentId,

@@ -1514,8 +1514,12 @@ impl Game {
     /// CR 603.8: a state trigger doesn't trigger again while that exact
     /// source's occurrence waits to be put on the stack or is on it.
     fn state_trigger_waiting(&self, source: Option<ObjectId>, ability_index: usize) -> bool {
+        // A granted or delayed trigger carries its own effects and may share
+        // the printed ability's index; it is never the state trigger.
         let same = |trigger: &PendingTrigger| {
-            trigger.source_ref() == source && trigger.ability_index == ability_index
+            trigger.source_ref() == source
+                && trigger.ability_index == ability_index
+                && trigger.inline_effects.is_none()
         };
         let placing = self
             .state
@@ -1526,7 +1530,9 @@ impl Game {
         self.state.pending_triggers.iter().chain(placing).any(same)
             || self.state.stack_objects.iter().any(|item| {
                 matches!(item, StackObject::TriggeredAbility(trigger)
-                    if trigger.source_ref() == source && trigger.ability_index == ability_index)
+                    if trigger.source_ref() == source
+                        && trigger.ability_index == ability_index
+                        && trigger.inline_effects.is_none())
             })
     }
 

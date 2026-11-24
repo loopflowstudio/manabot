@@ -1870,15 +1870,20 @@ impl Game {
         }
         model.life = model.life.saturating_sub(payment.life());
         let grantors = payment.owed.iter().filter_map(|component| match component {
-            CostComponent::ExileGrantor(object) => Some(*object),
+            CostComponent::ExileGrantor(object) => Some((*object, false)),
+            CostComponent::TapGrantor(object) => Some((*object, true)),
             _ => None,
         });
-        for object in payment.receipt.paid_as(How::Sacrificed).chain(grantors) {
+        let sacrificed = payment
+            .receipt
+            .paid_as(How::Sacrificed)
+            .map(|object| (object, false));
+        for (object, tap) in sacrificed.chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
                 model.reserve(SourceReservation {
                     permanent,
-                    tap: false,
-                    sacrifice: true,
+                    tap,
+                    sacrifice: !tap,
                 });
             }
         }
@@ -1902,7 +1907,7 @@ impl Game {
         } = operation
         {
             let ability = self.activation_ability(*source, *ability_index)?;
-            if ability.exile_grantor || ability.tap_grantor {
+            if ability.has_grantor_cost() {
                 model.reserve(SourceReservation {
                     permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
                     tap: ability.tap_grantor,

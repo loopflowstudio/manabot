@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 30;
+pub const MATCH_STATE_HASH_VERSION: u32 = 31;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -344,5 +344,89 @@ impl GameState {
             version: MATCH_STATE_HASH_VERSION,
             digest: *blake3::hash(&bytes).as_bytes(),
         }
+    }
+}
+
+/// Turn-history counts above this compare alike in a loop fingerprint: no
+/// card asks for an occurrence or amount this high, and a mandatory loop
+/// passes every lower threshold before it is watched.
+const LOOP_COUNT_SATURATION: u64 = 16;
+
+impl GameState {
+    /// CR 104.4b: the rules-relevant state a mandatory loop returns to. The
+    /// canonical match state, without what every repetition advances on its
+    /// own: life totals (the loop watch tracks their progress itself), the
+    /// event logs, priority bookkeeping, identity and timestamp allocation,
+    /// waiting triggers' enqueue ids, and turn-history counts past
+    /// [`LOOP_COUNT_SATURATION`]. Anything a
+    /// finite chain uses up (counters, objects, cards, mana) stays in.
+    pub(crate) fn loop_fingerprint(&self) -> u64 {
+        use serde_json::Value;
+
+        fn saturate(value: &mut Value) {
+            match value {
+                Value::Number(number) => {
+                    if number.as_u64().is_some_and(|n| n > LOOP_COUNT_SATURATION) {
+                        *value = Value::from(LOOP_COUNT_SATURATION);
+                    }
+                }
+                Value::Array(items) => items.iter_mut().for_each(saturate),
+                Value::Object(fields) => fields.values_mut().for_each(saturate),
+                _ => {}
+            }
+        }
+
+        let mut canonical = self.deterministic_hash_value();
+        let state = canonical
+            .as_object_mut()
+            .expect("canonical match state is an object");
+        for key in [
+            "events",
+            "pending_events",
+            "observation_events",
+            "priority",
+            "trigger_enqueue_counter",
+            "allocation_watermark",
+        ] {
+            state.remove(key);
+        }
+        if let Some(Value::Array(players)) = state.get_mut("players") {
+            for player in players {
+                if let Some(player) = player.as_object_mut() {
+                    player.remove("life");
+                }
+            }
+        }
+        // A waiting trigger's id is its enqueue order, renumbered each cycle.
+        fn forget_id(trigger: &mut Value) {
+            if let Some(trigger) = trigger.as_object_mut() {
+                trigger.remove("id");
+            }
+        }
+        if let Some(Value::Array(pending)) = state.get_mut("pending_triggers") {
+            pending.iter_mut().for_each(forget_id);
+        }
+        if let Some(Value::Object(placement)) = state.get_mut("trigger_placement") {
+            if let Some(Value::Array(remaining)) = placement.get_mut("remaining") {
+                remaining.iter_mut().for_each(forget_id);
+            }
+            if let Some(placing) = placement.get_mut("placing") {
+                forget_id(placing);
+            }
+        }
+        if let Some(Value::Object(turn)) = state.get_mut("turn") {
+            for key in [
+                "history",
+                "ability_triggers_this_turn",
+                "ability_resolutions_this_turn",
+            ] {
+                if let Some(value) = turn.get_mut(key) {
+                    saturate(value);
+                }
+            }
+        }
+        let bytes = serde_json::to_vec(&canonical).expect("canonical match state serializes");
+        let digest = blake3::hash(&bytes);
+        u64::from_le_bytes(digest.as_bytes()[..8].try_into().expect("eight bytes"))
     }
 }

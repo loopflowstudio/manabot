@@ -7,6 +7,7 @@ use crate::{
         combat::CombatState,
         event::GameEvent,
         game::{Game, GameOutcome, GameProcedure},
+        priority::{LoopSample, MandatoryLoopWatch},
         proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
@@ -108,6 +109,10 @@ impl Game {
                     continue;
                 }
                 if !self.skip_trivial || space.actions.len() > 1 {
+                    if space.kind != ActionSpaceKind::Priority && space.actions.len() > 1 {
+                        // A player chooses: the chain is no longer mandatory.
+                        self.state.priority_mut().loop_watch = None;
+                    }
                     self.publish_action_space(space);
                     return false;
                 }
@@ -198,6 +203,7 @@ impl Game {
 
     fn on_step_start(&mut self, step: StepKind) {
         self.restart_priority_round();
+        self.state.priority_mut().loop_watch = None;
         if step == StepKind::Untap {
             let player = self.active_player();
             if let Some(exposure) = self.exposure_mut() {
@@ -457,9 +463,6 @@ impl Game {
         // An automatic pass changes only the priority holder. Reuse this
         // invocation's fixed-point proof until a stack object resolves.
         let mut stabilized = false;
-        // Resolutions inside this call follow only automatic passes: no
-        // player could choose anything between them.
-        let mut watch = MandatoryLoopWatch::default();
         loop {
             // A suspended resolution owns the game until its decision is
             // made — no SBAs, triggers, or priority in between (CR 608.2).
@@ -494,9 +497,7 @@ impl Game {
                         // A turn-ending resolution leaves this priority round.
                         return None;
                     }
-                    if watch.repeats(self.loop_progress(), |seat| {
-                        !self.protected_from_loss(PlayerId(seat))
-                    }) {
+                    if self.watch_for_mandatory_loop() {
                         self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
                             mandatory_loop: true,
                         });
@@ -523,116 +524,29 @@ impl Game {
         }
     }
 
-    /// What a mandatory loop that ends on its own must use up: the stack
-    /// unwinding, a library emptying, poison accruing, or the life of a
-    /// player who can lose the game falling.
-    fn loop_progress(&self) -> LoopProgress {
-        let seats = [PlayerId(0), PlayerId(1)];
-        LoopProgress {
-            stack: self.state.stack_objects.len(),
-            libraries: seats.map(|seat| self.state.zones.size(ZoneType::Library, seat)),
-            poison: seats.map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
-            life: seats.map(|seat| self.state.players[seat.0].life),
-        }
-    }
-}
-
-/// The finite resources a sequence of automatic resolutions can exhaust.
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct LoopProgress {
-    stack: usize,
-    libraries: [usize; 2],
-    poison: [i32; 2],
-    life: [i32; 2],
-}
-
-/// CR 104.4b: a game in a loop of mandatory actions, "repeating a sequence
-/// of events with no way to stop", is a draw. Watches the resolutions one
-/// `tick_priority` call makes with no decision in between. A run of
-/// resolutions that sets no new extreme of `LoopProgress` (stack depth,
-/// library size, poison, or an unprotected player's life) is a loop. A
-/// finite stack of triggers unwinds to new depths and a drain toward a
-/// loss lowers life, so neither is mistaken for one; the absolute cap ends
-/// a loop that grows something unbounded instead.
-#[derive(Default)]
-struct MandatoryLoopWatch {
-    resolutions: u32,
-    without_progress: u32,
-    extremes: Option<LoopProgress>,
-}
-
-impl MandatoryLoopWatch {
-    /// Resolutions without new progress that make a loop.
-    const REPEATS: u32 = 64;
-    /// Automatic resolutions in one call that make a loop regardless.
-    const CAP: u32 = 10_000;
-
-    /// Record one resolution; true once the loop is established. Falling
-    /// life is progress only for a player `can_lose` (not one protected by
-    /// Herald of Eternal Dawn), asked only when that life reaches a new low.
-    fn repeats(&mut self, now: LoopProgress, can_lose: impl Fn(usize) -> bool) -> bool {
-        self.resolutions += 1;
-        let Some(extremes) = &mut self.extremes else {
-            self.extremes = Some(now);
+    /// Count one resolution toward the CR 104.4b watch; true once it shows
+    /// a mandatory loop. An emptied stack with nothing waiting to trigger
+    /// ends any chain, so it ends the watch instead.
+    fn watch_for_mandatory_loop(&mut self) -> bool {
+        if self.stack_is_empty()
+            && self.state.pending_triggers.is_empty()
+            && self.state.trigger_placement.is_none()
+        {
+            self.state.priority_mut().loop_watch = None;
             return false;
+        }
+        let seats = [PlayerId(0), PlayerId(1)];
+        let watching = MandatoryLoopWatch::watching_next(self.state.priority.loop_watch.as_deref());
+        let sample = LoopSample {
+            fingerprint: watching.then(|| self.state.loop_fingerprint()),
+            life: seats.map(|seat| self.state.players[seat.0].life),
+            poison: seats.map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
+            can_lose: seats.map(|seat| !watching || !self.protected_from_loss(seat)),
         };
-        let mut progressed = false;
-        if now.stack < extremes.stack {
-            extremes.stack = now.stack;
-            progressed = true;
-        }
-        for seat in 0..2 {
-            if now.libraries[seat] < extremes.libraries[seat] {
-                extremes.libraries[seat] = now.libraries[seat];
-                progressed = true;
-            }
-            if now.poison[seat] > extremes.poison[seat] {
-                extremes.poison[seat] = now.poison[seat];
-                progressed = true;
-            }
-            if now.life[seat] < extremes.life[seat] {
-                extremes.life[seat] = now.life[seat];
-                progressed |= can_lose(seat);
-            }
-        }
-        self.without_progress = if progressed {
-            0
-        } else {
-            self.without_progress + 1
-        };
-        self.without_progress >= Self::REPEATS || self.resolutions >= Self::CAP
-    }
-}
-
-#[cfg(test)]
-mod mandatory_loop_tests {
-    use super::{LoopProgress, MandatoryLoopWatch};
-
-    fn at(stack: usize, life: i32) -> LoopProgress {
-        LoopProgress {
-            stack,
-            libraries: [40, 40],
-            poison: [0, 0],
-            life: [20, life],
-        }
-    }
-
-    #[test]
-    fn a_finite_stack_unwinding_without_other_change_is_no_loop() {
-        let mut watch = MandatoryLoopWatch::default();
-        assert!((0..200)
-            .rev()
-            .all(|depth| !watch.repeats(at(depth, 20), |_| true)));
-    }
-
-    #[test]
-    fn a_repeating_stack_is_a_loop_unless_a_player_who_can_lose_is_losing_life() {
-        let mut protected = MandatoryLoopWatch::default();
-        let repeats = (0..MandatoryLoopWatch::REPEATS as i32 + 1)
-            .position(|n| protected.repeats(at(1, 20 - n), |seat| seat == 0));
-        assert_eq!(repeats, Some(MandatoryLoopWatch::REPEATS as usize));
-
-        let mut draining = MandatoryLoopWatch::default();
-        assert!((0..1000).all(|n| !draining.repeats(at(1, 2000 - n), |_| true)));
+        self.state
+            .priority_mut()
+            .loop_watch
+            .get_or_insert_with(Default::default)
+            .repeats(sample)
     }
 }

@@ -2205,7 +2205,7 @@ impl Observation {
                 if let Some(grantor) = view
                     .activated_abilities
                     .get(*ability_index)
-                    .filter(|ability| ability.exile_grantor)
+                    .filter(|ability| ability.has_grantor_cost())
                     .and_then(|ability| ability.granted_by)
                     .and_then(|grant| game.state.permanent_of(grant.grantor))
                 {

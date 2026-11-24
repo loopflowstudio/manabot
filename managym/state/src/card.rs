@@ -668,6 +668,12 @@ impl ActivatedAbilityDefinition {
         self.tap_cost.clone().map(|cost| (cost, Toward::Printed))
     }
 
+    /// Whether part of the cost is paid by the permanent that granted this
+    /// ability (exiling or tapping it), which the activation then names.
+    pub fn has_grantor_cost(&self) -> bool {
+        self.exile_grantor || self.tap_grantor
+    }
+
     /// Whether paying the cost removes the source permanent from the
     /// battlefield (sacrificed or exiled).
     pub fn source_leaves(&self) -> bool {

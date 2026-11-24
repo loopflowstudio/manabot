@@ -60,7 +60,6 @@ from managym.experience import (
     PresentationEvent,
 )
 from managym.experience_projection import (
-    HERO_PLAYER_INDEX,
     decision_surface_view,
     definition_names,
     describe_actions,
@@ -528,7 +527,11 @@ def _encountered_definition_ids(
 
 
 def viewer_view(
-    obs: managym.Observation, viewer: int, *, include_details: bool = False
+    obs: managym.Observation,
+    viewer: int,
+    *,
+    winner: int | None,
+    include_details: bool = False,
 ) -> dict[str, Any]:
     """Serialize an observation for one acting viewer.
 
@@ -536,19 +539,18 @@ def viewer_view(
     from:
       1. ``agent`` is always ``viewer`` and ``opponent`` the other player.
       2. The opponent's hand is redacted (libraries are never serialized).
+
+    ``winner`` is the game's winning seat, ``None`` while it is running or
+    after a draw: the other seat's ``won: false`` does not say whether the
+    viewer won.
     """
     data = serialize_observation(obs, include_details=include_details)
     if int(data["agent"]["player_index"]) != viewer:
         data["agent"], data["opponent"] = data["opponent"], data["agent"]
-        data["won"] = bool(obs.game_over) and not bool(obs.won)
+        data["won"] = bool(obs.game_over) and winner == viewer
 
     redact_observation(data)
     return data
-
-
-def hero_view(obs: managym.Observation) -> dict[str, Any]:
-    """Backwards-compatible player-0 projection for the live board."""
-    return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
 def _is_hero_turn(obs: managym.Observation, human_seat: int = 0) -> bool:
@@ -1763,9 +1765,10 @@ class GameSession:
                 if next_obs.game_over
                 else int(next_obs.agent.player_index),
             )
+            winner = self.env.winner_index() if next_obs.game_over else None
             text = narrate_move(
-                person_board(observation, self.human_seat),
-                person_board(after, self.human_seat),
+                person_board(observation, self.human_seat, winner=winner),
+                person_board(after, self.human_seat, winner=winner),
                 [event["kind"] for event in presentation_events],
                 own_steps(
                     [vars(event) for event in self.trace.events],

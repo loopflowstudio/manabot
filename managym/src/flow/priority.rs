@@ -96,7 +96,6 @@ pub struct MandatoryLoopWatch {
     resolutions: u32,
     life_low: [i32; 2],
     poison_high: [i32; 2],
-    #[serde(serialize_with = "crate::state::game_object::exact")]
     seen: BTreeMap<u64, LoopMark>,
 }
 
@@ -185,8 +184,8 @@ mod tests {
     #[test]
     fn an_unbounded_chain_ends_at_the_cap() {
         let mut watch = MandatoryLoopWatch::default();
-        let ended = (0..u64::from(MandatoryLoopWatch::CAP))
-            .position(|n| watch.repeats(sample(n, 20, 0)));
+        let ended =
+            (0..u64::from(MandatoryLoopWatch::CAP)).position(|n| watch.repeats(sample(n, 20, 0)));
         assert_eq!(ended, Some(MandatoryLoopWatch::CAP as usize - 1));
     }
 }
