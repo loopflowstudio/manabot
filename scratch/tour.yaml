@@ -1,37 +1,39 @@
-at: 47dec0aa77290194b440f98bdd0e09c842b8d4d1
+at: d61564193aa3b0d5aa3becc6adbfaf3af53b729b
 first:
-  - path: scratch/plan.md
-    why: Batch 1 scope, delivered rows and open checks.
   - path: docs/engine.md
-    why: Follow a copy and its trigger through departure.
-  - path: managym/state/src/game_object.rs
-    why: Departure LKI keeps effective battlefield facts.
-  - path: managym/state/src/ability.rs
-    why: Counted entry, ExiledWithSource, explicit exile target counts.
-  - path: managym/src/flow/layers.rs
-    why: One predicate matcher for live and departed permanents.
-  - path: managym/src/flow/identity.rs
-    why: Capture battlefield facts as a permanent leaves.
+    why: Play the kicked Clerics and follow a copied spell.
+  - path: scratch/plan.md
+    why: Delivered cohorts and remaining rules work.
+  - path: managym/state/src/permanent.rs
+    why: Spell choices and payment belong to one battlefield entry.
+  - path: managym/src/flow/decision.rs
+    why: Resolving spells supply choices before entry replacements.
+  - path: managym/src/flow/proposed_event.rs
+    why: Cast-only and X-counter replacements read the entering spell.
   - path: managym/src/flow/triggers.rs
-    why: Departure triggers read LKI and a departed Aura.
-  - path: managym/src/flow/statics.rs
-    why: Source conditions answer from last known information.
+    why: Capture the entering source before anyone can respond.
   - path: managym/src/flow/resolution.rs
-    why: Follow departures to arrivals; freeze death counts.
-  - path: managym/src/flow/zones.rs
-    why: Only until-leaves links return when the source departs.
-  - path: managym/src/flow/game.rs
-    why: Prune exile-with links once nothing watches the source.
+    why: Recheck intervening conditions with the captured choices.
   - path: managym/cards/src/fdn.rs
-    why: Kykar, Familiar, Vessel and Valkyrie's Call.
+    why: Healer restricts targets by type and mana value.
+  - path: managym/cards/src/znr.rs
+    why: Nullpriest uses the same trigger for any creature.
+  - path: managym/cards/tests/cards.rs
+    why: Fork kicker and targets, then kill or blink.
+  - path: managym/tests/rules/cr_400_identity.rs
+    why: Resolving spell copies retain choices and have no payment.
+  - path: managym/state/src/game_object.rs
+    why: Earlier departure work records last-known battlefield facts.
+  - path: managym/src/flow/identity.rs
+    why: Capture battlefield forms before departure.
+  - path: managym/src/flow/layers.rs
+    why: Match live and departed characteristics.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Departure cases with forks and stale Commands.
-  - path: managym/cards/tests/cards/observability.rs
-    why: New selector and value reach tokens and text.
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Delivered ledger rows.
+    why: Graveyard returns, copies, and departure regressions.
   - path: managym/cards/tests/cards/fin.rs
-    why: Earlier transform, meld and token departures.
+    why: Transform, meld, and token movement.
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Each delivered row names its source and check.
 hide:
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Appended printing rows for the new cards.
+    why: Printing data transcribed from Scryfall.
