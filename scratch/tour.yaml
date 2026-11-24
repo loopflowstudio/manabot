@@ -1,9 +1,11 @@
-at: a5262a74bd0adeacaf7180e4991e8448d403659e
+at: 10d14ac7a0d86a760cb4ab44908285ec94af6b06
 first:
   - path: scratch/plan.md
     why: Implemented interactions and remaining Unravel comparison
   - path: managym/cards/src/blb.rs
     why: Bakersbane Duo's entry and expend abilities
+  - path: managym/src/flow/event.rs
+    why: SpellCast records the payer and turn totals
   - path: managym/src/flow/play.rs
     why: Receipt and caster establish the spend crossing
   - path: managym/src/flow/triggers.rs

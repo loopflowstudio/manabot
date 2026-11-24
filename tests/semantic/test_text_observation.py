@@ -417,12 +417,10 @@ def test_continuation_text_states_announcing_only_when_present() -> None:
 
 
 def _choose(env: managym.Env, wording: str) -> None:
-    """Submit the one offered action whose line contains `wording`."""
+    """Submit the unique action whose description contains `wording`."""
     decision = capture_text_decision(env)
-    [line] = [
-        line for line in decision.text.splitlines() if " — " in line and wording in line
-    ]
-    submit_response(env, decision, line.split(" — ", 1)[0])
+    [action] = [action for action in decision.actions if wording in action.description]
+    submit_response(env, decision, action.reference)
 
 
 def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
@@ -1932,14 +1930,8 @@ def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
 def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
     env = priority_root(("Serra Angel",), ("Bakersbane Duo",) + ("Plains",) * 5)
     payer = env.current_agent_index()
-    _choose(env, "Cast")
-    if any(
-        "Pay the offered cost" in action.description
-        for action in capture_text_decision(env).actions
-    ):
-        _choose(env, "Pay the offered cost")
-
-    for viewer in (payer, 1 - payer):
+    for viewer, action in [(payer, "Cast"), (1 - payer, "Pass priority")]:
+        _choose(env, action)
         assert env.current_agent_index() == viewer
         obs = env.observation_for_player(viewer)
         caster = obs.agent if viewer == payer else obs.opponent
@@ -1950,4 +1942,3 @@ def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
             [1 if viewer == payer else 2, 5]
         ]
         assert "spent 5 mana casting spells" in capture_text_decision(env).text
-        _choose(env, "Pass priority")
