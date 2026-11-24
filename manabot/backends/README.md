@@ -422,8 +422,7 @@ catalog program schedule and selects the device's inference layout
 - **CPU:** drops unused object columns (`attention="used_columns"`) and, unless
   `bucketed_shapes=True`, unused fact columns (`facts="used_columns"`).
 - **MPS:** pads used object columns with empty columns to a power of two
-  (`attention="bucketed_columns"`), bounding distinct Metal attention shapes
-  while leaving fact columns padded.
+  (`attention="bucketed_columns"`), bounding distinct Metal attention shapes.
 - **CUDA:** keeps padded object and fact columns.
 
 When `attention_on` is false, object column compaction is skipped; when
@@ -431,12 +430,26 @@ When `attention_on` is false, object column compaction is skipped; when
 precedence over column compaction. Simulation, search and rollout bootstrapping
 prepare with `inference=True`. Column compaction changes floating-point
 summation order, so learner rows use the default `inference=False`: they retain
-padded object and fact columns (unless `live_tokens=True`) and select only
-referenced catalog programs unless bucketed shapes require the full schedule.
+padded object columns (unless `live_tokens=True`) and select only referenced
+catalog programs. Bucketed CUDA learners use the full schedule to keep the
+catalog encoder's shape fixed across batches.
 The argument chooses preparation purpose independently of autograd mode;
 `no_grad` does not change a default learner batch into an inference batch.
 Torch rollout `rows` and `minibatches` always prepare learner rows;
 `next_observation` always prepares inference rows for bootstrapping.
+
+Torch MPS uses `facts="bucketed_live_rows"` for inference and learning. It
+packs live facts into one `[1,R]` route and adds unlinked rows so `R` is a
+power of two of at least 64. Captured 64-board calls had at most 1.3% of
+their fact rows live. CPU and CUDA use `[B,F]` fact routes.
+
+Every packed GRU (catalog programs, fact programs, record reducers) goes
+through `packed_gru` (`torch/packed_gru.py`). On MPS it projects all packed
+rows once and runs a hand-written backward that carries only the state
+gradient through the reverse step loop, as MLX's `gru_recurrence` does.
+On MPS, `nn.GRU` over a `PackedSequence` dispatches about twenty ops per step.
+It reads the module's `nn.GRU` weights and runs in float32 under autocast, as
+`nn.GRU` does on MPS. CPU and CUDA call `nn.GRU`.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather

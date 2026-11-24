@@ -638,3 +638,79 @@ fn evolving_wilds_sacrifices_itself_for_a_tapped_basic_land() {
     };
     assert!(tapped(&s, entered));
 }
+
+#[test]
+fn foundations_5d_battle_rattle_shaman() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{choose_mode, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::{PlayerId, Target};
+
+    let mut s = five_color_setup(&["Battle-Rattle Shaman", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Battle-Rattle Shaman");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::ChooseTarget,
+        "beginning of combat trigger".into(),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(crate::support::inspect::mode_labels(&s)[0].contains("+2/+0"));
+    for (mode, power) in [(0, 4), (1, 2)] {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        settle(&mut branch);
+        assert_eq!(branch.game().characteristics(ogre).power, power);
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(branch.game().characteristics(ogre).power, 2);
+    }
+}
+
+#[test]
+fn foundations_5e_fleeting_distraction() {
+    crate::assert_targeted_pump("Fleeting Distraction", "Gray Ogre", 1, (1, 2), &[], 0, 1);
+}
+
+#[test]
+fn foundations_5f_pelakka_wurm() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{enter_and_settle, move_and_settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Pelakka Wurm"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let wurm = enter_and_settle(&mut s, "Pelakka Wurm");
+    s.assert_life(0, 27);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+    move_and_settle(&mut s, wurm, ZoneType::Graveyard);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+    s.assert_life(0, 27);
+}
+
+/// "{8}: Target creature gets +5/+5 and gains trample until end of turn."
+#[test]
+fn foundations_5f_wildheart_invoker() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::keywords,
+        play::{activate, settle, spend_colorless},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Wildheart Invoker", "Gray Ogre"]);
+    let invoker = s.force_permanent_on_battlefield(0, "Wildheart Invoker");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, invoker, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (7, 7));
+    assert!(keywords(&s, ogre).has(Keyword::Trample));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert!(!keywords(&s, ogre).has(Keyword::Trample));
+}

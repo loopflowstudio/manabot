@@ -4,7 +4,6 @@
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
-        combat::CombatState,
         event::GameEvent,
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
@@ -154,6 +153,20 @@ impl Game {
         }
 
         self.on_step_end(step);
+        // Read before writing: a mutable borrow of `state` advances every
+        // derived-cache revision, and most damage steps have no second pass.
+        if step == StepKind::CombatDamage
+            && self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.in_first_strike_damage_step())
+        {
+            self.state.combat.as_mut().unwrap().regular_damage_step = true;
+            self.state.turn.step_initialized = false;
+            self.state.turn.turn_based_actions_complete = false;
+            return None;
+        }
         if self.state.turn.cleanup_priority {
             // CR 514.3a: repeat cleanup after its priority round finishes.
             self.state.turn.start_cleanup();
@@ -215,7 +228,7 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
-                self.state.combat = Some(Box::<CombatState>::default());
+                self.state.combat = Some(Box::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
@@ -330,21 +343,20 @@ impl Game {
                     }
                     return None;
                 };
+                let must_attack = self.must_attack(attacker);
+                let actions = [true, false]
+                    .into_iter()
+                    .filter(|attack| *attack || !must_attack)
+                    .map(|attack| Action::DeclareAttacker {
+                        player: active,
+                        permanent: attacker,
+                        attack,
+                    })
+                    .collect();
                 Some(ActionSpace {
                     player: Some(active),
                     kind: ActionSpaceKind::DeclareAttacker,
-                    actions: vec![
-                        Action::DeclareAttacker {
-                            player: active,
-                            permanent: attacker,
-                            attack: true,
-                        },
-                        Action::DeclareAttacker {
-                            player: active,
-                            permanent: attacker,
-                            attack: false,
-                        },
-                    ],
+                    actions,
                     focus: Vec::new(),
                 })
             }

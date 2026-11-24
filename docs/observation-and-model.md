@@ -246,18 +246,15 @@ current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.
 
-Inside the network, fact ids are looked up at the fact axis's shape instead of
-for selected rows, and learning encodes the complete card catalog instead of
-the definitions a batch references. Shared-effect routing, fact programs and
-legal-action selection keep their packed, data-dependent layouts. A forward
-therefore takes one of a few shapes per input axis instead of a new shape for
-nearly every batch, and does much less work than padding everything to
-capacity. The complete catalog is more work than the padded path's
-referenced definitions: captured Elemental learner batches referenced 65 to
-154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
-tokens. On CPU, where the recurrent catalog encoder dominates learning, a
-learner forward and backward is therefore slower than on the padded path,
-most of all for small decks.
+On CUDA, Torch looks up fact ids at the bucketed fact axis's shape and
+encodes the complete card catalog to keep the recurrent encoder's schedule
+fixed across learner batches. This adds work for small decks. Captured
+Elemental learner batches referenced 65 to 154 of 360 definitions, so the
+full schedule encoded 2.3 to 5.8 times as many catalog tokens. Torch learners
+on CPU and MPS and MLX learners encode only the referenced definitions in
+both layouts. Inference uses the full catalog so it can cache the encoded
+programs across calls. Shared-effect routing, fact programs and legal-action
+selection keep their packed, data-dependent layouts.
 
 A loop's settings choose it, with
 [live-token attention](#live-token-attention). Both are plain `SelfPlay`
@@ -276,11 +273,9 @@ settings.bucketed_shapes, settings.live_tokens  # (True, True)
 The baseline recipe does this when its `device` is `cuda` and
 `padded_shapes` is false; to compare the paths on CUDA, run it with
 `--config '{"device": "cuda", "padded_shapes": true}'`
-([run training](training.md#run-training)). Nothing resolves the switches
-from the device: self-play checks `live_tokens` per backend at run admission
-(CUDA-only on Torch; `mps` and `cpu` on MLX), and bucketed shapes may be
-written explicitly on CPU or MPS, where they are slower to learn on Torch CPU,
-as described above.
+([run training](training.md#run-training)). Self-play checks `live_tokens`
+at run admission. Torch supports it on CUDA and MLX supports it on MPS and
+CPU. You can enable bucketed shapes explicitly on CPU or MPS.
 
 The loop's collection and learner policies use the settings' layout. Code
 that builds a policy outside a loop chooses it itself: `ActorCritic(...)`,
@@ -301,9 +296,9 @@ The setting changes how a forward is computed, not the model. It changes no
 `ModelConfig` field, checkpoint, binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the padded path
-up to the order of floating-point sums. A batch that references no card
-definition is the one difference in gradient support: the catalog encoder then
-receives exactly zero gradients instead of none. Capacity overflow and
+up to the order of floating-point sums. On CUDA, when a batch references no
+card definition, the bucketed learner's full catalog receives exactly zero
+gradients while the padded learner skips the encoder. Capacity overflow and
 malformed inputs are rejected with the same error and message as on the
 padded path.
 
@@ -386,7 +381,7 @@ Each Torch device maps `inference=True` to its host-preparation layout in
 | Device (`inference=True`) | Object attention layout | Fact layout |
 | --- | --- | --- |
 | CPU | `"used_columns"`: exact columns valid in at least one row | `"used_columns"` (or `"padded"` when `bucketed_shapes=True`) |
-| MPS | `"bucketed_columns"`: used columns padded with empty columns to the next power of two (minimum 8) | `"padded"` |
+| MPS | `"bucketed_columns"`: used columns padded with empty columns to the next power of two (minimum 8) | `"bucketed_live_rows"`: live facts padded to a power of two (minimum 64) |
 | CUDA | `"padded"` (or `"live_tokens"` when `live_tokens=True`) | `"padded"` |
 
 On MPS, exact per-batch column counts change shape from step to step and trigger
@@ -733,9 +728,11 @@ modes are offered, and the choice's focus is the permanent just tapped.
 The same `mode` column carries every indexed choice: a mode of a modal spell,
 a mana-spend option, a replacement order and a value of X. In v11, columns 23
 and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
-value for X (for a spell, an activation or a payment, or a replicate count),
-and `x` is that value in tenths, named and scaled as the stack row's `has_x`
-and `x` are. The native `Action.announces_x` says the same of an offer:
+value for X (for a spell, an activation or a payment, or a replicate count)
+or an amount of combat damage an attacker assigns to a blocker, and `x` is
+that value in tenths, named and scaled as the stack row's `has_x` and `x`
+are, so amounts past the mode's one-hot range stay distinct. A combat damage
+offer's focus is the attacker and then the blocker. The native `Action.announces_x` says the same of an offer:
 
 ```python
 # arrays = game.encode_observation(observation), at a decision that chooses X

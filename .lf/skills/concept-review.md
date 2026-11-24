@@ -4,12 +4,11 @@ extends: builtin
 ## In this repository
 
 For engine, RL and training code (`managym` and `manabot` outside Academy and
-CLI surfaces), the consumer is the algorithm or caller, not a human operator.
-Judge concepts, APIs and data layouts by throughput, memory and cache
-ownership, thread safety, statistical validity and composability rather than
-human UX. Still challenge opaque wrapper names that hide what a type is and
-arbitrary numeric caps or tested-grid `Literal` sets lacking a structural
-invariant.
+CLI surfaces), judge concepts, APIs and data layouts by throughput, memory and
+cache ownership, thread safety, statistical validity and composability rather
+than human UX. Still challenge opaque wrapper names, derived consequence or
+interpretation flags where direct Comprehensive Rules state belongs, and
+arbitrary caps or tested-grid `Literal` sets lacking a structural invariant.
 
 **Skip a pass that adds no concept.** In a headless run, when the work since
 the last review only authored cards or moved callers onto types, records and

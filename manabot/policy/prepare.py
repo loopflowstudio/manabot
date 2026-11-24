@@ -601,8 +601,9 @@ type AttentionLayout = Literal[
 ]
 ATTENTION_LAYOUTS: tuple[AttentionLayout, ...] = get_args(AttentionLayout.__value__)
 # Fact layout. `used_columns` drops fact columns invalid in every row;
-# `live_rows` routes only live fact rows as one `[1,R]` row.
-type FactLayout = Literal["padded", "used_columns", "live_rows"]
+# `live_rows` routes live facts as one `[1,R]` row; `bucketed_live_rows`
+# pads that row with unlinked facts to bound distinct device shapes.
+type FactLayout = Literal["padded", "used_columns", "live_rows", "bucketed_live_rows"]
 FACT_LAYOUTS: tuple[FactLayout, ...] = get_args(FactLayout.__value__)
 
 
@@ -750,9 +751,7 @@ def prepare(
 
     `attention` and `facts` choose the object-attention and fact layouts
     (`AttentionLayout`, `FactLayout`); a backend picks them from its device
-    and purpose. Compaction changes float summation order, so Torch learners
-    keep padded shapes for gradient reduction order. Unknown layouts raise
-    `ValueError`.
+    and purpose. Unknown layouts raise `ValueError`.
     Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
@@ -824,13 +823,15 @@ def prepare(
             else native.capacities["facts"]
         )
         fact_valid = span.mask(stop)
-        live_facts = span.integers[:, : tables.layout.widths["facts"]]
+        fact_rows = span.integers[:, : tables.layout.widths["facts"]]
     else:
-        fact_rows = obs["facts"]
+        dense_facts = obs["facts"]
         if facts == "used_columns":
-            fact_rows = fact_rows[:, (fact_rows[..., FACT_VALID_INDEX] == 1).any(0)]
-        fact_valid = fact_rows[..., FACT_VALID_INDEX] == 1
-        live_facts = fact_rows[fact_valid]
+            dense_facts = dense_facts[
+                :, (dense_facts[..., FACT_VALID_INDEX] == 1).any(0)
+            ]
+        fact_valid = dense_facts[..., FACT_VALID_INDEX] == 1
+        fact_rows = dense_facts[fact_valid]
     stack = obs.get("stack")
     validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
@@ -1050,13 +1051,13 @@ def prepare(
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
         facts=_facts(
-            live_facts,
+            fact_rows,
             fact_valid,
             tables,
             objects,
             object_remap,
             native=native,
-            compact=facts == "live_rows",
+            layout=facts,
         ),
         effects=_effects(obs, tables, objects, object_remap, native=native),
         relation_features=relation_features,
@@ -1151,6 +1152,10 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
+# The smallest fact route `bucketed_live_rows` emits.
+MIN_LIVE_FACT_ROWS = 64
+
+
 def _facts(
     live: Array,
     valid: Array,
@@ -1159,17 +1164,26 @@ def _facts(
     object_remap: Array | None = None,
     *,
     native: ObservationSpans | None = None,
-    compact: bool = False,
+    layout: FactLayout = "padded",
 ) -> FactRoutes[Array]:
     """Route live fact rows; `valid` places them in their padded slots.
 
     Only live facts are indexed on the host. By default padding is restored to
     `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
-    `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
-    with targets from each row's own observation; a padded row changes no
-    output or gradient, so the encoder skips that work.
+    `live_rows` emits the `R` live rows in row-major order as `[1,R]`,
+    with targets from each row's own observation. `bucketed_live_rows` pads
+    `R` with zero (unlinked) rows to a power of two, at least
+    `MIN_LIVE_FACT_ROWS`.
     """
     word = record_word if native is None else full_word
+    compact = layout in ("live_rows", "bucketed_live_rows")
+    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]
+    if layout == "bucketed_live_rows":
+        size = max(MIN_LIVE_FACT_ROWS, 1 << max(len(live) - 1, 0).bit_length())
+        live = np.concatenate(
+            [live, np.zeros((size - len(live), *live.shape[1:]), live.dtype)]
+        )
+        owners = np.pad(owners, ((0, 0), (0, size - owners.shape[1])))
     routed = (1, len(live)) if compact else valid.shape
 
     def padded(values: Array) -> Array:
@@ -1236,7 +1250,6 @@ def _facts(
         id_mask = np.ones(routed, np.float32)
         detail_mask = np.ones(routed, np.float32)
     links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
-    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]
     all_programs = padded(program)
     return FactRoutes(
         kinds=padded(kinds),

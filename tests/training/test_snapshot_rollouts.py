@@ -1870,7 +1870,9 @@ def test_native_snapshot_self_play(
             "transitions": 1,
             "games_per_stream": 1,
             "snapshot": SnapshotConfig(
-                capacity=2,
+                # Hold warmup entries alongside update 2's fresh captures so
+                # untrained critic-residual noise cannot evict the visited root.
+                capacity=4,
                 group_size=group_size,
                 horizon=horizon,
                 replay_fraction=replay_fraction,

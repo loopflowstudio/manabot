@@ -1600,12 +1600,10 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self
-            .agent_player
-            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
+        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
         let opponent_player_ptr = self
             .opponent_player
-            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
+            .row_ptr(env_index, config.player_dim())?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -1833,17 +1831,11 @@ impl SendObservationFieldSlices {
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player: unsafe {
-                slice::from_raw_parts_mut(
-                    agent_player_ptr,
-                    crate::agent::observation_encoder::PLAYER_DIM,
-                )
+                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
             },
             // SAFETY: each call uses disjoint per-env rows.
             opponent_player: unsafe {
-                slice::from_raw_parts_mut(
-                    opponent_player_ptr,
-                    crate::agent::observation_encoder::PLAYER_DIM,
-                )
+                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },

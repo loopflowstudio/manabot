@@ -131,6 +131,10 @@ class TestEnumParity:
             (StepEnum.POSTCOMBAT_MAIN_STEP, managym.StepEnum.POSTCOMBAT_MAIN_STEP),
             (StepEnum.ENDING_END, managym.StepEnum.ENDING_END),
             (StepEnum.ENDING_CLEANUP, managym.StepEnum.ENDING_CLEANUP),
+            (
+                StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+                managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+            ),
         ],
     )
     def test_step_enum(self, py_enum, cpp_enum):

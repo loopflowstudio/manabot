@@ -110,3 +110,17 @@ fn vampiric_rites_sacrifices_a_chosen_creature_for_a_life_and_a_card() {
     assert!(s.game().state.permanents[ogre].is_some());
     assert_eq!(s.untapped_permanents_named(0, "Swamp"), 2);
 }
+
+#[test]
+fn foundations_5e_sure_strike() {
+    use managym::state::card::Keyword;
+    crate::assert_targeted_pump(
+        "Sure Strike",
+        "Gray Ogre",
+        0,
+        (5, 2),
+        &[Keyword::FirstStrike],
+        0,
+        0,
+    );
+}

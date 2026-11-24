@@ -22,15 +22,17 @@ Captured programs are encoded in row order and preserve signed numeric tokens.
 Host admission checks rows once. Host preparation
 compacts and indexes them; the encoder reads `FactRoutes`, including the
 host's packed program schedule in the original equal-length sorting order.
+Padded `[B,F]` routes add into each observation's objects with `scatter_add`;
+live-only `[1,R]` routes (MPS) `index_add` into the flattened objects.
 """
 
 from typing import Literal
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import PackedSequence
 
 from manabot.backends.torch.numerics import embedding_rows
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.backends.torch.records import program_number
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import FACT_KINDS
@@ -101,18 +103,24 @@ class FactEncoder(nn.Module):
             tokens = hidden.flatten(0, 1)[program.rows] + self.program_numeric(
                 program_number(program.numbers).unsqueeze(-1)
             )
-            packed, _ = self.program_sequence(
-                PackedSequence(
-                    tokens[program.schedule.gather],
-                    torch.tensor(program.schedule.sizes),
-                )
+            packed, _ = packed_gru(
+                self.program_sequence,
+                tokens[program.schedule.gather],
+                program.schedule.sizes,
             )
-            sequence = packed.data[program.schedule.unpack]
+            sequence = packed[program.schedule.unpack]
             hidden = hidden.masked_scatter(
                 program.mask.view_as(rows.kinds).unsqueeze(-1),
                 (tokens + sequence).to(hidden.dtype),
             )
-        encoded = self.output(torch.tanh(hidden))
+        encoded = self.output(torch.tanh(hidden)).masked_fill(
+            (rows.linked == 0).unsqueeze(-1), 0
+        )
+        if rows.compact:
+            # Live rows `[1,R]` add into the flattened `[B*N,W]` objects.
+            return objects + torch.zeros_like(objects).flatten(0, 1).index_add(
+                0, rows.targets, encoded[0].to(objects.dtype)
+            ).view_as(objects)
         targets = (
             rows.targets.view(rows.kinds.shape)
             - torch.arange(objects.shape[0], device=objects.device)[:, None]
@@ -121,6 +129,6 @@ class FactEncoder(nn.Module):
         delta = torch.zeros_like(objects).scatter_add(
             1,
             targets.unsqueeze(-1).expand(-1, -1, objects.shape[-1]),
-            encoded.masked_fill((rows.linked == 0).unsqueeze(-1), 0).to(objects.dtype),
+            encoded.to(objects.dtype),
         )
         return objects + delta

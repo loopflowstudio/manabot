@@ -4,14 +4,18 @@ use managym_state::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
         TriggerCondition, TriggerSubject, TurnStep,
     },
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fevered_visions(), tireless_tracker()]
+    vec![
+        crow_of_dark_tidings(),
+        fevered_visions(),
+        tireless_tracker(),
+    ]
 }
 
 fn tireless_tracker() -> CardDefinition {
@@ -95,6 +99,45 @@ fn fevered_visions() -> CardDefinition {
                     },
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crow_of_dark_tidings() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters or dies, mill two cards. (Put the top two cards of your library into your graveyard.)";
+    CardDefinition {
+        key: "soi.crow_of_dark_tidings",
+        scryfall_id: "14e4d1b5-72de-4062-9fdd-e9bfd655ee79",
+        printed: PrintedCharacteristics {
+            name: "Crow of Dark Tidings".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into(), "Bird".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::when_enters(
+                    TriggerSubject::This,
+                    vec![Effect::MillCards {
+                        count: EffectValue::Fixed(2),
+                        target: None,
+                    }],
+                ),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::MillCards {
+                        count: EffectValue::Fixed(2),
+                        target: None,
+                    }],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

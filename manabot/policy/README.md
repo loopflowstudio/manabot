@@ -66,8 +66,9 @@ the full action width.
     back to `used_columns`), or `"live_tokens"` (flat `live_index` /
     `live_offsets`, plus MLX's `compact_attention`).
   - `facts: FactLayout`: `"padded"` (default), `"used_columns"` (columns valid
-    in at least one row; unbucketed CPU and MLX inference), or `"live_rows"`
-    (live fact rows only; MLX learner compaction).
+    in at least one row for unbucketed CPU and MLX inference), `"live_rows"`
+    (live fact rows for MLX learner compaction), or `"bucketed_live_rows"`
+    (live facts padded to a power of two of at least 64 for Torch MPS).
 
   Unknown layouts raise `ValueError`. Both `ObservationSpans` and dense buffers
   share `select_attention_columns`

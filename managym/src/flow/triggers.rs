@@ -19,7 +19,7 @@ use crate::{
             Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
             TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
-        card::CardType,
+        card::{CardDefId, CardType, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
         game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
@@ -128,6 +128,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
+        TriggerCondition::GainsLife { .. } => EventKinds::of(EventKind::LifeChanged),
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
         TriggerCondition::NthCounter { .. }
         | TriggerCondition::PutsCounters { .. }
@@ -212,6 +213,24 @@ impl Game {
             if trigger.source_ref().is_some() && self.permanent_object(id) == trigger.source_ref())
     }
 
+    pub(crate) fn trigger_source_definition(&self, trigger: &PendingTrigger) -> CardDefId {
+        trigger.source_lki.as_ref().map_or_else(
+            || self.state.source_base(trigger.source_object()).0,
+            |lki| lki.definition_id,
+        )
+    }
+
+    /// The face that supplied the ability, even if its source has since changed.
+    pub(crate) fn trigger_source_face(
+        &self,
+        trigger: &PendingTrigger,
+    ) -> Option<&PrintedCharacteristics> {
+        self.source_face(
+            trigger.source_object(),
+            self.trigger_source_definition(trigger),
+        )
+    }
+
     fn trigger_requirements(
         &self,
         trigger: &PendingTrigger,
@@ -219,15 +238,7 @@ impl Game {
         let effects = match &trigger.inline_effects {
             Some(effects) => effects.as_slice(),
             None => self
-                .source_face(
-                    trigger.source_object(),
-                    trigger
-                        .source_lki
-                        .as_ref()
-                        .map_or(self.state.source_base(trigger.source_object()).0, |lki| {
-                            lki.definition_id
-                        }),
-                )?
+                .trigger_source_face(trigger)?
                 .abilities
                 .get(trigger.ability_index)?
                 .effects(),
@@ -359,12 +370,12 @@ impl Game {
             if self.state.pending_triggers.is_empty() {
                 return None;
             }
-            *self.state.trigger_placement_mut() = Some(TriggerPlacement {
+            *self.state.trigger_placement_mut() = Some(Box::new(TriggerPlacement {
                 remaining: std::mem::take(self.state.pending_triggers_mut()),
                 active: self.active_player(),
                 group: 0,
                 placing: None,
-            });
+            }));
         }
         loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();
@@ -406,19 +417,26 @@ impl Game {
             };
             // CR 700.2b: a modal trigger's mode is chosen first; with no
             // mode that has legal targets it is removed (CR 700.2a).
-            if let Some(modes) = self.unchosen_trigger_modes(&trigger) {
-                let legal = self.legal_trigger_modes(&trigger, &modes);
-                let up_to = matches!(
-                    self.trigger_mode_rule(&trigger),
-                    Some(Effect::TriggerModes { up_to: Some(_), .. })
-                );
-                if up_to && (legal.is_empty() || self.trigger_modes_left(&trigger) == 0) {
+            if let Some(Effect::TriggerModes {
+                modes,
+                up_to,
+                unchosen,
+            }) = self.pending_trigger_mode_rule(&trigger)
+            {
+                let legal = self.legal_trigger_modes(&trigger, modes, *unchosen);
+                let finished = up_to.as_ref().is_some_and(|limit| {
+                    legal.is_empty()
+                        || trigger.chosen_modes.len()
+                            >= self.controller_value(limit, trigger.controller).max(0) as usize
+                });
+                if finished {
                     // "Choose up to": the chosen modes, in printed order.
-                    trigger.inline_effects = Some(self.chosen_mode_effects(&trigger, &modes));
+                    trigger.inline_effects = Some(Self::chosen_mode_effects(&trigger, modes));
                 } else if legal.is_empty() {
                     continue;
                 } else {
                     let controller = trigger.controller;
+                    let may_decline = up_to.is_some();
                     self.state.trigger_placement_mut().as_mut().unwrap().placing = Some(trigger);
                     return Some(ActionSpace {
                         player: Some(controller),
@@ -429,7 +447,7 @@ impl Game {
                                 player: controller,
                                 mode,
                             })
-                            .chain(up_to.then_some(Action::Decline { player: controller }))
+                            .chain(may_decline.then_some(Action::Decline { player: controller }))
                             .collect(),
                         focus: Vec::new(),
                     });
@@ -505,30 +523,13 @@ impl Game {
         }
     }
 
-    /// The modes of a placing trigger whose modes are not yet chosen.
-    pub(crate) fn unchosen_trigger_modes(
-        &self,
-        trigger: &PendingTrigger,
-    ) -> Option<Vec<Vec<Effect>>> {
+    /// Borrow the printed mode rule until the selected effects are on the trigger.
+    pub(crate) fn pending_trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         if trigger.inline_effects.is_some() {
             return None;
         }
-        match self.trigger_mode_rule(trigger)? {
-            Effect::TriggerModes { modes, .. } => Some(modes.clone()),
-            _ => None,
-        }
-    }
-
-    /// The placing trigger's `Effect::TriggerModes`, its only effect.
-    fn trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         match self
-            .source_face(
-                trigger.source_object(),
-                trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                ),
-            )?
+            .trigger_source_face(trigger)?
             .abilities
             .get(trigger.ability_index)?
             .effects()
@@ -538,27 +539,15 @@ impl Game {
         }
     }
 
-    /// How many modes the placing trigger may still choose: one, or "up to"
-    /// its value less those chosen.
-    fn trigger_modes_left(&self, trigger: &PendingTrigger) -> usize {
-        match self.trigger_mode_rule(trigger) {
-            Some(Effect::TriggerModes {
-                up_to: Some(value), ..
-            }) => usize::try_from(self.controller_value(value, trigger.controller))
-                .unwrap_or(0)
-                .saturating_sub(trigger.chosen_modes.len()),
-            _ => 1,
-        }
-    }
-
     /// Modes the placing trigger may choose next: every required target has
     /// a legal candidate, it is not chosen already, and an "unchosen" rule's
     /// source has not chosen it before.
-    fn legal_trigger_modes(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<usize> {
-        let unchosen = matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { unchosen: true, .. })
-        );
+    fn legal_trigger_modes(
+        &self,
+        trigger: &PendingTrigger,
+        modes: &[Vec<Effect>],
+        unchosen: bool,
+    ) -> Vec<usize> {
         let chosen_before = match trigger
             .source_ref()
             .map(|source| self.lookup_current_permanent(source))
@@ -610,17 +599,26 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        let Some(Effect::TriggerModes {
+            modes,
+            up_to,
+            unchosen,
+        }) = self.pending_trigger_mode_rule(trigger)
+        else {
+            return Err(AgentError("no pending trigger mode".into()));
+        };
         if trigger.controller != player
-            || !self.legal_trigger_modes(trigger, &modes).contains(&mode)
+            || !self
+                .legal_trigger_modes(trigger, modes, *unchosen)
+                .contains(&mode)
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
-        let rule = self.trigger_mode_rule(trigger).cloned();
-        let source = trigger
+        // Multiple modes resolve in printed order once selection is complete.
+        let selected = up_to.is_none().then(|| modes[mode].clone());
+        let remember_on = trigger
             .source_ref()
+            .filter(|_| *unchosen && up_to.is_none())
             .and_then(|source| self.lookup_current_permanent(source).ok());
         let trigger = self
             .state
@@ -628,62 +626,33 @@ impl Game {
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger");
-        match rule {
-            Some(Effect::TriggerModes { up_to: Some(_), .. }) => trigger.chosen_modes.push(mode),
-            Some(Effect::TriggerModes { unchosen, .. }) => {
-                trigger.inline_effects = Some(modes[mode].clone());
-                if let (true, Some(source)) = (unchosen, source) {
-                    let affected = self.affected_permanent(source);
-                    let controller = player;
-                    let object = self.state.permanents[source].as_ref().map(|p| p.object);
-                    self.apply_continuous(
-                        object,
-                        controller,
-                        affected,
-                        Modification::ModeChosen {
-                            mode: u8::try_from(mode).unwrap_or(u8::MAX),
-                        },
-                        EffectDuration::Indefinite,
-                    );
-                }
-            }
-            _ => {}
+        if let Some(effects) = selected {
+            trigger.inline_effects = Some(effects);
+        } else {
+            trigger.chosen_modes.push(mode);
+        }
+        if let Some(source) = remember_on {
+            self.apply_continuous(
+                self.permanent_object(source),
+                player,
+                self.affected_permanent(source),
+                Modification::ModeChosen {
+                    mode: u8::try_from(mode).unwrap_or(u8::MAX),
+                },
+                EffectDuration::Indefinite,
+            );
         }
         Ok(())
     }
 
     /// The effects of the placing trigger's chosen modes, in printed order.
-    fn chosen_mode_effects(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
+    fn chosen_mode_effects(trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
         let mut chosen = trigger.chosen_modes.clone();
         chosen.sort_unstable();
         chosen
             .into_iter()
             .flat_map(|mode| modes[mode].iter().cloned())
             .collect()
-    }
-
-    /// Stop choosing an "up to" trigger's modes.
-    fn stop_choosing_trigger_modes(&mut self, player: PlayerId) -> Result<(), AgentError> {
-        let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        if trigger.controller != player {
-            return Err(AgentError("not the trigger's controller".into()));
-        }
-        let effects = self.chosen_mode_effects(trigger, &modes);
-        self.state
-            .trigger_placement
-            .as_mut()
-            .and_then(|p| p.placing.as_mut())
-            .expect("validated trigger")
-            .inline_effects = Some(effects);
-        Ok(())
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
@@ -693,12 +662,23 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        if matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { up_to: Some(_), .. })
-        ) && trigger.inline_effects.is_none()
+        if let Some(Effect::TriggerModes {
+            modes,
+            up_to: Some(_),
+            ..
+        }) = self.pending_trigger_mode_rule(trigger)
         {
-            return self.stop_choosing_trigger_modes(player);
+            if trigger.controller != player {
+                return Err(AgentError("not the trigger's controller".into()));
+            }
+            let effects = Self::chosen_mode_effects(trigger, modes);
+            self.state
+                .trigger_placement
+                .as_mut()
+                .and_then(|p| p.placing.as_mut())
+                .expect("validated trigger")
+                .inline_effects = Some(effects);
+            return Ok(());
         }
         let requirements = self
             .trigger_requirements(trigger)
@@ -749,11 +729,7 @@ impl Game {
     }
 
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
-        let source_definition_id = trigger
-            .source_lki
-            .as_ref()
-            .map(|lki| lki.definition_id)
-            .unwrap_or(self.state.source_base(trigger.source_object()).0);
+        let source_definition_id = self.trigger_source_definition(&trigger);
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
@@ -807,7 +783,10 @@ impl Game {
                     .map(Target::GraveyardCard)
                     .collect()
             }
-            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
+            TargetSpec::Player
+            | TargetSpec::Opponent
+            | TargetSpec::AnyTarget
+            | TargetSpec::PlayerOrPlaneswalker => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
@@ -849,6 +828,7 @@ impl Game {
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget
+                | TargetSpec::PlayerOrPlaneswalker
                 | TargetSpec::CreatureYouControl
                 | TargetSpec::CreatureOpponentControls
                 | TargetSpec::LandYouControl
@@ -1083,7 +1063,9 @@ impl Game {
                 GameEvent::SpellCast {
                     object_id: object, ..
                 } => Some(self.spell_caster(*object)),
-                GameEvent::CardDrawn { player, .. } => Some(*player),
+                GameEvent::CardDrawn { player, .. } | GameEvent::LifeChanged { player, .. } => {
+                    Some(*player)
+                }
                 // "that player": whose graveyard the card was put into.
                 GameEvent::CardMoved {
                     object_id: object,
@@ -2010,6 +1992,9 @@ impl Game {
                             == Some(n as usize - 1)
                     })
             }
+            (TriggerCondition::GainsLife { who }, GameEvent::LifeChanged { player, old, new }) => {
+                new > old && who.includes(source_controller, *player)
+            }
             (
                 TriggerCondition::Draws { who, nth },
                 GameEvent::CardDrawn {
@@ -2148,16 +2133,25 @@ impl Game {
             _ => return false,
         };
         let departed = event.departed_object();
-        let animated = departed
-            .and_then(|object| self.object_lki(object))
-            .map(|lki| lki.animated_creature)
-            .unwrap_or_else(|| {
-                self.state
-                    .permanent_of(moved_object)
-                    .filter(|id| self.state.permanents[*id].is_some())
-                    .is_some_and(|id| self.characteristics(id).is_animated)
-            });
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
+            if let GameEvent::CardMoved {
+                to: ZoneType::Battlefield,
+                ..
+            } = event
+            {
+                if let Some(id) = self.state.permanent_of(moved_object) {
+                    return self.permanent_matches_predicate(id, predicate);
+                }
+            }
+            let animated = departed
+                .and_then(|object| self.object_lki(object))
+                .map(|lki| lki.animated_creature)
+                .unwrap_or_else(|| {
+                    self.state
+                        .permanent_of(moved_object)
+                        .filter(|id| self.state.permanents[*id].is_some())
+                        .is_some_and(|id| self.characteristics(id).is_animated)
+                });
             predicate.matches(
                 &self.state[moved_object],
                 self.object_power(moved_object),
@@ -2168,6 +2162,16 @@ impl Game {
         // it left (CR 603.10a looks back to the departed object).
         let is_source = moved_object == source_object || departed == Some(source_object);
         match subject {
+            TriggerSubject::ThisOr(other) => {
+                is_source
+                    || self.subject_matches_moved_object(
+                        other,
+                        source_object,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2181,7 +2185,7 @@ impl Game {
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature => self
+            TriggerSubject::Attached => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
@@ -2203,8 +2207,22 @@ impl Game {
             return false;
         };
         match subject {
+            TriggerSubject::ThisOr(other) => {
+                permanent.object == source_object
+                    || self.subject_matches_permanent(
+                        other,
+                        source_object,
+                        source_controller,
+                        permanent_id,
+                    )
+            }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
+            TriggerSubject::Attached => {
+                self.state
+                    .permanent_of(source_object)
+                    .and_then(|source| self.attached_permanent(source))
+                    == Some(permanent_id)
+            }
             TriggerSubject::Matching {
                 controlled_by,
                 predicate,
@@ -2215,15 +2233,6 @@ impl Game {
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
-    }
-
-    /// Whether the Aura card `aura` is on the battlefield attached to the
-    /// permanent.
-    fn is_enchanted_by(&self, permanent_id: PermanentId, aura: ObjectId) -> bool {
-        self.state
-            .permanent_of(aura)
-            .and_then(|aura| self.attached_permanent(aura))
-            == Some(permanent_id)
     }
 }
 

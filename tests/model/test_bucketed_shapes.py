@@ -12,6 +12,7 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.observation import (
     FACT_OBJECT_INDEX,
+    FACT_VALID_INDEX,
     ObservationSpace,
     column,
     encode_observation,
@@ -25,7 +26,7 @@ from manabot.policy.buckets import (
     row_needs,
     sizes_of,
 )
-from manabot.policy.prepare import prepare
+from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
@@ -260,8 +261,7 @@ def test_outputs_and_gradients_match_default(history: bool, streams: bool) -> No
         reference.named_parameters(), agent.parameters(), strict=True
     ):
         if a.grad is None:
-            # The complete catalog may add exactly-zero program gradients.
-            assert b.grad is None or not b.grad.any(), name
+            assert b.grad is None, name
         else:
             assert b.grad is not None, name
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
@@ -487,3 +487,50 @@ def test_collection_records_each_rows_measured_needs() -> None:
     assert recorded is not None
     host = batch.observations(rows).observation
     assert np.array_equal(recorded, row_needs(host, case.agent.observation_space))
+
+
+@pytest.mark.parametrize("bucketed", [False, True])
+def test_mps_live_fact_routes_match_padded_outputs_and_gradients(
+    bucketed: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MPS preparation routes live facts only; run here on CPU against padding."""
+    torch.manual_seed(303)
+    case = _policy(history=False)
+    obs = _later_decisions(case)
+    reference = _bucketed(case.agent)
+    if not bucketed:
+        reference.bucketed_shapes = False
+    padded_input = device_input(reference, obs)
+    monkeypatch.setattr(ActorCritic, "device_type", "mps")
+    live_input = device_input(reference, obs)
+    live = int((obs["facts"][..., FACT_VALID_INDEX] == 1).sum())
+    assert live > 0 and padded_input.facts.programs is not None
+    assert live_input.facts.compact
+    assert live_input.facts.kinds.shape == (
+        1,
+        max(MIN_LIVE_FACT_ROWS, 1 << (live - 1).bit_length()),
+    )
+    gradients = []
+    outputs = []
+    for prepared in (padded_input, live_input):
+        reference.zero_grad()
+        logits, values = reference.forward_distribution(prepared)
+        legal = obs["actions_valid"].bool()
+        (logits[legal].square().mean() + values.square().mean()).backward()
+        outputs.append((logits.detach(), values.detach()))
+        gradients.append([p.grad for p in reference.parameters()])
+    torch.testing.assert_close(outputs[1], outputs[0], atol=1e-5, rtol=1e-5)
+    for (name, _), a, b in zip(reference.named_parameters(), *gradients, strict=True):
+        assert (a is None) == (b is None), name
+        if a is not None:
+            torch.testing.assert_close(b, a, atol=1e-5, rtol=1e-4)
+    with torch.no_grad(), PolicyInference(reference) as scope:
+        served = scope.prepare(host_inputs(obs))
+        assert served.facts.compact
+        if not bucketed:
+            assert served.attention_columns is not None
+            assert len(served.attention_columns) == bucket(
+                int(served.validity.bool().any(0).sum()), served.validity.shape[1]
+            )
+        served_outputs = reference.forward_distribution(served)
+    torch.testing.assert_close(served_outputs, outputs[0], atol=1e-5, rtol=1e-5)

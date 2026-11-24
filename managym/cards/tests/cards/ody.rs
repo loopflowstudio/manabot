@@ -122,3 +122,31 @@ fn tarnished_citadel_damage_is_prevented_under_teferis_protection() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("W"));
     assert_eq!(s.life(0), 20);
 }
+
+#[test]
+fn foundations_5e_zombify() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::{card_of, offered_targets, permanent, permanent_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Zombify", "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(0, "Forest");
+    let ours = card_of(&s, ours);
+    let ours = move_card(&mut s, ours, ZoneType::Graveyard);
+    let theirs = card_of(&s, theirs);
+    let theirs = move_card(&mut s, theirs, ZoneType::Graveyard);
+    let land = card_of(&s, land);
+    let land = move_card(&mut s, land, ZoneType::Graveyard);
+    cast(&mut s, "Zombify");
+    let offers = offered_targets(&s);
+    assert_eq!(offers, [Target::GraveyardCard(ours)]);
+    assert!(!offers.contains(&Target::GraveyardCard(theirs)));
+    assert!(!offers.contains(&Target::GraveyardCard(land)));
+    assert!(s.choose_target(Target::GraveyardCard(ours)));
+    settle(&mut s);
+    let returned = permanent_of(&s, ours).expect("returned");
+    assert!(!permanent(&s, returned).tapped);
+}

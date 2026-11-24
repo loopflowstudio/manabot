@@ -47,6 +47,7 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            attached_to: permanent.attached_to,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics
@@ -62,6 +63,7 @@ impl Game {
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
+            was_creature: characteristics.is_creature(),
             animated_creature: characteristics.is_animated,
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,

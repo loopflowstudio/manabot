@@ -448,6 +448,8 @@ pub struct LegacyPermanentView {
     /// Attacking in the current combat.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,

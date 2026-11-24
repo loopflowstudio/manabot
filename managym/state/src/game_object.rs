@@ -283,6 +283,9 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    /// The exact object this permanent was attached to immediately before departure.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
+    pub attached_to: Option<ObjectId>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -300,6 +303,8 @@ pub struct ObjectLki {
     pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
+    /// Effective creature status at departure, for damage from a stacked ability.
+    pub was_creature: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,

@@ -58,6 +58,7 @@ from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
     AttentionLayout,
     BeliefRows,
+    FactLayout,
     Layout,
     Prepared,
     Tables,
@@ -533,7 +534,9 @@ class ActorCritic(nn.Module):
         """Prepare unchanged admitted rows for learning or inference.
 
         `inference` selects compaction and catalog coverage independently of
-        autograd mode; bucketed batches always use the full catalog schedule.
+        autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
+        MPS uses bucketed object columns for inference and bucketed live fact
+        routes for both inference and learning.
         """
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
             rows = observation_spans(
@@ -564,7 +567,7 @@ class ActorCritic(nn.Module):
         inference: bool,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
-        device = device_of(self).type
+        device = self.device_type
         # Learners and CUDA inference keep padded attention; power-of-two
         # column counts on MPS bound the distinct Metal attention graphs.
         attention: AttentionLayout = "padded"
@@ -575,18 +578,23 @@ class ActorCritic(nn.Module):
                 attention = "used_columns"
             elif inference and device == "mps":
                 attention = "bucketed_columns"
-        compact_facts = inference and device == "cpu" and not self.bucketed_shapes
+        facts: FactLayout = "padded"
+        if device == "mps":
+            facts = "bucketed_live_rows"
+        elif inference and device == "cpu" and not self.bucketed_shapes:
+            facts = "used_columns"
+        full_catalog = inference or (self.bucketed_shapes and device == "cuda")
         return prepare(
             obs,
             tables,
             attention=attention,
-            facts="used_columns" if compact_facts else "padded",
+            facts=facts,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
             binding=self._binding(),
-            select_programs=not inference and not self.bucketed_shapes,
+            select_programs=not full_catalog,
         )
 
     def _evaluate_outputs(
