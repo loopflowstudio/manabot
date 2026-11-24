@@ -1,16 +1,21 @@
 //! Dominaria United.
 use managym_state::{
-    ability::{Ability, Effect, PaymentCost, TriggerSubject},
+    ability::{
+        Ability, Actor, Effect, ObjectSelector, PaymentCost, Scope, TriggerCondition,
+        TriggerSubject,
+    },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
         StaticAbility,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        balmor_battlemage_captain(),
         magnigoth_sentry(),
         resolute_reinforcements(),
         tolarian_terror(),
@@ -80,6 +85,47 @@ fn magnigoth_sentry() -> CardDefinition {
             power: Some(4),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Reach]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn balmor_battlemage_captain() -> CardDefinition {
+    let text_box = "Flying\nWhenever you cast an instant or sorcery spell, creatures you control get +1/+0 and gain trample until end of turn.";
+    CardDefinition {
+        key: "dmu.balmor_battlemage_captain",
+        scryfall_id: "959ba62e-bb3a-49ad-8b1b-e787e413e5d4",
+        printed: PrintedCharacteristics {
+            name: "Balmor, Battlemage Captain".into(),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bird".into(), "Wizard".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{U}{R}")),
+            power: Some(1),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                        ..Default::default()
+                    },
+                ),
+                intervening_if: None,
+                effects: vec![
+                    Effect::until_end_of_turn(
+                        ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
+                        Modification::pump(1, 0),
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                    ),
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

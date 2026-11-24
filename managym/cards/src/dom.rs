@@ -1,14 +1,14 @@
 //! Dominaria.
-use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{Ability, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![run_amok()]
+    vec![tatyova_benthic_druid(), run_amok()]
 }
 
 fn run_amok() -> CardDefinition {
@@ -38,6 +38,34 @@ fn run_amok() -> CardDefinition {
             ],
             targeting: vec![TargetRequirement::one(attacking())],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tatyova_benthic_druid() -> CardDefinition {
+    CardDefinition {
+        key: "dom.tatyova_benthic_druid",
+        scryfall_id: "93657aaa-7a0f-49ad-b026-6f79b3bd6768",
+        printed: PrintedCharacteristics {
+            name: "Tatyova, Benthic Druid".into(),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Merfolk".into(), "Druid".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{3}{G}{U}")),
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::gain_life(1), Effect::DrawCards { count: 1.into() }],
+            )],
+            text_box:
+                "Landfall — Whenever a land you control enters, you gain 1 life and draw a card."
+                    .into(),
             ..Default::default()
         },
         ..Default::default()

@@ -32,3 +32,5 @@ Use the first printed red 1/1 Goblin token face (Unglued) and file the cross-set
 Fill the Batch 5a cohort with the ledger’s vanilla and keyword-only creatures. Include Primeval Bounty and the three Treasure producers. Keep modal and targeted removal spells in their planned Batch 5b.
 
 Use the 23 spells named in Batch 5b as this review cohort. Keep unnamed siblings in the remaining audit queue. For Deadly Plot, Hungry Ghoul ordinarily enters untapped so the return instruction determines its orientation.
+
+Use the 15 explicitly named Batch 5c permanents as the review cohort. Fork Soul-Guide Lantern before activation to compare its two sacrifice abilities from the same graveyards.

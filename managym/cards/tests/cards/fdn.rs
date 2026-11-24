@@ -1107,3 +1107,39 @@ fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
     s.pass_priority();
     assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
 }
+
+#[test]
+fn foundations_permanent_clinquant_skymage() {
+    use crate::support::game::{five_color_setup, ready};
+    use crate::support::inspect::counters;
+    use crate::support::play::{activate, settle};
+    let mut s = five_color_setup(&["Clinquant Skymage", "Arcanis the Omnipotent"]);
+    let source = s.force_permanent_on_battlefield(0, "Clinquant Skymage");
+    let arcanis = s.force_permanent_on_battlefield(0, "Arcanis the Omnipotent");
+    ready(&mut s, "Arcanis the Omnipotent");
+    activate(&mut s, arcanis, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, source), 3);
+}
+
+#[test]
+fn foundations_permanent_elvish_regrower() {
+    use crate::support::game::{five_color_setup, plant_in_graveyard};
+    use crate::support::inspect::zone_of;
+    use crate::support::play::{cast, pass_until, settle, spend_colorless};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Elvish Regrower", "Gray Ogre", "Giant Growth"]);
+    let wrong_type = plant_in_graveyard(&mut s, 0, "Giant Growth");
+    let theirs = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    let card = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    cast(&mut s, "Elvish Regrower");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(!s.choose_target(Target::GraveyardCard(wrong_type)));
+    assert!(!s.choose_target(Target::GraveyardCard(theirs)));
+    assert!(s.choose_target(Target::GraveyardCard(card)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Hand));
+}

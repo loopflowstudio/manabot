@@ -5,9 +5,11 @@
 “stop doing 1 card at a time” (2026-11-24). Select a cohort by shared rules capability. Implement and verify its ready cards in the same pass, aiming for the planned 20–35 for simple compositions where available. Record a blocked card’s missing capability and continue with its ready siblings. Review the batch together and queue the next cohort during realignment. This supersedes individual next-card entries below.
 
 ## Working progress
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions, 73 have been authored on this branch (16 earlier cards, 35 in Batch 5a and 22 in Batch 5b), thirteen have documented deferrals and 133 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions, 88 have been authored on this branch (16 earlier cards, 35 in Batch 5a, 22 in Batch 5b and 15 in Batch 5c), thirteen have documented deferrals and 118 await audit.
 
-**Next slice.** Audit Batch 5c’s triggered and activated permanents together. Keep the remaining unnamed removal and pump spells in the 133-row audit queue. Live consumer parity, closed-deck privacy, end-to-end Command checks and the legal loyalty activation remain open for gate.
+**Batch 5c.** All 15 named triggered and activated permanents have first-printing definitions and directed native outcomes linked in the FDN ledger. Golem, Merfolk and Unicorn needed entries in the creature subtype table. Arcanis checks for the same battlefield object when its return ability resolves. Soul-Guide Lantern's untargeted activation uses the opposing seat's graveyard, while its entry chooses one card from either graveyard.
+
+**Next slice.** Audit Batch 5d's characteristics and choice continuations. The remaining unnamed siblings stay in the audit queue. Gate retains live consumer parity, Seeker’s Folly’s chooser and three-card closed-deck privacy, Lightning Strike’s replay and stale Command after a hexproof response, and the legal loyalty activation.
 
 **Batch 5b.** The 22 authored spells exercise target restrictions, both branches of each authored modal spell, and changes across cleanup. The ledger links each of the 22 definitions to its native casting fixture. Stab kills Gray Ogre and Hill Giant recovers at cleanup. Broken Wings offers the flier and excludes the ground creature. With Day of Judgment, Beifong’s Bounty Hunters see both their own death and Gray Ogre’s, leaving six counters on the Forest. All 22 directed tests and the registered-printing conformance check passed. The Lightning Strike fixtures in `cards/tests/cards/ths.rs` cover opposing hexproof at announcement and resolution.
 

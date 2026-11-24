@@ -175,3 +175,19 @@ fn axe_equipped_fynn_poisons_in_both_damage_steps() {
     );
     s.assert_life(1, 16);
 }
+
+#[test]
+fn foundations_permanent_youthful_valkyrie() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{counters, permanent_named};
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Youthful Valkyrie", "Gray Ogre", "Serra Angel"]);
+    enter_and_settle(&mut s, "Youthful Valkyrie");
+    let source = permanent_named(&s, "Youthful Valkyrie");
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Gray Ogre");
+    assert_eq!(counters(&s, permanent_named(&s, "Gray Ogre")), 0);
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Serra Angel");
+    assert_eq!(counters(&s, source), 1);
+}

@@ -17,6 +17,8 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        elvish_regrower(),
+        clinquant_skymage(),
         seekers_folly(),
         goblin_surprise(),
         stab(),
@@ -722,6 +724,76 @@ fn herald_of_eternal_dawn() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
             statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
             text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn clinquant_skymage() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.clinquant_skymage",
+        scryfall_id: "36012810-0e83-4640-8ba7-7262229f1b84",
+        printed: PrintedCharacteristics {
+            name: "Clinquant Skymage".into(),
+            subtypes: vec!["Bird".into(), "Wizard".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: None,
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: "Flying\nWhenever you draw a card, put a +1/+1 counter on this creature."
+                .into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elvish_regrower() -> CardDefinition {
+    let text_box =
+        "When this creature enters, return target permanent card from your graveyard to your hand.";
+    CardDefinition {
+        key: "fdn.elvish_regrower",
+        scryfall_id: "2694e3cd-26ed-4a10-ae55-fb84d7800253",
+        printed: PrintedCharacteristics {
+            name: "Elvish Regrower".into(),
+            subtypes: vec!["Elf".into(), "Druid".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            power: Some(4),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            card_types_any: vec![
+                                CardType::Artifact,
+                                CardType::Battle,
+                                CardType::Creature,
+                                CardType::Enchantment,
+                                CardType::Land,
+                                CardType::Planeswalker,
+                            ],
+                            ..Default::default()
+                        },
+                    },
+                ))],
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

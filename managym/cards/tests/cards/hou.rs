@@ -23,3 +23,23 @@ fn foundations_spell_abrade() {
     settle(&mut s);
     assert_eq!(zone_of(&s, killed), Some(ZoneType::Graveyard));
 }
+
+#[test]
+fn foundations_permanent_firebrand_archer() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::play_and_settle;
+    let mut s = five_color_setup(&[
+        "Firebrand Archer",
+        "Gray Ogre",
+        "Sol Ring",
+        "Scout's Warning",
+    ]);
+    s.force_permanent_on_battlefield(0, "Firebrand Archer");
+    play_and_settle(&mut s, "Gray Ogre");
+    s.assert_life(1, 20);
+    play_and_settle(&mut s, "Sol Ring");
+    s.assert_life(1, 19);
+    play_and_settle(&mut s, "Scout's Warning");
+    s.assert_life(1, 18);
+    s.assert_life(0, 20);
+}

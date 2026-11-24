@@ -1,7 +1,8 @@
 //! Kaldheim.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition, TurnStep,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -15,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        youthful_valkyrie(),
         snakeskin_veil(),
         fynn_the_fangbearer(),
         koma_cosmos_serpent(),
@@ -157,6 +159,35 @@ fn fynn_the_fangbearer() -> CardDefinition {
                 }],
             }],
             text_box: "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhenever a creature you control with deathtouch deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn youthful_valkyrie() -> CardDefinition {
+    let text_box =
+        "Flying\nWhenever another Angel you control enters, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "khm.youthful_valkyrie",
+        scryfall_id: "ffe93b27-f8ae-4abf-8ade-90f503f132c2",
+        printed: PrintedCharacteristics {
+            name: "Youthful Valkyrie".into(),
+            subtypes: vec!["Angel".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            power: Some(1),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::subtype("Angel")),
+                vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

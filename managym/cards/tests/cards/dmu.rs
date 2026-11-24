@@ -88,3 +88,27 @@ fn printed_creature_magnigoth_sentry() {
     use managym::state::card::Keyword;
     crate::printed_creature_combat("Magnigoth Sentry", 4, 4, &[Keyword::Reach]);
 }
+
+#[test]
+fn foundations_permanent_balmor_battlemage_captain() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::play_and_settle;
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Balmor, Battlemage Captain", "Gray Ogre", "Scout's Warning"]);
+    let source = s.force_permanent_on_battlefield(0, "Balmor, Battlemage Captain");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    play_and_settle(&mut s, "Scout's Warning");
+    assert_eq!(s.game().characteristics(source).pt(), (2, 3));
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 2));
+    for id in [source, ogre] {
+        assert!(s.game().characteristics(id).keywords.has(Keyword::Trample));
+    }
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert!(!s
+        .game()
+        .characteristics(ogre)
+        .keywords
+        .has(Keyword::Trample));
+}

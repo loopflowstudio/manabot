@@ -61,3 +61,26 @@ fn token_producer_lathliss_dragon_queen() {
 fn printed_creature_gigantosaurus() {
     crate::printed_creature_combat("Gigantosaurus", 10, 10, &[]);
 }
+
+#[test]
+fn foundations_permanent_meteor_golem() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, pass_until, settle, spend_colorless};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Meteor Golem", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(1, "Island");
+    let own = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Meteor Golem");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(!s.choose_target(Target::Permanent(land)));
+    assert!(!s.choose_target(Target::Permanent(own)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+}

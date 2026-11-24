@@ -1,9 +1,9 @@
 //! Onslaught.
 use managym_state::{
-    ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
+    ability::{Actor, Condition, Effect, ObjectSelector, PlayerSelector, Scope},
     card::{
-        CardDefinition, CardType, CardTypes, DamageTransform, Keyword, Keywords,
-        PrintedCharacteristics, ReplacementEffect,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageTransform, Keyword,
+        Keywords, PrintedCharacteristics, ReplacementEffect,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -11,7 +11,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![glory_seeker(), gratuitous_violence(), insurrection()]
+    vec![
+        arcanis_the_omnipotent(),
+        glory_seeker(),
+        gratuitous_violence(),
+        insurrection(),
+    ]
 }
 
 fn glory_seeker() -> CardDefinition {
@@ -86,4 +91,41 @@ fn insurrection() -> CardDefinition {
 /// "All creatures": every creature on the battlefield.
 fn creatures() -> ObjectSelector {
     ObjectSelector::each(Scope::Battlefield, CardPredicate::creature())
+}
+
+fn arcanis_the_omnipotent() -> CardDefinition {
+    CardDefinition {
+        key: "ons.arcanis_the_omnipotent",
+        scryfall_id: "90865f52-c062-4505-a204-b4d7d4b3fc4c",
+        printed: PrintedCharacteristics {
+            name: "Arcanis the Omnipotent".into(),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Wizard".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}{U}")),
+            power: Some(3),
+            toughness: Some(4),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::DrawCards { count: 3.into() }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{2}{U}{U}"),
+                    // A response can remove Arcanis before this ability resolves.
+                    effects: vec![Effect::If {
+                        condition: Condition::SourceMatches(CardPredicate::default()),
+                        then: vec![Effect::return_to_hand(ObjectSelector::This)],
+                        otherwise: vec![],
+                    }],
+                    ..Default::default()
+                },
+            ],
+            text_box: "{T}: Draw three cards.\n{2}{U}{U}: Return Arcanis to its owner's hand."
+                .into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

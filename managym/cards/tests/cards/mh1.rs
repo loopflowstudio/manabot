@@ -130,3 +130,19 @@ fn sunbaked_canyon_pays_life_for_red_or_white_and_cycles_itself() {
     assert!(s.game().state.permanents[canyon].is_none());
     s.assert_life(0, 20);
 }
+
+#[test]
+fn foundations_permanent_good_fortune_unicorn() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{counters, permanent_named};
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Good-Fortune Unicorn", "Gray Ogre", "Serra Angel"]);
+    enter_and_settle(&mut s, "Good-Fortune Unicorn");
+    let source = permanent_named(&s, "Good-Fortune Unicorn");
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Gray Ogre");
+    assert_eq!(counters(&s, permanent_named(&s, "Gray Ogre")), 1);
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Serra Angel");
+    assert_eq!(counters(&s, permanent_named(&s, "Serra Angel")), 1);
+}

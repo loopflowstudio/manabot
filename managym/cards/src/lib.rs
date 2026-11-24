@@ -16,12 +16,14 @@ mod aer;
 mod afr;
 mod akh;
 mod ala;
+mod apc;
 mod atq;
 mod avr;
 mod bfz;
 mod blb;
 mod bng;
 mod bro;
+mod c13;
 mod c17;
 mod c19;
 mod chk;
@@ -66,6 +68,7 @@ mod m14;
 mod m15;
 mod m19;
 mod m20;
+mod m21;
 mod mbs;
 mod mh1;
 mod mh2;
@@ -95,6 +98,7 @@ mod spm;
 mod sth;
 mod stx;
 mod tdm;
+mod thb;
 mod ths;
 mod tla;
 mod tle;
@@ -144,12 +148,14 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     afr::cards,
     akh::cards,
     ala::cards,
+    apc::cards,
     atq::cards,
     avr::cards,
     bfz::cards,
     blb::cards,
     bng::cards,
     bro::cards,
+    c13::cards,
     c17::cards,
     c19::cards,
     chk::cards,
@@ -194,6 +200,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     m15::cards,
     m19::cards,
     m20::cards,
+    m21::cards,
     mbs::cards,
     mh1::cards,
     mh2::cards,
@@ -223,6 +230,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     sth::cards,
     stx::cards,
     tdm::cards,
+    thb::cards,
     ths::cards,
     tla::cards,
     tle::cards,

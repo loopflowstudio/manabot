@@ -37,3 +37,16 @@ fn run_amok_pumps_only_an_attacking_creature() {
     s.advance_to_step(StepKind::EndOfCombat);
     s.assert_life(1, 15);
 }
+
+#[test]
+fn foundations_permanent_tatyova_benthic_druid() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::enter_and_settle;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Tatyova, Benthic Druid"]);
+    s.force_permanent_on_battlefield(0, "Tatyova, Benthic Druid");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    enter_and_settle(&mut s, "Forest");
+    s.assert_life(0, 21);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}

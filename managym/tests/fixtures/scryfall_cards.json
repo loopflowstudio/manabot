@@ -7792,5 +7792,194 @@
     ],
     "oracle_text": "Equipped creature gets +1/+1 and has \"{15}, Exile The Dominion Bracelet: You control target opponent during their next turn. This ability costs {X} less to activate, where X is this creature's power. Activate only as a sorcery.\" (You see all cards that player could see and make all decisions for them.)\nEquip {1}",
     "colors": []
+  },
+  "Firebrand Archer": {
+    "name": "Firebrand Archer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Archer",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever you cast a noncreature spell, this creature deals 1 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Guttersnipe": {
+    "name": "Guttersnipe",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Shaman",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you cast an instant or sorcery spell, this creature deals 2 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Clinquant Skymage": {
+    "name": "Clinquant Skymage",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Bird Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you draw a card, put a +1/+1 counter on this creature.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Phyrexian Arena": {
+    "name": "Phyrexian Arena",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, you draw a card and lose 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Tatyova, Benthic Druid": {
+    "name": "Tatyova, Benthic Druid",
+    "mana_cost": "{3}{G}{U}",
+    "type_line": "Legendary Creature — Merfolk Druid",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, you gain 1 life and draw a card.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Balmor, Battlemage Captain": {
+    "name": "Balmor, Battlemage Captain",
+    "mana_cost": "{U}{R}",
+    "type_line": "Legendary Creature — Bird Wizard",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast an instant or sorcery spell, creatures you control get +1/+0 and gain trample until end of turn.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Good-Fortune Unicorn": {
+    "name": "Good-Fortune Unicorn",
+    "mana_cost": "{1}{G}{W}",
+    "type_line": "Creature — Unicorn",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever another creature you control enters, put a +1/+1 counter on that creature.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Youthful Valkyrie": {
+    "name": "Youthful Valkyrie",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Angel",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever another Angel you control enters, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Shipwreck Dowser": {
+    "name": "Shipwreck Dowser",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Creature — Merfolk Wizard",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Prowess"
+    ],
+    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhen this creature enters, return target instant or sorcery card from your graveyard to your hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Elvish Regrower": {
+    "name": "Elvish Regrower",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, return target permanent card from your graveyard to your hand.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Angel of Finality": {
+    "name": "Angel of Finality",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Angel",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, exile target player's graveyard.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Meteor Golem": {
+    "name": "Meteor Golem",
+    "mana_cost": "{7}",
+    "type_line": "Artifact Creature — Golem",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, destroy target nonland permanent an opponent controls.",
+    "colors": []
+  },
+  "Soul-Guide Lantern": {
+    "name": "Soul-Guide Lantern",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this artifact enters, exile target card from a graveyard.\n{T}, Sacrifice this artifact: Exile each opponent's graveyard.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
+    "colors": []
+  },
+  "Arcanis the Omnipotent": {
+    "name": "Arcanis the Omnipotent",
+    "mana_cost": "{3}{U}{U}{U}",
+    "type_line": "Legendary Creature — Wizard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{T}: Draw three cards.\n{2}{U}{U}: Return Arcanis to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Rogue's Passage": {
+    "name": "Rogue's Passage",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.",
+    "colors": []
   }
 }

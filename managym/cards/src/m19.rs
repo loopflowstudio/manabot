@@ -1,6 +1,6 @@
 //! Core Set 2019.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
@@ -11,6 +11,7 @@ use managym_state::{
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        meteor_golem(),
         gigantosaurus(),
         lathliss_dragon_queen(),
         heroic_reinforcements(),
@@ -91,6 +92,37 @@ fn gigantosaurus() -> CardDefinition {
             subtypes: vec!["Dinosaur".into()],
             power: Some(10),
             toughness: Some(10),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn meteor_golem() -> CardDefinition {
+    CardDefinition {
+        key: "m19.meteor_golem",
+        scryfall_id: "1bdb0b15-d651-4730-8be9-d0e01145311b",
+        printed: PrintedCharacteristics {
+            name: "Meteor Golem".into(),
+            subtypes: vec!["Golem".into()],
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{7}")),
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::PermanentOpponentControls {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    },
+                ))],
+            )],
+            text_box:
+                "When this creature enters, destroy target nonland permanent an opponent controls."
+                    .into(),
             ..Default::default()
         },
         ..Default::default()

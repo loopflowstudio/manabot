@@ -106,3 +106,27 @@ fn gratuitous_violence_doubles_a_creatures_entry_damage_to_a_friendly_permanent(
     settle(&mut s);
     assert_eq!(permanent(&s, wall).damage, 2);
 }
+
+#[test]
+fn foundations_permanent_arcanis_the_omnipotent() {
+    use crate::support::game::{five_color_setup, ready};
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{activate, settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Arcanis the Omnipotent"]);
+    let source = s.force_permanent_on_battlefield(0, "Arcanis the Omnipotent");
+    ready(&mut s, "Arcanis the Omnipotent");
+    let card = card_of(&s, source);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    activate(&mut s, source, 0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 3);
+    s.set_player_mana_pool(0, "2UU");
+    activate(&mut s, source, 1);
+    let mut removed = s.clone();
+    crate::support::game::move_card(&mut removed, card, ZoneType::Graveyard);
+    settle(&mut removed);
+    assert_eq!(zone_of(&removed, card), Some(ZoneType::Graveyard));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Hand));
+}

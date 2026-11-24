@@ -1,17 +1,19 @@
 //! Modern Horizons.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics,
     },
     effect::Modification,
     mana::{Color, Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        good_fortune_unicorn(),
         fists_of_flame(),
         force_of_negation(),
         prismatic_vista(),
@@ -136,6 +138,34 @@ fn sunbaked_canyon() -> CardDefinition {
                     ..Default::default()
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn good_fortune_unicorn() -> CardDefinition {
+    let text_box =
+        "Whenever another creature you control enters, put a +1/+1 counter on that creature.";
+    CardDefinition {
+        key: "mh1.good_fortune_unicorn",
+        scryfall_id: "49d68905-e13e-4751-b028-90c795c11cd5",
+        printed: PrintedCharacteristics {
+            name: "Good-Fortune Unicorn".into(),
+            subtypes: vec!["Unicorn".into()],
+            types: CardTypes::new([CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{1}{G}{W}")),
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature()),
+                vec![Effect::put_counters(
+                    ObjectSelector::Triggering,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

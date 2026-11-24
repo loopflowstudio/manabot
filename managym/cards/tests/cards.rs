@@ -14,6 +14,8 @@ mod aer;
 mod afr;
 #[path = "cards/akh.rs"]
 mod akh;
+#[path = "cards/apc.rs"]
+mod apc;
 #[path = "cards/atq.rs"]
 mod atq;
 #[path = "cards/avr.rs"]
@@ -26,6 +28,8 @@ mod blb;
 mod bng;
 #[path = "cards/bro.rs"]
 mod bro;
+#[path = "cards/c13.rs"]
+mod c13;
 #[path = "cards/c17.rs"]
 mod c17;
 #[path = "cards/c19.rs"]
@@ -112,6 +116,8 @@ mod m15;
 mod m19;
 #[path = "cards/m20.rs"]
 mod m20;
+#[path = "cards/m21.rs"]
+mod m21;
 #[path = "cards/mbs.rs"]
 mod mbs;
 #[path = "cards/mh1.rs"]
@@ -172,6 +178,8 @@ mod sth;
 mod stx;
 #[path = "cards/tdm.rs"]
 mod tdm;
+#[path = "cards/thb.rs"]
+mod thb;
 #[path = "cards/ths.rs"]
 mod ths;
 #[path = "cards/tla.rs"]
