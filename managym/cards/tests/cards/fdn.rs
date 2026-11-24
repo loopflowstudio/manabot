@@ -2,13 +2,14 @@
 use crate::support::{
     game::{five_color_setup, move_card, Scenario},
     inspect::{card_of, permanent_named, permanent_of},
-    play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
+    play::{activate, attack_with, cast, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
+    agent::observation::Observation,
     flow::turn::StepKind,
     state::{
         card::Keyword,
-        game_object::{ObjectId, PlayerId},
+        game_object::{ObjectId, PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -1994,4 +1995,50 @@ fn raise_the_past_returns_small_creatures_together_so_momo_sees_the_sailor() {
         2,
         "the Sailor entered with Momo"
     );
+}
+
+/// CR 205.3m: the animated land has every creature type, indefinitely, so
+/// Diligent Zookeeper's "non-Human" excludes it. Witness Protection's later
+/// type change replaces them with Citizen alone (CR 613.7, layer 4).
+#[test]
+fn soulstone_sanctuary_has_all_creature_types_until_a_later_type_change() {
+    let mut s = five_color_setup(&[
+        "Soulstone Sanctuary",
+        "Diligent Zookeeper",
+        "Witness Protection",
+    ]);
+    s.force_permanent_on_battlefield(0, "Diligent Zookeeper");
+    let object = enter_and_settle(&mut s, "Soulstone Sanctuary");
+    let sanctuary = permanent_of(&s, object).unwrap();
+    activate(&mut s, sanctuary, 0);
+    settle(&mut s);
+    let view = s.game().characteristics(sanctuary);
+    assert!(view.is_creature() && view.is_land());
+    assert!(view.creature_types.is_all());
+    assert!(view.has_subtype("Ally") && view.has_subtype("Human"));
+    assert!(!view.has_subtype("Forest"), "no land subtype");
+    assert!(view.keywords.has(Keyword::Vigilance));
+    assert_eq!(view.pt(), (3, 3), "a Human gets no Zookeeper bonus");
+    let id = s.game().state.permanents[sanctuary].as_ref().unwrap().id.0 as i32;
+    let row = Observation::for_player(s.game(), PlayerId(0))
+        .agent_permanents
+        .into_iter()
+        .find(|row| row.id == id)
+        .unwrap();
+    assert!(row.is_ally);
+
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(
+        s.game().characteristics(sanctuary).creature_types.is_all(),
+        "no duration"
+    );
+    s.set_player_mana_pool(0, "U");
+    cast(&mut s, "Witness Protection");
+    assert!(s.choose_target(Target::Permanent(sanctuary)));
+    settle(&mut s);
+    let view = s.game().characteristics(sanctuary);
+    assert_eq!(view.creature_types.listed(), ["Citizen".to_string()]);
+    assert!(!view.has_subtype("Human") && !view.is_land());
+    assert_eq!(view.pt(), (2, 2), "a Citizen with one creature type");
 }

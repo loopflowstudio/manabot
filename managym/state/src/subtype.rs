@@ -232,6 +232,98 @@ pub fn is_creature_type(subtype: &str) -> bool {
     category == Some(Creature)
 }
 
+/// An object's creature types (CR 205.3m): the ones it lists, or every
+/// creature type at once ("all creature types", Soulstone Sanctuary). "All"
+/// is one value rather than an enumeration of the creature-type list, so it
+/// also covers types no card in the catalog names.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CreatureTypes {
+    /// Sorted and distinct.
+    Listed(Vec<String>),
+    All,
+}
+
+impl Default for CreatureTypes {
+    fn default() -> Self {
+        Self::Listed(Vec::new())
+    }
+}
+
+impl CreatureTypes {
+    /// The distinct creature types among `subtypes`.
+    pub fn among<'a>(subtypes: impl IntoIterator<Item = &'a String>) -> Self {
+        let mut listed: Vec<String> = subtypes
+            .into_iter()
+            .filter(|subtype| is_creature_type(subtype))
+            .cloned()
+            .collect();
+        listed.sort();
+        listed.dedup();
+        Self::Listed(listed)
+    }
+
+    /// The listed creature types; none for all creature types.
+    pub fn listed(&self) -> &[String] {
+        match self {
+            Self::Listed(listed) => listed,
+            Self::All => &[],
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        matches!(self, Self::All)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Listed(listed) if listed.is_empty())
+    }
+
+    pub fn contains(&self, creature_type: &str) -> bool {
+        match self {
+            Self::Listed(listed) => listed.iter().any(|t| t == creature_type),
+            Self::All => is_creature_type(creature_type),
+        }
+    }
+
+    /// Whether the two have a creature type in common ("that share a
+    /// creature type"); all creature types shares with any nonempty list.
+    pub fn shares(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::All, other) | (other, Self::All) => !other.is_empty(),
+            (Self::Listed(a), Self::Listed(b)) => a.iter().any(|t| b.contains(t)),
+        }
+    }
+
+    /// The creature types both have.
+    pub fn intersection(&self, other: &Self) -> Self {
+        match (self, other) {
+            (Self::All, other) | (other, Self::All) => other.clone(),
+            (Self::Listed(a), Self::Listed(b)) => {
+                Self::Listed(a.iter().filter(|t| b.contains(t)).cloned().collect())
+            }
+        }
+    }
+
+    /// How many creature types it has, at most `max`.
+    pub fn count_up_to(&self, max: usize) -> usize {
+        match self {
+            Self::Listed(listed) => listed.len().min(max),
+            Self::All => max,
+        }
+    }
+}
+
+/// A listed set serializes as its names, so retained records keep their
+/// bytes; all creature types is the string `"all"`.
+impl serde::Serialize for CreatureTypes {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Listed(listed) => listed.serialize(serializer),
+            Self::All => serializer.serialize_str("all"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

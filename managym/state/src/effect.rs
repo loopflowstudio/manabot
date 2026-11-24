@@ -148,6 +148,10 @@ pub enum Modification<N = i32> {
     HasAbilitiesOfSource,
     /// Layer 3: is named this (CR 613.1c; "named Humble Merchant").
     SetName(String),
+    /// Layer 4: has all creature types (CR 205.3m), while it is a creature.
+    /// A later type change that replaces its creature types or removes
+    /// Creature ends it; losing abilities does not.
+    AllCreatureTypes,
 }
 
 impl<N> Modification<N> {
@@ -207,6 +211,7 @@ impl<N> Modification<N> {
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
             Self::SetName(name) => Modification::SetName(name.clone()),
+            Self::AllCreatureTypes => Modification::AllCreatureTypes,
         }
     }
 }

@@ -4,12 +4,13 @@ use managym_state::{
         Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
         TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
+    card::ManaAbility,
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
     },
     effect::{CopyException, Modification},
-    mana::ManaCost,
+    mana::{Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
 };
@@ -38,7 +39,39 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         leyline_axe(),
         sire_of_seven_deaths(),
         raise_the_past(),
+        soulstone_sanctuary(),
     ]
+}
+
+fn soulstone_sanctuary() -> CardDefinition {
+    let text_box = "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.";
+    CardDefinition {
+        key: "fdn.soulstone_sanctuary",
+        scryfall_id: "642553a7-6d0f-483d-a873-3a703786db42",
+        printed: PrintedCharacteristics {
+            name: "Soulstone Sanctuary".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}"),
+                effects: [
+                    Modification::BecomeCreature,
+                    Modification::base_pt(Some(3), Some(3)),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Vigilance])),
+                    Modification::AllCreatureTypes,
+                ]
+                .into_iter()
+                .map(|modification| Effect::indefinitely(ObjectSelector::This, modification))
+                .collect(),
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn fiendish_panda() -> CardDefinition {

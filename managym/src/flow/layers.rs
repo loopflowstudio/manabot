@@ -15,7 +15,7 @@ use crate::{
         mana::{Colors, Mana, SpendingContext, SpendingObject},
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
-        subtype::{is_creature_type, subtype_category, subtype_corresponds_to},
+        subtype::{is_creature_type, subtype_category, subtype_corresponds_to, CreatureTypes},
         zone::ZoneType,
     },
 };
@@ -286,7 +286,9 @@ impl Operation {
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetName(_) => NAME,
-                Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
+                Modification::SetCreatureTypes(_)
+                | Modification::AddSubtypes(_)
+                | Modification::AllCreatureTypes => SUBTYPES,
                 Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
                 Modification::Nonlegendary => SUPERTYPES,
@@ -321,6 +323,7 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
         Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
+        | Modification::AllCreatureTypes
         | Modification::AddTypes(_)
         | Modification::SetTypes { .. }
         | Modification::BecomeCreature
@@ -553,17 +556,15 @@ impl<'a> Context<'a> {
     fn finish_object(object: &mut LayerObject, record: &Object) {
         let view = Arc::make_mut(&mut object.view);
         view.is_animated = view.is_creature() && !record.types.is_creature();
-        view.creature_types = if view.is_creature() {
-            view.subtypes
-                .iter()
-                .filter(|s| is_creature_type(s))
-                .cloned()
-                .collect()
+        // During the pass `CreatureTypes::All` marks a record granting all
+        // creature types; a listed set is derived from the final subtypes.
+        view.creature_types = if !view.is_creature() {
+            CreatureTypes::default()
+        } else if view.creature_types.is_all() {
+            CreatureTypes::All
         } else {
-            Vec::new()
+            CreatureTypes::among(&view.subtypes)
         };
-        view.creature_types.sort();
-        view.creature_types.dedup();
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
@@ -576,12 +577,15 @@ impl<'a> Context<'a> {
                     matches!(purpose, SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes))
+                    } if source.describes(&view.subtypes, view.creature_types.is_all()))
                 })
                 .cloned();
             let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
                 zone: ZoneType::Battlefield,
-                source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
+                source: SpendingObject::new(
+                    view.subtypes.iter().map(String::as_str),
+                    view.creature_types.is_all(),
+                ),
             });
             for ability in &mut view.activated_abilities {
                 if ability.mana_cost.purpose != purpose {
@@ -773,13 +777,12 @@ impl<'a> Context<'a> {
     }
     fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
-            (self.objects[&id]
-                .view
-                .subtypes
-                .iter()
-                .filter(|s| is_creature_type(s))
-                .count() as i32)
-                .min(max)
+            let view = &self.objects[&id].view;
+            if view.creature_types.is_all() {
+                max
+            } else {
+                (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
+            }
         });
         let controller = self.controller(source);
         let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
@@ -1069,7 +1072,9 @@ impl<'a> Context<'a> {
                         view.name = name.clone();
                         view.characteristics_set = true;
                     }
+                    Modification::AllCreatureTypes => view.creature_types = CreatureTypes::All,
                     Modification::SetCreatureTypes(types) => {
+                        view.creature_types = CreatureTypes::default();
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
                         view.added_subtypes.retain(|s| !is_creature_type(s));
@@ -1103,6 +1108,11 @@ impl<'a> Context<'a> {
                                     .iter()
                                     .any(|set| subtype_category(set) == subtype_category(subtype))
                         };
+                        if !types.contains(&CardType::Creature)
+                            || subtypes.iter().any(|s| is_creature_type(s))
+                        {
+                            view.creature_types = CreatureTypes::default();
+                        }
                         view.types.types = types.iter().copied().collect();
                         view.subtypes.retain(keeps);
                         view.added_subtypes.retain(keeps);
@@ -1246,6 +1256,7 @@ pub(super) fn matches_view(
     CharacteristicView {
         types: &view.types,
         subtypes: &view.subtypes,
+        all_creature_types: view.creature_types.is_all(),
         supertypes: &object.supertypes,
         colors: &view.colors,
         name: &view.name,
@@ -1267,6 +1278,7 @@ pub(super) fn matches_view(
 struct CharacteristicView<'a> {
     types: &'a CardTypes,
     subtypes: &'a [String],
+    all_creature_types: bool,
     supertypes: &'a [String],
     colors: &'a Colors,
     name: &'a str,
@@ -1289,6 +1301,7 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
     CharacteristicView {
         types: &facts.types,
         subtypes: &facts.subtypes,
+        all_creature_types: lki.creature_types.is_all(),
         supertypes: &facts.supertypes,
         colors: &facts.colors,
         name: &facts.name,
@@ -1306,6 +1319,11 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
 }
 
 impl CharacteristicView<'_> {
+    fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|s| s == subtype)
+            || (self.all_creature_types && is_creature_type(subtype))
+    }
+
     fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
@@ -1343,11 +1361,10 @@ impl CharacteristicView<'_> {
             && p.not_card_types
                 .iter()
                 .all(|t| !self.types.types.contains(t))
-            && p.subtype.as_ref().is_none_or(|s| self.subtypes.contains(s))
-            && (p.subtypes_any.is_empty()
-                || p.subtypes_any.iter().any(|s| self.subtypes.contains(s)))
+            && p.subtype.as_ref().is_none_or(|s| self.has_subtype(s))
+            && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| self.has_subtype(s)))
             && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| self.colors.contains(c)))
-            && p.not_subtypes.iter().all(|s| !self.subtypes.contains(s))
+            && p.not_subtypes.iter().all(|s| !self.has_subtype(s))
             && p.min_power.is_none_or(|min| self.power >= min)
             && p.max_power.is_none_or(|max| self.power <= max)
             && p.min_mana_value.is_none_or(|min| self.mana_value >= min)

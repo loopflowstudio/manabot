@@ -7331,5 +7331,15 @@
     "colors": [
       "U"
     ]
+  },
+  "Soulstone Sanctuary": {
+    "name": "Soulstone Sanctuary",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
+    "colors": []
   }
 }

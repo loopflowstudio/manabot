@@ -325,8 +325,8 @@ pub struct ObjectLki {
     pub keywords: crate::card::Keywords,
     /// Its creature types as it last existed (CR 608.2h), sorted; read when
     /// a departed target's partners must share one (Secret Tunnel).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub creature_types: Vec<String>,
+    #[serde(skip_serializing_if = "crate::subtype::CreatureTypes::is_empty")]
+    pub creature_types: crate::subtype::CreatureTypes,
     /// The battlefield slot it occupied, so a departed `Target::Permanent`
     /// finds its last known information.
     pub permanent: PermanentId,

@@ -11,6 +11,7 @@
 // ability functions from its owner's hand or graveyard (cycling, "return
 // this card from your graveyard").
 
+use crate::state::subtype::CreatureTypes;
 use crate::{
     agent::action::AgentError,
     flow::{
@@ -1339,7 +1340,7 @@ impl Game {
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str)),
+            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
         };
         self.price_activation(player, &mut ability);
         Some(ability)
@@ -1538,7 +1539,7 @@ impl Game {
         &self,
         targets: impl Iterator<Item = Target>,
     ) -> bool {
-        let mut common: Option<Vec<String>> = None;
+        let mut common: Option<CreatureTypes> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
@@ -1546,7 +1547,7 @@ impl Game {
             let types = self.characteristics(id).creature_types.clone();
             common = Some(match common {
                 None => types,
-                Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
+                Some(common) => common.intersection(&types),
             });
         }
         common.is_some_and(|common| !common.is_empty())

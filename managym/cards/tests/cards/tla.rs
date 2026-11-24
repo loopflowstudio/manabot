@@ -1319,7 +1319,7 @@ fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
     let view = s.game().characteristics(tunnel);
     assert!(view.has_subtype("Cave"), "{:?}", view.subtypes);
     assert!(view.has_subtype("Citizen"));
-    assert_eq!(view.creature_types, vec!["Citizen".to_string()]);
+    assert_eq!(view.creature_types.listed(), ["Citizen".to_string()]);
 }
 
 /// Elemental Teachings reveals up to four differently named lands; the

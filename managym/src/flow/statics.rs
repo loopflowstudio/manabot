@@ -1,6 +1,7 @@
 //! Derived characteristics and rules questions. `layers::Context` owns CR 613
 //! evaluation; this module caches its immutable board and exposes the one public
 //! view. Activation prices and dynamic mana outputs are finalized afterwards.
+use crate::state::subtype::{is_creature_type, CreatureTypes};
 use crate::{
     flow::{
         decision::EffectFrame,
@@ -64,8 +65,8 @@ pub struct Characteristics {
     /// Creature subtypes added by records after any characteristic-setting
     /// Aura (layer 4), in record order.
     pub added_subtypes: Vec<String>,
-    /// Distinct creature types (CR 205.3m), sorted.
-    pub creature_types: Vec<String>,
+    /// Its creature types (CR 205.3m); none unless it is a creature.
+    pub creature_types: CreatureTypes,
     /// Layer 4 card types: printed, added by static type grants, and
     /// Creature when animated.
     pub types: CardTypes,
@@ -142,8 +143,10 @@ impl Characteristics {
         self.types.is_land()
     }
 
+    /// Whether it has this subtype, counting all creature types.
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
+            || (self.creature_types.is_all() && is_creature_type(subtype))
     }
 }
 
@@ -733,13 +736,20 @@ impl Game {
         })
     }
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
+        // A creature with all creature types shares each listed one.
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        let mut all = 0;
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-            for creature_type in &view.creature_types {
-                *counts.entry(creature_type.clone()).or_default() += 1;
+            match &view.creature_types {
+                CreatureTypes::All => all += 1,
+                CreatureTypes::Listed(listed) => {
+                    for creature_type in listed {
+                        *counts.entry(creature_type.clone()).or_default() += 1;
+                    }
+                }
             }
         }
-        counts.into_values().max().unwrap_or(0)
+        counts.into_values().max().unwrap_or(0) + all
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.

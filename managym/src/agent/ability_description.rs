@@ -1370,6 +1370,7 @@ pub(super) fn continuous_description(
             format!("{subject} has all activated and triggered abilities of the chosen card")
         }
         Modification::SetName(name) => format!("{subject} is named {name}{until}"),
+        Modification::AllCreatureTypes => format!("{subject} has all creature types{until}"),
     }
 }
 

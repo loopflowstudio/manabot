@@ -2,6 +2,7 @@
 // Resolving stack objects. Effects execute through an EffectFrame so a
 // resolution can suspend on a mid-resolution decision (see decision.rs).
 
+use crate::state::subtype::CreatureTypes;
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
@@ -578,7 +579,7 @@ impl Game {
         let members: Vec<usize> = (0..slots.len())
             .filter(|&index| slots[index].requirement == requirement)
             .collect();
-        let types: Vec<Vec<String>> = members
+        let types: Vec<CreatureTypes> = members
             .iter()
             .map(|&index| self.last_known_creature_types(slots[index].target))
             .collect();
@@ -587,13 +588,13 @@ impl Game {
             slots[index].legal &= types
                 .iter()
                 .enumerate()
-                .all(|(other, theirs)| other == member || theirs.iter().any(|t| own.contains(t)));
+                .all(|(other, theirs)| other == member || theirs.shares(own));
         }
     }
 
     /// A permanent target's creature types: current ones while it remains,
     /// else as it last existed on the battlefield (CR 608.2h).
-    fn last_known_creature_types(&self, target: Target) -> Vec<String> {
+    fn last_known_creature_types(&self, target: Target) -> CreatureTypes {
         match target {
             Target::Permanent(id) if self.permanent_object(id).is_some() => {
                 self.characteristics(id).creature_types.clone()
@@ -602,7 +603,7 @@ impl Game {
                 .departed_permanent_lki(id)
                 .map(|lki| lki.creature_types.clone())
                 .unwrap_or_default(),
-            _ => Vec::new(),
+            _ => CreatureTypes::default(),
         }
     }
 

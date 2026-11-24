@@ -583,7 +583,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 38] = [
+pub const MODIFICATION_NAMES: [&str; 39] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -622,6 +622,7 @@ pub const MODIFICATION_NAMES: [&str; 38] = [
     "HasAbilitiesOfSource",
     "Saddled",
     "SetName",
+    "AllCreatureTypes",
 ];
 
 impl ContinuousEffectData {
@@ -692,6 +693,7 @@ impl ContinuousEffectData {
                 "AddSubtypes"
             }
             Modification::BecomeCreature => "BecomeCreature",
+            Modification::AllCreatureTypes => "AllCreatureTypes",
             Modification::Nonlegendary => "Nonlegendary",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
@@ -1576,13 +1578,10 @@ impl Observation {
             name: characteristics
                 .characteristics_set
                 .then(|| characteristics.name.to_string()),
-            creature_types: characteristics.characteristics_set.then(|| {
-                characteristics
-                    .creature_types
-                    .iter()
-                    .map(|creature_type| creature_type.to_string())
-                    .collect()
-            }),
+            // All creature types is projected by its shared-effect row.
+            creature_types: characteristics
+                .characteristics_set
+                .then(|| characteristics.creature_types.listed().to_vec()),
             is_granted_land: characteristics.is_land() && !object.types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat

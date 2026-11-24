@@ -23,7 +23,7 @@ fn treetop_village_enters_tapped_and_becomes_a_3_3_green_ape_until_end_of_turn()
     let view = s.game().characteristics(village);
     assert!(view.is_creature() && view.is_land());
     assert_eq!((view.power, view.toughness), (3, 3));
-    assert!(view.creature_types.iter().any(|t| t == "Ape"));
+    assert!(view.creature_types.contains("Ape"));
     assert!(view.keywords.has(Keyword::Trample));
     assert_eq!(
         view.colors.iter().copied().collect::<Vec<_>>(),
