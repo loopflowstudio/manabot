@@ -2569,7 +2569,7 @@ mod card_type_tests {
                     is_permanent: types.is_permanent(),
                     is_non_land_permanent: types.is_non_land_permanent(),
                     is_non_creature_permanent: types.is_non_creature_permanent(),
-                    is_spell: types.is_spell(),
+                    is_spell: types.is_instant_or_sorcery(),
                     is_creature: types.is_creature(),
                     is_land: types.is_land(),
                     is_planeswalker: types.is_planeswalker(),

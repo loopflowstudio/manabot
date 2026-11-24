@@ -295,7 +295,7 @@ fn sanar_makes_treasure_after_an_instant_and_wild_idea_finds_one() {
     assert!(
         choices
             .iter()
-            .all(|&id| s.game().state[id].types.is_spell()),
+            .all(|&id| s.game().state[id].types.is_instant_or_sorcery()),
         "only instant and sorcery cards"
     );
     select_card(&mut s, choices[0]);

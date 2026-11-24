@@ -1188,6 +1188,15 @@ card’s mana cost until cleanup. The permission survives the Sphinx leaving
 play. A card with printed flashback keeps both prices. Either flashback cast
 exiles the spell when it leaves the stack.
 
+On its controller’s turn, Iroh, Grand Lotus grants graveyard Lessons flashback
+for {1} and other instants and sorceries flashback for their mana cost. A
+creature with an Adventure in the graveyard still needs another permission to
+cast either face.
+
+Casting the top card with Vizier of the Menagerie or Planetarium of Wan Shi
+Tong moves each remembered library position up by one. A player who scried
+the second card knows the new top. That knowledge stays private.
+
 When Etali, Primal Storm attacks, its controller exiles the top card of each
 library. They can cast the eligible spells in either order for free, or stop
 and leave the remaining cards in exile. Choosing Charring Bite from an exiled

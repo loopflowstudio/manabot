@@ -127,6 +127,13 @@ impl Game {
             .collect()
     }
 
+    pub(super) fn is_library_top(&self, object: ObjectId) -> bool {
+        self.state
+            .zones
+            .top(ZoneType::Library, self.state[object].owner)
+            == Some(object)
+    }
+
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
         self.state.library_order_pins_mut(player).clear();
         self.state.known_library_mut(player).forget_order();
@@ -577,6 +584,8 @@ impl Game {
             ZoneType::Stack,
             ZoneEntry {
                 profile: cast.profile,
+                library_top_departure: cast_from == ZoneType::Library
+                    && self.is_library_top(object),
                 ..Default::default()
             },
         );

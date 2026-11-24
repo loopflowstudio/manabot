@@ -4415,6 +4415,45 @@ fn gather_creates_per_plains_and_scry_can_reverse_top_cards_privately() {
 }
 
 #[test]
+fn vizier_library_top_cast_preserves_the_private_scry_order() {
+    let mut s = five_color_setup(&[
+        "Gather the White Lotus",
+        "Vizier of the Menagerie",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Vizier of the Menagerie");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let cards = pin_top(&mut s, &["Forest", "Island"]);
+    cast(&mut s, "Gather the White Lotus");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    for card in &cards {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::ScryCard {object, to_bottom: false, ..} if object == card),
+        );
+    }
+    settle(&mut s);
+    let ogre = move_card(&mut s, ogre, ZoneType::Library);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let forest = s.game().state[cards[0]].definition_id.0;
+    let island = s.game().state[cards[1]].definition_id.0;
+    let before = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(before.agent.known_library.get(&1), Some(&forest));
+    assert_eq!(before.agent.known_library.get(&2), Some(&island));
+
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(owner.agent.known_library.get(&0), Some(&forest));
+    // Vizier shows the new top. Only memory can supply the next position.
+    assert_eq!(owner.agent.known_library.get(&1), Some(&island));
+    let other = Observation::for_player(s.game(), PlayerId(1));
+    assert!(other.opponent.known_library.is_empty());
+}
+
+#[test]
 fn scry_possible_world_materialization_preserves_inspected_cards_and_order_choices() {
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
     let mut s = five_color_setup(&["Gather the White Lotus"]);
@@ -7617,6 +7656,58 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         }
         assert_eq!(zone_of(&s, lesson), Some(ZoneType::Exile));
     }
+}
+
+#[test]
+fn iroh_leaves_graveyard_permanents_to_muldrothas_permission() {
+    use managym::flow::cast_permission::PlayRoute;
+
+    let permanents = [
+        "Gray Ogre",
+        "Prophetic Prism",
+        "Omniscience",
+        "Smaug, the Great Calamity",
+    ];
+    let mut deck = vec!["Iroh, Grand Lotus", "Muldrotha, the Gravetide"];
+    deck.extend(permanents);
+    let mut s = five_color_setup(&deck);
+    s.force_permanent_on_battlefield(0, "Iroh, Grand Lotus");
+    let cards = permanents.map(|name| plant_in_graveyard(&mut s, 0, name));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for (card, name) in cards.into_iter().zip(permanents) {
+        assert!(!can_cast(&s, card), "Iroh offered {name}");
+    }
+
+    let ogre = cards[0];
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let casts: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter(|a| matches!(a, Action::CastSpell {object, ..} if *object == ogre))
+        .collect();
+    assert!(matches!(
+        casts.as_slice(),
+        [Action::CastSpell { route: None, .. }]
+    ));
+
+    let mut forged = s.game().clone();
+    let actions = &mut forged.current_action_space.as_mut().unwrap().actions;
+    let index = actions.len();
+    actions.push(Action::CastSpell {
+        player: PlayerId(0),
+        object: ogre,
+        route: Some(PlayRoute::GrantedFlashback),
+        profile: SpellProfile::Front,
+    });
+    let before = witness(&forged);
+    assert!(forged.step(index).is_err());
+    assert_eq!(witness(&forged), before);
+
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
 }
 
 #[test]
@@ -12779,9 +12870,9 @@ fn planetarium_scry(s: &mut Scenario, planetarium: PermanentId) {
 /// on top offers nothing and spends nothing, and declining keeps the option.
 #[test]
 fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
-    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre"]);
+    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre", "Hill Giant"]);
     let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
-    let top = pin_top(&mut s, &["Gray Ogre", "Gray Ogre", "Gray Ogre"]);
+    let top = pin_top(&mut s, &["Gray Ogre", "Hill Giant", "Gray Ogre"]);
     planetarium_scry(&mut s, planetarium);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(offered_cards(&s), vec![top[0]]);
@@ -12796,8 +12887,15 @@ fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
         .tapped = false;
     planetarium_scry(&mut s, planetarium);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let giant = s.game().state[top[1]].definition_id.0;
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(owner.agent.known_library.get(&1), Some(&giant));
     select_card(&mut s, top[0]);
     settle(&mut s);
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    let opponent = Observation::for_player(s.game(), PlayerId(1));
+    assert_eq!(owner.agent.known_library.get(&0), Some(&giant));
+    assert!(opponent.opponent.known_library.is_empty());
     assert_eq!(
         zone_of(&s, top[0]),
         Some(ZoneType::Battlefield),

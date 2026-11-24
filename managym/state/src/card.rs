@@ -73,7 +73,7 @@ impl CardTypes {
     }
 
     #[inline]
-    pub fn is_spell(&self) -> bool {
+    pub fn is_instant_or_sorcery(&self) -> bool {
         self.types.contains(&CardType::Instant) || self.types.contains(&CardType::Sorcery)
     }
 

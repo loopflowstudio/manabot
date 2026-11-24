@@ -144,7 +144,7 @@ impl Game {
                             exile_instants_and_sorceries: true,
                             ..
                         }
-                    ) && spell.types.is_spell(),
+                    ) && spell.types.is_instant_or_sorcery(),
                     ..Default::default()
                 });
             }
@@ -210,13 +210,15 @@ impl Game {
         self.can_pay_automatic_mana(player, cost)
     }
 
-    /// Iroh grants a Lesson {1}, and other spells their printed mana cost.
+    /// Iroh grants Lessons {1} and other instants and sorceries their mana cost.
     fn granted_flashback_cost(&self, object: ObjectId) -> Option<ManaCost> {
         let card = &self.state[object];
         if card.has_subtype("Lesson") {
             Some(ManaCost::parse("{1}"))
-        } else {
+        } else if card.types.is_instant_or_sorcery() {
             card.mana_cost.clone()
+        } else {
+            None
         }
     }
 
@@ -380,9 +382,15 @@ impl Game {
                     && (cast.profile.is_front()
                         || (!grant.on_adventure && !grant.foretold && !grant.flashback))
             }),
-            PlayRoute::PrintedFlashback
-            | PlayRoute::GrantedFlashback
-            | PlayRoute::PrintedGraveyard => !land && cast.profile.is_front(),
+            PlayRoute::PrintedFlashback => {
+                !land && cast.profile.is_front() && face.flashback().is_some()
+            }
+            PlayRoute::GrantedFlashback => {
+                !land && cast.profile.is_front() && self.granted_flashback_cost(object).is_some()
+            }
+            PlayRoute::PrintedGraveyard => {
+                !land && cast.profile.is_front() && face.graveyard_counter_cast().is_some()
+            }
         }
     }
 
@@ -689,6 +697,7 @@ impl Game {
             crate::flow::proposed_event::ZoneEntry {
                 controller,
                 transformed: profile == SpellProfile::BackFace,
+                library_top_departure: self.is_library_top(object),
                 ..Default::default()
             },
         )]));
