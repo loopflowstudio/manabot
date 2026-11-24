@@ -78,12 +78,16 @@ struct CanonicalTurn<'a> {
     spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
     #[serde(skip_serializing_if = "crate::flow::turn::DamageHistory::is_empty")]
     damage_pairs: &'a crate::flow::turn::DamageHistory,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    creature_died_this_turn: bool,
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    attacks_this_turn: Vec<(ObjectId, u32)>,
+
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
-    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectId, usize, u32)>,
+    ability_triggers_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
     ability_resolutions_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -110,12 +114,13 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
-            creature_died_this_turn: turn.creature_died_this_turn,
+            attacks_this_turn: turn.attacks_this_turn.clone(),
+
             history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()
-                .map(|((source, index), count)| (*source, *index, *count))
+                .map(|(&(source, face, index), &count)| (source, (face, index), count))
                 .collect(),
             ability_resolutions_this_turn: turn
                 .ability_resolutions_this_turn

@@ -46,7 +46,7 @@ pub struct CardPredicate {
     /// "with a +1/+1 counter on it": only permanents carry counters.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub with_counter: bool,
-    /// "attacking": only permanents declared as attackers this combat.
+    /// "attacking": all currently attacking permanents, including those put in attacking.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
     /// "tapped": only permanents are tapped.

@@ -324,6 +324,14 @@ def _turn_history(player: managym.Player) -> str:
         parts.append(f"bent {bent}")
     if count := history.life_gains:
         parts.append(f"gained life {count} time{'s' if count != 1 else ''}")
+    if amount := history.life_gained:
+        parts.append(f"gained {amount} life")
+    if count := history.creatures_died:
+        parts.append(f"{count} controlled creature deaths")
+    if count := history.permanents_left:
+        parts.append(f"{count} permanents left ({history.nonland_permanents_left} nonland)")
+    if history.warped_this_turn:
+        parts.append("cast a spell for warp")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
     if amount := history.mana_spent_casting:
@@ -1046,6 +1054,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.attacked_this_turn:
+            parts.append("attacked this turn")
         if permanent.entered_this_turn:
             parts.append("entered this turn")
         for seat in permanent.combat_damage_to_players:
@@ -1260,6 +1270,8 @@ class _Renderer:
                 granted := _keywords(item.granted_keywords)
             ):
                 details.append(f"granted keywords {granted}")
+            if item.mana_spent:
+                details.append(f"spent {item.mana_spent} mana to cast")
             if item.kicked:
                 details.append(self.taken_cost(item.source_card_registry_key).taken)
             if targets:

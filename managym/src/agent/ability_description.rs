@@ -84,17 +84,18 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Attacks {
             subject,
             per,
-            attackers,
+            attackers, nth,
         } => {
             let attack = match per {
                 Per::Object => format!("{} attacks", subject_description(subject)),
                 Per::Batch => format!("{} attack", one_or_more(subject, "permanents")),
             };
+            let prefix = nth.map_or_else(|| "Whenever".to_string(), |n| format!("On attack {n} this turn, when"));
             match attackers {
-                AttackSize::Any => format!("Whenever {attack}"),
-                AttackSize::Alone => format!("Whenever {attack} alone"),
-                AttackSize::WithAnother => {
-                    format!("Whenever {attack} with at least one other creature")
+                AttackSize::Any => format!("{prefix} {attack}"),
+                AttackSize::Alone => format!("{prefix} {attack} alone"),
+                AttackSize::AtLeast(n) => {
+                    format!("{prefix} {attack} with at least {n} attackers")
                 }
             }
         }
@@ -395,6 +396,12 @@ fn condition_text(condition: &Condition) -> String {
         }
         Condition::CreatureDiedThisTurn => "a creature died this turn".into(),
         Condition::GainedLifeThisTurn => "you gained life this turn".into(),
+        Condition::Compare { left, op, right } => format!(
+            "{} {} {}",
+            value_description(left),
+            op.symbol(),
+            value_description(right)
+        ),
         Condition::LostLifeThisTurn => "you lost life this turn".into(),
         Condition::AllOf(conditions) => conditions
             .iter()
@@ -842,6 +849,17 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::TriggeringDamage => "the combat damage dealt to that player".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
+        EffectValue::LifeTotal(who) => format!("life total of {}", player_description(who)),
+        EffectValue::LifeGainedThisTurn(who) => {
+            format!("life gained this turn by {}", player_description(who))
+        }
+        EffectValue::LifeLostThisTurn(who) => {
+            format!("life lost this turn by {}", player_description(who))
+        }
+        EffectValue::SpellManaValue(of) => format!("mana value of {}", selector_description(of)),
+        EffectValue::SpellManaSpent(of) => {
+            format!("mana spent to cast {}", selector_description(of))
+        }
         EffectValue::LifeLostThisWay => "the life lost this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
@@ -1423,6 +1441,7 @@ mod tests {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
+                    nth: None,
                 },
                 "Whenever a creature you control attacks alone",
             ),

@@ -313,6 +313,8 @@ pub struct ObjectLki {
     /// Effective creature type immediately before departure (CR 603.10a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub was_creature: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub was_land: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,

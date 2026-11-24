@@ -61,8 +61,20 @@ impl Game {
             .or_else(|| self.object_lki(object).map(|lki| lki.power))
     }
 
+    fn spell_payment(&self, object: ObjectId) -> Option<crate::flow::decision::SpellPayment> {
+        let index = self.find_spell_on_stack_index(object)?;
+        let StackObject::Spell(spell) = &self.state.stack_objects[index] else {
+            return None;
+        };
+        Some(crate::flow::decision::SpellPayment {
+            mana_value: self.object_mana_value(object),
+            spent: spell.spent.total(),
+        })
+    }
+
     /// Resolve a quantity against the frame's targets, payments and instruction results.
-    fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+    pub(crate) fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+        let controller = frame.controller;
         match value {
             EffectValue::Objects {
                 of,
@@ -83,6 +95,35 @@ impl Game {
                 .map(|id| self.permanent_mana_value(id))
                 .collect::<std::collections::BTreeSet<_>>()
                 .len() as i32,
+            EffectValue::LifeTotal(who)
+            | EffectValue::LifeGainedThisTurn(who)
+            | EffectValue::LifeLostThisTurn(who) => self
+                .selected_players(who, frame)
+                .into_iter()
+                .map(|player| match value {
+                    EffectValue::LifeTotal(_) => self.state.players[player.0].life,
+                    EffectValue::LifeGainedThisTurn(_) => {
+                        self.state.turn.history[player.0].life_gained as i32
+                    }
+                    _ => self.state.turn.history[player.0].life_lost as i32,
+                })
+                .sum(),
+            EffectValue::SpellManaSpent(of) | EffectValue::SpellManaValue(of) => {
+                let payment = match of.as_ref() {
+                    ObjectSelector::Target(_) => frame
+                        .active_targets()
+                        .find(|slot| slot.legal)
+                        .and_then(|slot| slot.spell),
+                    _ => self
+                        .select(of, frame)
+                        .first()
+                        .and_then(|object| self.spell_payment(*object)),
+                };
+                payment.map_or(0, |spell| match value {
+                    EffectValue::SpellManaSpent(_) => i32::from(spell.spent),
+                    _ => i32::from(spell.mana_value),
+                })
+            }
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TriggeringManaValue => match frame.context_target {
@@ -123,29 +164,7 @@ impl Game {
                 })
                 .count() as i32,
             EffectValue::Half(inner) => self.effect_value(inner, frame).div_euclid(2),
-            _ => self.controller_value(value, frame.controller),
-        }
-    }
-
-    /// A quantity relative to `controller` outside any resolution (a mana
-    /// ability): X and excess damage are 0.
-    pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
-        match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::Objects { .. }
-            | EffectValue::DistinctManaValues { .. }
-            | EffectValue::X
-            | EffectValue::TriggeringDamage
-            | EffectValue::ExcessDamage
-            | EffectValue::LifeLostThisWay
-            | EffectValue::ManaSpentToCast
-            | EffectValue::ColorsSpentToCast
-            | EffectValue::SourcePower
-            | EffectValue::PowerTappedToPay
-            | EffectValue::TriggeringPower
-            | EffectValue::TriggeringManaValue
-            | EffectValue::TargetToughness
-            | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -196,8 +215,12 @@ impl Game {
                         .is_some_and(|permanent| self.state[permanent.object].owner == controller)
                 })
                 .count() as i32,
-            EffectValue::Half(inner) => self.controller_value(inner, controller).div_euclid(2),
         }
+    }
+
+    /// Evaluate a mana output or price with only its controller bound.
+    pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
+        self.effect_value(value, &EffectFrame::new(controller, Vec::new()))
     }
 
     pub(crate) fn resolve_top_of_stack(&mut self) {
@@ -482,6 +505,7 @@ impl Game {
             context_target: triggered.context,
             triggering_player: triggered.player,
             ability,
+            ability_face: ability.map(|_| triggered.source_definition_id),
             ..EffectFrame::new(
                 triggered.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -508,6 +532,10 @@ impl Game {
             .map(|(index, target)| {
                 let requirement = indices.get(index).copied().unwrap_or(0);
                 ResolutionTarget {
+                    spell: match target {
+                        Target::StackSpell(object) => self.spell_payment(*object),
+                        _ => None,
+                    },
                     target: *target,
                     requirement,
                     legal: requirements.get(requirement).is_some_and(|req| {
@@ -1635,7 +1663,7 @@ impl Game {
                 None
             }
             Effect::MayOnceEachTurn { effects } => {
-                let key = (frame.source_ref()?, frame.ability?);
+                let key = (frame.source_ref()?, frame.ability_face?, frame.ability?);
                 if self
                     .state
                     .turn
@@ -1740,6 +1768,7 @@ impl Game {
                     return None;
                 }
                 frame.targets = vec![crate::flow::decision::ResolutionTarget {
+                    spell: None,
                     target: Target::GraveyardCard(became),
                     requirement: 0,
                     legal: true,
@@ -2242,48 +2271,53 @@ impl Game {
                     .into_iter()
                     .collect()
             }
-            ObjectSelector::Each {
-                of,
-                predicate,
-                except,
-                max_mana_value,
-                exact_mana_value,
-            } => {
-                let players: Vec<PlayerId> = match of {
-                    Scope::YouControl => vec![frame.controller],
-                    Scope::OpponentsControl => vec![PlayerId(1 - frame.controller.0)],
-                    Scope::DamagedBySourceInCombat => frame
-                        .source()
-                        .into_iter()
-                        .flat_map(|source| self.state.turn.damage_pairs.combat_players(source))
-                        .collect(),
-                    Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
-                    Scope::TargetPlayerControls => match self.present_primary_target(frame) {
-                        Some(Target::Player(player)) => vec![player],
-                        _ => Vec::new(),
-                    },
-                };
-                let excepted = self.excepted_permanent(*except, frame);
-                let exact = exact_mana_value
-                    .as_ref()
-                    .map(|value| self.effect_value(value, frame));
-                let max_mana_value = max_mana_value
-                    .as_ref()
-                    .map(|value| self.effect_value(value, frame));
-                players
-                    .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| Some(*id) != excepted)
-                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                    .filter(|id| {
-                        exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
-                            && max_mana_value
-                                .is_none_or(|max| self.permanent_mana_value(*id) <= max)
-                    })
-                    .filter_map(|id| self.permanent_object(id))
-                    .collect()
-            }
+            ObjectSelector::Each { .. } => self.select_board(what, frame),
         }
+    }
+
+    fn select_board(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<ObjectId> {
+        let ObjectSelector::Each {
+            of,
+            predicate,
+            except,
+            max_mana_value,
+            exact_mana_value,
+        } = what
+        else {
+            return Vec::new();
+        };
+        let players: Vec<PlayerId> = match of {
+            Scope::YouControl => vec![frame.controller],
+            Scope::OpponentsControl => vec![PlayerId(1 - frame.controller.0)],
+            Scope::DamagedBySourceInCombat => frame
+                .source()
+                .into_iter()
+                .flat_map(|source| self.state.turn.damage_pairs.combat_players(source))
+                .collect(),
+            Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
+            Scope::TargetPlayerControls => match self.present_primary_target(frame) {
+                Some(Target::Player(player)) => vec![player],
+                _ => Vec::new(),
+            },
+        };
+        let excepted = self.excepted_permanent(*except, frame);
+        let exact = exact_mana_value
+            .as_ref()
+            .map(|value| self.effect_value(value, frame));
+        let max_mana_value = max_mana_value
+            .as_ref()
+            .map(|value| self.effect_value(value, frame));
+        players
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| Some(*id) != excepted)
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .filter(|id| {
+                exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
+                    && max_mana_value.is_none_or(|max| self.permanent_mana_value(*id) <= max)
+            })
+            .filter_map(|id| self.permanent_object(id))
+            .collect()
     }
 
     /// The permanent an `Except` leaves out: the source, or the clause's

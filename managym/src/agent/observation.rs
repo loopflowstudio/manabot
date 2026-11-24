@@ -11,7 +11,7 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        ability::{Effect, EffectValue, PaymentCost},
+        ability::{Effect, PaymentCost},
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
@@ -468,6 +468,7 @@ pub struct StackObjectData {
     pub combat_damage_to_players: Vec<usize>,
     /// Effective power read by a pending source-power damage instruction.
     pub source_power: Option<i32>,
+    pub mana_spent: u16,
     pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     pub description: Option<String>,
@@ -827,6 +828,7 @@ pub struct PermanentData {
     /// marked.
     pub dealt_damage_this_turn: bool,
     pub entered_this_turn: bool,
+    pub attacked_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     pub effects: Vec<ContinuousEffectData>,
@@ -1009,7 +1011,7 @@ impl Observation {
             .is_some_and(|winner| winner == agent_player.0);
 
         let turn = TurnData {
-            creature_died_this_turn: game.state.turn.creature_died_this_turn,
+            creature_died_this_turn: game.state.turn.creature_died_this_turn(),
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
             step: game.state.turn.current_step_kind(),
@@ -1535,7 +1537,10 @@ impl Observation {
                     game.state
                         .turn
                         .ability_triggers_this_turn
-                        .range((object, 0)..=(object, usize::MAX))
+                        .range(
+                            (object, game.state[object].definition_id, 0)
+                                ..=(object, game.state[object].definition_id, usize::MAX),
+                        )
                         .count()
                 })) as i32,
             granted_firebending: i32::from(characteristics.firebending),
@@ -1584,6 +1589,7 @@ impl Observation {
             }),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            attacked_this_turn: game.state.turn.attack_count(permanent.object) > 0,
             entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
             combat_damage_to_players: game
                 .state
@@ -1726,23 +1732,28 @@ impl Observation {
     }
 
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
-        let source_power = match stack_object {
-            StackObject::ActivatedAbility(a)
-                if a.effects.iter().any(|effect| {
-                    matches!(
-                        effect,
-                        Effect::DealDamage {
-                            amount: EffectValue::SourcePower,
-                            ..
-                        }
-                    )
-                }) =>
-            {
-                game.permanent_power_or_lki(a.source_object())
-            }
-            _ => None,
+        let program = match stack_object {
+            StackObject::ActivatedAbility(a) => Some((a.source_object(), a.effects.as_slice())),
+            StackObject::TriggeredAbility(a) => a
+                .inline_effects
+                .as_deref()
+                .or_else(|| {
+                    game.source_face(a.source_object(), a.source_definition_id)?
+                        .abilities
+                        .get(a.ability_index)
+                        .map(|ability| ability.effects())
+                })
+                .map(|effects| (a.source_object(), effects)),
+            StackObject::Spell(_) => None,
         };
+        let source_power = program
+            .filter(|(_, effects)| effects.iter().any(Effect::reads_source_power))
+            .and_then(|(object, _)| game.permanent_power_or_lki(object));
         StackObjectData {
+            mana_spent: match stack_object {
+                StackObject::Spell(spell) => spell.spent.total(),
+                _ => 0,
+            },
             combat_damage_to_players: match stack_object {
                 StackObject::ActivatedAbility(a) => game
                     .state
@@ -1766,11 +1777,7 @@ impl Observation {
             },
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
-                    let description = super::ability_description::effects_description(&a.effects);
-                    Some(match source_power {
-                        Some(power) => format!("{description} (source power {power})"),
-                        None => description,
-                    })
+                    Some(super::ability_description::effects_description(&a.effects))
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
@@ -1781,7 +1788,11 @@ impl Observation {
                     ))
                 }
                 _ => None,
-            },
+            }
+            .map(|description| match source_power {
+                Some(power) => format!("{description} (source power {power})"),
+                None => description,
+            }),
             stack_object_id: stack_object.id().0 as i32,
             kind: match stack_object {
                 StackObject::Spell(_) => StackObjectKindData::Spell,

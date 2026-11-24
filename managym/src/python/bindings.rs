@@ -158,7 +158,7 @@ fn encoded_to_dict<'py>(
         put(
             "player_turn_state",
             &encoded.player_turn_state,
-            &[2, enc::TURN_STATE_DIM],
+            &[2, config.player_turn_state_len() / 2],
         )?;
         put(
             "card_turn_state",
@@ -1265,6 +1265,16 @@ pub struct PyPlayerTurnHistory {
     pub life_gains: u32,
     #[pyo3(get, set)]
     pub mana_spent_casting: u32,
+    #[pyo3(get, set)]
+    pub life_gained: u32,
+    #[pyo3(get, set)]
+    pub creatures_died: u32,
+    #[pyo3(get, set)]
+    pub permanents_left: u32,
+    #[pyo3(get, set)]
+    pub nonland_permanents_left: u32,
+    #[pyo3(get, set)]
+    pub warped_this_turn: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1288,6 +1298,11 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             life_lost: value.life_lost,
             life_gains: value.life_gains,
             mana_spent_casting: value.mana_spent_casting,
+            life_gained: value.life_gained,
+            creatures_died: value.creatures_died,
+            permanents_left: value.permanents_left,
+            nonland_permanents_left: value.nonland_permanents_left,
+            warped_this_turn: value.warped_this_turn,
         }
     }
 }
@@ -1304,6 +1319,11 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             life_lost: value.life_lost,
             life_gains: value.life_gains,
             mana_spent_casting: value.mana_spent_casting,
+            life_gained: value.life_gained,
+            creatures_died: value.creatures_died,
+            permanents_left: value.permanents_left,
+            nonland_permanents_left: value.nonland_permanents_left,
+            warped_this_turn: value.warped_this_turn,
         }
     }
 }
@@ -2434,6 +2454,10 @@ impl PyPermanent {
         self.data.used_abilities = value;
     }
     #[getter]
+    fn attacked_this_turn(&self) -> bool {
+        self.data.attacked_this_turn
+    }
+    #[getter]
     fn entered_this_turn(&self) -> bool {
         self.data.entered_this_turn
     }
@@ -2802,6 +2826,10 @@ impl PyStackObject {
     #[getter]
     fn combat_damage_to_players(&self) -> Vec<usize> {
         self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
+    fn mana_spent(&self) -> u16 {
+        self.data.mana_spent
     }
     #[getter]
     fn source_power(&self) -> Option<i32> {

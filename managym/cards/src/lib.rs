@@ -19,6 +19,7 @@ mod bfz;
 mod blb;
 mod bng;
 mod bro;
+mod c14;
 mod c17;
 mod c19;
 mod chk;
@@ -41,6 +42,7 @@ mod frf;
 mod fut;
 mod gpt;
 mod grn;
+mod gs1;
 mod gtc;
 mod hob;
 mod ice;
@@ -94,6 +96,7 @@ mod vis;
 mod war;
 mod woe;
 mod wth;
+mod xln;
 mod zen;
 
 use std::sync::OnceLock;
@@ -132,6 +135,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     bfz::cards,
     bng::cards,
     bro::cards,
+    c14::cards,
     c17::cards,
     chk::cards,
     c19::cards,
@@ -154,6 +158,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     fut::cards,
     gpt::cards,
     grn::cards,
+    gs1::cards,
     gtc::cards,
     hob::cards,
     ice::cards,
@@ -206,5 +211,6 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     war::cards,
     woe::cards,
     wth::cards,
+    xln::cards,
     zen::cards,
 ];

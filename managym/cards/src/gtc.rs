@@ -1,10 +1,16 @@
 //! Gatecrash.
-use managym_state::card::CardDefinition;
+use managym_state::{
+    ability::{Ability, AttackSize, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    mana::ManaCost,
+    predicate::CardPredicate,
+};
 
 use super::rtr::guildgate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        aurelia_the_warleader(),
         boros_guildgate(),
         dimir_guildgate(),
         gruul_guildgate(),
@@ -56,4 +62,40 @@ fn simic_guildgate() -> CardDefinition {
         "Simic Guildgate",
         ["G", "U"],
     )
+}
+
+fn aurelia_the_warleader() -> CardDefinition {
+    let text_box = "Flying, vigilance, haste\nWhenever Aurelia attacks for the first time each turn, untap all creatures you control. After this phase, there is an additional combat phase.";
+    CardDefinition {
+        key: "gtc.aurelia_the_warleader",
+        scryfall_id: "4ec18e35-05e4-4bfc-b32b-c3e71c95a71d",
+        printed: PrintedCharacteristics {
+            name: "Aurelia, the Warleader".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Angel".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance, Keyword::Haste]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                    per: Per::Object,
+                    attackers: AttackSize::Any,
+                    nth: Some(1),
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::Untap {
+                        what: ObjectSelector::each_you_control(CardPredicate::creature()),
+                    },
+                    Effect::AdditionalCombatPhase { attackers: None },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

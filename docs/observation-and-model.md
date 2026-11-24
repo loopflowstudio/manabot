@@ -531,8 +531,10 @@ relation references, history contexts) names that row:
 
 Each player's `turn_history.mana_spent_casting` totals the mana they paid to cast
 spells during the current turn, including spells later countered. Both viewers
-see positive totals in text and in the v11 `mana_spent_casting` fact on that
-player's row. Paying for an ability leaves the total unchanged.
+see the total in text and in that seat’s v11 `player_turn_state` row. The row
+also gives separate counts for life-gain events and life gained, creature deaths,
+and permanent and nonland departures under that player’s control. A spell on the
+stack shows its own actual mana expenditure in `stack.mana_spent`.
 
 The published observation exposes `card.characteristics` and
 `permanent.characteristics` as `ObservationCharacteristics`. Effective P/T,
@@ -551,9 +553,8 @@ object_id = permanent.object_id  # selection, payment and history identity
 A spell's `stack_object.characteristics` is present even for a copy;
 `object_id`, `owner_id`, `is_copy` and `announced_x` belong to the stack object.
 An ability has no spell characteristics and retains its captured source
-definition/reference after the source leaves. For an activation such as
-Heartfire Immolator’s, the stack object reports the source power used for
-damage. After sacrifice this is the power of the departed permanent, even if
+definition/reference after the source leaves. A pending ability that reads source power reports that value. This includes
+Heartfire Immolator’s damage and Alesha’s graveyard target limit. After sacrifice this is the power of the departed permanent, even if
 the card returns. The v11 stack column `source_power` stores it in tenths.
 The LLM prompt and Academy stack label show the unscaled value. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).

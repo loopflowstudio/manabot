@@ -342,6 +342,11 @@ class PlayerTurnHistoryView(ProtocolModel):
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     life_gains: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     mana_spent_casting: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
@@ -450,6 +455,7 @@ class LegacyPermanentView(ProtocolModel):
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    attacked_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     entered_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
@@ -573,6 +579,7 @@ class LegacyTurnView(ProtocolModel):
 
 
 class StackEntryView(ProtocolModel):
+    mana_spent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     combat_damage_to_players: list[UInt8] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )

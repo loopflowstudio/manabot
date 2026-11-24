@@ -315,6 +315,11 @@ impl Game {
                     let attackers = combat.attackers[first..].to_vec();
                     if !attackers.is_empty() {
                         self.state.turn.history[active.0].attacked = true;
+                        for &attacker in &attackers {
+                            let object =
+                                self.permanent_object(attacker).expect("declared attacker");
+                            self.state.turn.record_attack(object);
+                        }
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
                             attackers: attackers.clone(),

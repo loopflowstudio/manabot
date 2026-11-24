@@ -214,6 +214,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "damaged_permanents": list(permanent.damaged_permanents) or None,
         "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "attacked_this_turn": bool(permanent.attacked_this_turn) or None,
         "entered_this_turn": bool(permanent.entered_this_turn) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
@@ -237,6 +238,11 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "bent": history.bent,
         "life_gains": history.life_gains,
         "mana_spent_casting": history.mana_spent_casting,
+        "life_gained": history.life_gained,
+        "creatures_died": history.creatures_died,
+        "permanents_left": history.permanents_left,
+        "nonland_permanents_left": history.nonland_permanents_left,
+        "warped_this_turn": history.warped_this_turn,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -530,6 +536,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
                 int(entry.kind)
             ],
             "controller": int(entry.controller_id),
+            "mana_spent": entry.mana_spent,
             "label": entry.description
             or data["definition_names"][str(entry.source_card_registry_key)],
             "source_permanent": entry.source_permanent_id,

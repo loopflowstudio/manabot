@@ -7115,5 +7115,178 @@
     "colors": [
       "B"
     ]
+  },
+  "Alesha, Who Laughs at Fate": {
+    "name": "Alesha, Who Laughs at Fate",
+    "mana_cost": "{1}{B}{R}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "First strike",
+      "Raid"
+    ],
+    "oracle_text": "First strike\nWhenever Alesha attacks, put a +1/+1 counter on it.\nRaid — At the beginning of your end step, if you attacked this turn, return target creature card with mana value less than or equal to Alesha's power from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
+  "Ancestor Dragon": {
+    "name": "Ancestor Dragon",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Creature — Dragon",
+    "power": "5",
+    "toughness": "6",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever one or more creatures you control attack, you gain 1 life for each attacking creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Armasaur Guide": {
+    "name": "Armasaur Guide",
+    "mana_cost": "{4}{W}",
+    "type_line": "Creature — Dinosaur",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever you attack with three or more creatures, put a +1/+1 counter on target creature you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Aurelia, the Warleader": {
+    "name": "Aurelia, the Warleader",
+    "mana_cost": "{2}{R}{R}{W}{W}",
+    "type_line": "Legendary Creature — Angel",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Haste"
+    ],
+    "oracle_text": "Flying, vigilance, haste\nWhenever Aurelia attacks for the first time each turn, untap all creatures you control. After this phase, there is an additional combat phase.",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Battlesong Berserker": {
+    "name": "Battlesong Berserker",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Human Berserker",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever you attack, target creature you control gets +1/+0 and gains menace until end of turn. (It can't be blocked except by two or more creatures.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Goblin Boarders": {
+    "name": "Goblin Boarders",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Pirate",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — This creature enters with a +1/+1 counter on it if you attacked this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Gorehorn Raider": {
+    "name": "Gorehorn Raider",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Minotaur Pirate",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — When this creature enters, if you attacked this turn, this creature deals 2 damage to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Jazal Goldmane": {
+    "name": "Jazal Goldmane",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Legendary Creature — Cat Warrior",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\n{3}{W}{W}: Attacking creatures you control get +X/+X until end of turn, where X is the number of attacking creatures.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Midnight Snack": {
+    "name": "Midnight Snack",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Food",
+      "Raid"
+    ],
+    "oracle_text": "Raid — At the beginning of your end step, if you attacked this turn, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n{2}{B}, Sacrifice this enchantment: Target opponent loses X life, where X is the amount of life you gained this turn.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Searslicer Goblin": {
+    "name": "Searslicer Goblin",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — At the beginning of your end step, if you attacked this turn, create a 1/1 red Goblin creature token.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Skyship Buccaneer": {
+    "name": "Skyship Buccaneer",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Creature — Human Pirate",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Raid"
+    ],
+    "oracle_text": "Flying\nRaid — When this creature enters, if you attacked this turn, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Storm Fleet Spy": {
+    "name": "Storm Fleet Spy",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Pirate",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — When this creature enters, if you attacked this turn, draw a card.",
+    "colors": [
+      "U"
+    ]
   }
 }

@@ -2,12 +2,13 @@
 use managym_state::{
     ability::{
         Ability, Actor, AttackSize, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
-        Per, PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Per, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
+        Keywords, PrintedCharacteristics, ReplacementEffect, SacrificeCost, StaticAbility,
+        TargetCostReduction,
     },
     effect::Modification,
     mana::{Color, ManaCost},
@@ -17,6 +18,14 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        alesha_who_laughs_at_fate(),
+        searslicer_goblin(),
+        gorehorn_raider(),
+        goblin_boarders(),
+        battlesong_berserker(),
+        midnight_snack(),
+        skyship_buccaneer(),
+        armasaur_guide(),
         blasphemous_edict(),
         cackling_prowler(),
         cat_collector(),
@@ -691,6 +700,7 @@ fn chart_a_course() -> CardDefinition {
 }
 
 fn linden_the_steadfast_queen() -> CardDefinition {
+    let text_box = "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever a white creature you control attacks, you gain 1 life.";
     CardDefinition {
         key: "fdn.linden_the_steadfast_queen",
         scryfall_id: "e0bb07cd-9b74-4ba7-8089-27a565d74197",
@@ -700,15 +710,23 @@ fn linden_the_steadfast_queen() -> CardDefinition {
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
             subtypes: vec!["Human".into(), "Noble".into()],
-            power: Some(3), toughness: Some(3),
+            power: Some(3),
+            toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Vigilance]),
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::you_control(CardPredicate {colors_any: vec![Color::White], ..CardPredicate::creature()}),
-                    per: Per::Object, attackers: AttackSize::Any,
-                }, intervening_if: None, effects: vec![Effect::gain_life(1)],
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        colors_any: vec![Color::White],
+                        ..CardPredicate::creature()
+                    }),
+                    per: Per::Object,
+                    attackers: AttackSize::Any,
+                    nth: None,
+                },
+                intervening_if: None,
+                effects: vec![Effect::gain_life(1)],
             }],
-            text_box: "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever a white creature you control attacks, you gain 1 life.".into(),
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()
@@ -729,6 +747,256 @@ fn herald_of_eternal_dawn() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
             statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
             text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn armasaur_guide() -> CardDefinition {
+    let text_box = "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever you attack with three or more creatures, put a +1/+1 counter on target creature you control.";
+    CardDefinition {
+        key: "fdn.armasaur_guide",
+        scryfall_id: "c80fc380-0499-4499-8a60-c43844c02c9b",
+        printed: PrintedCharacteristics {
+            name: "Armasaur Guide".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dinosaur".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    per: Per::Batch,
+                    attackers: AttackSize::AtLeast(3),
+                    nth: None,
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skyship_buccaneer() -> CardDefinition {
+    let text_box =
+        "Flying\nRaid — When this creature enters, if you attacked this turn, draw a card.";
+    CardDefinition {
+        key: "fdn.skyship_buccaneer",
+        scryfall_id: "62958fc3-55dc-4b97-a070-490d6ed27820",
+        printed: PrintedCharacteristics {
+            name: "Skyship Buccaneer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pirate".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::DrawCards { count: 1.into() }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn midnight_snack() -> CardDefinition {
+    let text_box = "Raid — At the beginning of your end step, if you attacked this turn, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n{2}{B}, Sacrifice this enchantment: Target opponent loses X life, where X is the amount of life you gained this turn.";
+    CardDefinition {
+        key: "fdn.midnight_snack",
+        scryfall_id: "c9b7543f-2a45-4db6-b560-d15507a58c91",
+        printed: PrintedCharacteristics {
+            name: "Midnight Snack".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::create_tokens("token.food", 1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}{B}"),
+                sacrifice_source: true,
+                effects: vec![Effect::LoseLife {
+                    player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                    amount: EffectValue::LifeGainedThisTurn(PlayerSelector::You),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn battlesong_berserker() -> CardDefinition {
+    let text_box = "Whenever you attack, target creature you control gets +1/+0 and gains menace until end of turn. (It can't be blocked except by two or more creatures.)";
+    CardDefinition {
+        key: "fdn.battlesong_berserker",
+        scryfall_id: "a1f8b199-5d62-485f-b1c3-b30aa550595b",
+        printed: PrintedCharacteristics {
+            name: "Battlesong Berserker".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Berserker".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate::creature()),
+                    Per::Batch,
+                ),
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                    effects: vec![
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::pump(1, 0),
+                        ),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                        ),
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_boarders() -> CardDefinition {
+    let text_box =
+        "Raid — This creature enters with a +1/+1 counter on it if you attacked this turn.";
+    CardDefinition {
+        key: "fdn.goblin_boarders",
+        scryfall_id: "4409a063-bf2a-4a49-803e-3ce6bd474353",
+        printed: PrintedCharacteristics {
+            name: "Goblin Boarders".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Pirate".into()],
+            power: Some(3),
+            toughness: Some(2),
+            replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
+                count: 1,
+                condition: Some(Condition::AttackedThisTurn),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gorehorn_raider() -> CardDefinition {
+    let text_box = "Raid — When this creature enters, if you attacked this turn, this creature deals 2 damage to any target.";
+    CardDefinition {
+        key: "fdn.gorehorn_raider",
+        scryfall_id: "78ce6c40-3452-4aa0-a45b-dbfd70f8d220",
+        printed: PrintedCharacteristics {
+            name: "Gorehorn Raider".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Minotaur".into(), "Pirate".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::deal_damage(
+                    2,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn searslicer_goblin() -> CardDefinition {
+    let text_box = "Raid — At the beginning of your end step, if you attacked this turn, create a 1/1 red Goblin creature token.";
+    CardDefinition {
+        key: "fdn.searslicer_goblin",
+        scryfall_id: "94ad0b97-a318-4e76-ac79-b3e83417c333",
+        printed: PrintedCharacteristics {
+            name: "Searslicer Goblin".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::create_tokens("token.goblin", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn alesha_who_laughs_at_fate() -> CardDefinition {
+    let text_box = "First strike\nWhenever Alesha attacks, put a +1/+1 counter on it.\nRaid — At the beginning of your end step, if you attacked this turn, return target creature card with mana value less than or equal to Alesha's power from your graveyard to the battlefield.";
+    CardDefinition {
+        key: "fdn.alesha_who_laughs_at_fate",
+        scryfall_id: "a93e3406-4e29-4bc0-ae52-cbd2ac1f99a4",
+        printed: PrintedCharacteristics {
+            name: "Alesha, Who Laughs at Fate".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                    intervening_if: Some(Condition::AttackedThisTurn),
+                    effects: vec![Effect::return_to_battlefield(
+                        ObjectSelector::Target(TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+                            predicate: CardPredicate::creature(),
+                        }),
+                        false,
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

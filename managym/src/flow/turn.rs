@@ -6,8 +6,8 @@ use crate::state::{
     predicate::CardPredicate,
 };
 
-/// A once-each-turn use: the exact source object and its ability index.
-pub type OnceEachTurnKey = (ObjectId, usize);
+/// A once-each-turn use, keyed by exact source, printed face and ability index.
+pub type OnceEachTurnKey = (ObjectId, crate::state::card::CardDefId, usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
@@ -115,6 +115,16 @@ pub struct PlayerTurnHistory {
     /// Mana spent by this player to cast spells this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub mana_spent_casting: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub life_gained: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub creatures_died: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub permanents_left: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub nonland_permanents_left: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub warped_this_turn: bool,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
@@ -214,11 +224,16 @@ pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub graveyard_from_battlefield: Vec<ObjectId>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub creature_died_this_turn: bool,
+
     /// Positive damage to permanents and combat damage to players this turn.
     #[serde(skip_serializing_if = "DamageHistory::is_empty")]
     pub damage_pairs: DamageHistory,
+    /// Sorted by exact battlefield appearance, incremented only at declaration commit.
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attacks_this_turn: Vec<(ObjectId, u32)>,
     /// Once-each-turn uses by exact source object and ability index: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
@@ -253,6 +268,26 @@ pub struct TurnState {
 }
 
 impl TurnState {
+    pub fn creature_died_this_turn(&self) -> bool {
+        self.history.iter().any(|seat| seat.creatures_died > 0)
+    }
+
+    pub fn attack_count(&self, object: ObjectId) -> u32 {
+        self.attacks_this_turn
+            .binary_search_by_key(&object, |entry| entry.0)
+            .map_or(0, |index| self.attacks_this_turn[index].1)
+    }
+
+    pub fn record_attack(&mut self, object: ObjectId) {
+        match self
+            .attacks_this_turn
+            .binary_search_by_key(&object, |entry| entry.0)
+        {
+            Ok(index) => self.attacks_this_turn[index].1 += 1,
+            Err(index) => self.attacks_this_turn.insert(index, (object, 1)),
+        }
+    }
+
     pub fn new(active_player: PlayerId) -> Self {
         Self {
             player_controls: Vec::new(),
@@ -260,7 +295,8 @@ impl TurnState {
             turn_number: 1,
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
-            creature_died_this_turn: false,
+
+            attacks_this_turn: Vec::new(),
             damage_pairs: Default::default(),
             history: Default::default(),
             graveyard_from_battlefield: Vec::new(),
@@ -409,8 +445,9 @@ impl TurnState {
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
-        self.creature_died_this_turn = false;
+
         self.damage_pairs.0.clear();
+        self.attacks_this_turn.clear();
         self.history = Default::default();
         self.graveyard_from_battlefield.clear();
         self.spells_cast = [Vec::new(), Vec::new()];

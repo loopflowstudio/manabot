@@ -895,6 +895,11 @@ class PlayerTurnHistory:
     # Life lost this turn (CR 119.3).
     life_gains: int
     mana_spent_casting: int
+    life_gained: int
+    creatures_died: int
+    permanents_left: int
+    nonland_permanents_left: int
+    warped_this_turn: bool
     life_lost: int
 
 class RestrictedMana:
@@ -1077,6 +1082,7 @@ class Permanent:
     ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
     entered_this_turn: bool
+    attacked_this_turn: bool
     dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]
@@ -1130,6 +1136,7 @@ class StackTarget:
 
 class StackObject:
     combat_damage_to_players: list[int]
+    mana_spent: int
     source_power: int | None
     ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.

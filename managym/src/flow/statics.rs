@@ -98,6 +98,7 @@ impl Characteristics {
             ability.power_up
                 || ability.reduce_by_source_power
                 || ability.cost_reduction_per.is_some()
+                || matches!(ability.effects.as_slice(), [crate::state::ability::Effect::AddMana { amount, until_end_of_combat: false, .. }] if !matches!(amount, crate::state::ability::EffectValue::Fixed(1)))
                 || matches!(
                     ability.effects.as_slice(),
                     [crate::state::ability::Effect::If { .. }
@@ -795,6 +796,26 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
         };
         match condition {
+            Condition::Compare { left, op, right } => {
+                let context;
+                let frame = match frame {
+                    Some(frame) => frame,
+                    None => {
+                        context = EffectFrame {
+                            source_identity: crate::state::game_object::AbilitySource::optional(
+                                source, source,
+                            ),
+                            context_target: triggering,
+                            ..EffectFrame::new(controller, Vec::new())
+                        };
+                        &context
+                    }
+                };
+                op.test(
+                    self.effect_value(left, frame),
+                    self.effect_value(right, frame),
+                )
+            }
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,
             Condition::CardsDrawnAtLeast { count } => {
@@ -858,7 +879,7 @@ impl Game {
             Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
                 self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
-            Condition::CreatureDiedThisTurn => self.state.turn.creature_died_this_turn,
+            Condition::CreatureDiedThisTurn => self.state.turn.creature_died_this_turn(),
             Condition::GainedLifeThisTurn => self.state.turn.history[controller.0].life_gains > 0,
             Condition::LostLifeThisTurn => self.state.turn.history[controller.0].life_lost > 0,
             Condition::AllOf(conditions) => conditions.iter().all(|condition| {

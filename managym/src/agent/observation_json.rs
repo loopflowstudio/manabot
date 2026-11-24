@@ -317,6 +317,9 @@ impl Serialize for StackObjectJson<'_> {
         map.serialize_entry("kind", &(value.kind as i32))?;
         map.serialize_entry("source_card_registry_key", &value.source_card_registry_key)?;
         map.serialize_entry("source_permanent_id", &value.source_permanent_id)?;
+        if value.mana_spent > 0 {
+            map.serialize_entry("mana_spent", &value.mana_spent)?;
+        }
         if let Some(power) = value.source_power {
             map.serialize_entry("source_power", &power)?;
         }
@@ -801,6 +804,8 @@ pub(super) struct WirePermanentData {
     pub dealt_damage_this_turn: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub entered_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -829,6 +834,8 @@ pub(super) struct WireStackObjectData {
     #[serde(default)]
     pub combat_damage_to_players: Vec<usize>,
     pub source_power: Option<i32>,
+    #[serde(default)]
+    pub mana_spent: u16,
     #[serde(default)]
     pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
@@ -926,6 +933,7 @@ impl From<WirePermanentData> for PermanentData {
             ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
             entered_this_turn: w.entered_this_turn,
+            attacked_this_turn: w.attacked_this_turn,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
             effects: w.effects,
             timestamp: w.timestamp,
@@ -997,6 +1005,7 @@ impl Serialize for PermanentData {
             ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
             entered_this_turn: self.entered_this_turn,
+            attacked_this_turn: self.attacked_this_turn,
             dealt_damage_this_turn: self.dealt_damage_this_turn,
             effects: self.effects.clone(),
             timestamp: self.timestamp,
@@ -1015,6 +1024,7 @@ impl From<WireStackObjectData> for StackObjectData {
         Self {
             combat_damage_to_players: w.combat_damage_to_players,
             source_power: w.source_power,
+            mana_spent: w.mana_spent,
             description: w.description,
             ability_resolutions: w.ability_resolutions,
             stack_object_id: w.stack_object_id,

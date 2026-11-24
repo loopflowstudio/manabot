@@ -239,13 +239,13 @@ Start with `lf sync main`, land the four unifications above, and author and veri
 - **Armasaur Guide** (`AttackSize::AtLeast(3)`, `Per::Batch`)
 - **Skyship Buccaneer** (raid ETB draw)
 - **Midnight Snack** (raid end-step Food + sacrifice losing `EffectValue::LifeGainedThisTurn(PlayerSelector::You)`)
-- **Battlesong Berserker** (`Attacks { you_control(creature), Per::Batch, Any }` targeting another creature you control for +1/+0 and menace)
+- **Battlesong Berserker** (`Attacks { you_control(creature), Per::Batch, Any }` targeting any creature you control, including itself for +1/+0 and menace)
 - **Goblin Boarders** (`ReplacementEffect::EntersWithPlusOneCounters { count: 1, condition: Some(Condition::AttackedThisTurn) }`)
 - **Gorehorn Raider** (raid ETB 2 damage to any target)
 - **Searslicer Goblin** (raid end-step intervening-if creating 1/1 red Goblin token via `token_catalog()`)
-- **Alesha, Who Laughs at Fate** (first strike + raid end-step intervening-if graveyard reanimation within source power, with departed source power projected on the stack)
-- **Ancestor Dragon** (flying + batch attack trigger gaining `ObjectSelector::each(Scope::YouControl, attacking creature).count()`)
-- **Jazal Goldmane** (first strike + `{3}{W}{W}` pumping attacking creatures you control by `ObjectSelector::each(Scope::YouControl, attacking creature).count()`)
+- **Alesha, Who Laughs at Fate** (first strike + a +1/+1 counter when Alesha attacks + raid end-step intervening-if graveyard reanimation within source power, with departed source power projected on the stack)
+- **Ancestor Dragon** (flying + batch attack trigger gaining `ObjectSelector::each(Scope::Battlefield, attacking creature).count()`)
+- **Jazal Goldmane** (first strike + `{3}{W}{W}` pumping attacking creatures you control by `ObjectSelector::each(Scope::Battlefield, attacking creature).count()`)
 - **Storm Fleet Spy** (raid ETB draw)
 - **Aurelia, the Warleader** (flying, vigilance, haste + `Attacks { subject: This, per: Per::Object, attackers: Any, nth: Some(1) }` untapping all creatures you control and adding an additional combat phase)
 
@@ -254,6 +254,14 @@ Directed verification for this slice must exercise:
 2. **Batch trigger multiplicity & identity:** two declared attackers with a trigger doubler emit `2 × 2 = 4` triggers with distinct `ObjectSelector::Triggering` contexts (not `2 + 1 = 3` with `None`).
 3. **Combined attack/raid + lifegain total:** 0 attackers (negative control for all raid triggers, Goblin Boarders entry, and Armasaur Guide), 2 attackers (triggers Battlesong/Ancestor/Jazal/raid, not Armasaur Guide), 3 attackers (triggers Armasaur Guide), two separate life gains of 3 and 2 (verifying `life_gains == 2` and `life_gained == 5` in Midnight Snack and both viewers’ v11 `player_turn_state` + LLM text), and Alesha pending trigger after Alesha leaves the battlefield (verifying `stack::SOURCE_POWER`, text, and Academy stack description).
 4. **Shared `select_board` control:** a mana ability using `ObjectSelector::each_you_control(...).count()` produces the live count rather than 0, and bundled v9/v11 pinned pilots still pass with the appended v11 `player_turn_state` / `permanent` / `stack` columns.
+
+**Unification and attack/raid batch · implemented.** Synced onto main `dca0a901b6` (hash v26, `ENTERED_THIS_TURN` kept at permanent column 51). All twelve rows are authored (FDN in `fdn.rs`; Ancestor Dragon `gs1.rs`, Jazal Goldmane `c14.rs`, Storm Fleet Spy `xln.rs`, Aurelia `gtc.rs`) with the eight `attack_batch_*` fixtures in `managym/cards/tests/cards/fdn.rs`; their ledger rows are recorded. The full debug native workspace run passed (1551 tests) after three repairs this pass taught:
+- Activated targets now go through `targets_for_source`, which excludes the source only for `another` clauses (main excluded an activated ability's own permanent unconditionally, which is wrong for "target creature"). Deserter's Disciple, North Pole Patrol and Earth Kingdom Protectors print "another target" and now author `TargetRequirement::another` in a `TargetClause`.
+- Alesha's Minotaur subtype needed its CR 205.3 row.
+- The semantic-kernel `evidence-opening-v1.json` was re-recorded under hash v26 and the grown catalog; the Clone suspended-entry hash witness in `lea.rs` was re-pinned for the same reason.
+A dynamic mana output (`AddMana` with a counted amount) finalizes to one `ManaChoice`; trivial skipping removes it in play, and the constructed fixture takes it explicitly.
+
+Next: Python-side checks after the CPython 3.13 rebuild (`tests/semantic/test_text_observation.py` attack-batch text, `tests/env/test_named_observation_layout.py`, `tests/verify/test_input_v10.py`, `tests/model/test_pinned_pilot.py`), then compress and the batch behavior review. Recorded Watch playback of a partial declaration and the Engine Budget stay in integrated validation.
 
 ## Remaining mechanic batches
 

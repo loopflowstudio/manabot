@@ -1376,6 +1376,9 @@
           "format": "uint32",
           "minimum": 0
         },
+        "attacked_this_turn": {
+          "type": "boolean"
+        },
         "attacking": {
           "description": "Attacking in the current combat.",
           "type": "boolean"
@@ -2055,9 +2058,19 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
+        },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "life_gains": {
           "description": "Separate occurrences, independent of the amount gained.",
@@ -2077,11 +2090,24 @@
           "format": "uint32",
           "minimum": 0
         },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "description": "Permanents this player sacrificed (CR 701.21).",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -2388,6 +2414,11 @@
         },
         "label": {
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "type": [

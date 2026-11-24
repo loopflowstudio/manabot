@@ -2615,6 +2615,9 @@
           "default": null,
           "title": "Attached To"
         },
+        "attacked_this_turn": {
+          "type": "boolean"
+        },
         "attacking": {
           "default": false,
           "title": "Attacking",
@@ -3796,10 +3799,20 @@
           "title": "Cards Drawn",
           "type": "integer"
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "default": false,
           "title": "Land Entered",
           "type": "boolean"
+        },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "life_gains": {
           "description": "Separate occurrences, independent of the amount gained.",
@@ -3820,12 +3833,25 @@
           "format": "uint32",
           "minimum": 0
         },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Permanents Sacrificed",
           "type": "integer"
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "title": "PlayerTurnHistoryView",
@@ -4231,6 +4257,11 @@
         "label": {
           "title": "Label",
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "anyOf": [

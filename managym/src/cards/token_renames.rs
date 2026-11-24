@@ -5,6 +5,7 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "AttackSize::WithAnother", None),
     (Structure, "/Effect::SearchLandsOpponentSplits", None),
     (Structure, "/ManaUse", None),
     (Structure, "/TriggerCondition::AttacksAlone", None),

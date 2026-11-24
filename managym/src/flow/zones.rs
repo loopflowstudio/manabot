@@ -471,6 +471,7 @@ impl Game {
         } = &mut event
         {
             if new > old {
+                self.state.turn.history[player.0].life_gained += old.abs_diff(*new);
                 let gains = &mut self.state.turn.history[player.0].life_gains;
                 *gains += 1;
                 *gain_ordinal = *gains;
@@ -634,7 +635,14 @@ impl Game {
         let mut event_controller = owner;
 
         if old_zone == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.state.object_to_permanent[prior_object.slot()].take() {
+            if let Some(permanent_id) = self.state.object_to_permanent[prior_object.slot()] {
+                let lki = departing_lki.as_ref().expect("departing permanent");
+                let history = &mut self.state.turn.history[lki.controller.0];
+                history.permanents_left += 1;
+                history.nonland_permanents_left += u32::from(!lki.was_land);
+                history.creatures_died +=
+                    u32::from(to_zone == ZoneType::Graveyard && lki.was_creature);
+                self.state.object_to_permanent[prior_object.slot()] = None;
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
@@ -692,12 +700,6 @@ impl Game {
                 .or_default() += 1;
         }
         if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
-            if self
-                .object_lki(prior_object)
-                .is_some_and(|lki| lki.was_creature)
-            {
-                self.state.turn.creature_died_this_turn = true;
-            }
             self.state.turn.graveyard_from_battlefield.push(object_id);
         }
 

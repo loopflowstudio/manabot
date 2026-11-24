@@ -2795,6 +2795,13 @@ fn deadly_precision() -> CardDefinition {
 fn deserter_s_disciple() -> CardDefinition {
     let text_box =
         "{T}: Another target creature you control with power 2 or less can't be blocked this turn.";
+    let small = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Creature),
+            max_power: Some(2),
+            ..Default::default()
+        },
+    };
 
     CardDefinition {
         key: "tla.deserter_s_disciple",
@@ -2808,16 +2815,13 @@ fn deserter_s_disciple() -> CardDefinition {
             toughness: Some(2),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            max_power: Some(2),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::CantBeBlocked,
-                )],
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::another(small.clone()),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(small),
+                        Modification::CantBeBlocked,
+                    )],
+                }],
                 ..Default::default()
             }],
             text_box: text_box.into(),
@@ -3009,6 +3013,12 @@ fn earth_kingdom_jailer() -> CardDefinition {
 
 fn earth_kingdom_protectors() -> CardDefinition {
     let text_box = "Vigilance\nSacrifice this creature: Another target Ally you control gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)";
+    let ally = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate {
+            subtype: Some("Ally".into()),
+            ..Default::default()
+        },
+    };
 
     CardDefinition {
         key: "tla.earth_kingdom_protectors",
@@ -3023,15 +3033,13 @@ fn earth_kingdom_protectors() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Vigilance]),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 sacrifice_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            subtype: Some("Ally".into()),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                )],
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::another(ally.clone()),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(ally),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                    )],
+                }],
                 ..Default::default()
             }],
             text_box: text_box.into(),
@@ -6847,6 +6855,9 @@ fn north_pole_gates() -> CardDefinition {
 
 fn north_pole_patrol() -> CardDefinition {
     let text_box = "{T}: Untap another target permanent you control.\nWaterbend {3}, {T}: Tap target creature an opponent controls. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+    let yours = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::default(),
+    };
 
     CardDefinition {
         key: "tla.north_pole_patrol",
@@ -6870,11 +6881,10 @@ fn north_pole_patrol() -> CardDefinition {
                 },
                 ActivatedAbilityDefinition {
                     tap_source: true,
-                    effects: vec![Effect::untap(ObjectSelector::Target(
-                        TargetSpec::PermanentYouControl {
-                            predicate: CardPredicate::default(),
-                        },
-                    ))],
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::another(yours.clone()),
+                        effects: vec![Effect::untap(ObjectSelector::Target(yours))],
+                    }],
                     ..Default::default()
                 },
             ],
@@ -8598,7 +8608,8 @@ fn sokka_lateral_strategist() -> CardDefinition {
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                     per: Per::Object,
-                    attackers: AttackSize::WithAnother,
+                    attackers: AttackSize::AtLeast(2),
+                    nth: None,
                 },
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
@@ -9084,6 +9095,7 @@ fn team_avatar() -> CardDefinition {
                     }),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
+                    nth: None,
                 },
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::Triggering,

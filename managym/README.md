@@ -969,5 +969,9 @@ would finish it. During attacker selection both viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
 declaration finishes and lasts through the turn, even if those creatures leave.
 A creature that enters attacking deals combat damage normally but does not
-count toward raid or trigger abilities such as Linden’s. The same address rules as payment previews apply, and the
+count toward raid or trigger abilities such as Linden’s. Each declared creature records its own attack for the turn. Aurelia triggers on
+its first declaration even if it previously entered attacking. A creature that
+leaves and returns starts a new attack history. Extra combats preserve raid
+and each creature’s history until the turn ends.
+The same address rules as payment previews apply, and the
 call is read-only in the same way.

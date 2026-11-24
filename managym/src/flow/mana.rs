@@ -36,7 +36,7 @@ use crate::{
         statics::Characteristics,
     },
     state::{
-        ability::Effect,
+        ability::{Effect, EffectValue},
         card::{
             ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
@@ -1649,6 +1649,17 @@ impl Game {
                     otherwise
                 };
                 Some(branch[0].clone())
+            }
+            Effect::AddMana {
+                mana,
+                amount,
+                until_end_of_combat: false,
+            } if !matches!(amount, EffectValue::Fixed(1)) => {
+                let mut output = Mana::default();
+                for _ in 0..self.controller_value(amount, controller) {
+                    output.add(mana);
+                }
+                Some(Effect::add_mana(output))
             }
             Effect::AddOneColorManaValue { amount } => {
                 let amount = self.controller_value(amount, controller).max(0) as usize;

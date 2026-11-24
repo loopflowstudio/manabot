@@ -281,6 +281,13 @@ columns! { player {
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
+pub fn turn_state_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::Legacy => &turn_state::COLUMNS[..turn_state::LIFE_GAINS],
+        InputLayout::OneToken => turn_state::COLUMNS,
+    }
+}
+
 columns! { turn_state {
     0: LIFE_LOST => ("life_lost", ValueLayout::new(ValueKind::Count { scale: 20 }, "Life lost this turn / 20", "nonnegative; no fixed bound")),
     1: SPELLS_CAST => ("spells_cast", ValueLayout::new(ValueKind::Count { scale: 10 }, "Spells cast this turn / 10", "nonnegative; no fixed bound")),
@@ -290,6 +297,13 @@ columns! { turn_state {
     5: NONARTIFACT_MANA_RED => ("nonartifact_mana_red", ValueLayout::NONARTIFACT_MANA),
     6: NONARTIFACT_MANA_GREEN => ("nonartifact_mana_green", ValueLayout::NONARTIFACT_MANA),
     7: NONARTIFACT_MANA_COLORLESS => ("nonartifact_mana_colorless", ValueLayout::NONARTIFACT_MANA),
+    8: LIFE_GAINS => ("life_gains", ValueLayout::COUNT),
+    9: LIFE_GAINED => ("life_gained", ValueLayout::COUNT),
+    10: MANA_SPENT_CASTING => ("mana_spent_casting", ValueLayout::COUNT),
+    11: CREATURES_DIED => ("creatures_died", ValueLayout::COUNT),
+    12: PERMANENTS_LEFT => ("permanents_left", ValueLayout::COUNT),
+    13: NONLAND_PERMANENTS_LEFT => ("nonland_permanents_left", ValueLayout::COUNT),
+    14: WARPED_THIS_TURN => ("warped_this_turn", ValueLayout::FLAG),
 } }
 
 columns! { card {
@@ -406,6 +420,7 @@ columns! { permanent {
     51: ENTERED_THIS_TURN => ("entered_this_turn", ValueLayout::FLAG),
     52: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     53: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
+    54: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -453,6 +468,7 @@ columns! { stack {
     38: SOURCE_POWER => ("source_power", ValueLayout::NUMBER_TENTHS),
     39: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     40: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
+    41: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -806,10 +822,7 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
-        FactKind::CreatureDied => ("creature_died_this_turn", "object: active player; a creature died during this turn"),
         FactKind::TriggeringDamage => ("triggering_damage", "object: controller; id: frame index + 1; value: combat damage dealt to the player"),
-        FactKind::ManaSpentCasting => ("mana_spent_casting", "value: mana this player spent casting spells this turn"),
-        FactKind::LifeGains => ("life_gains","value: times this player gained life this turn"),
         FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
         FactKind::UsedAbility => ("used_ability", "id: zero-based activated ability index; value: 1"),
         FactKind::Copy => ("copy", "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2"),
@@ -1035,11 +1048,7 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::CreatureDied
-                    | FactKind::LifeGains
-                    | FactKind::ManaSpentCasting
-                    | FactKind::AbilityResolution
-                    | FactKind::TriggeringDamage
+                FactKind::AbilityResolution | FactKind::TriggeringDamage
             )
     });
     facts.row_kinds = kinds
@@ -1087,7 +1096,11 @@ pub fn observation_layout(
     if turn_state {
         layout.insert(
             "player_turn_state".into(),
-            ArrayLayout::features(&["viewer_relative_seat"], &[Some(2)], turn_state::COLUMNS),
+            ArrayLayout::features(
+                &["viewer_relative_seat"],
+                &[Some(2)],
+                turn_state_columns(layout_kind),
+            ),
         );
         layout.insert(
             "card_turn_state".into(),
@@ -1152,7 +1165,7 @@ mod tests {
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 54 } else { 38 },
+                    if one_token { 55 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1178,7 +1191,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 41);
+                assert_eq!(stack::WIDTH, 42);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

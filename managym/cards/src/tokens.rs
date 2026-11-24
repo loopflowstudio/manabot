@@ -29,6 +29,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         elf_warrior(),
         faerie(),
         food(),
+        goblin(),
         human(),
         human_soldier(),
         komas_coil(),
@@ -454,5 +455,14 @@ fn villain() -> TokenDefinition {
             keywords: Keywords::of(&[Keyword::Menace]),
             ..creature(base, 2, 1, [Color::Black])
         },
+    )
+}
+
+fn goblin() -> TokenDefinition {
+    let base = face("Goblin", [CardType::Creature], &["Goblin"], "");
+    token(
+        "token.goblin",
+        "fbd728ed-d5dc-44b3-9159-6c86cab3be0c",
+        creature(base, 1, 1, [Color::Red]),
     )
 }

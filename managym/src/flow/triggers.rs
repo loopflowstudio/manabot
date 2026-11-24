@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
+            Ability, Actor, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
@@ -33,6 +33,7 @@ use crate::{
 /// placed: a printed ability by index, or a granted one's effects.
 #[derive(Clone)]
 struct FiredTrigger {
+    attacker: Option<PermanentId>,
     hit: Option<CombatPlayerHit>,
     source: TriggerSourceSnapshot,
     ability_index: usize,
@@ -935,16 +936,17 @@ impl Game {
                         self.triggering_permanent(event),
                     )
                 }) && (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
-                    || !self
-                        .state
-                        .turn
-                        .ability_triggers_this_turn
-                        .contains_key(&(source.lki.object, ability_index)))
+                    || !self.state.turn.ability_triggers_this_turn.contains_key(&(
+                        source.lki.object,
+                        source.lki.definition_id,
+                        ability_index,
+                    )))
                 {
                     self.collect_occurrences(
                         condition,
                         event,
                         FiredTrigger {
+                            attacker: None,
                             hit: None,
                             source: source.clone(),
                             ability_index,
@@ -987,6 +989,7 @@ impl Game {
                     condition,
                     event,
                     FiredTrigger {
+                        attacker: None,
                         hit: None,
                         source: source.clone(),
                         ability_index: 0,
@@ -1013,6 +1016,7 @@ impl Game {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
+            attacker,
             hit,
             source,
             ability_index,
@@ -1037,7 +1041,11 @@ impl Game {
                     }
                 )
             {
-                self.spend_once_each_turn((source_lki.object, ability_index));
+                self.spend_once_each_turn((
+                    source_lki.object,
+                    source_lki.definition_id,
+                    ability_index,
+                ));
             }
             let effects = match &granted {
                 Some(effects) => effects.as_slice(),
@@ -1049,7 +1057,9 @@ impl Game {
             };
             let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
             let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
-            let context = if reads_triggering_permanent {
+            let context = if let Some(attacker) = attacker {
+                Some(Target::Permanent(attacker))
+            } else if reads_triggering_permanent {
                 self.triggering_permanent(event)
             } else if let (
                 true,
@@ -1141,6 +1151,46 @@ impl Game {
     ) {
         let source = &occurrence.source;
         if let (
+            TriggerCondition::Attacks {
+                subject,
+                per,
+                attackers: size,
+                nth,
+            },
+            GameEvent::AttackersDeclared { attackers, .. },
+        ) = (condition, event)
+        {
+            if !size.matches(attackers.len()) {
+                return;
+            }
+            let mut matching = attackers
+                .iter()
+                .copied()
+                .filter(|&id| {
+                    self.attack_matches(subject, *nth, source.lki.object, source.controller, id)
+                })
+                .peekable();
+            if matching.peek().is_none() {
+                return;
+            }
+            let copies = 1 + self.additional_trigger_times(source);
+            match per {
+                Per::Object => {
+                    for attacker in matching {
+                        fired.extend(std::iter::repeat_n(
+                            FiredTrigger {
+                                attacker: Some(attacker),
+                                ..occurrence.clone()
+                            },
+                            copies,
+                        ));
+                    }
+                }
+                Per::Batch => fired.extend(std::iter::repeat_n(occurrence, copies)),
+            }
+            return;
+        }
+        if let (
             TriggerCondition::DealsCombatDamage { subject, to, per },
             GameEvent::CombatDamageToPlayers { hits },
         ) = (condition, event)
@@ -1179,9 +1229,7 @@ impl Game {
             condition_event_kinds(condition).contains(event.kind()),
             "{condition:?} fired on an event kind it is not indexed by: {event:?}"
         );
-        let count =
-            self.trigger_multiplicity(condition, source.lki.object, source.controller, event)
-                + self.additional_trigger_times(source);
+        let count = 1 + self.additional_trigger_times(source);
         fired.extend(std::iter::repeat_n(occurrence, count));
     }
 
@@ -1910,11 +1958,26 @@ impl Game {
                 source_was_on_battlefield,
                 event,
             ),
-            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
-            | (
-                TriggerCondition::DealsCombatDamage { .. },
-                GameEvent::CombatDamageToPlayers { .. },
-            ) => self.trigger_multiplicity(condition, source_object, source_controller, event) > 0,
+            (
+                TriggerCondition::Attacks {
+                    subject,
+                    attackers: size,
+                    nth,
+                    ..
+                },
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                size.matches(attackers.len())
+                    && attackers.iter().any(|&id| {
+                        self.attack_matches(subject, *nth, source_object, source_controller, id)
+                    })
+            }
+            (
+                TriggerCondition::DealsCombatDamage { subject, to, .. },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => hits
+                .iter()
+                .any(|hit| self.hit_matches(hit, subject, *to, source_object, source_controller)),
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },
@@ -2103,65 +2166,18 @@ impl Game {
         }
     }
 
-    /// How many times one event triggers a matching ability: once, except
-    /// attacks and combat damage `per` object, which trigger for each
-    /// matching creature (CR 603.2c).
-    fn trigger_multiplicity(
+    fn attack_matches(
         &self,
-        condition: &TriggerCondition,
-        source_object: ObjectId,
-        source_controller: PlayerId,
-        event: &GameEvent,
-    ) -> usize {
-        let (per, matching) = match (condition, event) {
-            (
-                TriggerCondition::DealsCombatDamage { subject, to, per },
-                GameEvent::CombatDamageToPlayers { hits },
-            ) => (
-                per,
-                hits.iter()
-                    .filter(|hit| {
-                        self.hit_matches(hit, subject, *to, source_object, source_controller)
-                    })
-                    .count(),
-            ),
-            (
-                TriggerCondition::Attacks {
-                    subject,
-                    per,
-                    attackers: size,
-                },
-                GameEvent::AttackersDeclared { attackers, .. },
-            ) => {
-                let size_holds = match size {
-                    AttackSize::Any => true,
-                    AttackSize::Alone => attackers.len() == 1,
-                    AttackSize::WithAnother => attackers.len() >= 2,
-                };
-                if !size_holds {
-                    return 0;
-                }
-                (
-                    per,
-                    attackers
-                        .iter()
-                        .filter(|id| {
-                            self.subject_matches_permanent(
-                                subject,
-                                source_object,
-                                source_controller,
-                                **id,
-                            )
-                        })
-                        .count(),
-                )
-            }
-            _ => return 1,
-        };
-        match per {
-            Per::Object => matching,
-            Per::Batch => usize::from(matching > 0),
-        }
+        subject: &TriggerSubject,
+        nth: Option<u32>,
+        source: ObjectId,
+        controller: PlayerId,
+        attacker: PermanentId,
+    ) -> bool {
+        nth.is_none_or(|ordinal| {
+            self.permanent_object(attacker)
+                .is_some_and(|object| self.state.turn.attack_count(object) == ordinal)
+        }) && self.subject_matches_permanent(subject, source, controller, attacker)
     }
 
     fn hit_matches(

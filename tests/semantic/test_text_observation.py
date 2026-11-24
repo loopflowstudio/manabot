@@ -14,11 +14,8 @@ from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
     FACT_ABILITY_RESOLUTION,
-    FACT_CREATURE_DIED,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_LIFE_GAINS,
-    FACT_MANA_SPENT_CASTING,
     FACT_OBJECT_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
@@ -666,6 +663,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
+        "attacked_this_turn": "attacked this turn",
         "entered_this_turn": "entered this turn",
         "plus1_counters": "+1/+1 counters",
         "cant_be_blocked_this_turn": "cannot be blocked this turn",
@@ -726,6 +724,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
     },
     managym.StackObject: {
         "combat_damage_to_players": "seats dealt combat damage by the source this turn",
+        "mana_spent": "mana spent to cast",
         "source_power": "source power in the ability description",
         "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
@@ -753,6 +752,11 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_gained": "gained N life",
+        "creatures_died": "controlled creature deaths",
+        "permanents_left": "permanents left",
+        "nonland_permanents_left": "nonland departures",
+        "warped_this_turn": "cast a spell for warp",
         "mana_spent_casting": "spent N mana casting spells",
         "life_gains": "gained life N times",
         "life_lost": "lost N life",
@@ -873,7 +877,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
-            "life_gains": 2,
+            "life_gains": 2, "life_gained": 5, "creatures_died": 1,
             "life_lost": 3,
         },
         "restricted_mana": [
@@ -891,14 +895,13 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     ]
     assert "A creature died this turn." in decision.text
     assert serialize_observation(observation)["turn"]["creature_died_this_turn"]
-    assert facts[
-        facts[:, FACT_KIND_INDEX] == FACT_CREATURE_DIED, FACT_VALUE_INDEX
-    ].tolist() == [1]
+    turn_state = encode_observation(ObservationSpace(), observation)["player_turn_state"]
+    assert turn_state[0, column("player_turn_state", "creatures_died")] == 1
     counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
     assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
-    assert facts[
-        facts[:, FACT_KIND_INDEX] == FACT_LIFE_GAINS, FACT_VALUE_INDEX
-    ].tolist() == [2]
+    assert turn_state[0, column("player_turn_state", "life_gains")] == 2
+    assert turn_state[0, column("player_turn_state", "life_gained")] == 5
+    assert "gained 5 life" in decision.text
     text = decision.text
     assert "; blocking P2 (Gray Ogre);" in text
     assert "dealt damage to P2 (Gray Ogre) this turn" in text
@@ -1975,11 +1978,8 @@ def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
         obs = env.observation_for_player(viewer)
         caster = obs.agent if viewer == payer else obs.opponent
         assert caster.turn_history.mana_spent_casting == 5
-        facts = encode_observation(ObservationSpace(), obs)["facts"]
-        spend = facts[facts[:, FACT_KIND_INDEX] == FACT_MANA_SPENT_CASTING]
-        assert spend[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX]].tolist() == [
-            [1 if viewer == payer else 2, 5]
-        ]
+        turn_state = encode_observation(ObservationSpace(), obs)["player_turn_state"]
+        assert turn_state[int(viewer != payer), column("player_turn_state", "mana_spent_casting")] == 5
         assert "spent 5 mana casting spells" in capture_text_decision(env).text
 
 
@@ -2007,3 +2007,27 @@ def test_second_draw_triggers_share_public_history_in_text_and_policy_input() ->
         assert row[..., column(side, "cards_drawn")].item() == pytest.approx(0.3)
         if viewer == drawer:
             _choose(env, "Pass priority")
+
+
+def test_attack_batch_both_choosers_see_gain_amount_and_occurrences() -> None:
+    env = priority_root(("Koala-Sheep",), ("Ancestor Dragon", "Gray Ogre", "Midnight Snack") + ("Plains",) * 3)
+    caster = env.current_agent_index()
+    _choose(env, "Cast")
+    viewers: set[int] = set()
+    for _ in range(32):
+        viewer = env.current_agent_index()
+        assert viewer is not None
+        observation = env.observation_for_player(viewer)
+        player = observation.agent if caster == viewer else observation.opponent
+        decision = capture_text_decision(env)
+        if player.turn_history.life_gained == 5:
+            assert player.turn_history.life_gains == 2
+            assert "gained 5 life" in decision.text
+            assert "gained life 2 times" in decision.text
+            viewers.add(viewer)
+            if len(viewers) == 2:
+                return
+        action = next(action for action in decision.actions
+                      if action.description.startswith("Attack with") or action.description == "Pass priority")
+        submit_response(env, decision, action.reference)
+    pytest.fail(f"turn gain total reached viewers {viewers}")

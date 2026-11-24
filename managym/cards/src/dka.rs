@@ -28,7 +28,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
             toughness: Some(1),
             keywords: Keywords::of(&[Keyword::Indestructible]),
             abilities: vec![
-                grow(TriggerCondition::Attacks { subject: TriggerSubject::This, per: Per::Object, attackers: AttackSize::Any }),
+                grow(TriggerCondition::Attacks { subject: TriggerSubject::This, per: Per::Object, attackers: AttackSize::Any, nth: None, }),
                 grow(TriggerCondition::Dies { subject: TriggerSubject::CreatureDamagedByThis }),
             ],
             text_box: "Indestructible (Damage and effects that say \"destroy\" don't destroy this creature.)\nWhenever this creature attacks, put a +1/+1 counter on it.\nWhenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.".into(),

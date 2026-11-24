@@ -572,7 +572,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 28] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 33] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -582,7 +582,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 28] {
         history,
         graveyard_from_battlefield: _,
         ability_triggers_this_turn: _,
-        creature_died_this_turn: _,
+        attacks_this_turn: _,
         damage_pairs: _,
         ability_resolutions_this_turn: _,
         extra_turns: _,
@@ -603,11 +603,17 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 28] {
         bent: _,
         life_gains: _,
         mana_spent_casting: _,
+        life_gained: _,
+        creatures_died: _,
+        permanents_left: _,
+        nonland_permanents_left: _,
+        warped_this_turn: _,
+
         life_lost: _,
     } = history[0];
     [
         ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
-        ("creature_died_this_turn", Seen::Via("creature death fact on active player")),
+        ("attacks_this_turn", Seen::Via("exact attacking permanent")),
         ("active_player", Seen::Player(player::IS_ACTIVE, player::LIBRARY_COUNT)),
         (
             "turn_number",
@@ -643,6 +649,21 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 28] {
         (
             "resume_with",
             Seen::Via("the player after the interrupted turn: the extra-turn columns and the active player"),
+        ),
+        (
+            "history.life_gained", Seen::Via("player turn state"),
+        ),
+        (
+            "history.creatures_died", Seen::Via("player turn state"),
+        ),
+        (
+            "history.permanents_left", Seen::Via("player turn state"),
+        ),
+        (
+            "history.nonland_permanents_left", Seen::Via("player turn state"),
+        ),
+        (
+            "history.warped_this_turn", Seen::Via("player turn state"),
         ),
         (
             "history.mana_spent_casting",
@@ -1232,6 +1253,7 @@ fn condition_token(condition: &Condition) -> &'static str {
             "Condition::OpponentLostLifeThisTurnAtLeast"
         }
         Condition::AllOf(_) => "Condition::AllOf",
+        Condition::Compare { .. } => "Condition::Compare",
         Condition::LostLifeThisTurn => "Condition::LostLifeThisTurn",
         Condition::CreatureDiedThisTurn => "Condition::CreatureDiedThisTurn",
         Condition::GainedLifeThisTurn => "Condition::GainedLifeThisTurn",
@@ -1281,6 +1303,11 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
         Condition::AllOf(vec![Condition::YourTurn]),
+        Condition::Compare {
+            left: Box::new(EffectValue::LifeTotal(PlayerSelector::You)),
+            op: managym::state::ability::CompareOp::Ge,
+            right: Box::new(1.into()),
+        },
         Condition::LostLifeThisTurn,
         Condition::CreatureDiedThisTurn,
         Condition::GainedLifeThisTurn,
@@ -2200,13 +2227,17 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         });
         expected.push(format!("Per::{per:?}"));
     }
-    for attackers in [AttackSize::Any, AttackSize::Alone, AttackSize::WithAnother] {
+    for attackers in [AttackSize::Any, AttackSize::Alone, AttackSize::AtLeast(2)] {
         conditions.push(TriggerCondition::Attacks {
             subject: TriggerSubject::you_control(CardPredicate::creature()),
             per: Per::Batch,
             attackers,
+            nth: None,
         });
-        expected.push(format!("AttackSize::{attackers:?}"));
+        expected.push(match attackers {
+            AttackSize::AtLeast(_) => "AttackSize::AtLeast".to_string(),
+            _ => format!("AttackSize::{attackers:?}"),
+        });
     }
     let definition = ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
@@ -3104,9 +3135,6 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
         FactKind::TriggeringDamage => "ContinuationFrame.triggering_damage",
-        FactKind::CreatureDied => "TurnData.creature_died_this_turn",
-        FactKind::LifeGains => "PlayerTurnHistory.life_gains",
-        FactKind::ManaSpentCasting => "PlayerTurnHistory.mana_spent_casting",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Copy => "PermanentData.copy",
@@ -3173,7 +3201,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         order => [Rows("v7 effect_members column 1: reversible native record order")],
     }));
     fields.extend(encoding!(TurnData {
-        creature_died_this_turn => [Fact(FactKind::CreatureDied)],
+        creature_died_this_turn => [column(PlayerTurnState, turn_state::CREATURES_DIED)],
         turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
         step => [Columns(Player, player::STEP_UNTAP, 12)],
@@ -3215,8 +3243,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         land_entered => [column(Player, player::LAND_ENTERED)],
         cards_drawn => [column(Player, player::CARDS_DRAWN)],
         bent => [Columns(Player, player::BENT_WATER, 4)],
-        life_gains => [Fact(FactKind::LifeGains)],
-        mana_spent_casting => [Fact(FactKind::ManaSpentCasting)],
+        life_gains => [column(PlayerTurnState, turn_state::LIFE_GAINS)],
+        life_gained => [column(PlayerTurnState, turn_state::LIFE_GAINED)],
+        mana_spent_casting => [column(PlayerTurnState, turn_state::MANA_SPENT_CASTING)],
+        creatures_died => [column(PlayerTurnState, turn_state::CREATURES_DIED)],
+        permanents_left => [column(PlayerTurnState, turn_state::PERMANENTS_LEFT)],
+        nonland_permanents_left => [column(PlayerTurnState, turn_state::NONLAND_PERMANENTS_LEFT)],
+        warped_this_turn => [column(PlayerTurnState, turn_state::WARPED_THIS_TURN)],
+
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
     fields.extend(encoding!(CharacteristicsData {
@@ -3378,6 +3412,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
+        attacked_this_turn => [column(Permanent, permanent::ATTACKED_THIS_TURN)],
         entered_this_turn => [column(Permanent, permanent::ENTERED_THIS_TURN)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
         combat_damage_to_players => [column(Permanent, permanent::COMBAT_DAMAGE_TO_ME), column(Permanent, permanent::COMBAT_DAMAGE_TO_OPPONENT)],
@@ -3417,6 +3452,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     }));
     fields.extend(encoding!(StackObjectData {
         combat_damage_to_players => [column(Stack, stack::COMBAT_DAMAGE_TO_ME), column(Stack, stack::COMBAT_DAMAGE_TO_OPPONENT)],
+        mana_spent => [column(Stack, stack::MANA_SPENT)],
         source_power => [column(Stack, stack::SOURCE_POWER)],
         ability_resolutions => [column(Stack, stack::ABILITY_RESOLUTIONS)],
         description => [Definition],
@@ -4432,23 +4468,21 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
 }
 
 #[test]
-fn creature_death_fact_joins_the_active_player_for_either_viewer() {
+fn creature_death_counts_for_the_departing_controller_in_either_view() {
     let (mut game, ogre) = ogre_game();
-    let object = game.state.permanents[ogre].as_ref().unwrap().object;
-    game.move_object(object, ZoneType::Graveyard);
+    let permanent = game.state.permanents[ogre].as_ref().unwrap();
+    let controller = permanent.controller.0;
+    game.move_object(permanent.object, ZoneType::Graveyard);
     for viewer in 0..2 {
-        let (obs, encoded) = observe(&game, viewer);
-        let rows: Vec<_> = encoded
-            .facts
-            .chunks_exact(FACT_DIM)
-            .filter(|row| row[fact::KIND] == FactKind::CreatureDied as u8 as f32)
+        let (_, encoded) = observe(&game, viewer);
+        let counts: Vec<_> = encoded
+            .player_turn_state
+            .chunks_exact(TURN_STATE_DIM)
+            .map(|row| row[turn_state::CREATURES_DIED])
             .collect();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0][fact::VALUE], 1.0);
-        assert_eq!(
-            rows[0][fact::OBJECT],
-            if obs.agent.is_active { 1.0 } else { 2.0 }
-        );
+        let seat = usize::from(controller != viewer);
+        assert_eq!(counts[seat], 1.0);
+        assert_eq!(counts[1 - seat], 0.0);
     }
 }
 

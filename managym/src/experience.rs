@@ -472,6 +472,8 @@ pub struct LegacyPermanentView {
     /// It entered the battlefield during this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub entered_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked_this_turn: bool,
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
@@ -615,6 +617,8 @@ pub struct DecisionTargetView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackEntryView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_spent: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub combat_damage_to_players: Vec<u8>,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]

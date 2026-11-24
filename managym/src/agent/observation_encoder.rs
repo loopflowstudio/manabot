@@ -66,14 +66,11 @@ pub enum FactKind {
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
     AbilityResolution = 15,
-    LifeGains = 16,
     TriggeringDamage = 17,
-    CreatureDied = 18,
-    ManaSpentCasting = 19,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 18] = [
+    pub const ALL: [FactKind; 15] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -88,10 +85,7 @@ impl FactKind {
         FactKind::KeywordCounterTimestamp,
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
-        FactKind::LifeGains,
         FactKind::TriggeringDamage,
-        FactKind::CreatureDied,
-        FactKind::ManaSpentCasting,
     ];
 }
 
@@ -250,7 +244,7 @@ impl ObservationEncoderConfig {
     /// Two seat rows of v10 player turn state; empty for v9.
     pub fn player_turn_state_len(&self) -> usize {
         if self.turn_state {
-            2 * TURN_STATE_DIM
+            2 * super::observation_layout::turn_state_columns(self.layout).len()
         } else {
             0
         }
@@ -1169,6 +1163,7 @@ fn encode_into_memory(
             row[stack::COMBAT_DAMAGE_TO_ME],
             row[stack::COMBAT_DAMAGE_TO_OPPONENT],
         ] = combat_damage_flags(&object.combat_damage_to_players);
+        row[stack::MANA_SPENT] = f32::from(object.mana_spent);
         row[stack::SOURCE_POWER] = object.source_power.unwrap_or_default() as f32 / 10.0;
         row[stack::ABILITY_RESOLUTIONS] = object.ability_resolutions as f32;
         row[stack::SOURCE] = link(object.source_permanent_id);
@@ -1271,7 +1266,18 @@ fn encode_turn_state(
     .into_iter()
     .enumerate()
     {
-        let row = &mut players[seat * TURN_STATE_DIM..(seat + 1) * TURN_STATE_DIM];
+        let width = super::observation_layout::turn_state_columns(config.layout).len();
+        let row = &mut players[seat * width..(seat + 1) * width];
+        if config.layout == InputLayout::OneToken {
+            row[turn_state::LIFE_GAINS] = player.turn_history.life_gains as f32;
+            row[turn_state::LIFE_GAINED] = player.turn_history.life_gained as f32;
+            row[turn_state::MANA_SPENT_CASTING] = player.turn_history.mana_spent_casting as f32;
+            row[turn_state::CREATURES_DIED] = player.turn_history.creatures_died as f32;
+            row[turn_state::PERMANENTS_LEFT] = player.turn_history.permanents_left as f32;
+            row[turn_state::NONLAND_PERMANENTS_LEFT] =
+                player.turn_history.nonland_permanents_left as f32;
+            row[turn_state::WARPED_THIS_TURN] = bool_to_f32(player.turn_history.warped_this_turn);
+        }
         row[turn_state::LIFE_LOST] = player.turn_history.life_lost as f32 / 20.0;
         row[turn_state::SPELLS_CAST] = player.spells_cast as f32 / 10.0;
         for class in player
@@ -1714,6 +1720,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::ATTACKED_THIS_TURN] = bool_to_f32(permanent.attacked_this_turn);
         out[permanent::ENTERED_THIS_TURN] = bool_to_f32(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
@@ -1841,26 +1848,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             effect: None,
         })
     };
-    if layout == InputLayout::OneToken && obs.turn.creature_died_this_turn {
-        push(obs.turn.active_player_id, FactKind::CreatureDied, 0, 1.0);
-    }
     for player in [&obs.agent, &obs.opponent] {
-        if layout == InputLayout::OneToken && player.turn_history.mana_spent_casting > 0 {
-            push(
-                player.id,
-                FactKind::ManaSpentCasting,
-                0,
-                player.turn_history.mana_spent_casting as f32,
-            );
-        }
-        if layout == InputLayout::OneToken && player.turn_history.life_gains > 0 {
-            push(
-                player.id,
-                FactKind::LifeGains,
-                0,
-                player.turn_history.life_gains as f32,
-            );
-        }
         for (kind, count) in &player.counters {
             push(
                 player.id,
@@ -2752,6 +2740,7 @@ mod tests {
             StackObjectData {
                 combat_damage_to_players: Vec::new(),
                 source_power: None,
+                mana_spent: 0,
                 ability_resolutions: 0,
                 description: None,
                 stack_object_id: 600,
@@ -2772,6 +2761,7 @@ mod tests {
             StackObjectData {
                 combat_damage_to_players: Vec::new(),
                 source_power: None,
+                mana_spent: 0,
                 ability_resolutions: 0,
                 description: None,
                 stack_object_id: 601,

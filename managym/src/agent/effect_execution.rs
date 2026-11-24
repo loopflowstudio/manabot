@@ -114,6 +114,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "kept on top",
     "last known characteristics",
     "last known creature",
+    "last known land",
     "last known definition",
     "legend group",
     "legends kept",
@@ -633,6 +634,7 @@ impl<'a> Projection<'a> {
             permanent: _,
             animated_creature,
             was_creature,
+            was_land,
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -659,6 +661,9 @@ impl<'a> Projection<'a> {
                     },
                 );
             }
+        }
+        if *was_land {
+            self.field("last known land", &true);
         }
         if *was_creature {
             self.field("last known creature", &true);
@@ -1175,7 +1180,7 @@ pub(crate) fn project_decision(
                     out.receipt(&payment.receipt, None);
                     if let Some(key) = payment.spends {
                         out.object("once each turn source", key.0);
-                        out.field("once each turn ability", &key.1);
+                        out.field("once each turn ability", &key.2);
                     }
                 }
                 SpendCompletion::Foretell(card) => {
@@ -1261,7 +1266,7 @@ pub(crate) fn project_decision(
             out.effects("if declined", &progress.if_declined);
             if let Some(key) = &progress.spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
             if let Some(target) = progress.counters_on_decline {
                 out.target("counter on decline", target);
@@ -1419,7 +1424,7 @@ pub(crate) fn project_decision(
             }
             if let Some(key) = spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
         }
         // Mana output/cost and caller chains are already explicit relation frames;

@@ -1435,10 +1435,10 @@ fn copied_island_death_uses_departure_type_for_morbid_and_delayed_watchers() {
         branch.process_game_events();
         assert!(branch.flush_triggers().is_none());
         let died = zone == ZoneType::Graveyard;
-        assert_eq!(branch.state.turn.creature_died_this_turn, died);
+        assert_eq!(branch.state.turn.creature_died_this_turn(), died);
         assert_eq!(branch.state.stack_objects.len(), usize::from(died));
         let hash = branch.state.deterministic_hash();
-        branch.state.turn.creature_died_this_turn = !died;
+        branch.state.turn.history[1].creatures_died = u32::from(!died);
         assert_ne!(branch.state.deterministic_hash(), hash);
     }
 }
@@ -4020,6 +4020,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 "iteration" => {
                     frame.iteration = Some(TargetIteration {
                         remaining: vec![ResolutionTarget {
+                            spell: None,
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,

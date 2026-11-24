@@ -94,11 +94,13 @@ pub enum TriggerCondition {
     /// matching attacker or once per combat ("whenever you attack", "one or
     /// more ... attack"); `attackers` limits how many creatures were
     /// declared in all ("attacks alone", "and at least one other creature
-    /// attack"). A lone matching attacker is the trigger's context.
+    /// attack"). Per-object occurrences each carry their matching attacker as context.
     Attacks {
         subject: TriggerSubject,
         per: Per,
         attackers: AttackSize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        nth: Option<u32>,
     },
     /// The inner cast or entry trigger only for an object that came from
     /// `zone` ("whenever you cast a spell from exile", "whenever a permanent
@@ -218,6 +220,11 @@ pub enum TriggerCondition {
 /// ability. Definitions never use those outside `Effect::If`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Condition {
+    Compare {
+        left: Box<EffectValue>,
+        op: CompareOp,
+        right: Box<EffectValue>,
+    },
     YourTurn,
     Always,
     CardsDrawnAtLeast {
@@ -353,16 +360,55 @@ impl TriggerCondition {
             subject,
             per,
             attackers: AttackSize::Any,
+            nth: None,
         }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CompareOp {
+    Eq,
+    Ge,
+    Le,
+    Lt,
+    Gt,
+}
+impl CompareOp {
+    pub fn test(self, left: i32, right: i32) -> bool {
+        match self {
+            Self::Eq => left == right,
+            Self::Ge => left >= right,
+            Self::Le => left <= right,
+            Self::Lt => left < right,
+            Self::Gt => left > right,
+        }
+    }
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Self::Eq => "=",
+            Self::Ge => "≥",
+            Self::Le => "≤",
+            Self::Lt => "<",
+            Self::Gt => ">",
+        }
+    }
+}
 impl Condition {
+    fn reads_source_power(&self) -> bool {
+        match self {
+            Self::Compare { left, right, .. } => {
+                left.reads_source_power() || right.reads_source_power()
+            }
+            Self::AllOf(items) | Self::AnyOf(items) => items.iter().any(Self::reads_source_power),
+            _ => false,
+        }
+    }
     /// Whether answering reads the asking ability's source permanent or the
     /// permanent that triggered it, so the condition is meaningful only in
     /// `Effect::If` and intervening-if clauses.
     pub fn reads_source(&self) -> bool {
         match self {
+            Condition::Compare { left, right, .. } => left.reads_source() || right.reads_source(),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -381,6 +427,9 @@ impl Condition {
     /// with this condition follows the `mana_pools` revision.
     pub fn reads_mana_pools(&self) -> bool {
         match self {
+            Condition::Compare { left, right, .. } => {
+                left.reads_mana_pools() || right.reads_mana_pools()
+            }
             Condition::UnspentManaAtLeast { .. } => true,
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 conditions.iter().any(Condition::reads_mana_pools)
@@ -393,6 +442,9 @@ impl Condition {
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
         match self {
+            Condition::Compare { left, right, .. } => {
+                left.is_resolution_only() || right.is_resolution_only()
+            }
             Condition::Kicked
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
@@ -501,8 +553,18 @@ pub enum AttackSize {
     Any,
     /// Exactly one (CR 506.5).
     Alone,
-    /// Two or more, the subject among them.
-    WithAnother,
+    /// At least this many declared creatures, including the matching attacker.
+    AtLeast(u8),
+}
+
+impl AttackSize {
+    pub fn matches(self, declared: usize) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Alone => declared == 1,
+            Self::AtLeast(n) => declared >= usize::from(n),
+        }
+    }
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -594,6 +656,11 @@ impl PlayerSelector {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
+    LifeTotal(PlayerSelector),
+    LifeGainedThisTurn(PlayerSelector),
+    LifeLostThisTurn(PlayerSelector),
+    SpellManaSpent(Box<ObjectSelector>),
+    SpellManaValue(Box<ObjectSelector>),
     Fixed(i32),
     /// The resolving spell's announced X (CR 107.3).
     X,
@@ -1647,7 +1714,35 @@ pub struct TargetRequirement {
     pub opponent_chooses: bool,
 }
 
+impl ObjectSelector {
+    fn reads_source_power(&self) -> bool {
+        match self {
+            Self::Each {
+                exact_mana_value,
+                max_mana_value,
+                ..
+            } => [exact_mana_value, max_mana_value]
+                .into_iter()
+                .flatten()
+                .any(|value| value.reads_source_power()),
+            _ => self
+                .target_spec()
+                .is_some_and(TargetSpec::reads_source_power),
+        }
+    }
+}
+
+impl TargetSpec {
+    fn reads_source_power(&self) -> bool {
+        matches!(self, Self::GraveyardCardYouOwnWithinSourcePower { .. })
+    }
+}
+
 impl TargetRequirement {
+    pub fn reads_source_power(&self) -> bool {
+        self.spec.reads_source_power()
+    }
+
     /// `max` for "any number of targets" (CR 601.2c): the legal candidates
     /// bound the choice; the value stays within the learning tokens' i32.
     pub const ANY_NUMBER: usize = i32::MAX as usize;
@@ -1721,6 +1816,79 @@ impl Default for Effect {
 }
 
 impl Effect {
+    pub fn reads_source_power(&self) -> bool {
+        let reads = |effects: &[Effect]| effects.iter().any(Self::reads_source_power);
+        if self
+            .selectors()
+            .into_iter()
+            .any(ObjectSelector::reads_source_power)
+            || self
+                .target_spec()
+                .is_some_and(TargetSpec::reads_source_power)
+        {
+            return true;
+        }
+        let modification_reads = |modification: &Modification<EffectValue>| match modification {
+            Modification::SetBasePt { power, toughness } => [power, toughness]
+                .into_iter()
+                .flatten()
+                .any(EffectValue::reads_source_power),
+            Modification::ModifyPt { power, toughness } => {
+                power.reads_source_power() || toughness.reads_source_power()
+            }
+            _ => false,
+        };
+        match self {
+            Self::TargetClause {
+                requirement,
+                effects,
+            } => requirement.reads_source_power() || reads(effects),
+            Self::ApplyContinuous { modification, .. } => modification_reads(modification),
+            Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
+            Self::DealDamage { amount, .. }
+            | Self::DealDamageToPlayer { amount, .. }
+            | Self::LoseLife { amount, .. }
+            | Self::GainLife { amount }
+            | Self::PutCounters { amount, .. }
+            | Self::DrawCards { count: amount }
+            | Self::MillCards { count: amount, .. }
+            | Self::Earthbend { count: amount, .. }
+            | Self::DrainLife { amount }
+            | Self::AddMana { amount, .. }
+            | Self::CreateToken { count: amount, .. }
+            | Self::AddOneColorManaValue { amount }
+            | Self::ExileUntilNonlandCastFree { below: amount }
+            | Self::LookAndSelect { look: amount, .. } => amount.reads_source_power(),
+            Self::If {
+                condition,
+                then,
+                otherwise,
+            } => condition.reads_source_power() || reads(then) || reads(otherwise),
+            Self::OnNthResolutionThisTurn { effect, .. } => effect.reads_source_power(),
+            Self::ForEachTarget { effects }
+            | Self::ForPlayer { effects, .. }
+            | Self::MayOnceEachTurn { effects } => reads(effects),
+            Self::OptionalPayment {
+                if_paid,
+                if_declined,
+                ..
+            } => reads(if_paid) || reads(if_declined),
+            Self::OptionalManaPaymentX { if_paid } => reads(if_paid),
+            Self::SelectCards {
+                max,
+                effects,
+                if_declined,
+                ..
+            } => max.reads_source_power() || reads(effects) || reads(if_declined),
+            Self::Modal { modes } => modes.iter().any(|mode| reads(mode)),
+            Self::TriggerModes { modes, up_to, .. } => {
+                up_to.as_ref().is_some_and(EffectValue::reads_source_power)
+                    || modes.iter().any(|mode| reads(mode))
+            }
+            _ => false,
+        }
+    }
+
     /// Whether this program reads its enclosing ability's resolution ordinal.
     /// Delayed and reflexive triggers will be inspected when they resolve.
     pub fn reads_resolution_count(&self) -> bool {
@@ -2218,6 +2386,77 @@ impl Effect {
             condition: Condition::Moved,
             then,
             otherwise: Vec::new(),
+        }
+    }
+}
+
+impl EffectValue {
+    fn reads_source_power(&self) -> bool {
+        match self {
+            Self::SourcePower => true,
+            Self::Half(inner) => inner.reads_source_power(),
+            Self::Objects { of, .. }
+            | Self::DistinctManaValues { of }
+            | Self::SpellManaValue(of)
+            | Self::SpellManaSpent(of) => of.reads_source_power(),
+            _ => false,
+        }
+    }
+
+    pub fn reads_source(&self) -> bool {
+        match self {
+            Self::SourcePower => true,
+            Self::Half(inner) => inner.reads_source(),
+            Self::Objects { of, .. } | Self::DistinctManaValues { of } => matches!(
+                of.as_ref(),
+                ObjectSelector::This
+                    | ObjectSelector::Each {
+                        except: Some(Except::This),
+                        ..
+                    }
+            ),
+            _ => false,
+        }
+    }
+    pub fn reads_mana_pools(&self) -> bool {
+        // Spent mana is read from a payment receipt, independently of either live pool.
+        matches!(self, Self::Half(inner) if inner.reads_mana_pools())
+    }
+    pub fn is_resolution_only(&self) -> bool {
+        match self {
+            Self::Half(inner) => inner.is_resolution_only(),
+            Self::LifeTotal(who) | Self::LifeLostThisTurn(who) | Self::LifeGainedThisTurn(who) => {
+                !matches!(who, PlayerSelector::You | PlayerSelector::EachOpponent)
+            }
+            Self::Objects { of, .. } | Self::DistinctManaValues { of } => match of.as_ref() {
+                ObjectSelector::Each {
+                    of: Scope::YouControl | Scope::OpponentsControl | Scope::Battlefield,
+                    except,
+                    exact_mana_value,
+                    max_mana_value,
+                    ..
+                } => {
+                    *except == Some(Except::Target)
+                        || [exact_mana_value, max_mana_value]
+                            .into_iter()
+                            .flatten()
+                            .any(|v| v.is_resolution_only())
+                }
+                _ => true,
+            },
+            Self::SpellManaSpent(_)
+            | Self::SpellManaValue(_)
+            | Self::X
+            | Self::TriggeringDamage
+            | Self::ExcessDamage
+            | Self::LifeLostThisWay
+            | Self::ManaSpentToCast
+            | Self::ColorsSpentToCast
+            | Self::PowerTappedToPay
+            | Self::TriggeringPower
+            | Self::TriggeringManaValue
+            | Self::TargetToughness => true,
+            _ => false,
         }
     }
 }
