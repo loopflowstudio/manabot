@@ -418,15 +418,13 @@ Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6 (and local sync steer d
 
 > Stop doing one card per coverage-working loop. In realign, group the remaining in-scope ledger rows by shared mechanics, enumerate the cards in each batch, and select a whole batch for implement. Implement every feasible row in that batch with its directed checks before handing off to compress and review. Review the batch together. Record completed rows and concrete blockers. If one row is blocked, continue with independent rows. Apply this to the current run and subsequent passes.
 
-The FDN ledger has 80 of 81 primary rows with definitions and native
-fixture evidence. Only Mazemind Tome remains pending (plus Bloodthirsty Conqueror's
-deferred CR 104.4b mandatory-loop draw), closed in the final slice below.
-Fiendish Panda and Heartfire Immolator satisfy the additional exact-source
-witnesses. Hunter, Hatcher, Prowler, Blast, Ruby, Sanguine Indulgence, Ayli,
-Kalastria Highborn, Archmage of Runes, Painful Quandary, Ramos, Lathril,
-Cryptic Caves, Ghalta and Elvish Archdruid are covered cost-primary witnesses.
-Daggers identify remaining pending cost candidates whose full ledger obligation
-decides delivery. Keep the established cross-set and integration boundaries.
+All 81 primary FDN rows (47 `event_history`, 34 `context_queries`) have
+definitions and native fixture pointers, with no `pending` note (checked
+against `fdn.jsonl` at `a1f79ee437`). Fiendish Panda and Heartfire Immolator
+satisfy the additional exact-source witnesses. Cost-primary rows citing either
+dependency: 15 of 17 delivered; Quilled Greatwurm (`play_permissions` plus
+distributed counter removal) and Ovika (composite mana-and-life ward) carry
+recorded blockers. Keep the established cross-set and integration boundaries.
 
 ### Implemented slice · Power at attack, combat and resolution
 
@@ -464,7 +462,7 @@ Not built in this slice:
 - **CR 104.4b mandatory-loop draw** (`GameOutcome::Draw` and cycle detection in `flow/tick.rs`). Conqueror's ledger row records it as pending. It needs a loop partner such as Vito, Thorn of the Dusk Rose, which isn't defined yet. It also touches every outcome reader: `winner_index`, Env rewards and Academy. It should be its own slice with that partner card.
 - Vanguard Seraph's waiting-viewer privacy during the surveil choice, and Exemplar under a trigger doubler or with CR 122.6 entry counters. The shared machinery has existing controls, but these cards have no directed check.
 
-Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) remain independent cleanup for the working review.
+Findings 3–5 (opening-hand Academy fixtures and relocating earlier single-card tests/ledger pointers) closed in `cf12733e50` and `6aa5452f11`.
 
 ### Implemented slice · Creature deaths and turn death history
 
@@ -486,7 +484,7 @@ Compression (`e4579800a7`) gave stacked triggers one effects reader, `Game::stac
 
 Taught: the plan's Banshee text was wrong; the printed card is -1/-1, or -13/-13 after a death. `Scenario` does not skip single-action decisions, so fixtures choose the lone target themselves.
 
-Still open from this slice: re-record conformance evidence (catalog grew again; hash now v29) at the final head; Findings 3–5. Finding 7 was fixed in `4502508574`.
+Conformance evidence was re-recorded at hash v30 (`00da7aaf31`); Findings 3–5 closed in the closing slice; Finding 7 was fixed in `4502508574`.
 
 **Compression at the draw/cast slice.** Stack lookups now go through `spell_on_stack` and `stack_index_of(Target)`; X-inclusive mana value is `Object::mana_value_with_x`; one `trigger_context` binds the event object for the intervening-if and the stacked ability; pending trigger text and definitions share `pending_trigger_description`/`pending_trigger_definition`. Finding 7 is fixed there: a modal trigger with zero chosen modes reads "no modes chosen". Debug workspace: 1588 passed; the 15 stale `frozen_*`/inventory cases fail as recorded above, and `compatibility_names_and_content_allocations_are_metamorphic` fails (state hash diverges at step 47 after renaming objects). It fails identically at `1ca881442e`. Cause (read at `f11b0b882c`): the test rewrites every `Object.name` (`conformance.rs::rename_compatibility_cards`), and the death batch's v27 `ObjectLki` serializes the layered `name` (`state/src/game_object.rs:307`) into the hashed state, so the first departure diverges. `SpellLki` carries no name. Remaining: keep the departed name out of hashed identity (it follows from `source_base` and copy provenance, or hash the definition key instead), or rename it in the test alongside `Object.name`; decide which before re-recording evidence. Focused Python: 116 passed, 1 skipped.
 
@@ -626,6 +624,8 @@ Shared changes:
 
 Checks: the debug workspace under nextest (`--profile ci`, 1649 tests) failed only on stale evidence before re-recording (14 `frozen_*` cases and the inventory) plus three pins this slice moved: the heavy fixture's event count (558 → 617, exactly its 59 `PermanentUntapped` events, which also fixed both `search_state_contract` cases), the Clone v30 witness in `lea.rs`, and `definitions.rs` (a state trigger's condition is a source question). Semantic-kernel w17-v6 re-recorded in `00da7aaf31`: 14 cases, 3049 commands and every outcome unchanged; `semantic_conformance_tests` 20/20. The opening authored-match authority (193 decisions, only digests and the catalog listing moved) and live/headless parity receipt were refreshed in `03deb316db`; authority and parity tests 8/8. After rebuilding and atomically installing the cp313 extension: the focused selection plus pinned pilot and the Finding 3 fixtures passed (124 passed, 1 skipped). `test_public_commitment_parity.py` fails before and after this slice for an older reason (see questions).
 
+Not yet done for this slice: a behavior review (the earlier batches each had one; this slice adds the loop watch, untap events in the hashed ledger and `ContextRead::SourceLki`). Check in it that the loop watch cannot draw a long finite automatic sequence (the finite-drain control covers one shape) and that Fishing Pole's `If` over `SourceCountersAtLeast` matches "remove a bait counter. If you do" when the counter is already gone.
+
 Remaining for gate and later phases: Engine Budget will see moved search/decision digests (untap events in the hashed ledger) and the per-resolution loop watch; adopt the PR's run as the reference if it stays within budget. The integrated validation, decomposition and performance phases below are unchanged.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
@@ -654,10 +654,11 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
 - Keep public object joins and pending history consistent through native
   projections, Python, v11 and text as new queries land. Save prefixes and
   frozen evidence, and keep hidden identities out of both projections.
-  The 81-row reconciliation, integrated replay and privacy checks, and
-  Engine Budget remain open. Once the cohort
-  stabilizes, refresh the current semantic-kernel, authored-match and
-  Academy parity receipts in `conformance/README.md`.
+  The semantic-kernel, authored-match and live/headless parity receipts were
+  refreshed at hash v30 (`00da7aaf31`, `03deb316db`); refresh them again only
+  if a later change moves the catalog or hash. The working review of the
+  closing slice, integrated replay and privacy checks, and Engine Budget
+  remain open.
 
 ## Directed interactions for integrated validation
 
