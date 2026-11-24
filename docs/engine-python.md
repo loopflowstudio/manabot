@@ -108,7 +108,7 @@ print(performance.from_statistics(read_statistics(Path("statistics"))))
 print(performance.excluded_games)
 ```
 
-The same `statistics_path` option works on `CapturedVector`. Use one file per
+The same `statistics_path` option works on `RecordedVectorEnv`. Use one file per
 producer. Rows carry the card digest and the capture's `context` labels at the
 game's end, so a table can be split by run, update or cell; they use mode 0600, flush at each game boundary
 and fsync at close. The reader accepts a file or directory and ignores a torn
@@ -229,7 +229,7 @@ statistics; add `statistics_path` to collect those independently.
 `extra` for anything else JSON can hold. Academy shows the first three and
 marks an absent one "not retained"; it never recomputes them.
 
-For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`
+For native batches, `managym.recording.RecordedVectorEnv` owns its `VectorEnv`
 and takes the same options. Construct it with `num_envs` and `seed`, use
 `reset_all(players)` and `step(actions)` or the buffered methods, and pass
 `annotations=` with one entry (or `None`) per stream. Use `stream_offset` for
@@ -464,7 +464,10 @@ controller, including tokens), `stack_len`, `action_count`, `action_kind`
 sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
 stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
 and `action_kind` and `acting_player` are `None`. Reading metadata never builds
-observation JSON or opens hidden zones.
+observation JSON or opens hidden zones. `snapshot.state_digest` returns the
+cached state digest and `snapshot.seed` returns the originating reset seed.
+Use `snapshot.acting_player` to read the chooser alone. It returns `None`
+at a terminal and skips the board summary.
 
 `snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
 settings, committed external actions, and ordered branch interventions. It
@@ -485,6 +488,91 @@ forced-decision skipping is enabled, both seats use `agent`, and decklist
 disclosure agrees. The acting view hides the opponent’s hand. The spectator
 response includes both hands. The board draws the bottom seat’s cards and
 shows the top seat’s hand count. Branch seeds stay on the server.
+
+### Batched slot loading and snapshots
+
+A terminal step on `VectorEnv` or `RecordedVectorEnv` reports the finished
+game's observation, reward, flags and winner. The slot then parks with chooser
+`-1`. Reset the whole vector (`reset_all_into_buffers` for buffered callers),
+or load individual slots as in this example.
+
+```python
+import numpy as np
+import managym
+
+layout = managym.ObservationLayout()
+buffers = {
+    **layout.allocate(2),
+    "rewards": np.zeros(2, dtype=np.float64),
+    "terminated": np.zeros(2, dtype=np.uint8),
+    "truncated": np.zeros(2, dtype=np.uint8),
+}
+games = managym.VectorEnv(num_envs=2, seed=42)
+games.set_buffers(buffers, layout=layout)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+games.reset_all_into_buffers(players)
+
+# Read metadata or clone snapshots only for masked slots.
+[meta, _] = games.slot_metadata([True, False])
+[snap, _] = games.snapshot_slots([True, False])
+assert meta is not None and snap is not None
+
+# Restore slot 0 and deal slot 1 with a different setup.
+alt_players = [
+    managym.PlayerConfig(f"alt{seat}", {"Forest": 8, "Llanowar Elves": 4})
+    for seat in (0, 1)
+]
+results = games.load_slots_into_buffers([
+    managym.SlotLoad.snapshot(
+        0, snap, managym.RestoreOptions.shuffle_libraries(seed=101)
+    ),
+    managym.SlotLoad.fresh(1, player_configs=alt_players),
+])
+for result in results:
+    print(result.slot, result.seed, result.acting_player, result.terminal)
+# 0 42 0 False
+# 1 45 0 False
+print(games.next_fresh_seeds())
+# [42, 47]
+```
+
+`slot_metadata(mask)` reads the live position without cloning it or advancing
+its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
+for skipped slots and reject requests to read an unset or poisoned slot.
+
+`load_slots_into_buffers(requests)` accepts live, finished and poisoned slots.
+
+- `SlotLoad.fresh(slot, player_configs=None)` deals the slot's next scheduled
+  seed and advances it by `seed_stride`, saturating at the maximum u64.
+  An explicit setup becomes the default for subsequent fresh loads. With a
+  uniform or training roster, omit the setup so the roster can draw the decks.
+- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch.
+  Replacing an untouched fresh opening with a snapshot refunds that opening's
+  seed. Other snapshot loads leave the seed sequence unchanged.
+- `SlotLoad.slot`, `SlotLoad.with_slot(slot)` and `SlotLoadResult.with_slot(slot)`
+  map requests and results between local and global shard coordinates.
+
+The loader checks distinct slot indices, setups, restore options and encoding
+capacity across all participating shards before writing any row or spending a
+seed. You can correct a rejected request and retry it. Results follow request
+order and carry the slot, generation, seed, acting player, terminal flag and
+source digest. `next_fresh_seeds()` gives each slot's next unspent seed.
+
+Mask parked slots out of steps until you reset or reload them. A forced action
+can finish a restored game during the load itself. Its result then has
+`terminal=True` and `acting_player=None`, its buffer has `terminated=1`, and
+its last info carries the winner when there is one.
+
+Game recordings, statistics and exposure count fresh games. Replacing a played
+fresh game retains its evidence. Replacing an untouched opening with a branch
+discards that opening. A recorded fresh terminal includes its winner and final
+digest even if the slot stays parked. For branch evidence,
+`RecordedVectorEnv.game_inputs(slot)` joins the original commitments and
+interventions to the attempted suffix on demand. Failure capture and durable
+journaling use the same replay inputs.
 
 ## Ask questions of recorded games
 
@@ -563,13 +651,13 @@ when the attack was good" belongs in a reducer of your own, since the engine
 has no opinion on good.
 
 The same reducers run during scalar or vector play. Pass `reducers=[...]` to
-`ScalarCapture` or `CapturedVector`, and call `capture.rows()` for tables from
+`ScalarCapture` or `RecordedVectorEnv`, and call `capture.rows()` for tables from
 completed or closed games:
 
 ```python
-from managym.recording import CapturedVector
+from managym.recording import RecordedVectorEnv
 
-capture = CapturedVector(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
+capture = RecordedVectorEnv(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
 # Reset and step through the capture, using ordinary or buffered vector calls.
 # No games_path is needed: these questions cover every game, not a saved sample.
 capture.close()
@@ -578,10 +666,10 @@ print(capture.rows())
 
 Each vector stream receives a deep copy of your reducers and owns independent
 per-game state. `start` resets that state at every native root, including
-autoreset and same-seed replacement. Only committed, active-stream decisions
-reach `decision`; rejected isolated calls do not. `end` receives the old game's
-card facts before autoreset discards them, or an interrupted result on root
-replacement/close. Per-game rows are combined and the original reducer's
+`load_slots_into_buffers` and same-seed resets. Only committed, active-stream
+decisions reach `decision`; rejected isolated calls do not. `end` receives a
+finished game's card facts when it reaches terminal, or an interrupted result
+when an unfinished slot is replaced or closed. Per-game rows are combined and the original reducer's
 `finish(rows)` aggregates them; do not depend on stream-local mutable state in
 `finish`. Rows accumulate until the capture is released, so return compact
 per-game summaries. Record annotations are available to live hooks even when

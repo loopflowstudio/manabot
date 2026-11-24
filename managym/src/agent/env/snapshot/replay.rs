@@ -20,13 +20,7 @@ impl GameSnapshot {
             managym_version: env!("CARGO_PKG_VERSION").into(),
             card_digest: default_content_pack().content_digest(),
             seed: self.reset_seed,
-            state_digest: state_digest(
-                &self.state,
-                &self.action_space,
-                &self.pending_choice,
-                self.skip_trivial,
-                self.skipped,
-            ),
+            state_digest: self.state_digest().into(),
             provenance: provenance.clone(),
         }
         .into_json()
@@ -78,10 +72,11 @@ impl GameSnapshot {
         if env.is_game_over() != replay.terminal {
             return Err(AgentError("snapshot terminal status mismatch".into()));
         }
-        if env.state_digest()? != replay.state_digest {
+        let snapshot = env.snapshot()?;
+        if snapshot.state_digest() != replay.state_digest {
             return Err(AgentError("snapshot state_digest mismatch".into()));
         }
-        env.snapshot()
+        Ok(snapshot)
     }
 
     #[cfg(feature = "python")]

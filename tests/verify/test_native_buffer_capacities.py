@@ -9,8 +9,8 @@ from pydantic import ValidationError
 import pytest
 
 from manabot.env.failures import (
-    CapturedVector,
     CaptureScope,
+    RecordedVectorEnv,
     ScalarCapture,
     capture_scope,
 )
@@ -140,7 +140,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         )
     )
     vector = (
-        CapturedVector(num_envs=2, seed=game.seed, skip_trivial=True)
+        RecordedVectorEnv(num_envs=2, seed=game.seed, skip_trivial=True)
         if workers == 1
         else ShardedVectorEnv(num_envs=2, seed=game.seed, workers=workers)
     )
@@ -154,7 +154,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
             scalar.step(action)
             vector.step_into_buffers([action, 0], [True, False])
         frame = scalar.semantic_decision_frame_json()
-        if isinstance(vector, CapturedVector):
+        if isinstance(vector, RecordedVectorEnv):
             assert vector.semantic_decision_frames_json()[0] == frame
         control = managym.Env(seed=game.seed + 1, skip_trivial=True)
         control.reset(_players())
@@ -173,9 +173,9 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         reference = encode_observation(space, obs)
         for key, value in reference.items():
             np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert vector.current_game_seeds() == [game.seed + 2, game.seed + 1]
-        if isinstance(vector, CapturedVector):
+        if isinstance(vector, RecordedVectorEnv):
             assert (
                 vector.semantic_decision_frames_json()[1]
                 == control.semantic_decision_frame_json()
@@ -561,7 +561,7 @@ def test_captured_vector_records_native_support_before_policy_step(
         ObservationConfig(max_actions=2, action_overflow="first-legal")
     )
     with capture_scope(CaptureScope(tmp_path)):
-        vector = CapturedVector(num_envs=1, seed=213)
+        vector = RecordedVectorEnv(num_envs=1, seed=213)
         vector.set_buffers(
             allocate_vector_buffers(space, 1), "first-legal", layout=space.layout
         )

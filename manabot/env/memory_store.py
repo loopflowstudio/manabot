@@ -510,6 +510,8 @@ class MemoryStore:
             self._live_metadata = np.zeros((count, 2, 7), np.uint64)
             self._live_valid = np.zeros((count, 2), np.bool_)
         selected_seats = np.asarray(seats, dtype=np.int64)[rows]
+        if ((selected_seats < 0) | (selected_seats > 1)).any():
+            raise ValueError("decision-memory capture requires a live seat (0 or 1)")
         selected_epochs = np.asarray(epochs, dtype=np.uint64)[rows]
         selected_seeds = np.asarray(seeds, dtype=np.uint64)[rows]
         selected_cursors = np.asarray(cursors, dtype=np.uint64)[rows, selected_seats]
@@ -534,20 +536,21 @@ class MemoryStore:
                     )
         for index in changed:
             row, seat = int(rows[index]), int(selected_seats[index])
+            epoch = int(selected_epochs[index])
             old = previous[index]
             # A game's viewer identity is created once, even across changed tails.
             identity = (
                 old.identity
                 if isinstance(old, Prefix)
-                and old.native_epoch == int(selected_epochs[index])
+                and old.native_epoch == epoch
                 and selected_seeds[index] == self._live_metadata[row, seat, 1]
-                else PrefixIdentity(str(seeds[row]), seat, str(seeds[row]))
+                else PrefixIdentity(str(seeds[row]), seat, str(epoch))
             )
             previous[index] = self._capture_live_admitted(
                 buffers,
                 row,
                 identity,
-                epoch=int(selected_epochs[index]),
+                epoch=epoch,
                 counts=selected_cursors[index, :4],
                 tail_version=int(selected_cursors[index, 4]),
             )

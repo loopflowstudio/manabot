@@ -538,12 +538,13 @@ return the settings our recipes use. A variant is a training function that
 changes a copy's fields (`settings.model_copy(update={...})`) in its body and
 adds a config field only for what its runs vary.
 
-`workers` accepts 1 (default), 2 or 4 CPU observation producers: persistent
+`workers` accepts 1 (default) or any positive count up to `streams` CPU
+observation producers: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
 unchanged across partitions. Sampled rosters (a deck source or
 `elemental-uniform`) draw each game's decks from that game's native seed, so
-draws, exposure and batches agree for 1, 2 and 4 producers. `threads` controls
+draws, exposure and batches agree for any worker count. `threads` controls
 Torch threads independently. `sampled_self_play()` defaults to four producers,
 a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in
@@ -1445,12 +1446,12 @@ scope before the first collection phase. Each native boundary distinguishes:
 | Phase | Interpretation |
 | --- | --- |
 | `preparing` | Inputs are durable before native decision-frame reads; cached decision context is explicitly last-known. Execution has not started. |
-| `executing` | Intent to call the named native mutation (step, reset, reassignment or failed-row replacement) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
+| `executing` | Intent to call the named native mutation (step, reset or slot load) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
 | `synchronizing` | The native call returned; current seeds, decks or game generations are still being read. |
 | `ready` | Synchronization completed and the retained evidence describes the current known game prefixes. |
 
 A returned batch does not establish success for every row. Unobserved row
-outcomes stay unknown. During sampled reset or auto-reset, the new seed/setup
+outcomes stay unknown. During sampled reset or slot load, the new seed/setup
 may be unknown until synchronization; the previous prefix and decks remain
 last-known evidence, never the claimed new game. The operation marker and
 producer files are written independently, so compare their coordinates and
@@ -1472,9 +1473,10 @@ uv run python -m manabot.training.state.game_errors ~/.etude/track/journal-demo/
 
 Replay uses the [existing source/native and world checks](#automatic-capture-and-replay).
 An indexed-step execution journal can attempt its pending action under the
-retained fresh binding. A reset, reassignment or replacement journal
-reconstructs the last-known prefix and reports its new setup unavailable; it
-never replays proposed seeds or decks as observed native state. Preparation and
+retained fresh binding. A reset or slot-load journal (and historical
+reassignment or replacement journals) reconstructs the last-known prefix and
+reports its new setup unavailable; it never replays proposed seeds or decks as
+observed native state. Preparation and
 synchronization journals reconstruct the last-known prefix where possible and
 report unavailable binding or setup; replay cannot
 reconstruct an unobserved sampled root or settle the original unknown outcome.

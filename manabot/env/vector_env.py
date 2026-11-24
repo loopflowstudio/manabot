@@ -8,7 +8,7 @@ from typing import Any, Dict, Literal, Optional, Tuple
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
@@ -39,8 +39,8 @@ class VectorEnv:
         self.observation_space = observation_space
         self.reward = reward
         self.num_envs = num_envs
-        self.device = torch.device(device)
         self._rust_env = self._build_rust_env(seed=seed)
+        self._terminal_infos: list[dict[str, Any]] | None = None
 
         self._buffers = allocate_vector_buffers(self.observation_space, self.num_envs)
         self._rust_env.set_buffers(
@@ -48,7 +48,18 @@ class VectorEnv:
             self.observation_space.config.action_overflow,
             layout=self.observation_space.layout,
         )
-        self._build_tensor_views()
+        self._obs_cpu_views = {
+            key: torch.from_numpy(self._buffers[key])
+            for key in self.observation_space.keys()
+        }
+        self._reward_cpu_view = torch.from_numpy(self._buffers["rewards"])
+        self._terminated_cpu_view = torch.from_numpy(self._buffers["terminated"])
+        self._truncated_cpu_view = torch.from_numpy(self._buffers["truncated"])
+        # Outcome tensors own the completed step even after a refill clears its buffers.
+        self._reward_tensor = self._reward_cpu_view.to(torch.float32)
+        self._terminated_tensor = self._terminated_cpu_view.to(torch.bool)
+        self._truncated_tensor = self._truncated_cpu_view.to(torch.bool)
+        self.to(device)
 
         # Land and creature counts read the battlefield: input v11's permanent
         # rows, or the deprecated v9/v10 battlefield card rows.
@@ -75,8 +86,8 @@ class VectorEnv:
                 "opponent_player",
             )
 
-    def _build_rust_env(self, seed: int) -> CapturedVector:
-        return CapturedVector(
+    def _build_rust_env(self, seed: int) -> RecordedVectorEnv:
+        return RecordedVectorEnv(
             num_envs=self.num_envs,
             decision_memory=self.observation_space.config.max_decision_records > 0,
             decision_memory_include_own=self.observation_space.config.decision_memory_include_own,
@@ -85,50 +96,14 @@ class VectorEnv:
             player_policies=self._player_policies,
         )
 
-    def _build_tensor_views(self) -> None:
-        self._obs_keys = tuple(self.observation_space.keys())
-        self._obs_cpu_views = {
-            key: torch.from_numpy(self._buffers[key]) for key in self._obs_keys
-        }
-        self._reward_cpu_view = torch.from_numpy(self._buffers["rewards"])
-        self._terminated_cpu_view = torch.from_numpy(self._buffers["terminated"])
-        self._truncated_cpu_view = torch.from_numpy(self._buffers["truncated"])
-
-        self._obs_tensors = {}
-        for key, cpu_view in self._obs_cpu_views.items():
-            tensor_dtype = torch.float32 if key == "action_focus" else cpu_view.dtype
-            if self.device.type == "cpu" and cpu_view.dtype == tensor_dtype:
-                self._obs_tensors[key] = cpu_view
-                continue
-
-            self._obs_tensors[key] = torch.empty(
-                cpu_view.shape,
-                dtype=tensor_dtype,
-                device=self.device,
-            )
-
-        self._terminated_tensor = torch.empty(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self._truncated_tensor = torch.empty(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-
-        self._reward_tensor = torch.empty(
-            self.num_envs,
-            dtype=torch.float32,
-            device=self.device,
-        )
-
-    def _sync_tensors_from_buffers(self) -> None:
-        for key in self._obs_keys:
-            src = self._obs_cpu_views[key]
+    def _sync_observations(self) -> None:
+        for key, src in self._obs_cpu_views.items():
             dst = self._obs_tensors[key]
             if dst.data_ptr() != src.data_ptr():
                 dst.copy_(src)
 
+    def _sync_outcomes(self) -> None:
         self._reward_tensor.copy_(self._reward_cpu_view)
-
         self._terminated_tensor.copy_(self._terminated_cpu_view)
         self._truncated_tensor.copy_(self._truncated_cpu_view)
 
@@ -314,8 +289,23 @@ class VectorEnv:
             self._player_configs = options["match"].to_rust()
 
         self._rust_env.reset_all_into_buffers(self._player_configs)
-        self._sync_tensors_from_buffers()
+        self._terminal_infos = None
+        self._sync_outcomes()
+        self._sync_observations()
         return self._obs_tensors, {}
+
+    def _step_and_refill(self, actions: torch.Tensor) -> None:
+        self._prev_obs = {
+            key: self._obs_tensors[key].clone() for key in self._prev_obs_keys
+        }
+        self._rust_env.step_into_buffers(actions.cpu().tolist())
+        self._sync_outcomes()
+        done = np.flatnonzero(self._buffers["terminated"] | self._buffers["truncated"])
+        self._terminal_infos = self._rust_env.get_last_info() if done.size else None
+        if done.size:
+            self._rust_env.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(int(slot)) for slot in done]
+            )
 
     def step(
         self, actions: torch.Tensor
@@ -326,11 +316,8 @@ class VectorEnv:
         torch.Tensor,
         Dict[str, Any],
     ]:
-        self._prev_obs = {
-            key: self._obs_tensors[key].clone() for key in self._prev_obs_keys
-        }
-        self._rust_env.step_into_buffers(actions.cpu().tolist())
-        self._sync_tensors_from_buffers()
+        self._step_and_refill(actions)
+        self._sync_observations()
         self._apply_reward_policy()
         return (
             self._obs_tensors,
@@ -341,7 +328,11 @@ class VectorEnv:
         )
 
     def get_last_info(self) -> Dict[str, Any]:
-        infos = [dict(info) for info in self._rust_env.get_last_info()]
+        infos = (
+            self._terminal_infos
+            if self._terminal_infos is not None
+            else self._rust_env.get_last_info()
+        )
         return self._stack_infos(infos)
 
     def write_observations_for_players(
@@ -364,7 +355,7 @@ class VectorEnv:
         )
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
-        """Privileged CPU hand snapshots of the current games, including autoresets."""
+        """Privileged CPU hand snapshots of the current games, including refilled slots."""
         return self._rust_env.hand_snapshots(players)
 
     def current_agent_indices(self) -> list[int]:
@@ -391,8 +382,15 @@ class VectorEnv:
 
     def to(self, device: str) -> "VectorEnv":
         self.device = torch.device(device)
-        self._build_tensor_views()
-        self._sync_tensors_from_buffers()
+        self._obs_tensors = {
+            key: src.to(
+                self.device, dtype=torch.float32 if key == "action_focus" else src.dtype
+            )
+            for key, src in self._obs_cpu_views.items()
+        }
+        self._reward_tensor = self._reward_tensor.to(self.device)
+        self._terminated_tensor = self._terminated_tensor.to(self.device)
+        self._truncated_tensor = self._truncated_tensor.to(self.device)
         return self
 
     def close(self) -> None:
