@@ -75,6 +75,8 @@ Behavior review of the alignment pass at `e2327b6a59` (2026-11-24). Items 1 and 
 
 `trigger_description` fills X only where `bound_x` names an amount: "X" for the source's own entering, "that many" for counters put (`PutsCounters`, `NthCounter`, `Chapter` beneath any wrapper) and the per-creature `DealsCombatDamage { per: Object, to: None }` beneath `ActiveIf` only, mirroring `event_condition`. Wildborn Preserver's stacked trigger keeps "the announced value of X" with no "(0)" (`eld::wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack`, both viewers). The "X (3)" reflexive nit was left. Debug reruns: cards 917, `--lib` + rules 554 (2 skipped); `test_pinned_pilot` unchanged after the extension rebuild.
 
+Behavior review of D7 at `b35dfe9ef0` (2026-11-24): fixed, no new defects. `bound_x` matches the cases `flow/triggers.rs` binds. Counters-put events bind beneath any wrapper; `NoCounters` is asked by `check_state_triggers` and binds nothing. The per-creature `CombatDamageTotals` occurrence (`to: None`, `per: Object`) binds beneath `ActiveIf` only, as `event_condition` does. Stack text (`observation.rs`), ChooseTrigger offers (`decision_context.rs`) and placement (`action.rs`) all go through `trigger_description`, so one fix covers all three. Debug rerun: 38 card tests matching wildborn, quilled_greatwurm or trigger all pass. Latent (part of the two-owners nit below): the engine also gives `cast_x` to a non-`This` entering condition when the source itself enters ("whenever a creature you control enters"), while the text keeps such a trigger's X symbolic. No catalog trigger of that shape refers to X. The working phase is satisfied; next is gate.
+
 ## Remaining work
 
 Next is **gate**. Gate owns:
