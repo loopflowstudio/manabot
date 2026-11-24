@@ -1,39 +1,41 @@
-at: 80040af53936652cff75fd6ee905aa2e159575a1
+at: fbd4319d09e4e11dd47bf173e4a5cbd2d62a9aaa
 first:
   - path: manabot/backends/mlx.md
     why: Supported architectures, training commands and checkpoint formats
   - path: docs/observation-and-model.md
     why: Live-token coordinates and whole-game memory semantics
-  - path: manabot/training/state/backend.py
-    why: Backend admission for self-play execution
   - path: manabot/policy/prepare.py
-    why: Prepare shared live-token indexes and compact attention coordinates
+    why: Host coordinates for packed and trimmed attention
+  - path: manabot/policy/decision_memory.py
+    why: Fold order, parent states and reference slices
   - path: manabot/policy/collection_memory.py
-    why: Shared GRU cache ownership and native lineage checks
+    why: Root eligibility across viewer lineages and native epochs
   - path: manabot/backends/mlx/decision_memory.py
-    why: Differentiable record encoders and frozen serving roots
+    why: Encode records and resume from frozen roots
   - path: manabot/backends/mlx/live_tokens.py
     why: Packed projections and bounded attention
   - path: manabot/backends/mlx/policy.py
-    why: Join history, belief and memory to both heads
+    why: Restore object coordinates for action and value heads
   - path: manabot/backends/mlx/checkpoint.py
-    why: Map canonical weights and gradients across architectures
+    why: Canonical weights across architectures
   - path: manabot/backends/mlx/runtime.py
-    why: Branch from the published control's readings and weights
+    why: Warm starts from published control weights and readings
   - path: manabot/training/updates/backend.py
-    why: Common learner and critic interfaces for both updates
+    why: Learner and critic interfaces for both updates
   - path: manabot/policy/returns.py
     why: Outcome mixtures at terminals and bootstrap cuts
   - path: manabot/training/updates/ppo.py
     why: One clipped PPO step across execution chunks
+  - path: manabot/sim/search/sampling_receipt.py
+    why: Sampled card counts and their joint log probability
   - path: manabot/belief/checkpoint.py
     why: Portable sampler storage and legacy Torch reads
   - path: manabot/backends/mlx/belief.py
-    why: Physical odds and learned joint hand probabilities
+    why: Physical odds and recurrent corrections for sampled counts
   - path: manabot/backends/mlx/belief_fit.py
-    why: Fit the recurrent corrections from private hand labels
-  - path: tests/model/test_prepare_rows.py
-    why: Check compact placement and shorter-board padding
+    why: Fit the corrections from private hand labels
+  - path: tests/belief/test_sampling.py
+    why: Verify seeded draws and their physical probabilities
   - path: tests/model/test_mlx_backend.py
     why: Compare forwards, gradients, optimizer steps and warm starts
   - path: tests/training/test_mlx_workflow.py
