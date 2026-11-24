@@ -938,7 +938,9 @@ class _Renderer:
             terms.append(f"only after turn {permission.after_turn}")
         if permission.source_permanent_id is not None:
             terms.append(
-                f"while they control {self.name(permission.source_permanent_id)}"
+                f"permission follows the controller of {self.name(permission.source_permanent_id)}"
+                if permission.follows_source_controller
+                else f"while they control {self.name(permission.source_permanent_id)}"
             )
         if permission.flash:
             terms.append("as though it had flash")

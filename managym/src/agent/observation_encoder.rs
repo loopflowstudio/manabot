@@ -1994,7 +1994,9 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
                 grant.waterbend,
                 grant.foretold,
             );
-            let tokens = if grant.on_adventure {
+            let tokens = if grant.follows_source_controller {
+                crate::cards::tokens::rules_tokens(&(terms, grant.on_adventure, true), pack())
+            } else if grant.on_adventure {
                 crate::cards::tokens::rules_tokens(&(terms, true), pack())
             } else {
                 crate::cards::tokens::rules_tokens(&terms, pack())

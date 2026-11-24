@@ -16,13 +16,14 @@
     text: string | null;
     permanent?: PermanentState | null;
     card?: CardState | null;
+    castTerms?: string[];
     /** The name of the attacker this permanent blocks. */
     blocks?: string | null;
     /** Art height in px; the docked pane uses a shorter strip. */
     art?: number;
   }
 
-  let { name, text, permanent = null, card = null, blocks = null, art = 128 }: Props = $props();
+  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, art = 128 }: Props = $props();
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
@@ -61,6 +62,7 @@
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
+  {#each castTerms as term}<p class="state">{term}</p>{/each}
   {#if pt}
     <div class="pt" data-testid="pt-provenance">
       <p class="total"><b>{pt.power}/{pt.toughness}</b>{#if permanent?.damage}<span> · {permanent.toughness! - permanent.damage} toughness left after damage</span>{/if}</p>

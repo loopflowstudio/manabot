@@ -1031,6 +1031,7 @@ def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
             for c in obs.opponent_cards
             if c.cast_permissions and c.characteristics.name == "Seed Suture"
         ]
+        assert copy.cast_permissions[0].follows_source_controller
         assert copy.cast_permissions[0].source_permanent_id == source.id
         assert copy.cast_permissions[0].player_id == obs.opponent.id
     assert restored.search_witness_json() == env.search_witness_json()

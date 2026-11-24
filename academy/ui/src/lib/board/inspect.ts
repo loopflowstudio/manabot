@@ -11,7 +11,7 @@
  * ability" (a static grant from another permanent).
  */
 import type { CardFace } from '$lib/card-faces.svelte';
-import type { ContinuousEffect, PermanentState } from '$lib/types';
+import type { CardState, ContinuousEffect, PermanentState } from '$lib/types';
 
 export interface PtPart {
   label: string;
@@ -110,4 +110,17 @@ export function signed(power: number, toughness: number): string {
 export function labelText(name: string): string {
   const words = name.replace(/_/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Source-conditioned permissions from the inspected card's viewer projection. */
+export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_permissions'> | null, permanentName: (id: number) => string, playerName: (id: number) => string): string[] {
+  const grants = card?.cast_permissions ?? (card?.cast_permission ? [card.cast_permission] : []);
+  return grants.flatMap(grant => {
+    if (grant.source_permanent_id == null) return [];
+    const source = permanentName(grant.source_permanent_id);
+    const player = playerName(grant.player_id);
+    return [grant.follows_source_controller
+      ? `The controller of ${source} may cast this (currently ${player}).`
+      : `${player} may cast this while they control ${source}.`];
+  });
 }

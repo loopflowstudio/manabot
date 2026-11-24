@@ -619,6 +619,26 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
                 [facts[owners == first_permanent + i, 1:] for i in range(2)]
             )
 
+        # Changing only entitlement changes the linked terms for policy and people.
+        first = card["cast_permissions"][0]
+        first["follows_source_controller"] = True
+        following = managym.Observation.from_json(json.dumps(state))
+        following_card = next(c for c in following.agent_cards if c.id == card["id"])
+        assert following_card.cast_permissions[0].follows_source_controller
+        assert not np.array_equal(encode_observation(space, following)["facts"], facts)
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert (
+            "permission follows the controller of" in line
+            and "while they control" in line
+        )
+        board_card = next(
+            c
+            for c in serialize_observation(following)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert board_card["cast_permissions"][0]["follows_source_controller"]
+        del first["follows_source_controller"]
+
         # A reader using the original card columns still sees the first grant.
         card["cast_permission"] = card.pop("cast_permissions")[0]
         single = managym.Observation.from_json(json.dumps(state))

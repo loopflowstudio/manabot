@@ -923,6 +923,7 @@ class CastPermission:
     any_mana: bool
     waterbend: bool
     foretold: bool
+    follows_source_controller: bool
     on_adventure: bool
 
 class ObservationCharacteristics:

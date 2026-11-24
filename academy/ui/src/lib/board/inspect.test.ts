@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PermanentState } from '$lib/types';
 import type { CardFace } from '$lib/card-faces.svelte';
-import { keywordsOf, labelText, ptProvenance, signed, statusesOf } from './inspect';
+import { keywordsOf, labelText, permissionTerms, ptProvenance, signed, statusesOf } from './inspect';
 
 const face: CardFace = { cost: '{G}{W}', colors: ['G', 'W'], type_line: 'Creature — Human Soldier Ally', keywords: ['trample'], power: 1, toughness: 1 };
 function permanent(extra: Partial<PermanentState>): PermanentState {
@@ -87,4 +87,14 @@ describe('labelText', () => {
     expect(labelText('first_strike')).toBe('First strike');
     expect(labelText('flying')).toBe('Flying');
   });
+});
+
+it('names who can cast before a source changes control', () => {
+  const grant = { player_id: 1, source_permanent_id: 12 };
+  const source = (id: number) => id === 12 ? 'Blossom-Blessed Angel' : 'other permanent';
+  const player = (id: number) => id === 1 ? 'Alice' : 'Bob';
+  expect(permissionTerms({ cast_permissions: [grant, { ...grant, follows_source_controller: true }] }, source, player)).toEqual([
+    'Alice may cast this while they control Blossom-Blessed Angel.',
+    'The controller of Blossom-Blessed Angel may cast this (currently Alice).',
+  ]);
 });

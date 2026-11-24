@@ -341,7 +341,7 @@ pub struct LegacyCastPermissionView {
     /// Usable only on a turn numbered after this one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after_turn: Option<u32>,
-    /// Lasts while the permitted player controls this permanent.
+    /// The public permanent sustaining this grant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_permanent_id: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -352,6 +352,8 @@ pub struct LegacyCastPermissionView {
     pub waterbend: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub foretold: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub follows_source_controller: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub on_adventure: bool,
 }

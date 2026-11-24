@@ -3235,6 +3235,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         flash => [column(Card, card::PERMISSION_FLASH)],
         any_mana => [column(Card, card::PERMISSION_ANY_MANA)],
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
+        follows_source_controller => [FactOccurrence(FactKind::EffectProgram)],
         on_adventure => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],

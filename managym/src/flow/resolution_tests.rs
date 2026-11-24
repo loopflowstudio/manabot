@@ -4672,7 +4672,8 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
         ("Blossom-Blessed Angel".into(), 4),
         ("Emergency Phytomedic".into(), 4),
         ("Counterspell".into(), 4),
-        ("Plains".into(), 28),
+        ("Lightning Bolt".into(), 1),
+        ("Plains".into(), 27),
     ]);
     let mut game = Game::new(
         vec![
@@ -4839,6 +4840,24 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
     );
     let fixed_spell = game.state.now(fixed_spell);
     assert!(game.live_grants(owner, fixed_spell).next().is_some());
+    for viewer in [owner, caster] {
+        let obs = crate::agent::observation::Observation::for_player(&game, viewer);
+        for (object, follows) in [(copies[0], true), (fixed_spell, false)] {
+            let row = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|row| row.id == game.state[object].id.0 as i32)
+                .unwrap();
+            let grant = &row.cast_permissions[0];
+            assert_eq!(grant.follows_source_controller, follows);
+            assert_eq!(grant.player_id, game.state.players[owner.0].id.0 as i32);
+            assert_eq!(
+                grant.source_permanent_id,
+                Some(game.state.permanents[angel].as_ref().unwrap().id.0 as i32)
+            );
+        }
+    }
     game.change_control(angel, caster);
     game.finish_action_step();
     assert!(cast_offer(&game, copies[0]).is_none());
@@ -4905,5 +4924,61 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
         spell.spent.mana()[0].color,
         crate::state::mana::Color::White as u8
     );
+    assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
+}
+
+#[test]
+fn returning_prepared_angel_rejects_departed_object_at_current_revision() {
+    let (mut game, sources, copies) = prepared_seed_sutures();
+    let player = game.active_player();
+    game.scenario_force_card_in_hand(player, "Lightning Bolt")
+        .unwrap();
+    game.state.players[player.0].mana_pool = crate::state::mana::Mana::parse("WR").into();
+    game.finish_action_step();
+    let address = |game: &Game, object| {
+        game.semantic_decision_frame()
+            .unwrap()
+            .object_candidates
+            .into_iter()
+            .find(|candidate| {
+                game.semantic_object_candidates.borrow().get(candidate) == Some(&object)
+            })
+            .unwrap()
+    };
+    let departed = address(&game, sources[0]);
+    let exiled = game.move_object(sources[0], ZoneType::Exile);
+    let returned = game.move_object(exiled, ZoneType::Battlefield);
+    game.finish_action_step();
+    assert_ne!(sources[0], returned);
+    assert!(cast_offer(&game, copies[0]).is_none());
+    let fresh = game
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, game.active_player())
+        .iter()
+        .copied()
+        .find(|copy| game.preparation_source(*copy) == Some(returned))
+        .unwrap();
+    let mut cast = bound_command(&game, cast_offer(&game, fresh).unwrap());
+    cast.object_preconditions = vec![address(&game, returned)];
+    let stale = Command {
+        object_preconditions: vec![departed],
+        ..cast.clone()
+    };
+    let before = game.state.deterministic_hash();
+    assert!(matches!(
+        game.execute_semantic_command(&stale),
+        Err(crate::decision::SemanticError::StaleObject)
+    ));
+    assert_eq!(game.state.deterministic_hash(), before);
+    game.execute_semantic_command(&cast).unwrap();
+    let target = bound_command(
+        &game,
+        Action::ChooseTarget {
+            player: game.active_player(),
+            target: Target::Permanent(game.lookup_current_permanent(returned).unwrap()),
+        },
+    );
+    game.execute_semantic_command(&target).unwrap();
     assert_eq!(game.preparation_source(copies[1]), Some(sources[1]));
 }

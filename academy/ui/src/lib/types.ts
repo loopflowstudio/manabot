@@ -46,12 +46,13 @@ export interface CastPermission {
   own_turn_only?: boolean;
   /** Usable only on a turn numbered after this one. */
   after_turn?: number;
-  /** Lasts while the permitted player controls this permanent. */
+  /** The public permanent sustaining this grant. */
   source_permanent_id?: number;
   flash?: boolean;
   any_mana?: boolean;
   waterbend?: boolean;
   foretold?: boolean;
+  follows_source_controller?: boolean;
   on_adventure?: boolean;
 }
 

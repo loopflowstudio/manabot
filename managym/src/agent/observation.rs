@@ -213,7 +213,10 @@ pub struct CastPermissionData {
     /// Usable only on a turn numbered after this one.
     #[serde(default)]
     pub after_turn: Option<u32>,
-    /// Lasts while the permitted player controls this permanent.
+    /// Entitlement follows the current controller of the source.
+    #[serde(default)]
+    pub follows_source_controller: bool,
+    /// Permanent sustaining this permission.
     #[serde(default)]
     pub source_permanent_id: Option<i32>,
     #[serde(default)]
@@ -1702,6 +1705,7 @@ impl Observation {
                     any_mana: grant.any_mana,
                     waterbend: grant.waterbend,
                     foretold: grant.foretold,
+                    follows_source_controller: grant.prepared,
                     on_adventure: grant.on_adventure,
                 })
                 .collect(),

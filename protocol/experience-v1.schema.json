@@ -1167,6 +1167,9 @@
         "flash": {
           "type": "boolean"
         },
+        "follows_source_controller": {
+          "type": "boolean"
+        },
         "foretold": {
           "type": "boolean"
         },
@@ -1182,7 +1185,7 @@
           "minimum": 0
         },
         "source_permanent_id": {
-          "description": "Lasts while the permitted player controls this permanent.",
+          "description": "The public permanent sustaining this grant.",
           "type": [
             "integer",
             "null"
