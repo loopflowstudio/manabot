@@ -46,3 +46,5 @@ The ordinary-play transfer replay uses Agent of Treachery to take the Angel and 
 Project the caster rule on visible permissions so a policy can distinguish the effects of a control change before choosing it. Use the existing transfer fixture as the paired control.
 
 Use a castable Lightning Bolt to issue a public target address for the Angel before it leaves. Use a controlled non-Pilot creature as the positive target for All Aboard.
+
+Use the pending Waypoint activation as the first fork for repeat preparation. Compare exact links and copy movements before adding a stored reverse index.
