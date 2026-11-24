@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Battlefield forms, target legality, layers and transitions · MTG-420</title>
+<title>Battlefield forms, trigger programs, layers and transitions · MTG-420</title>
 <style>
 :root{color-scheme:light dark;font:16.5px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas)}
 body{max-width:58rem;margin:2.5rem auto;padding:0 1.1rem}
@@ -23,58 +23,72 @@ code{font-size:.9em;overflow-wrap:anywhere}
 @media (max-width:720px){.grid{grid-template-columns:1fr}}
 </style>
 <main>
-<small>MTG-420 · post-Batch 2A concept review · base <code>b9b09bc6</code> → <code>15b63c7b</code></small>
-<h1>Do the engine’s battlefield forms, targeting, layer and transition records line up after Batch 2A?</h1>
+<small>MTG-420 · post-Batch 2B concept review · base <code>82c5d1d1</code> → <code>97a27b3e</code></small>
+<h1>Do battlefield forms, trigger programs, selection and layer records line up after Batch 2B?</h1>
 
-<p><strong>Area reviewed.</strong> Battlefield forms, copiable snapshots, spell-entry provenance, source-relative target legality, zone-filtered selection, layered characteristic grants and resumable battlefield moves across <code>managym/state/src/{game_object,permanent,card,ability,effect,stack_object,zone}.rs</code>, <code>managym/src/flow/{zones,triggers,trigger,resolution,retarget,play,proposed_event,layers,statics,identity,cast_permission,decision,action,selection_sampling,sba,game}.rs</code>, <code>managym/src/agent/{observation,record_vocabulary}.rs</code> and <code>managym/src/cards/content_pack.rs</code>. Batch 2A (<code>d6156419</code>, <code>12c51346</code>, <code>7cd57bfb</code>) closed the cast-provenance mismatch with <code>Arc&lt;SpellEntry&gt;</code>; stepping back across the whole area now exposes three live bugs hidden inside the current form, mana-value and cache-invalidation splits alongside the planned Batch 2B–4 work.</p>
+<p><strong>Area reviewed.</strong> Battlefield forms, copiable snapshots, stacked trigger identity/effects, source-relative target legality, zone-filtered selection, layered characteristic grants and resumable battlefield moves across <code>managym/state/src/{game_object,permanent,card,ability,effect,predicate,stack_object,zone}.rs</code>, <code>managym/src/flow/{zones,triggers,trigger,resolution,retarget,play,proposed_event,layers,statics,identity,cast_permission,decision,action,selection_sampling,sba,payment,game}.rs</code>, <code>managym/src/agent/{observation,ability_description,continuation,record_vocabulary}.rs</code> and <code>managym/src/cards/content_pack.rs</code>. Batch 2B (<code>7e1fa0b9</code>, <code>24ac46fe</code>) closed the clause-target legality split across trigger placement, mode legality, retargeting and resolution. Stepping back across the whole area now exposes three newly verified bugs—non-DFC Clone copying a transformed DFC’s front face (CR 712.8e/712.9), manifested entry predicates reading the hidden card’s mana value (CR 708.2), and chosen-mode printed triggers overloaded onto <code>inline_effects</code>—alongside the remaining Batch 2C–4 work.</p>
 
 <section class="callout warn">
-<h2>Biggest mismatch · battlefield form backing, transitions and mana value are split across four owners and three diverging paths</h2>
-<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> One player-visible concept — <em>what physical card(s) back a permanent, what face/orientation it currently shows, and what changes when it transforms or turns face up</em> (CR 707, 701.27, 701.34, 712) — has no single owner:</p>
+<h2>Biggest mismatch · battlefield form backing, transitions and mana value are split across four owners and five live bugs</h2>
+<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> One player-visible concept — <em>what physical card(s) or token back a permanent, what face/orientation it shows, what its mana value is, and what changes when it transforms or turns face up</em> (CR 707, 708, 712) — has no single owner:</p>
 <ul>
 <li><code>Object.printed</code> (<code>game_object.rs:602</code>) is overloaded for entry copies (Clone), melded forms (Ragnarok) and manifested face-down cards (Manifest Dread).</li>
-<li><code>Object.front</code> (<code>game_object.rs:599</code>) holds the front face of a transformed permanent and is cloned onto copies.</li>
-<li><code>Permanent.manifested</code> (<code>permanent.rs:197</code>) stays <code>true</code> even after reveal solely to keep <code>observed_object_id</code> anchored to <code>permanent.id</code>; three callers (<code>identity.rs:52</code>, <code>action.rs:454</code>, <code>selection_sampling.rs:212</code>) each repeat <code>manifested &amp;&amp; definition_id == ANONYMOUS</code> to ask “is it face down?”</li>
+<li><code>Object.front</code> (<code>game_object.rs:599</code>) holds a transformed permanent’s front face and is blindly cloned in <code>Object::become_copy_of</code> (<code>game_object.rs:644</code>) onto non-DFC card copies.</li>
+<li><code>Permanent.manifested</code> (<code>permanent.rs:197</code>) stays <code>true</code> after reveal solely to keep <code>observed_object_id</code> anchored to <code>permanent.id</code>; three callers (<code>identity.rs:52</code>, <code>action.rs:454</code>, <code>selection_sampling.rs:212</code>) repeat <code>manifested &amp;&amp; definition_id == ANONYMOUS</code> to ask “is it face down?”</li>
 <li><code>ZoneManager.melded_cards</code> (<code>zone.rs:149</code>) tracks a melded permanent’s second physical card out-of-band.</li>
-<li><strong>Three live rules bugs follow directly from this split:</strong>
+<li><strong>Five live rules bugs follow directly from this split:</strong>
   (1) <code>transform_permanent</code> (<code>zones.rs:975</code>) never checks physical backing, so a non-DFC Clone copying Cecil illegally transforms (CR 712.9);
-  (2) <code>FrameCompletion::TurnFaceUp</code> (<code>decision.rs:1404</code>) calls <code>reveal_manifest()</code> directly without invalidating either player’s <code>mana_cache</code>, unlike <code>transform_permanent</code> (<code>zones.rs:992</code>) — turning a manifested Llanowar Elves face up leaves a stale mana cache;
-  (3) <code>Game::permanent_mana_value</code> (<code>resolution.rs:2410</code>), used by <code>ObjectSelector::Each { max_mana_value }</code>, reads <code>self.state[permanent.object].mana_cost</code> directly instead of <code>object_mana_value</code> (<code>resolution.rs:2688</code>), so transformed Cecil (MV 1, CR 712.8e) and melded Ragnarok (MV 8, CR 712.8g) both read as <strong>MV 0</strong>.</li>
+  (2) <code>Object::become_copy_of</code> (<code>game_object.rs:644</code>) copies <code>source.front</code> onto Clone copying transformed Cecil, giving it MV 1 instead of <strong>0</strong> (CR 712.8e: a permanent copying a DFC’s back face has MV 0) and letting <code>transform_permanent</code> flip it to Cecil’s front face (whereas a <em>transforming token copy</em> under CR 707.8a, like Ember Island Production on Avatar Kuruk, legitimately keeps both faces);
+  (3) <code>FrameCompletion::TurnFaceUp</code> (<code>decision.rs:1404</code>) calls <code>reveal_manifest()</code> without <code>invalidate_mana_cache</code>, unlike <code>transform_permanent</code> (<code>zones.rs:992</code>), leaving stale producible mana after revealing manifested Llanowar Elves;
+  (4) <code>Game::permanent_mana_value</code> (<code>resolution.rs:2405</code>), used by <code>ObjectSelector::Each</code>, duplicates <code>object_mana_value</code> (<code>resolution.rs:2697</code>) and reads <code>mana_cost</code> directly, treating transformed Cecil (MV 1) and melded Ragnarok (MV 8) as <strong>MV 0</strong>;
+  (5) <code>Game::entry_matches_predicate</code> (<code>statics.rs:588</code>) reads <code>row.mana_value_cost()</code> even when <code>entry.manifested</code> is true, testing a manifested card against entry replacements with its hidden card’s mana value instead of <strong>0</strong> (CR 708.2), and <code>object_matches_predicate</code> (<code>statics.rs:511</code> → <code>predicate.rs:167</code>) omits announced <code>X</code> on stack spells (CR 202.3e).</li>
 </ul>
 
 <div class="grid">
 <div class="panel">
-<h3><span class="tag existing">Existing</span> Before · four fields, three bugs</h3>
+<h3><span class="tag existing">Existing</span> Before · four fields, five bugs</h3>
 <ol>
-<li><strong>Clone copying Cecil</strong> hits <code>transform_permanent</code> → <code>show_back_face(Cecil)</code> sees Cecil’s back face → non-DFC Clone illegally flips (CR 712.9).</li>
-<li><strong>Manifested Llanowar Elves</strong> turns face up via <code>FrameCompletion::TurnFaceUp</code> → <code>reveal_manifest()</code> bumps layer revisions but skips <code>invalidate_mana_cache</code> → cached producible mana stays stale.</li>
-<li><strong><code>Each { max_mana_value: Some(2) }</code></strong> sweeps the board → <code>permanent_mana_value</code> reads <code>mana_cost: None</code> on melded Ragnarok (MV 8) and transformed Cecil (MV 1) → treats both as MV 0.</li>
+<li><strong>Clone copying transformed Cecil</strong> copies <code>source.front</code> → reads MV 1 (violating CR 712.8e) and flips to Cecil’s front face via <code>transform_permanent</code> (violating CR 712.9).</li>
+<li><strong>Manifested Llanowar Elves</strong> enters with hidden MV in <code>entry_matches_predicate</code> (CR 708.2) and turns face up via <code>TurnFaceUp</code> without invalidating <code>mana_cache</code>.</li>
+<li><strong><code>Each { max_mana_value: Some(0) }</code></strong> (Day of Black Sun) reads <code>permanent_mana_value</code> → destroys transformed Cecil (MV 1) and melded Ragnarok (MV 8) as MV 0.</li>
 </ol>
 </div>
 <div class="panel">
-<h3><span class="tag proposed">Proposed</span> After · explicit form backing + one transition authority</h3>
+<h3><span class="tag proposed">Proposed</span> After · explicit form backing + one transition &amp; MV authority</h3>
 <ol>
-<li>Replace <code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code> and <code>ZoneManager.melded_cards</code> with explicit physical backing (card, melded pair, token) and face state (face up, transformed, face down + stable manifest alias) separate from <code>CopiableValues</code> — keeping <code>Permanent</code> at its 168-byte ceiling.</li>
-<li>Route both <code>transform_permanent</code> and <code>TurnFaceUp</code> through one battlefield form-transition helper that enforces CR 712.9/712.10 backing rules and invalidates both players’ mana caches and layer/trigger revisions.</li>
-<li>Delete <code>permanent_mana_value</code>; every permanent mana-value read calls <code>object_mana_value</code>. Share one <code>is_face_down()</code> across <code>identity.rs</code>, <code>action.rs</code> and <code>selection_sampling.rs</code>.</li>
+<li>Replace <code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code> and <code>ZoneManager.melded_cards</code> with explicit physical backing (single card, melded pair, token, transforming token) and face state (face up, transformed, face down + stable manifest alias) separate from <code>CopiableValues</code>, within the 168-byte <code>Permanent</code> ceiling. Non-transforming copies take only the shown face’s copiable values (MV 0, untransformable); transforming token copies (CR 707.8a) keep both faces.</li>
+<li>Route both <code>transform_permanent</code> and <code>TurnFaceUp</code> through one form-transition authority enforcing CR 712.9/712.10 backing rules and invalidating both players’ mana caches and layer/trigger revisions. Share one <code>is_face_down()</code>.</li>
+<li>Delete <code>permanent_mana_value</code>; route <code>Each</code> and <code>object_matches_predicate</code> through <code>object_mana_value</code>, and pass MV 0 for <code>entry.manifested</code> in <code>entry_matches_predicate</code>.</li>
 </ol>
 </div>
 </div>
 </section>
 
+<section class="callout">
+<h2>Second mismatch (newly exposed after Batch 2B) · <code>inline_effects</code> + <code>program</code> conflate chosen-mode printed triggers with non-printed triggers</h2>
+<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> <code>PendingTrigger.inline_effects</code> and <code>TriggeredAbilityOnStack.inline_effects</code> (<code>trigger.rs:88</code>, <code>stack_object.rs:133</code>) currently hold three different concepts: a printed trigger whose mode was chosen (<code>triggers.rs:376, 527, 579</code>, <code>program: false</code>), a granted/delayed trigger (<code>triggers.rs:1088, 1308</code>, <code>program: true</code>), and a reflexive/firebending inline trigger (<code>triggers.rs:1222</code>, <code>resolution.rs:1710</code>, <code>program: false</code>).</p>
+<ul>
+<li><code>resolve_triggered_ability</code> (<code>resolution.rs:419</code>) treats any <code>inline_effects: Some(_)</code> as non-printed: <code>(effects, None, None)</code> silently drops <code>intervening_if</code> (CR 603.4) and collapses <code>ability_resolutions_this_turn</code> onto sentinel <code>usize::MAX</code>.</li>
+<li><code>stacked_trigger_program</code> (<code>resolution.rs:53</code>) returns <code>None</code> whenever <code>inline_effects.is_some()</code> and <code>!program</code>, and <code>ContinuationFrame</code> never sets <code>mode</code> on triggers (<code>continuation.rs:650</code>) — hiding the chosen mode of a modal trigger from viewers and policy.</li>
+<li><code>ability_description::trigger_description</code> (<code>ability_description.rs:48</code>) labels every <code>inline_effects: Some(_)</code> as <code>"{name} — delayed ability: {effects}"</code>, mislabeling chosen-mode triggers (Kykar) and granted triggers (Kellan).</li>
+<li>Four callers (<code>trigger_requirements</code>, <code>resolve_triggered_ability</code>, <code>stack_target_requirements</code>, <code>trigger_description</code>) each re-dispatch <code>inline_effects</code> vs <code>source_face.abilities[ability_index]</code>, and <code>sba.rs:344</code> assumes <code>inline.is_none()</code> means a printed Saga chapter.</li>
+</ul>
+<p><span class="tag proposed">Proposed</span> Keep <code>inline_effects</code> strictly for non-printed triggers (delayed, reflexive, granted, firebending). Carry <code>chosen_modes: Vec&lt;usize&gt;</code> on <code>TriggeredAbilityOnStack</code> (with <code>skip_serializing_if = "Vec::is_empty"</code> so non-modal bytes stay unchanged) and a <code>modes_chosen: bool</code> flag on <code>PendingTrigger</code> so 0-mode declines remain distinct from unchosen modes. Provide one shared <code>stacked_trigger_effects(trigger)</code> helper for resolution, retargeting and descriptions: printed modal triggers keep their <code>ability_index</code>, <code>intervening_if</code> recheck, Saga chapter identity, real trigger description and <code>ContinuationFrame</code> mode/program projection.</p>
+</section>
+
 <h2>Concrete walks · normal path, counterexample and recovery</h2>
 <table>
-<thead><tr><th>Step</th><th>Fiendish Panda &amp; modal / shrunk source (Batch 2B)</th><th>Manifested Llanowar Elves &amp; Equipment move (Batches 3–4)</th></tr></thead>
+<thead><tr><th>Step</th><th>Modal trigger with intervening-if &amp; stack copy (Batch 2 finish)</th><th>Clone of transformed Cecil &amp; manifested Elves (Batches 2C–4)</th></tr></thead>
 <tbody>
 <tr><th>Normal path</th>
-<td>3/2 Panda dies with a 2-MV creature in your graveyard; its trigger asks for <em>another</em> target creature card with MV ≤ Panda’s power (3). Separately, a live 3/3’s trigger targets a 3-MV graveyard card.</td>
-<td>Player manifests Llanowar Elves face down (2/2, no mana ability), later pays <code>{G}</code> to turn it face up. Separately, Imprisoned in the Moon enchants an opponent’s Elves, or a mana-granting Equipment moves to another creature.</td></tr>
+<td>A permanent’s printed modal trigger fires and its controller picks mode 1 (or up to two modes), places it on the stack, optionally copies or retargets it, and resolves it.</td>
+<td>Cecil transforms to back face (MV 1); player casts Clone copying transformed Cecil; another player casts Day of Black Sun (X=0). Separately, player manifests Llanowar Elves (2/2, MV 0) and later pays <code>{G}</code> to turn it face up.</td></tr>
 <tr><th>Counterexample / failure</th>
-<td><strong>Existing fails in 4 places:</strong> (1) <code>fits_trigger_clause</code> (<code>triggers.rs:251</code>) and <code>retarget_candidates</code> (<code>retarget.rs:100</code>) check <code>another</code> on live <code>Target::Permanent</code> only, so dead Panda targets its own <code>Target::GraveyardCard</code>; (2) <code>legal_trigger_modes</code> (<code>triggers.rs:479</code>) omits <code>within_source_bound</code> completely; (3) <code>resolution_targets</code> (<code>resolution.rs:511</code>) omits both <code>another</code> and <code>within_source_bound</code>, so shrinking a live source in response fails to fizzle the trigger under CR 608.2b; (4) checking only <code>departure_arrivals</code> for <code>another</code> would miss a graveyard-originating trigger with <code>card == source</code>.</td>
-<td><strong>Existing fails in 3 places:</strong> (1) <code>FrameCompletion::TurnFaceUp</code> (<code>decision.rs:1404</code>) omits <code>invalidate_mana_cache</code>, leaving stale mana after reveal; (2) <code>zones.rs:930</code> skips <code>StaticAbility::Continuous</code> (<code>LoseAllAbilities</code>, <code>LoseNonManaAbilities</code>, <code>GrantActivated</code>, <code>SetTypes</code>, <code>AddSubtypes</code>) and <code>GrantsAnyColorManaAbility</code>; (3) <code>attach_source_to</code> (<code>resolution.rs:2505</code>) and SBA Equipment detachment (<code>sba.rs:272</code>) never invalidate mana caches.</td></tr>
+<td><strong>Existing fails in 4 places:</strong> (1) choosing a mode writes <code>inline_effects = Some(chosen)</code>, so <code>resolve_triggered_ability</code> drops <code>intervening_if</code> (CR 603.4) and per-turn ability index; (2) <code>ContinuationFrame</code> projects neither <code>mode</code> nor <code>program</code>; (3) <code>ability_description</code> labels it <code>"delayed ability"</code>; (4) a modal Saga chapter would fail <code>sba.rs:344</code>’s <code>inline.is_none()</code> check.</td>
+<td><strong>Existing fails in 4 places:</strong> (1) <code>become_copy_of</code> copies Cecil’s <code>front</code> onto Clone → Clone reads MV 1 instead of 0 (CR 712.8e) and illegally flips to front-face Cecil under <code>transform_permanent</code> (CR 712.9); (2) <code>Each</code> calls <code>permanent_mana_value</code> → Day of Black Sun at X=0 destroys transformed Cecil and melded Ragnarok; (3) <code>entry_matches_predicate</code> reads hidden MV 1 for manifested Elves instead of 0 (CR 708.2); (4) <code>TurnFaceUp</code> skips <code>invalidate_mana_cache</code>.</td></tr>
 <tr><th>Recovery / fork</th>
-<td><strong>Proposed:</strong> One <code>target_fits_clause(target, requirement, controller, source: Option&lt;AbilitySource&gt;)</code> shared by placement, mode legality, retarget and resolution. <code>target_is_source</code> matches live permanent, live graveyard source (<code>card == source</code>) and <code>departure_arrivals(source)</code>; <code>within_source_bound</code> checks live permanent before departure LKI. Forking at target choice or retarget rejects self/out-of-bound targets consistently.</td>
-<td><strong>Proposed:</strong> One form-transition authority for transform + turn-face-up invalidates both mana caches; one <code>static_affects_mana</code> helper covers all mana-affecting statics on entry/exit; <code>attach_source_to</code> and SBA detachment invalidate mana caches; <code>name_set</code> and <code>creature_types_set</code> project independently in <code>observation.rs</code>.</td></tr>
+<td><strong>Proposed:</strong> Printed modal trigger keeps <code>inline_effects: None</code> and stores <code>chosen_modes</code>. Copying it on the stack clones <code>chosen_modes</code> and <code>source_face</code> (CR 707.10c); retargeting, resolution and description all read <code>stacked_trigger_effects</code>; viewers see the chosen mode/program on <code>ContinuationFrame</code>; intervening-if rechecks normally even after source removal.</td>
+<td><strong>Proposed:</strong> <code>Each</code> and <code>object_matches_predicate</code> use <code>object_mana_value</code>; <code>entry_matches_predicate</code> uses MV 0 for manifests; explicit form backing gives Clone-of-transformed-Cecil MV 0 and blocks <code>Transform</code> (while transforming token copies like Ember Island Production on Avatar Kuruk still transform under CR 707.8a); one form-transition authority invalidates both mana caches on transform and turn-up.</td></tr>
 </tbody>
 </table>
 
@@ -96,23 +110,27 @@ code{font-size:.9em;overflow-wrap:anywhere}
 
 <tr><td><strong>How a permanent’s spell entered</strong><br>Cast vs spell copy vs blink; kicker, X and payment surviving source removal (CR 400.7d, 603.4, 702.33, 707.10).</td>
 <td><code>Permanent.spell_entry: Option&lt;Arc&lt;SpellEntry&gt;&gt;</code>; <code>ZoneEntry::from_spell</code>; <code>PendingTrigger</code> / <code>TriggeredAbilityOnStack.kicked/x/spent</code>; <code>Condition::Kicked</code>.</td>
-<td><span class="tag yes">Yes</span> Closed in Batch 2A (<code>d6156419</code>, <code>12c51346</code>). Cleanly separates a cast for zero (<code>payment: Some(empty)</code>) from a permanent spell copy (<code>payment: None</code>) within the 168-byte <code>Permanent</code> budget.</td></tr>
+<td><span class="tag yes">Yes</span> Closed in Batch 2A (<code>d6156419</code>, <code>12c51346</code>). Cleanly separates cast-for-zero from spell copy within 168 bytes.</td></tr>
 
 <tr><td><strong>Clause target legality (“another” &amp; source-power bounds)</strong><br>CR 601.2c, 608.2b, 400.7e.</td>
-<td>Split across <code>fits_trigger_clause</code> (<code>triggers.rs:245</code>), <code>legal_trigger_modes</code> (<code>triggers.rs:479</code>), <code>retarget_candidates</code> (<code>retarget.rs:55</code>), <code>resolution_targets</code> (<code>resolution.rs:511</code>) and <code>activated_ability_targets</code> (<code>play.rs:1484</code>).</td>
-<td><span class="tag no">No</span> Action with no single owner. Placement/retarget miss graveyard arrivals; mode legality omits <code>within_source_bound</code>; resolution omits both <code>another</code> and <code>within_source_bound</code>; <code>play.rs:1500</code> excludes source unconditionally regardless of <code>clause.another</code>.</td></tr>
+<td><code>target_fits_clause</code>, <code>target_is_source</code>, <code>legal_clause_targets</code>, <code>can_add_clause_target</code> and <code>stack_target_requirements</code> across <code>triggers.rs</code>, <code>retarget.rs</code> and <code>resolution.rs</code>.</td>
+<td><span class="tag yes">Yes</span> Closed in Batch 2B (<code>7e1fa0b9</code>, <code>24ac46fe</code>). <code>play.rs:1500</code> intentionally retains existing activated-ability self-exclusion for TLA compatibility.</td></tr>
 
-<tr><td><strong>Selecting matching cards in public graveyards &amp; battlefield mana value</strong><br>Raise the Past; Rise of the Dark Realms; <code>Each { max_mana_value }</code> on DFC/meld.</td>
-<td><code>ObjectSelector::Each</code> hardcodes battlefield and reads duplicate <code>permanent_mana_value</code> (<code>resolution.rs:2410</code>) instead of <code>object_mana_value</code> (<code>resolution.rs:2688</code>); <code>ObjectSelector::Zone</code> has no predicate or <code>Actor</code>.</td>
-<td><span class="tag no">No</span> One idea under two names (<code>permanent_mana_value</code> vs <code>object_mana_value</code>) gives transformed DFCs and melded permanents MV 0 in <code>Each</code>; missing <code>ZoneMatching</code> blocks simultaneous graveyard reanimation via <code>Effect::Move</code>.</td></tr>
+<tr><td><strong>Printed vs chosen-mode vs delayed/granted triggered abilities</strong><br>CR 603.4, 700.2b, 707.10c, Saga chapters, stack/continuation view.</td>
+<td><code>PendingTrigger.inline_effects</code> / <code>TriggeredAbilityOnStack.inline_effects</code> + <code>program: bool</code>; 4 separate lookup sites + <code>stacked_trigger_program</code>.</td>
+<td><span class="tag no">No</span> One field for three concepts. Choosing a mode on a printed trigger drops <code>intervening_if</code> and ability-index tracking, hides the chosen mode from <code>ContinuationFrame</code>, mislabels descriptions as <code>"delayed ability"</code> and breaks <code>sba.rs</code> chapter detection.</td></tr>
 
-<tr><td><strong>Layered transformation Auras, mana-cache invalidation &amp; characteristic observation</strong><br>Witness Protection, Eaten by Piranhas, Imprisoned in the Moon, Kellan, Celestial Armor.</td>
-<td><code>AttachedSetsCharacteristics</code> + <code>Operation::Name</code> parallel to <code>StaticContinuous</code>; <code>zones.rs:930</code> misses <code>StaticContinuous</code>; <code>attach_source_to</code> (<code>resolution.rs:2505</code>) &amp; SBA detach (<code>sba.rs:272</code>) skip mana-cache invalidation; <code>observation.rs:1572</code> gates replaced <code>creature_types</code> on <code>Operation::Name</code>.</td>
-<td><span class="tag no">No</span> Two overlapping static systems; three mana-cache invalidation gaps; non-renaming type replacements (Eaten by Piranhas, Kellan) vanish from <code>PermanentData.creature_types</code>.</td></tr>
+<tr><td><strong>Selecting matching cards in public zones &amp; single mana-value authority</strong><br>Raise the Past; Rise of the Dark Realms; Day of Black Sun; X spells; manifests.</td>
+<td><code>ObjectSelector::Each</code> calls duplicate <code>permanent_mana_value</code> (<code>resolution.rs:2405</code>); <code>object_matches_predicate</code> (<code>statics.rs:511</code>) omits X; <code>entry_matches_predicate</code> (<code>statics.rs:588</code>) reads hidden MV on manifest; no <code>ZoneMatching</code> selector.</td>
+<td><span class="tag no">No</span> Duplicate mana-value paths diverge on DFCs, melds, X spells and manifests; missing <code>ZoneMatching</code> blocks simultaneous public-zone reanimation via <code>Effect::Move</code>.</td></tr>
 
-<tr><td><strong>Battlefield form backing, form transitions &amp; resumable battlefield moves</strong><br>Single card, DFC, meld, manifest, token copy (CR 707, 712).</td>
-<td><code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code>, <code>ZoneManager.melded_cards</code>; <code>transform_permanent</code> (<code>zones.rs:975</code>) vs <code>FrameCompletion::TurnFaceUp</code> (<code>decision.rs:1404</code>); <code>cast_permission::exile_linked</code> (<code>decision.rs:2897</code>) calls <code>move_object</code>.</td>
-<td><span class="tag no">No</span> Biggest mismatch. Non-DFC Clone transforms (CR 712.9); turning a manifested permanent face up skips mana-cache invalidation; <code>is_face_down</code> is open-coded 3 times; exiling Ragnarok via <code>exile_linked</code> panics at <code>proposed_event.rs:994</code>.</td></tr>
+<tr><td><strong>Layered transformation Auras, mana-cache invalidation &amp; characteristic observation</strong><br>Witness Protection, Eaten by Piranhas, Imprisoned in the Moon (<code>emn.rs</code>), Kellan (<code>fdn.rs</code>), Celestial Armor.</td>
+<td><code>AttachedSetsCharacteristics</code> + <code>Operation::Name</code> parallel to <code>StaticContinuous</code>; <code>zones.rs:930</code> misses <code>StaticContinuous</code> &amp; <code>GrantsAnyColorManaAbility</code>; <code>attach_source_to</code> (<code>resolution.rs:2505</code>) &amp; SBA detach (<code>sba.rs:272</code>) skip mana-cache invalidation; <code>observation.rs:1572</code> gates <code>creature_types</code> on <code>Operation::Name</code>.</td>
+<td><span class="tag no">No</span> Two overlapping static systems; Imprisoned in the Moon (already defined in <code>emn.rs</code>) leaves stale mana caches; Kellan (already defined in <code>fdn.rs</code>) loses observed <code>creature_types</code> after tier upgrades.</td></tr>
+
+<tr><td><strong>Battlefield form backing, form transitions &amp; resumable battlefield moves</strong><br>Single card, DFC, meld, manifest, non-DFC copy vs transforming token copy (CR 707.8a, 708.2, 712.8e/9/10).</td>
+<td><code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code>, <code>ZoneManager.melded_cards</code>; <code>become_copy_of</code> copies <code>front</code>; <code>transform_permanent</code> vs <code>TurnFaceUp</code>; <code>cast_permission::exile_linked</code> (<code>decision.rs:2897</code>) is the sole remaining battlefield immediate <code>move_object</code> caller (<code>payment.rs:1071</code> already uses <code>EffectFrame.batch</code>).</td>
+<td><span class="tag no">No</span> Biggest mismatch. Clone copying transformed Cecil gets MV 1 and illegally transforms; turning manifested Elves face up leaves stale mana cache; <code>is_face_down</code> is open-coded 3 times; exiling Ragnarok via Azula panics at <code>proposed_event.rs:1014</code>.</td></tr>
 
 <tr><td><strong>Creation-time values frozen into delayed triggers</strong><br>Nine-Lives Familiar’s <code>revival - 1</code>.</td>
 <td>Card-shaped <code>EffectValue::DeathCountersMinus</code> frozen by one <code>matches!</code> in <code>resolution.rs:1966</code>.</td>
@@ -123,31 +141,32 @@ code{font-size:.9em;overflow-wrap:anywhere}
 <section class="callout">
 <h2>Recommended model &amp; execution order <span class="tag proposed">Proposed</span></h2>
 <ol>
-<li><strong>Batch 2B (next) · unify clause target legality behind <code>AbilitySource</code>.</strong>
+<li><strong>Batch 2C (next) · add <code>ObjectSelector::ZoneMatching</code> and unify mana-value reads.</strong>
   <ul>
-  <li>Put base spec legality, <code>another</code> and <code>within_source_bound</code> behind one <code>target_fits_clause(target, requirement, controller, source: Option&lt;AbilitySource&gt;)</code> called from trigger placement, <code>legal_trigger_modes</code> (closing its missing power-bound check), <code>retarget_candidates</code> and <code>resolution_targets</code>.</li>
-  <li>Check <code>target_is_source</code> against live permanent, live graveyard source (<code>card == source</code>) and <code>departure_arrivals(source)</code> (including melded pairs). Resolve <code>within_source_bound</code> from live permanent before departure LKI so shrinking a live source fizzles at resolution (CR 608.2b).</li>
-  <li>Keep <code>play.rs</code>’s existing activated-ability source exclusion intact for TLA compatibility; audit only if a future card needs a self-targeting activated ability.</li>
+  <li>Add <code>ObjectSelector::ZoneMatching { zone, owner: Actor, predicate }</code> selecting physical cards in non-battlefield card zones by owner (<code>zone_cards</code> / <code>Actor::includes</code> in deterministic seat order) via <code>object_matches_predicate</code>, feeding <code>Effect::Move</code>’s simultaneous <code>EventBatch</code> (distinct from <code>Each</code>’s controller-scoped battlefield permanents and <code>Zone</code>’s hidden-zone sampling provenance).</li>
+  <li>Delete duplicate <code>Game::permanent_mana_value</code> (<code>resolution.rs:2405</code>) so <code>Each</code> calls <code>object_mana_value</code> (fixing Day of Black Sun at X=0 on transformed Cecil and melded Ragnarok).</li>
+  <li>Pass <code>self.object_mana_value(object_id)</code> inside <code>object_matches_predicate</code> (fixing CR 202.3e X-spell predicates) and pass MV 0 when <code>entry.manifested</code> in <code>entry_matches_predicate</code> (fixing CR 708.2).</li>
   </ul>
 </li>
-<li><strong>Batch 2C · add <code>ObjectSelector::ZoneMatching</code> and delete <code>permanent_mana_value</code>.</strong>
+<li><strong>Batch 2 finish · separate chosen-mode printed triggers from <code>inline_effects</code> and share one trigger-effect reader.</strong>
   <ul>
-  <li>Add <code>ObjectSelector::ZoneMatching { zone, owner: Actor, predicate }</code> selecting physical cards only (<code>zone_cards</code> / <code>card_of</code>) in deterministic player order, feeding <code>Effect::Move</code>’s simultaneous <code>EventBatch</code> (and join <code>Effect::SelectCards</code>’s <code>cards_only</code> guard).</li>
-  <li>Delete duplicate <code>Game::permanent_mana_value</code> (<code>resolution.rs:2410</code>) and read <code>i32::from(self.object_mana_value(permanent.object))</code> in <code>ObjectSelector::Each</code> so transformed DFCs and melded permanents keep their CR 712.8e/g mana values.</li>
+  <li>Carry <code>chosen_modes: Vec&lt;usize&gt;</code> on <code>TriggeredAbilityOnStack</code> (omitted when empty) and <code>modes_chosen: bool</code> on <code>PendingTrigger</code>; leave <code>inline_effects</code> strictly for delayed, reflexive, granted and firebending triggers.</li>
+  <li>Route <code>resolve_triggered_ability</code>, <code>stack_target_requirements</code> and <code>ability_description</code> through one shared <code>stacked_trigger_effects</code> helper, keeping <code>intervening_if</code> (CR 603.4), <code>ability_resolutions_this_turn</code>, Saga chapter identity and real descriptions intact; project chosen mode/program on <code>ContinuationFrame</code>.</li>
+  <li>Finish Heartfire Immolator, Ordeal of Nylea, Feldon’s Cane ledger record, and the carried Undying Malice / Valkyrie’s Call simultaneous-death + blink witness.</li>
   </ul>
 </li>
 <li><strong>Batch 3 · unify transformation Auras onto <code>StaticContinuous</code>, close all mana-cache hooks and decouple observation flags.</strong>
   <ul>
-  <li>Add <code>Modification::SetName(String)</code>, lower <code>AttachedSetsCharacteristics</code> through it (deleting <code>Operation::Name</code> while preserving Honest Work’s tokens) and scan <code>SetName</code> in <code>record_vocabulary.rs</code>.</li>
+  <li>Add <code>Modification::SetName(String)</code>, lower <code>AttachedSetsCharacteristics</code> through it (deleting <code>Operation::Name</code> while preserving Honest Work’s TLA tokens) and scan <code>SetName</code> in <code>record_vocabulary.rs</code>.</li>
   <li>Replace <code>zones.rs:930</code> with one <code>static_affects_mana</code> helper covering <code>StaticContinuous</code> (<code>LoseAllAbilities</code>, <code>LoseNonManaAbilities</code>, <code>GrantActivated</code>, <code>SetTypes</code>, <code>AddSubtypes</code>) and <code>GrantsAnyColorManaAbility</code>, and invalidate both mana caches in <code>attach_source_to</code> (<code>resolution.rs:2505</code>) and SBA Equipment detachment (<code>sba.rs:272</code>).</li>
-  <li>Split <code>characteristics_set</code> into independent <code>name_set</code> and <code>creature_types_set</code> flags for <code>observation.rs</code>.</li>
+  <li>Split <code>characteristics_set</code> into independent <code>name_set</code> and <code>creature_types_set</code> flags for <code>observation.rs</code> (covering already-defined Kellan and planned Eaten by Piranhas).</li>
   </ul>
 </li>
-<li><strong>Batch 4 · unify battlefield form backing, form transitions and resumable battlefield moves.</strong>
+<li><strong>Batch 4 · unify battlefield form backing, form transitions and the last immediate battlefield move.</strong>
   <ul>
-  <li>Replace <code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code> and <code>ZoneManager.melded_cards</code> with explicit physical backing + face state (plus stable manifest public-id alias) separate from <code>CopiableValues</code>, keeping <code>Permanent</code> ≤ 168 bytes.</li>
-  <li>Route both <code>transform_permanent</code> and <code>FrameCompletion::TurnFaceUp</code> through one form-transition authority enforcing CR 712.9/712.10 backing rules and invalidating both players’ mana caches and layer/trigger revisions. Share one <code>is_face_down()</code> across <code>identity.rs</code>, <code>action.rs</code> and <code>selection_sampling.rs</code>.</li>
-  <li>Route battlefield-capable immediate <code>move_object</code> callers (starting with <code>cast_permission::exile_linked</code>) through <code>EffectFrame.batch</code>.</li>
+  <li>Replace <code>Object.printed</code>, <code>Object.front</code>, <code>Permanent.manifested</code> and <code>ZoneManager.melded_cards</code> with explicit physical backing (single card, melded pair, token, transforming token) + face state (face up, transformed, face down + stable manifest alias) separate from <code>CopiableValues</code>, within the 168-byte <code>Permanent</code> ceiling. Non-transforming copies take only the shown face (MV 0, untransformable under CR 712.8e/712.9); transforming token copies keep both faces (CR 707.8a).</li>
+  <li>Route both <code>transform_permanent</code> and <code>FrameCompletion::TurnFaceUp</code> through one form-transition authority enforcing CR 712.9/712.10 and invalidating both players’ mana caches and layer/trigger revisions. Share one <code>is_face_down()</code> across <code>identity.rs</code>, <code>action.rs</code> and <code>selection_sampling.rs</code>.</li>
+  <li>Route <code>Decision::ExileLinked</code> / <code>cast_permission::exile_linked</code> (confirmed sole remaining battlefield-capable immediate <code>move_object</code> caller) through <code>EffectFrame.batch</code>.</li>
   </ul>
 </li>
 </ol>
@@ -155,17 +174,17 @@ code{font-size:.9em;overflow-wrap:anywhere}
 
 <h2>Review questions (choices recorded for review)</h2>
 <ol>
-<li>How should <code>target_is_source</code> handle <code>requirement.another</code> across zones and should <code>play.rs</code>’s unconditional activated-ability self-exclusion change now?
-  <strong>1a · Unify placement, mode legality, retarget and resolution on one <code>target_fits_clause</code> whose <code>target_is_source</code> excludes live permanent, live graveyard source (<code>card == source</code>) and <code>departure_arrivals(source)</code>; keep <code>play.rs:1500</code>’s existing activated-ability exclusion intact for TLA compatibility (selected — fixes every trigger/retarget/resolution bug without disturbing existing TLA activations).</strong>
-  1b · Also switch <code>play.rs:1500</code> to gate on <code>clause.another</code> now (requires auditing every TLA activated ability that omitted <code>another: true</code>).</li>
-<li>Where should the duplicate <code>permanent_mana_value</code> reader (MV 0 bug on transformed Cecil / melded Ragnarok in <code>Each</code>) be removed?
-  <strong>2a · Delete <code>permanent_mana_value</code> in Batch 2C alongside <code>Game::select</code>’s <code>ZoneMatching</code> work and call <code>object_mana_value</code> directly (selected — 1-line deletion of a duplicate owner while already editing <code>Game::select</code>).</strong>
-  2b · Defer until Batch 4’s form unification (leaves a known CR 712.8e/g mana-value bug in <code>Game::select</code> across two more batches).</li>
+<li>How should chosen-mode printed triggers be represented on the stack instead of overloading <code>inline_effects</code>?
+  <strong>1a · Carry <code>chosen_modes: Vec&lt;usize&gt;</code> on <code>TriggeredAbilityOnStack</code> (skipped in serde when empty) and <code>modes_chosen: bool</code> on <code>PendingTrigger</code>, keeping <code>inline_effects</code> strictly for non-printed triggers, with one shared <code>stacked_trigger_effects</code> helper (selected — preserves CR 603.4 <code>intervening_if</code>, per-turn ability counts, Saga chapter identity, real descriptions and <code>ContinuationFrame</code> mode/program visibility with zero serialization impact on non-modal triggers).</strong>
+  1b · Keep overwriting <code>inline_effects</code> for chosen-mode triggers and patch <code>intervening_if</code>, <code>ability_description</code> and <code>ContinuationFrame</code> with an extra <code>from_printed: bool</code> flag (leaves one field overloaded for three concepts).</li>
+<li>How should a non-DFC Clone copying a transformed DFC (e.g. Clone copying transformed Cecil) handle <code>front</code> and mana value in Batch 4?
+  <strong>2a · Non-transforming copies copy only the shown face’s copiable values (no <code>front</code>, MV 0 per CR 712.8e, untransformable per CR 712.9), while transforming token copies (CR 707.8a, e.g. Ember Island Production on Avatar Kuruk) retain both faces and can transform (selected — exact CR 712.8e + 707.8a + 712.9 semantics from one backing model).</strong>
+  2b · Keep copying <code>front</code> onto Clone and only block <code>transform_permanent</code> (leaves Clone copying transformed Cecil at MV 1 instead of 0, violating CR 712.8e).</li>
+<li>Should <code>object_matches_predicate</code> and <code>entry_matches_predicate</code> join the Batch 2C mana-value cleanup alongside deleting <code>permanent_mana_value</code>?
+  <strong>3a · Yes — pass <code>self.object_mana_value(object_id)</code> in <code>object_matches_predicate</code> (CR 202.3e X spells) and <code>0</code> for <code>entry.manifested</code> in <code>entry_matches_predicate</code> (CR 708.2) in the same pass as deleting <code>permanent_mana_value</code> (selected — 5 lines, makes <code>object_mana_value</code> the single authority across selection, predicates and entry checks).</strong>
+  3b · Delete only <code>permanent_mana_value</code> in Batch 2C and defer manifest/X-spell predicate mana value to Batch 4 (leaves two diverging mana-value paths across another batch).</li>
 <li>Should <code>transform_permanent</code> and <code>FrameCompletion::TurnFaceUp</code> share one battlefield form-transition helper in Batch 4?
-  <strong>3a · Yes — one form-transition authority validates physical backing (CR 712.9/712.10), updates face state and invalidates both players’ mana caches and layer/trigger revisions (selected — eliminates the stale-mana-cache bug on manifested mana creatures like Llanowar Elves and guarantees future form transitions can’t drop invalidation).</strong>
-  3b · Keep separate mutation paths and patch <code>invalidate_mana_cache</code> inline in <code>decision.rs:1406</code> (keeps two parallel owners for battlefield face changes).</li>
-<li>How broadly should Batch 3’s mana-cache invalidation cover statics and attachments?
-  <strong>4a · Share one <code>static_affects_mana</code> helper covering <code>StaticContinuous</code> (<code>LoseAllAbilities</code>, <code>LoseNonManaAbilities</code>, <code>GrantActivated</code>, <code>SetTypes</code>, <code>AddSubtypes</code>) and <code>GrantsAnyColorManaAbility</code> on entry/exit, and invalidate both players’ mana caches in <code>attach_source_to</code> and SBA detachment (selected — closes every attachment and static mana-cache path in one pass).</strong>
-  4b · Only check <code>LoseAllAbilities</code> / <code>LoseNonManaAbilities</code> / <code>GrantActivated</code> in <code>zones.rs:930</code> (leaves stale mana caches when an Equipment moves or detaches, or when <code>SetTypes</code>/<code>AddSubtypes</code> changes land mana abilities).</li>
+  <strong>4a · Yes — one form-transition authority validates physical backing (CR 712.9/712.10), updates face state and invalidates both players’ mana caches and layer/trigger revisions (selected — fixes stale mana caches on manifested mana creatures and prevents future form transitions from dropping invalidation).</strong>
+  4b · Keep separate mutation paths and patch <code>invalidate_mana_cache</code> inline in <code>decision.rs:1406</code> (keeps two parallel owners for battlefield face changes).</li>
 </ol>
 </main></html>
