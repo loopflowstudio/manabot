@@ -391,6 +391,8 @@ def test_safe_stop_matches_uninterrupted(
         )
     control = read_state(tmp_path / "control/out/state")
     assert control is not None
+    if scenario == "complete":
+        assert control.record.extra["optimizer_updates"] == 2
     expected = mx.load(control.path / "training.safetensors")
     for arm in ["split", "repeat"] if scenario == "metal" else ["split"]:
         actual = read_state(tmp_path / arm / "out/state")
@@ -484,6 +486,15 @@ def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) ->
                 "batch_closure": "complete-games",
                 "learning_seats": "both",
                 "games_per_stream": 1,
+                # One optimizer step per update, independent of game length.
+                "learning": settings.learning.model_copy(
+                    update={
+                        "filter_scope": "actor_critic",
+                        "filter_kind": "top_count",
+                        "advantage_quantile": 1.0,
+                        "min_advantage": 0.0,
+                    }
+                ),
                 "deck_source": None,
                 "match": MatchConfig(
                     hero_deck={"Mountain": 8, "Gray Ogre": 4},
