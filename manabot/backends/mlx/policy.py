@@ -1,7 +1,7 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
 `MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
-module, for the scalar catalog policies admitted by `require_supported`.
+module, for the scalar policies admitted by `require_supported`.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
@@ -53,6 +53,7 @@ from manabot.policy.prepare import (
 )
 from manabot.policy.protocol import InferenceResult, Precision
 from manabot.policy.readings import Readings
+import managym
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -232,8 +233,12 @@ class SemanticCards(nn.Module):
 
 
 class Facts(nn.Module):
-    def __init__(self, dims: Dimensions) -> None:
+    def __init__(self, dims: Dimensions, hashed_buckets: int) -> None:
         super().__init__()
+        if hashed_buckets:
+            self.ident = nn.Embedding(hashed_buckets, dims.hidden)
+            self.detail = nn.Embedding(hashed_buckets, dims.hidden)
+            self.source = nn.Embedding(hashed_buckets, dims.hidden)
         self.kind = nn.Embedding(dims.fact_kinds + 1, dims.hidden)
         self.numeric = nn.Linear(dims.fact, dims.hidden)
         self.program_numeric = nn.Linear(1, dims.hidden)
@@ -249,8 +254,12 @@ class RecordReducer(nn.Module):
 
 
 class SharedEffects(nn.Module):
-    def __init__(self, dims: Dimensions) -> None:
+    def __init__(self, dims: Dimensions, hashed_buckets: int) -> None:
         super().__init__()
+        if hashed_buckets:
+            self.modification = nn.Embedding(hashed_buckets, dims.hidden)
+            self.detail = nn.Embedding(hashed_buckets, dims.hidden)
+            self.source = nn.Embedding(hashed_buckets, dims.hidden)
         self.detail_kind = nn.Embedding(20, dims.hidden)
         self.detail_number = nn.Linear(1, dims.hidden)
         self.header = nn.Linear(dims.effect + 2 * dims.hidden, dims.hidden)
@@ -281,7 +290,7 @@ class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
     catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed[np.ndarray]
+    catalog: Packed[np.ndarray] | None
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -320,9 +329,15 @@ class MLXActorCritic(nn.Module):
         self.stack_tokens = space.one_token
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = None
         hidden = dims.hidden
-        self.semantic_cards = SemanticCards(
-            dims, library=space.one_token, stream_norm=config.stream_norm
-        )
+        if tables.definition_rows is None:
+            self.semantic_cards = None
+            self.card_definitions = padding_embedding(
+                managym.CARD_DEFINITION_COUNT + 1, hidden
+            )
+        else:
+            self.semantic_cards = SemanticCards(
+                dims, library=space.one_token, stream_norm=config.stream_norm
+            )
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
@@ -341,7 +356,7 @@ class MLXActorCritic(nn.Module):
         self.value_head = nn.Sequential(
             nn.Linear(hidden, hidden),
             nn.ReLU(),
-            nn.Identity(),  # MeanPoolingLayer's slot; pooling is masked below
+            nn.Identity(),  # MeanPoolingLayer's slot; pooling follows the saved mode
             nn.Linear(hidden, hidden),
             nn.ReLU(),
             nn.Linear(hidden, 1),
@@ -360,8 +375,9 @@ class MLXActorCritic(nn.Module):
             self.policy_film = zero_projection(hidden)
         self.link_from_target = [nn.Linear(hidden, hidden) for _ in range(dims.links)]
         self.link_to_target = [nn.Linear(hidden, hidden) for _ in range(dims.links)]
-        self.facts = Facts(dims)
-        self.shared_effects = SharedEffects(dims)
+        hashed_buckets = 0 if config.catalog_records() else tables.record_buckets
+        self.facts = Facts(dims, hashed_buckets)
+        self.shared_effects = SharedEffects(dims, hashed_buckets)
         self.name_candidates = NameCandidates(dims)
         self.continuation = Continuation(dims)
         if space.one_token:
@@ -377,16 +393,21 @@ class MLXActorCritic(nn.Module):
             }
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
-        programs = tables.full_programs
-        tokens, schedule = programs.tokens, programs.schedule
-        named = np.nonzero(tables.name_definitions != 0)[0]
+        programs = tables.full_programs if self.has_programs else None
+        named = (
+            np.flatnonzero(tables.name_definitions)
+            if self.has_programs
+            else np.empty(0, np.int64)
+        )
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
             "_static",
             _Static(
-                packed_steps(tokens, schedule),
-                schedule,
+                packed_steps(programs.tokens, programs.schedule)
+                if programs is not None
+                else [],
+                programs.schedule if programs is not None else None,
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
                 tables,
@@ -450,12 +471,16 @@ class MLXActorCritic(nn.Module):
         return (
             sum(value.nbytes for _, value in tree_flatten(self.parameters()))
             + sum(value.nbytes for value in buffers if value is not None)
-            + (len(tables.catalog_lengths) + 1) * self.dims.hidden * 4
+            + (
+                (len(tables.catalog_lengths) + 1) * self.dims.hidden * 4
+                if self.has_programs
+                else 0
+            )
         )
 
     @property
     def has_programs(self) -> bool:
-        return True
+        return self.semantic_cards is not None
 
     def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
         return PolicyInference(self, cache_catalog=cache_catalog)
@@ -546,7 +571,7 @@ class MLXActorCritic(nn.Module):
     def compute_dtype(self) -> mx.Dtype:
         """The dtype the weights hold now: float32 masters, or the selected
         precision's casts inside `forward_precision`."""
-        return self.semantic_cards.token_embedding.weight.dtype
+        return self.player_embedding.projection.layers[0].weight.dtype
 
     def set_precision(self, precision: Precision) -> None:
         """Select compute precision without changing stored master weights."""
@@ -634,17 +659,25 @@ class MLXActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": mx.array(mask), "failed": mx.array(failed)},
             ) from error
+        definition_count = (
+            0 if self.has_programs else self.card_definitions.weight.shape[0]
+        )
         admission.check(
-            obs, admission.Spec(self.config, self._static.space, tables, 0), legal
+            obs,
+            admission.Spec(self.config, self._static.space, tables, definition_count),
+            legal,
         )
 
     # Programs ----------------------------------------------------------------------
 
-    def programs(self) -> mx.array:
+    def programs(self) -> mx.array | None:
         """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
         with self.forward_precision():
             static: _Static = self._static
             cards = self.semantic_cards
+            if cards is None:
+                return None
+            assert static.catalog is not None
             _, finished = cards.encoder.run(
                 cards.token_embedding.weight, static.catalog_steps
             )
@@ -656,8 +689,9 @@ class MLXActorCritic(nn.Module):
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
         programs = self.programs()
-        mx.eval(programs)
-        self._static.cache["programs"] = programs
+        if programs is not None:
+            mx.eval(programs)
+            self._static.cache["programs"] = programs
 
     def clear_cache(self) -> None:
         self._static.cache.clear()
@@ -743,55 +777,61 @@ class MLXActorCritic(nn.Module):
             programs = self.programs()
         # Every object reader sees the normalized table; raw `programs` keep
         # scoring naming candidates.
-        definitions = self._definition_table(self._public(programs))
         cards = self.semantic_cards
-        tokens = cards.token_embedding.weight
+        if programs is None:
+            # Torch's generic identity embedding excludes padding from gradients.
+            table = self.card_definitions.weight
+            definitions = self._definition_table(
+                mx.concatenate([mx.stop_gradient(table[:1]), table[1:]])
+            )
+        else:
+            definitions = self._definition_table(self._public(programs))
+        tokens = cards.token_embedding.weight if self.config.catalog_records() else None
 
         def defs(rows: np.ndarray) -> mx.array:
             return _take(definitions, mx.array(rows))
 
         # Objects: players, cards, permanents and optional v11 stack rows.
         card_programs = defs(batch.card_rows)
-        attenuation = 1.0 if self.config.stream_norm else 60.0
-        known = (
-            defs(batch.known_rows)
-            * self._floating(batch.known_counts)[..., None]
-            / attenuation
-        ).sum(2)
-        known = self._masked_norm(
-            getattr(cards, "hand_norm", None), known, batch.known_counts
+        agent_player = self._stream(
+            "player", self.player_embedding(self._floating(batch.agent_player))
         )
-        if "library_projection" in cards:
-            library_pooled = (
-                defs(batch.library_rows)
-                * self._floating(batch.library_weights)[..., None]
+        opponent_player = self._stream(
+            "player", self.player_embedding(self._floating(batch.opponent_player))
+        )
+        if cards is not None:
+            attenuation = 1.0 if self.config.stream_norm else 60.0
+            known = (
+                defs(batch.known_rows)
+                * self._floating(batch.known_counts)[..., None]
                 / attenuation
             ).sum(2)
+            known = self._masked_norm(
+                getattr(cards, "hand_norm", None), known, batch.known_counts
+            )
+            if "library_projection" in cards:
+                library_pooled = (
+                    defs(batch.library_rows)
+                    * self._floating(batch.library_weights)[..., None]
+                    / attenuation
+                ).sum(2)
+                known = known + self._masked_norm(
+                    getattr(cards, "library_norm", None),
+                    cards.library_projection(library_pooled),
+                    batch.library_weights,
+                )
+            pooled = mx.einsum(
+                "bsrh,bsrc->bsch",
+                defs(batch.deck_rows),
+                self._floating(batch.deck_counts),
+            ).reshape(b, 2, 4 * hidden)
             known = known + self._masked_norm(
-                getattr(cards, "library_norm", None),
-                cards.library_projection(library_pooled),
-                batch.library_weights,
+                getattr(cards, "decklist_norm", None),
+                cards.decklist_projection(pooled),
+                batch.deck_counts,
             )
-        pooled = mx.einsum(
-            "bsrh,bsrc->bsch", defs(batch.deck_rows), self._floating(batch.deck_counts)
-        ).reshape(b, 2, 4 * hidden)
-        known = known + self._masked_norm(
-            getattr(cards, "decklist_norm", None),
-            cards.decklist_projection(pooled),
-            batch.deck_counts,
-        )
-        agent_player = (
-            self._stream(
-                "player", self.player_embedding(self._floating(batch.agent_player))
-            )
-            + known[:, 0, None]
-        )
-        opponent_player = (
-            self._stream(
-                "player", self.player_embedding(self._floating(batch.opponent_player))
-            )
-            + known[:, 1, None]
-        )
+            agent_player = agent_player + known[:, 0, None]
+            opponent_player = opponent_player + known[:, 1, None]
         agent_cards = (
             self._stream("card", self.card_embedding(self._floating(batch.agent_cards)))
             + card_programs[:, 0]
@@ -901,10 +941,13 @@ class MLXActorCritic(nn.Module):
             )
         keep = (validity != 0)[..., None].astype(objects.dtype)
 
-        # Masked-mean critic.
+        # Historical checkpoints average the projected bias of padding slots too.
         value = self.value_head.layers
-        projected = value[1](value[0](encoded_objects)) * keep
-        pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
+        projected = value[1](value[0](encoded_objects))
+        if self.config.value_aggregation == "historical_mean":
+            pooled_value = projected.mean(1)
+        else:
+            pooled_value = (projected * keep).sum(1) / validity.sum(1, keepdims=True)
         values = value[5](value[4](value[3](pooled_value))).astype(mx.float32)
         # A horizon bootstrap can contain only non-acting viewers.
         if not batch.legal_batches.size:
@@ -936,7 +979,8 @@ class MLXActorCritic(nn.Module):
             / self._floating(batch.group_counts)[:, None]
             * self._floating(batch.group_mask)[:, None]
         )
-        actions = actions + _take(programs, mx.array(batch.candidate_rows))
+        if programs is not None:
+            actions = actions + _take(programs, mx.array(batch.candidate_rows))
         actions = actions + _take(shared, legal_batches)
         post = encoded_objects.reshape(b * count, hidden)
         focus = batch.focus
@@ -1014,10 +1058,10 @@ class MLXActorCritic(nn.Module):
         self,
         batch: Prepared[np.ndarray],
         objects: mx.array,
-        tokens: mx.array,
+        tokens: mx.array | None,
         definitions: mx.array,
     ) -> mx.array:
-        """`FactEncoder.forward` with catalog ids."""
+        """`FactEncoder.forward` over prepared record ids."""
         facts = self.facts
         routes = batch.facts
         b, count, hidden = objects.shape
@@ -1026,14 +1070,21 @@ class MLXActorCritic(nn.Module):
         def rows(table: mx.array, index: np.ndarray) -> mx.array:
             return _take(table, mx.array(index.reshape(-1))).reshape(*shape, hidden)
 
-        ids = (
-            rows(tokens, routes.id_rows) * self._floating(routes.id_mask)[..., None]
-            + rows(tokens, routes.detail_rows)
-            * self._floating(routes.detail_mask)[..., None]
-            + rows(tokens, routes.token_rows)
-            * self._floating(routes.token_mask)[..., None]
-            + rows(definitions, routes.source_rows)
-        )
+        if tokens is None:
+            ids = (
+                facts.ident(mx.array(routes.id_rows))
+                + facts.detail(mx.array(routes.detail_rows))
+                + facts.source(mx.array(routes.source_rows))
+            )
+        else:
+            ids = (
+                rows(tokens, routes.id_rows) * self._floating(routes.id_mask)[..., None]
+                + rows(tokens, routes.detail_rows)
+                * self._floating(routes.detail_mask)[..., None]
+                + rows(tokens, routes.token_rows)
+                * self._floating(routes.token_mask)[..., None]
+                + rows(definitions, routes.source_rows)
+            )
         hidden_rows = (
             facts.kind(mx.array(routes.kinds))
             + ids
@@ -1073,10 +1124,10 @@ class MLXActorCritic(nn.Module):
         self,
         batch: Prepared[np.ndarray],
         objects: mx.array,
-        tokens: mx.array,
+        tokens: mx.array | None,
         definitions: mx.array,
     ) -> mx.array:
-        """`SharedEffectEncoder.forward` with catalog ids."""
+        """`SharedEffectEncoder.forward` over prepared record ids."""
         routes = batch.effects
         if routes is None:
             return objects
@@ -1096,10 +1147,16 @@ class MLXActorCritic(nn.Module):
                 [self._floating(routes.numeric), controller, source_object], axis=-1
             )
         )
-        modification = _take(tokens, mx.array(routes.modification_rows))
-        sources = _take(definitions, mx.array(routes.source_rows))
+        if tokens is None:
+            modification = effects.modification(mx.array(routes.modification_rows))
+            sources = effects.source(mx.array(routes.source_rows))
+            detail = effects.detail(mx.array(routes.detail_rows))
+        else:
+            modification = _take(tokens, mx.array(routes.modification_rows))
+            sources = _take(definitions, mx.array(routes.source_rows))
+            detail = _take(tokens, mx.array(routes.detail_rows))
         detail = (
-            _take(tokens, mx.array(routes.detail_rows))
+            detail
             + effects.detail_kind(mx.array(routes.detail_kinds))
             + effects.detail_number(
                 _program_number(mx.array(routes.detail_numbers)).astype(

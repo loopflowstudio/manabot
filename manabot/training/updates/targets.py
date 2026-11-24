@@ -21,7 +21,6 @@ from manabot.training.updates.backend import (
     Policy,
     UpdateBackend,
     categorical_rl,
-    ppo_rl,
 )
 from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.selection import SourceSelection, select_sources
@@ -174,7 +173,6 @@ def compute_batch_targets(
     to_device, to_host = backend.arrays.from_numpy, backend.arrays.to_numpy
     batch = admitted.batch
     if isinstance(learning, Learning):
-        ppo_rl(rl)
         gamma, fraction = learning.gamma, learning.retained_fraction
     else:
         gamma, fraction = 1.0, 1 - learning.advantage_quantile

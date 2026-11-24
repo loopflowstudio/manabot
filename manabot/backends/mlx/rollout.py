@@ -10,6 +10,7 @@ Admission is recorded per row, so later epochs do not repeat the checks.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
@@ -54,6 +55,13 @@ class AdmittedRollout(AdmittedRows):
         """Prepared observations of flat rollout `indexes`, with their behavior
         distributions."""
         return self.prepare_rows(indexes)
+
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: object
+    ) -> AbstractContextManager[
+        Iterator[tuple[NDArray[np.int64], Prepared[np.ndarray], ActionRows]]
+    ]:
+        return self.prefetch_minibatches(order, size)
 
     def legal(self, obs: Prepared) -> mx.array:
         """The legal-action mask [B,A] of rows this rollout returned."""

@@ -88,6 +88,7 @@ from manabot.policy.checkpoint import (
 from manabot.policy.prepare import Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.recipes import baseline, elemental
+from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import (
     Counts,
     create,
@@ -97,8 +98,10 @@ from manabot.training.loops.self_play import (
 )
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.ppo import update_iteration
 from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
+from manabot.verify.representation import kellan_upgrade_root
 import managym
 
 
@@ -400,6 +403,116 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
             float(np.abs(value - expected_after[name]).max())
             <= STEP_PARAMETER_TOLERANCE
         ), name
+
+
+@pytest.mark.parametrize("world", [None, managym.WORLD_SETUP])
+def test_hashed_records_match_torch_with_a_live_shared_effect(
+    world: str | None,
+) -> None:
+    torch.manual_seed(23)
+    env = kellan_upgrade_root()
+    space = ObservationSpace()
+    obs = env.observation_for_player(env.current_agent_index())
+    rows = {key: value[None] for key, value in encode_observation(space, obs).items()}
+    assert (rows["effect_details"][..., 0] >= 11).any()
+    config = ModelConfig(hidden_dim=16, world=world, record_vocabulary="hashed")
+    reference = ActorCritic(space, config)
+    with torch.no_grad():
+        # A fresh policy's zero residuals would hide a wrong record embedding.
+        for parameter in (
+            reference.facts.output.weight,
+            reference.shared_effects.reducer.output.weight,
+        ):
+            parameter.normal_(std=0.1)
+    policy = assemble(policy_weights(reference))
+    for actual, expected in zip(
+        policy.evaluate(policy.prepare(rows)),
+        reference.evaluate(reference.prepare(rows)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=LOGIT_TOLERANCE)
+
+
+def test_gray_ogre_ppo_matches_torch_on_one_clipped_step() -> None:
+    torch.manual_seed(17)
+    settings = gray_ogre_self_play(horizon=1)
+    space = ObservationSpace(settings.observation)
+    reference = ActorCritic(space, settings.model)
+    batch = self_play_batch(
+        reference,
+        Match(settings.match),
+        TorchCollectionSession(device="cpu", seed=17),
+        6,
+    )
+    # Exercise both loss terms and distinct actor/critic denominators on a
+    # short nonterminal rollout, independently of when the first game ends.
+    batch = replace(
+        batch,
+        rewards=np.linspace(-1, 1, batch.actions.size, dtype=np.float32).reshape(
+            batch.actions.shape
+        ),
+    )
+    learning = settings.learning.model_copy(
+        update={"filter_scope": "actor", "max_grad_norm": 0.01}
+    )
+    size = batch.actions.size
+    policy = assemble(policy_weights(reference))
+    rows = batch.observations(np.arange(size)).observation
+    for actual, expected in zip(
+        policy.evaluate(policy.prepare(rows)),
+        reference.evaluate(reference.prepare(rows)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=LOGIT_TOLERANCE)
+    torch_learner = TorchLearner(reference, "cpu", minibatch_rows=size)
+    mlx_learner = MLXLearner(policy, minibatch_rows=size, execution_rows=2)
+    expected = update_iteration(
+        torch_module, torch_learner, batch, learning, 0, np.random.default_rng(13)
+    )
+    actual = update_iteration(
+        mlx_backend, mlx_learner, batch, learning, 0, np.random.default_rng(13)
+    )
+
+    assert actual.keys() == expected.keys()
+    assert actual["numerical"].keys() == expected["numerical"].keys()
+    assert (
+        actual["numerical"]["optimizer_steps"]
+        == expected["numerical"]["optimizer_steps"]
+        == 1
+    )
+    assert (
+        0
+        < actual["actor_exposures"]
+        == expected["actor_exposures"]
+        < actual["critic_exposures"]
+        == size
+    )
+    assert expected["gradient_norm"] > learning.max_grad_norm
+    for key in ("gradient_norm", "loss", "value_loss", "policy_loss"):
+        assert actual[key] == pytest.approx(
+            expected[key], rel=LOSS_TOLERANCE, abs=1e-6
+        ), key
+
+    # Adam's first moment after one step is proportional to the complete
+    # clipped gradient, including every execution chunk.
+    moments = {
+        name: state["exp_avg"].numpy()
+        if (state := torch_learner.optimizer.state.get(param))
+        else np.zeros(tuple(param.shape), np.float32)
+        for name, param in reference.named_parameters()
+    }
+    mlx_moments = {
+        key.removesuffix(".m"): value
+        for key, value in flat_numpy(mlx_learner.optimizer.state).items()
+        if key.endswith(".m")
+    }
+    agreement = gradient_agreement(mlx_moments, _mlx_names(moments))
+    assert agreement.min_cosine >= COSINE_TOLERANCE, agreement.worst
+    after = mlx_learner.parameters()
+    for name, value in _mlx_names(torch_learner.parameters()).items():
+        np.testing.assert_allclose(
+            after[name], value, rtol=0, atol=STEP_PARAMETER_TOLERANCE, err_msg=name
+        )
 
 
 def test_bfloat16_host_arrays_widen_to_float32() -> None:

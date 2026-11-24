@@ -7,13 +7,8 @@ module satisfies with plain functions. `Learner` and `Policy` are the objects
 an update steps and runs forward. `manabot.policy.protocol.Backend` also
 provides checkpoint admission. Parity supplies its own learner and layout contract.
 
-Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
-standardization and a policy `__call__`/`get_value`; only
-torch provides it. A categorical critic needs `CategoricalRL` (torch only);
-`categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
-likewise refuses an unsupported PPO update before reading rollout or learner state.
-`tests/training/test_update_backend_protocols.py` checks each backend's files
-against these member lists and signatures.
+Both backends run scalar PPO and the damped update. A categorical critic needs
+`CategoricalRL`, which `categorical_rl` checks before using it.
 
 Nothing here imports a framework. `Array` is a backend's own array
 (`torch.Tensor`, `mlx.core.array`), opaque to the update: it does arithmetic,
@@ -84,6 +79,10 @@ class RL(LossTerms, Protocol):
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
     ) -> tuple[Array, float | None]: ...
 
+    def standardized_advantages(
+        self, advantages: Array, over: Array | None = None
+    ) -> Array: ...
+
 
 @runtime_checkable
 class CategoricalRL(RL, CategoricalValueLoss, Protocol):
@@ -109,23 +108,6 @@ def categorical_rl(rl: RL) -> CategoricalRL:
     if not isinstance(rl, CategoricalRL):
         name = getattr(rl, "__name__", type(rl).__name__)
         raise TypeError(f"{name} has no categorical critic")
-    return rl
-
-
-@runtime_checkable
-class PPORL(CategoricalRL, Protocol):
-    """`rl` of a backend the PPO update runs on."""
-
-    def standardized_advantages(
-        self, advantages: Array, over: Array | None = None
-    ) -> Array: ...
-
-
-def ppo_rl(rl: RL) -> PPORL:
-    """Refuse an unsupported update before reading its rollout or learner."""
-    if not isinstance(rl, PPORL):
-        name = getattr(rl, "__name__", type(rl).__name__)
-        raise TypeError(f"{name} has no PPO update")
     return rl
 
 
@@ -175,15 +157,6 @@ class AdmittedRollout(Protocol):
 
     def evidence(self, obs: Observations) -> Mapping[str, Array]: ...
 
-
-class RolloutFile(ActionValidator, Protocol):
-    """`backend.rollout`. The first argument is the learner's `agent`."""
-
-    @property
-    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
-
-
-class PPOAdmittedRollout(AdmittedRollout, Protocol):
     def minibatches(
         self, order: NDArray[np.int64], size: int, device: Device
     ) -> AbstractContextManager[
@@ -193,9 +166,11 @@ class PPOAdmittedRollout(AdmittedRollout, Protocol):
         ...
 
 
-class PPORolloutFile(RolloutFile, Protocol):
+class RolloutFile(ActionValidator, Protocol):
+    """`backend.rollout`. The first argument is the learner's `agent`."""
+
     @property
-    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], PPOAdmittedRollout]: ...
+    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
 
 
 # -- policy and learner --------------------------------------------------------
@@ -218,14 +193,6 @@ class Policy(Protocol):
     ) -> Prepared[np.ndarray]: ...
 
     def forward_distribution(self, obs: Observations, /) -> tuple[Array, Array]: ...
-
-
-class PPOPolicy(Policy, Protocol):
-    def __call__(self, obs: Observations, /) -> tuple[Array, Array]:
-        """Logits [B,A] and scalar values [B]."""
-        ...
-
-    def get_value(self, obs: Observations, /) -> Array: ...
 
 
 class Learner(Protocol):
@@ -269,16 +236,11 @@ class Learner(Protocol):
         ...
 
 
-class PPOLearner(Learner, Protocol):
-    @property
-    def agent(self) -> PPOPolicy: ...
-
-
 # -- the backend module --------------------------------------------------------
 
 
 class UpdateBackend(Protocol):
-    """A backend module as the damped update takes it."""
+    """A backend module as both updates take it."""
 
     @property
     def rl(self) -> RL: ...
@@ -291,11 +253,3 @@ class UpdateBackend(Protocol):
 
     @property
     def rollout(self) -> RolloutFile: ...
-
-
-class PPOBackend(UpdateBackend, Protocol):
-    @property
-    def rl(self) -> PPORL: ...
-
-    @property
-    def rollout(self) -> PPORolloutFile: ...

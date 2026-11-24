@@ -58,8 +58,6 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
     """Refuse configurations the MLX backend does not yet implement, naming
     every one, rather than running them partially."""
     reasons = []
-    if model.world is None or not model.catalog_records():
-        reasons.append("a catalog world with record_vocabulary='catalog' is required")
     if observation.policy_input_version not in (9, 10, 11):
         reasons.append(f"policy_input_version={observation.policy_input_version}")
     if model.belief_count_buckets:
@@ -68,7 +66,7 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
         reasons.append("decision memory")
     if model.recent_events:
         reasons.append("policy history input (recent_events)")
-    if model.value_aggregation != "masked_mean":
+    if model.value_aggregation not in ("masked_mean", "historical_mean"):
         reasons.append(f"value_aggregation={model.value_aggregation!r}")
     if model.value_kind != "scalar":
         reasons.append(f"value_kind={model.value_kind!r}")

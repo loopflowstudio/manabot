@@ -1,8 +1,10 @@
 """Verify trained MLX exports through local CPU game children and the baseline report."""
 
 from collections import Counter
+import hashlib
 import importlib.util
 from itertools import count
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -39,6 +41,49 @@ def check_policy_loads() -> None:
         return policy, space
 
     MLXBackend.load_policy = checked_load
+
+
+def test_belief_policy_trains_and_registers_a_checkpoint_without_torch(
+    tmp_path: Path,
+) -> None:
+    if importlib.util.find_spec("mlx") is None:
+        pytest.skip("requires MLX")
+    (tmp_path / "sitecustomize.py").write_text(
+        'import sys\nsys.modules["torch"] = None\n'
+    )
+    track = tmp_path / "track"
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "etude",
+            "train",
+            "manabot/recipes/belief_policy.py",
+            "--config",
+            '{"backend":"mlx","device":"mps"}',
+            "--until",
+            "updates=1",
+        ],
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join((str(tmp_path), str(Path.cwd()))),
+            "ETUDE_TRACK_DIR": str(track),
+            "ETUDE_HOME": str(tmp_path),
+        },
+        check=True,
+        timeout=180,
+    )
+    run = track / "belief_policy"
+    checkpoint = json.loads((run / "checkpoints/updates-1.json").read_bytes())
+    assert (
+        checkpoint["at"]["updates"] == 1 and checkpoint["at"]["learner_transitions"] > 0
+    )
+    policy = run / checkpoint["file"]
+    assert policy.suffix == ".safetensors"
+    assert (
+        hashlib.sha256(policy.read_bytes()).hexdigest()
+        == checkpoint["artifact"]["sha256"]
+    )
 
 
 @pytest.mark.parametrize("width", [64, 256])

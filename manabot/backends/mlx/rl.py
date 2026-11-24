@@ -219,6 +219,16 @@ def transition_gae(
     return mx.array(advantages), mx.array(value_targets)
 
 
+def standardized_advantages(
+    advantages: mx.array, over: mx.array | None = None
+) -> mx.array:
+    """Standardize every row using the selected rows' population statistics."""
+    reference = advantages if over is None else advantages[over]
+    mean = reference.mean()
+    deviation = mx.sqrt(mx.square(reference - mean).mean())
+    return (advantages - mean) / mx.maximum(deviation, 1e-8)
+
+
 # -- Losses --------------------------------------------------------------------
 # Per-row loss terms over one minibatch; the caller reduces, masks and weights.
 
