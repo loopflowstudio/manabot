@@ -6,6 +6,10 @@ Implement the remaining cards in batches that share rules behavior. Run the oute
 
 The Task brief's design constraint: “Explore one-card transform, two-card meld, and hidden face-down characteristics against contrasting real cards before fixing the representation, preserving exact physical-card identity and viewer-safe observations.”
 
+Use first printings and record each delivered definition and directed check in the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) where it applies. Match tokens by their full printed characteristics. Scope comes from Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md).
+
+Ledger at HEAD: 22 of 23 FDN `object_lifetime` rows are `source definition found`, each naming a check that exists; Abyssal Harvester stays `definition pending` with `blocked_by` MTG-418.
+
 ## Done (detail in git and the test files)
 
 - Transform: Cecil and Esper Origins, `fin.rs` (Cecil fixtures shipped before `9dbe17ee`).
@@ -48,9 +52,6 @@ All slices are built (`d93b4c19f6` through the activation-limit commit after `ab
 - Decomposition review, second pass (2026-11-24, after the activation-limit commit): **met**. Every use-limit read goes through `once_per_object`/`is_use_limited` (`Permanent::activation_used`/`record_activation`, the three `mana.rs` sites, the mana test); `statics.rs` reads `power_up` only for its cost reduction. Soulstone Sanctuary and Dropkick Bomber reach observation, text and tokens through one layer value and one matcher; the set-list/All projection, mid-pass reads and creature-Aura SBA each have a directed test that fails without the fix (the Forest witness gets +1/+1 from Allied Teamwork without the mid-pass gate).
 - Decomposition review, third pass (2026-11-24, at `a855e140aa`, after compress `77a073e5bf`): **met**. Followed Mild-Mannered Librarian (offer `action.rs`, activation `play.rs`, mana `mana.rs:1807/1819/2953/3132`, observation `used_abilities`/`exhausted_abilities`) and Soulstone Sanctuary (layer `AllCreatureTypes` clears `creature_types_set`; mid-pass `has_subtype`, `buff`, `matches_view` all read `has_all_creature_types`; post-pass readers see `finish_object`'s normalized value). No card-key dispatch in `flow/` or `agent/`; the removed `Game::record_activation` wrapper has no callers left. Debug at HEAD: cards 895/895; `rules_tests` + `canonical_replay_tests` + `scenario_tests` 206 (2 skipped); lib `mana|observation|layers|sba` 98/99 (known base failure). Kindred creature types are a deferred gap with no catalog witness (`questions.md`).
 - Folded elsewhere: the death/LKI witnesses are the representation review's "mooned creature dying"; CR 603.6a Aura-entry suppression waits for a catalog witness (`questions.md`).
-
-
-Use first printings and record each delivered definition and directed check in the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) where it applies. Match tokens by their full printed characteristics. Scope comes from Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md).
 
 ## Batch 4 · Representation, consumers and budget
 
@@ -146,9 +147,15 @@ Instructions retired (`/usr/bin/time -l`, stable to 0.1% under any load) against
 - Checks: debug nextest `--profile ci` lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests` 565/566 (known base `historical_captures…`), cards 907/907; `content_pack_clone_allocations` + `bench_footprint` with `--features benchmark`; `cargo check --all-targets --features benchmark` and `--features python`; `tests/infra/test_engine_budget.py` 20 passed; `cargo fmt --check`, ruff clean.
 - Speed verdict belongs to CI's same-runner Engine Budget; no wall-time claim from this host.
 
-Next: run `pr-publish`, then `demo` and `deliver` (`gate`). Gate owns:
+## After the measurement
 
-- CI's same-runner Engine Budget for the final speed verdict.
+- `e99ca6604d`: `ProgramProjection` (`agent/continuation.rs`) owns the tokens-and-text rule for `ContinuationFrame::program` and `DelayedEffects`.
+- PR #593 is published and ready. Merge `3ca5b59f93` brought main `610370233c` (one casting authority for Adventures/Omens/prepared/modal faces, 207 Foundations cards with combat damage choices); conflict resolutions are in `questions.md`. **All local evidence above predates this merge**; CI on `3ca5b59f93` is the first run over the merged tree (in progress at realign).
+
+## Next: `gate`
+
+- Read CI on `3ca5b59f93`; a failure caused by the merge is fixed in place. Engine Budget there is the speed verdict (the earlier `bench_steps` failure was the unified `benchmark` feature, fixed in `9f841c3e74`).
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).
-- Rerun vector/recording consumers and canonical replay after merges `361823be59`/`4c10520b67`.
-- The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's.
+- Rerun vector/recording consumers and canonical replay over the merged tree.
+- The base failures listed in `questions.md` (Rust `historical_captures…`, eight Python tests, Academy numpy import, `experience.py` format drift) are not this branch's; recheck them against the new base.
+- Delete `scratch/` in the pre-land commit.
