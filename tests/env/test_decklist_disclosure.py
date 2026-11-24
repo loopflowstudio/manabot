@@ -10,7 +10,12 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import DECKLIST_DIM, ObservationSpace, encode_observation
+from manabot.env.observation import (
+    DECKLIST_DIM,
+    ObservationSpace,
+    column,
+    encode_observation,
+)
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
 from manabot.policy.prepare import Prepared
@@ -94,7 +99,9 @@ def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) 
     for viewer in (0, 1):
         encoded = encode_observation(space, env.observation_for_player(viewer))
         for key in ("agent_player", "opponent_player"):
-            assert encoded[key][0, -1] == float(decklists == "open")
+            assert encoded[key][0, column(key, "decklists_open")] == float(
+                decklists == "open"
+            )
     lists = encode_observation(space, obs)["decklists"]
     assert lists.shape == (2, 60, DECKLIST_DIM)
     assert lists[0, :, 1].sum() == 41
